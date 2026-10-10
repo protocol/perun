@@ -55,3 +55,20 @@ Run a lens only when its trigger exists; record the grep and hit count either wa
 - **Switches and readiness.** A kill switch or feature flag must fail closed on an unknown, empty or misspelled value
   (grep the parse); a readiness or health check must reflect migration state, not just process liveness; a scheduled
   run and a manual run of the same job must take the same lock, not two.
+- **Writer/reader data shape.** For each persisted JSON blob, metric or event key, list every writer and every reader
+  (grep the key string); the shapes must agree (type, nesting, units, nullability, enum values). A reader that expects
+  a field no writer emits, or a writer whose new field no reader handles, is a finding; the key list is the evidence.
+- **Identity match.** For each lookup that matches a record by identity (user, tenant, device, token, account), list
+  every branch that resolves it and the stored key set it compares against; each branch must compare the same bound
+  key set, and a branch that matches on a strict subset (name only, no tenant) is a finding.
+- **Mutation reachability.** For each library function that mutates state, list every entry point that reaches it
+  (use the entry-point table) and the guard on each path; a mutation guarded on one route and open on another is a
+  finding. Guard the function, not only the route.
+- **Gate review.** For each CI or release gate, list what it lets through: fallbacks that return success on a missing
+  input, path or file exclusions, skipped or retried-until-green steps. A "100% tests pass" gate reports a pass rate,
+  not coverage; check whether the tests exercise the changed code before trusting it.
+- **Metric labels.** Numerator and denominator must count the same entity (`data-metrics.md`); a total must name its
+  time window, and two totals with different windows must not sit side by side unlabeled.
+- **Fix re-verification and findings ledger.** When re-checking a fix, re-run the grep for the whole defect class
+  (`method.md`), not only the cited lines; a sibling site that survives means `still-open`. Emit each finding with
+  id, status and evidence line in the `machine-report.md` ledger so the next run re-checks it automatically.
