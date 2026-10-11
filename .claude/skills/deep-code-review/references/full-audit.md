@@ -68,13 +68,13 @@ Run a lens only when its trigger exists; record the grep and hit count either wa
 - **Mutation reachability.** For each library function that mutates state, list every entry point that reaches it
   (use the entry-point table) and the guard on each path; a mutation guarded on one route and open on another is a
   finding. Guard the function, not only the route.
-- **Gate review.** For each CI or release gate, list what it lets through: fallbacks that return success on a missing
-  input, path or file exclusions, skipped or retried-until-green steps. A "100% tests pass" gate reports a pass rate,
-  not coverage; check whether the tests exercise the changed code before trusting it.
+- **Gate review.** Check each CI or release gate against `release-engineering.md` (Gate tooling and hooks: fallbacks
+  that pass on missing input, could-not-check, seeded ratchets). A "100% tests pass" gate reports a pass rate, not
+  coverage; check whether the tests exercise the changed code before trusting it.
 - **Metric labels.** Numerator and denominator must count the same entity (`data-metrics.md`); a total must name its
   time window, and two totals with different windows must not sit side by side unlabeled.
 - **Fix re-verification and findings ledger.** When re-checking a fix, re-run the grep for the whole defect class
   (`method.md`), not only the cited lines; a sibling site that survives means `still-open`. Emit each finding with
   id, status and evidence line in the `machine-report.md` ledger so the next run re-checks it automatically.
-  On a FULL re-run, load the prior findings file by default (`machine-report.md` section 3, no flag needed) and
+  On a FULL re-run, load the prior machine report in `code-review/` for the same target by default (`machine-report.md` section 3, no `PRIOR` flag needed) and
   emit `fixed` or `still-open` for every prior id before new hunting.
