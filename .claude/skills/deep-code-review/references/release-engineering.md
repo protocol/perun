@@ -371,9 +371,8 @@ problem, not contention.
 - **Scrub the tool's own config.** A harness that runs a checker must clear that tool's own config and mode env vars
   (and config files found by upward search) before running; otherwise the operator's shell silently changes what the
   gate checks.
-- **Infra failure is "could not check".** A crash, timeout, missing binary or unreachable service reports
-  "could not check" (distinct exit code and message); it is never mapped to PASS and never to a FAIL that blames the
-  change. Empty or partial evidence (zero tests collected, a truncated report, no files matched) is the same.
+- **Infra failure is "could not check".** Never PASS, never a FAIL that blames the change, including empty or partial
+  evidence; see `merge-operations.md` (crash cousin of the hang).
 - **One acceptance rule for cache and consumer.** The code that decides a cache entry is a hit and the code that
   consumes it must share one predicate (key, version, freshness, validity); two copies drift until the cache serves
   what the consumer would reject.

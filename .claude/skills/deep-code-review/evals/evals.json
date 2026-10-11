@@ -7981,7 +7981,7 @@
     {
       "id": "full-audit-guard-added-later-and-secondary-reads",
       "prompt": "FULL audit of an app whose getProject accessor gained a tenant check, while a search palette, an export job and a notifications feed read the projects table directly. Server actions also run a 5s external call on mount.",
-      "expected_output": "Greps every other reader of the raw table and flags the search, export and notifications readers as bypassing the accessor guard; builds a role x resource matrix including those secondary read surfaces; flags the slow mount-time server action because Next serializes actions per page.",
+      "expected_output": "Greps every other reader of the raw table and flags the search, export and notifications readers as bypassing the accessor guard; builds a role x resource matrix including those secondary read surfaces; flags the slow mount-time server action because the Next client dispatches server actions one at a time.",
       "expectations": [
         "Greps all other readers of the raw primitive after a guard is added to one accessor",
         "Covers secondary read surfaces (search, exports, notifications, counts) in the access matrix",
@@ -8038,6 +8038,16 @@
         "Reads the prior findings file by default on a FULL re-run without being asked",
         "Emits fixed or still-open for every prior id before new findings",
         "Points to machine-report.md rather than restating the ledger format"
+      ]
+    },
+    {
+      "id": "nextjs-server-action-nonvoid-return",
+      "prompt": "Review a Next.js server action `checkInvite(code)` that returns `true` or `false` to the client, and a second that returns the string of any caught error's message.",
+      "expected_output": "Flags that every non-void return and thrown error is serialized to the browser: the boolean is an existence oracle for invite codes, the error string can leak internal messages or ids; asks that the caller handle every branch.",
+      "expectations": [
+        "Flags the boolean return as an existence or permission oracle",
+        "Flags the returned error string as a possible internal-message leak",
+        "Checks the caller handles every return branch, not only the happy path"
       ]
     }
   ]

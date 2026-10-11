@@ -1410,3 +1410,9 @@ fact).
 |---|---|---|
 | Claude Code — Skills | https://code.claude.com/docs/en/skills | "Edit a skill during a session": a skill added, edited, or removed under the project `.claude/skills/` is picked up "within the current session, without a restart". |
 | Claude Code — Settings files and precedence | https://code.claude.com/docs/en/settings | "When edits take effect": Claude Code "applies most edits to the running session without a restart, including edits to `permissions`, `hooks`"; keys read only at session start include `model` (switch with `/model`) and `effortLevel` (switch with `/effort`). |
+
+## Verified by direct fetch (2026-10-11) — Next.js server action dispatch (`nextjs-app-router.md`)
+
+| Standard / source | URL | What was confirmed |
+|---|---|---|
+| Next.js — Mutating Data | https://nextjs.org/docs/app/getting-started/mutating-data | "Invoking Server Functions" note: "The client currently dispatches and awaits them one at a time. This is an implementation detail and may change." Scope is the client, not per page; may change. Fetched + verified 2026-10-11. |
