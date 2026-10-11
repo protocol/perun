@@ -365,3 +365,28 @@ problem, not contention.
   query-performance change. This file never restates it.
 - `docs/standards-index.md` — DORA, feature-toggle, canary, and blue-green
   citations with fetch dates.
+
+## Gate tooling and hooks (read when reviewing a repo's own gate scripts, harnesses, hooks or caches)
+
+- **Scrub the tool's own config.** A harness that runs a checker must clear that tool's own config and mode env vars
+  (and config files found by upward search) before running; otherwise the operator's shell silently changes what the
+  gate checks.
+- **Infra failure is "could not check".** A crash, timeout, missing binary or unreachable service reports
+  "could not check" (distinct exit code and message); it is never mapped to PASS and never to a FAIL that blames the
+  change. Empty or partial evidence (zero tests collected, a truncated report, no files matched) is the same.
+- **One acceptance rule for cache and consumer.** The code that decides a cache entry is a hit and the code that
+  consumes it must share one predicate (key, version, freshness, validity); two copies drift until the cache serves
+  what the consumer would reject.
+- **Select affected tests by the import graph, fail closed.** Choosing tests from changed paths by name or directory
+  misses indirect dependents; walk the import graph, and when the graph cannot be built or a changed file is
+  unmapped, run the full suite instead of none.
+- **Seed a safety net.** A ratchet or regression gate whose first run only records a baseline judges nothing; seed
+  the baseline (or fail the first run) and test that a worse value trips it.
+- **Data is argv, never shell text.** Pass branch names, titles, paths and other external data as separate argv
+  elements; interpolating them into `bash -c` or `sh -c` strings is command injection and breaks on spaces.
+- **Machine-wide lock for shared-state jobs.** Jobs that touch the same checkout, port, cache or database take one
+  machine-wide lock that records its owner pid and reclaims a lock whose pid is dead; a per-process or per-run lock
+  protects nothing, and a lock that never reclaims wedges after a crash.
+- **Hooks verify against the artifact.** A hook or checker that accepts a claim ("tests pass", "reviewed") must read
+  the real artifact or receipt (file, exit code, SHA it names) rather than the claim text; an explicit
+  `not run (reason)` is allowed and recorded, silence is not.

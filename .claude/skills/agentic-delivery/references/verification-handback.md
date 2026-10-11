@@ -681,3 +681,6 @@ page, a header clipped, and an integration returned 4xx for days while every han
 - **Say the state you have.** merged, deployed and verified-on-<page> are different words (`communication-structure`).
 - **Secrets and env.** Before asking the owner for a secret, check what the platform and its config already store.
   A required-env list names only variables that already have values; an empty required field blocks deploy forms.
+- **QA on a fresh database per branch.** Run QA against a database built from that branch's migrations, never a
+  shared or long-lived one: a stale or other-branch schema passes a branch whose migration is broken, or fails one
+  that is fine. Record the DB identity in the receipt.

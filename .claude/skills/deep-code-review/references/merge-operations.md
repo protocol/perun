@@ -257,7 +257,7 @@ finished green goes stale:
 Either way the green is real; it just certifies a state that no longer exists. So before merging, **confirm
 the green reflects the current head / inputs**: read the **SHA (or input digest)** the passing check actually
 ran against and compare it to what you're about to merge (the pin-the-verdict-to-the-exact-SHA discipline,
-`method.md`). And **know each gate's trigger model** — which events re-evaluate it and which don't — so a
+`method.md`); carry that gated SHA end to end into the land step itself (no re-resolve of a branch name between gate and land, a TOCTOU window). And **know each gate's trigger model** — which events re-evaluate it and which don't — so a
 mutation the triggers **don't cover**, or a run **still in flight**, reads as **invalidating**, not trusted.
 These are the verdict-staleness siblings of the moving-base cases: there the *base* moved under a still-valid
 check; here the *reviewed object* changed — via an event the check never saw, or one whose run hasn't
@@ -325,7 +325,7 @@ the union never validated. Keep flaky / heavy browser / visual gates in **per-ch
 as a blocking term of the batch union, so one wedged heavy gate can't stall the whole train.
 
 A heavy gate **broken in this environment** — its own harness crashes, a dependency it needs is down — is the
-**crash cousin** of the hang above, and likewise a **can't-check, not a red**: "could not check" is not "found
+**crash cousin** of the hang above, and likewise a **can't-check, not a red**: "could not check" is neither PASS nor FAIL, and never "found
 a problem" (the gate discipline in `ux-gates.md`). It must **fail-open for the batch proof** — drop
 that one broken term and run the deterministic runnable subset — so batching **continues** rather than
 collapsing the whole train to serial merging; one broken tool must not halt all batching. Hang and crash

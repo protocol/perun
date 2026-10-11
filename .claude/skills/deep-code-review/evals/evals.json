@@ -7977,6 +7977,68 @@
         "Compares the config file to the flags in the invoking script",
         "Reports the effective value (1) not the config value (0)"
       ]
+    },
+    {
+      "id": "full-audit-guard-added-later-and-secondary-reads",
+      "prompt": "FULL audit of an app whose getProject accessor gained a tenant check, while a search palette, an export job and a notifications feed read the projects table directly. Server actions also run a 5s external call on mount.",
+      "expected_output": "Greps every other reader of the raw table and flags the search, export and notifications readers as bypassing the accessor guard; builds a role x resource matrix including those secondary read surfaces; flags the slow mount-time server action because Next serializes actions per page.",
+      "expectations": [
+        "Greps all other readers of the raw primitive after a guard is added to one accessor",
+        "Covers secondary read surfaces (search, exports, notifications, counts) in the access matrix",
+        "Flags a long server action called on mount as blocking later actions"
+      ]
+    },
+    {
+      "id": "full-audit-replay-and-fail-closed-switch",
+      "prompt": "FULL audit: a client retries a 429 with the same single-use token, a webhook handler rejects redeliveries older than 5 minutes, an idempotency key is matched by prefix, a kill switch parses 'off' only and treats anything else as on, and a nightly job and a manual button take separate locks.",
+      "expected_output": "Flags token reuse on retry, the freshness window versus redelivery, the prefix-matched key collision, the kill switch not failing closed on unknown values, and the two locks for one job.",
+      "expectations": [
+        "Flags single-use token replay on a 429 retry",
+        "Flags prefix-matched idempotency keys",
+        "Flags a kill switch that does not fail closed on unknown values",
+        "Requires one shared lock for scheduled and manual runs of the same job"
+      ]
+    },
+    {
+      "id": "full-audit-contract-identity-gate-ledger",
+      "prompt": "FULL audit: a job writes a metrics JSON with key 'latency' as seconds while the dashboard reader assumes milliseconds; a lookup has two branches, one matching user by id and tenant, one by id only; a lib function deleteProject is guarded on the admin route but reachable from an unguarded webhook; a CI gate passes when the test file is missing and reports '100% tests'; a fix commit patched only the cited line of a missing-await pattern.",
+      "expected_output": "Lists writers and readers of the key and flags the unit mismatch; flags the id-only branch as a weaker bound key set; lists every entry point reaching deleteProject; flags the gate fallback and pass-rate-vs-coverage; re-greps the whole missing-await class; emits id, status and evidence line per finding.",
+      "expectations": [
+        "Lists writers and readers per persisted key and flags the shape mismatch",
+        "Flags the lookup branch that matches a smaller key set",
+        "Lists every entry point reaching a library mutation with its guard",
+        "Flags the gate fallback that passes on missing input and pass rate versus coverage",
+        "Re-greps the whole defect class instead of only the cited line",
+        "Emits a findings ledger with id, status and evidence line"
+      ]
+    },
+    {
+      "id": "gate-tooling-hooks-and-harness",
+      "prompt": "Review this repo's gate tooling: the harness inherits the caller's lint config env vars; a test run that crashes prints PASS; the cache lookup checks only the key while the consumer also checks the version; affected tests are picked by directory name and run none if unmapped; a new coverage ratchet records a baseline on its first run and passes; the land step re-resolves the branch name after the gate; a script runs bash -c \"git checkout $BRANCH\"; two jobs share one checkout with a per-run lock; a hook accepts 'tests passed' from the agent's message text.",
+      "expected_output": "Flags each: scrub the tool's own config env; infra failure and empty evidence are 'could not check', not PASS/FAIL; one shared acceptance rule for cache and consumer; import-graph selection with full-suite fallback; seed the ratchet; carry the gated SHA to land; pass data as argv; machine-wide lock with pid reclaim; hook verifies receipt/artifact and allows explicit 'not run (reason)'.",
+      "expectations": [
+        "Flags config env vars leaking into the gate harness",
+        "Reports infra failure or empty evidence as could not check, never PASS or FAIL",
+        "Requires cache lookup and consumer to share one acceptance rule",
+        "Selects affected tests by import graph with a fail-closed full-suite fallback",
+        "Flags a ratchet whose first run only records a baseline",
+        "Carries the gated SHA end to end to land",
+        "Flags data interpolated into bash -c and requires argv",
+        "Requires a machine-wide lock with pid reclaim for shared-state jobs",
+        "Requires hooks to verify the real artifact or receipt and allows explicit not run with a reason"
+      ]
+    },
+    {
+      "id": "full-audit-external-contract-rerun-ledger",
+      "prompt": "FULL audit of a repo whose analytics module builds warehouse SQL with a column name that no longer exists, inside a try/except that logs and returns an empty list; a prior findings file with three ids exists from an earlier run. Re-run the audit.",
+      "expected_output": "Checks the query identifiers against the live schema and flags the swallowing catch; loads the prior findings file by default and emits fixed or still-open per prior id before new hunting.",
+      "expectations": [
+        "Verifies each external query or API identifier against the live schema or published contract",
+        "Flags the catch that swallows the error and hides wrong identifiers as empty data",
+        "Reads the prior findings file by default on a FULL re-run without being asked",
+        "Emits fixed or still-open for every prior id before new findings",
+        "Points to machine-report.md rather than restating the ledger format"
+      ]
     }
   ]
 }
