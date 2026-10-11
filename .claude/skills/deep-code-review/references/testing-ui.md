@@ -232,7 +232,7 @@ coincidence, and the coincidence breaks silently:
 
 ## A locator keyed to visible text breaks the moment the component's own edit mode replaces that text
 
-- **Prefer a stable identifier over visible text for a locator that must survive
+- **Prefer a stable, name-based identifier (role + name, or test id) over visible text for a locator that must survive
   re-rendering.** A row located by its currently-visible text is fragile against any
   state where the component legitimately swaps that text out — most commonly an edit
   mode replacing a read view with an input/editor. Reading a row's text, acting on it,

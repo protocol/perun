@@ -8011,6 +8011,22 @@
         "Re-greps the whole defect class instead of only the cited line",
         "Emits a findings ledger with id, status and evidence line"
       ]
+    },
+    {
+      "id": "gate-tooling-hooks-and-harness",
+      "prompt": "Review this repo's gate tooling: the harness inherits the caller's lint config env vars; a test run that crashes prints PASS; the cache lookup checks only the key while the consumer also checks the version; affected tests are picked by directory name and run none if unmapped; a new coverage ratchet records a baseline on its first run and passes; the land step re-resolves the branch name after the gate; a script runs bash -c \"git checkout $BRANCH\"; two jobs share one checkout with a per-run lock; a hook accepts 'tests passed' from the agent's message text.",
+      "expected_output": "Flags each: scrub the tool's own config env; infra failure and empty evidence are 'could not check', not PASS/FAIL; one shared acceptance rule for cache and consumer; import-graph selection with full-suite fallback; seed the ratchet; carry the gated SHA to land; pass data as argv; machine-wide lock with pid reclaim; hook verifies receipt/artifact and allows explicit 'not run (reason)'.",
+      "expectations": [
+        "Flags config env vars leaking into the gate harness",
+        "Reports infra failure or empty evidence as could not check, never PASS or FAIL",
+        "Requires cache lookup and consumer to share one acceptance rule",
+        "Selects affected tests by import graph with a fail-closed full-suite fallback",
+        "Flags a ratchet whose first run only records a baseline",
+        "Carries the gated SHA end to end to land",
+        "Flags data interpolated into bash -c and requires argv",
+        "Requires a machine-wide lock with pid reclaim for shared-state jobs",
+        "Requires hooks to verify the real artifact or receipt and allows explicit not run with a reason"
+      ]
     }
   ]
 }
