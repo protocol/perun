@@ -8049,6 +8049,17 @@
         "Flags the returned error string as a possible internal-message leak",
         "Checks the caller handles every return branch, not only the happy path"
       ]
+    },
+    {
+      "id": "gate-parser-zero-failures-killed-log",
+      "prompt": "Review a bisect helper that runs the test suite, greps the log for `FAILED` lines and treats zero matches as a clean commit. A run was SIGKILLed by the OOM killer; the log held only the kill line and the helper reported 0 failures. Two other scripts in the repo parse the same logs.",
+      "expected_output": "Flags that zero parsed failures is read as pass without checking exit status or a summary line, so a killed or truncated log passes; requires exit status plus a completeness marker before zero means passed, and applies the fix to the sibling parsers via the class re-grep.",
+      "expectations": [
+        "Flags zero parsed failures read as clean without checking exit status",
+        "Requires a completeness marker such as the runner summary line, not only the exit code",
+        "Applies the fix to every sibling parser of the same logs, found by a class re-grep",
+        "Treats a missing summary line or non-zero exit as could not check, not passed"
+      ]
     }
   ]
 }

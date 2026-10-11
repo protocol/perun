@@ -389,3 +389,7 @@ problem, not contention.
 - **Hooks verify against the artifact.** A hook or checker that accepts a claim ("tests pass", "reviewed") must read
   the real artifact or receipt (file, exit code, SHA it names) rather than the claim text; an explicit
   `not run (reason)` is allowed and recorded, silence is not.
+- **Zero counts need proof the run finished.** Wherever a test-run log is parsed into pass/fail counts, "0 failures"
+  counts only after the exit status is checked AND the runner's completeness marker (its summary line) is present; a
+  SIGKILLed or truncated log holds only the kill line and parses to zero. Fix every sibling parser of such logs, found
+  by the class re-grep in `method.md`, not just the one that bit.
