@@ -13,3 +13,8 @@ size-budget-raise: .claude/skills/deep-code-review/references/full-audit.md 4172
 size-budget-raise: .claude/skills/deep-code-review/references/release-engineering.md 27810→30031 gate-tooling and hook checks
 size-budget-raise: .claude/skills/deep-code-review/references/merge-operations.md 79273→79433 gated SHA to land, could-not-check wording
 size-budget-raise: .claude/skills/deep-code-review/references/testing-ui.md 18016→18054 name-based locator wording
+
+- deep-code-review FULL audits: external query/API contract lens (verify identifiers against the live schema or published contract, flag error-swallowing catches) and default re-run ledger (load the prior findings file, emit fixed or still-open per id) in `references/full-audit.md`, routed from `SKILL.md`. Default single-pass review text unchanged.
+
+size-budget-raise: .claude/skills/deep-code-review/references/full-audit.md 6000→6545 external contract lens, re-run ledger
+size-budget-raise: .claude/skills/deep-code-review/SKILL.md 23618→23711 FULL-scope routing note

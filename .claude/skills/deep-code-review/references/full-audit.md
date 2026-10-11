@@ -52,6 +52,10 @@ Run a lens only when its trigger exists; record the grep and hit count either wa
   reused on a 429/5xx retry (the retry replays a consumed credential); a webhook redelivered after the handler's
   freshness window (a valid redelivery rejected as stale, or accepted twice); an idempotency key matched by prefix or
   truncated, so two distinct requests collide.
+- **External query and API contract.** For every external query or call (warehouse SQL, third-party API), check each
+  identifier (column, field, endpoint, parameter) against the live schema or the published contract, not against
+  the code's own assumption. A catch or fallback that swallows the error turns a wrong identifier into silent
+  empty data; flag it.
 - **Switches and readiness.** A kill switch or feature flag must fail closed on an unknown, empty or misspelled value
   (grep the parse); a readiness or health check must reflect migration state, not just process liveness; a scheduled
   run and a manual run of the same job must take the same lock, not two.
@@ -72,3 +76,5 @@ Run a lens only when its trigger exists; record the grep and hit count either wa
 - **Fix re-verification and findings ledger.** When re-checking a fix, re-run the grep for the whole defect class
   (`method.md`), not only the cited lines; a sibling site that survives means `still-open`. Emit each finding with
   id, status and evidence line in the `machine-report.md` ledger so the next run re-checks it automatically.
+  On a FULL re-run, load the prior findings file by default (`machine-report.md` section 3, no flag needed) and
+  emit `fixed` or `still-open` for every prior id before new hunting.
