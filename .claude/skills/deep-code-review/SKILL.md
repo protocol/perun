@@ -185,7 +185,7 @@ applicable domains. Language footguns:
 `language-stack-redflags.md` + only the languages present:
 `lang-python.md`, `lang-js-ts.md`, `lang-go.md`, `lang-jvm.md`, `lang-ruby-php.md`,
 `lang-c-cpp-rust.md`, `lang-shell.md`, `lang-sql.md`.
-`nextjs-app-router.md` when `next` is a dependency; `FULL` scope: `full-audit.md` (incl. external query/API contract check and default re-run ledger vs a prior findings file).
+`nextjs-app-router.md` when `next` is a dependency; `FULL` scope: `full-audit.md`.
 
 | | Domain | Depth |
 |---|---|---|
