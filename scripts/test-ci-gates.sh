@@ -3977,6 +3977,27 @@ fi
 # rules — rule-enforcement lint: planted RED, advisory/mechanism/baseline pass,
 # baseline growth needs a commit marker. Own git fixture.
 # ---------------------------------------------------------------------------
+# dirty-tree guard lint: a skill shell script that runs `git checkout|switch|reset` on a caller-given
+# tree must call require_clean_tree (agentic-delivery/scripts/_dirty_guard.sh) so it refuses a dirty
+# tree up front instead of silently wiping uncommitted edits.
+# ---------------------------------------------------------------------------
+_dg_bad() { # file...: print each that checks out/resets without the guard
+  local f
+  for f in "$@"; do
+    grep -qE '^[^#]*\bgit( -C [^ ]+)? (checkout|switch|reset)\b' "$f" && ! grep -q 'require_clean_tree' "$f" && echo "$f"
+  done
+  return 0
+}
+_dg_fix="$WORK/dg-fixture.sh"
+printf 'git checkout -q --detach "$X"\n' >"$_dg_fix"
+[ -n "$(_dg_bad "$_dg_fix")" ]; record $? "dirty-tree lint: a checkout script without the guard is flagged"
+printf 'require_clean_tree . || exit 2\ngit checkout -q --detach "$X"\n' >"$_dg_fix"
+[ -z "$(_dg_bad "$_dg_fix")" ]; record $? "dirty-tree lint: a guarded checkout script passes"
+_dg_real=$(_dg_bad "$ROOT"/.claude/skills/*/scripts/*.sh)
+if [ -z "$_dg_real" ]; then record 0 "dirty-tree lint: every skill script with checkout/switch/reset calls require_clean_tree"
+else printf '  unguarded: %s\n' "$_dg_real"; record 1 "dirty-tree lint: every skill script with checkout/switch/reset calls require_clean_tree"; fi
+
+# ---------------------------------------------------------------------------
 rr="$WORK/rules-fixture"
 mkdir -p "$rr/.claude/skills/demo" "$rr/scripts"
 git -C "$rr" init -q

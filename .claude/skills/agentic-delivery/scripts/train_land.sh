@@ -28,6 +28,9 @@ T=$1; shift
 BASE_BRANCH=${BASE_BRANCH:-main} REMOTE=${REMOTE:-origin} LOG=${LOG_DIR:-.}/train$T.log
 HERE=$(cd "$(dirname "$0")" && pwd) GH=${GH:-gh}
 . "$HERE/_clean_union.sh"
+. "$HERE/_dirty_guard.sh"
+echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, stop and park for the owner; do not retry or route around." >&2
+require_clean_tree . || exit 2
 # .perun/policy.json: PERUN_JOBS (parallelism from local_cpu) and PERUN_GITHUB_ACTIONS reach VERIFY_CMD and
 # BROWSER_CMD. github_actions=off: this script never waits on or re-runs CI (it has no CI wait at all), and
 # land_train.sh adds [skip ci] to every merge-commit body only; it never suppresses PR-head checks or

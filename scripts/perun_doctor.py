@@ -16,7 +16,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
 SKIP = {".git", "node_modules", ".venv", "__pycache__", "worktrees", "skill-backups"}
-HOOK_SCRIPTS = ("pipe_mask_guard.py", "subagent_start_inject.py", "handback_cap.py")  # operating-layer template
+HOOK_SCRIPTS = ("pipe_mask_guard.py", "bypass_guard.py", "subagent_start_inject.py", "handback_cap.py")  # operating-layer template
 
 
 def sha(p):

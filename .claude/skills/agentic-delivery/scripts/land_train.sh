@@ -21,6 +21,7 @@
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: land_train.sh <base-sha> <union-sha>" >&2; exit 2; }
 BASE=$1 U=$2
+echo "land_train: this lands to ${BASE_BRANCH:-main}: if the host classifier denies the merge, stop and park for the owner; do not retry or route around." >&2
 : "${UNION_DIRS:?set UNION_DIRS}"
 BASE_BRANCH=${BASE_BRANCH:-main} REMOTE=${REMOTE:-origin} CHANGELOG_DIR=${CHANGELOG_DIR:-changelog.d}
 BACKFILL_FILE=${BACKFILL_FILE:-./changelog_backfill.txt} PR_RE=${PR_RE:-merge-train: #([0-9]+)} GH=${GH:-gh}
