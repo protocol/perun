@@ -2671,9 +2671,9 @@
         "Health is labelled a suggestion and Off track is left to a person",
         "The agent does not post the update unread",
         "A missing gh or tracker key is reported as NOT CHECKED, not as a pass"
-        ]
-      },
-      {
+      ]
+    },
+    {
       "id": "autonomous-run-continues",
       "prompt": "The owner says 'autonomous run' and the agent finishes one item, then asks what to do next. Why, and what is the sanctioned fix?",
       "expected_output": "Names the host ending the turn on model return, and self-paced /loop (or /perun-run) driven by task_ledger next --check.",
@@ -2683,6 +2683,18 @@
         "Each tick picks the item with task_ledger.py next --check and stops only on exit 3 (drained) or owner stop",
         "Gated or irreversible items are parked with defer --park, not asked and waited on",
         "Does not propose a blocking Stop hook"
+      ]
+    },
+    {
+      "id": "test-real-clock-rollover",
+      "prompt": "The development branch went red on Monday with no code change: tests passed all last week. The failing tests call datetime.now() and Date.now() directly. What is the cause, and what do you do about it and prevent a repeat?",
+      "expected_output": "Names real-clock/timezone reads in tests failing at a week rollover; pins or injects a clock; runs clock_lint.py and a future-clock run.",
+      "expectations": [
+        "Diagnoses tests reading the real clock or timezone that fail at a week, month or DST rollover, not a code regression or a random flake",
+        "Fix pins a fake clock (freezegun, jest/vi setSystemTime, fake timers) or injects now into the code under test",
+        "Runs scripts/clock_lint.py (file:line: real clock in test) to find the other offenders, with the clock-lint: allow comment as the only per-line escape",
+        "Verifies with a future-clock run: the suite with TZ set off-UTC and fake time pushed about +8 days, where a failure only in the shifted run is a test bug",
+        "Does not just rerun the suite until green or add retries"
       ]
     }
   ]
