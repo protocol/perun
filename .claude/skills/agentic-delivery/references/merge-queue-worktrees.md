@@ -178,7 +178,9 @@ adding load; pushes go through one serial queue (`train-push.lock`). The lease i
 fresh; the train renews it at each step. Waits use the `_lock.sh` mkdir lock, never a process-name match; a lock that looks
 stale is reported with the command to clear it by hand and is never moved or deleted automatically. A red browser run lands
 only when every new listed failure re-ran as a flake and the runner's own `FAILURES <n>` count is not above the listed `FAIL`
-lines. Tests: `scripts/test-train-resilience.sh`.
+lines. **CANT rule:** the per-PR bisect re-runs each real id through the same flake triage (never one run), blames a PR only
+when it fails the id alone, and a failure that is pre-existing on the base (`BASE RED`), passes alone for every PR (`FLAKY`, no
+blame) or is not pinned to a culprit makes the train print `CANT` and exit 3 with nothing landed. Tests: `scripts/test-train-resilience.sh`, `scripts/test-peer-pains-2.sh`.
 
 ## An independent-PR-queue cascade is a cadence choice, not a new authority
 

@@ -7,7 +7,7 @@ and left ranked P0s unpulled, because the checks existed but nothing surfaced th
 Lines (each skipped when its input is missing; nothing is fetched from the network):
   1. `perun <installed> < <origin/main>`: the installed .claude/skills/deep-code-review/VERSION vs
      the Perun checkout's local origin/main ref, plus the update command. The checkout path comes
-     from $PERUN_SOURCE, else `<cache>/perun/source` (written by install.sh). Silent when current.
+     from $PERUN_SOURCE, else `<cache>/perun/source` (written by install.sh). Silent when current; a failed read prints NOT CHECKED, never silence or 0.
   2. worktrees whose branch is merged into origin/main (`git branch --merged`; a squash-merged
      branch is not seen as merged) and dev servers listening with a cwd inside this repo's
      worktrees (lsof, skipped when missing or denied), each with a copy-paste report/cleanup
@@ -63,7 +63,9 @@ def version_line(repo: Path):
         return None
     latest = _git(src, "show", "origin/main:.claude/skills/deep-code-review/VERSION")
     have = installed.read_text().strip()
-    if not latest or _vtuple(latest) <= _vtuple(have):
+    if not latest:
+        return f"perun version NOT CHECKED (could not read origin/main of {src}); installed {have}"
+    if _vtuple(latest) <= _vtuple(have):
         return None
     return f"perun {have} < {latest.strip()} on origin/main; update: bash {src}/scripts/update-installed.sh {repo}"
 
@@ -104,11 +106,16 @@ def hygiene_line(repo: Path):
     if not wts:
         return None
     main_wt = wts[0][0]
-    merged = set()
+    merged, unchecked = set(), []
     if _git(repo, "rev-parse", "-q", "--verify", "origin/main"):
-        merged = {b.strip() for b in (_git(repo, "branch", "--merged", "origin/main", "--format=%(refname:short)") or "").splitlines()}
+        out = _git(repo, "branch", "--merged", "origin/main", "--format=%(refname:short)")
+        if out is None:
+            unchecked.append("merged worktrees")
+        merged = {b.strip() for b in (out or "").splitlines()}
     done = [p for p, b in wts[1:] if b and b in merged]
     servers = dev_servers([p for p, _ in wts])
+    if servers is None:
+        unchecked.append("dev servers")
     parts, sc = [], ".claude/skills/agentic-delivery/scripts"
     parent = os.path.commonpath([os.path.dirname(p) for p in done]) if done else ""
     if done:
@@ -116,6 +123,8 @@ def hygiene_line(repo: Path):
     if servers:
         parts.append(f"{len(servers)} dev server(s) listening from this repo's worktrees (pids {' '.join(servers[:5])}); "
                      f"list: bash {main_wt}/{sc}/reap_own.sh --report")
+    if unchecked:
+        parts.append(f"NOT CHECKED (git/lsof unavailable or timed out): {', '.join(unchecked)}; this is not zero")
     return "; ".join(parts) or None
 
 

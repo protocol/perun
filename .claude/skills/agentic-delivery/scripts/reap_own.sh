@@ -14,7 +14,8 @@
 # TCP port as "<cwd> pid=<n> age=<s>s" sorted by worktree path (ROOT optional: unset = all of them), then
 # "orphans=N", the free RAM, and a "FINDING hot" line for each own process using >= CPU_HOT percent CPU
 # (default 50) for more than MAX_AGE_S. Use it as the hand-back check (ROOT=<lane worktree>: orphans=0 means no
-# server or listener is left under it) and as the coordinator-wake check.
+# server or listener is left under it) and as the coordinator-wake check. When pgrep/lsof fail or a live pid's cwd
+# is unreadable it prints "orphans=COULD_NOT_CHECK" and exits 2, never a false "orphans=0".
 set -euo pipefail
 REPORT=0; [ "${1:-}" = "--report" ] && REPORT=1
 if [ $REPORT = 1 ]; then ROOT=${ROOT:-}; else : "${ROOT:?set ROOT to your own tree}"; fi
@@ -29,13 +30,16 @@ kill_verified() {
   kill -9 "$1" 2>/dev/null || true; sleep 0.2
   if alive "$1"; then echo "WARN: pid $1 survived SIGKILL" >&2; return 1; fi
 }
-PIDS=$(pgrep -u "$(id -u)" -f "$PATTERN" || true)
+prc=0; PIDS=$(pgrep -u "$(id -u)" -f "$PATTERN") || prc=$?; BAD=""  # rc 1 = no match; rc >= 2 = pgrep itself failed
+[ "$prc" -le 1 ] || BAD="pgrep failed rc=$prc"
+if [ $REPORT = 1 ]; then command -v lsof >/dev/null || BAD="${BAD:+$BAD; }lsof missing"; fi
 if [ $REPORT = 1 ]; then PIDS="$PIDS $(lsof -t -a -u "$(id -u)" -iTCP -sTCP:LISTEN 2>/dev/null || true)"; fi
 for q in ${QA_PORTS:-}; do PIDS="$PIDS $(lsof -t -a -u "$(id -u)" -iTCP:"$q" -sTCP:LISTEN 2>/dev/null || true)"; done
 n=0; rows=""
 for P in $(printf '%s\n' $PIDS | sort -u); do
   [ "$P" != "$$" ] || continue
   C=$(lsof -a -p "$P" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+  if [ -z "$C" ] && [ $REPORT = 1 ] && alive "$P"; then BAD="${BAD:+$BAD; }cwd of pid $P unreadable"; fi
   if [ -n "$ROOT" ]; then
     case "$C" in "$ROOT"|"$ROOT"/*) ;; *) continue ;; esac
   fi
@@ -46,6 +50,7 @@ for P in $(printf '%s\n' $PIDS | sort -u); do
 done
 if [ $REPORT = 0 ]; then echo "reaped=$n"; exit 0; fi
 printf '%s' "$rows" | sort
+if [ -n "$BAD" ]; then echo "orphans=COULD_NOT_CHECK ($BAD); not zero, not green" >&2; echo "orphans=COULD_NOT_CHECK"; exit 2; fi
 echo "orphans=$n"
 if [ -r /proc/meminfo ]; then echo "ram_free_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
 elif command -v vm_stat >/dev/null; then

@@ -3759,6 +3759,13 @@ else
   record 1 "train resilience: flake re-run triage, exclusive gate lease, mkdir locks"; tail -8 "$WORK/train-resilience.log"
 fi
 
+# peer pains 2: own per-feature file (scripts/test-peer-pains-2.sh), one case here.
+if bash "$ROOT/scripts/test-peer-pains-2.sh" >"$WORK/peer-pains-2.log" 2>&1; then
+  record 0 "peer pains 2: train CANT rule, no false orphans=0, session_brief NOT CHECKED"
+else
+  record 1 "peer pains 2: train CANT rule, no false orphans=0, session_brief NOT CHECKED"; tail -8 "$WORK/peer-pains-2.log"
+fi
+
 # fleet lessons: own per-feature file (scripts/test-fleet-lessons.sh), one case here.
 if bash "$ROOT/scripts/test-fleet-lessons.sh" >"$WORK/fleet-lessons.log" 2>&1; then
   record 0 "fleet lessons: same-host baselines, fresh-store per-title re-runs, process-group timebox"

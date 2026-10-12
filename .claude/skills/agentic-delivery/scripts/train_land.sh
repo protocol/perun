@@ -14,7 +14,8 @@
 # Takes a per-worktree lock (<git-dir>/train-land.lock, pid-checked; a dead holder's lock is reclaimed), so two
 # trains cannot share this worktree or a log. UNION_DIRS: space-separated, or newline-separated when a path has a space.
 # Flake triage (see train_flake.sh; BROWSER_CMD must print `FAIL <id>` per failure and `FAILURES <n>`): RERUN_CMD (TEST=<id>), BASELINE_FAILS (ids failing on the base); LOCK_TIMEOUT_MIN (30), PUSH_WAIT_SECS (600).
-# Exit: 0 landed, 1 base/browser red or lock held, 2 usage/refused, 3 no GREEN union (nothing landed).
+# Exit: 0 landed, 1 base/browser red or lock held, 2 usage/refused, 3 no GREEN union or CANT (nothing landed; CANT = a real browser failure
+# not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame).
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
 # "BASE RED" and exits 1, so a red base is never blamed on a PR), RATCHET_CMD (run via bash -c on each PR
 # merged alone onto the base, with PR=<n>; when no union is GREEN, prints "CULPRIT #n" for each PR that fails it),
@@ -102,22 +103,25 @@ flk=$(grep -c '^FLAKE ' "$LOG.flake" || true)
 listed=$(grep -c . "$LOG.fails" || true); rn=$(sed -nE 's/^FAILURES +([0-9]+) *$/\1/p' "$LOG.browser" | tail -1)
 if [ "$t" -eq 0 ] && [ "$newn" -ge 1 ] && [ "$flk" -eq "$newn" ] && [ -n "$rn" ] && [ "$rn" -le "$listed" ]; then echo "browser failures were flakes only; landing" >&2; break; fi
 [ "$t" -eq 1 ] || { echo "$BR" >&2; exit 1; }
-keep=() ; base=$(git rev-parse HEAD)
+# Bisect (CANT rule): a failure lands nothing unless it is attributed, i.e. it re-fails in isolation (train_flake.sh,
+# FLAKE_RUNS/FLAKE_REAL_AT) AND passes on the bare base AND is pinned to a PR that fails it alone. Flaky-only -> "FLAKY", no blame.
+cant() { git merge --abort 2>/dev/null || true; git checkout -q --detach "$base"; echo "CANT: $1; nothing landed" >&2; exit 3; }
+tri() { local rc=0; RERUN_CMD=$RERUN_CMD FLAKE_INVOCATION=${FLAKE_INVOCATION:-$BROWSER_CMD} bash "$HERE/train_flake.sh" "$1" >"$2.t" || rc=$?; [ "$rc" -ne 2 ] || cant "re-run setup failed in the bisect"; sed -n 's/^REAL //p' "$2.t" >"$2"; }
+keep=() ; base=$(git rev-parse HEAD); sed -n 's/^REAL //p' "$LOG.flake" >"$LOG.real"; : >"$LOG.pinned"
+renew; tri "$LOG.real" "$LOG.onbase"
+[ ! -s "$LOG.onbase" ] || { echo "BASE RED: $(tr '\n' ' ' <"$LOG.onbase")fail(s) on the bare base (pre-existing; add to BASELINE_FAILS); nothing landed" >&2; exit 1; }
 for n in "${PRS[@]}"; do
-  renew  # per-PR bisect: merge alone onto the base, re-run each REAL id
-  git checkout -q --detach "$base"; bad=0
-  if git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1; then
-    while IFS= read -r id; do
-      br=0; RERUN_CMD=$RERUN_CMD bash "$HERE/train_flake.sh" --one "$id" || br=$?  # same fresh store + setup hook as the triage
-      [ "$br" -ne 125 ] || { git merge --abort 2>/dev/null || true; git checkout -q --detach "$base"; echo "fresh store or FLAKE_SETUP_CMD failed in the bisect for $id; nothing landed" >&2; exit 1; }
-      [ "$br" -eq 0 ] || bad=1
-    done < <(sed -nE 's/^REAL //p' "$LOG.flake")
-  fi
-  git merge --abort 2>/dev/null || true
-  if [ "$bad" -eq 1 ]; then echo "DROP #$n fails the real browser failures alone on the base"; else keep+=("$n"); fi
+  renew  # per-PR bisect: merge alone onto the base, re-run each REAL id with the same triage
+  git checkout -q --detach "$base"
+  git fetch -q "$REMOTE" "pull/$n/head" && git merge -q --no-edit FETCH_HEAD >/dev/null 2>&1 || cant "#$n does not merge alone onto the base, so it cannot be attributed"
+  tri "$LOG.real" "$LOG.alone"; git merge --abort 2>/dev/null || true
+  if [ -s "$LOG.alone" ]; then cat "$LOG.alone" >>"$LOG.pinned"; echo "DROP #$n fails the real browser failures alone on the base"
+  else keep+=("$n"); echo "FLAKY #$n: no real failure alone on the base; not blamed"; fi
 done
 git checkout -q --detach "$base"
-if [ "${#keep[@]}" -eq "${#PRS[@]}" ] || [ "${#keep[@]}" -lt 2 ]; then echo "$BR (real failures not isolated to droppable PRs, or <2 PRs left)" >&2; exit 1; fi
+[ "${#keep[@]}" -lt "${#PRS[@]}" ] || cant "no culprit pinned for the real failures"
+grep -vxFf "$LOG.pinned" "$LOG.real" | grep -q . && cant "real failure(s) not pinned to any PR: $(grep -vxFf "$LOG.pinned" "$LOG.real" | tr '\n' ' ')"
+[ "${#keep[@]}" -ge 2 ] || cant "<2 PRs left after dropping culprits"
 PRS=("${keep[@]}")
 done
 # Pushes go through one serial queue across worktrees (mkdir lock under the git common dir).

@@ -34,7 +34,7 @@ mkdir "$WORK/stale"; echo dirty >"$WORK/stale/x"; export STALE="$WORK/stale"
 FLAKE_SETUP_CMD='echo seed >"$FLAKE_STORE/s"' RERUN_CMD='[ -n "${FLAKE_STORE:-}" ] && [ ! -e "$FLAKE_STORE/x" ] && [ -e "$FLAKE_STORE/s" ]' bash "$SC/train_flake.sh" --one t1 2>/dev/null
 ok $? "bisect helper: --one gives a fresh seeded store (a stale shared store would fail)"
 RERUN_CMD='[ -n "${FLAKE_STORE:-}" ]' bash -c 'unset FLAKE_STORE; bash -c "$RERUN_CMD"'; [ $? -ne 0 ]; ok $? "without the helper FLAKE_STORE is unset, so a stale-store re-run fails"
-grep -q 'train_flake.sh" --one' "$SC/train_land.sh"; ok $? "train_land bisect calls train_flake.sh --one"
+grep -q 'train_flake.sh" "\$1"' "$SC/train_land.sh"; ok $? "train_land bisect re-runs through train_flake.sh triage (fresh store per run)"
 ! grep -nE '\brm\b' "$SC/train_flake.sh"; ok $? "train_flake.sh contains no rm"
 
 # --- timebox kills the whole process group (grandchild included), only its own ---

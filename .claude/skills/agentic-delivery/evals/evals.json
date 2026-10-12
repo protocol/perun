@@ -2684,6 +2684,18 @@
         "Gated or irreversible items are parked with defer --park, not asked and waited on",
         "Does not propose a blocking Stop hook"
       ]
+    },
+    {
+      "id": "train-cant-and-unchecked-not-zero",
+      "prompt": "A merge train's browser gate is red. The bisect blames PR #2, which passes the failing specs alone, and a lane hands back while its own git push is still in its 15 minute pre-push hook. What do the mechanisms do, and what must a status line print when a check could not run?",
+      "expected_output": "Train exits CANT and lands nothing for unattributed failures; flaky-only bisects print FLAKY with no blame; the handback hook blocks a hand-back while the worktree's push runs; could-not-check prints NOT CHECKED or COULD_NOT_CHECK, never 0.",
+      "expectations": [
+        "Bisect re-runs each failing id in isolation through train_flake.sh (FLAKE_RUNS/FLAKE_REAL_AT) and blames only a PR that fails it alone",
+        "A failure that passes alone for every PR is reported FLAKY, no PR is blamed, and the train exits CANT (3) landing nothing",
+        "A real failure that is pre-existing on the base (BASE RED) or not pinned to a culprit PR also lands nothing",
+        "A lane owns its background work (its own git push, tests, builds) until it completes and never hands back mid-push; handback_cap.py blocks such a hand-back",
+        "A timeout or error in a status or summary check prints NOT CHECKED or COULD_NOT_CHECK (reap_own --report, session_brief), never orphans=0 or silence"
+      ]
     }
   ]
 }

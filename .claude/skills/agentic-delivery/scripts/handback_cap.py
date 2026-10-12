@@ -43,6 +43,7 @@ skip it.
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 
@@ -83,10 +84,45 @@ def _read_blocks(path):
         return 0
 
 
+def _push_running(cwd):
+    """True when a `git push` whose cwd is inside `cwd` is live (its pre-push hook may be running).
+    Unknowable (no ps/lsof, empty cwd) -> False: the check is advisory and never wedges a stop."""
+    if not cwd:
+        return False
+    try:
+        ps = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=10).stdout
+        root = os.path.realpath(cwd)
+        for ln in ps.splitlines():
+            pid, _, cmd = ln.strip().partition(" ")
+            if not re.search(r"\bgit\b(\s+-\S+)*\s+push\b", cmd) or not pid.isdigit() or int(pid) == os.getpid():
+                continue
+            out = subprocess.run(["lsof", "-a", "-d", "cwd", "-p", pid, "-Fn"], capture_output=True, text=True, timeout=10).stdout
+            for n in out.splitlines():
+                p = os.path.realpath(n[1:]) if n.startswith("n") else ""
+                if p == root or p.startswith(root.rstrip("/") + "/"):
+                    return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return False
+
+
 def check(data):
     """Return the hook exit code (0 pass, 2 block) for one hook-input dict."""
     if str(data.get("agent_type") or "") in _exempt_types():
         return 0
+    if _push_running(data.get("cwd")):
+        agent_id = str(data.get("agent_id") or "unknown")
+        os.makedirs(STATE_DIR, exist_ok=True)
+        path = _state_path(agent_id) + ".push"
+        blocks = _read_blocks(path)
+        if blocks < MAX_BLOCKS:
+            with open(path, "w") as fh:
+                fh.write(str(blocks + 1))
+            sys.stderr.write(
+                "A git push from this worktree is still running (its pre-push hook may take 15+ minutes). "
+                "You own it until it exits: wait with lane_guard.py wait --pid <pid> --timeout <s>, then hand back.\n"
+            )
+            return 2
     msg = data.get("last_assistant_message") or ""
     agent_id = str(data.get("agent_id") or "unknown")
     chars = len(msg)
@@ -148,6 +184,18 @@ def _selftest():
         else:
             failed += 1
             print(f"FAIL  {name} (got rc={got}, want rc={want})")
+
+    global _push_running
+    real_push = _push_running
+    _push_running = lambda cwd: cwd == "/live"
+    case("push-running-blocks", check({"agent_id": "p1", "cwd": "/live", "last_assistant_message": "VERIFIED"}), 2)
+    case("push-not-running-passes", check({"agent_id": "p2", "cwd": "/idle", "last_assistant_message": "VERIFIED"}), 0)
+    case("push-exempt-type-passes", check({"agent_id": "p3", "agent_type": "Explore", "cwd": "/live", "last_assistant_message": "x"}), 0)
+    for _ in range(MAX_BLOCKS):
+        check({"agent_id": "p4", "cwd": "/live", "last_assistant_message": "VERIFIED"})
+    case("push-block-releases-after-max-blocks", check({"agent_id": "p4", "cwd": "/live", "last_assistant_message": "VERIFIED"}), 0)
+    _push_running = real_push
+    case("push-check-no-cwd-passes", _push_running(""), False)
 
     # short message passes
     case("short-passes", check({"agent_id": "a1", "last_assistant_message": "VERIFIED | verdict=ok"}), 0)
