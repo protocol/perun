@@ -58,8 +58,7 @@ loop, not a single task**. Frame it as the default stance:
   against durable output. Useful signals — **no** target thresholds (fabricated
   otherwise): merged-**to-default** per window, base-red **minutes-to-green**,
   **fix-forward share**. Routing: `fanout-host-sizing.md` **Report the artifact,
-  not the activity** and `unattended-trackers.md` **reconcile what you report against the
-  operator's metric**; DORA: `deep-code-review`'s `release-engineering.md`.
+  not the activity** and `unattended-trackers.md` **Even before that automation exists**; DORA: `deep-code-review`'s `release-engineering.md`.
 
 ## Why sessions stop after one item, and how to run autonomously
 
@@ -102,8 +101,7 @@ The mode is not new machinery — it is the suite's existing gates run continuou
   a host/user-scope mechanism reaching every spawned subagent, never a
   per-brief instruction alone — and verified the same way too: confirm a
   spawned subagent's own context actually carries it before claiming the
-  profile is universal (`multi-session-coordination.md` **Enforce the
-  default**, whose "bridge in-flight agents" rider and reach test apply
+  profile is universal (`multi-session-coordination.md` **A standing house default must live where every subagent reads it**, whose "bridge in-flight agents" rider and reach test apply
   unchanged here).
 - **A decision that would otherwise wait on the owner is attacked by
   `idea-critic` before the reversible-choice default above is taken, not
@@ -149,8 +147,7 @@ Each rung is a name and a pointer; the mechanism lives at the pointer.
 
 - **FREEZE-THEN-TRAIN** — while a resolver rebases a cluster against the base,
   freeze merges into that base and land only non-overlapping surgical merges
-  meanwhile. `merge-operations.md` **freeze the sweep while a resolver
-  runs**; `merge-queue-worktrees.md` **Parallelizing the merge seat backfires** and
+  meanwhile. `merge-operations.md` **Mergeable is a snapshot against a moving base head**; `merge-queue-worktrees.md` **Parallelizing the merge seat backfires** and
   `dev-env-ownership.md` **An ownership map blocks a dual write, not dual work** (a shared artifact in
   flight blocks only the lanes that touch it).
 - **SIZE-TO-MEASURED-HEADROOM-AND-SCALE-UP** — the ceiling is a **back-off trigger,

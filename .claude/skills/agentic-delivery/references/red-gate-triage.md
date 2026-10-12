@@ -76,7 +76,7 @@ misread and is just as costly.
   list — a real assertion, a type error, a lint — is deterministic and reproduces, so it is a real regression on
   the **first** red; never rerun it blind. This is §5's
   *retry only an `UNKNOWN`, never a definite `CONFLICTING`* rule read at the required-check layer (and the
-  lane-level twin, `fanout-host-sizing.md` *an ENOSPC is a sizing bug, not a flaky lane to retry*). The cap does double duty in
+  lane-level twin, `fanout-host-sizing.md` **a sizing bug, the spawn gate omitted disk**). The cap does double duty in
   the drainer: past it the verdict **flips** to suspected regression — it does not merely stop the retrying.
 - **The auto-rerun is a stopgap, not the fix — track it as a defect.** File the flaky gate for a **durable fix**
   (make the probe fail-open on a can't-check, widen the timeout, or de-parallelize it) and watch the
