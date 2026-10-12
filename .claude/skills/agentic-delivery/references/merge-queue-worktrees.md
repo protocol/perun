@@ -1,9 +1,7 @@
 # Fast agentic delivery — merge-queue cadence and train landing
 
-Read this when: draining a ready queue or a single merge seat, landing a train (`merge_train.py`, `train_land.sh`, `land_train.sh`, the review gate), scoping an auto-merger, hitting a permission asymmetry or a human-run escape hatch, staggering ready-flips, rebasing a moving base under stacked lanes, offloading a heavy gate to CI, or an OOM-killed train.
-Part of the `fast-agentic-delivery.md` lesson ledger — its index, sources, and cross-references live there; an "above"/"below"
-pointer to a section not in this file resolves through that index (sibling parts: `merge-queue-worktrees.md`,
-`red-gate-triage.md`, `worktree-isolation.md`).
+Read this when: draining a ready queue or a single merge seat, landing a train (`merge_train.py`, `train_land.sh`, `land_train.sh`, the review gate), scoping an auto-merger, hitting a permission asymmetry or a human-run escape hatch, staggering ready-flips, rebasing a moving base under stacked lanes, offloading a heavy gate to CI, an opt-in throughput lever, the window's not-red admission check, an independent-PR queue cascade, draft-gated heavy checks, fleet delivery rules (footprint-sized trains, one merge at a time), or an OOM-killed train.
+Part of the `fast-agentic-delivery.md` ledger (index and sources there); an "above"/"below" pointer to a missing section is in `red-gate-triage.md` or `worktree-isolation.md`.
 
 ---
 
@@ -260,7 +258,7 @@ drained runner pool.
 
 ## A moving base under a stack of dependent lanes: merge it in, don't rebase onto it — and verify a self-reported "rebased" claim
 
-The section above rebases a **single** queued branch onto a landed fix — safe because nothing downstream depends
+The `red-gate-triage.md` section on a landed flaky-test fix rebases a **single** queued branch onto a landed fix — safe because nothing downstream depends
 on that branch's SHAs. A **stacked** lane (a child branched off a parent's still-unmerged branch, `SKILL.md`'s
 *A stacked/child lane branches off the parent's LOCAL ref*) is different: rebasing the parent onto a base that
 keeps moving rewrites every SHA the child already built on, so each parent rebase forces every child to redo its

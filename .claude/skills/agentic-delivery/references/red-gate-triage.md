@@ -1,9 +1,7 @@
 # Fast agentic delivery — red-gate triage
 
 Read this when: a gate, union, or CI check is red and you must decide whether it is real: attributing a red union (check the bare base first), a load-flaky or contention-red check, a fleet-wide external finding, an absent (uncomputable) check, or propagating a landed flaky-test fix to queued branches.
-Part of the `fast-agentic-delivery.md` lesson ledger — its index, sources, and cross-references live there; an "above"/"below"
-pointer to a section not in this file resolves through that index (sibling parts: `merge-queue-worktrees.md`,
-`red-gate-triage.md`, `worktree-isolation.md`).
+Part of the `fast-agentic-delivery.md` ledger (index and sources there); an "above"/"below" pointer to a missing section is in `merge-queue-worktrees.md` or `worktree-isolation.md`.
 
 ---
 
@@ -78,7 +76,7 @@ misread and is just as costly.
   list — a real assertion, a type error, a lint — is deterministic and reproduces, so it is a real regression on
   the **first** red; never rerun it blind. This is §5's
   *retry only an `UNKNOWN`, never a definite `CONFLICTING`* rule read at the required-check layer (and the
-  lane-level twin, *an ENOSPC is a sizing bug, not a flaky lane to retry*, above). The cap does double duty in
+  lane-level twin, `fanout-host-sizing.md` *an ENOSPC is a sizing bug, not a flaky lane to retry*). The cap does double duty in
   the drainer: past it the verdict **flips** to suspected regression — it does not merely stop the retrying.
 - **The auto-rerun is a stopgap, not the fix — track it as a defect.** File the flaky gate for a **durable fix**
   (make the probe fail-open on a can't-check, widen the timeout, or de-parallelize it) and watch the
@@ -116,16 +114,16 @@ delivery gate's own verdict.
   chasing a non-bug; `--no-verify`-ing past the red defeats the gate. Do neither on the first red.
 - **The disambiguator is a rerun *in isolation*, not merely on the same commit.** Quiesce the box first — pause
   or kill the other heavy lanes, shedding the test runner's own browsers but not the app's dev server
-  (*CI-offload the heavy gate* above) — then re-run the **specific failing check** on the identical commit. A
+  (`merge-queue-worktrees.md` *CI-offload the heavy gate*) — then re-run the **specific failing check** on the identical commit. A
   pass on the quiesced box proves the red was contention; only a failure that
   **still reproduces at low concurrency** is a candidate regression and enters the fix queue. A same-commit
   rerun taken *without* quiescing is not a valid disambiguation: under sustained contention it keeps failing and
   wrongly flips the verdict to "regression" — the exact wasted cycle the load-flaky rule's bounded rerun assumes
   it has already ruled out.
 - **Prevent the misread by sizing, not only by diagnosing it after.** Throttle heavy gate lanes by *measured*
-  load (free RAM + the swap trend, *Gate on free RAM and the swap trend* above; the peer-aggregate form is
+  load (free RAM + the swap trend, `fanout-host-sizing.md` *Gate on free RAM and the swap trend*; the peer-aggregate form is
   `multi-session-coordination.md`'s shared heavy-lane reservation), and run locally only the gate CI actually
-  enforces (*CI-offload the heavy gate* above) — so fewer contention-flakes reach the verdict step at all.
+  enforces (`merge-queue-worktrees.md` *CI-offload the heavy gate*) — so fewer contention-flakes reach the verdict step at all.
 - **A rebase or merge-conflict resolution is unverified code, not a confirmed pass.** `git rebase --continue`
   never re-invokes `pre-commit` on the replayed commits, so re-run the lint+unit tier explicitly right after
   conflict resolution and before `git push`; `templates/pre-push-verify.sh` (`deep-code-review`) can enforce this
@@ -135,7 +133,7 @@ delivery gate's own verdict.
   the staged content, not the working tree, so an unstaged fix leaves the old hit in place and the same
   failure repeats. Re-add the file, then rerun the gate.
 
-Distinct from *Gate on free RAM and the swap trend* and *CI-offload the heavy gate* (#935): those decide
+Distinct from *Gate on free RAM and the swap trend* and `merge-queue-worktrees.md` *CI-offload the heavy gate* (#935): those decide
 **whether and how heavily** to run the local gate (sizing) — prevention; this decides
 **how to read a red the gate already produced** — interpretation. Distinct from the load-flaky-required-gate
 rule above: that is the CI required-check verdict with a same-commit rerun; here the shared-machine gate's rerun
@@ -192,7 +190,7 @@ landed fix, before the branch's next push.
 
 ## Absent checks are a third state, not a slow "pending" — an uncomputable merge ref suppresses the run; bounded-wait then re-trigger, never wait forever
 
-The two sections above are how an autonomous drainer reads a check-state bit at two of the places it reads one:
+The `merge-queue-worktrees.md` *not-red* section and this one are how an autonomous drainer reads a check-state bit at two of the places it reads one:
 the *not-red* section sets the **base-admission threshold** (a base run still in flight is admissible — pending
 is not a hold), and the *load-flaky* section sets the **red-verdict rule** (a first red is a candidate to
 reclassify, not a regression conclusion). This is the third place — a **member PR's own** readiness — and its
@@ -206,7 +204,7 @@ backlog can suppress the dispatch the same way, transiently). The PR then shows 
 easy to misread: a human or drainer sees "no failures" and reads it as *still pending*, or even *clean*, when in
 fact the run never started and never will for that SHA without intervention. A drainer whose rule is "poll until
 the checks appear and go green" then polls a PR whose checks will never appear — the same starvation as the
-blocked-head case above, but from a head that was never *checked* rather than one checked and *refused*.
+`merge-queue-worktrees.md` blocked-head case, but from a head that was never *checked* rather than one checked and *refused*.
 
 - **Read `mergeable` / `mergeable_state` alongside the check list — it is the discriminator.** Zero checks +
   non-mergeable (`dirty` / `CONFLICTING`) = **stalled**: the run was suppressed and needs a re-fire. Zero checks
@@ -231,7 +229,7 @@ gets a job to report because the workflow is wired wrong (a path filter, a trigg
 `on.pull_request.branches` base entry), and the fix is **config-side** and permanent — a pass-through job or a
 corrected `on:` block. Here the workflow is correctly wired; a re-merge makes the *same* job fire. Same surface
 symptom (no status looks like pending), opposite remedy — a config fix vs a re-trigger. Distinct too from the
-**serial-drainer spins on a blocked head** rule (above): there the head is green + mergeable but refused by a
+**serial-drainer spins on a blocked head** rule (`merge-queue-worktrees.md`): there the head is green + mergeable but refused by a
 *stricter final gate*, so the drain **advances past** it; here the head was never checked at all, so the drain
 **re-fires** it — advance-past abandons a genuinely-blocked item, re-fire rescues a never-started one.
 

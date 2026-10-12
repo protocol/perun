@@ -1,9 +1,7 @@
 # Fast agentic delivery — worktree isolation
 
 Read this when: isolating a lane's worktree: stale refs, `git stash`, out-of-tree scratch, an assignment path, a worktree's own gate firing on a file it does not own, worktree sprawl or cleanup, or sparse-excluding committed evidence.
-Part of the `fast-agentic-delivery.md` lesson ledger — its index, sources, and cross-references live there; an "above"/"below"
-pointer to a section not in this file resolves through that index (sibling parts: `merge-queue-worktrees.md`,
-`red-gate-triage.md`, `worktree-isolation.md`).
+Part of the `fast-agentic-delivery.md` ledger (index and sources there); an "above"/"below" pointer to a missing section is in `merge-queue-worktrees.md` or `red-gate-triage.md`.
 
 ---
 

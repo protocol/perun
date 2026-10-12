@@ -26,7 +26,7 @@ Copied as principles, not as anyone's private playbook:
 9. **Closing or deleting shared state needs evidence, not presumption** — a reproducible reason, unique context migrated first.
 10. **A fleet-wide external advisory is a third case for principle 3, and an
     independent-queue merge cascade is a cadence choice subordinate to
-    principle 6** — depth and honest limits: `references/merge-queue-worktrees.md`.
+    principle 6** — see `references/red-gate-triage.md`, `merge-queue-worktrees.md`
 11. **"Visible/done" is measured on the owner's own surface, never a proxy** — wired ≠ rendered ≠ has a real value.
 12. **A fork a ratified invariant already decides is not an owner gate**; a change that would reverse one is queued to the owner, never applied silently.
 

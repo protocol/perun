@@ -58,8 +58,8 @@ loop, not a single task**. Frame it as the default stance:
   against durable output. Useful signals — **no** target thresholds (fabricated
   otherwise): merged-**to-default** per window, base-red **minutes-to-green**,
   **fix-forward share**. Routing: `fanout-host-sizing.md` **Report the artifact,
-  not the activity** and `unattended-trackers.md` **reconcile status against the
-  operator's open-issue metric**; DORA: `deep-code-review`'s `release-engineering.md`.
+  not the activity** and `unattended-trackers.md` **reconcile what you report against the
+  operator's metric**; DORA: `deep-code-review`'s `release-engineering.md`.
 
 ## Why sessions stop after one item, and how to run autonomously
 
@@ -133,7 +133,7 @@ Each rung is a name and a pointer; the mechanism lives at the pointer.
 3. **Turn red / conflicting PRs green by conflict TYPE, not file count** —
    already-applied vs diverged vs regenerable-artifact vs true textual conflict,
    each resolved by its type. `deep-code-review` `branch-and-merge-hygiene.md` §4
-   decision tree, `merge-operations.md` **Never hand-resolve a conflict inside a generated file**;
+   decision tree, `merge-operations.md` **Never hand-resolve a merge conflict**;
    `merge-operations.md` **Merge trains**; the zero-checks / `mergeable_state` re-fire case is
    `red-gate-triage.md` **Absent checks are a third state**.
 4. **Deliver open issues in verify-first waves** — the fix may already be on the
