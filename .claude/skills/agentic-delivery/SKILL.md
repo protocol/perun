@@ -27,14 +27,16 @@ chat may be terse.
 
 **No files/tools (plain chat)?** Say so once; never claim a reference loaded or a command run. Write `would run: <cmd>`, mark skipped depth `unverified-depth`, answer first, reasoning short.
 
-**Read `INDEX.md` first** — every reference/script's trigger; open one only
-when its row matches, never blindly. **On a new machine or a new fleet, read
-`references/operating-discipline.md` first of all** — the always-on layer's
-one entry point (communication/minimal-code modes, hand-back caps, model/
-effort routing, fan-out probing, usage pacing, conductor rules, cross-session
-coordination, safety rules), each a one-line pointer to the section that owns
-it, plus the `install.sh --with-operating-layer` settings snippet and
-`scripts/operating_selfcheck.py` self-check.
+**Task to entry** — a match skips `INDEX.md`; otherwise read it (every reference/script trigger) and open only matching rows.
+
+| Task | Open |
+|---|---|
+| Land PRs as a train | `scripts/merge_train.py`, `scripts/train_land.sh`; depth `references/merge-queue-worktrees.md` |
+| Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md` |
+| Start a lane | `templates/lane-preamble.md` |
+| Isolate a lane's worktree | `references/worktree-isolation.md` |
+| Verify or relay a lane's result | `references/verification-handback.md` |
+| New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
 
 ---
 
@@ -103,18 +105,16 @@ the duplicated-work failure mode, and the pilot procedure:
 same lane, change approach; the cost-ordered ladder (reframe, decorrelate,
 stronger tier): `references/fanout-host-sizing.md` **Escalate a lane**.
 
-**Sweeping the whole ready queue on every trigger** — a completeness fix to
-this event-driven model, not a change to it: `references/merge-queue-worktrees.md`.
+**Ready-queue sweep on every trigger; review gate** — `scripts/review_gate.py`, `references/merge-queue-worktrees.md`.
 
-**Review gate:** `scripts/review_gate.py`, `references/merge-queue-worktrees.md`.
-
-**Worked-lesson ledger** — five themed files, indexed one line each in
-`references/fast-agentic-delivery.md`. Read `references/verification-handback.md`
-when verifying, finalizing, or relaying a lane's result (liveness, `Verify:`
-lines, fan-out joins); `references/dev-env-ownership.md` when a lane serves a
-dev server, re-runs a generator or ratchet, or shares files under an ownership
-map; `references/unattended-trackers.md` when closing tracker issues or running
-a multi-hour work loop; `references/work-tracking.md` when a repo uses a work tracker (issue/PR linking, status moves, auto-close hazards, the weekly project update, `tracker_check.py`). Paste `templates/lane-preamble.md` into every lane brief. Loop prompts and scheduled-task templates (coordinator, peer, cleanup; 20-minute floor): `templates/loops/*.md`.
+**Worked-lesson ledger** — seven themed files, indexed one line each in
+`references/fast-agentic-delivery.md`. Open `references/verification-handback.md`
+when verifying or relaying a lane's result; `references/dev-env-ownership.md`
+when a lane serves a dev server, re-runs a generator or ratchet, or shares files
+under an ownership map; `references/unattended-trackers.md` when closing tracker
+issues or running a multi-hour work loop; `references/work-tracking.md` when a
+repo uses a work tracker (issue/PR linking, status moves, auto-close hazards,
+the weekly project update, `tracker_check.py`). Paste `templates/lane-preamble.md` into every lane brief. Loop prompts and scheduled-task templates (coordinator, peer, cleanup; 20-minute floor): `templates/loops/*.md`.
 
 **Drifting into a lane's work** — while a lane is in flight, two consecutive
 Conductor turns that query, build, edit, or mutate the target instead of

@@ -1,0 +1,241 @@
+# Fast agentic delivery — red-gate triage
+
+Read this when: a gate, union, or CI check is red and you must decide whether it is real: attributing a red union (check the bare base first), a load-flaky or contention-red check, a fleet-wide external finding, an absent (uncomputable) check, or propagating a landed flaky-test fix to queued branches.
+Part of the `fast-agentic-delivery.md` lesson ledger — its index, sources, and cross-references live there; an "above"/"below"
+pointer to a section not in this file resolves through that index (sibling parts: `merge-queue-worktrees.md`,
+`red-gate-triage.md`, `worktree-isolation.md`).
+
+---
+
+## A third gate-epistemology case: a correct, external, fleet-wide finding
+
+Principle 3 separates *the check could not run* (`UNVERIFIED` — never a pass, and a *required* missing check
+still blocks its gated action) from *a real defect the diff introduced* (fail closed). A newly-published,
+correctly-detected dependency-vulnerability advisory is neither: the gate is right, the finding is real, and it
+is shared across every open change **and the mainline itself**, with no relationship to any one diff. One
+observed instance: a real advisory reddened the mainline and every open PR in a queue at once with zero code
+change from any of them; the fix that actually unblocked the fleet was
+**one coordinated dependency-lockfile bump**, landed as a fix-forward, after which the rest of the queue needed
+to resync against the new mainline rather than each independently rediscover the same fix. Name this case
+explicitly — it saves the diagnosis time of treating a fleet-wide, external-cause red as N unrelated
+regressions. It is a **diagnosis shortcut, not a new merge authority**: it does not license merging onto a red
+mainline beyond whatever narrow, human-approved change-control path a project already has for exactly this case
+(one reviewed, unblocking fix).
+
+## A red union is not automatically the first PR's fault: attribute it, and check the bare base first
+
+Three train-failure shapes look like a PR failure and are not. **(1) Culprit attribution:** when a union fails a
+ratchet (a file-length or count limit), dropping the first PR drops the wrong one when a later PR's diff is what
+exceeds the limit; measure each PR merged **alone onto the current base** and drop the one that fails. **(2) Stale-base
+measurement:** a PR can be under a line limit on its own stale base and over it once the current base is merged in,
+so measure ratchets only after merging the current base. **(3) Red base:** a new advisory or a broken base fails the
+audit gate in every train; run the audit on the bare base first and report `BASE RED` instead of blaming a PR.
+`scripts/train_land.sh` implements (1) and (3) behind optional `RATCHET_CMD` and `BASE_AUDIT_CMD` (tested in
+`scripts/test-train-scripts.sh`); (2) is the same measurement taken on the merged result.
+
+**Load flakes must not sink a train.** A train that is all-or-nothing under load can merge nothing for hours: failures that
+looked new all passed when re-run alone. With `RERUN_CMD` (and optionally `BASELINE_FAILS`), `train_land.sh` re-runs each
+new `FAIL <id>` from the browser gate alone up to 3 times (`train_flake.sh`); an id is real only when it fails at least 2
+of 3, flakes are reported separately and never block, and only PRs that fail the real ids merged alone onto the base are
+dropped before the rest re-verify and land. While the gate runs it holds the exclusive machine-wide heavy lease
+(`perun_policy.py heavy-exclusive`), so `heavy_gate.py` denies other heavy commands with "gate running: wait" and lanes stop
+adding load; pushes go through one serial queue (`train-push.lock`). The lease is valid while its pid is alive and its mtime is
+fresh; the train renews it at each step. Waits use the `_lock.sh` mkdir lock, never a process-name match; a lock that looks
+stale is reported with the command to clear it by hand and is never moved or deleted automatically. A red browser run lands
+only when every new listed failure re-ran as a flake and the runner's own `FAILURES <n>` count is not above the listed `FAIL`
+lines. Tests: `scripts/test-train-resilience.sh`.
+
+## A load-flaky required gate is not a confirmed red — bounded-rerun the same commit to reclassify it before concluding a regression
+
+This expands `gate-epistemology.md` principle 3 ("if the shape matches a known-flaky
+browser/probe/hydration check, rerun and recheck **before** reverting") to the verdict an
+**autonomous merge-drainer** draws from a required check's pass/fail bit after each merge. Principle 3 carries
+the discriminator — identify the failing job **and step**, match it against a known-flaky signature, revert only
+once the failure **reproduces** and is causally tied to the change — and the rerun **mechanics** live in
+`merge-operations.md`: diagnose a slow/stuck shard by its log, **rerun at most once, only after**
+diagnosis, no *rerun-storm*, and retry only an indeterminate result (an `UNKNOWN`), never a **definite**
+failure, as if it were transient. Neither is restated here. What the drainer case adds is the **verdict layer**:
+a first red is not a regression conclusion, the premature *halt* is as costly as the premature *revert*, and an
+auto-rerun that keeps working is itself a tracked defect.
+
+The trap is specific: a required gate that shells out to an external probe under a tight timeout is
+deterministic in isolation but **load-sensitive** under merge volume, so a busy runner reddens the trunk with no
+code change from any diff. From the bit alone the drainer cannot separate this **load-flake** from a real
+regression, and both naive reactions are wrong — **halt** the whole queue (throughput collapses and an innocent
+PR is blamed, sometimes auto-reverted) or **force through** (a genuinely broken trunk is hidden for the next
+contributor). Principle 3 governs the premature *revert*; the premature *halt* is the other face of the same
+misread and is just as costly.
+
+- **A first non-green is a candidate to reclassify, not a verdict.** If its shape is on the known-flaky list,
+  rerun the gate on the **identical commit** — never a silent rebase, which changes what is tested and can
+  launder a real failure into a "pass" — within the bounded rerun budget §5's slow-shard-diagnosis rule sets
+  (para 1). Green on rerun confirms the flake; proceed. This is how a first red *becomes* a **confirmed** red:
+  only after the bounded reruns still fail is the trunk a confirmed-failing base, at which point the
+  **red-base discharge floor** applies (a confirmed red is a real deadlock needing a proven union to discharge —
+  the floor above, and `merge-operations.md`) and a revert is warranted — name the candidate commits.
+  The first red is never itself the confirmed red.
+- **Only a known-flaky shape is a rerun candidate; everything else is real immediately.** A shape *not* on the
+  list — a real assertion, a type error, a lint — is deterministic and reproduces, so it is a real regression on
+  the **first** red; never rerun it blind. This is §5's
+  *retry only an `UNKNOWN`, never a definite `CONFLICTING`* rule read at the required-check layer (and the
+  lane-level twin, *an ENOSPC is a sizing bug, not a flaky lane to retry*, above). The cap does double duty in
+  the drainer: past it the verdict **flips** to suspected regression — it does not merely stop the retrying.
+- **The auto-rerun is a stopgap, not the fix — track it as a defect.** File the flaky gate for a **durable fix**
+  (make the probe fail-open on a can't-check, widen the timeout, or de-parallelize it) and watch the
+  **fraction of reruns that go green**: a rising ratio means the flaky-signature list is outgrowing the fixes
+  and the drainer is leaning on a crutch, each entry a gate that still needs its own repair.
+
+Distinct from **"bound every flaky finalize step"** (below): there the bound's expiry falls back to a text
+`Verify:` report and the change still lands; here the bound's expiry **flips the verdict on the code** — flake
+to suspected real regression — and gates the halt/revert decision itself. Distinct too from the
+**fleet-wide external advisory** (above): that is a *real* finding shared by every open change, fixed by one
+coordinated bump; a load-flake is **not a real finding at all**, and the remedy is a rerun, not a fix-forward.
+
+**🚩** a drainer that concludes "regression" — halts the queue or auto-reverts the last merge — on the **first**
+non-green of a load-/infra-shaped required check without a bounded same-commit rerun; or one that reruns a
+**deterministic** assertion failure instead of treating it as real; or a rising rerun-went-green ratio nobody is
+converting into durable gate fixes.
+
+## A local pre-push gate reddened by machine contention is not a regression — re-run the failing check in isolation before concluding one
+
+The load-flaky-required-gate rule above is the CI/merge-drainer sibling of this one: it reads a
+*required check's* pass/fail bit and reruns the **identical commit** to reclassify a first red. The same
+discipline governs the **local build/test/lint gate** several lanes — or peer sessions
+(`multi-session-coordination.md`) — run before push on **one shared machine**, with one constraint the CI
+wording leaves open: the rerun must also be **isolated**, because the contention that reddened the gate is
+*on that box*, so a same-commit rerun taken while the other heavy lanes still run reproduces the contention, not
+the code. The canonical rule — a failure appearing only under fan-out concurrency is contention, not a defect,
+until reproduced at low concurrency, and its "re-run the specific failing check in isolation" step — is
+`parallel-audit.md` §0 (in the `deep-code-review` sibling) and is **not restated here**; this applies it to the
+delivery gate's own verdict.
+
+- **A first red under aggregate load is a candidate to reclassify, not a regression conclusion — and bypassing the gate is not the alternative.**
+  Several full local gates at once can exhaust the shared box's CPU / RAM / file descriptors, so a
+  headless-browser render times out, a latency/timing assertion trips, or a suite flakes — indistinguishable,
+  from inside one lane, from a real regression the diff introduced. Concluding "regression" burns a fix cycle
+  chasing a non-bug; `--no-verify`-ing past the red defeats the gate. Do neither on the first red.
+- **The disambiguator is a rerun *in isolation*, not merely on the same commit.** Quiesce the box first — pause
+  or kill the other heavy lanes, shedding the test runner's own browsers but not the app's dev server
+  (*CI-offload the heavy gate* above) — then re-run the **specific failing check** on the identical commit. A
+  pass on the quiesced box proves the red was contention; only a failure that
+  **still reproduces at low concurrency** is a candidate regression and enters the fix queue. A same-commit
+  rerun taken *without* quiescing is not a valid disambiguation: under sustained contention it keeps failing and
+  wrongly flips the verdict to "regression" — the exact wasted cycle the load-flaky rule's bounded rerun assumes
+  it has already ruled out.
+- **Prevent the misread by sizing, not only by diagnosing it after.** Throttle heavy gate lanes by *measured*
+  load (free RAM + the swap trend, *Gate on free RAM and the swap trend* above; the peer-aggregate form is
+  `multi-session-coordination.md`'s shared heavy-lane reservation), and run locally only the gate CI actually
+  enforces (*CI-offload the heavy gate* above) — so fewer contention-flakes reach the verdict step at all.
+- **A rebase or merge-conflict resolution is unverified code, not a confirmed pass.** `git rebase --continue`
+  never re-invokes `pre-commit` on the replayed commits, so re-run the lint+unit tier explicitly right after
+  conflict resolution and before `git push`; `templates/pre-push-verify.sh` (`deep-code-review`) can enforce this
+  mechanically (and refuses every push while `<git-common-dir>/DCR_HOLD` exists — an operator freeze), but a hook is self-report, not the control — `branch-and-merge-hygiene.md`'s "Self-report ≠
+  control" is the trusted-evidence rule (not restated here).
+- **After fixing a hit from a gate that scans the index, stage the fixed file again.** A pre-commit gate reads
+  the staged content, not the working tree, so an unstaged fix leaves the old hit in place and the same
+  failure repeats. Re-add the file, then rerun the gate.
+
+Distinct from *Gate on free RAM and the swap trend* and *CI-offload the heavy gate* (#935): those decide
+**whether and how heavily** to run the local gate (sizing) — prevention; this decides
+**how to read a red the gate already produced** — interpretation. Distinct from the load-flaky-required-gate
+rule above: that is the CI required-check verdict with a same-commit rerun; here the shared-machine gate's rerun
+must *also* be **isolated**. **🚩 tell:** a lane opening a fix or reverting on the **first** red of a heavy local
+gate — or bypassing the gate — while other heavy lanes are live on the same box, with no isolated re-run of the
+failing check to separate contention from a defect.
+
+## A landed flaky-test fix only protects a branch that already has it — rebase every queued branch onto it, don't wait for each to re-discover the failure
+
+A pre-push (or pre-commit) hook tests the tree being **pushed**, not the tree
+on the base branch, so fixing a flaky test on the base does nothing for a
+branch that was cut before the fix landed: it keeps re-running the old, still-
+flaky test on every push until that branch is rebased onto (or merged with)
+the commit that carries the fix. In parallel delivery many branches are cut
+before any given fix lands and stay open for hours, so left implicit each one
+either burns time re-diagnosing a failure that already has a known fix, or an
+agent works around it locally — skipping the test, bypassing the hook — in a
+way that quietly weakens the gate instead of fixing the actual staleness.
+
+- **Land the fix, then find every open PR head that doesn't have it yet —
+  propagate it, don't wait for each branch to discover it.** Once the fix
+  lands at `<sha>`, list open-PR heads
+  (`gh pr list --state open --json headRefName`) — never a raw ref sweep,
+  which also returns `origin/HEAD` and merged or abandoned branches — keep
+  each where `git merge-base --is-ancestor <sha> origin/<head>` exits
+  non-zero, and tell its **owning lane** to rebase before its next push;
+  rebase it yourself only when no one is writing to that branch. This runs on
+  the **landing** of the fix, not on the next flake report, and it is Ops /
+  Merge-Guard plumbing (`roles.md`) — not a Conductor-level decision.
+- **A branch that cannot rebase right now scope-skips that one test, never
+  disables it.** A documented, temporary deselect of the specific test for
+  local pushes only, with a pointer comment to `<sha>`, while CI keeps running
+  it; the fix commit itself never disables or skips the test, and the hook is
+  never silently bypassed (`--no-verify`).
+- **Track the queued-branch list so the fix actually reaches them.** A fix
+  landed on the base and never checked against the open-branch list is the
+  same silent-drop failure the *feedback-coverage map* (`roles.md`) exists to
+  catch on the product side — the branch list isn't closed until each entry is
+  rebased or explicitly scope-skipped with its `<sha>` pointer, not merely
+  landed and left to chance.
+
+**🚩 tell:** a branch pushed after a known flaky-test fix landed still fails on
+that exact test, or a skip/deselect for that test sits in a diff with no
+commit pointer, in place of a rebase.
+
+Distinct from *A load-flaky required gate is not a confirmed red* (above):
+that section is about diagnosing and reclassifying a flaky test the **first**
+time a drainer sees it; this is about **propagating a fix that already
+exists** to every branch that has not received it yet. Distinct from *A
+rebase or merge-conflict resolution is unverified code, not a confirmed pass*
+(above): that says re-run the lint/unit tier after a rebase's conflict
+resolution; this says rebase in the first place, specifically to pick up a
+landed fix, before the branch's next push.
+
+## Absent checks are a third state, not a slow "pending" — an uncomputable merge ref suppresses the run; bounded-wait then re-trigger, never wait forever
+
+The two sections above are how an autonomous drainer reads a check-state bit at two of the places it reads one:
+the *not-red* section sets the **base-admission threshold** (a base run still in flight is admissible — pending
+is not a hold), and the *load-flaky* section sets the **red-verdict rule** (a first red is a candidate to
+reclassify, not a regression conclusion). This is the third place — a **member PR's own** readiness — and its
+rule is that **absent ≠ slow**: a PR reporting *zero* checks (none at all — not one in flight, not one red) is
+not a check that is merely early, and a drainer that treats it as one waits forever.
+
+The mechanism is that CI runs against a **computed merge ref** (the PR merged into its base), not the raw head.
+When the PR is non-mergeable — `mergeable_state=dirty`: a real conflict, or its base advanced past what it last
+merged — the forge **cannot compute that ref, so it never dispatches CI for the head at all** (a runner-queue
+backlog can suppress the dispatch the same way, transiently). The PR then shows **no checks**, which is fatally
+easy to misread: a human or drainer sees "no failures" and reads it as *still pending*, or even *clean*, when in
+fact the run never started and never will for that SHA without intervention. A drainer whose rule is "poll until
+the checks appear and go green" then polls a PR whose checks will never appear — the same starvation as the
+blocked-head case above, but from a head that was never *checked* rather than one checked and *refused*.
+
+- **Read `mergeable` / `mergeable_state` alongside the check list — it is the discriminator.** Zero checks +
+  non-mergeable (`dirty` / `CONFLICTING`) = **stalled**: the run was suppressed and needs a re-fire. Zero checks
+  + `MERGEABLE` = **genuinely just-triggered**: a bounded wait is correct. The two act on
+  **different fields, and neither is wait-forever**: poll the *mergeability* field until it settles (the brief
+  `UNKNOWN`-while-recomputing state `merge-operations.md` bounds to 2–4 tries), then apply
+  bounded-wait-then-re-fire to the *check list*. The check list alone cannot split stalled from fresh; the
+  mergeability field is what does.
+- **Recover by re-triggering, not waiting.** A fresh fetch + merge-of-base + push (or a rebase) recomputes the
+  merge ref; if the re-merge is conflict-free, `mergeable` flips and CI fires within seconds — the rebase /
+  re-run-CI mechanics are `merge-operations.md`'s, not restated here. A true `dirty` from a real
+  conflict needs that conflict resolved first; either way the move is an **action**, never more polling.
+- **Time-box zero-checks, and never read it as a verdict.** Past a short dispatch-delay threshold **and** while
+  non-mergeable → escalate to a re-merge; do not keep polling. Never interpret zero-checks as an implicit
+  **pass** (the run never ran) or as a stable **pending** (it will never resolve on its own). Track PRs sitting
+  at zero checks while non-mergeable past a normal dispatch delay — a nonzero count is work stalling invisibly
+  on uncomputable merge refs.
+
+Distinct from the **config-unsatisfiable required check** (`merge-operations.md`'s
+*a required check must be satisfiable* rule, the #262 *no-status* case): there a required check **name** never
+gets a job to report because the workflow is wired wrong (a path filter, a trigger-event gap, a missing
+`on.pull_request.branches` base entry), and the fix is **config-side** and permanent — a pass-through job or a
+corrected `on:` block. Here the workflow is correctly wired; a re-merge makes the *same* job fire. Same surface
+symptom (no status looks like pending), opposite remedy — a config fix vs a re-trigger. Distinct too from the
+**serial-drainer spins on a blocked head** rule (above): there the head is green + mergeable but refused by a
+*stricter final gate*, so the drain **advances past** it; here the head was never checked at all, so the drain
+**re-fires** it — advance-past abandons a genuinely-blocked item, re-fire rescues a never-started one.
+
+**🚩** an orchestrator turn history that is a run of near-identical "still waiting for CI" ticks on a PR that
+shows **no checks at all** and is non-mergeable — the *emit-on-transition-only* tell (below) applied to a state
+that will **never** transition without a re-merge; the loop is not waiting, it is stuck, and the run it is
+waiting for was never dispatched.

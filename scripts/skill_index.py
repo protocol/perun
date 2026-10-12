@@ -7,10 +7,11 @@ WHAT IT WRITES
 --------------
 For every `.claude/skills/<name>/` that has a `SKILL.md`:
   `.claude/skills/<name>/INDEX.md` — one row per `references/*.md` and
-  `scripts/*.py` in that skill: its one-line "Read this when..."/docstring
-  trigger, an estimated token cost (`bytes // 4`, this repo's own
-  chars/4 convention — see mustload gate in scripts/ci-gates.sh) and, for a
-  script, its CLI usage line and exit codes, when its docstring documents them.
+  `scripts/*.py|*.sh` in that skill: a one-line (<=100 chars, first sentence)
+  "Read this when..."/header trigger and, for a reference, an estimated token
+  cost (`bytes // 4`, this repo's chars/4 convention); for a script, its CLI
+  usage line when its docstring/header documents one. The full trigger stays
+  in the file's own header; the index exists to be cheap to read.
 
 And one repo-level table:
   `.claude/skills/INDEX.md` — every skill's purpose (from its SKILL.md
@@ -42,8 +43,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIRNAME = ".claude/skills"
 
-TRIGGER_MAX = 240
-BLOCK_MAX = 300
+TRIGGER_MAX = 100
+BLOCK_MAX = 120
 DESC_MAX = 120
 
 _UNDERLINE_RE = re.compile(r"^[-=]{3,}$")
@@ -58,6 +59,17 @@ def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1].rstrip() + "…"
+
+
+def _short(text: str, limit: int = 0) -> str:
+    """First sentence of `text`, collapsed, truncated to `limit` (default TRIGGER_MAX)."""
+    text = _collapse(text)
+    m = re.search(r"[.;] ", text)
+    if m and m.start() > 20:
+        text = text[: m.start() + (m.group(0) == ". ")]
+    # the column header says "Read this when...", and a script row's file cell names it
+    text = re.sub(r"^(?:read this when:?\s*|\S+\.(?:py|sh)\s+[—-]\s+)", "", text, flags=re.I)
+    return _truncate(text, limit or TRIGGER_MAX)
 
 
 def _strip_md(text: str) -> str:
@@ -92,7 +104,7 @@ def parse_reference_md(path: Path) -> str:
     while i < len(lines) and lines[i].strip() and not lines[i].lstrip().startswith("#"):
         para.append(lines[i].strip())
         i += 1
-    return _truncate(_strip_md(" ".join(para)), TRIGGER_MAX)
+    return _short(_strip_md(" ".join(para)))
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +129,7 @@ def _first_paragraph(doc: str) -> str:
                 break
             continue
         para.append(line.strip())
-    return _truncate(_strip_md(" ".join(para)), TRIGGER_MAX)
+    return _short(_strip_md(" ".join(para)))
 
 
 def _extract_section(doc_lines: list[str], header_re: re.Pattern[str]) -> str | None:
@@ -144,21 +156,48 @@ def _extract_section(doc_lines: list[str], header_re: re.Pattern[str]) -> str | 
 # end of line. Prose that merely starts a docstring line with "usage)." or
 # "usage," is not a CLI section (it leaked a sentence fragment into a CLI cell).
 _USAGE_RE = re.compile(r"^usage(?=:|\s|$)\s*:?\s*(?P<inline>.*)$", re.IGNORECASE)
-_EXIT_RE = re.compile(
-    r"^(?:exit codes?\b[^:]*|.+\(\s*exit codes?\s*\))\s*:?\s*(?P<inline>.*)$",
-    re.IGNORECASE,
-)
 
 
-def parse_script_py(path: Path) -> tuple[str, str | None, str | None]:
+def parse_script_py(path: Path) -> tuple[str, str | None]:
     doc = _docstring(path)
     if not doc:
-        return "(no module docstring)", None, None
+        return "(no module docstring)", None
     trigger = _first_paragraph(doc)
     doc_lines = doc.splitlines()
     usage = _extract_section(doc_lines, _USAGE_RE)
-    exit_codes = _extract_section(doc_lines, _EXIT_RE)
-    return trigger, usage, exit_codes
+    return trigger, usage
+
+
+def parse_script_sh(path: Path) -> tuple[str, str | None]:
+    """(trigger, usage) from a shell script's leading comment block: the first
+    paragraph is the trigger; `name.sh args — text` or `Usage: ...` gives the CLI."""
+    block: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#!"):
+            continue
+        if not line.startswith("#"):
+            break
+        block.append(line.lstrip("#").strip())
+    para: list[str] = []
+    for line in block:
+        if not line:
+            if para:
+                break
+            continue
+        para.append(line)
+    if not para:
+        return "(no header comment)", None
+    first = _strip_md(para[0])
+    m = re.match(r"^(\S+\.sh\b[^—]*?)\s+[—-]\s+(.*)$", first)
+    usage = None
+    if m:
+        usage = _truncate(m.group(1), BLOCK_MAX)
+        para[0] = m.group(2)
+    else:
+        u = next((l for l in block if l.lower().startswith("usage:")), None)
+        if u:
+            usage = _truncate(_strip_md(u.split(":", 1)[1]), BLOCK_MAX)
+    return _short(_strip_md(" ".join(para))), usage
 
 
 # ---------------------------------------------------------------------------
@@ -212,45 +251,38 @@ def find_skill_dirs(root: Path) -> list[Path]:
 def generate_skill_index(skill_dir: Path) -> str:
     name = skill_dir.name
     refs = sorted((skill_dir / "references").glob("*.md")) if (skill_dir / "references").is_dir() else []
-    scripts = sorted((skill_dir / "scripts").glob("*.py")) if (skill_dir / "scripts").is_dir() else []
+    scripts = (
+        sorted([*(skill_dir / "scripts").glob("*.py"), *(skill_dir / "scripts").glob("*.sh")])
+        if (skill_dir / "scripts").is_dir()
+        else []
+    )
 
     out = [
         f"# INDEX — {name}",
         "",
-        "Generated by `scripts/skill_index.py`. Do not hand-edit — regenerate after "
-        "adding, removing, or retitling a `references/*.md` or `scripts/*.py` file "
-        "(`python3 scripts/skill_index.py`). Lookup table only: not must-load, and "
-        "carries no routing/size-budget obligation of its own.",
+        "Generated by `scripts/skill_index.py` (do not hand-edit; rerun it after changing "
+        "a `references/*.md` or `scripts/*.py|*.sh`). Triggers are cut to one line: the "
+        "full text is in the file's own header.",
+        "",
+        "## References",
         "",
     ]
-
-    out.append("## References")
-    out.append("")
     if refs:
-        out.append("| File | Read this when... | Tokens (est) |")
+        out.append("| File | Read this when... | Tok |")
         out.append("|---|---|---|")
         for ref in refs:
-            out.append(
-                f"| `references/{ref.name}` | {_table_cell(parse_reference_md(ref))} | {token_est(ref)} |"
-            )
+            out.append(f"| `references/{ref.name}` | {_table_cell(parse_reference_md(ref))} | {token_est(ref)} |")
     else:
         out.append("_No references/*.md in this skill._")
-    out.append("")
-
-    out.append("## Scripts")
-    out.append("")
+    out += ["", "## Scripts", ""]
     if scripts:
-        out.append("| File | Trigger | Tokens (est) | CLI | Exit codes |")
-        out.append("|---|---|---|---|---|")
+        out.append("| File | Trigger | CLI (— = open the header) |")
+        out.append("|---|---|---|")
         for scr in scripts:
-            trigger, usage, exit_codes = parse_script_py(scr)
-            out.append(
-                f"| `scripts/{scr.name}` | {_table_cell(trigger)} | "
-                f"{token_est(scr)} | {_table_cell(usage or '')} | "
-                f"{_table_cell(exit_codes or '')} |"
-            )
+            trigger, usage = parse_script_sh(scr) if scr.suffix == ".sh" else parse_script_py(scr)
+            out.append(f"| `scripts/{scr.name}` | {_table_cell(trigger)} | {_table_cell(usage or '')} |")
     else:
-        out.append("_No scripts/*.py in this skill._")
+        out.append("_No scripts/*.py or *.sh in this skill._")
     out.append("")
     return "\n".join(out)
 
@@ -363,6 +395,8 @@ def run_selftest() -> int:
             "print('fixture')\n",
         )
 
+        _write(skill / "scripts" / "run.sh", "#!/usr/bin/env bash\n# run.sh <arg> — Run the fixture shell tool. More text.\nset -e\n")
+        _write(skill / "scripts" / "bare.sh", "#!/usr/bin/env bash\nset -e\n")
         # 1) generation produces both INDEX.md files.
         cmd_generate(root)
         repo_idx = root / SKILLS_DIRNAME / "INDEX.md"
@@ -378,13 +412,18 @@ def run_selftest() -> int:
         skill_text = skill_idx.read_text(encoding="utf-8")
         case("references/one.md" in skill_text, "skill index: references row present")
         case(
-            "Read this when the fixture needs reference one." in skill_text,
-            "skill index: reference trigger extracted",
+            "| the fixture needs reference one. |" in skill_text and "Read this when the" not in skill_text,
+            "skill index: reference trigger extracted, redundant lead-in dropped",
         )
         case("Alpha" not in skill_text and "Headings" not in skill_text, "skill index: no headings column")
         case("scripts/tool.py" in skill_text, "skill index: scripts row present")
         case("python3 scripts/tool.py <path>" in skill_text, "skill index: CLI usage extracted")
-        case("0 ok; 1 bad input." in skill_text, "skill index: exit codes extracted")
+        case("0 ok; 1 bad input." not in skill_text, "skill index: exit codes dropped (kept in the script header)")
+        case(
+            "scripts/run.sh` | Run the fixture shell tool" in skill_text and "run.sh <arg>" in skill_text,
+            "skill index: .sh script row with trigger and usage from its header comment",
+        )
+        case("scripts/bare.sh` | (no header comment)" in skill_text, "skill index: .sh without a header comment still listed")
 
         # 2) --check is green right after generation.
         case(cmd_check(root) == 0, "check: passes immediately after generate (RED->GREEN proof)")
@@ -430,9 +469,6 @@ def run_selftest() -> int:
         case(_USAGE_RE.match("usage). Exit 2 is never a pass.") is None, "usage regex: prose 'usage).' is not a CLI heading")
         case(_USAGE_RE.match("usage, then exits.") is None, "usage regex: prose 'usage,' is not a CLI heading")
         case(_USAGE_RE.match("USAGE  python3 x.py") is not None, "usage regex: 'USAGE <cmd>' inline still matches")
-        case(_EXIT_RE.match("EXIT CODES (fail closed)") is not None, "exit regex: leading 'EXIT CODES (...)' still matches")
-        case(_EXIT_RE.match("CONTRACT (exit codes)") is not None, "exit regex: trailing '(exit codes)' heading matches")
-        case(_EXIT_RE.match("Exit codes: 0 ok; 1 bad.") is not None, "exit regex: 'Exit codes: ...' inline still matches")
 
         # 9) smoke test against the real repo tree (never asserts on its
         #    prose, only that generation does not crash and stays non-empty).

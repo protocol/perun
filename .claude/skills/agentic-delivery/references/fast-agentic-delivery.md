@@ -11,15 +11,15 @@ it expands.
 
 ---
 
-## Index — five themed lesson files (load only the one the trigger names)
+## Index — seven themed files (load only the trigger's)
 
 - Fan-out sizing, the WIP cap, cycle-time, handback verbosity as a cost lever, the RAM/swap/disk/CPU probe, a
   dev-server memory cap, a shared quota ceiling, a remembered constraint-state, worktree lifecycle and teardown →
   `fanout-host-sizing.md`
-- Ready-queue sweeps, head-of-line starvation, auto-merge scoping, permission asymmetries and escape hatches, the
-  fleet-wide advisory, merge cascade and single seat, staggered ready-flips, flaky/contended/absent checks,
-  propagating a landed flaky-fix to queued branches, opt-in levers, CI-offload, draft-gated heavy checks, worktree
-  isolation → `merge-queue-worktrees.md`
+- Queue sweeps, head-of-line starvation, auto-merge scoping, permission asymmetries, cascade and single seat,
+  ready-flips, train landers, review gate, CI-offload, draft-gated checks → `merge-queue-worktrees.md`
+- Red unions, fleet-wide advisories, flaky/contended/absent checks, landed flaky-fix propagation → `red-gate-triage.md`
+- Stale refs, stash, scratch, assignment paths, worktree sprawl → `worktree-isolation.md`
 - Delegating by measured number, foreground verification, finalize and done-contracts, stranded PRs, hard-to-write
   tests, liveness and duplicate dispatch, plugin forks, self-polling lanes, timeboxed briefs, release verification,
   `Verify:` lines, fan-out joins, relaying findings, soft prohibitions, context-inheriting forks → `verification-handback.md`
@@ -30,7 +30,7 @@ it expands.
   monitors, the add-only loop set, degradation workarounds, research vs delivery, terminus, surface enumeration →
   `unattended-trackers.md`
 
-Each themed file keeps its sections in their original order. The sources below back sections across all five files.
+Sections keep their original order; the sources below back all seven files.
 
 ---
 

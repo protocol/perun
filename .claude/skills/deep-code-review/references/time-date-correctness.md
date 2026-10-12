@@ -216,7 +216,7 @@ time or inject the clock into that entry point too. A test mixing a pinned const
 entry point is a finding even when a comment argues the margin is large. With the clock injected, pin the
 threshold itself: one fixture just before, one exactly at, and one just after the boundary. Cheap catch: a CI job that runs
 the suite with the clock advanced (+30 and +365 days via a faketime-style shim). When it fires fleet-wide,
-treat it as agentic-delivery's `merge-queue-worktrees.md` *fleet-wide finding*: one owner lands one fix while
+treat it as agentic-delivery's `red-gate-triage.md` *fleet-wide finding*: one owner lands one fix while
 other lanes hold pushes, then they resync (issues #1140, #1141).
 
 **🚩 red flags**: a recurring wall-clock event stored as one fixed UTC instant; a

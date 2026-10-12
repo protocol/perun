@@ -290,7 +290,7 @@ required check must actually run to satisfy branch protection); prefer `gh
 pr merge --auto` (merges once required checks pass, no polling) over a
 watch/poll loop. The one rerun carve-out: at most one same-commit rerun, and
 only when the failure log matches a known infrastructure-flake signature
-(runner lost, network timeout) — `merge-queue-worktrees.md` **A load-flaky
+(runner lost, network timeout) — `red-gate-triage.md` **A load-flaky
 required gate is not a confirmed red** and `gate-epistemology.md` principle
 3 own the mechanics; anything else is fixed, not rerun. None of this blocks
 a genuinely new push (a real fix, a rebase after a real conflict) — only the

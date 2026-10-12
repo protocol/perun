@@ -102,7 +102,7 @@ singles: some failures appear only with two specific PRs merged together (an int
 introduces alone), and some are load flakes from concurrent runners that pass in every isolated
 configuration — a suspect that passes alone and in every pairing it's tried in is not exonerated until a
 load-matched re-run is tried, or it should be treated as a flake, not a regression, and handled by the
-load-flaky-gate discipline (`merge-queue-worktrees.md`). Keep the **majority-rerun** ("fails 2 of 3")
+load-flaky-gate discipline (`red-gate-triage.md`). Keep the **majority-rerun** ("fails 2 of 3")
 shortcut for short regression lists — roughly 5 specs or fewer; past that, per-PR bisection is cheaper
 than reading a noisy majority vote across a long list.
 

@@ -121,7 +121,7 @@ the reversibility boundary or a human tap (`SKILL.md` **Human gates**).
 
 Each rung is a name and a pointer; the mechanism lives at the pointer.
 
-1. **Keep the base green.** `merge-queue-worktrees.md` **A load-flaky required gate
+1. **Keep the base green.** `red-gate-triage.md` **A load-flaky required gate
    is not a confirmed red** + `deep-code-review` `merge-operations.md`
    **Red base: discharge the deadlock with a train**; `SKILL.md` principle 3.
 2. **Land every green PR** — a **single merge seat**, back-to-back inside one
@@ -135,7 +135,7 @@ Each rung is a name and a pointer; the mechanism lives at the pointer.
    each resolved by its type. `deep-code-review` `branch-and-merge-hygiene.md` §4
    decision tree, `merge-operations.md` **Never hand-resolve a conflict inside a generated file**;
    `merge-operations.md` **Merge trains**; the zero-checks / `mergeable_state` re-fire case is
-   `merge-queue-worktrees.md` **Absent checks are a third state**.
+   `red-gate-triage.md` **Absent checks are a third state**.
 4. **Deliver open issues in verify-first waves** — the fix may already be on the
    base. `unattended-trackers.md` **An open tracker issue is not proof the fix is
    absent**, **reproduce an inbound bug on current HEAD**; `verification-handback.md`
