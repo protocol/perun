@@ -16,6 +16,10 @@ set -uo pipefail
 inv=$(printf %s "${FLAKE_INVOCATION:-${BROWSER_CMD:-}}" | { shasum -a 256 2>/dev/null || sha256sum; } | cut -c1-16)
 host=${FLAKE_HOST:-$(hostname -s)}
 T=${TMPDIR:-/tmp}
+# norm: the ONE id normalizer (strip trailing whitespace incl. CR, nothing else). Every emit and match of a FAIL/REAL id goes through it
+# (`train_flake.sh --norm` filters stdin), so an id printed with a trailing space or CRLF still equals the listed one.
+norm() { sed -E 's/[[:space:]]+$//'; }
+[ "${1:-}" != --norm ] || { norm; exit $?; }
 # one_run <id> <n>: fresh store (mktemp -d, FLAKE_STORE), optional FLAKE_SETUP_CMD hook, then RERUN_CMD alone. rc 125 = hook failed.
 one_run() {
   local d rc=0; d=$(mktemp -d "$T/flake-store.XXXXXX") || return 125; echo "train_flake: store $d (left for OS temp cleanup)" >&2
@@ -30,11 +34,12 @@ if [ "${1:-}" = --one ]; then [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { ec
 if [ "${1:-}" = --base ]; then
   [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh --base <id>" >&2; exit 2; }
   runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-2}; f=0 p=0; o=$(mktemp "$T/flake-out.XXXXXX") || exit 125
+  bid=$(printf %s "$2" | norm)
   case $runs$need in ''|*[!0-9]*) exit 125 ;; esac; [ "$need" -ge 1 ] && [ "$need" -le "$runs" ] || exit 125
   for n in $(seq "$runs"); do
-    RERUN_OUT=$o one_run "$2" "$n"; r=$?
+    RERUN_OUT=$o one_run "$bid" "$n"; r=$?
     [ "$r" -ne 125 ] || exit 125
-    if [ "$r" -eq 0 ] || ! sed -nE 's/^FAIL +//p' "$o" | grep -qxF -- "$2"; then p=$((p + 1)); else f=$((f + 1)); fi
+    if [ "$r" -eq 0 ] || ! sed -nE 's/^FAIL +//p' "$o" | norm | grep -qxF -- "$bid"; then p=$((p + 1)); else f=$((f + 1)); fi
     [ "$f" -ge "$need" ] || [ "$p" -gt $((runs - need)) ] && break
   done
   [ "$f" -ge "$need" ]; exit $?
@@ -45,16 +50,17 @@ if [ "${1:-}" = --record ]; then
 fi
 [ $# -ge 1 ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh <failed-ids> [baseline-ids]" >&2; exit 2; }
 [ -r "$1" ] || { echo "could not check: failed-ids file '$1' is missing or unreadable (a missing list is not 'no failures')" >&2; exit 2; }
+[ -z "${2:-}" ] || [ -r "$2" ] || { echo "could not check: baseline file '$2' is unreadable (refusing to treat it as empty)" >&2; exit 2; }
 runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-2} real=0
 case $runs$need in ''|*[!0-9]*) echo "train_flake: FLAKE_RUNS/FLAKE_REAL_AT must be integers" >&2; exit 2 ;; esac
 [ "$runs" -ge 1 ] && [ "$need" -ge 1 ] && [ "$need" -le "$runs" ] || { echo "train_flake: need 1 <= FLAKE_REAL_AT <= FLAKE_RUNS" >&2; exit 2; }
 [ "$need" -le 2 ] || need=2  # a FLAKE must pass at least FLAKE_RUNS-1 of FLAKE_RUNS: a higher FLAKE_REAL_AT never lets 2+ failures pass as flakes
-if [ -s "${2:-/dev/null}" ] && [ "$(head -n1 "$2")" != "# baseline host=$host inv=$inv" ]; then
+if [ -s "${2:-/dev/null}" ] && [ "$(head -n1 "$2" | norm)" != "# baseline host=$host inv=$inv" ]; then
   echo "train_flake: baseline $2 not recorded on this host with this invocation (want '# baseline host=$host inv=$inv'); refusing to compare" >&2; exit 2
 fi
 while IFS= read -r id; do
   [ -n "$id" ] || continue
-  [ -z "${2:-}" ] || ! grep -qxF -- "$id" "$2" 2>/dev/null || continue
+  [ -z "${2:-}" ] || ! norm <"$2" | grep -qxF -- "$id" 2>/dev/null || continue
   f=0 p=0
   for n in $(seq "$runs"); do
     one_run "$id" "$n"; r=$?
@@ -63,5 +69,5 @@ while IFS= read -r id; do
     [ "$f" -ge "$need" ] || [ "$p" -gt $((runs - need)) ] && break
   done
   if [ "$f" -ge "$need" ]; then echo "REAL $id"; real=1; else echo "FLAKE $id (failed $f of $((f + p)) alone)"; fi
-done <"$1"
+done < <(norm <"$1")
 exit $real

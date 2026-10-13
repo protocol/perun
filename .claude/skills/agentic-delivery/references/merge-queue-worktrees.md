@@ -386,3 +386,13 @@ release's CHANGELOG section. Publishing every merge needs no GitHub Actions minu
   stale before the last one lands.
 - **Pin every guard with a contract test that fails if the call or rule disappears**, and prefer symptom alarms
   (trunk-green %, merges per day, gate p50 drift) over a check that only proves the guard exists.
+
+## Make the train the only voucher: require `perun/train-gate` (one-time, owner step)
+
+An agent that self-merges on unit-only proof bypasses the train and can turn the integration branch red. In the real
+`merge_train.py merge --apply` path, right before each member's merge, the train posts commit status `perun/train-gate`=success
+on that head (overwritten with `error` if the merge fails; dry-run and `verify` post nothing; `--no-status` opts out; a failed
+post prints `WARN ... NOT posted`). Once, in the repo's branch protection or a ruleset on the base branch, add
+`perun/train-gate` as a required status check; nothing here creates it. Then only train-verified heads can merge.
+`operating_selfcheck.py --base <branch>` prints `WARN: train-gate` when the base does not require it, and
+`COULD_NOT_CHECK` (never green, never "not required") when protection or rulesets cannot be read; it matches the name only.

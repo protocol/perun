@@ -220,6 +220,7 @@ from refix_gate import load_fix_class_gate  # noqa: E402  (fix_class_gate's glob
 _FCG = load_fix_class_gate()
 
 OK, RED, ERROR, HALT = 0, 1, 2, 3
+GATE_CONTEXT = "perun/train-gate"
 GREEN_CONCLUSIONS = {"success", "neutral", "skipped"}
 PR_LIMIT = 200
 MAX_BACKOFF = 300
@@ -616,6 +617,30 @@ class Train:
         self.say("RED no green union: every member parked" if parked_any else "NOOP no eligible members")
         return RED if parked_any else OK
 
+    def post_status(self, m, state):
+        """Post commit status `perun/train-gate` (success|error) on member `m`'s head; True only when the post succeeded.
+
+        Called only from the apply merge path, right before that member's merge, so the vouch is never stale. A failed
+        post is a WARN (never raised, never claimed posted); --no-status skips it.
+        """
+        if self.a.no_status:
+            return False
+        repo = self.a.repo or "{owner}/{repo}"
+        body = json.dumps({"state": state, "context": GATE_CONTEXT,
+                           "description": f"train: {state} for union on {self.a.base}@{self.state['base_sha'][:7]}"})
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            fh.write(body)
+        try:
+            rc, _, err = self.run(["gh", "api", "-X", "POST", f"repos/{repo}/statuses/{m['head']}", "--input", fh.name], ok=False)
+        finally:
+            os.unlink(fh.name)
+        if rc == 0:
+            self.say(f"STATUS posted {GATE_CONTEXT}={state} on #{m['number']} {m['head'][:7]}")
+            return True
+        self.say(f"WARN {GATE_CONTEXT}={state} NOT posted on #{m['number']} {m['head'][:7]} ({clean(err.strip(), 120)}); "
+                 "a base that requires it will block this merge")
+        return False
+
     # ---- merge ----------------------------------------------------------
     def same_base(self, proved, current):
         """HALT unless `current` is the base SHA the union was proved on (#1137)."""
@@ -682,8 +707,17 @@ class Train:
             self.say("DRY-RUN nothing merged; --apply --grant REF merges (integration owner or recorded standing grant)")
             return OK
         for i, m in enumerate(members):
-            why = self.still_ready(m) or self.merge_one(m)
+            why = self.still_ready(m)
+            posted = not why and self.post_status(m, "success")
+            try:
+                why = why or self.merge_one(m)
+            except BaseException:  # interrupted or crashed between vouch and merge: never leave success on an unmerged head
+                if posted:
+                    self.post_status(m, "error") or self.post_status(m, "error")
+                raise
             if why:
+                if posted:  # overwrite the vouch: this head did not land (one retry; a failed post is a loud WARN)
+                    self.post_status(m, "error") or self.post_status(m, "error")
                 self.park(m, why)
                 self.state["members"] = []
                 self.save()
@@ -1225,6 +1259,7 @@ def build_parser():
     common.add_argument("--remote", default="origin")
     common.add_argument("--state", default="", help="state file (default <git-common-dir>/merge-train.json)")
     common.add_argument("--min-checks", type=int, default=1, help="K: latest successful check runs required")
+    common.add_argument("--no-status", action="store_true", help=f"do not post the {GATE_CONTEXT} commit status before each apply merge")
     common.add_argument("--allow-forks", action="store_true", help="admit fork PRs (their code runs locally)")
     common.add_argument("--retries", type=int, default=2, help="bounded re-runs for a flaky step")
     common.add_argument("--backoff", type=float, default=30.0, help="first retry delay in seconds (doubles, max 300)")
@@ -1332,6 +1367,7 @@ class FakeForge:
         self.grant_blame, self.grant_date = "a" * 40, datetime.now(timezone.utc).date().isoformat()
         self.bodies = []  # merge commit bodies written by `gh pr merge --body`
         self.based, self.udiffs, self.update_fail = {}, {}, set()  # refresh / dupes scenarios
+        self.statuses, self.status_fail = [], False  # gate-status POST paths; simulate a rejected post
 
     def base(self):
         return self.hist[-1]
@@ -1346,6 +1382,10 @@ class FakeForge:
             rows = [{"number": n, "headRefOid": p["head"], **{k: p[k] for k in ("isDraft", "mergeable", "isCrossRepository")}}
                     for n, p in self.prs.items() if p["state"] == "OPEN"]
             return 0, json.dumps(rows), ""
+        if a[:4] == ["gh", "api", "-X", "POST"]:
+            with open(a[a.index("--input") + 1]) as fh:
+                self.statuses.append((a[4], json.load(fh)))
+            return (1, "", "HTTP 403: Resource not accessible") if self.status_fail else (0, "{}", "")
         if a[:2] == ["gh", "api"]:
             sha = a[2].split("/commits/")[1].split("/")[0]
             runs = next(p["runs"] for p in self.prs.values() if p["head"] == sha)
@@ -1566,6 +1606,52 @@ def _selftest() -> int:
         return (rc == OK and merged == ["1", "2"] and "MERGED #2 h2 -> main@M2 grant=owner-grant-1" in out
                 and all("--merge" in c for c in f.calls if c[:3] == ["gh", "pr", "merge"])
                 and again_rc == OK and "NOOP" in again), (out, merged, again)
+
+    def st(f):
+        return [(p.rsplit("/", 1)[1], d["state"], d["context"]) for p, d in f.statuses]
+
+    def verify_and_dry_run_post_nothing():
+        f = FakeForge(2)
+        stt = verified(f, "gs.json")
+        rc, out = go(f, "merge", state=stt)
+        return rc == OK and "DRY-RUN" in out and not f.statuses, (f.statuses, out)
+
+    def apply_posts_success_then_merges():
+        f = FakeForge(2)
+        stt = verified(f, "ap.json")
+        rc, out = go(f, "merge", "--apply", "--grant", "g", state=stt)
+        order = [("s", c[4].rsplit("/", 1)[1]) if c[:2] == ["gh", "api"] else ("m", c[3]) for c in f.calls
+                 if (c[:2] == ["gh", "api"] and "POST" in c) or c[:3] == ["gh", "pr", "merge"]]
+        return (rc == OK and st(f) == [("h1", "success", "perun/train-gate"), ("h2", "success", "perun/train-gate")]
+                and order == [("s", "h1"), ("m", "1"), ("s", "h2"), ("m", "2")]
+                and "B0" in f.statuses[0][1]["description"]), (f.statuses, order, out)
+
+    def base_moved_after_verify_posts_nothing():
+        f = FakeForge(2)
+        stt = verified(f, "bmv.json")
+        f.hist.append("B1")
+        rc, out = go(f, "merge", "--apply", "--grant", "g", state=stt)
+        return rc == HALT and not f.statuses, out
+
+    def failed_merge_overwrites_with_error():
+        f = FakeForge(2)
+        stt = verified(f, "fm.json")
+        f.merge_fail = {1}
+        rc, out = go(f, "merge", "--apply", "--grant", "g", state=stt)
+        return rc == HALT and st(f) == [("h1", "success", "perun/train-gate"), ("h1", "error", "perun/train-gate")], (st(f), out)
+
+    def no_status_flag_posts_nothing():
+        f = FakeForge(2)
+        stt = verified(f, "ns.json")
+        rc, out = go(f, "merge", "--apply", "--grant", "g", "--no-status", state=stt)
+        return rc == OK and "MERGED #2" in out and not f.statuses and "STATUS" not in out, out
+
+    def failed_status_post_warns_never_claims_posted():
+        f = FakeForge(2)
+        f.status_fail = True
+        stt = verified(f, "sf.json")
+        rc, out = go(f, "merge", "--apply", "--grant", "g", state=stt)
+        return rc == OK and "WARN perun/train-gate=success NOT posted on #1" in out and "STATUS posted" not in out, out
 
     def base_moved_halts_without_reverify():
         f = FakeForge(2)
@@ -2268,6 +2354,12 @@ def _selftest() -> int:
         ("deterministic-failure-parks-member", deterministic_failure_parks_member),
         ("all-members-bad-is-red", all_members_bad_is_red),
         ("red-base-halts", red_base_halts),
+        ("verify-and-dry-run-post-no-status", verify_and_dry_run_post_nothing),
+        ("apply-posts-success-then-merges", apply_posts_success_then_merges),
+        ("base-moved-after-verify-posts-nothing", base_moved_after_verify_posts_nothing),
+        ("failed-merge-overwrites-with-error", failed_merge_overwrites_with_error),
+        ("no-status-flag-posts-nothing", no_status_flag_posts_nothing),
+        ("failed-status-post-warns-never-claims-posted", failed_status_post_warns_never_claims_posted),
         ("ratchet-overshoot-attributed-per-member", ratchet_overshoot_attributed_per_member),
         ("dry-run-is-default", dry_run_is_default),
         ("apply-needs-grant", apply_needs_grant),

@@ -3776,6 +3776,13 @@ else
   record 1 "train hardening: spaced UNION_DIRS, per-worktree lock, exit 3 on no GREEN union"; tail -8 "$WORK/train-hardening.log"
 fi
 
+# train id normalizer: own per-feature file (scripts/test-train-id-normalize.sh), one case here.
+if bash "$ROOT/scripts/test-train-id-normalize.sh" >"$WORK/train-idnorm.log" 2>&1; then
+  record 0 "train ids: trailing space/CRLF on a FAIL id still matches (one normalizer)"
+else
+  record 1 "train ids: trailing space/CRLF on a FAIL id still matches (one normalizer)"; tail -8 "$WORK/train-idnorm.log"
+fi
+
 # train fail-closed parsers: own per-feature file (scripts/test-train-failclosed.sh), one case here.
 if bash "$ROOT/scripts/test-train-failclosed.sh" >"$WORK/train-failclosed.log" 2>&1; then
   record 0 "train fail-closed: missing failed-ids list and GREEN-with-nonzero-rc are not a pass"
