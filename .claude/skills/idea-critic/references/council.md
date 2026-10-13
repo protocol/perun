@@ -56,4 +56,4 @@ Measured 2026-10-13 (29 labelled pass/block cases from `evals/`, one mid-tier mo
 tools): council, self-consistency-3 and a single call all scored 29/29, so the set cannot separate
 them; the council cost about twice self-consistency-3 (critique ran on 7 cases). No accuracy
 advantage is shown. It stays opt-in: use it for the audit trail (verified citations, kept dissent)
-or mixed models, not for accuracy, until a harder set says otherwise.
+or mixed models, not for accuracy, until a harder set says otherwise. The tool-less path is untested for accuracy.

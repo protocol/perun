@@ -156,6 +156,12 @@ class T(unittest.TestCase):
         self.assertIn("PACKET (file ev.txt):\n1| alpha\n2| beta", prompt)
         self.assertIn("never tool-call markup", prompt)
         self.assertEqual(json.loads(r.stdout)["confidence"], 1.0)  # ev.txt:2 + quote verified without any file tool
+        out = Path(tempfile.mkdtemp()) / "p.txt"
+        out.write_text("x\n")
+        r = subprocess.run([sys.executable, str(SK / "council.py"), "--cmd", f"{sys.executable} {d/'fake.py'} {d/'cfg.json'}", "--claim", "c",
+                            "--steelman", "s", "--root", str(d), "--packet", str(out)], capture_output=True, text=True)
+        self.assertIn("WARN packet is outside --root", r.stderr)
+        self.assertIn("PACKET:\n1| x", json.loads((d / "log").read_text().splitlines()[-1]))
 
     def test_missing_packet_and_empty_cmd_fail_closed(self):
         rc, rec, _, _ = self.run_council([ans("REVISE")] * 3, packet="/nonexistent/p.txt")
