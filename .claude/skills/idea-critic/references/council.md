@@ -50,4 +50,10 @@ Debate-style councils often fail to beat plain self-consistency
 (`docs/standards-index.md`, "Should we be going MAD?"). Keep the council only if,
 at equal call budget, it beats self-consistency-3 (same cmd, three samples, vote)
 on the bench by a margin that survives a bootstrap over TEST cases. Otherwise it
-stays opt-in or is removed. Not yet measured; no accuracy claim is made here.
+stays opt-in or is removed.
+
+Measured 2026-10-13 (29 labelled pass/block cases from `evals/`, one mid-tier model with file-read
+tools): council, self-consistency-3 and a single call all scored 29/29, so the set cannot separate
+them; the council cost about twice self-consistency-3 (critique ran on 7 cases). No accuracy
+advantage is shown. It stays opt-in: use it for the audit trail (verified citations, kept dissent)
+or mixed models, not for accuracy, until a harder set says otherwise.
