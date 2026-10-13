@@ -167,7 +167,8 @@ One skill, three hats. Default: run all three. Do not invent a fourth.
    from that: a required review that *could not run at all* has operational
    status `UNVERIFIED`, outside the verdict enum — the absence of a review, not a
    rejection of the idea.
-5. **Act before any owner-facing message:**
+5. **Act before any owner-facing message** (skipping a hat or about to emit `PASS_TO_USER`? read
+   `references/anti-rationalization.md` first: discussion is not a verdict, missing keys = `HOLD`):
    - `HOLD` — do not recommend it. Owner hears nothing unless they asked.
    - `REVISE` — incorporate the attack and re-run, at most **two** rechecks. If
      it is still unresolved, report it as unresolved — never loop, never treat
