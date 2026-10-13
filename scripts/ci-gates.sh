@@ -663,6 +663,20 @@ cmd_size() {
         "$rel" "$bytes" "$budget" >&2
       fail=1
     fi
+    # Core cap: consumers cap each skill core at ~4,000 tokens (chars/4), so every
+    # SKILL.md must be <=16000 bytes. Allowlist = the two cores already over it when
+    # the cap was adopted; their row budget above freezes them (may shrink, never grow).
+    case "$rel" in
+      */SKILL.md)
+        case "$rel" in
+          .claude/skills/agentic-delivery/SKILL.md|.claude/skills/deep-code-review/SKILL.md) ;;
+          *) if [ "$bytes" -gt 16000 ]; then
+               printf 'SIZE FAIL: %s is %s bytes (core cap 16000) — move depth into a routed references/ file\n' \
+                 "$rel" "$bytes" >&2
+               fail=1
+             fi ;;
+        esac ;;
+    esac
   done
 
   [ "$fail" -eq 0 ] \

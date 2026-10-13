@@ -289,6 +289,19 @@ else
   record 1 "size: fails closed on a shipped file absent from the config"
 fi
 
+# Core cap: a non-allowlisted SKILL.md over 16000 bytes FIRES even within its row budget (planted RED).
+capdir="$sizeroot/.claude/skills/bloat"; mkdir -p "$capdir"
+head -c 16001 /dev/zero | tr '\0' 'a' >"$capdir/SKILL.md"
+printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t12\n.claude/skills/demo/references/ref.md\t3\n.claude/skills/bloat/SKILL.md\t99999\n' \
+  >"$WORK/size-config-cap.tsv"
+gate "$GATES" size --config "$WORK/size-config-cap.tsv" "$sizeroot"
+if [ "$GATE_RC" -ne 0 ] && grep -q 'core cap 16000' "$WORK/last.log"; then
+  record 0 "size: FIRES on a non-allowlisted SKILL.md over the 16000-byte core cap (planted RED)"
+else
+  record 1 "size: FIRES on a non-allowlisted SKILL.md over the 16000-byte core cap (planted RED)"
+fi
+rm -f "$capdir/SKILL.md"; rmdir "$capdir"
+
 # Fail closed: a config row naming a file that no longer exists on disk.
 printf '# unit: bytes\n.claude/skills/demo/SKILL.md\t12\n.claude/skills/demo/references/ref.md\t3\n.claude/skills/demo/references/ghost.md\t5\n' \
   >"$WORK/size-config-dangling.tsv"
