@@ -157,6 +157,39 @@ class AutoUpdatePrTests(unittest.TestCase):
         self.assertEqual(self.branches(), "")
         self.assertFalse((au.cache() / "auto-update.log").exists())
 
+    def test_policy_base_targets_named_branch_and_warn_uses_it(self):
+        sh("git", "push", "-q", "origin", "main:refs/heads/integ", cwd=self.proj)  # integ stays at 1.0.0
+        c = self.tmp / "adv"
+        sh("git", "clone", "-q", str(self.origin), str(c))
+        (c / SKILL).mkdir(parents=True, exist_ok=True)
+        (c / SKILL / "VERSION").write_text("1.1.0\n")
+        commit(c, "main is current")
+        sh("git", "push", "-q", "origin", "main", cwd=c)  # origin/HEAD target (main) is not behind; integ is
+        self.assertTrue(au.update_pr(self.proj).startswith("pr skip: committed version on origin/main"))
+        (self.proj / ".perun").mkdir()
+        pol = self.proj / ".perun/policy.json"
+        pol.write_text('{"auto_update_pr_base": "integ"}')
+        self.assertIn("committed Perun v1.0.0 < installed v1.1.0", au.behind_warn(self.proj))
+        self.assertEqual(au.update_pr(self.proj), "pr opened: perun/update-v1.1.0 -> integ")
+        self.assertIn("--base integ", self.calls())
+
+    def test_policy_base_missing_on_origin_skips_never_guesses(self):
+        (self.proj / ".perun").mkdir()
+        (self.proj / ".perun/policy.json").write_text('{"auto_update_pr_base": "nope"}')
+        self.assertEqual(au.update_pr(self.proj), "pr skip: auto_update_pr_base 'nope' not found on origin")
+        self.assertEqual(self.branches(), "")
+        self.assertIsNone(au.behind_warn(self.proj))
+        (self.proj / ".perun/policy.json").write_text('{"auto_update_pr_base": ""}')  # empty = origin/HEAD as before
+        self.assertEqual(au.update_pr(self.proj), "pr opened: perun/update-v1.1.0 -> main")
+
+    def test_policy_base_validation(self):
+        import perun_policy
+        self.assertEqual(perun_policy.validate({})["auto_update_pr_base"], "")
+        self.assertEqual(perun_policy.validate({"auto_update_pr_base": "release/1.x"})["auto_update_pr_base"], "release/1.x")
+        for bad in ("-x", "a..b", "a b", 1, None, "HEAD", "a//b", "a/"):
+            with self.assertRaises(ValueError):
+                perun_policy.validate({"auto_update_pr_base": bad})
+
     def test_pr_step_logs_and_never_raises(self):
         sh("git", "remote", "remove", "origin", cwd=self.proj)
         au.pr_step(self.proj)

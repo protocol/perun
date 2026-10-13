@@ -95,7 +95,7 @@ def plan(repo):
 
 
 def finish(repo):
-    for f in (".claude/.dcr-install-flags", perun_marker.MARKER):
+    for f in (".claude/.dcr-install-flags", ".claude/.dcr-install-flags.local", perun_marker.MARKER):
         (repo / f).unlink(missing_ok=True)
 
 

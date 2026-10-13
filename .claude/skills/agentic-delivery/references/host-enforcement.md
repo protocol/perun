@@ -564,7 +564,7 @@ hand; `install.sh` never edits settings:
 Background auto-update (`scripts/perun_auto_update.py`) rewrites only the main clone's working tree. The Perun
 copy committed on the integration branch then stays old, so every lane worktree and fresh checkout (branched from
 it) runs old skills. With policy `auto_update_pr: on` (the default; `off` opts out) the same worker, after an update
-or an up-to-date check, opens a PR that commits the install marker's recorded managed files (skill files and slash commands; never untracked files or symlinks) to `perun/update-v<ver>`. It works in a throwaway detached worktree off `origin/<default>`, so the user's
+or an up-to-date check, opens a PR that commits the install marker's recorded managed files (skill files and slash commands; never untracked files or symlinks) to `perun/update-v<ver>`. It works in a throwaway detached worktree off `origin/<default>` (or `origin/<auto_update_pr_base>` when that policy key names the integration branch; a base missing on origin skips the PR, never guessed; the WARN below compares against the same base), so the user's
 checkout and uncommitted work are never touched; pushes without force; opens the PR with `gh pr create`, falling back
 to `gh_rest.py`'s curl path; never merges; commit/push hooks are never bypassed but time out after 30 min (`hooks timed out`, logged). It skips when the committed version already equals the installed one,
 when an open PR for the branch exists (a pushed branch with no PR only gets its PR retried), or when nothing differs, and logs the outcome to `auto-update.log`. Failures

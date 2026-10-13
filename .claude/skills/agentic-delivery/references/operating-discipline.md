@@ -32,7 +32,7 @@ template's hooks and env (plus `model: sonnet` when unset; existing env and mode
 `TARGET/.claude/settings.local.json`, appends only hook entries not already present (re-running
 yields an identical file), writes `settings.local.json.bak` first when the file changes, writes
 `.claude/agents/delivery-lane.md` (Sonnet, terse, one-line hand-back) only if absent, and fails
-closed when `jq` is missing. Every install records its flags in `TARGET/.claude/.dcr-install-flags`;
+closed when `jq` is missing. Every install records its pack flags in `TARGET/.claude/.dcr-install-flags` and the capability-adding ones (`--apply-operating-layer`, `--with-operating-layer`, `--no-sandbox`) in the untracked `.dcr-install-flags.local`;
 `scripts/update-installed.sh TARGET...` replays them from this checkout so installed skills pull the
 latest main (update this checkout first). The applied layer also wires `scripts/perun_auto_update.py`
 on SessionStart and UserPromptSubmit: at most every 6h, detached, it replays the same flags from the

@@ -167,8 +167,20 @@ def skips(target: Path, why: str | None) -> int:
 VER = ".claude/skills/deep-code-review/VERSION"
 
 
+def pr_base(target: Path) -> str:
+    """Policy `auto_update_pr_base` ('' when unset or the policy is malformed)."""
+    try:
+        return perun_policy.load(perun_policy.find_policy(str(target)))["auto_update_pr_base"]
+    except ValueError:
+        return ""
+
+
 def default_ref(target: Path) -> str:
-    """The integration branch as a ref: `origin/HEAD`'s target, else `origin/main`, `origin/master`; '' when none exists."""
+    """The integration branch as a ref: policy `auto_update_pr_base` as `origin/<base>` when set (never guessed:
+    '' if that branch is not on origin), else `origin/HEAD`'s target, `origin/main`, `origin/master`; '' when none exists."""
+    base = pr_base(target)
+    if base:
+        return f"origin/{base}" if git("-C", str(target), "rev-parse", "-q", "--verify", f"refs/remotes/origin/{base}").returncode == 0 else ""
     h = git("-C", str(target), "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
     for ref in ([h.stdout.strip()] if h.returncode == 0 else []) + ["origin/main", "origin/master"]:
         if git("-C", str(target), "rev-parse", "-q", "--verify", ref).returncode == 0:
@@ -283,7 +295,8 @@ def update_pr(target: Path) -> str:
         return "pr skip: fetch origin failed"
     ref = default_ref(target)
     if not ref:
-        return "pr skip: no default branch ref"
+        b = pr_base(target)
+        return f"pr skip: auto_update_pr_base {b!r} not found on origin" if b else "pr skip: no default branch ref"
     if not committed_behind(target):
         return f"pr skip: committed version on {ref} is not behind {ver}"
     branch, base = f"perun/update-v{ver}", ref.split("/", 1)[1]

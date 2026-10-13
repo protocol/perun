@@ -30,11 +30,11 @@ cp "$ROOT/scripts/update-installed.sh" "$W/h/scripts/"; echo 1.0.0 >"$W/h/.claud
 printf '#!/usr/bin/env bash\ntrue\n' >"$W/h/install.sh"
 echo '{"hooks":{"SubagentStart":[{"hooks":[{"type":"command","command":"echo other"}]}]}}' >"$W/u/.claude/settings.local.json"
 DCR_NO_PULL=1 bash "$W/h/scripts/update-installed.sh" "$W/u" >/dev/null 2>&1
-! grep -q apply-operating-layer "$W/u/.claude/.dcr-install-flags"; ok $? "update-installed: unrelated SubagentStart hook not inferred as operating layer"
-rm -f "$W/u/.claude/.dcr-install-flags"
+! grep -qs apply-operating-layer "$W/u/.claude/.dcr-install-flags" "$W/u/.claude/.dcr-install-flags.local"; ok $? "update-installed: unrelated SubagentStart hook not inferred as operating layer"
+rm -f "$W/u/.claude/.dcr-install-flags" "$W/u/.claude/.dcr-install-flags.local"
 echo '{"hooks":{"SubagentStart":[{"hooks":[{"type":"command","command":"python3 x/subagent_start_inject.py"}]}]}}' >"$W/u/.claude/settings.local.json"
 DCR_NO_PULL=1 bash "$W/h/scripts/update-installed.sh" "$W/u" >/dev/null 2>&1
-grep -q apply-operating-layer "$W/u/.claude/.dcr-install-flags"; ok $? "update-installed: injector hook inferred as operating layer"
+grep -q apply-operating-layer "$W/u/.claude/.dcr-install-flags.local"; ok $? "update-installed: injector hook inferred as operating layer"
 
 # 3b) update-installed: a bad first target must not stop the second; exit non-zero at the end.
 mkdir -p "$W/bad/.claude" "$W/good/.claude/skills/deep-code-review"

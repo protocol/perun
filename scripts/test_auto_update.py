@@ -201,6 +201,50 @@ class InstallWiringTests(unittest.TestCase):
         self.assertEqual(json.loads((repo / ".perun/policy.json").read_text()), {"tokens": 5, "auto_update": "off"})
         self.assertIn("--no-auto-update", (repo / ".claude/.dcr-install-flags").read_text())
 
+    def test_machine_local_flags_go_to_untracked_local_file_and_migrate(self):
+        repo = Path(tempfile.mkdtemp())
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        p = self.install(repo, "--with-delivery", "--apply-operating-layer", "--no-sandbox")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        tracked, local = (repo / ".claude/.dcr-install-flags").read_text(), (repo / ".claude/.dcr-install-flags.local").read_text()
+        self.assertEqual((tracked.split(), local.split()), (["--with-delivery"], ["--apply-operating-layer", "--no-sandbox"]))
+        self.assertIn(".dcr-install-flags.local", (repo / ".git/info/exclude").read_text())
+        self.assertNotIn("dcr-install-flags", (repo / ".claude/.perun-install.json").read_text())  # not a managed file
+        # tracked-file carrying a local-only flag (old record): ignored + warned, never applied; opt-outs still honored
+        (repo / ".claude/.dcr-install-flags").write_text("--apply-operating-layer\n--no-auto-update\n")
+        (repo / ".claude/.dcr-install-flags.local").unlink()
+        (repo / ".claude/settings.local.json").unlink()
+        u = self.update(repo)
+        self.assertEqual(u.returncode, 0, u.stderr)
+        self.assertIn("ignoring --apply-operating-layer", u.stderr)
+        self.assertFalse((repo / ".claude/settings.local.json").exists())  # layer not applied
+        self.assertEqual((repo / ".claude/.dcr-install-flags").read_text().split(), ["--no-auto-update"])
+        self.assertFalse((repo / ".claude/.dcr-install-flags.local").exists())
+        self.assertEqual(json.loads((repo / ".perun/policy.json").read_text())["auto_update"], "off")
+
+    def update(self, repo):
+        return subprocess.run(["bash", str(ROOT / "scripts/update-installed.sh"), str(repo)], capture_output=True, text=True,
+                              env={**os.environ, "DCR_NO_PULL": "1", "PERUN_REMOTE": "https://example.com/perun.git"})
+
+    def test_local_file_honored_and_survives_pre_marker_path(self):
+        repo = Path(tempfile.mkdtemp())
+        self.assertEqual(self.install(repo, "--with-delivery", "--apply-operating-layer").returncode, 0)
+        (repo / ".claude/.dcr-install-flags").unlink()  # pre-marker state
+        (repo / ".claude/.dcr-install-flags.local").write_text("--apply-operating-layer\n--no-sandbox\n")
+        u = self.update(repo)
+        self.assertEqual(u.returncode, 0, u.stderr)
+        self.assertEqual((repo / ".claude/.dcr-install-flags.local").read_text().split(), ["--apply-operating-layer", "--no-sandbox"])
+
+    def test_exclude_line_is_anchored_for_a_subdirectory_target(self):
+        top = Path(tempfile.mkdtemp())
+        subprocess.run(["git", "init", "-q", str(top)], check=True)
+        sub = top / "pkg/app"
+        sub.mkdir(parents=True)
+        self.assertEqual(self.install(sub, "--with-delivery", "--apply-operating-layer").returncode, 0)
+        self.assertIn("/pkg/app/.claude/.dcr-install-flags.local\n", (top / ".git/info/exclude").read_text())
+        ign = subprocess.run(["git", "-C", str(top), "check-ignore", "-q", "pkg/app/.claude/.dcr-install-flags.local"])
+        self.assertEqual(ign.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
