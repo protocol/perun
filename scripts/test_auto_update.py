@@ -94,7 +94,7 @@ class AutoUpdateTests(unittest.TestCase):
         s.write_text('{"model": "opus"}\n')
         self.assertEqual(au.run(self.proj), 0)
         self.assertFalse((self.proj / ".claude/ran").exists())
-        self.assertIn("skip: uncommitted changes: M .claude/settings.local.json", self.log())
+        self.assertIn("skip: uncommitted changes: .claude/settings.local.json", self.log())
 
     def test_moved_local_tag_is_refused(self):
         self.assertEqual(au.run(self.proj), 0)

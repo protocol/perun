@@ -46,6 +46,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import perun_policy  # noqa: E402
 
 THROTTLE = 6 * 3600
+STALE_LOCK = 24 * 3600  # a lock in a linked worktree older than this is leftover, not a live operation
+SKIP_WARN_AT = 3  # consecutive skips with the same reason before behind_warn surfaces it
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -103,6 +105,15 @@ def git(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
 LOCKS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "rebase-merge", "rebase-apply", "train-land.lock")
 
 
+def _newest(lock: Path) -> float:
+    """Latest mtime of `lock` and, for a directory lock (rebase-merge), its direct children, so an operation
+    still being worked on is not called stale. A path that vanished or cannot be read counts as fresh (now)."""
+    try:
+        return max(p.stat().st_mtime for p in [lock, *(lock.iterdir() if lock.is_dir() else [])])
+    except OSError:
+        return time.time()
+
+
 def blocker(target: Path, marker: dict) -> str:
     """Why an update must wait ('' when clear): a merge/rebase/cherry-pick/train lock in this or any
     linked worktree, a managed file edited since install, or uncommitted git changes to a managed path
@@ -111,9 +122,14 @@ def blocker(target: Path, marker: dict) -> str:
     if gd.returncode == 0:
         own, common = gd.stdout.split("\n")[:2]
         common = target / common  # relative to the -C dir when not absolute; an absolute path wins in `/`
-        for d in [Path(own), common, *(common / "worktrees").glob("*")]:
+        mine = {Path(own).resolve(), common.resolve()}
+        linked = {d for d in (common / "worktrees").glob("*") if d.resolve() not in mine}
+        for d in [Path(own), common, *sorted(linked)]:
             for lock in LOCKS:
                 if (d / lock).exists():
+                    if d in linked and time.time() - _newest(d / lock) > STALE_LOCK:
+                        log(target, f"ignoring stale {lock} in {d}")
+                        continue
                     return f"{lock} present in {d}"
     files = [(Path(d) / f, h) for d, fs in marker.get("skills", {}).items() for f, h in fs.items()]
     if marker.get("agent"):
@@ -122,12 +138,27 @@ def blocker(target: Path, marker: dict) -> str:
         p = target / rel
         if not p.is_file() or hashlib.sha256(p.read_bytes()).hexdigest() != h:
             return f"dirty Perun-managed file {rel}"
+    clean = {str(rel) for rel, _ in files}  # sha matched the marker: an install over an older commit, not a user edit
     paths = [*marker.get("skills", {}), *([marker["agent"]["path"]] if marker.get("agent") else []),
              ":(glob).claude/settings*.json"]
-    st = git("-C", str(target), "status", "--porcelain", "--untracked-files=no", "--", *paths)
-    if st.returncode == 0 and st.stdout.strip():
-        return f"uncommitted changes: {st.stdout.strip().splitlines()[0].strip()}"
-    return ""
+    # --relative + -z: names relative to target and unquoted, so a subdirectory target or a path with spaces compares exactly
+    st = git("-C", str(target), "diff", "--name-only", "-z", "--relative", "HEAD", "--", *paths)
+    left = [l for l in st.stdout.split("\0") if l and l not in clean] if st.returncode == 0 else []
+    return f"uncommitted changes: {left[0]}" if left else ""
+
+
+def skips(target: Path, why: str | None) -> int:
+    """Consecutive-skip counter for `target` in the cache dir: record one more skip for `why`, or clear it when
+    `why` is empty. Returns the count of consecutive skips with the same reason (0 when cleared)."""
+    f = stamp(target).with_suffix(".skips")
+    n, _, prev = f.read_text().partition("\n") if f.is_file() else ("0", "", "")
+    if not why:
+        f.unlink(missing_ok=True)
+        return 0
+    n = int(n) + 1 if prev == why and n.isdigit() else 1
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(f"{n}\n{why}")
+    return n
 
 
 VER = ".claude/skills/deep-code-review/VERSION"
@@ -160,10 +191,16 @@ def committed_behind(target: Path) -> tuple | None:
 
 
 def behind_warn(target: Path) -> str | None:
-    """The WARN line for `committed_behind`, or None."""
+    """The WARN line for `committed_behind` and/or an auto-update blocked `SKIP_WARN_AT`+ runs in a row for one
+    reason (see `skips`), joined with `; ` on one line; None when neither."""
     b = committed_behind(target)
-    return b and (f"WARN: committed Perun v{b[0]} < installed v{b[1]}: lanes in other worktrees run old skills; "
-                  "open/merge the perun/update PR")
+    f = stamp(target).with_suffix(".skips")
+    n, _, why = f.read_text().partition("\n") if f.is_file() and enabled(target) else ("0", "", "")
+    parts = [b and f"committed Perun v{b[0]} < installed v{b[1]}: lanes in other worktrees run old skills; "
+             "open/merge the perun/update PR",
+             n.isdigit() and int(n) >= SKIP_WARN_AT and f"auto-update skipped {n} runs in a row: {why}"]
+    parts = [x for x in parts if x]
+    return "WARN: " + "; ".join(parts) if parts else None
 
 
 def pr_open(branch: str, cwd: Path) -> bool | None:
@@ -322,6 +359,7 @@ def run(target: Path) -> int:
             log(target, "skip: install marker has no remote or version (reinstall once to record them)")
             return 0
         why = blocker(target, marker)
+        skips(target, why)
         if why:
             log(target, f"skip: {why}")
             return 0
