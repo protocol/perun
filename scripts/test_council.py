@@ -144,6 +144,19 @@ class T(unittest.TestCase):
             self.assertEqual(p.count("\nSTAGE: CRITIQUE"), 0)
             self.assertIn("<<<DATA-", p)
 
+    def test_packet_is_numbered_and_named_for_models_without_file_tools(self):
+        d = Path(tempfile.mkdtemp())
+        (d / "ev.txt").write_text("alpha\nbeta\n")
+        (d / "fake.py").write_text(FAKE)
+        (d / "cfg.json").write_text(json.dumps({"answers": dict.fromkeys(("skeptic", "better-way", "kill-criteria"), ans("REVISE", "ev.txt:2", "beta")),
+                                              "critique": "{}", "log": str(d / "log")}))
+        r = subprocess.run([sys.executable, str(SK / "council.py"), "--cmd", f"{sys.executable} {d/'fake.py'} {d/'cfg.json'}", "--claim", "c",
+                            "--steelman", "s", "--root", str(d), "--packet", str(d / "ev.txt")], capture_output=True, text=True)
+        prompt = json.loads((d / "log").read_text().splitlines()[0])
+        self.assertIn("PACKET (file ev.txt):\n1| alpha\n2| beta", prompt)
+        self.assertIn("never tool-call markup", prompt)
+        self.assertEqual(json.loads(r.stdout)["confidence"], 1.0)  # ev.txt:2 + quote verified without any file tool
+
     def test_missing_packet_and_empty_cmd_fail_closed(self):
         rc, rec, _, _ = self.run_council([ans("REVISE")] * 3, packet="/nonexistent/p.txt")
         self.assertEqual((rc, rec["verdict"]), (3, "COULD_NOT_DECIDE"))

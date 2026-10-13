@@ -15,6 +15,8 @@ python3 scripts/council.py --cmd "claude -p --strict-mcp-config" \
 - `--cmd` reads the prompt on stdin and prints the answer; repeat it for mixed
   models (lens *i* uses cmd *i* mod N). Default is solo-3: one cmd, three lenses
   in `scripts/lenses/*.txt` (plain text, no host tool names; edit them freely).
+- The packet is shown with numbered lines and its path under `--root`, so a model with no file tools
+  (a bare `ollama run`, an API one-shot) can still cite `path:line`; keep the packet under `--root`.
 - Lens answers are independent: no lens sees another's. The critique round runs
   only when verdicts differ, with answers shuffled and relabelled A/B/C (seeded,
   recorded). A member changes its verdict only if its critique carries an

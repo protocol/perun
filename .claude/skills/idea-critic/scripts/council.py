@@ -23,7 +23,9 @@ CONTRACT = (
     '"claims": [{"text": "...", "evidence": "path:line or URL", "quote": "..."}], '
     '"would_change_it": "a checkable fact that would flip your verdict"}. '
     "Every claim needs evidence and a short verbatim quote of the cited line "
-    "(\"quote\"); claims without both earn no credit."
+    "(\"quote\"); claims without both earn no credit. PACKET lines are numbered: without "
+    "file tools, cite them as <packet file>:<line> and answer from the PACKET alone. "
+    "Output only the JSON object, never tool-call markup."
 )
 CRITIQUE = (
     "STAGE: CRITIQUE\nOther reviewers answered independently and disagree. Attack "
@@ -93,13 +95,18 @@ def fence(label: str, raw: str, tok: str) -> str:
 def run(a) -> dict:
     root = Path(a.root)
     lens_dir = Path(__file__).parent / "lenses"
-    packet = Path(a.packet).read_text(encoding="utf-8") if a.packet else ""
+    packet = name = ""
+    if a.packet:
+        # numbered, with its path under --root when it has one, so a model with no file tools can still cite path:line
+        src = Path(a.packet).resolve()
+        name = src.relative_to(root.resolve()).as_posix() if src.is_relative_to(root.resolve()) else ""
+        packet = "\n".join(f"{i}| {ln}" for i, ln in enumerate(src.read_text(encoding="utf-8").splitlines(), 1))
     cmds = [c for c in a.cmd if c.strip()]
     if not cmds:
         raise Stop("empty --cmd")
     for c in cmds:
         shlex.split(c)
-    body = f"CLAIM:\n{a.claim}\n\nSTEELMAN:\n{a.steelman}\n\nPACKET:\n{packet}\n\n"
+    body = f"CLAIM:\n{a.claim}\n\nSTEELMAN:\n{a.steelman}\n\nPACKET{f" (file {name})" if name else ""}:\n{packet}\n\n"
     # lens i runs on cmd i mod len(cmds): one cmd = solo-3, several = mixed
     plan = [(cmds[i % len(cmds)], (lens_dir / f"{l}.txt").read_text(encoding="utf-8")) for i, l in enumerate(LENSES)]
     st = {"calls": 0, "chars": 0}
