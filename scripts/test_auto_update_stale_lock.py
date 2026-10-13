@@ -32,32 +32,23 @@ class StaleLockTests(unittest.TestCase):
         os.utime(d / "MERGE_HEAD", (time.time() - age,) * 2)
         return d
 
-    def test_stale_linked_lock_is_ignored_and_logged_fresh_still_blocks(self):
-        d = self.linked_lock(2 * 86400)
+    def test_linked_worktree_merge_never_blocks_but_a_fresh_train_lock_does(self):
+        d = self.linked_lock(0)
         self.assertEqual(au.blocker(self.proj, self.marker()), "")
-        self.assertIn(f"ignoring stale MERGE_HEAD in {d}", self.log())
-        os.utime(d / "MERGE_HEAD", None)
-        self.assertIn("MERGE_HEAD present in", au.blocker(self.proj, self.marker()))
+        self.assertIn(f"ignoring MERGE_HEAD in linked worktree {d}", self.log())
+        (d / "train-land.lock").write_text("x\n")
+        self.assertIn("train-land.lock present in", au.blocker(self.proj, self.marker()))
+        os.utime(d / "train-land.lock", (time.time() - 2 * 86400,) * 2)
+        self.assertEqual(au.blocker(self.proj, self.marker()), "")
 
     def test_stale_lock_in_own_git_dir_still_blocks(self):
         (self.proj / ".git/MERGE_HEAD").write_text("x\n")
         os.utime(self.proj / ".git/MERGE_HEAD", (time.time() - 5 * 86400,) * 2)
         self.assertIn("MERGE_HEAD present in", au.blocker(self.proj, self.marker()))
 
-    def test_old_rebase_dir_with_a_fresh_child_still_blocks(self):
-        d = self.proj / ".git/worktrees/lane1/rebase-merge"
-        d.mkdir(parents=True)
-        (d / "done").write_text("x\n")
-        os.utime(d, (time.time() - 2 * 86400,) * 2)
-        self.assertIn("rebase-merge present in", au.blocker(self.proj, self.marker()))
-        for q in (d / "done", d):
-            os.utime(q, (time.time() - 2 * 86400,) * 2)
-        self.assertEqual(au.blocker(self.proj, self.marker()), "")
-
     def test_subdirectory_target_installed_over_older_commit_is_not_dirty(self):
         repo = self.tmp / "mono repo"
         repo.mkdir()
-        sh("git", "init", "-q", cwd=repo)
         sub = repo / "app one"
         os.rename(self.proj, sub)
         sh("git", "init", "-q", cwd=repo)

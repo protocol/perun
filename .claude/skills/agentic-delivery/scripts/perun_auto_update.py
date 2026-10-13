@@ -13,7 +13,8 @@ network wait ever lands on the session start path. Prints nothing (hook stdout w
 `--run [--target DIR]` (the background worker, also runnable by hand): under one machine-wide
 flock, it reads `.claude/.perun-install.json` (`version`, `remote`), skips when the target has a
 merge, rebase, cherry-pick or train lock (`MERGE_HEAD`, `CHERRY_PICK_HEAD`, `rebase-merge/`,
-`rebase-apply/`, `train-land.lock` in its git dir or any `worktrees/*/` dir), when a Perun-managed
+`rebase-apply/`, `train-land.lock` in its own or common git dir; in a linked `worktrees/*/` dir only a
+`train-land.lock` under 24h old), when a Perun-managed
 file differs from the hash install recorded, or when `git status` shows uncommitted changes to a
 managed path or `.claude/settings*.json`. It finds the newest `vX.Y.Z` tag on the remote
 (`git ls-remote`); when it is newer it fetches the tag into a cache clone
@@ -115,8 +116,8 @@ def _newest(lock: Path) -> float:
 
 
 def blocker(target: Path, marker: dict) -> str:
-    """Why an update must wait ('' when clear): a merge/rebase/cherry-pick/train lock in this or any
-    linked worktree, a managed file edited since install, or uncommitted git changes to a managed path
+    """Why an update must wait ('' when clear): a merge/rebase/cherry-pick/train lock in this checkout's own or
+    common git dir, a train lock under 24h old in a linked worktree (a linked worktree's own merge or rebase never blocks), a managed file edited since install, or uncommitted git changes to a managed path
     or `.claude/settings*.json` (untracked files do not count)."""
     gd = git("-C", str(target), "rev-parse", "--absolute-git-dir", "--git-common-dir")
     if gd.returncode == 0:
@@ -127,8 +128,10 @@ def blocker(target: Path, marker: dict) -> str:
         for d in [Path(own), common, *sorted(linked)]:
             for lock in LOCKS:
                 if (d / lock).exists():
-                    if d in linked and time.time() - _newest(d / lock) > STALE_LOCK:
-                        log(target, f"ignoring stale {lock} in {d}")
+                    # a lane merging or rebasing in its own linked worktree has its own checkout: the update never
+                    # writes there, and in a busy fleet one such merge is always in progress. Only a train lock counts.
+                    if d in linked and (lock != "train-land.lock" or time.time() - _newest(d / lock) > STALE_LOCK):
+                        log(target, f"ignoring {lock} in linked worktree {d}")
                         continue
                     return f"{lock} present in {d}"
     files = [(Path(d) / f, h) for d, fs in marker.get("skills", {}).items() for f, h in fs.items()]

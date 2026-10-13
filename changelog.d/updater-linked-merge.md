@@ -1,0 +1,1 @@
+Auto-update is no longer blocked by a merge, rebase or cherry-pick in progress in a *linked* worktree (each has its own checkout; in a busy fleet one is always in progress, which blocked updates indefinitely). A train lock under 24 hours old in a linked worktree, and any lock in the checkout's own git dir, still block.
