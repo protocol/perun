@@ -12,6 +12,7 @@ CONFIG is JSON, gates in order:
 .preflight-times.json, keep it gitignored) and the 3 slowest gates of this run print last, to show what to make cheap.
 Output, one line per gate: PASS | FAIL (exit N) | TIMEOUT | COULD_NOT_RUN (command not startable) | SKIPPED.
 Exit: 0 all ran and passed; 1 any FAIL/TIMEOUT; 3 any COULD_NOT_RUN or SKIPPED with no FAIL; 2 bad config.
+After the gates, `clock_lint.py --base origin/main` always runs as an advisory step (its lines print; no exit effect).
 A gate that cannot start is never a pass. Timeouts use subprocess timeout only: the direct child is killed, but
 grandchildren it spawned are NOT (no process-group kill); keep gate commands single-process or self-limiting.
 """
@@ -118,6 +119,11 @@ def main(argv=None):
         os.replace(tmp, a.cache)
     except (OSError, TypeError, ValueError) as e:
         print(f"WARN: preflight cache not written: {e}", file=sys.stderr)
+    try:  # built-in advisory step (never changes the exit code): real-clock reads and date-literal time bombs in changed files
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "clock_lint.py"),
+                        "--base", "origin/main", "--deadline", "5"], timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     top = sorted((r for r in res if r[1] != "SKIPPED"), key=lambda r: -r[2])[:3]
     print("slowest: " + ", ".join(f"{n} {sec:.1f}s" for n, _, sec, _ in top))
     st = {s for _, s, _, _ in res}
