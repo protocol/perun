@@ -56,7 +56,46 @@ WINDOWING
 ---------
 `--since <ISO-8601>` keeps only turns at or after that timestamp, on both
 main and every subagent; a subagent with zero turns in the window is
-dropped from the report entirely (not printed as an all-zero row).
+dropped from the report entirely (not printed as an all-zero row). A value
+without a timezone is LOCAL time (what `date +%FT%T` prints); transcript
+timestamps are UTC. Fractional seconds of any length, `Z`, `+00:00` and
+`+0000` all parse (older Pythons reject some of these natively; a rejected
+transcript timestamp used to drop its turn silently, so one window looked
+empty while a nearby one did not). A turn with no parsable timestamp is
+dropped under `--since` and counted without it. When a window is empty the
+tool says so on stderr with the transcript's real time span.
+
+LANES, MODELS, IN-FLIGHT
+------------------------
+Each turn's `message.model` is kept. A lane reports its majority model plus
+counts (`models`), and a `by_model` totals map; `meta.json` `effort`, when
+present, is shown (never guessed). The text report prints totals by model for
+main and for all subagents. A lane with no `SubagentHandback` call and no
+`stop_reason: end_turn` is `in_flight`: its spend still counts, so mid-session
+numbers are not understated. `--top N` lists the N costliest lanes (default
+5, 0 = all; JSON always carries every lane).
+
+MAIN CONTEXT PER TURN
+---------------------
+Per main turn, context = input_tokens + cache_read. The report prints the
+average, the first-third vs last-third averages (trend, needs >= 3 turns),
+and flags `HANDOFF` when the last-third average (the average when < 3 turns)
+exceeds 400000: write a handoff note and start a fresh session. JSON key:
+`main_context`.
+
+PRICING (--rates TSV)
+---------------------
+No prices ship with this tool. Pass your own rate card as a TSV, USD per 1M
+tokens, one row per model, `#` comments and blank lines skipped:
+
+  model<TAB>input<TAB>cache_write_5m<TAB>cache_write_1h<TAB>cache_read<TAB>output
+
+A transcript model id matches the row whose model is its longest prefix
+(`claude-x` prices `claude-x-20260101`). With `--rates`, the report prints
+dollar cost for main, subagents and each listed lane; a model with no row is
+named as UNPRICED and its tokens add nothing to the dollar figure (so the
+figure is a floor). Without `--rates` the cost line reads `UNPRICED`. A bad
+rates file exits 2. JSON: `cost_usd` (`null` without rates).
 
 ORCHESTRATION SHARE
 --------------------
@@ -107,7 +146,7 @@ same id on two streamed lines counts once), windowed by `--since`.
 
 OUTPUT
 ------
-Default text report is at most 20 lines. `--json` prints the full computed
+Default text report is at most 20 lines (for up to a few models). `--json` prints the full computed
 report (every subagent, not just the top 5) as one JSON object for
 machine consumption.
 
@@ -117,12 +156,12 @@ CONTRACT (exit codes)
   usage-bearing turns is a valid, if boring, answer).
 * 1 — `--budget` only: at least one cap breached (one line per breach).
 * 2 — the main session file does not exist / cannot be read, or a bad
-  `--since` value was given, or the budget TSV is unreadable or malformed
+  `--since` value was given, or a bad `--rates` file, or the budget TSV is unreadable or malformed
   (fail closed; never a guessed report).
 
 USAGE
 -----
-  token_report.py --session <path/to/session.jsonl> [--since ISO] [--json]
+  token_report.py --session <path/to/session.jsonl> [--since ISO] [--json] [--top N] [--rates TSV]
   token_report.py --session <path/to/session.jsonl> [--since ISO] --budget [budget.tsv]
   token_report.py --selftest
 """
@@ -135,6 +174,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 OK = 0
@@ -145,6 +185,7 @@ CACHE_READ_MULT = 0.1
 CACHE_WRITE_5M_MULT = 1.25
 CACHE_WRITE_1H_MULT = 2.0
 ORCHESTRATION_FLAG_THRESHOLD = 0.20
+CONTEXT_HANDOFF_THRESHOLD = 400_000
 
 # metric -> (default cap, lever). Order is the breach-line order within a lane.
 # Starting values to tune from --json output, not claims (see BUDGET GATE).
@@ -190,17 +231,23 @@ def read_jsonl(path: str):
                 yield obj
 
 
-def parse_timestamp(value):
-    """Parse an ISO-8601 timestamp (with or without a trailing 'Z'). None on failure."""
+def parse_timestamp(value, local=False):
+    """Parse an ISO-8601 timestamp (Z, +HH:MM, +HHMM, any fraction length). None on failure.
+
+    A value with no timezone is UTC, or the machine's local zone when `local`
+    (used for the user-typed --since).
+    """
     if not isinstance(value, str) or not value:
         return None
     text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    text = re.sub(r"([+-]\d\d)(\d\d)$", r"\1:\2", text)
+    text = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], text, count=1)
     try:
         dt = datetime.fromisoformat(text)
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone() if local else dt.replace(tzinfo=timezone.utc)
     return dt
 
 
@@ -246,11 +293,12 @@ def extract_turns(entries: list) -> list:
         rank = block_index if isinstance(block_index, int) else 0
         existing = grouped.get(key)
         if existing is None or rank >= existing["_rank"]:
-            grouped[key] = {"_rank": rank, "timestamp": ts, **_turn_usage(entry)}
+            grouped[key] = {"_rank": rank, "timestamp": ts, "model": (entry.get("message") or {}).get("model"),
+                            **_turn_usage(entry)}
         if key not in order:
             order.append(key)
     turns = [grouped[k] for k in order]
-    turns.sort(key=lambda t: (t["timestamp"] is None, t["timestamp"]))
+    turns.sort(key=lambda t: (t["timestamp"] is None, t["timestamp"] or datetime.min.replace(tzinfo=timezone.utc)))
     for t in turns:
         t.pop("_rank", None)
     return turns
@@ -282,6 +330,77 @@ def sum_turns(turns: list) -> dict:
         + totals["output_tokens"]
     )
     return totals
+
+
+def model_stats(turns: list):
+    """(majority model, {model: turn count}, {model: totals}); the synthetic placeholder model is ignored."""
+    names = [t.get("model") for t in turns if t.get("model") and t["model"] != "<synthetic>"]
+    counts = dict(Counter(names).most_common())
+    by_model = {m: sum_turns([t for t in turns if t.get("model") == m]) for m in counts}
+    return (next(iter(counts), None), counts, by_model)
+
+
+def load_rates(path: str) -> dict:
+    """Parse `model<TAB>input<TAB>cache_write_5m<TAB>cache_write_1h<TAB>cache_read<TAB>output` (USD per 1M tokens).
+
+    Raises ValueError on a malformed row or a non-finite/negative price, OSError if unreadable.
+    """
+    rates = {}
+    with open(path, "r", encoding="utf-8") as fh:
+        for n, raw in enumerate(fh, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = [c.strip() for c in line.split("\t")]
+            if len(cols) != 6:
+                raise ValueError(f"line {n}: want model + 5 prices (tab separated): {line!r}")
+            try:
+                prices = [float(c) for c in cols[1:]]
+            except ValueError:
+                raise ValueError(f"line {n}: price is not a number: {line!r}") from None
+            if not all(math.isfinite(x) and x >= 0 for x in prices):
+                raise ValueError(f"line {n}: price is not a finite non-negative number: {line!r}")
+            rates[cols[0]] = dict(zip(("input_tokens", "cache_write_5m", "cache_write_1h", "cache_read", "output_tokens"), prices))
+    return rates
+
+
+def price(by_model: dict, rates):
+    """(USD, [unpriced models]) for a {model: totals} map; (None, []) without rates. Unpriced models add 0."""
+    if rates is None:
+        return (None, [])
+    usd, missing = 0.0, []
+    for model, tot in by_model.items():
+        match = max((k for k in rates if str(model).startswith(k)), key=len, default=None)
+        if match is None:
+            missing.append(model)
+            continue
+        usd += sum(tot[k] * v for k, v in rates[match].items()) / 1e6
+    return (round(usd, 4), missing)
+
+
+def merge_by_model(maps: list) -> dict:
+    out: dict = {}
+    for mp in maps:
+        for model, tot in mp.items():
+            out.setdefault(model, []).append(tot)
+    return {m: sum_turns(ts) for m, ts in out.items()}
+
+
+def main_context(turns: list) -> dict:
+    """Average input+cache_read per main turn, first/last-third trend, handoff flag."""
+    ctx = [t["input_tokens"] + t["cache_read"] for t in turns]
+    if not ctx:
+        return {"avg": 0, "first_third": None, "last_third": None, "handoff": False,
+                "threshold": CONTEXT_HANDOFF_THRESHOLD}
+
+    def avg(xs):
+        return round(sum(xs) / len(xs))
+
+    k = len(ctx) // 3
+    first, last = (avg(ctx[:k]), avg(ctx[-k:])) if k else (None, None)
+    return {"avg": avg(ctx), "first_third": first, "last_third": last,
+            "handoff": (last if last is not None else avg(ctx)) > CONTEXT_HANDOFF_THRESHOLD,
+            "threshold": CONTEXT_HANDOFF_THRESHOLD}
 
 
 def weighted_tokens(totals: dict) -> float:
@@ -376,6 +495,12 @@ def build_subagent_report(jsonl_path: str, since) -> dict:
     if not turns:
         return None
     meta = load_meta(jsonl_path)
+    model, models, by_model = model_stats(turns)
+    asst = [e for e in entries if e.get("type") == "assistant"]
+    last_stop = (asst[-1].get("message") or {}).get("stop_reason") if asst else None
+    called = any(b.get("name") == "SubagentHandback" for e in asst
+                 for b in (e.get("message") or {}).get("content") or []
+                 if isinstance(b, dict) and b.get("type") == "tool_use")
     first = turns[0]
     startup = first["input_tokens"] + first["cache_write_5m"] + first["cache_write_1h"] + first["cache_read"]
     totals = sum_turns(turns)
@@ -386,13 +511,20 @@ def build_subagent_report(jsonl_path: str, since) -> dict:
         "startup_tokens": startup,
         "handback_chars": extract_handback_chars(entries),
         "tool_calls": extract_tool_calls(entries, since),
+        "model": model,
+        "models": models,
+        "by_model": by_model,
+        "effort": meta.get("effort"),
+        "in_flight": not called and last_stop != "end_turn",
         **totals,
     }
 
 
-def build_report(session_path: str, since) -> dict:
+def build_report(session_path: str, since, top: int = 5, rates=None) -> dict:
     main_entries = list(read_jsonl(session_path))
-    main_turns = filter_since(extract_turns(main_entries), since)
+    all_main = extract_turns(main_entries)
+    main_turns = filter_since(all_main, since)
+    stamps = [t["timestamp"] for t in all_main if t["timestamp"]]
     main_totals = sum_turns(main_turns)
 
     session_dir = session_path[: -len(".jsonl")] if session_path.endswith(".jsonl") else session_path
@@ -415,13 +547,28 @@ def build_report(session_path: str, since) -> dict:
     denom = main_totals["raw_tokens"] + sub_raw
     share = (main_totals["raw_tokens"] / denom) if denom else 0.0
 
-    top5 = sorted(subagents, key=lambda s: s["input_equivalent"] + s["output_tokens"], reverse=True)[:5]
+    ranked = sorted(subagents, key=lambda s: s["input_equivalent"] + s["output_tokens"], reverse=True)
+    top5 = ranked[:top] if top > 0 else ranked
+    _m, main_models, main_by_model = model_stats(main_turns)
+    sub_by_model = merge_by_model([s["by_model"] for s in subagents])
+    cost = {"main": price(main_by_model, rates), "subagents": price(sub_by_model, rates)}
+    for s in subagents:
+        s["cost_usd"], s["unpriced_models"] = price(s["by_model"], rates)
 
     return {
         "session": session_path,
         "since": since.isoformat() if since else None,
         "main": main_totals,
         "main_turns": len(main_turns),
+        "main_span": [stamps[0].isoformat(), stamps[-1].isoformat()] if stamps else None,
+        "main_context": main_context(main_turns),
+        "main_models": main_models,
+        "main_by_model": main_by_model,
+        "subagents_by_model": sub_by_model,
+        "cost_usd": None if rates is None else {
+            "main": cost["main"][0], "subagents": cost["subagents"][0],
+            "total": round(cost["main"][0] + cost["subagents"][0], 4),
+            "unpriced_models": sorted(set(cost["main"][1] + cost["subagents"][1]))},
         "unusable_subagents": unusable,
         "subagents_count": len(subagents),
         "subagents_totals": {
@@ -533,6 +680,15 @@ def check_budget(report: dict, budget: dict) -> list:
 # ---------------------------------------------------------------------------
 
 
+def _usd(x) -> str:
+    return f"${x:.2f}"
+
+
+def _model_line(label: str, by_model: dict) -> str:
+    parts = [f"{m} raw={t['raw_tokens']} out={t['output_tokens']}" for m, t in by_model.items()]
+    return f"{label} by model: " + ("; ".join(parts) or "n/a")
+
+
 def render_text(report: dict) -> str:
     lines = []
     lines.append(f"Token report — {os.path.basename(report['session'])}"
@@ -544,16 +700,38 @@ def render_text(report: dict) -> str:
     st = report["subagents_totals"]
     lines.append(f"SUBAGENTS(n={report['subagents_count']}) input-eq={st['input_equivalent']} "
                  f"out={st['output_tokens']} raw={st['raw_tokens']}")
+    lines.append(_model_line("MAIN", report["main_by_model"]))
+    lines.append(_model_line("SUBAGENTS", report["subagents_by_model"]))
+    c = report["cost_usd"]
+    if c is None:
+        lines.append("Cost: UNPRICED (pass --rates TSV)")
+    else:
+        miss = f" UNPRICED models: {', '.join(c['unpriced_models'])}" if c["unpriced_models"] else ""
+        lines.append(f"Cost: main {_usd(c['main'])} subagents {_usd(c['subagents'])} total {_usd(c['total'])}{miss}")
+    x = report["main_context"]
+    if report["main_turns"]:
+        trend = f" first-third={x['first_third']} last-third={x['last_third']}" if x["first_third"] is not None else ""
+        hand = f"  <-- HANDOFF >{x['threshold']}: write a handoff note and start fresh" if x["handoff"] else ""
+        lines.append(f"Main context/turn (input+cacheR): avg={x['avg']}{trend}{hand}")
     flag = "  <-- FLAG >20%" if report["orchestration_flag"] else ""
     lines.append(f"Orchestration share (main/(main+subagents)): {report['orchestration_share'] * 100:.1f}%{flag}")
+    if report["orchestration_flag"]:
+        hint = "Cheaper route: run main on a cheaper tier for routine turns"
+        if m["raw_tokens"] and m["cache_read"] * 2 > m["raw_tokens"]:
+            hint += "; main cache reads dominate, start a fresh session from a handoff note"
+        lines.append(hint)
     if report["top_subagents"]:
         lines.append("Top subagents by cost (input-eq + output):")
         for i, s in enumerate(report["top_subagents"], 1):
             cost = round(s["input_equivalent"] + s["output_tokens"], 2)
             handback = s["handback_chars"] if s["handback_chars"] is not None else "n/a"
-            lines.append(f"  {i}. {s['label']} [{s['agent_type']}] cost={cost} "
+            mdl = ",".join(f"{k}:{v}" for k, v in s["models"].items()) or "n/a"
+            effort = f" effort={s['effort']}" if s.get("effort") else ""
+            usd = "" if s.get("cost_usd") is None else f" usd={_usd(s['cost_usd'])}"
+            fly = " in-flight" if s["in_flight"] else ""
+            lines.append(f"  {i}. {s['label']} [{s['agent_type']}] model={mdl}{effort}{usd} cost={cost} "
                          f"startup={s['startup_tokens']} calls={s['tool_calls']} out={s['output_tokens']} "
-                         f"handback_chars={handback}")
+                         f"handback_chars={handback}{fly}")
     return "\n".join(lines)
 
 
@@ -569,6 +747,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="print the full report as JSON")
     p.add_argument("--budget", nargs="?", const="", metavar="TSV",
                    help="gate mode: exit 1 with one line per breached cap (optional TSV overrides defaults)")
+    p.add_argument("--top", type=int, default=5, metavar="N", help="lanes to list (default 5, 0 = all)")
+    p.add_argument("--rates", metavar="TSV", help="user-supplied USD-per-1M rates; without it cost is UNPRICED")
     p.add_argument("--selftest", action="store_true")
     return p
 
@@ -587,12 +767,22 @@ def main(argv=None) -> int:
 
     since = None
     if args.since:
-        since = parse_timestamp(args.since)
+        since = parse_timestamp(args.since, local=True)
         if since is None:
             print(f"token_report.py: could not parse --since value: {args.since}", file=sys.stderr)
             return ERROR
 
-    report = build_report(args.session, since)
+    rates = None
+    if args.rates:
+        try:
+            rates = load_rates(args.rates)
+        except (OSError, ValueError) as exc:
+            print(f"token_report.py: bad --rates file {args.rates}: {exc}", file=sys.stderr)
+            return ERROR
+    report = build_report(args.session, since, max(args.top, 0), rates)
+    if since and not report["main_turns"] and not report["subagents_count"]:
+        print(f"token_report.py: warning: --since {since.isoformat()} matched no turns; "
+              f"main transcript spans {report['main_span']}", file=sys.stderr)
     if args.budget is not None:
         try:
             budget = load_budget(args.budget) if args.budget else DEFAULT_BUDGET
@@ -858,6 +1048,90 @@ def _selftest() -> int:
             check(f"bad-budget-row-exits-2 {bad_row!r}", quiet_main(["--session", sess, "--budget", tsv]) == ERROR, "")
         check("missing-budget-file-exits-2",
               quiet_main(["--session", sess, "--budget", os.path.join(tmp, "nope.tsv")]) == ERROR, "")
+
+    # -- timestamps (the --since bug): every spelling of one instant parses equal ----
+    ref = parse_timestamp("2026-10-14T10:00:00.500000+00:00")
+    for spelling in ("2026-10-14T10:00:00.5Z", "2026-10-14T10:00:00.5000001234Z", "2026-10-14T10:00:00.5+0000",
+                     "2026-10-14T12:00:00.5+02:00"):
+        check(f"timestamp-spelling {spelling}", parse_timestamp(spelling) == ref, str(parse_timestamp(spelling)))
+    check("naive-since-is-local-naive-transcript-is-utc",
+          parse_timestamp("2026-10-14T10:00:00", local=True) == datetime(2026, 10, 14, 10).astimezone()
+          and parse_timestamp("2026-10-14T10:00:00").utcoffset().total_seconds() == 0, "")
+    check("two-turns-without-timestamp-sort-without-crash",
+          len(extract_turns([{"type": "assistant", "message": {"usage": {"input_tokens": 1}}},
+                             {"type": "assistant", "message": {"usage": {"input_tokens": 2}}}])) == 2, "")
+
+    # -- models, effort, in-flight, --top, --rates, context/turn, cheaper-route hint --
+    def mturn(req, ts, model, usage, stop=None, content=()):
+        msg = {"usage": usage, "model": model, "content": list(content)}
+        if stop:
+            msg["stop_reason"] = stop
+        return json.dumps({"type": "assistant", "timestamp": ts, "requestId": req, "apiBlockIndex": 0,
+                           "message": msg}) + "\n"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        sess = os.path.join(tmp, "s.jsonl")
+        with open(sess, "w", encoding="utf-8") as fh:
+            for i in range(6):  # context grows 100k -> 600k; cache reads dominate main
+                fh.write(mturn(f"m{i}", f"2026-01-01T00:0{i}:00.5Z", "model-big-20260101",
+                               {"input_tokens": 0, "cache_read_input_tokens": 100000 * (i + 1), "output_tokens": 1}))
+        sub = os.path.join(tmp, "s", "subagents")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "agent-a.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(mturn("a1", "2026-01-01T00:01:00Z", "model-big-20260101", {"input_tokens": 1000, "output_tokens": 100}))
+            fh.write(mturn("a2", "2026-01-01T00:02:00Z", "model-big-20260101", {"input_tokens": 1000, "output_tokens": 100}))
+            fh.write(mturn("a3", "2026-01-01T00:03:00Z", "model-small", {"input_tokens": 1000, "output_tokens": 100},
+                           stop="end_turn"))
+        with open(os.path.join(sub, "agent-a.meta.json"), "w", encoding="utf-8") as fh:
+            json.dump({"effort": "high"}, fh)
+        with open(os.path.join(sub, "agent-b.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(mturn("b1", "2026-01-01T00:04:00Z", "model-small", {"input_tokens": 10, "output_tokens": 1}, stop="tool_use"))
+        rates_tsv = os.path.join(tmp, "rates.tsv")
+        with open(rates_tsv, "w", encoding="utf-8") as fh:
+            fh.write("# model\tin\t5m\t1h\tread\tout\nmodel-big\t10\t0\t0\t1\t100\n")
+        rates = load_rates(rates_tsv)
+        rep = build_report(sess, None, 1, rates)
+        lanes = {s["file"]: s for s in rep["all_subagents"]}
+        check("lane-majority-model-and-counts", lanes["agent-a"]["model"] == "model-big-20260101"
+              and lanes["agent-a"]["models"] == {"model-big-20260101": 2, "model-small": 1}, str(lanes["agent-a"]["models"]))
+        check("lane-effort-from-meta-else-none", lanes["agent-a"]["effort"] == "high" and lanes["agent-b"]["effort"] is None, "")
+        check("in-flight-lane-flagged-and-still-counted", lanes["agent-b"]["in_flight"] is True
+              and lanes["agent-b"]["raw_tokens"] == 11 and lanes["agent-a"]["in_flight"] is False,
+              str((lanes["agent-b"]["in_flight"], lanes["agent-b"]["raw_tokens"])))
+        check("top-1-lists-one-lane-json-keeps-all", len(rep["top_subagents"]) == 1 and len(rep["all_subagents"]) == 2, "")
+        check("top-0-lists-all", len(build_report(sess, None, 0)["top_subagents"]) == 2, "")
+        check("subagent-totals-by-model", set(rep["subagents_by_model"]) == {"model-big-20260101", "model-small"}, "")
+        # main: cache_read 2.1M * $1/M + 6 out * $100/M ; model-big lane a: 2000 in * $10/M + 200 out * $100/M
+        check("main-cost-from-rates", rep["cost_usd"]["main"] == round(2_100_000 * 1 / 1e6 + 6 * 100 / 1e6, 4), str(rep["cost_usd"]))
+        check("lane-cost-and-unpriced-model", lanes["agent-a"]["cost_usd"] == round(2000 * 10 / 1e6 + 200 * 100 / 1e6, 4)
+              and lanes["agent-a"]["unpriced_models"] == ["model-small"], str(lanes["agent-a"]))
+        check("unpriced-model-named-in-total", rep["cost_usd"]["unpriced_models"] == ["model-small"], str(rep["cost_usd"]))
+        ctx = rep["main_context"]
+        check("context-per-turn-trend-and-handoff", ctx["avg"] == 350000 and ctx["first_third"] == 150000
+              and ctx["last_third"] == 550000 and ctx["handoff"] is True, str(ctx))
+        text = render_text(rep)
+        check("text-has-handoff-flag", "HANDOFF" in text and "start fresh" in text, text)
+        check("text-has-cheaper-route-hint-incl-cache-dominated", "Cheaper route:" in text and "cache reads dominate" in text, text)
+        check("text-shows-model-usd-and-in-flight", "model=model-big-20260101:2,model-small:1" in text
+              and "effort=high" in text and "usd=$" in text, text)
+        check("text-total-by-model-blocks", "MAIN by model:" in text and "SUBAGENTS by model:" in text, text)
+        check("no-rates-says-UNPRICED", "Cost: UNPRICED" in render_text(build_report(sess, None)), "")
+        check("no-rates-json-cost-null", build_report(sess, None)["cost_usd"] is None, "")
+        in_flight_text = render_text(build_report(sess, None, 0))
+        check("in-flight-marker-in-text", "in-flight" in in_flight_text, in_flight_text)
+        for bad in ("m\t1\t2\n", "m\t1\t2\t3\t4\tx\n", "m\t1\t2\t3\t4\t-5\n"):
+            with open(rates_tsv, "w", encoding="utf-8") as fh:
+                fh.write(bad)
+            check(f"bad-rates-exits-2 {bad!r}", quiet_main(["--session", sess, "--rates", rates_tsv]) == ERROR, "")
+        check("missing-rates-exits-2", quiet_main(["--session", sess, "--rates", os.path.join(tmp, "nope")]) == ERROR, "")
+        # empty window explains itself on stderr instead of a silent zero report
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            rc_empty = main(["--session", sess, "--since", "2099-01-01T00:00:00Z"])
+        check("empty-window-warns-with-span", rc_empty == OK and "matched no turns" in err.getvalue()
+              and "2026-01-01" in err.getvalue(), err.getvalue())
+        check("window-boundary-with-fraction-keeps-turn", build_report(
+            sess, parse_timestamp("2026-01-01T00:05:00.5Z"))["main_turns"] == 1, "")
 
     if failures:
         for f in failures:
