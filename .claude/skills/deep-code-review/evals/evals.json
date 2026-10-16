@@ -8109,6 +8109,19 @@
         "Tags shadow-rule findings and counts disabled-rule suppressions",
         "States the safety floor is not relaxed by the file"
       ]
+    },
+    {
+      "id": "ci-cost-advisor-prices-then-recommends-local-first",
+      "prompt": "Two repos ask how to stop overspending on GitHub Actions. Repo A is public. Repo B is private: its only PR workflow, ci.yml, triggers on push and pull_request with a 3 OS x 2 Python matrix and has no concurrency, a nightly schedule lives in another file, and branch protection requires ci.yml. The owner wants the gates to run locally instead of on paid Actions. What do you run, what do you say about each repo, and what do you refuse to do?",
+      "expected_output": "Run `.claude/skills/deep-code-review/scripts/ci_cost_advisor.py <root>` (or `ci_cost_lint.py --advise`) on each repo instead of estimating by eye. Repo A: a public repository on standard GitHub-hosted runners is free (docs.github.com), so the verdict is FREE and there is no spend to cut; local-first is optional, and only larger runners are billed. Repo B: the advisor reads the triggers, matrix and git history and prints estimated minutes and dollars before and after at the published per-minute rates (Linux 2-core $0.006, Windows $0.010, macOS $0.062, every job rounded up to a whole minute) net of the plan's included minutes, labelling what it assumed (job minutes default to 5, three pushes per PR) and taking measured numbers through `--job-minutes`; `--required ci.yml` tells it which workflow branch protection requires. The local-first plan: run the full gate locally before the push (the cached pre-push gate), keep only a cheap required check in Actions, limit `push` to main so the push plus pull_request double trigger stops, add per-PR concurrency with cancel-in-progress, and use path filters or `[skip ci]` only for workflows that are not required checks, because a workflow skipped by a filter or a commit message leaves its required check Pending and blocks the merge. It prints a unified diff for the owner to review and `git apply`; it never edits a workflow itself. Setting policy `ci: local-first` makes lanes run the gates locally and push once per PR.",
+      "expectations": [
+        "Runs or cites ci_cost_advisor.py (or ci_cost_lint.py --advise) instead of estimating by eye",
+        "Says a public repo on standard runners is free, so repo A has no spend to cut",
+        "Prices repo B from its triggers, matrix and git history at the published per-minute rates, rounded up per job, and labels assumptions (job minutes, pushes per PR) rather than presenting them as measured",
+        "Recommends the local-first plan: full gate locally before the push, only a cheap required check in Actions, push limited to main, per-PR concurrency with cancel-in-progress",
+        "States that path filters and [skip ci] must not be applied to a required check because the skipped check stays Pending and blocks the merge",
+        "Hands the owner a patch to review and apply and does not edit the workflow itself"
+      ]
     }
   ]
 }

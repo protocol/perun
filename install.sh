@@ -501,6 +501,9 @@ automates them (they need forge/org privileges this script does not have):
       Cloud -- Team, Pro, and personal-account repos get none of it.
   [ ] Run `python3 .claude/skills/deep-code-review/scripts/ci_cost_lint.py --gate .`
       before merging any new/changed workflow file.
+  [ ] Run `python3 .claude/skills/deep-code-review/scripts/ci_cost_advisor.py .` to
+      price your workflows in minutes and dollars (public repos on standard runners
+      are free) and get a local-first patch to review; it never edits a workflow.
 
 Optional, only useful alongside --with-delivery: --with-operating-layer WRITES the
 two-tier SubagentStop hand-back cap, the SubagentStart house-default injector, and

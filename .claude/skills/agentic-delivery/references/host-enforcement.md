@@ -284,7 +284,9 @@ see "Subagent model + cache-TTL pin" above; not restated here.
 Run every gate locally, once, before pushing: a push, a re-run, or `gh pr
 update-branch` each cost a fresh CI run for zero new signal over what the
 local run already showed. Mechanisms, not just prose: `ci_cost_lint.py`
-(`deep-code-review/scripts/`) flags a rerun-prone workflow; `token_report.py
+(`deep-code-review/scripts/`) flags a rerun-prone workflow and `ci_cost_advisor.py`
+prices it (a public repo on standard runners is free) and prints a local-first patch
+(policy `ci: local-first|cloud|auto`); `token_report.py
 --budget` (`agentic-ceo/scripts/`) catches a poll/re-push loop's spend;
 `merge_train.py refresh` (`merge-operations.md`) defaults to printing local
 merge-and-push commands per PR, never `gh pr update-branch`, unless

@@ -2802,6 +2802,17 @@
         "Invokes agentic-delivery before listing or reading files",
         "Does not decline the build on the grounds that the directory is empty before routing"
       ]
+    },
+    {
+      "id": "ci-policy-local-first-push-once",
+      "prompt": "`.perun/policy.json` sets `ci: local-first`. A lane has finished a change; the repo's hosted CI takes about 15 minutes, and the lane is tempted to push now to see whether CI passes and to re-push after every small fix. What should it do, and how does the `auto` value differ?",
+      "expected_output": "Read the mode with `perun_policy.py ci` (it prints local-first). On local-first the lane runs every gate locally before the push (the repo's pre-push hook runs its gate and caches the verdict per commit, so an unchanged commit never re-runs), pushes each PR once, and never pushes, re-runs or polls hosted CI to see whether it passes; hosted CI stays a cheap required backstop. A legitimate re-push (review feedback, a conflict) is allowed: the pre-push hook prints a warning for a branch that already exists on the remote, and the rest is a lane rule, not enforced by code. `cloud` means hosted CI is the gate. `auto` (the default) resolves to local-first when `github_actions` is off, otherwise to the verdict of `ci_cost_advisor.py --decide`: a public repo, or a private one inside its free minutes, stays cloud; a private repo using at least half its included minutes goes local-first; a missing or failing advisor means cloud.",
+      "expectations": [
+        "Reads the mode with perun_policy.py ci (policy key ci) instead of assuming it",
+        "On local-first runs every gate locally before the push and pushes each PR once, without pushing, re-running or polling hosted CI to see whether it passes",
+        "Allows a re-push for review feedback or a conflict and names the pre-push warning as the only mechanical part, the rest being a lane rule",
+        "Explains auto: github_actions off means local-first, otherwise the cost advisor decides (public or inside free minutes stays cloud), and an advisor failure means cloud"
+      ]
     }
   ]
 }

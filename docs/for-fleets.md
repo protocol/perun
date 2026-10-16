@@ -91,6 +91,18 @@ Every resource is spent efficiently unless you name a front to push. One file,
   pushing a branch starts no runner either. Limitation: a required status check never reports on a
   `[skip ci]` commit, so branch protection that requires checks blocks the merge; satisfy them with
   local gates (or an owner-approved admin merge). Perun's own scripts create no pushed commits.
+- `ci` (`local-first|cloud|auto`, default `auto`) says where the gates run. `local-first`: agents run every gate
+  locally before the push (the pre-push hook caches its verdict per commit), push each PR once and never push or
+  re-run to see whether hosted CI passes; hosted CI stays a cheap required backstop, and the pre-push hook warns
+  on a re-push. `cloud`: hosted CI is the gate. `auto`: local-first when `github_actions` is `off`, else
+  `ci_cost_advisor.py --decide` (a public repo, or one inside its free minutes: cloud; a private one using half its
+  included minutes: local-first). `perun_policy.py ci` prints the effective mode.
+- To see what hosted CI costs, run `python3 .claude/skills/deep-code-review/scripts/ci_cost_advisor.py .` (or
+  `ci_cost_lint.py --advise .`). It reads `.github/workflows`, the repo's visibility and its git history, and
+  prints estimated minutes and dollars per month before and after a local-first plan, plus a patch to review and
+  `git apply`. It never edits a workflow. A public repo on standard runners is free, and it says so. Pass
+  `--required ci.yml` (the workflows branch protection requires) to unlock the larger edits, and measured job
+  times with `--job-minutes ci.yml=14` (the default is an assumed 5).
 - Set it without hand-writing JSON: `perun_policy.py set local_cpu maximize`, or at install
   `./install.sh --policy local_cpu=maximize,github_actions=off,share_learnings=auto`.
 - `tokens`: enforced only as a lane cap. `perun_policy.py lanes` and `heavy-slots` (and host_probe's lane cap)

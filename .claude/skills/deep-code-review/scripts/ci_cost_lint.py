@@ -84,6 +84,12 @@ CHECKS (one line per finding, name + fix)
     workflow files share byte-identical normalized triggers — a candidate to
     merge into one workflow (job-count rounding, see domain-k.md).
 
+PRICING AND A LOCAL-FIRST PATCH
+-------------------------------
+`--advise` runs `ci_cost_advisor.py` after the findings: it estimates minutes and dollars per push/PR and per
+month from these same triggers, matrices and jobs, and prints a local-first plan with a ready patch (never
+applied). Public repos on standard runners are free; the advisor says so and stops.
+
 EXIT CODES
 -----------
 Default mode prints every finding and exits 0 (advisory only — see the repo
@@ -736,6 +742,21 @@ def _consolidation_findings(fingerprints: dict[str, list[str]]) -> list[tuple[st
     return findings
 
 
+def load_workflows(root: str) -> dict[str, str]:
+    """{`.github/workflows/<name>`: text} for every `.yml`/`.yaml` under `root`, sorted. The one loader the lint
+    and `ci_cost_advisor.py` share. Raises FileNotFoundError on a nonexistent `root`; `{}` when `root` has no
+    `.github/workflows/`."""
+    if not os.path.isdir(root):
+        raise FileNotFoundError(f"ci_cost_lint: root not found: {root}")
+    wf_dir = os.path.join(root, ".github", "workflows")
+    out: dict[str, str] = {}
+    for name in sorted(os.listdir(wf_dir)) if os.path.isdir(wf_dir) else []:
+        if name.endswith((".yml", ".yaml")):
+            with open(os.path.join(wf_dir, name), encoding="utf-8", errors="replace") as fh:
+                out[os.path.join(".github", "workflows", name)] = fh.read()
+    return out
+
+
 def scan(
     root: str, *, matrix_max: int, strict: bool | None,
     default_branch: str = "main", required: frozenset[str] = frozenset(),
@@ -747,20 +768,9 @@ def scan(
     path was wrong"). A `root` that exists but has no `.github/workflows/`
     is a legitimate, clean scan: returns `[]`, does not raise.
     """
-    if not os.path.isdir(root):
-        raise FileNotFoundError(f"ci_cost_lint: root not found: {root}")
-    wf_dir = os.path.join(root, ".github", "workflows")
     findings: list[tuple[str, bool, str]] = []
-    if not os.path.isdir(wf_dir):
-        return findings
     fingerprints: dict[str, list[str]] = {}
-    for name in sorted(os.listdir(wf_dir)):
-        if not name.endswith((".yml", ".yaml")):
-            continue
-        full = os.path.join(wf_dir, name)
-        rel = os.path.join(".github", "workflows", name)
-        with open(full, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
+    for rel, text in load_workflows(root).items():
         findings.extend(lint_workflow(
             rel, text, matrix_max=matrix_max, strict=strict,
             default_branch=default_branch, required=required,
@@ -1442,6 +1452,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--required", default="", metavar="FILE[,FILE...]",
                          help="comma-separated workflow basenames (e.g. ci.yml) treated as"
                               " required status checks for REQUIRED-PATHS-FILTER")
+    parser.add_argument("--advise", action="store_true",
+                         help="after the findings, price these workflows and print a local-first plan and patch"
+                              " (ci_cost_advisor.py; never edits a workflow)")
     parser.add_argument("--selftest", action="store_true", help="run the built-in selftest and exit")
     args = parser.parse_args(argv)
 
@@ -1475,6 +1488,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if not findings:
         print("ci_cost_lint: ok (no findings)")
+
+    if args.advise:
+        import ci_cost_advisor  # sibling: prices what this lint flags, reusing this module's parser
+        print()
+        ci_cost_advisor.main([args.root, "--default-branch", args.default_branch]
+                             + (["--strict-protection"] if args.strict_protection else [])
+                             + (["--repo", args.repo] if args.repo else [])
+                             + (["--required", args.required] if args.required else []))
+    elif findings:
+        print("hint: --advise prices these workflows and prints a local-first plan and patch (nothing is edited)")
 
     if args.gate and blocking:
         return GATE_FAIL

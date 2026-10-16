@@ -30,7 +30,8 @@ lifecycle, canary/blue-green claims vs actual config, DORA-or-`UNMEASURED` —
   triggers with no `paths`/`paths-ignore` filter still re-runs on a docs-only
   change (`.claude/skills/deep-code-review/scripts/ci_cost_lint.py` checks
   these deterministically — plus the docs-only-trigger heuristic as advisory —
-  and `--gate` fails a PR on the blocking ones). The mandatory,
+  and `--gate` fails a PR on the blocking ones; `ci_cost_advisor.py` prices them and
+  prints a local-first patch: a public repo on standard runners is free). The mandatory,
   universal minimum-cost profile (integration-branch CI ban, main-only hosted
   CI shape, self-hosted-runner isolation, merge-queue plan gate, spend/token
   backstops) is the canonical doctrine in

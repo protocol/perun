@@ -81,6 +81,11 @@
 # control" above). DCR_PREPUSH_SKIP_CACHE=1 forces a full re-run and still
 # refreshes the stamp on success.
 #
+# CI MODE: when agentic-delivery's perun_policy.py is installed and `ci` resolves
+# to `local-first`, a push of a branch that already exists on the remote prints
+# a one-line notice (one push per PR; review fixes and conflicts are legitimate
+# re-pushes). Warn-only: it never fails the push.
+#
 # CONFIGURATION (env vars):
 #   DCR_PREPUSH_CMD             the fast tier to run before allowing the
 #                                push, e.g. "make lint test-unit". Run through
@@ -288,6 +293,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fi
   else
     base_sha="${remote_sha}"
+    # Policy `ci: local-first` expects one push per PR: a branch that already exists on the remote is a re-push.
+    # Warn-only (a review fix or a conflict is a legitimate re-push); the default branch and a missing
+    # perun_policy.py (agentic-delivery not installed) are skipped.
+    ci_policy=".claude/skills/agentic-delivery/scripts/perun_policy.py"
+    if [ -f "${ci_policy}" ] && [ "${remote_ref}" != "refs/heads/$(resolve_default_branch)" ] \
+      && [ "$(python3 "${ci_policy}" ci 2>/dev/null || true)" = "local-first" ]; then
+      printf 'pre-push-verify: ci=local-first expects one push per PR and %s already exists on the remote: re-push only for review feedback or a conflict, and run every gate locally first (perun_policy.py ci)\n' "${remote_ref}" >&2
+    fi
   fi
 
   export BASE_SHA="${base_sha}"
