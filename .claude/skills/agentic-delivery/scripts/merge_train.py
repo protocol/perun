@@ -141,10 +141,13 @@ SUBCOMMANDS
 FLAKY VS DETERMINISTIC
 ----------------------
 A failing --verify-cmd is re-run up to --retries times on the same tree with
-exponential backoff (--backoff seconds, doubling, capped at 300 s). A re-run
-that passes is reported `FLAKY` and counts as a pass; failing every attempt is
-deterministic. A failed `gh pr merge` is retried on the same bounded schedule.
-Parking a member never sleeps.
+exponential backoff (--gate-backoff seconds, default 5, doubling, capped at
+300 s: a test re-run needs no long cool-down). A re-run that passes is reported
+`FLAKY` and counts as a pass; failing every attempt is deterministic. The
+verdict is cached per git tree SHA for the run: an identical tree (a bisect
+prefix that equals a rebuilt union) is never tested twice (`CACHED`). A failed
+`gh pr merge` and every other gh retry use --backoff (default 30, doubling,
+capped at 300 s). Parking a member never sleeps.
 
 AUTHORITY AND SAFETY
 --------------------
@@ -182,7 +185,7 @@ USAGE
   merge_train.py plan   --base main [--repo OWNER/NAME] [--min-checks K]
   merge_train.py verify --base main --verify-cmd 'make test'
                         [--count-cmd CMD --cap N --marker-key size-budget-raise]
-                        [--retries 2] [--backoff 30] [--timeout 3600]
+                        [--retries 2] [--backoff 30] [--gate-backoff 5] [--timeout 3600]
   merge_train.py merge  --base main [--apply --grant REF]
   merge_train.py keystone --base main --pr N --verify-cmd CMD --only GLOB
                         [--only GLOB ...] [--owner-email E ...] [--require-signed] [--apply]
@@ -307,6 +310,7 @@ class Train:
         self.repo_flag = ["--repo", args.repo] if args.repo else []
         self.base_sha = ""
         self.run_id = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"  # never a per-process counter (#1139)
+        self.verdicts = {}  # git tree SHA -> fails() verdict for this run: an identical tree is never re-tested
         self.refs = set()  # refs this run fetched into; dropped when the run ends
         self.state_path = args.state or self._default_state()
         self.state = self._load()
@@ -437,9 +441,9 @@ class Train:
             except Exception as exc:  # noqa: BLE001 — cleanup must never mask the run's exit code
                 self.say(f"DROP-FAILED {ref}: {clean(exc, 120)}")
 
-    def delay(self, attempt):
-        """Backoff before retry `attempt` (1-based): --backoff doubling, capped at MAX_BACKOFF."""
-        return min(self.a.backoff * 2 ** (attempt - 1), MAX_BACKOFF)
+    def delay(self, attempt, base=None):
+        """Backoff before retry `attempt` (1-based): `base` (default --backoff) doubling, capped at MAX_BACKOFF."""
+        return min((self.a.backoff if base is None else base) * 2 ** (attempt - 1), MAX_BACKOFF)
 
     def park(self, member, reason):
         """Exclude `member` at its current head from every later plan, persist it, print PARK."""
@@ -535,22 +539,31 @@ class Train:
     def fails(self, members, label):
         """'' when base+members passes the gate, else 'verify' or 'cap C>N'."""
         with self.tree(self.base_sha, members) as wt:
-            attempts = self.a.retries + 1
-            for i in range(attempts):
+            sha = self.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt)[1].strip()
+            if sha in self.verdicts:
+                self.say(f"CACHED {label} tree {sha[:7]} verdict={self.verdicts[sha] or 'pass'}")
+                return self.verdicts[sha]
+            self.verdicts[sha] = why = self._gate(wt, label)
+        return why
+
+    def _gate(self, wt, label):
+        """Run the gate (re-runs on failure) and the cap count once in `wt`: '' or 'verify' or 'cap C>N'."""
+        attempts = self.a.retries + 1
+        for i in range(attempts):
+            if i:
+                self.sleep(self.delay(i, self.a.gate_backoff))
+            if self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)[0] == 0:
                 if i:
-                    self.sleep(self.delay(i))
-                if self.run(["sh", "-c", self.a.verify_cmd], cwd=wt, ok=False, timeout=self.a.timeout)[0] == 0:
-                    if i:
-                        self.say(f"FLAKY {label} passed on attempt {i + 1}/{attempts}")
-                    break
-            else:
-                self.say(f"FAIL {label} deterministic ({attempts}/{attempts} attempts)")
-                return "verify"
-            if self.a.count_cmd:
-                count = self.count(wt)
-                if count > self.a.cap:
-                    self.say(f"FAIL {label} cap {count}>{self.a.cap}")
-                    return f"cap {count}>{self.a.cap}"
+                    self.say(f"FLAKY {label} passed on attempt {i + 1}/{attempts}")
+                break
+        else:
+            self.say(f"FAIL {label} deterministic ({attempts}/{attempts} attempts)")
+            return "verify"
+        if self.a.count_cmd:
+            count = self.count(wt)
+            if count > self.a.cap:
+                self.say(f"FAIL {label} cap {count}>{self.a.cap}")
+                return f"cap {count}>{self.a.cap}"
         return ""
 
     def count(self, wt):
@@ -764,7 +777,7 @@ class Train:
 
         Uses a throwaway index, never the working tree. A setup failure raises ForgeError.
         """
-        script = ('d=$(mktemp -d) || exit 3; trap \'rm -rf "$d"\' EXIT; '
+        script = ('d=$(mktemp -d "${TMPDIR:-/tmp}/keystone.XXXXXX") || exit 3; trap \'rm -rf "$d"\' EXIT; '
                   'GIT_INDEX_FILE="$d/index" git read-tree "$1" || exit 3; '
                   'GIT_INDEX_FILE="$d/index" git apply --cached --check -R "$2" 2>/dev/null')
         fd, path = tempfile.mkstemp(prefix="keystone-", suffix=".patch")
@@ -1263,6 +1276,8 @@ def build_parser():
     common.add_argument("--allow-forks", action="store_true", help="admit fork PRs (their code runs locally)")
     common.add_argument("--retries", type=int, default=2, help="bounded re-runs for a flaky step")
     common.add_argument("--backoff", type=float, default=30.0, help="first retry delay in seconds (doubles, max 300)")
+    common.add_argument("--gate-backoff", type=float, default=5.0,
+                        help="first delay before re-running a failing --verify-cmd (doubles, max 300)")
     p = argparse.ArgumentParser(description="Verify several green PRs as one union, then land them back-to-back.")
     p.add_argument("--selftest", action="store_true", help="run offline self-tests against a fake forge")
     sub = p.add_subparsers(dest="cmd")
@@ -1315,8 +1330,8 @@ def run(argv, runner=default_runner, out=sys.stdout, sleep=time.sleep) -> int:
         problems.append("--repo must be OWNER/NAME")
     if a.min_checks < 1:
         problems.append("--min-checks must be >= 1 (zero checks is never green)")
-    if a.retries < 0 or a.backoff < 0:
-        problems.append("--retries/--backoff must be >= 0")
+    if a.retries < 0 or a.backoff < 0 or a.gate_backoff < 0:
+        problems.append("--retries/--backoff/--gate-backoff must be >= 0")
     if a.cmd == "verify" and bool(a.count_cmd) != (a.cap is not None):
         problems.append("--count-cmd and --cap go together")
     if a.cmd == "merge" and a.apply and not a.grant.strip():
@@ -1421,6 +1436,9 @@ class FakeForge:
                    **{f"refs/pull/{n}/head": self.pushed.get(n, p["head"]) for n, p in self.prs.items()}}
             now.update(self.remote_override)
             return 0, "".join(f"{now[r]}\t{r}\n" for r in a[3:] if now.get(r)), ""
+        if a[:3] == ["git", "rev-parse", "HEAD^{tree}"]:  # same start + same merged members = same tree
+            t = self.trees[cwd]
+            return 0, f"T{t['start']}-{'-'.join(map(str, sorted(t['merged'])))}\n", ""
         if a[:2] == ["git", "rev-parse"] and "/pull-" in a[2]:
             n = int(a[2].rsplit("-", 1)[1])
             return 0, self.pushed.get(n, self.prs[n]["head"]) + "\n", ""

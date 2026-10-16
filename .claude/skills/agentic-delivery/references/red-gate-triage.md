@@ -44,7 +44,7 @@ fresh; the train renews it at each step. Waits use the `_lock.sh` mkdir lock, ne
 stale is reported with the command to clear it by hand and is never moved or deleted automatically. A red browser run lands
 only when every new listed failure re-ran as a flake and the runner's own `FAILURES <n>` count is not above the listed `FAIL`
 lines. **CANT rule:** the per-PR bisect re-runs each real id through the same flake triage (never one run), blames a PR only
-when it fails the id alone, and a failure that passes alone for every PR (`FLAKY`, no blame) or is not pinned to a culprit makes the train print `CANT` and exit 3 with nothing landed; a `FLAKE` always means at least `FLAKE_RUNS`-1 passes (`FLAKE_REAL_AT` is clamped to 2). Tests: `scripts/test-train-resilience.sh`, `scripts/test-peer-pains-2.sh`.
+when it fails the id alone, and a failure that passes alone for every PR (`FLAKY`, no blame) or is not pinned to a culprit makes the train print `CANT` and exit 3 with nothing landed; an id is `REAL` only if it fails all `FLAKE_RUNS` (3) solo re-runs, else `FLAKE`. Tests: `scripts/test-train-resilience.sh`, `scripts/test-peer-pains-2.sh`.
 
 ## A load-flaky required gate is not a confirmed red — bounded-rerun the same commit to reclassify it before concluding a regression
 

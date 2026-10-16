@@ -53,10 +53,10 @@ FLAKE_INVOCATION="bash $WORK/browser.sh" bash "$SC/train_flake.sh" --record "$WO
 out=$(BASELINE_FAILS="$WORK/baseline" FLAKE_INVOCATION="bash $WORK/browser.sh" run env); rc=$?
 [ $rc -eq 0 ] && grep -q '^BASE RED: 2 pre-existing' <<<"$out" && ! grep -q '^DROP\|^CANT' <<<"$out"
 ok $? "train_land: with BASELINE_FAILS set, an id outside the list that fails on the base is still base-checked, not blamed"
-# (1e) FLAKE_REAL_AT above 2 must not let two failures of three pass as flakes: fails 2 of 3 alone -> REAL -> not landed
+# (1e) an explicit FLAKE_REAL_AT=2 restores the old 2-of-3 rule: fails 2 of 3 alone -> REAL -> not landed (the default is all N: scripts/test-train-flake-rate.sh)
 printf 'x\n' >"$WORK/one"; echo 'f="$WORK/seq"; r=$(head -c1 "$f"); tail -c +2 "$f" >"$f.n"; mv "$f.n" "$f"; [ "$r" != F ]' >"$WORK/rr.sh"
-printf 'FFP' >"$WORK/seq"; RERUN_CMD="bash $WORK/rr.sh" FLAKE_RUNS=3 FLAKE_REAL_AT=3 bash "$SC/train_flake.sh" "$WORK/one" >"$WORK/o" 2>/dev/null; rc=$?
-[ $rc -eq 1 ] && grep -q '^REAL x' "$WORK/o"; ok $? "train_flake: FLAKE_REAL_AT=3 still treats a 2-of-3 failure as REAL (flake needs >= RUNS-1 passes)"
+printf 'FFP' >"$WORK/seq"; RERUN_CMD="bash $WORK/rr.sh" FLAKE_RUNS=3 FLAKE_REAL_AT=2 bash "$SC/train_flake.sh" "$WORK/one" >"$WORK/o" 2>/dev/null; rc=$?
+[ $rc -eq 1 ] && grep -q '^REAL x' "$WORK/o"; ok $? "train_flake: an explicit FLAKE_REAL_AT=2 still treats a 2-of-3 failure as REAL"
 # (1d) one real culprit alone still isolates: t1 flaky at the union, t2 pinned to #2 -> #2 dropped, #1 and #3 re-verify and land
 echo 'echo "GREEN base=$B union=$U123"' >"$WORK/verify.sh"
 U13=$(mkunion 1 3); export U13

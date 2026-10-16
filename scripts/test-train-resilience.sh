@@ -17,12 +17,12 @@ f="$WORK/seq.$TEST"; r=$(head -c1 "$f" 2>/dev/null); tail -c +2 "$f" >"$f.n" 2>/
 echo "$TEST" >>"$WORK/reruns.log"; [ "$r" != F ]
 STUB
 export WORK; export RERUN_CMD="bash $WORK/rerun.sh"
-printf 'FFP' >"$WORK/seq.real1"; printf 'FPP' >"$WORK/seq.flaky1"; printf 'PP' >"$WORK/seq.pass1"; printf 'F' >"$WORK/seq.base1"
+printf 'FFF' >"$WORK/seq.real1"; printf 'FPP' >"$WORK/seq.flaky1"; printf 'PP' >"$WORK/seq.pass1"; printf 'F' >"$WORK/seq.base1"
 printf 'real1\nflaky1\npass1\nbase1\n' >"$WORK/fails"; echo base1 >"$WORK/b1"; FLAKE_INVOCATION=x bash "$SC/train_flake.sh" --record "$WORK/b1" >"$WORK/baseline"; export FLAKE_INVOCATION=x
 out=$(bash "$SC/train_flake.sh" "$WORK/fails" "$WORK/baseline"); rc=$?
 [ $rc -eq 1 ] && grep -q '^REAL real1$' <<<"$out" && grep -q '^FLAKE flaky1' <<<"$out" && grep -q '^FLAKE pass1' <<<"$out" \
-  && ! grep -q base1 <<<"$out" && [ "$(grep -c '^real1$' "$WORK/reruns.log")" -eq 2 ] && ! grep -q '^base1$' "$WORK/reruns.log"
-ok $? "flake triage: fail 2 of 3 is REAL (stops at 2), 1 of 3 is FLAKE, baseline ids are skipped"
+  && ! grep -q base1 <<<"$out" && [ "$(grep -c '^real1$' "$WORK/reruns.log")" -eq 3 ] && ! grep -q '^base1$' "$WORK/reruns.log"
+ok $? "flake triage: fail 3 of 3 is REAL, 1 of 3 is FLAKE, baseline ids are skipped"
 printf 'FPP' >"$WORK/seq.flaky1"; echo flaky1 >"$WORK/fails1"
 bash "$SC/train_flake.sh" "$WORK/fails1" >/dev/null; ok $? "flake triage: flakes only exits 0"
 

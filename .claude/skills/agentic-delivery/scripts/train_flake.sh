@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # train_flake.sh — triage NEW gate failures into REAL vs FLAKE by re-running each alone.
 # Usage: train_flake.sh <failed-ids-file> [baseline-ids-file]     (one test id per line)
-# Env: RERUN_CMD (required; run via bash -c with TEST=<id>; exit 0 = pass), FLAKE_RUNS (default 3), FLAKE_REAL_AT (default 2).
+# Env: RERUN_CMD (required; run via bash -c with TEST=<id>; exit 0 = pass), FLAKE_RUNS (N, default 3), FLAKE_REAL_AT (default = FLAKE_RUNS).
 # An id already failing on the base (baseline file) is skipped: it is not new. A new id is REAL only when it fails at least
-# FLAKE_REAL_AT of FLAKE_RUNS isolated re-runs; stops early once the verdict is fixed. Prints "REAL <id>" / "FLAKE <id>"
+# FLAKE_REAL_AT of FLAKE_RUNS isolated re-runs, by default ALL of them: a 1-in-3 flake is then blamed (1/3)^3 = 3.7% of the time
+# (2-of-3 blamed it 7/27 = 25.9%). Stops early once the verdict is fixed, so a flake that passes once costs one re-run. Prints "REAL <id>" / "FLAKE <id>"
 # lines (flakes are reported separately, never blamed on a PR). Exit: 0 no REAL ids, 1 at least one REAL, 2 usage or bad FLAKE_RUNS/FLAKE_REAL_AT (fails closed).
 # Same-host baseline: a non-empty baseline file must start with the header `# baseline host=<h> inv=<hash>` written by
 # `train_flake.sh --record <failing-ids-file> > baseline` on the machine and invocation that measured it. The current host
@@ -33,7 +34,7 @@ if [ "${1:-}" = --one ]; then [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { ec
 # 1 = not pre-existing (RERUN_CMD must print `FAIL <id>` only for tests that actually ran), 125 = fresh store/hook failed or bad bounds (fail closed).
 if [ "${1:-}" = --base ]; then
   [ -n "${2:-}" ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh --base <id>" >&2; exit 2; }
-  runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-2}; f=0 p=0; o=$(mktemp "$T/flake-out.XXXXXX") || exit 125
+  runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-$runs}; f=0 p=0; o=$(mktemp "$T/flake-out.XXXXXX") || exit 125
   bid=$(printf %s "$2" | norm)
   case $runs$need in ''|*[!0-9]*) exit 125 ;; esac; [ "$need" -ge 1 ] && [ "$need" -le "$runs" ] || exit 125
   for n in $(seq "$runs"); do
@@ -51,10 +52,9 @@ fi
 [ $# -ge 1 ] && [ -n "${RERUN_CMD:-}" ] || { echo "usage: RERUN_CMD=... train_flake.sh <failed-ids> [baseline-ids]" >&2; exit 2; }
 [ -r "$1" ] || { echo "could not check: failed-ids file '$1' is missing or unreadable (a missing list is not 'no failures')" >&2; exit 2; }
 [ -z "${2:-}" ] || [ -r "$2" ] || { echo "could not check: baseline file '$2' is unreadable (refusing to treat it as empty)" >&2; exit 2; }
-runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-2} real=0
+runs=${FLAKE_RUNS:-3} need=${FLAKE_REAL_AT:-$runs} real=0
 case $runs$need in ''|*[!0-9]*) echo "train_flake: FLAKE_RUNS/FLAKE_REAL_AT must be integers" >&2; exit 2 ;; esac
 [ "$runs" -ge 1 ] && [ "$need" -ge 1 ] && [ "$need" -le "$runs" ] || { echo "train_flake: need 1 <= FLAKE_REAL_AT <= FLAKE_RUNS" >&2; exit 2; }
-[ "$need" -le 2 ] || need=2  # a FLAKE must pass at least FLAKE_RUNS-1 of FLAKE_RUNS: a higher FLAKE_REAL_AT never lets 2+ failures pass as flakes
 if [ -s "${2:-/dev/null}" ] && [ "$(head -n1 "$2" | norm)" != "# baseline host=$host inv=$inv" ]; then
   echo "train_flake: baseline $2 not recorded on this host with this invocation (want '# baseline host=$host inv=$inv'); refusing to compare" >&2; exit 2
 fi
