@@ -13,7 +13,8 @@
 # is the caller's. A lane that lands second just re-runs this: no rebump by hand, no force-push.
 #
 # size-budgets.tsv rows are rewritten to current sizes; a raise still needs the `size-budget-raise:`
-# marker in the fragment (enforced by `ci-gates.sh size-ratchet`).
+# marker in the fragment (enforced by `ci-gates.sh size-ratchet`). Land refuses a fragment that
+# `ci-gates.sh fragments` rejects (a malformed marker, a `## ` heading): the check .githooks/pre-commit runs on staged fragments.
 # `land-release.sh tag` (run AFTER the release commit is on origin/main): creates and pushes annotated tag vX.Y.Z
 # on the commit that introduced that VERSION on origin/main; refuses if origin/main is not at that version;
 # an existing local tag is skipped with a message. Land itself never tags.
@@ -111,6 +112,7 @@ fi
 
 shopt -s nullglob; frags=(changelog.d/*.md); shopt -u nullglob
 [ "${#frags[@]}" -gt 0 ] || { echo "land-release: no changelog.d/*.md fragment; nothing to land" >&2; exit 1; }
+bash scripts/ci-gates.sh fragments --config scripts/size-budgets.tsv changelog.d >/dev/null || exit 1
 
 IFS=. read -r maj min _ <.claude/skills/deep-code-review/VERSION
 ver="$maj.$((min + 1)).0"

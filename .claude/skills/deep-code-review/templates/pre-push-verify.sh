@@ -366,6 +366,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ -f CHANGELOG.md ] && [ -f scripts/ci-gates.sh ] && fg "CHANGELOG version heading" \
       "put unreleased notes in changelog.d/<slug>.md, not CHANGELOG.md; land-release.sh stamps the heading at land time" \
       bash scripts/ci-gates.sh version .
+    [ -d changelog.d ] && [ -f scripts/size-budgets.tsv ] && fg "changelog fragments" \
+      "fix the fragment named above (rules: the 'fragments' header in scripts/ci-gates.sh)" \
+      bash scripts/ci-gates.sh fragments --config scripts/size-budgets.tsv changelog.d
     [ "${fg_fail}" -eq 0 ] || { fail=1; continue; }
   fi
 

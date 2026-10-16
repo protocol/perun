@@ -32,7 +32,9 @@ Parallel lanes must not bump the version: each one claims "main + 1" and all but
 - **Lane:** add `changelog.d/<slug>.md` (the body for the release heading: `### Added` plus bullets;
   put any `size-budget-raise:` marker here). Do not touch `VERSION`, `metadata.version`,
   `plugin.json` or the top of `CHANGELOG.md`. Run `bash scripts/land-release.sh --regen` before
-  pushing so INDEX.md, `SHA256SUMS` and `size-budgets.tsv` match your tree.
+  pushing so INDEX.md, `SHA256SUMS` and `size-budgets.tsv` match your tree. `bash scripts/ci-gates.sh fragments
+  --config scripts/size-budgets.tsv changelog.d` checks the fragment's marker lines and headings (the pre-commit
+  and pre-push hooks, land and CI run it), so a malformed fragment fails your commit instead of the release.
 - **Land:** on the branch, run `bash scripts/land-release.sh`. Under a lock it merges `origin/main`
   (generated-file conflicts are regenerated, anything else aborts), stamps the next minor across the
   lockstep set, folds the fragments into `CHANGELOG.md`, regenerates, and commits. Push and merge as

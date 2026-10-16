@@ -18,7 +18,8 @@
 #   size --config <file> <root>          every shipped SKILL.md/references/*.md is within its frozen size-budgets.tsv byte budget
 #   size-ratchet --base <ref> --config <file> <root>
 #                                        no size-budgets.tsv row may increase vs <ref> without a `size-budget-raise:` marker (fail closed on unresolvable base)
-#   binaries <root>                      no git-tracked file at a banned image/media/archive/build-output extension (allowlist: scripts/binaries-allowlist.tsv)
+#   fragments [--config <file>] <dir>    every <dir>/*.md changelog fragment: its `size-budget-raise:` lines are the exact marker size-ratchet greps (path a row of <file>), no "## " heading
+#   binaries <root>                    no git-tracked file at a banned image/media/archive/build-output extension (allowlist: scripts/binaries-allowlist.tsv)
 #   mustload --config <file> <root>      every SKILL.md load-map archetype's MUST-LOAD token-est total is within its frozen mustload-budgets.tsv ceiling; the Phase 0-2 floor equals its pin exactly, and every " when " ref is a pinned phase-conditional row
 #   rules --baseline <file> [--base <ref>] [--list] <root>
 #                                        every MUST/NEVER/ALWAYS (or bold "Never") rule line in a SKILL.md must sit in a paragraph that names a mechanism (scripts/, ci-gates, evals, hook) or says "advisory"; unenforced rules not in the baseline FAIL (ratchet); --base: baseline rows added vs <ref> need a `rule-baseline-raise:` commit marker
@@ -61,6 +62,7 @@ Usage:
   ci-gates.sh enumeration <root>
   ci-gates.sh size --config <file> <root>
   ci-gates.sh size-ratchet --base <ref> --config <file> <root>
+  ci-gates.sh fragments [--config <file>] <dir>
   ci-gates.sh binaries <root>
   ci-gates.sh mustload --config <file> <root>
 EOF
@@ -874,6 +876,58 @@ cmd_size_ratchet() {
 }
 
 # ---------------------------------------------------------------------------
+# fragments — changelog.d/*.md fragments carry what the release path needs from them.
+#
+# land-release.sh folds every fragment verbatim under one new release heading, so a fragment's lines become
+# CHANGELOG.md lines. Two defects then show only at release time; this fails them at the fragment instead:
+#   1. A `size-budget-raise:` marker line (a list bullet may precede it) that is not exactly
+#      `size-budget-raise: <path> <old>→<new> <reason>` with <path> a row of --config. size-ratchet greps that
+#      text, so an ASCII `->`, two files on one line or a bare file name never approves the raise and the release
+#      commit fails RATCHET. A line is a marker attempt only when it starts with the marker word and carries a
+#      digit; prose that merely names the marker is not one.
+#   2. A `## ` heading: publish and release.yml end a release's notes at the next one, silently cutting the rest.
+# Checks <dir>/*.md; a missing <dir> or no fragment is ok (changelog.d leaves the tree once every fragment has
+# landed). Run by land-release.sh before it stamps, .githooks/pre-commit on the staged blobs, the pre-push fast
+# gates and CI: one implementation of the rules.
+# ---------------------------------------------------------------------------
+cmd_fragments() {
+  local config="" dir="" f line path rows="" n=0 fail=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --config) config="${2:-}"; shift 2 ;;
+      -*) die "fragments: unknown option: $1" ;;
+      *) [ -z "$dir" ] || die "fragments: unexpected extra argument: $1"; dir="$1"; shift ;;
+    esac
+  done
+  [ -n "$dir" ] || die "fragments: a fragment directory is required"
+  if [ -n "$config" ]; then
+    [ -f "$config" ] || die "fragments: config not found: $config (fail closed)"
+    rows="$(cut -f1 "$config")"
+  fi
+  for f in "$dir"/*.md; do
+    [ -f "$f" ] || continue
+    n=$((n + 1))
+    if LC_ALL=C grep -q '^## ' "$f"; then
+      printf 'FRAGMENT FAIL: %s has a "## " heading; use "### " (the release notes end at the next "## ")\n' "${f##*/}" >&2
+      fail=1
+    fi
+    while IFS= read -r line; do
+      path="$(printf '%s\n' "$line" | LC_ALL=C sed -nE 's/^size-budget-raise: ([^[:space:]]+) [0-9]+→[0-9]+ [^[:space:]].*$/\1/p')"
+      if [ -z "$path" ]; then
+        printf 'FRAGMENT FAIL: %s: want "size-budget-raise: <path> <old>→<new> <reason>" (one file per line, the → arrow), got: %s\n' \
+          "${f##*/}" "${line:0:100}" >&2
+        fail=1
+      elif [ -n "$config" ] && ! grep -qxF -- "$path" <<<"$rows"; then
+        printf 'FRAGMENT FAIL: %s: marker path %s is not a row of %s (use the full path written there)\n' "${f##*/}" "$path" "$config" >&2
+        fail=1
+      fi
+    done < <(LC_ALL=C sed -nE 's/^[-*+>[:space:]]*(size-budget-raise:.*[0-9].*)$/\1/p' "$f")
+  done
+  [ "$fail" -eq 0 ] || die "fragments: fix the fragment(s) above; the release would fail on them"
+  printf 'fragments: ok (%d checked)\n' "$n"
+}
+
+# ---------------------------------------------------------------------------
 # binaries — extension-scoped block on committed images/media/fonts/archives
 # and common compiled build output, so the "committed screenshot" bloat class
 # (and its cousins — 1.1GB of committed screenshots, a 3.75MB file committed
@@ -1452,6 +1506,7 @@ case "$subcmd" in
   enumeration) cmd_enumeration "$@" ;;
   size) cmd_size "$@" ;;
   size-ratchet) cmd_size_ratchet "$@" ;;
+  fragments) cmd_fragments "$@" ;;
   binaries) cmd_binaries "$@" ;;
   mustload) cmd_mustload "$@" ;;
   rules) cmd_rules "$@" ;;
