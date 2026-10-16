@@ -14,7 +14,8 @@
 # Takes a per-worktree lock (<git-dir>/train-land.lock, pid-checked; a dead holder's lock is reclaimed), so two
 # trains cannot share this worktree or a log. UNION_DIRS: space-separated, or newline-separated when a path has a space.
 # Base-red guard: when BROWSER_CMD fails, BASELINE_FAILS is unset and RERUN_CMD is set, each failing id is re-run alone at BASE_SHA
-# (train_flake.sh --base: FLAKE_REAL_AT of FLAKE_RUNS failures, each printing `FAIL <id>` so a test absent on the base is NOT excused); those are pre-existing ("BASE RED: <n> pre-existing: ids") and never block, only new failures do.
+# (train_flake.sh --base: FLAKE_REAL_AT (default FLAKE_RUNS) of FLAKE_RUNS failures, each printing `FAIL <id>` so a test absent on the base is NOT excused); those are pre-existing ("BASE RED: <n> pre-existing: ids") and never block, only new failures do.
+# A FLAKE-only red lands only when every flaked id also fails >= 1 of FLAKE_RUNS solo runs on the base; one that passes N of N there is CANT (exit 3).
 # Flake triage (see train_flake.sh; BROWSER_CMD must print `FAIL <id>` per failure and `FAILURES <n>`): RERUN_CMD (TEST=<id>), BASELINE_FAILS (ids failing on the base); LOCK_TIMEOUT_MIN (30), PUSH_WAIT_SECS (600).
 # Exit: 0 landed, 1 base/browser red or lock held, 2 usage/refused, 3 no GREEN union or CANT (nothing landed; CANT = a real browser failure
 # not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame).
@@ -105,7 +106,7 @@ norm() { bash "$HERE/train_flake.sh" --norm; }  # the one id normalizer: emit an
 sed -nE 's/^FAIL +//p' "$LOG.browser" | norm >"$LOG.fails"
 if [ -r "${BASELINE_FAILS:-/dev/null}" ]; then norm <"${BASELINE_FAILS:-/dev/null}" >"$LOG.baseline"; else : >"$LOG.baseline"; fi
 pre=0
-if :; then  # base-red guard: an id (not already in BASELINE_FAILS) that also fails twice alone on the base is pre-existing
+if :; then  # base-red guard: an id (not already in BASELINE_FAILS) that also fails every one of FLAKE_RUNS solo re-runs on the base (train_flake.sh --base) is pre-existing
   renew; git checkout -q --detach "$B"; : >"$LOG.pre"
   while IFS= read -r id; do
     [ -n "$id" ] || continue; br=0
@@ -130,7 +131,17 @@ flk=$(grep -c '^FLAKE ' "$LOG.flake" || true)
 # The runner must also print "FAILURES <n>" (its own count): missing, or more than the listed FAIL lines = an unlisted crash.
 listed=$(( $(grep -c . "$LOG.fails" || true) + pre )); rn=$(sed -nE 's/^FAILURES +([0-9]+) *$/\1/p' "$LOG.browser" | tail -1)
 if [ "$t" -eq 0 ] && [ -n "$rn" ] && [ "$rn" -le "$listed" ]; then
-  if [ "$newn" -ge 1 ] && [ "$flk" -eq "$newn" ]; then echo "browser failures were flakes only; landing" >&2; break; fi
+  if [ "$newn" -ge 1 ] && [ "$flk" -eq "$newn" ]; then
+    # A FLAKE lands only if the test is also flaky on the base (fails >= 1 of FLAKE_RUNS there): an intermittent regression
+    # also passes a solo re-run now and then, and would otherwise land. Passing N of N on the base = CANT: park, no blame, no land.
+    renew; git checkout -q --detach "$B"
+    while IFS= read -r id; do
+      br=0; FLAKE_REAL_AT=1 RERUN_CMD=$RERUN_CMD bash "$HERE/train_flake.sh" --base "$id" || br=$?
+      [ "$br" -ne 125 ] || { git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "fresh store or FLAKE_SETUP_CMD failed re-running $id on the base; nothing landed" >&2; exit 1; }
+      [ "$br" -eq 0 ] || { git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "CANT: flake $id never fails on the base, so it may be an intermittent regression; no PR blamed, nothing landed" >&2; exit 3; }
+    done < <(sed -nE 's/^FLAKE (.*) \(failed [0-9]+ of [0-9]+ alone\)$/\1/p' "$LOG.flake")
+    echo "browser failures were flakes only, each also flaky on the base; landing" >&2; break
+  fi
   if [ "$newn" -eq 0 ] && [ "$pre" -ge 1 ]; then echo "browser failures all pre-existing on the base; landing" >&2; break; fi
 fi
 [ "$t" -eq 1 ] || { echo "$BR" >&2; exit 1; }

@@ -35,8 +35,9 @@ audit gate in every train; run the audit on the bare base first and report `BASE
 
 **Load flakes must not sink a train.** A train that is all-or-nothing under load can merge nothing for hours: failures that
 looked new all passed when re-run alone. With `RERUN_CMD` (and optionally `BASELINE_FAILS`), `train_land.sh` re-runs each
-new `FAIL <id>` from the browser gate alone up to 3 times (`train_flake.sh`); an id is real only when it fails at least 2
-of 3, flakes are reported separately and never block, and only PRs that fail the real ids merged alone onto the base are
+new `FAIL <id>` from the browser gate alone up to 3 times (`train_flake.sh`); an id is real only when it fails all 3,
+a flake lands only if it also fails once in 3 solo base runs (else `CANT`, exit 3: it may be an intermittent regression), and
+only PRs that fail the real ids merged alone onto the base are
 dropped before the rest re-verify and land. While the gate runs it holds the exclusive machine-wide heavy lease
 (`perun_policy.py heavy-exclusive`), so `heavy_gate.py` denies other heavy commands with "gate running: wait" and lanes stop
 adding load; pushes go through one serial queue (`train-push.lock`). The lease is valid while its pid is alive and its mtime is
@@ -44,7 +45,7 @@ fresh; the train renews it at each step. Waits use the `_lock.sh` mkdir lock, ne
 stale is reported with the command to clear it by hand and is never moved or deleted automatically. A red browser run lands
 only when every new listed failure re-ran as a flake and the runner's own `FAILURES <n>` count is not above the listed `FAIL`
 lines. **CANT rule:** the per-PR bisect re-runs each real id through the same flake triage (never one run), blames a PR only
-when it fails the id alone, and a failure that passes alone for every PR (`FLAKY`, no blame) or is not pinned to a culprit makes the train print `CANT` and exit 3 with nothing landed; an id is `REAL` only if it fails all `FLAKE_RUNS` (3) solo re-runs, else `FLAKE`. Tests: `scripts/test-train-resilience.sh`, `scripts/test-peer-pains-2.sh`.
+when it fails the id alone, and a failure that passes alone for every PR (`FLAKY`, no blame) or is not pinned to a culprit makes the train print `CANT` and exit 3 with nothing landed. Tests: `scripts/test-train-resilience.sh`, `test-peer-pains-2.sh`, `test-train-flake-base.sh`.
 
 ## A load-flaky required gate is not a confirmed red — bounded-rerun the same commit to reclassify it before concluding a regression
 
