@@ -48,7 +48,7 @@ before any reset and never tell the owner to restart. Two advisory cost hooks ri
 telling the agent to write it once the main context passes 250k tokens (`PERUN_CONTEXT_NUDGE_TOKENS`), again only per 50k of growth; `scripts/lane_resume_nudge.py` (PreToolUse `Agent|Task`)
 advises resuming an earlier same-domain lane with SendMessage instead of paying a new lane's startup re-read. Neither
 ever blocks, and both fail open. The layer also wires `scripts/lane_cap.py` (PostToolUse) with `LANE_TOOL_CAP=250`:
-a lane is told to checkpoint at 80% and stop at the cap; `LANE_TOOL_CAP_<TYPE>` overrides per lane type.
+a lane is told to checkpoint at 80% and stop at the cap; `LANE_TOOL_CAP_<TYPE>` overrides per lane type. `scripts/ceo_altitude_guard.py` (PreToolUse + UserPromptSubmit) is inert until policy `role` is `ceo` (warn) or `ceo-strict` (block): it flags the main session's hand edits of source and tests, never a lane's; the owner lifts it per turn with `ceo:off`; `operating_selfcheck.py` prints those edits per session, counted even while `role` is `off`.
 
 `scripts/operating_selfcheck.py [--settings F] [--skill-root D]` reports, per item above,
 `PRESENT`, `MISSING`, or `COULD_NOT_CHECK <why>` — the three settings-backed items (1, 2, 3's pin) read `--settings`; the two script-file items (4, 5) check the

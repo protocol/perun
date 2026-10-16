@@ -17,7 +17,7 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent
 SKIP = {".git", "node_modules", ".venv", "__pycache__", "worktrees", "skill-backups"}
 SKILL_HOSTS = (".claude", ".cursor", ".agents", ".codex", ".gemini", ".opencode", ".github", ".windsurf", ".hermes", ".kiro", ".cline", ".roo", ".factory", ".qwen", ".grok")  # every root install.sh can write
-HOOK_SCRIPTS = ("pipe_mask_guard.py", "bypass_guard.py", "destructive_guard.py", "subagent_start_inject.py", "handback_cap.py", "context_nudge.py", "lane_resume_nudge.py")  # operating-layer template
+HOOK_SCRIPTS = ("pipe_mask_guard.py", "bypass_guard.py", "destructive_guard.py", "subagent_start_inject.py", "handback_cap.py", "context_nudge.py", "lane_resume_nudge.py", "ceo_altitude_guard.py")  # operating-layer template
 
 
 def sha(p):

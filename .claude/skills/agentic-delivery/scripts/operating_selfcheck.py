@@ -28,6 +28,10 @@ A settings file that does not exist at all reports all three `MISSING` (a
 fresh install has none yet); an existing but unreadable/malformed one reports
 all three `COULD_NOT_CHECK` instead — genuinely ambiguous, never guessed.
 
+A fourth settings item, `ceo-altitude-guard`, is PRESENT only when `ceo_altitude_guard.py` is wired on both PreToolUse and
+UserPromptSubmit. The report also prints the guard's drift counter (`ceo-altitude:` and `ceo-altitude-session <id>:` lines):
+the role in effect, and how many direct source edits the main session made in each recent session of `--project`.
+
 Two items are **script-file presence**, resolved relative to this script's
 own installed skill directory (`--skill-root`, default: two directories up
 from this file):
@@ -133,15 +137,18 @@ def check_settings(settings_path: str) -> dict:
     """
     if not os.path.exists(settings_path):
         return {"subagent-start-injector": "MISSING", "handback-cap-two-tier": "MISSING",
-                "subagent-model-pin": "MISSING", "sandbox-on": SANDBOX_RED}
+                "subagent-model-pin": "MISSING", "sandbox-on": SANDBOX_RED, "ceo-altitude-guard": "MISSING"}
     try:
         with open(settings_path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError):
         reason = "COULD_NOT_CHECK: unreadable or malformed settings file"
         return {"subagent-start-injector": reason, "handback-cap-two-tier": reason,
-                "subagent-model-pin": reason, "sandbox-on": reason}
+                "subagent-model-pin": reason, "sandbox-on": reason, "ceo-altitude-guard": reason}
     hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
+    # the guard needs both events: PreToolUse counts and flags, UserPromptSubmit resets the turn and reads the owner override
+    guard = [any("ceo_altitude_guard.py" in c for c in _flatten_commands(hooks.get(ev, [])))
+             for ev in ("PreToolUse", "UserPromptSubmit")]
     start_cmds = _flatten_commands(hooks.get("SubagentStart", []))
     stop_cmds = _flatten_commands(hooks.get("SubagentStop", []))
     handback_hits = sum(1 for c in stop_cmds if "handback_cap.py" in c)
@@ -164,6 +171,8 @@ def check_settings(settings_path: str) -> dict:
                               else "PRESENT" if "CLAUDE_CODE_SUBAGENT_MODEL" in env else "MISSING",
         "sandbox-on": "PRESENT" if sb.get("enabled") is True and sb.get("allowUnsandboxedCommands") is False
                       else SANDBOX_RED,
+        "ceo-altitude-guard": "PRESENT" if all(guard) else "MISSING" + (
+            " (needs both PreToolUse and UserPromptSubmit: per-turn reset and the owner override)" if any(guard) else ""),
     }
 
 
@@ -308,6 +317,13 @@ def main(argv: list | None = None) -> int:
             print(line)
     except (ImportError, ValueError, OSError) as e:
         print(f"heavy-slots: COULD_NOT_CHECK ({e})")
+    try:  # drift counter: direct source edits by the main session, per session (always counted; the role only warns or blocks)
+        sys.path.insert(0, os.path.join(args.skill_root, "scripts"))
+        import ceo_altitude_guard
+        for line in ceo_altitude_guard.report_lines(args.project):
+            print(line)
+    except Exception as e:  # advisory: never fail the self-check over a counter
+        print(f"ceo-altitude: COULD_NOT_CHECK ({e})")
     print(train_gate_line(args.base))
     warn = sandbox_gh_warn(args.settings)
     if warn:
@@ -395,6 +411,15 @@ def _selftest() -> int:
         case("after-merge-handback-two-tier-present", after["handback-cap-two-tier"], "PRESENT")
         case("after-merge-pin-present", after["subagent-model-pin"], "PRESENT")
         case("after-merge-sandbox-present", after["sandbox-on"], "PRESENT")
+
+        guard_cmd = [{"hooks": [{"type": "command", "command": "python3 .../ceo_altitude_guard.py || true"}]}]
+        guard_path = os.path.join(tmp, "guard.json")
+        for name, hooks, want in (("both", {"PreToolUse": guard_cmd, "UserPromptSubmit": guard_cmd}, "PRESENT"),
+                                  ("pre-only", {"PreToolUse": guard_cmd}, "MISSING (needs both")):
+            with open(guard_path, "w", encoding="utf-8") as fh:
+                json.dump({"hooks": hooks}, fh)
+            case(f"ceo-guard-{name}", check_settings(guard_path)["ceo-altitude-guard"].startswith(want), True)
+        case("ceo-guard-before-merge-missing", before["ceo-altitude-guard"], "MISSING")
 
         case("no-settings-file-missing-not-could-not-check",
              check_settings(os.path.join(tmp, "does-not-exist.json"))["subagent-start-injector"], "MISSING")

@@ -42,8 +42,8 @@ WRAP = re.compile(r"(\w+=\S*|env|time|nice|command|exec|sudo|npx|uv run|poetry r
 LIGHT_FLAGS = {"--version", "--help", "-h", "--collect-only", "--co"}
 
 
-def _segments(command: str):
-    """Token lists, one per shell segment. Quotes and heredoc bodies never split; raises ValueError on a parse error."""
+def tokens(command: str):
+    """Shell tokens, punctuation (`;`, `|`, `>`, `&&`, newline) as tokens of their own. Quotes and heredoc bodies never split; raises ValueError on a parse error."""
     lines, delim = [], None
     for line in command.split("\n"):
         if delim is not None:
@@ -54,9 +54,15 @@ def _segments(command: str):
         lines.append(line)
     lex = shlex.shlex("\n".join(lines), posix=True, punctuation_chars=PUNCT)
     lex.whitespace = " \t\r"
+    return list(lex)
+
+
+def segments(command: str):
+    """Token lists, one per shell segment (split at punctuation); raises ValueError on a parse error.
+    A quoted empty argument (`sed -i '' ...`) is an argument, not a separator: `set('') <= set(PUNCT)` is true, hence the `tok and`."""
     seg, out = [], []
-    for tok in lex:
-        if set(tok) <= set(PUNCT):
+    for tok in tokens(command):
+        if tok and set(tok) <= set(PUNCT):
             out.append(seg)
             seg = []
         else:
@@ -64,7 +70,13 @@ def _segments(command: str):
     return out + [seg]
 
 
-def _strip_wrappers(toks):
+def heavy_patterns():
+    """Heavy-command regexes: the newline-separated ones in $PERUN_HEAVY_PATTERNS, else DEFAULT_PATTERNS."""
+    env_pat = os.environ.get("PERUN_HEAVY_PATTERNS")
+    return [p for p in env_pat.splitlines() if p.strip()] if env_pat else DEFAULT_PATTERNS
+
+
+def strip_wrappers(toks):
     """Drop leading runner wrappers (env/VAR=x/time/sudo, npx, uv|poetry|pipx run, pnpm exec, python -m) and their flags."""
     while toks:
         two = " ".join(toks[:2])
@@ -85,11 +97,11 @@ def is_heavy(command: str, patterns) -> bool:
     Light invocations (--version, --help, --collect-only, `playwright install`) are never heavy.
     A command that does not parse (unclosed quote) is NOT heavy: the gate fails open."""
     try:
-        segs = _segments(command or "")
+        segs = segments(command or "")
     except ValueError:
         return False
     for toks in segs:
-        toks = _strip_wrappers(toks)
+        toks = strip_wrappers(toks)
         if not toks or LIGHT_FLAGS & set(toks) or (toks[0] == "playwright" and (toks[1:2] or [""])[0].startswith("install")):
             continue
         seg = " ".join(toks)
@@ -163,9 +175,7 @@ def main() -> int:
     try:
         data = json.load(sys.stdin)
         cmd = (data.get("tool_input") or {}).get("command", "")
-        env_pat = os.environ.get("PERUN_HEAVY_PATTERNS")
-        patterns = [p for p in env_pat.splitlines() if p.strip()] if env_pat else DEFAULT_PATTERNS
-        if not is_heavy(cmd, patterns):
+        if not is_heavy(cmd, heavy_patterns()):
             return 0
         import perun_policy
         try:
