@@ -1,0 +1,19 @@
+**Payments webhooks: failed events are now acked, stored and retried by us (6 attempts, backoff capped at 30 min), not left to the provider's 3 retries; needs Ines's approval, two risks untested.**
+
+**Why:** On handler error we returned 500 and the provider retried 3 times over ~1 hr. We lost ~120 events in Sept (9/18 DB blip).
+
+**Change:**
+- `handler.py`: on error, return 200, store the event, retry ourselves. Idempotency on event id unchanged.
+- `retry.py` (new): exponential backoff, 6 attempts max, 30 min cap, then dead-letter and alert.
+- `webhook_event.py` + migration `0147`: add `attempt_count`, `next_attempt_at`.
+
+**Risk and rollback:**
+- Duplicate delivery mid-retry: not tested. The idempotency key should cover it; no staging repro. Whether a lock is needed is unknown.
+- Migration adds a column to a ~40M-row table; lock time not measured.
+- Rollback: not stated.
+
+**Verified:** ✅ 24 new tests pass; payments suite 418 passed, 0 failed. ✅ Staging fault injection, 2 hrs: 0 lost events. ⏳ Duplicate-during-retry and migration lock time: owner unassigned, no deadline.
+
+**Ask:** Ines to approve or request changes; no deadline.
+
+Note: add the exact rollback and owners/dates for the two ⏳ items before posting.

@@ -1,0 +1,36 @@
+**Upgrade date library from 2.x to 3.1.0**
+
+## Rollout decision for Ana
+
+This touches the delivery date picker, which is in the checkout funnel. There is no feature flag, so it ships all at once or not at all. 2.x reaches end of life on Dec 31, so it has to go out before then. I don't know whether you'd rather ship before the Nov 6 holiday promo starts or after it, and the code freeze dates aren't confirmed. Could you tell us which you prefer, and the freeze dates once they're set?
+
+For risk: the checkout e2e suite passes 58/58, and the only visual change is a tooltip that got 2px wider.
+
+## What changed
+
+- Upgrades the date library from 2.x to 3.1.0.
+- 63 files changed, +412 -389, mostly import path renames done with a codemod.
+- Bundle size is down 6.1 kB gzipped.
+
+**Breaking change:** `format()` now uses the locale's week start. For US users, the "week of" labels in order history and the delivery date picker would have shifted by a day. I pinned `weekStartsOn: 0` in our wrapper, `utils/dates.ts`, and added tests for it.
+
+## For reviewers (Sam, Yuki)
+
+Hand-edited files:
+
+- `utils/dates.ts`
+- `checkout/DeliveryPicker.tsx`
+- `account/OrderHistory.tsx`
+- `i18n/config.ts`
+
+Everything else is codemod output.
+
+## Testing
+
+- Unit: 1,926 passed, 0 failed, 3 skipped (the skips were already there).
+- E2E checkout suite: 58/58.
+- Visual diff on 14 screens: 1 changed, the tooltip mentioned above. I think it's fine.
+
+Not tested: I did not check the Japanese locale by hand. It is covered only by the automated snapshot.
+
+*Note: I left the library name generic since you didn't give it, so add it to the title and body.*

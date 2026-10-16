@@ -22,110 +22,95 @@ shorthand. This is about shape and length, not vocabulary. Lookup table:
 
 ## The rule
 
-- **BLUF.** Line 1-2 is the recommendation, answer, or ask. Everything after
-  it is support the reader can stop reading at any point without losing the
-  decision.
-- **One message, one decision.** A yes/no belongs on the last line, explicit,
-  A vs. B — never buried mid-paragraph.
-- **Under 30 seconds.** ~150 words by default. Longer needs a reason per
-  block, or a cut.
+- **BLUF.** Line 1 is the answer: the outcome, the number, the ask, in 30 words
+  or fewer. Everything after it is support the reader can skip without losing
+  the decision. No greeting, background or "This PR..." opener.
+- **One decision, explicit.** An ask names its owner and date when the source
+  gives them ("Dana, please pick A or B by Tuesday"), addressed to the reader;
+  with none given, leave them out; stand-ins ("owner unassigned") fail
+  `comms_lint.py`. A message ends on the ask. A PR body asks in its own words;
+  "Reply A or B" is for messages, never PRs.
+- **Add nothing the source lacks.** No number, date, owner, recommendation,
+  rationale, command or promise the author did not give. Keep an author's lean at
+  its stated strength ("leaning B", not "I recommend B"); with no view given, name the
+  options and who decides. A derived figure shows its basis; an unknown is
+  named ("insert overhead: not measured"). `comms_lint.py --source` checks this.
+- **Per-artifact shape and budget.** Status update, PR body, release note, decision
+  memo or executive summary, incident summary, README section, comment, meeting notes: read
+  `references/artifact-templates.md` before you draft. `comms_lint.py --kind <kind>
+  --file <draft>` scores each rule and prints the exact fix (exit 1 = below the bar).
+  The operating layer's `agentic-delivery/scripts/comms_guard.py` hook runs it
+  before a PR or tracker write and asks for one rewrite.
+- **Under 30 seconds.** ~150 words by default; the budgets in the reference
+  are the ceilings. Longer needs a reason per block, or a cut.
 - **Scannable.** Bold the one load-bearing sentence. Short paragraphs. A list
-  only when every item is parallel and load-bearing — never to pad, and
-  never a wall of open questions; keep the 1-2 that actually change the
-  decision and push the rest to the doc or PR.
-- **Their next action, not your process.** The reader is overloaded and mid
-  context-switch. Give them what changes what they do next; drop the
-  reasoning trail that got you there.
-- **A stakeholder-facing update states verified present-tense outcomes only.** List what is delivered and
-  working on the surface they use, in plain value terms (what changed for them), checked on that live surface
-  before you write it. No effort counts ("12 tasks done", lines, PRs, "% complete") and no "coming next week"
-  promises. The backlog-count rule below applies to backlog items, not to effort.
-- **Status updates for leadership (tracker project updates, issue status comments, owner hand-offs) use a fixed
-  seven-part structure.** Read `references/leadership-status-update.md`; check with `scripts/status_update_lint.py`.
-- **Status vocabulary: merged, deployed, verified-on-<page> are distinct.** "live", "live now", "shipped to
-  users" and "done" claim the last one and need a `verified-on-<page>` or `journey:` reference nearby; else say
-  "merged" or "deployed, unverified". `python3 .claude/skills/communication-structure/scripts/status_vocab_lint.py --file <update.md>` flags the rest (exit 1).
-- **Numbers over adjectives.** "40s to 6s" beats "significantly faster." Every headline metric states the
-  **exact measured value and the exact target on the same line** (`X / Y`, or `X of Y`), computed at report time,
-  not asserted from memory or rounded toward the desired outcome — "the vast majority" of a target where the
-  exact figure is under two-thirds of it is not a rounding, it is a flattering misstatement. A status that uses
-  only descriptive language ("mostly," "on track," "nearly there") with no paired numbers is incomplete. If the
-  exact number is not known, say so — never approximate favorably.
+  only when every item is parallel and load-bearing; keep the 1-2 open
+  questions that change the decision and push the rest to the doc or PR.
+- **Their next action, not your process.** Drop the reasoning trail; give what
+  changes what the reader does next.
+- **A stakeholder-facing update states verified present-tense outcomes only:**
+  what works on the surface they use, in plain value terms, checked there before
+  you write it (✅ = verified, names where; ⏳ = pending; neutral facts unmarked).
+  No effort counts ("12 tasks", PRs, "% complete") and no "coming next week".
+- **Status updates for leadership (tracker project updates, issue status comments,
+  owner hand-offs) use a fixed seven-part structure.** Read
+  `references/leadership-status-update.md`; `scripts/status_update_lint.py` checks it.
+- **Status vocabulary: merged, deployed, verified-on-<page> are distinct.** "live",
+  "shipped to users" and "done" claim the last one and need a `verified-on-<page>`
+  or `journey:` reference nearby; else say "merged" or "deployed, unverified".
+  `scripts/status_vocab_lint.py --file <update.md>` flags the rest.
+- **Numbers over adjectives.** "40s to 6s" beats "significantly faster." A
+  headline metric states the **exact measured value and the exact target on the
+  same line** (`X / Y`, `X of Y`), computed at report time, never rounded toward the
+  desired outcome. Only descriptive language ("mostly," "on track") with no
+  paired numbers is incomplete. If the exact number is unknown, say so.
 
 ## Deliverables, not just messages
 
-The rules above are written for a short message; they apply to a **deliverable**
-(a report, plan, doc, table) with one adaptation: the 30-seconds / ~150-word cap
-is a *message* rule — a deliverable is **as long as its content genuinely requires
-and no longer**. BLUF still comes first, every section still earns its place, and
-*Cut on sight* still applies in full: no filler, no restated prompt, no marketing
-adjectives, no summary-of-the-summary, no section that exists only to look
-thorough. Core value only, whatever the length. This is the suite's no-slop output
-contract; other skills reference it rather than restating it.
+The message rules apply to a **deliverable** (report, plan, doc, table) except the
+30-second cap: it is **as long as its content requires and no longer**. BLUF still
+comes first, every section earns its place, and *Cut on sight* applies in full: no
+filler, no restated prompt, no marketing adjectives, no summary-of-the-summary.
+This is the suite's no-slop output contract; other skills link to it.
 
 ## Cut on sight
 
-"You're right" / "great point." Apologizing for the mistake instead of fixing
-it. Hedges ("it depends", "I think maybe", "could potentially") — but **keep
-material uncertainty**: "the sync may not have run; its execution log is
-unavailable" is load-bearing evidence, not a hedge. Cut the reflexive
-qualifier, never the honest unknown. Restating the question back. Filler adjectives ("comprehensive", "robust",
-"seamless"). A summary of the summary. Take a position — if two are
-genuinely live, name both and say which you'd pick.
+"You're right" / "great point." Hedges ("it depends", "I think maybe", "could
+potentially") — but **keep material uncertainty**: "the sync may not have run; its
+log is unavailable" is evidence, not a hedge. Cut the reflexive qualifier, never
+the honest unknown. Restating the question. Filler adjectives ("comprehensive",
+"robust", "seamless"). A summary of the summary. Take a position only if the author
+gave one; if two are live, name both and who decides.
 
 ## Sanity check
 
 1. Read line 1 alone. Does it stand as the whole message? If not, promote it.
-2. Count the asks. More than one → split, or pick the one that blocks the
-   reader.
-3. Every paragraph after the first changes what the reader does — or it's
-   cut.
-4. Scan the draft against "Cut on sight" above.
+2. Count the asks. More than one → split, or pick the one that blocks the reader.
+3. Every paragraph after the first changes what the reader does, or it's cut.
+4. Every number, date and name is in the source. Run `comms_lint.py`.
 
 ## Before → After
 
 **Status update.**
-Before: "So I looked into why the dashboard was showing no data. I checked a
-few things — first thought the build had failed, but it turned out the build
-was fine and the issue was downstream. I think the nightly sync job that
-populates the dashboard isn't running after a deploy, which would explain
-the empty state even though the deploy itself succeeded. Not 100% sure, but
-running the sync manually should fix it — let me know if you want me to try
-that or if you'd rather take a different approach."
-After: "Deploy succeeded; the dashboard is empty because the nightly sync
-job never ran after it. **Running it now — confirm it should target
-production, not staging.**"
+Before: "So I looked into why the dashboard was showing no data. I checked a few
+things... I think the nightly sync job isn't running after a deploy... Not 100% sure,
+but running it manually should fix it — let me know if you want me to try."
+After: "Deploy succeeded; the dashboard is empty because the nightly sync never ran
+after it. **Running it now. Please confirm production, not staging, today.**"
 
-**PR comment, design call.**
-Before: "Thanks for looking at this! So for the empty state there are kind
-of two ways we could go — a skeleton loader or a 'no data yet' message. Both
-have pros and cons. The skeleton is maybe more consistent with the rest of
-the app, but the message might be clearer for new users. Curious what you
-think, no strong opinion either way, happy to do whatever works best!"
-After: "Empty state: skeleton loader (consistent with the rest of the app)
-vs. an explicit 'no data yet' message (clearer for first-time users).
-**Recommend skeleton — reply A (skeleton) or B (message).**"
-
-**Bug flag to the owner.**
-Before: "I think I may have found an issue, not totally sure if it's a real
-bug or expected behavior, but wanted to flag it just in case. Looks like the
-'Next' button doesn't do anything when clicked, at least on my machine,
-though it might just be a caching thing. Let me know if this is known or if
-you want me to dig deeper."
-After: "The 'Next' button is disabled but styled identically to the active
-one — looks clickable, does nothing. **Fixing now; no decision needed.**"
+**PR body.**
+Before: "Thanks for looking! There are kind of two ways to go on the empty state..."
+After: "Empty state: skeleton loader (matches the app) vs. a 'no data yet' message
+(clearer for new users). **Wen, please pick one.**" (the author's
+lean, if any, stays as stated; no invented recommendation, date or stand-in)
 
 **Stakeholder update.**
-Before: "12 tasks done, 3 in progress, 40 PRs merged. The new export button is live. Saved filters ship next week."
-After: "**The export button is live: you can now export your data from the dashboard.** [Unverified until checked on the live page.]" (effort counts and the next-week promise are dropped, not softened; an unchecked claim is flagged, never asserted)
-
-**Stakeholder update, unchecked claim leads.**
-Before: "Bulk import is live. 7 tickets closed, 22 PRs merged. Reports redesign arrives next sprint."
-After: "**Bulk import is not yet confirmed for customers: it works in staging only and is unverified in production.**" (the lead sentence is the unchecked claim, so the flag goes in the lead, not a footnote)
+Before: "12 tasks done, 40 PRs merged. The export button is live. Saved filters ship next week."
+After: "**The export button works for customers: verified-on-the-dashboard export page.**
+Saved filters: no date promised." (effort counts and the promise are dropped; an
+unchecked claim is flagged in the lead, never asserted)
 
 **Progress status, exact vs. flattering.**
-Before: "Strong progress on the backlog this week — we've closed the vast
-majority of the open items and are nearly done."
-After: "**<closed> / <total> backlog items closed.** Remainder listed below,
-owner-blocked ones flagged." (the real counts go in place of the
-placeholders — never a rounded-up or descriptive-only substitute for them)
+Before: "Strong progress — we've closed the vast majority of the open items."
+After: "**<closed> / <total> backlog items closed.** Owner-blocked ones listed
+below." (the real counts go in place of the placeholders)

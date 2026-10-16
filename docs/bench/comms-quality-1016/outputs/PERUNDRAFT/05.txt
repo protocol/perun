@@ -1,0 +1,25 @@
+**Payments webhooks: we now ack, store, and retry failed events ourselves (6 attempts, backoff capped at 30 min) instead of relying on the provider's 3 retries; needs Ines's approval, with two unverified risks below.**
+
+**Why:** On a handler error we returned 500 and depended on the provider, which retries 3 times over ~1 hr. We lost ~120 events in Sept (the 9/18 DB blip).
+
+**Change:**
+- `handler.py`: on error, return 200, store the event, hand it to our retry. Idempotency on event id is unchanged.
+- `retry.py` (new): exponential backoff, 6 attempts max, capped at 30 min, then dead-letter and alert.
+- `webhook_event.py` + migration `0147`: add `attempt_count` and `next_attempt_at`.
+- `test_webhook_retry.py` (new): 24 tests.
+
+**Risk and rollback:**
+- **Duplicate delivery mid-retry: not tested.** If the provider resends an event while our retry for it is in flight, the idempotency key should cover it, but I couldn't reproduce this in staging. Not known whether a lock is needed.
+- **Migration lock time: not measured.** It adds a column to a table of ~40M rows and I haven't checked how long it locks.
+- Rollback: not stated in the source.
+
+**Verified:**
+✅ 24 new tests pass; full payments suite 418 passed, 0 failed.
+✅ Staging with fault injection for 2 hrs: 0 lost events.
+⏳ Duplicate-during-retry behavior: not verified; no owner or date given.
+⏳ Migration lock duration: not verified; no owner or date given.
+
+**Ask:** Ines to approve or request changes; no deadline given. Please say whether the duplicate-delivery case needs a lock before merge.
+
+---
+Note: I left the rollback line as "not stated" rather than inventing one. Add the exact rollback, plus owners and dates for the two ⏳ items, before posting.

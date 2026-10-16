@@ -1,0 +1,27 @@
+**Upgrade date library from 2.x to 3.1.0**
+
+**Why:** 2.x reaches end of life on Dec 31. This moves us to 3.1.0 ahead of that date.
+
+**What changed**
+- 63 files changed (+412 / −389). Most are import path renames done with the codemod.
+- Hand-edited files (please review these closely): `utils/dates.ts`, `checkout/DeliveryPicker.tsx`, `account/OrderHistory.tsx`, `i18n/config.ts`.
+
+**Breaking change handled:** In 3.x, `format()` uses the locale's week start. Without a fix, "week of" labels in order history and the delivery date picker would have shifted by a day for US users. I pinned `weekStartsOn: 0` in our wrapper in `utils/dates.ts` and added tests for it.
+
+**Testing**
+- Unit: 1,926 passed, 0 failed, 3 skipped (the skips were already there).
+- E2E checkout suite: 58/58 passed.
+- Visual diff on 14 screens: 1 changed, a tooltip is 2px wider. I think that's fine.
+- Bundle size: −6.1 kB gzipped.
+- **Not tested manually:** the Japanese locale. It is covered only by the automated snapshot.
+
+**Rollout / for Ana**
+- This touches the delivery date picker, which is part of the checkout funnel.
+- There is no feature flag. It ships all at once and can only be undone by reverting.
+- Timing is open. The holiday promo starts Nov 6, and I haven't seen confirmed code freeze dates. We can merge before or after the promo. The hard deadline is Dec 31.
+- **Ana, decision needed:** do you prefer this ships before the promo (more time to catch issues, but it lands near the promo start) or after (promo-period risk avoided, but less buffer before EOL)? Once the freeze dates are confirmed, I'll plan around them.
+
+**Review focus:** the four hand-edited files, and the `weekStartsOn` pin and its tests.
+
+---
+Note: I wrote the before/after tradeoff for Ana from general reasoning, so adjust it if her constraints differ. Consider a quick manual check of the Japanese locale before merging.

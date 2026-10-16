@@ -1,0 +1,39 @@
+**Subject: Oct 9 checkout outage: two decisions for Monday 10/20**
+
+**Decisions needed**
+1. **Assign owners and dates to the four open action items** (below).
+2. **Whether to send a proactive note to affected customers.** Recommendation: yes, a short apology and status note now, with no credit commitments until legal finishes its review.
+
+**What happened**
+On Oct 9, from 14:12 to 15:58 UTC (1h46m), about 70% of checkout attempts failed. A typo in a config change cut the payment connection pool from 200 to 20. The pool ran out under afternoon load. There was no data loss and no security impact.
+
+**Impact**
+- About 41,000 failed checkouts, affecting about 18,500 customers.
+- Estimated lost GMV is **$1.1M to $1.6M**. This is provisional: the range depends on how many customers retried later, and analytics expects the final figure Oct 24.
+- Support received 2,340 tickets in 48 hours, against a typical 400.
+- Six enterprise merchants contacted their account managers. One, Fabrikam Retail, has asked about SLA credits (contract maximum is 10% of the monthly fee). Legal is reviewing whether the incident qualifies.
+
+**Why it lasted so long**
+- Config values have no range checks, and config changes ship without a canary.
+- Alert-to-acknowledgement took 12 minutes, with no escalation path when the primary on-call is already on another incident.
+- Config deploys don't appear on the incident dashboard, so finding the cause took 32 minutes after SEV1 was declared.
+- Rollback needed a second approver during business hours, which added 14 minutes.
+
+**Action items**
+
+| # | Item | Owner | Due |
+|---|------|-------|-----|
+| 1 | Range validation for pool config | Payments | Oct 31 |
+| 2 | Config deploys on incident dashboard | SRE | Nov 14 |
+| 3 | Single-approver rollback during declared incidents | **Needs owner** (Platform and Release Eng share the pipeline) | **Needs date** |
+| 4 | Canary deploys for config changes (3 to 4 weeks of work) | **Needs owner** | **Needs date** |
+| 5 | Escalation when primary on-call is busy | SRE | **Needs date** |
+| 6 | Customer communication and credits approach | **Needs owner** (possibly VP Customer) | **Needs date** |
+
+Item 6 is tied to decision 2 and to the Fabrikam request, so it is the most time-sensitive.
+
+**Still open:** the record of whether the Oct 9 change was reviewed is unclear. The review team is confirming.
+
+---
+Note: I kept the GMV range in, labeled provisional with the Oct 24 date, so the CFO sees the scale now. If you'd rather wait, replace it with "final figure Oct 24."
+Note: owners appear by team only, and the on-call and review points are written as process gaps.

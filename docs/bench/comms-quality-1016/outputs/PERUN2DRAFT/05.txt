@@ -1,0 +1,25 @@
+**Webhook failures now ack with 200 and retry in-house (6 attempts, 30 min cap, then dead-letter + alert); Ines, please approve, with two open risks below.**
+
+**Why:** On a handler exception we returned 500 and relied on the provider, which retries 3 times over ~1 hr. We lost ~120 events in Sept (the 9/18 DB blip).
+
+**Change:**
+- `handler.py`: ack with 200, store the event, retry ourselves.
+- `retry.py` (new): exponential backoff, 6 attempts max, capped at 30 min, then dead-letter + alert.
+- `webhook_event.py` + migration `0147`: add `attempt_count`, `next_attempt_at`.
+- Idempotency on event id is unchanged.
+
+**Risk and rollback:**
+- **Not tested:** the provider re-sending an event while our own retry for it is mid-flight. The idempotency key should cover it, but I couldn't reproduce it in staging. Not known whether a lock is needed.
+- **Migration:** adds columns to a table of ~40M rows. Lock time not checked.
+- Rollback: not stated.
+
+**Verified:**
+✅ 24 new tests pass; full payments suite 418 passed, 0 failed.
+✅ Staging, 2 hrs of fault injection: 0 lost events.
+⏳ Duplicate-during-retry case: not verified.
+⏳ Migration lock time on ~40M rows: not measured.
+
+Ines, please review and approve; payments code needs your sign-off before merge. Your view on whether the duplicate case needs a lock would help.
+
+---
+Note: no rollback plan was given, so I left it unstated rather than invent one. Add one before posting if you have it.

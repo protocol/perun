@@ -1,0 +1,46 @@
+# Add notification settings v2 behind `settings_v2_notifications`
+
+## What
+A new notification settings page, shown only when `settings_v2_notifications` is on. With the flag off, the old page is untouched. The new page uses a new PATCH endpoint, and the old endpoint is kept.
+
+## Changes
+- `web/settings/NotificationsV2.tsx` (new, +341)
+- `web/settings/components/ChannelToggle.tsx` (new, +96)
+- `web/settings/index.tsx` (+12 -3): flag switch between old and new page
+- `api/prefs/routes.ts` (+48 -6): new PATCH endpoint, old one kept
+- `flags/registry.ts` (+4): flag registration
+- Tests: 3 files, +287
+
+## Testing
+- Unit: 41 pass
+- E2E: 9 pass with the flag on, and the existing 22 pass with it off
+- **Not tested:** a user saves on the v2 page and the flag is then turned off for them. I don't know what the old page shows in that case.
+
+## Accessibility
+- axe scan: 0 critical, 2 serious
+- Fixed: missing label on the digest frequency select
+- **Open:** the disabled toggle has 3.9:1 contrast, and 4.5:1 is needed. Design will send a new token next sprint.
+- Keyboard navigation is OK.
+- Screen reader testing was VoiceOver on Mac only. NVDA is not tested.
+
+## Rollout decision (Grace)
+About 210k weekly active users reach settings. The flag supports percentage rollout.
+
+| Start | Users who can see the contrast issue (upper bound) |
+|---|---|
+| 5% | ~10.5k |
+| 25% | ~52k |
+
+Support estimates it can absorb about 2x normal settings tickets (normal is ~30/wk, so ~60/wk). That is a guess, not a measured limit.
+
+**Suggested start: 5%.** The contrast issue is known and unfixed, NVDA is untested, and the flag-off-after-save behavior is unknown. At 5% we can see real ticket volume before committing support to a larger number. Raise the percentage once ticket volume looks fine and the flag-off-after-save case is checked.
+
+## Reviewer notes (Chen)
+Please look closely at:
+- the new PATCH endpoint, and whether its saved data is compatible with what the old page reads
+- the flag switch in `index.tsx`
+
+Rolling back means turning the flag off. Until the flag-off-after-save case is tested, I can't say whether users who saved on v2 will see correct settings afterward.
+
+---
+Note: I used 210k × 5% and × 25% for the user counts, and 2 × 30 for the support ceiling. Fix any of those if your figures differ.

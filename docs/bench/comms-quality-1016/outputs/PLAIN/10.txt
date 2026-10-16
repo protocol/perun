@@ -1,0 +1,39 @@
+**Exec summary: Checkout outage, Oct 9 (postmortem draft)**
+
+**What happened**
+On Oct 9, from 14:12 to 15:58 UTC (1h46m), about 70% of Acme storefront checkout attempts failed. A config change deployed at 14:05 cut the payment connection limit from 200 to 20 because of a typo. Nothing in our process checked the value, and the change went out to everyone at once. No data loss and no security impact.
+
+**Impact**
+- About 41,000 failed checkouts across about 18,500 customers
+- Estimated lost GMV: **$1.1M to $1.6M (preliminary)**. The range depends on how many customers retried later. Analytics will give a final figure on Oct 24.
+- Support tickets: 2,340 in 48 hours, against a typical 400
+- Six enterprise merchants contacted their account managers. Fabrikam Retail has asked about SLA credits (contract allows up to 10% of the monthly fee). Legal is reviewing whether the incident qualifies.
+
+**Why it lasted so long**
+Four things stretched a bad change into a 106-minute outage:
+1. No automated check on config values
+2. A 12-minute gap between alert and acknowledgement, because the on-call engineer was already on another incident and there was no escalation path
+3. Config deploys don't appear on the incident dashboard, so finding the cause took 32 minutes after SEV1 was declared
+4. The rollback approval rule added a 14-minute wait during the outage
+
+Whether the original change received a proper review is still unconfirmed and is being checked.
+
+**Decisions needed Monday 10/20**
+
+1. **Assign owners and dates to open actions.**
+
+| Action | Status |
+|---|---|
+| Range validation for pool config | Owner (Payments), due Oct 31 |
+| Config deploys on incident dashboard | Owner (SRE), due Nov 14 |
+| Single-approver rollback during incidents | Needs owner and date (Platform and Release Eng share the pipeline) |
+| Canary deploys for config changes (est. 3 to 4 weeks) | Needs owner and date |
+| On-call escalation | Owner (SRE), needs date |
+| Customer communication and credits approach | Needs owner (likely VP Customer) and date |
+
+   The canary work is the largest item and addresses the root cause. It needs a prioritization call.
+
+2. **Send a proactive note to affected customers?** We recommend yes, at minimum to the six enterprise merchants who have already contacted us, with a broader note to the roughly 18,500 affected customers if leadership agrees. Support volume is already elevated and at least one merchant is asking about credits. Any credit language should wait for legal's view on Fabrikam so we don't set a precedent.
+
+*Note: I'd include the GMV range, labeled preliminary with the Oct 24 date, so the CFO isn't surprised later. Waiting for the final number would leave the Monday discussion without the scale of the impact.*
+*Note: I left individuals out and listed owners by team. Add names if leadership wants them.*

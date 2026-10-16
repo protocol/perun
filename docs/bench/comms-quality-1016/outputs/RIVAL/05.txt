@@ -1,0 +1,32 @@
+# Retry failed provider webhooks ourselves with exponential backoff
+
+## Problem
+
+When our handler threw on a provider webhook, we returned 500 and relied on the provider to retry. The provider retries only 3 times over about an hour. During the 9/18 database blip we lost about 120 events in September.
+
+## Change
+
+The handler now acks with 200 and stores the event. We retry it ourselves with exponential backoff: 6 attempts max, with the delay capped at 30 minutes. After the last attempt the event is dead-lettered and an alert fires. Idempotency on event id is unchanged.
+
+- `handlers.py`: ack and store instead of returning 500 (+86 -31)
+- `retry.py` (new): backoff and dead-letter logic
+- `webhook_event.py`: adds `attempt_count` and `next_attempt_at`
+- `0147_webhook_event_attempts.py`: migration for those two columns
+- `test_webhook_retry.py` (new): 24 tests
+
+## Testing
+
+- 24 new tests pass.
+- Full payments suite: 418 passed, 0 failed.
+- Ran in staging with fault injection for 2 hours: 0 lost events.
+
+## Not tested, needs your eyes
+
+1. **Duplicate delivery during our own retry.** If the provider re-sends an event while our retry for it is mid-flight, I expect the idempotency key to cover it. I could not reproduce the case in staging, so that is unconfirmed. I don't know whether we need a lock here. This is the part I most want your judgment on.
+2. **Migration lock time.** The migration adds a column to a table with about 40M rows. I have not checked how long it locks the table, so I can't say yet whether it is safe to run as is or needs an off-peak window.
+
+## Review ask
+
+Payments code, so this needs your approval before merge. Please look first at the retry and idempotency interaction in `retry.py` and `handler.py`, and tell me if you want a lock or a different approach to the migration.
+
+If you can get a lock-time number for the migration before requesting review, add it under "Not tested" and drop item 2.

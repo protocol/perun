@@ -1,0 +1,31 @@
+**Title: Retry failed provider webhooks ourselves with exponential backoff**
+
+**Problem**
+When our handler threw on a provider webhook, we returned 500 and relied on the provider to retry. The provider retries only 3 times over ~1 hour. During the 9/18 DB blip we lost ~120 events.
+
+**Change**
+- On handler failure we now ack with 200, store the event, and retry it ourselves.
+- Backoff is exponential, with a max of 6 attempts and a cap of 30 min between attempts.
+- After the final attempt the event is dead-lettered and an alert fires.
+- Idempotency on event id is unchanged.
+
+**Files**
+- `services/payments/webhooks/handler.py`: ack-and-store flow instead of returning 500 (+86 -31)
+- `services/payments/webhooks/retry.py` (new): backoff and retry logic
+- `services/payments/models/webhook_event.py`: adds `attempt_count` and `next_attempt_at`
+- `migrations/0147_webhook_event_attempts.py`: migration for the two new columns
+- `tests/payments/test_webhook_retry.py` (new): 24 tests
+
+**Testing**
+- 24 new tests pass. Full payments suite: 418 passed, 0 failed.
+- Ran in staging with fault injection for 2 hours: 0 lost events.
+
+**Not tested / needs your eyes, Ines**
+1. **Duplicate delivery during our own retry.** If the provider re-sends an event while our retry for it is mid-flight, I expect the event-id idempotency key to cover it, but I couldn't reproduce this in staging, so it's unverified. I don't know whether we need a lock. Please look closely at the handler/retry interaction here.
+2. **Migration lock time.** The migration adds columns to a table with ~40M rows. I haven't measured how long it locks the table. This needs checking before it runs in production (e.g. against a prod-sized copy), and we should decide whether it needs a different rollout approach.
+
+**Merge/rollout**
+I'd treat both items above as open until we've settled them. I'm not claiming this is safe to merge on the migration yet.
+
+---
+Note: I wrote "I" as the author, so adjust if someone else is posting. I didn't state whether the new columns are nullable or have defaults, since the summary doesn't say. Add that, as it affects lock time.

@@ -1,0 +1,29 @@
+**New notification settings page behind `settings_v2_notifications`; Grace, please pick the starting rollout (5% or 25%) before Thursday's release train.**
+
+**Why:** Grace asked whether to start at 5% or 25%. About 210k weekly active users hit settings. Flag off leaves the old page untouched.
+
+**Change:**
+- `web/settings/NotificationsV2.tsx` (new, +341) and `components/ChannelToggle.tsx` (new, +96): the v2 page.
+- `web/settings/index.tsx` (+12 -3): renders v2 only when the flag is on.
+- `api/prefs/routes.ts` (+48 -6): new PATCH endpoint; the old one is kept.
+- `flags/registry.ts` (+4): registers the flag, which supports percentage rollout.
+
+**Rollout numbers for the decision:**
+- 5% is about 10.5k users; 25% is about 52k users (the description's "~50k" rounded).
+- Known issue: the disabled toggle has 3.9:1 contrast against the 4.5:1 required. Design says a new token arrives next sprint.
+- Support says it can absorb about 2x normal settings tickets (normal is ~30/week), but that is a guess.
+
+**Verified:**
+✅ Unit: 41 pass. E2E: 9 pass with flag on; existing 22 pass with flag off.
+✅ axe: 0 critical, 2 serious. One fixed (missing label on the digest frequency select). Keyboard navigation OK.
+✅ VoiceOver on Mac.
+⏳ NVDA not tested.
+⏳ Contrast on the disabled toggle: serious, unfixed.
+⏳ Not tested: a user saves on the v2 page, then the flag is turned off for them. Rollback behavior is unknown.
+
+**Risk and rollback:** Turning the flag off restores the old page for everyone. What happens to preferences saved through v2 after that is not tested.
+
+Chen, please review the code. Grace, please choose 5% or 25% before Thursday's release train.
+
+---
+Note: I left out a recommendation because you gave no lean. If you have one, add it to the lead. Consider testing the save-then-flag-off case before Grace picks, since it affects how safe a rollback is.

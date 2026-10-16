@@ -1,0 +1,35 @@
+## Add notification settings v2 behind `settings_v2_notifications`
+
+**For Grace: starting rollout.** I recommend 5%. At 25%, about 50k of the ~210k weekly settings users would see the known contrast issue (below). At 5% that is about 10k. Support says they can absorb roughly 2x the normal ~30 settings tickets a week, but that is a guess, so a smaller start gives us real numbers before we widen.
+
+**For Chen: what to look at.** The new PATCH endpoint in `api/prefs/routes.ts`, and the fact that the old endpoint is kept.
+
+### What changed
+A new notification settings page, shown only when the flag is on. With the flag off, the old page is untouched.
+
+- `web/settings/NotificationsV2.tsx` (new, +341)
+- `web/settings/components/ChannelToggle.tsx` (new, +96)
+- `web/settings/index.tsx` (+12 -3)
+- `api/prefs/routes.ts` (+48 -6): new PATCH endpoint, old one kept
+- `flags/registry.ts` (+4)
+- Tests: 3 files, +287
+
+### Testing
+- Unit: 41 pass.
+- E2E: 9 pass with the flag on. The existing 22 pass with the flag off.
+
+### Accessibility
+- The axe scan found 0 critical and 2 serious issues.
+- Fixed: the missing label on the digest frequency select.
+- Open: the disabled toggle has 3.9:1 contrast, and 4.5:1 is needed. Design says a new token arrives next sprint.
+- Keyboard navigation is fine.
+- Screen reader testing was VoiceOver on Mac only. NVDA has not been tested.
+
+### Not tested
+I haven't tested what happens when a user saves on the v2 page and the flag is then turned off for them. I don't yet know whether the old page reads those saved values correctly. I'd like to check this before the flag is turned on for anyone, or at least before we need to roll back.
+
+### Rollout and rollback
+The flag supports percentages. Turning it off returns users to the old page, subject to the untested case above.
+
+---
+Note: the 5% recommendation is my addition, so change it if you disagree. Running the save-then-flag-off check before Thursday would let you drop the "Not tested" section.
