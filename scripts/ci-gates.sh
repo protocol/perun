@@ -461,14 +461,14 @@ cmd_enumeration() {
     #    A glob loop (`for d in .claude/skills/*/` calling `routing ... "$d"`) covers every
     #    skill, so adding one edits no shared list.
     grep -qE "ci-gates\.sh routing .*\.claude/skills/${name}[[:space:]]*\$" "$ci" \
-      || { grep -qE 'for [a-z_]+ in \.claude/skills/\*/' "$ci" && grep -qE 'ci-gates\.sh routing .*"\$d"' "$ci"; } \
+      || { grep -qE '^[[:space:]]*for [a-z_]+ in \.claude/skills/\*/; do' "$ci" && grep -qE '^[[:space:]]*[^#[:space:]].*ci-gates\.sh routing .*"\$d"' "$ci"; } \
       || { printf 'ENUM: %s has no ci.yml routing line\n' "$name" >&2; fail=1; }
     # 2) write-checksums.sh find-list (else the skill tree is unpinned). The path
     #    followed by whitespace matches the `find` argument list; write-checksums.sh
     #    holds no other skill paths, so a bare-mention false-PASS has no vector here.
-    #    Or the glob `find .claude/skills/*/`, which pins every skill dir.
+    #    Or the glob `find .claude/skills/*/` (a non-comment line), which pins every skill dir.
     grep -qE "\.claude/skills/${name}[[:space:]]" "$checksums" \
-      || grep -qF 'find .claude/skills/*/' "$checksums" \
+      || grep -qE '^[[:space:]]*find \.claude/skills/\*/' "$checksums" \
       || { printf 'ENUM: %s absent from write-checksums.sh find-list\n' "$name" >&2; fail=1; }
     # 3) install.sh — the base ships always; every overlay needs a SKILLS+= line
     if [ "$name" != "deep-code-review" ]; then

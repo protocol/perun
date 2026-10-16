@@ -73,5 +73,15 @@ grep -qE 'for d in \.claude/skills/\*/' "$ROOT/.github/workflows/ci.yml"; ok $? 
 grep -qF 'find .claude/skills/*/' "$ROOT/scripts/write-checksums.sh"; ok $? "write-checksums.sh pins every skill dir by glob"
 (cd "$ROOT" && bash scripts/ci-gates.sh enumeration . >/dev/null 2>&1); ok $? "enumeration gate accepts the glob forms"
 
+# Fail-open controls: a comment that names a glob must not satisfy the enumeration gate.
+printf '# find .claude/skills/*/\nfind .claude/skills/deep-code-review/ -type f\n' >"$R/scripts/write-checksums.sh"
+o=$(cd "$R" && bash scripts/ci-gates.sh enumeration . 2>&1); grep -q 'absent from write-checksums.sh find-list' <<<"$o"; ok $? "enumeration: a commented find-glob does not pin skills"
+g checkout -q -f -- scripts/write-checksums.sh
+sed -i.bak 's|^\( *\)for d in \.claude/skills/\*/; do|\1# for d in .claude/skills/*/; do|' "$R/.github/workflows/ci.yml"
+o=$(cd "$R" && bash scripts/ci-gates.sh enumeration . 2>&1); grep -q 'has no ci.yml routing line' <<<"$o"; ok $? "enumeration: a commented routing loop does not route skills"
+g checkout -q -f -- .github/workflows/ci.yml; rm -f "$R/.github/workflows/ci.yml.bak"
+grep -qF 'bash -e "$t"' "$ROOT/.github/workflows/ci.yml"; ok $? "ci-tests.d files run under bash -e (an early failure is not masked)"
+grep -qF 'regen-unlanded.sh --check "${fg_base}"' "$ROOT/.claude/skills/deep-code-review/templates/pre-push-verify.sh"; ok $? "pre-push hook decides landed-vs-unlanded against the merge-base"
+
 echo "Tests: $pass/$((pass + fail))"
 [ "$fail" -eq 0 ]

@@ -359,7 +359,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       python3 scripts/run-evals.py --selftest
     # Derived files (INDEX.md, SHA256SUMS) are not committed by lane PRs: they are rebuilt at land time
     # (VERSION moved vs the base) and checked there. Unlanded, CI rebuilds them, so skip the stale checks.
-    derived=1; [ -f scripts/regen-unlanded.sh ] && bash scripts/regen-unlanded.sh --check "${fg_ref}" && derived=0
+    derived=1; [ -f scripts/regen-unlanded.sh ] && bash scripts/regen-unlanded.sh --check "${fg_base}" && derived=0
     [ "${derived}" -eq 1 ] && [ -f scripts/skill_index.py ] && fg "INDEX.md stale" \
       "run 'bash scripts/land-release.sh --regen' and commit the result (land commits only)" \
       python3 scripts/skill_index.py --check
