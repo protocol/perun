@@ -14,7 +14,8 @@ whether perun_auto_update.py may re-apply a newer release tag in the background.
 up (never auto-merged); `auto_update_pr_base` (default empty = `origin/HEAD`) names the branch that PR targets and
 that the committed-version WARN compares against (a base missing on origin skips the PR). `review_gate` takes
 `warn|enforce|off` (default `warn`): whether review_gate.py blocks a merge with no independent review receipt.
-`release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
+`auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
+(`off` skips it; a value the user already set is never overridden either way). `release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
 
   perun_policy.py get <dim>      print the value (a number prints as a number)
   perun_policy.py show           print the whole effective policy as JSON
@@ -73,7 +74,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -83,7 +84,7 @@ def validate(raw: dict) -> dict:
             ok = isinstance(v, int) and not isinstance(v, bool) and v >= 1
         elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
             ok = isinstance(v, str) and (v == "" or (re.fullmatch(r"[A-Za-z0-9._/-]+", v) is not None and v[0] not in "-/" and v[-1] != "/" and ".." not in v and "//" not in v and v != "HEAD"))
-        elif k in ("auto_update", "auto_update_pr"):
+        elif k in ("auto_update", "auto_update_pr", "auto_compact"):
             ok = v in ON_OFF
         elif k in DIMS:
             ok = v in MODES or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)

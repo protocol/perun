@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""context_nudge.py — UserPromptSubmit hook: suggest a fresh session when the main context is huge.
+"""context_nudge.py — UserPromptSubmit hook: prompt a handoff write when the main context is huge.
 
 Long sessions re-read their whole context from cache on every turn, so cost grows with size. This hook reads the
 hook JSON on stdin, takes the last assistant message's usage (input + cache_read + cache_creation tokens) from
 `transcript_path` as the current context size, and when it is at least `PERUN_CONTEXT_NUDGE_TOKENS` (default
-250000) prints ONE line (UserPromptSubmit stdout enters context) suggesting a fresh session started from a short
-handoff note. It repeats only after another 50000 tokens of growth, tracked in a stamp under
+250000) prints ONE line (UserPromptSubmit stdout enters context) telling the agent to write `.claude/handoff.md`
+(handoff_inject.py re-injects it after auto-compact) and not to ask the owner to restart. It repeats only after another 50000 tokens of growth, tracked in a stamp under
 `$XDG_CACHE_HOME/perun/context-nudge/` (default `~/.cache`). Silent otherwise; any error exits 0 silently; only
 the last 1 MB of the transcript is read.
 
@@ -60,8 +60,8 @@ def check(payload):
         return None
     root.mkdir(parents=True, exist_ok=True)
     stamp.write_text(str(size))
-    return (f"Context is {size // 1000}k tokens and every turn re-reads it: consider a fresh session started from a "
-            "short handoff note (state, open work, next step).")
+    return (f"Context is {size // 1000}k tokens and every turn re-reads it: write .claude/handoff.md (state, open work, "
+            "next step) now. Auto-compact then re-injects it; do not tell the owner to restart the session.")
 
 
 def main():

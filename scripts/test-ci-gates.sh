@@ -3902,6 +3902,13 @@ else
   record 1 "sandbox default: operating layer sets sandbox + deny rules, selfcheck flags off"; tail -8 "$WORK/sandbox-default.log"
 fi
 
+# auto-context-reset: own per-feature file (scripts/test-auto-context-reset.sh), one case here.
+if bash "$ROOT/scripts/test-auto-context-reset.sh" >"$WORK/auto-context-reset.log" 2>&1; then
+  record 0 "auto-context-reset: autoCompactWindow never clobbers a user value, handoff hook output capped"
+else
+  record 1 "auto-context-reset: autoCompactWindow never clobbers a user value, handoff hook output capped"; tail -8 "$WORK/auto-context-reset.log"
+fi
+
 # first-run prompt: installer output and AGENTS.md block give a portable plain-words prompt (no remote/slash needed).
 FR="$WORK/firstrun"; mkdir -p "$FR"
 if bash "$ROOT/install.sh" "$FR" >"$FR.out" 2>&1 && grep -q "run a deep code review FILE" "$FR.out" && grep -q "run a deep code review FILE" "$FR/AGENTS.md" && sed -n '/^3\. \*\*Ask your agent/,/^>/p' "$ROOT/README.md" | head -2 | grep -q 'review FILE'; then

@@ -10,6 +10,7 @@ Writes TARGET/.claude/.perun-install.json, merged with any previous marker:
   hooks:  [{event, entry}]  operating-layer entries absent before this install
   env:    {key: value}      env keys absent before this install
   model:  "sonnet" | null   set only when the settings had no "model" before
+  autocompact: 200000       set only when the settings had no "autoCompactWindow" before
   files:  {<rel>: sha256}  slash commands, house-defaults.md and settings .bak files install wrote fresh (never pre-existing files)
   backups: [<rel dir>]  skill-backups dirs this install created (still on disk); never deleted unless every file is a shipped copy
   preinstall: [<rel dir>]  the backups that hold what was in a skill dir before Perun first wrote it (uninstall moves one back)
@@ -130,6 +131,8 @@ def record(target, dirs, pre=None, template=None, agent_created=False, files=(),
                 m["env"][k] = v
         if "model" not in before and now.get("model") == "sonnet":
             m["model"] = "sonnet"
+        if "autoCompactWindow" not in before and now.get("autoCompactWindow") == 200000:
+            m["autocompact"] = 200000
         for k in ("sandbox", "permissions"):
             if k in t and (a := added(before.get(k), t[k])):
                 m.setdefault("settings", {})[k] = merge(m.get("settings", {}).get(k, {}), a)
