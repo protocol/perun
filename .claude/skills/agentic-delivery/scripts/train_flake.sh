@@ -6,6 +6,7 @@
 # FLAKE_REAL_AT of FLAKE_RUNS isolated re-runs, by default ALL of them: a 1-in-3 flake is then blamed (1/3)^3 = 3.7% of the time
 # (2-of-3 blamed it 7/27 = 25.9%). Stops early once the verdict is fixed, so a flake that passes once costs one re-run. Prints "REAL <id>" / "FLAKE <id>"
 # lines (flakes are reported separately, never blamed on a PR). Exit: 0 no REAL ids, 1 at least one REAL, 2 usage or bad FLAKE_RUNS/FLAKE_REAL_AT (fails closed).
+# Optional: FLAKE_LEDGER_DIR=<dir> also records each verdict in flake_ledger.py's per-tree ledger (FLAKE_TREE, default HEAD's tree).
 # Same-host baseline: a non-empty baseline file must start with the header `# baseline host=<h> inv=<hash>` written by
 # `train_flake.sh --record <failing-ids-file> > baseline` on the machine and invocation that measured it. The current host
 # (FLAKE_HOST, default hostname -s) and invocation hash (sha256 of FLAKE_INVOCATION, default BROWSER_CMD) must match, else exit 2:
@@ -68,6 +69,9 @@ while IFS= read -r id; do
     if [ "$r" -eq 0 ]; then p=$((p + 1)); else f=$((f + 1)); fi
     [ "$f" -ge "$need" ] || [ "$p" -gt $((runs - need)) ] && break
   done
-  if [ "$f" -ge "$need" ]; then echo "REAL $id"; real=1; else echo "FLAKE $id (failed $f of $((f + p)) alone)"; fi
+  if [ "$f" -ge "$need" ]; then v="REAL $id"; real=1; else v="FLAKE $id (failed $f of $((f + p)) alone)"; fi
+  echo "$v"
+  # Optional flake ledger (flake_ledger.py): best-effort, never changes the verdict or the exit code.
+  [ -z "${FLAKE_LEDGER_DIR:-}" ] || printf '%s\n' "$v" | python3 "$(dirname "$0")/flake_ledger.py" --dir "$FLAKE_LEDGER_DIR" record ${FLAKE_TREE:+--tree "$FLAKE_TREE"} >&2 || true
 done < <(norm <"$1")
 exit $real

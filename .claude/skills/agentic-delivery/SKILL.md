@@ -32,7 +32,7 @@ chat may be terse.
 | Task | Open |
 |---|---|
 | Land PRs as a train | `scripts/merge_train.py`, `scripts/train_land.sh`; depth `references/merge-queue-worktrees.md` |
-| Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md` |
+| Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md`; repeat flake: `scripts/flake_ledger.py` |
 | Start a lane | `templates/lane-preamble.md` |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
@@ -47,7 +47,7 @@ chat may be terse.
 - The owner asked for a feature, migration, or release — not a one-line fix.
 - `./install.sh --recommend` named this overlay for the target.
 
-**Do not use** for a typo, a docs-only nit, or a repo that already runs another
+**Do not use** for a typo, a docs nit, or a repo that already runs another
 delivery pack. One conductor. Hats, not headcount. Before any agent-originated
 "we should" reaches the owner, load `idea-critic` if installed.
 
@@ -57,9 +57,8 @@ delivery pack. One conductor. Hats, not headcount. Before any agent-originated
 
 Smallest sufficient team. Hats fire from risk — not standing roles, never a
 bot or profile per role; one worker wears several compatible hats on a small
-change. The full roster (each hat's trigger, the gate it owns, its
-build/product discipline, and the `deep-code-review` lens it maps to) is
-`references/roles.md`. The core hats:
+change. The full roster (per hat: trigger, gate owned, build
+discipline, `deep-code-review` lens) is `references/roles.md`. The core hats:
 
 - **Conductor** — intent, scope, task graph, merge plan, evidence roll-up.
   Never self-approves.
