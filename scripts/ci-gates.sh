@@ -700,6 +700,10 @@ cmd_size() {
 #
 #   size-budget-raise: <path> <old-bytes>→<new-bytes> <reason>
 #
+# <old-bytes> is the larger of the file's size at <base> and its row there (an
+# unlanded base's rows are stale because lanes do not commit them; a hand-kept
+# row above the size is a budget).
+#
 # A marker already in the base's CHANGELOG.md never approves a new raise: only
 # lines the change itself adds count. Wired into ci.yml ("Size budgets ratchet
 # down") against the PR base / push before-SHA; run locally as:
@@ -831,7 +835,7 @@ cmd_size_ratchet() {
   added_log="$(git -C "$root" diff --no-color --no-ext-diff -U0 "$base" -- CHANGELOG.md changelog.d 2>/dev/null \
     | grep -E '^\+' | grep -vE '^\+\+\+ ' | sed 's/^+//' || true)"
 
-  local fail=0 i j p new_b old_b found marker
+  local fail=0 i j p new_b old_b found marker base_sz
   for i in "${!new_paths[@]}"; do
     p="${new_paths[$i]}"
     new_b="${new_budgets[$i]}"
@@ -841,6 +845,10 @@ cmd_size_ratchet() {
       if [ "${old_paths[$j]}" = "$p" ]; then found=1; old_b="${old_budgets[$j]}"; break; fi
     done
     [ "$found" -eq 1 ] || continue
+    # Rows are rebuilt at land time (regen-unlanded.sh), so a base from an unlanded wave carries stale rows:
+    # the raise is measured from the larger of the base row and the file's real size at base (a hand-kept
+    # row above the size is a budget and stays one).
+    base_sz="$(git -C "$root" cat-file -s "${base}:${p}" 2>/dev/null)" && [ "$base_sz" -gt "$old_b" ] && old_b="$base_sz"
     [ "$new_b" -gt "$old_b" ] || continue
 
     marker="size-budget-raise: $p ${old_b}→${new_b}"
