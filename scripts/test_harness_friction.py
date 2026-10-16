@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SC = ROOT / ".claude/skills/agentic-delivery/scripts"
 TPL = ROOT / ".claude/skills/agentic-delivery/templates/operating-layer.settings.json"
 sys.path.insert(0, str(SC))
-from subagent_start_inject import HOST_RULES  # noqa: E402
+from subagent_start_inject import HOST_RULES, LANE_RULES  # noqa: E402
 
 
 def run(script, payload, **env):
@@ -31,7 +31,7 @@ class HostRules(unittest.TestCase):
 
     def test_subagent_start_without_house_file(self):
         o = run("subagent_start_inject.py", {"hook_event_name": "SubagentStart", "agent_type": "x"})
-        self.assertEqual(o["hookSpecificOutput"]["additionalContext"], HOST_RULES)
+        self.assertEqual(o["hookSpecificOutput"]["additionalContext"], LANE_RULES + "\n" + HOST_RULES)
 
     def test_session_brief_always_injects(self):
         with tempfile.TemporaryDirectory() as d:  # not a git repo, no PRIORITIES.md: no report lines

@@ -31,13 +31,25 @@ works" bias makes it approximate the design with a generic component or drop
 states (`rendered-parity.md`'s goalpost rule) — omission beats a caveat
 nobody reads. Every other line is injected for every agent type unchanged.
 
+LANE RULES (always injected, no house file needed)
+---------------------------------------------------
+`LANE_RULES` is a fixed constant, like `HOST_RULES`: every lane runs tool calls
+only (zero prose between them) and ends with a key=value fields-only handback.
+`handback_cap.py` (SubagentStop) only logs a miss of the shape (a rewrite would
+re-read the lane's whole context and cost more than it saves), so this short
+rule, about 48 estimated tokens, is the only lever.
+Skipped for a type whose chat is its deliverable: `HANDBACK_EXEMPT_TYPES`
+(same env var and same default list as `handback_cap.py`) plus
+`LANE_RULES_SKIP_TYPES` (comma-separated, default empty) for a read-only review
+type that keeps a raised cap instead of being exempt. `LANE_RULES=0` drops it.
+
 FAILS OPEN, NEVER BLOCKS A SPAWN
 ---------------------------------
 `SubagentStart` hooks cannot block subagent creation at all, but this script
-still fails open deliberately: a missing `HOUSE_DEFAULTS_FILE` env var, an
-unreadable file, a non-`SubagentStart` event, or malformed stdin all print a
-stderr note (the file cases) and inject nothing (empty stdout, exit 0) —
-never a crash, never a partial/garbled injection.
+still fails open deliberately: a missing `HOUSE_DEFAULTS_FILE` env var or an
+unreadable file prints a stderr note and injects only the built-in `LANE_RULES`
+and `HOST_RULES`; a non-`SubagentStart` event or malformed stdin injects nothing
+(empty stdout, exit 0) — never a crash, never a partial/garbled injection.
 
 INSTALL
 -------
@@ -66,6 +78,11 @@ HOST_RULES = ("Host rules: never `sleep N` to wait; background the command and a
               "In an isolated worktree run plain separate git commands from the worktree root; "
               "no `cd X &&` chains or loops around git (the host refuses them as too complex to verify).\n"
               "Find any Perun skill or tool: read .claude/skills/INDEX.md first.")
+# Zero-chat lane rules, injected for every type except those in CHAT_TYPES. The size and shape named here are the target
+# handback_cap.py logs against (its default TARGET_CHARS 400); scripts/test_zero_chat_lanes.py pins both and CHAT_TYPES.
+LANE_RULES = ("Lane output: tool calls only, no prose between them. Final message: key=value fields only, "
+              "under 400 characters: status=VERIFIED|UNVERIFIED, sha=, result=, tests=, blockers=, report=<path>.")
+CHAT_TYPES = "Explore,Plan,claude-code-guide,statusline-setup"  # equals handback_cap.DEFAULT_EXEMPT_TYPES
 
 
 def build_context(house_text: str, agent_type: str, exempt_types: set) -> str:
@@ -89,7 +106,8 @@ def run(stdin_text: str) -> str:
     """The hook's stdout for one hook-input JSON string; `''` injects nothing.
 
     `''` on: a non-`SubagentStart` event or unparseable stdin. With no/unreadable
-    `HOUSE_DEFAULTS_FILE` (or an all-dropped one) only `HOST_RULES` is injected. Never raises.
+    `HOUSE_DEFAULTS_FILE` (or an all-dropped one) only `LANE_RULES` (unless the type is in `CHAT_TYPES`) and
+    `HOST_RULES` are injected. Never raises.
     """
     try:
         data = json.loads(stdin_text)
@@ -103,18 +121,21 @@ def run(stdin_text: str) -> str:
     house_file = os.environ.get("HOUSE_DEFAULTS_FILE")
     house_text = ""
     if not house_file:
-        sys.stderr.write("subagent_start_inject: HOUSE_DEFAULTS_FILE not set; injecting host rules only.\n")
+        sys.stderr.write("subagent_start_inject: HOUSE_DEFAULTS_FILE not set; injecting the built-in lane and host rules only.\n")
     else:
         try:
             with open(house_file, encoding="utf-8") as fh:
                 house_text = fh.read()
         except OSError as exc:
-            sys.stderr.write(f"subagent_start_inject: cannot read HOUSE_DEFAULTS_FILE {house_file!r}: {exc}; injecting host rules only.\n")
+            sys.stderr.write(f"subagent_start_inject: cannot read HOUSE_DEFAULTS_FILE {house_file!r}: {exc}; injecting the built-in lane and host rules only.\n")
     exempt_types = set(filter(None, os.environ.get("HOUSE_MINIMAL_CODE_EXEMPT_TYPES", "").split(",")))
-    context = build_context(house_text, str(data.get("agent_type") or ""), exempt_types)
+    agent_type = str(data.get("agent_type") or "")
+    context = build_context(house_text, agent_type, exempt_types)
     if context.strip() and os.environ.get("SKILL_ROUTE_REMINDER") != "0":
         context += "\n" + SKILL_ROUTE
-    context = (context + "\n" if context.strip() else "") + HOST_RULES
+    skip = set(filter(None, (os.environ.get("HANDBACK_EXEMPT_TYPES", CHAT_TYPES) + "," + os.environ.get("LANE_RULES_SKIP_TYPES", "")).split(",")))
+    lane = LANE_RULES + "\n" if os.environ.get("LANE_RULES") != "0" and agent_type not in skip else ""
+    context = (context + "\n" if context.strip() else "") + lane + HOST_RULES
     return json.dumps({"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": context}})
 
 
@@ -182,12 +203,21 @@ def _selftest() -> int:
 
         os.environ.pop("HOUSE_DEFAULTS_FILE", None)
         hr = lambda o: json.loads(o)["hookSpecificOutput"]["additionalContext"] if o else ""
-        case("missing-env-var-host-rules-only", hr(run(json.dumps({"hook_event_name": "SubagentStart"}))), HOST_RULES)
+        case("missing-env-var-lane-and-host-rules-only", hr(run(json.dumps({"hook_event_name": "SubagentStart"}))), LANE_RULES + "\n" + HOST_RULES)
         case("host-rules-no-sleep-no-cd-chain", "sleep N" in HOST_RULES and "cd X &&" in HOST_RULES and HOST_RULES.count("\n") <= 2, True)
         case("host-rules-also-with-house-file", HOST_RULES in ctx, True)
+        case("lane-rules-also-with-house-file", LANE_RULES in ctx, True)
+        explore = json.dumps({"hook_event_name": "SubagentStart", "agent_type": "Explore"})
+        case("chat-deliverable-type-gets-no-lane-rules", hr(run(explore)), HOST_RULES)
+        os.environ["LANE_RULES"] = "0"
+        case("lane-rules-opt-out", hr(run(json.dumps({"hook_event_name": "SubagentStart"}))), HOST_RULES)
+        os.environ.pop("LANE_RULES")
+        os.environ["LANE_RULES_SKIP_TYPES"] = "security-reviewer"
+        case("skip-types-env-drops-lane-rules", hr(run(json.dumps({"hook_event_name": "SubagentStart", "agent_type": "security-reviewer"}))), HOST_RULES)
+        os.environ.pop("LANE_RULES_SKIP_TYPES")
 
         os.environ["HOUSE_DEFAULTS_FILE"] = os.path.join(tmp, "does-not-exist.md")
-        case("unreadable-file-host-rules-only", hr(run(json.dumps({"hook_event_name": "SubagentStart"}))), HOST_RULES)
+        case("unreadable-file-lane-and-host-rules-only", hr(run(json.dumps({"hook_event_name": "SubagentStart"}))), LANE_RULES + "\n" + HOST_RULES)
 
         os.environ["HOUSE_DEFAULTS_FILE"] = house_path
         case("build-context-pure", build_context("MINIMAL-CODE: x\ny\n", "a", {"a"}), "y")

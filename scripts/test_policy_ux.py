@@ -39,7 +39,7 @@ class PolicyUx(unittest.TestCase):
     def test_preamble_agrees_with_tokens_and_ci_policy(self):
         self.assertEqual(self.pp("get", "tokens").stdout.strip(), "efficient")
         self.assertIn("`efficient` (default) means: use the cheapest model tier that fits, no duplicate review passes, "
-                      "terse hand-backs (guidance, not enforced), and at most 2 parallel lanes (enforced:", PRE)
+                      "fields-only hand-backs (logged by `handback_cap.py`), and at most 2 parallel lanes (enforced:", PRE)
         self.assertIn("perun_policy.py get tokens", PRE)
         self.assertRegex(PRE, r"`off`, end every commit message you push with `\[skip ci\]`")
 
