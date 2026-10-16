@@ -456,14 +456,19 @@ cmd_enumeration() {
   for d in "$skills_dir"/*/; do
     [ -d "$d" ] || continue
     name="$(basename "$d")"
-    # 1) ci.yml routing INVOCATION (per-skill; enumerated, not globbed). Anchored to
+    # 1) ci.yml routing INVOCATION (per-skill line, or the glob loop below). Anchored to
     #    the `ci-gates.sh routing` call so a bare mention (a comment) cannot satisfy it.
+    #    A glob loop (`for d in .claude/skills/*/` calling `routing ... "$d"`) covers every
+    #    skill, so adding one edits no shared list.
     grep -qE "ci-gates\.sh routing .*\.claude/skills/${name}[[:space:]]*\$" "$ci" \
+      || { grep -qE 'for [a-z_]+ in \.claude/skills/\*/' "$ci" && grep -qE 'ci-gates\.sh routing .*"\$d"' "$ci"; } \
       || { printf 'ENUM: %s has no ci.yml routing line\n' "$name" >&2; fail=1; }
     # 2) write-checksums.sh find-list (else the skill tree is unpinned). The path
     #    followed by whitespace matches the `find` argument list; write-checksums.sh
     #    holds no other skill paths, so a bare-mention false-PASS has no vector here.
+    #    Or the glob `find .claude/skills/*/`, which pins every skill dir.
     grep -qE "\.claude/skills/${name}[[:space:]]" "$checksums" \
+      || grep -qF 'find .claude/skills/*/' "$checksums" \
       || { printf 'ENUM: %s absent from write-checksums.sh find-list\n' "$name" >&2; fail=1; }
     # 3) install.sh — the base ships always; every overlay needs a SKILLS+= line
     if [ "$name" != "deep-code-review" ]; then
@@ -815,7 +820,7 @@ cmd_size_ratchet() {
   fi
 
   # Marker sources, computed once: commit messages in range, and only the
-  # CHANGELOG.md lines added since base (working tree vs base, so a local
+  # CHANGELOG.md / changelog.d fragment lines added since base (working tree vs base, so a local
   # pre-commit run sees the same thing CI sees on a clean checkout). A line
   # that already exists in the base's CHANGELOG.md is dropped, so moving or
   # re-adding an old marker cannot approve a new raise.
@@ -823,7 +828,7 @@ cmd_size_ratchet() {
   range_msgs="$(git -C "$root" log --format=%B "${base}..HEAD" 2>/dev/null)" \
     || die "size-ratchet: cannot read commit messages in ${base}..HEAD (fail closed)"
   base_log="$(git -C "$root" show "${base}:CHANGELOG.md" 2>/dev/null || true)"
-  added_log="$(git -C "$root" diff --no-color --no-ext-diff -U0 "$base" -- CHANGELOG.md 2>/dev/null \
+  added_log="$(git -C "$root" diff --no-color --no-ext-diff -U0 "$base" -- CHANGELOG.md changelog.d 2>/dev/null \
     | grep -E '^\+' | grep -vE '^\+\+\+ ' | sed 's/^+//' || true)"
 
   local fail=0 i j p new_b old_b found marker
@@ -845,7 +850,7 @@ cmd_size_ratchet() {
             && ! grep -qF -- "$marker" <<<"$base_log"; }; then
       printf 'size-ratchet: %s raised %s->%s with a documented marker (ok)\n' "$p" "$old_b" "$new_b"
     else
-      printf 'RATCHET FAIL: %s raised %s->%s bytes with no "%s <reason>" line in the %s..HEAD commit range or among CHANGELOG.md lines added since base\n' \
+      printf 'RATCHET FAIL: %s raised %s->%s bytes with no "%s <reason>" line in the %s..HEAD commit range or among CHANGELOG.md / changelog.d lines added since base\n' \
         "$p" "$old_b" "$new_b" "$marker" "$base" >&2
       fail=1
     fi

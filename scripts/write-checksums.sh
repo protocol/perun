@@ -7,17 +7,8 @@ cd "$ROOT"
 OUT="${1:-SHA256SUMS}"
 export LC_ALL=C
 {
-  find .claude/skills/deep-code-review \
-       .claude/skills/agentic-delivery \
-       .claude/skills/idea-critic \
-       .claude/skills/communication-structure \
-       .claude/skills/contribution \
-       .claude/skills/product-discovery \
-       .claude/skills/agentic-ceo \
-       .claude/skills/growth-analytics \
-       .claude/skills/positioning \
-       .claude/skills/business-ops \
-       .claude/skills/product-output-safety \
+  # every .claude/skills/<dir>/ is a shipped skill; globbed so a new skill never edits this list
+  find .claude/skills/*/ \
        -name __pycache__ -prune -o -type f ! -name SHA256SUMS ! -name '*.pyc' -print | sort
 } | while IFS= read -r f; do
   sha256sum "$f"

@@ -23,8 +23,9 @@ Replace `vX.Y.Z` with a published release tag (see GitHub Releases). The
 AGENTS.md stamp records `Installed: **x.y.z** (@ sha)` after copy.
 
 `SHA256SUMS` covers the three skill trees under `.claude/skills/`.
-Regenerate with `bash scripts/write-checksums.sh`. CI checks the file
-against the tree. This is a content hash, **not** OpenSSF Model Signing —
+Regenerate with `bash scripts/write-checksums.sh`. Lane PRs do not commit it;
+the land commit (the one that bumps `VERSION`) does, and CI checks the file
+against the tree there. This is a content hash, **not** OpenSSF Model Signing —
 do not claim a signed skill.
 
 Optional marketplace path, still pinned:

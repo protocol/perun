@@ -36,8 +36,13 @@ python3 - "$R/$F/evals/evals.json" <<'PY'
 import sys; p = sys.argv[1]; s = open(p).read(); open(p, "w").write(s.replace("[needs_files] Loads", "Loads", 1))
 PY
 red run-evals 'run-evals --selftest'
+# derived files are checked on land commits only (VERSION moved vs base); an unlanded tree defers them to CI
+echo "stale" >>"$R/$F/INDEX.md"; g add -A; g commit -q -m "plant unlanded stale index"; run
+ok $rc "unlanded tree with a stale INDEX.md passes (rebuilt in CI)"; g reset -q --hard "$B"
+echo 9.9.9 >"$R/$F/VERSION"
 echo "stale" >>"$R/$F/INDEX.md"
 red index 'INDEX.md stale'
+echo 9.9.9 >"$R/$F/VERSION"
 echo "# drift" >>"$R/.claude/skills/agentic-delivery/scripts/wired_check.py"
 red sha256 'SHA256SUMS stale'
 awk 'NR==5{print "## [Unreleased]\n"} {print}' "$R/CHANGELOG.md" >"$WORK/t" && cp "$WORK/t" "$R/CHANGELOG.md"

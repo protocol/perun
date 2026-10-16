@@ -31,8 +31,11 @@ Parallel lanes must not bump the version: each one claims "main + 1" and all but
 
 - **Lane:** add `changelog.d/<slug>.md` (the body for the release heading: `### Added` plus bullets;
   put any `size-budget-raise:` marker here). Do not touch `VERSION`, `metadata.version`,
-  `plugin.json` or the top of `CHANGELOG.md`. Run `bash scripts/land-release.sh --regen` before
-  pushing so INDEX.md, `SHA256SUMS` and `size-budgets.tsv` match your tree.
+  `plugin.json` or the top of `CHANGELOG.md`. Do not commit the derived files `SHA256SUMS`, `INDEX.md`
+  or `size-budgets.tsv` rows: committing them makes any two PRs conflict once one merges. CI rebuilds them
+  for an unlanded PR (`scripts/regen-unlanded.sh`; the size ratchet still compares the rebuilt rows to
+  main), and the land commit carries them and is checked byte-for-byte. Register a new test by adding
+  `scripts/ci-tests.d/<slug>.sh` (one command line), not a line in `ci.yml`.
 - **Land:** on the branch, run `bash scripts/land-release.sh`. Under a lock it merges `origin/main`
   (generated-file conflicts are regenerated, anything else aborts), stamps the next minor across the
   lockstep set, folds the fragments into `CHANGELOG.md`, regenerates, and commits. Push and merge as
@@ -46,17 +49,7 @@ Run the same gates CI runs ([`.github/workflows/ci.yml`](.github/workflows/ci.ym
 
 ```bash
 bash scripts/test-ci-gates.sh
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/deep-code-review
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/agentic-delivery
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/idea-critic
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/communication-structure
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/contribution
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/product-discovery
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/agentic-ceo
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/growth-analytics
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/positioning
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/business-ops
-bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/product-output-safety
+for d in .claude/skills/*/; do bash scripts/ci-gates.sh routing --max-bytes 24000 "$d"; done
 bash scripts/ci-gates.sh version .
 bash scripts/ci-gates.sh privacy --banlist .banlist.txt .
 bash scripts/ci-gates.sh enumeration .

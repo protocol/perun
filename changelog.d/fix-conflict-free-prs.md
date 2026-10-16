@@ -1,0 +1,6 @@
+### Fixed
+- PRs that touch different skills no longer conflict once one of them merges. Lanes stop committing the derived files that every merge changed: `SHA256SUMS`, the `scripts/size-budgets.tsv` rows and the `INDEX.md` files. `scripts/regen-unlanded.sh` rebuilds them in CI for an unlanded PR (VERSION equal to main's), so every gate still reads current files and the size ratchet still compares the rebuilt rows to main. On a land commit (VERSION moved) nothing is rebuilt, so the committed files are checked byte-for-byte there; an unresolvable base counts as landed.
+- `ci.yml` routes every skill through one glob loop and `write-checksums.sh` pins every skill dir by glob, so adding a skill edits neither list (the enumeration gate accepts both forms). New CI tests register as one file, `scripts/ci-tests.d/<slug>.sh`, instead of a line appended to a shared step.
+- The size ratchet now also reads `size-budget-raise:` markers from `changelog.d/` fragments, as CONTRIBUTING already said.
+- The pre-push hook skips the INDEX.md and SHA256SUMS stale checks on an unlanded tree and keeps them strict on a land commit.
+- New test `scripts/test-conflict-free-prs.sh`: two lanes on different skills merge cleanly, the old flow (lanes committing derived files) conflicts as a control, and the strict land-commit check still bites.

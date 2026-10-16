@@ -33,6 +33,13 @@ jobs:
         with:
           fetch-depth: 0 # fix-class gate diffs base..head; a depth-1 clone cannot resolve the range
 
+      # Derived files (SHA256SUMS, size-budgets.tsv rows, INDEX.md) are not committed by lane PRs, so two
+      # PRs never conflict on them. Rebuild them here, before any gate reads them; a land commit (VERSION
+      # moved) is skipped, so there the committed files are checked byte-for-byte.
+      - name: Regenerate derived files (unlanded PR)
+        if: github.event_name == 'pull_request'
+        run: bash scripts/regen-unlanded.sh origin/main
+
       # Prove the gate helper against its own fixtures (routing/version/privacy
       # + the real install path) before trusting it on this repo.
       - name: Gate helper self-tests
@@ -51,17 +58,10 @@ jobs:
           set -euo pipefail
           # Routing runs on every shipped skill dir — a reference under an overlay
           # cannot ship unrouted (dogfoods "documented but unenforced is a finding").
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/deep-code-review
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/agentic-delivery
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/idea-critic
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/communication-structure
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/contribution
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/product-discovery
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/agentic-ceo
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/growth-analytics
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/positioning
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/business-ops
-          bash scripts/ci-gates.sh routing --max-bytes 24000 .claude/skills/product-output-safety
+          # Globbed, not enumerated: a new skill adds no line here, so PRs on different skills never conflict.
+          for d in .claude/skills/*/; do
+            bash scripts/ci-gates.sh routing --max-bytes 24000 "$d"
+          done
           bash scripts/ci-gates.sh version .
           bash scripts/ci-gates.sh privacy --banlist .banlist.txt .
           bash scripts/ci-gates.sh enumeration .
@@ -346,3 +346,13 @@ jobs:
           python3 scripts/test_scan_tracked_only.py
           python3 scripts/test_review_gate.py
           python3 scripts/test_max_pace_no_waste.py
+
+      # Per-PR tests: a PR registers its test by adding scripts/ci-tests.d/<slug>.sh (one command line),
+      # not by appending a line to the step above, so PRs never conflict on this file.
+      - name: Per-PR tests (scripts/ci-tests.d)
+        run: |
+          set -euo pipefail
+          for t in scripts/ci-tests.d/*.sh; do
+            echo "== $t"
+            bash "$t"
+          done

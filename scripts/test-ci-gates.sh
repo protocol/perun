@@ -1625,7 +1625,11 @@ fi
 # SHA256SUMS — regenerates equal to the committed file
 # ---------------------------------------------------------------------------
 
-if [ -f "$ROOT/SHA256SUMS" ] && [ -x "$ROOT/scripts/write-checksums.sh" ]; then
+if bash "$ROOT/scripts/regen-unlanded.sh" --check origin/main; then
+  # Unlanded lane tree: SHA256SUMS is rebuilt at land time and checked byte-for-byte on the land commit
+  # (VERSION moved), where this branch does not apply. CI also rebuilds it before this test runs.
+  record 0 "checksums: unlanded tree, SHA256SUMS checked at land (regen-unlanded.sh)"
+elif [ -f "$ROOT/SHA256SUMS" ] && [ -x "$ROOT/scripts/write-checksums.sh" ]; then
   bash "$ROOT/scripts/write-checksums.sh" "$WORK/SHA256SUMS.check"
   if cmp -s "$ROOT/SHA256SUMS" "$WORK/SHA256SUMS.check"; then
     record 0 "checksums: SHA256SUMS matches the shipped skill trees"

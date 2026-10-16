@@ -2,8 +2,9 @@
 # land-release.sh [--regen] — stamp a release at merge time so parallel lanes never collide on a version.
 #
 # Lanes do NOT bump. A lane adds changelog.d/<slug>.md (the body that goes under the release heading,
-# e.g. "### Added" + bullets) and, before pushing, runs `land-release.sh --regen` to refresh the
-# generated artifacts (INDEX.md files, SHA256SUMS, size-budgets.tsv rows) so its own CI stays green.
+# e.g. "### Added" + bullets) and commits no generated artifact (INDEX.md files, SHA256SUMS, size-budgets.tsv
+# rows): committing them makes any two lanes conflict. CI rebuilds them for an unlanded tree with
+# `scripts/regen-unlanded.sh` (which calls `--regen`); the land commit below carries them, checked byte-for-byte.
 #
 # Land mode (no flag), run on the lane branch at merge time, serialized by a lock under the git common
 # dir (shared by every worktree): merges origin/main (generated-file conflicts are resolved by
