@@ -261,7 +261,7 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
    **Unstated → default to the stricter (later-stage) reading.** A review that
    assumed `prototype` and waved a Critical is a worse failure than one that
    over-asked for CI on a spike.
-2. **Security, secret-exposure, safety, and data-loss/integrity findings never relax** — a
+2. **Security, secret-exposure, and data-loss/integrity findings never relax** (nor safety) — a
    `prototype` with an exposed credential is still Critical. These have no "relax"
    entry at any stage; that is why the third column omits them on purpose.
 3. **Stage moves urgency, not intrinsic severity.** Every finding keeps its true
