@@ -102,6 +102,10 @@ model: prototype / mvp / growth / mature), the **area** of the ask, and the
   After two equivalent failures on a lane, change approach — never retry the
   same fix.
 
+## The improvement loop — what to build or fix next
+
+**Read `references/improvement-loop.md` when** asked what is most impactful, what else to improve or add, or for a roadmap: strategy context first (stage, vision, north star), then right-sized C-suite role lanes (CPO, CTO, CFO, CMO, CISO, COO) or direct analysis, `scripts/roadmap_rank.py` scoring with inputs sourced or `assumed`, `idea-critic` on the top 3, then ADRs and tracker issues. Never rank from the loudest feedback or a wishlist.
+
 ## The chaos playbook — the owner under pressure
 
 **Read `references/chaos-playbook.md` when** the owner floods you with many rapid,
@@ -175,6 +179,9 @@ human, no status essays — `agentic-delivery`'s `unattended-operating-mode.md`
 - The task ledger (`scripts/task_ledger.py`), not memory, is the source of
   truth: every owner ask is in it, `status` (not a paraphrase) reports
   progress, and no second list was ever created.
+- A "what next" answer ran the improvement loop: strategy context stated
+  (unknowns `assumed`, one batched owner question), inputs sourced or
+  `assumed`, the top 3 attacked, rejected items listed with reasons.
 
 **Anti-rationalization (excuse → rebuttal)** — tempted to swarm a small job,
 answer a market-size question inline, do a lane's work yourself, restate a
@@ -204,4 +211,9 @@ skill's method here, or trust memory over the ledger: `references/chaos-playbook
 - Under a flood or after a compaction, asks go into `scripts/task_ledger.py`
   (not memory), progress comes from `status`, and no second list is created
   (`ledger-is-the-only-todo-list`).
+- A "what should we build next?" ask gets the strategy context first, a
+  script-scored ranking with sourced-or-assumed inputs, a critic pass on the
+  top 3 and a rejected list, not a wishlist
+  (`improvement-loop-strategy-first-scored-roadmap`); only the relevant roles
+  run, each returning the one fixed schema (`improvement-loop-right-sized-roles`).
 - `evals/evals.json` plants these cases.

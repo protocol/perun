@@ -231,6 +231,33 @@
         "One numbered line per pending question",
         "Each line states the default and what it blocks"
       ]
+    },
+    {
+      "id": "improvement-loop-strategy-first-scored-roadmap",
+      "prompt": "We ship a small developer tool. Nobody has told you its stage or vision and the README only says what it does. We have 40 open issues and a changelog, but no analytics. Give me the ranked list of the most impactful things to build next.",
+      "expected_output": "Runs the improvement loop (references/improvement-loop.md). Starts with the strategy context: stage (the deep-code-review STAGE model, signals named), vision, north star, direction and constraints read from the repo docs; a field the docs do not state is marked `assumed:` with ONE batched owner question, and the run continues on the assumption. Gathers evidence (issues, changelog) and lists analytics as none present instead of inventing numbers. Scores each item with scripts/roadmap_rank.py (reach x impact x confidence / effort x stage weight x vision factor), every input sourced or `assumed`, confidence capped while reach or impact is assumed, never an invented reach. Rejects items misaligned with the vision or already shipped, with reasons. Attacks the top 3 with idea-critic. Output order: strategy context, rejected items, ranked roadmap with a metric per item, ADRs, tracker issues.",
+      "expectations": [
+        "Starts with stage, vision, north star, direction and constraints, not with a list of ideas",
+        "Marks unstated context fields as assumed and asks one batched owner question instead of stalling or asking several",
+        "States that analytics are absent instead of estimating reach or conversion",
+        "Scores with reach x impact x confidence / effort plus stage and vision factors, every input sourced or marked assumed, confidence capped while reach or impact is assumed",
+        "Lists rejected items with a stated reason before the ranking",
+        "Runs idea-critic on the top 3 before presenting the ranking",
+        "Orders the output: strategy context, rejected items, ranked roadmap, ADRs, tracker issues"
+      ]
+    },
+    {
+      "id": "improvement-loop-right-sized-roles",
+      "prompt": "A mature B2B product with three developers: CI is slow, support tickets pile up and the cloud bill is rising. There is no security backlog and no marketing push. Run the 'what next' loop with the C-suite roles.",
+      "expected_output": "Right-sizes the fan-out: runs only the relevant roles (COO or CTO for CI time, CPO for the support tickets, CFO for the cloud bill) and skips CISO and CMO because they have no evidence source, saying so. Gathering lanes are read-only on the cheapest model tier that can extract; each returns the one fixed schema (item, evidence links, reach, impact, confidence, effort, metric, risks) with every input sourced or assumed. The CEO merges, dedupes, scores with scripts/roadmap_rank.py, attacks the top 3 with idea-critic and hands accepted items to the CTO for short ADRs. At the mature stage the weights favour reliability and cost over growth and polish.",
+      "expectations": [
+        "Runs only the roles that have an evidence source here (CTO or COO, CPO, CFO) and says why CISO and CMO are skipped",
+        "Gathering lanes are read-only and use the cheapest model tier that can extract; the CEO keeps merging, scoring and judging",
+        "Each role returns the fixed schema: item, evidence links, reach, impact, confidence, effort, metric, risks",
+        "The CEO dedupes across roles, scores with the script and attacks the top 3 before output",
+        "Names the stage's effect on the weights (mature favours reliability and cost over growth and polish)",
+        "Does not run every role by default and does not let a role make legal or tax calls"
+      ]
     }
   ]
 }

@@ -1,3 +1,260 @@
+# Roadmap
+
+Two parts. The **product roadmap** below is what to build or fix next for Perun, produced by the CEO
+[improvement loop](../.claude/skills/agentic-ceo/references/improvement-loop.md): ranked by a printed formula from
+sourced-or-assumed inputs, with a success metric, evidence links, ADRs and tracker-ready issues. The
+[suite design record](#agent-suite-roadmap-proposed--living) after the divider is the 2026-09-11 design of the agent suite, kept unchanged.
+
+To regenerate, edit [`roadmap-input.json`](roadmap-input.json) and run
+`python3 .claude/skills/agentic-ceo/scripts/roadmap_rank.py docs/roadmap-input.json --update docs/roadmap.md`.
+`scripts/test_roadmap_rank.py` fails when this page and its input drift apart.
+
+<!-- roadmap:begin -->
+**BLUF.** Stage `mvp` (assumed). 13 open items ranked, 6 rejected, 7 in flight. Top: `peer-survey-v2` 4.50, `differentiator-bench` 1.50, `handback-automator` 1.25. Start now (highest-ranked item with no gate): `handback-automator`. Every reach input is assumed, so read the order as a hypothesis.
+
+## 1. Strategy context
+
+As of 2026-10-16. A source that starts with **assumed** is an explicit assumption, not a repo fact.
+
+| Field | Value | Source |
+|---|---|---|
+| stage | mvp | **assumed**: no repo doc states a stage. Signals: version 1.586.0, a public MIT repo, CI, gates and evals in place, a small set of peer operators (survey:2026-10-16), no retention or product-market-fit data and unverified adoption (docs/perun-vs-rivals.md section 3), no product skill ahead on a rubric-free judge (H1c, H1d). A growth stage needs a product-market-fit read (product-discovery); none exists. |
+| vision | One solution across code review, token optimisation, delivery, product work and C-suite advice, measurably better than rival bundles in each area, with every claim kept inside the evidence. | owner:2026-10-16 (stated goal). README.md states the review-first version and docs/roadmap.md the suite version (honesty, verification, stage-awareness). |
+| north star | Tokens per delivered, gate-green PR, with review quality (F1 on the public case set) held constant. | **assumed**: no repo doc names a north star. Closest instruments: .claude/skills/agentic-ceo/scripts/token_ratchet.py (tokens per delivered PR) and the review F1 in docs/perun-vs-rivals.md; neither is measured across installs, because there is no telemetry. |
+| direction | Close the measured gaps against rivals (review cost at equal quality; product skills that win no rubric-free comparison), remove the delivery friction peers report, and keep every claim inside the evidence. | docs/roadmap.md (suite direction and epistemic spine), docs/perun-vs-rivals.md (measured gaps), survey:2026-10-16 (peer pain points) |
+| constraints | No paid model benches in this pass. Instructions, not a service: no telemetry. No fabricated evidence; the privacy and no-duplication rules apply. In-flight work is listed, not re-ranked. | owner:2026-10-16 (no paid benches); README.md (Safety: instructions, not a service); CLAUDE.md (hard rules) |
+
+Owner question (one batch): confirm or correct the assumed stage, north star. The run continues on the assumption; a correction re-runs this script.
+
+Evidence base (a source that was absent or unreadable is listed as such, never skipped):
+
+- Run mode: CEO direct. One agent applied the CPO, CTO, CFO, CMO, CISO and COO briefs in turn to the same evidence and spawned no lanes, because the evidence fits one context and a fan-out would only add cost. The CISO lens found no open item with a security lever that clears the evidence bar; its host-safety concerns are folded into janitor-teardown-land and handback-automator.
+- Peer survey, 2026-10-16, rows P1 to P10: P1 hook reruns of 2 to 15 minutes; P2 gates run 3 times per tree; P3 the sandbox blocks gh, Chromium, Postgres and tsx IPC; P4 lanes end their turn while background tests still run; P5 flaky tests drop PRs from trains; P6 a pr_state one-shot command is wanted; P7 a lane-handback automator is wanted; P8 a sandbox preflight is wanted; P9 reply-cap rewrites; P10 re-deriving state after compaction. An operator-supplied list, not stored in the repo and without per-item counts, so every reach on this page is assumed.
+- GitHub issues and PRs for protocol/perun, REST API, fetched 2026-10-16: 14 open issues (61, 69, 267, 273, 393, 1316, 1380, 1418, 1430 to 1433, 1530, 1531) and 1 open PR (1382, last updated 2026-10-07). No open PR exists for any in-flight item the owner named, so those statuses are owner-stated and unverified on GitHub.
+- CHANGELOG.md, releases 1.584.0 to 1.586.0 (merge-train flake rules, extra hosts, auto-compact with handoff re-inject): read to reject work that already shipped.
+- docs/perun-vs-rivals.md: the repo's own benchmarks H1 to H11 and the rival gaps in section 3. Review ties the Anthropic toolkit at about 3.5 times the cost, and no product skill beats its rival on a rubric-free judge.
+- Rival and platform changelogs, fetched live 2026-10-16: obra/superpowers releases v7.0.0, v6.4.2, v6.4.1 and v6.3.0 (GitHub releases API) and the Claude Code CHANGELOG.md, top entry 2.1.301 (raw.githubusercontent.com). UNVERIFIED: gstack releases and the Claude Code release pages, because the unauthenticated GitHub API rate limit was hit; not retried.
+- Not present: analytics (Perun is instructions, not a service and has no telemetry), support threads and a user-feedback file. Not read: session logs (private by default); token_report.py and weekly_receipt.py are the instruments for an operator's own repo. docs/capability-matrix.md does not exist at origin/main c097d01f (checked 2026-10-16), so it was not used.
+
+## 2. Rejected items
+
+| Item | Rule | Reason |
+|---|---|---|
+| `usage-telemetry` Opt-out usage telemetry to measure reach | vision: misaligned | Breaks a stated constraint: Perun is instructions, not a service (README.md, Safety). The cheaper route to measured reach is a survey with counts (peer-survey-v2) and the operator-local receipts that already exist (weekly_receipt.py). |
+| `rederive-state-after-compaction` Re-derive state after compaction (survey P10) as a new feature | CEO decision | Already shipped: auto-compact with handoff re-inject (CHANGELOG.md 1.586.0, handoff_inject.py) and the task ledger (task_ledger.py). The remaining gap is PR state, covered by the in-flight pr-state-one-shot. |
+| `compact-card-recall-variants` More compact-card variants to recover review recall | CEO decision | A measured dead end: the best of three variants failed on the held-out half (n=22, F1 -0.036, interval -0.194 to +0.095, H7), and the real skill already ties the toolkit on recall (H7b). Reopen only with a new idea and a held-out plan. |
+| `own-output-safety-eval-runner` Build a product-output-safety eval runner inside Perun | CEO decision | Better way, registry not a bundle: an existing tool already runs evals and red-team scans in CI (promptfoo, section 3). Ship a config template only if the H1b loss is shown to come from missing tooling; that test comes first (differentiator-bench). |
+| `host-count-expansion` Add more native hosts | CEO decision | Breadth before depth: 18 of the 19 listed hosts were never run on a real host (H10) and the one open candidate, Muse, had no vendor docs (CHANGELOG.md 1.585.0). At mvp the stage weights favour verifying what is listed (real-host-smoke-tests). |
+| `session-diagnosis-skill` Add a session-diagnosis skill, as a rival did | CEO decision | Deferred on evidence, not rejected on merit: one rival release is a lead, not user evidence (product-discovery riskiest-assumption gate), and token_report.py covers spend, not causes. One question goes into peer-survey-v2 (how is a failed session diagnosed today?); reopen on the answers. |
+
+## 3. Ranked roadmap
+
+Score = reach × impact × confidence ÷ effort × stage weight × vision factor. Every input is sourced or `assumed`; the score orders the list, it does not prove anything.
+
+- reach 1-5: share of our own users or runs touched, 5 = every one (never a market size)
+- impact 0.25, 0.5, 1, 2 or 3: minimal, low, medium, high or massive effect on the north star
+- confidence 0-1, capped at 0.5 while reach or impact is `assumed`
+- effort: lane-days, above 0
+- stage weight: lever × stage from the table below; the active stage is `mvp`
+- vision factor: aligned 1.0, partial 0.5; a misaligned item is rejected in section 2
+- equal scores are ordered by lower effort, then id
+
+| lever | prototype | mvp (active) | growth | mature |
+|---|---|---|---|---|
+| learning | 1.5 | **1.5** | 1 | 0.75 |
+| reliability | 1 | **1.25** | 1.5 | 1.5 |
+| velocity | 1.25 | **1.25** | 1 | 0.75 |
+| growth | 0.25 | **0.5** | 1.5 | 0.75 |
+| scale | 0.25 | **0.5** | 1.25 | 1.5 |
+| cost | 0.5 | **0.75** | 1.25 | 1.5 |
+| polish | 0.25 | **0.5** | 1 | 1.25 |
+| security | 1.5 | **1.5** | 1.5 | 1.5 |
+
+| # | Item | Lane, lever | Score | Success metric | Evidence | Gate |
+|---|---|---|---|---|---|---|
+| 1 | `peer-survey-v2` Peer survey v2: per-item counts, a very-disappointed question and a week-4 still-using question | CPO, learning | 4.50 | Open items with a sourced (not assumed) reach: 0 now, at least half at the next run; product-market-fit read: UNVERIFIED now, a very-disappointed share with n stated. | survey:2026-10-16; [SKILL.md](../.claude/skills/product-discovery/SKILL.md); [perun-vs-rivals.md#3-what-the-rivals-ha…](../docs/perun-vs-rivals.md#3-what-the-rivals-have-that-perun-lacks) | owner: sending the form is an external send |
+| 2 | `differentiator-bench` Benchmark the claimed differentiator (refusing to fabricate) with deterministic predicates, not a rubric judge | CPO, learning | 1.50 | Bait-prompt pass rate, Perun vs the best rival, graded without a model: unmeasured now; n of 20 or more with a 95% interval; claim superiority only if the interval excludes 0. | [roadmap.md](../docs/roadmap.md); [self-improvement.md](../docs/self-improvement.md); [eval_predicates.py](../scripts/eval_predicates.py); [perun-vs-rivals.md#h1d-idea-critic-prod…](../docs/perun-vs-rivals.md#h1d-idea-critic-product-discovery-and-growth-analytics-re-tests-rubric-free-blind-judge-2026-10-16-425-of-a-6-cap-preregistered-in-docsbenchskill-rubricfree-1016) | owner: a small paid run under a cap, and a rival skill installed |
+| 3 | `handback-automator` Lane-handback automator: gates, required-check names, base-branch fast-forward and tracker post; cleanup printed, never run | COO, velocity | 1.25 | Manual steps per handback: 6 (lane-preamble.md: wait, handback, clean_finished.sh, reap_own.sh, changelog fragment, git diff --check) to 1; handbacks needing a second pass: unmeasured, count for 2 weeks. | survey:2026-10-16#P7; [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530; issue:#1531 | - |
+| 4 | `loop-before-after-measure` Measure the improvement loop against a plain 'what should we build next' prompt on two real repos | CPO, learning | 1.00 | Win rate vs a plain prompt on a rubric-free judge: unmeasured now; 20 or more pairs; claim a win only if the lower bound is above 0.5. | [improvement-loop.md](../.claude/skills/agentic-ceo/references/improvement-loop.md); [perun-vs-rivals.md#h3-skill-routing-age…](../docs/perun-vs-rivals.md#h3-skill-routing-agentic-ceo-pack-30-prompts-n1-per-prompt); [bench](../docs/bench) | owner: paid bench |
+| 5 | `background-work-guard` Block a handback while any background test or build from the worktree is still running | COO, reliability | 0.94 | Lanes handing back with a live background process: unmeasured now (survey P4), target 0; the guard blocks the planted fixture 1 of 1. | survey:2026-10-16#P4; [handback_cap.py](../.claude/skills/agentic-delivery/scripts/handback_cap.py); [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530 | - |
+| 6 | `janitor-teardown-land` Land the worktree janitor (PR 1382, open since 2026-10-07) and the teardown standard (issue 1531) | COO, reliability | 0.94 | Finished worktrees and leftover dev servers at session start: 130 or more in the field report behind session_brief.py, target 0 after a train; PR 1382 age 9 days to merged or closed. | pr:#1382; issue:#1531; [session_brief.py](../.claude/skills/agentic-delivery/scripts/session_brief.py); https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md | - |
+| 7 | `review-cost-per-recall` Cut review cost per unit of recall: ratchet the review path's tokens, then re-bench once | CFO, cost | 0.94 | Review cost per case at equal F1 vs the Anthropic toolkit: 3.5x ($0.0537 vs $0.0153, n=22, H7b) to 2x or less; web-archetype must-load ceiling 20,049 estimated tokens, ratcheted down. | [perun-vs-rivals.md#h7b-review-patch-onl…](../docs/perun-vs-rivals.md#h7b-review-patch-only-the-real-skill-against-anthropic-toolkit-2026-10-16); [README.md](../README.md); [mustload-budgets.tsv](../scripts/mustload-budgets.tsv); https://github.com/obra/superpowers/releases/tag/v6.4.1 | owner: the paid re-bench |
+| 8 | `flake-ledger-quarantine` Per-test flake ledger with quarantine, so flaky tests stop dropping PRs from trains | COO, reliability | 0.83 | PRs parked as flake-blamed per 100 train PRs: unmeasured now (survey P5), measure for 2 weeks then target 1 or fewer; tests with 2 or more intermittent failures listed in a ledger: 0 now. | survey:2026-10-16#P5; [perun-vs-rivals.md#h11-merge-train-15840](../docs/perun-vs-rivals.md#h11-merge-train-15840); [train_flake.sh](../.claude/skills/agentic-delivery/scripts/train_flake.sh) | - |
+| 9 | `judge-independence-rerun` Re-run the rubric-free comparisons with a judge from another vendor family | CPO, learning | 0.75 | Re-tested pairs judged by a different-vendor judge: 0 of 5 now, 5 of 5; per pair, whether the outcome moved by more than its interval. | [perun-vs-rivals.md#what-was-not-measured](../docs/perun-vs-rivals.md#what-was-not-measured); [perun-vs-rivals.md#h1d-idea-critic-prod…](../docs/perun-vs-rivals.md#h1d-idea-critic-product-discovery-and-growth-analytics-re-tests-rubric-free-blind-judge-2026-10-16-425-of-a-6-cap-preregistered-in-docsbenchskill-rubricfree-1016) | owner: paid calls and a second vendor's key |
+| 10 | `derived-numbers-gate` Extend the numbers-need-a-source gate from the leaders page to the README and the rivals page | CTO, reliability | 0.62 | Pages under the digit-needs-a-source rule: 1 of 3 now (docs/for-leaders.md only), 3 of 3. | [check-leader-doc.sh](../scripts/check-leader-doc.sh); [perun-vs-rivals.md](../docs/perun-vs-rivals.md); [CHANGELOG.md](../CHANGELOG.md) | - |
+| 11 | `real-host-smoke-tests` Smoke-test more of the listed hosts on real hosts, starting with the ones that cost nothing to run | CTO, reliability | 0.42 | Hosts smoke-tested on a real host (11 of 11 skills listed): 1 of 19 now, 5 of 19. | [perun-vs-rivals.md#h10-install-and-upda…](../docs/perun-vs-rivals.md#h10-install-and-update-15830-timings-measured-on-15820-host-and-uninstall-fixes-from-the-15830-release-checks); [host-safety.md](../docs/host-safety.md); [CHANGELOG.md](../CHANGELOG.md) | owner: vendor accounts or CLIs for each host |
+| 12 | `distribution-listing` Distribution: an official marketplace listing and positioning against competing prose skills (issue 273) | CMO, growth | 0.38 | Verified marketplace listings: 0 of 1 now (status unverified, section 3), 1 of 1; no usage target, since installs are not countable. | issue:#273; [perun-vs-rivals.md#3-what-the-rivals-ha…](../docs/perun-vs-rivals.md#3-what-the-rivals-have-that-perun-lacks); [perun-vs-rivals.md#h10-install-and-upda…](../docs/perun-vs-rivals.md#h10-install-and-update-15830-timings-measured-on-15820-host-and-uninstall-fixes-from-the-15830-release-checks) | owner: a marketplace submission is an external send |
+| 13 | `product-skill-runnable-checks` Give each product skill one runnable check or template, as the rivals ship | CPO, growth | 0.05 | Product skills with a runnable script: 0 of 5 now (product-discovery, growth-analytics, positioning, business-ops, product-output-safety); 2 of 5 only if the differentiator bench shows a tooling gap. | [perun-vs-rivals.md#3-what-the-rivals-ha…](../docs/perun-vs-rivals.md#3-what-the-rivals-have-that-perun-lacks); [perun-vs-rivals.md#h1d-idea-critic-prod…](../docs/perun-vs-rivals.md#h1d-idea-critic-product-discovery-and-growth-analytics-re-tests-rubric-free-blind-judge-2026-10-16-425-of-a-6-cap-preregistered-in-docsbenchskill-rubricfree-1016) | - |
+
+Score inputs:
+
+| # | reach | impact | confidence used | effort | stage × | vision × | score | assumed (R reach, I impact, C confidence, E effort) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 3 | 2 | 0.5 | 1 | 1.5 | 1 | 4.50 | R I C E |
+| 2 | 2 | 2 | 0.5 | 2 | 1.5 | 1 | 1.50 | R I C E |
+| 3 | 3 | 2 | 0.5 | 3 | 1.25 | 1 | 1.25 | R I C E |
+| 4 | 2 | 2 | 0.5 | 3 | 1.5 | 1 | 1.00 | R I C E |
+| 5 | 3 | 1 | 0.5 | 2 | 1.25 | 1 | 0.94 | R I C E |
+| 6 | 3 | 1 | 0.5 | 2 | 1.25 | 1 | 0.94 | R I C E |
+| 7 | 5 | 2 | 0.5 | 4 | 0.75 | 1 | 0.94 | R I C E |
+| 8 | 2 | 2 | 0.5 | 3 | 1.25 | 1 | 0.83 | R I C E |
+| 9 | 2 | 1 | 0.5 | 2 | 1.5 | 1 | 0.75 | R I C E |
+| 10 | 3 | 1 | 0.5 | 3 | 1.25 | 1 | 0.62 | R I C E |
+| 11 | 2 | 1 | 0.5 | 3 | 1.25 | 1 | 0.42 | R I C E |
+| 12 | 5 | 3 | 0.5 | 5 | 0.5 | 0.5 | 0.38 | R I C E |
+| 13 | 2 | 1 | 0.5 | 5 | 0.5 | 0.5 | 0.05 | R I C E |
+
+### Already in flight (listed, not re-ranked)
+
+| Item | Evidence | Metric to check when it lands |
+|---|---|---|
+| `gate-cache-tree-sha` Shared tree-SHA gate cache with gate_map and light-lane weighting | survey:2026-10-16#P1; survey:2026-10-16#P2; [pre-push-verify.sh](../.claude/skills/deep-code-review/templates/pre-push-verify.sh); [preflight.py](../.claude/skills/agentic-delivery/scripts/preflight.py) | Gate runs per tree from 3 to 1 (survey P2); pre-push hook wall time on an already-verified tree from 2 to 15 minutes (survey P1) to under 30 seconds. |
+| `sandbox-preflight` Sandbox preflight for gh, Chromium, Postgres and tsx IPC, with the reply-cap code-block exemption | survey:2026-10-16#P3; survey:2026-10-16#P8; survey:2026-10-16#P9; [sandbox_probe.py](../.claude/skills/agentic-delivery/scripts/sandbox_probe.py); [gh_rest.py](../.claude/skills/agentic-delivery/scripts/gh_rest.py); https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md | Blocked-tool surprises per lane from 4 named tools (survey P3) to 0 unreported: one verdict line per tool before work starts; reply-cap rewrites (survey P9) counted before and after the code-block exemption lands. |
+| `pr-state-one-shot` pr_state: one command for a PR's checks, mergeability and review state | survey:2026-10-16#P6; survey:2026-10-16#P10; [gh_rest.py](../.claude/skills/agentic-delivery/scripts/gh_rest.py) | Commands needed to learn a PR's state from several gh calls (survey P6) to 1; state after a compaction read in 1 call (survey P10). |
+| `host-command-hints` Host-aware command, model and effort hints | owner:2026-10-16; [perun-vs-rivals.md#h10-install-and-upda…](../docs/perun-vs-rivals.md#h10-install-and-update-15830-timings-measured-on-15820-host-and-uninstall-fixes-from-the-15830-release-checks) | Hosts with a hint verified on a real host: 1 of 19 at the start (H10); report the new count when it lands. |
+| `low-context-skill-index` Low-context skill index | [perun-vs-rivals.md#2-always-loaded-toke…](../docs/perun-vs-rivals.md#2-always-loaded-token-overhead-static-count-2026-10-15); [perun-vs-rivals.md#h7b-review-patch-onl…](../docs/perun-vs-rivals.md#h7b-review-patch-only-the-real-skill-against-anthropic-toolkit-2026-10-16); [INDEX.md](../.claude/skills/INDEX.md) | Always-loaded tokens, full install 921 and review-only install 75 (section 2), and review cost per case $0.0537 (H7b): report all three after it lands; the routing eval stays at 24 of 30 (H3). |
+| `review-lenses` Review lenses (scope as stated by the owner) | owner:2026-10-16; issue:#1430; issue:#1431; issue:#1432; issue:#1433 | Open lens issues 1430 to 1433: 4 open today; each closed with a planted-defect eval. |
+| `url-switch` URL switch to protocol/perun and the plugin rename | [README.md](../README.md); [plugin.json](../.claude-plugin/plugin.json); [perun_auto_update.py](../.claude/skills/agentic-delivery/scripts/perun_auto_update.py); owner:2026-10-16 | Lines naming the previous repository URL in tracked files outside CHANGELOG.md: 23 in 14 files (git grep at c097d01f) to 0 outside fixtures and tests that name it on purpose; plugin name still deep-code-review in .claude-plugin/plugin.json. |
+
+### Top 3 attacked by idea-critic
+
+- 1. `peer-survey-v2`: **PASS_TO_USER** (inline). Strongest attack survived: Self-selection and a small n make the counts unrepresentative. It survives because the item only replaces assumed reach with stated reach, keeps confidence capped until n is reported, and makes no fit claim below the stated n; the alternative, keeping assumed reach, is strictly weaker. Kill criteria: Fewer than 5 peers answer within 14 days of sending: stop and keep ranking on assumed reach under the confidence cap; The counts put any current top-5 item below 20 percent of respondents: re-rank from the counts before building that item Remaining risk: Low-information answers; the owner's time to send and to chase replies.
+- 2. `differentiator-bench`: **PASS_TO_USER** (inline). Strongest attack survived: The predicates are heuristics tuned on Perun's own fixtures, so they could favour Perun, the same bias class as the rubric. It survives only because done-when requires calibration on rival outputs and a pre-registered decision rule before scoring; without that step the verdict would be REVISE. Kill criteria: The predicates fail to separate the rival golden pairs: stop, the instrument is not valid for rivals; Perun and the best rival pass at the same rate (interval contains 0): drop honesty as the stated differentiator in positioning and do not widen the claim Remaining risk: The predicates stay narrower than real fabrication; a tie is a valid and useful result.
+- 3. `handback-automator`: **PASS_TO_USER** (inline). Strongest attack survived: Fast-forwarding the base branch and posting to a tracker are shared-state actions, so automating them could remove the human gate. It survives because the default is dry run, push and merge still need the owner's grant as today, and cleanup is printed, never run. Kill criteria: The composer has to reimplement any gate logic: stop and call the existing scripts only; A fast-forward runs without a human push grant in any test: stop and ship dry-run only Remaining risk: A second entry point to keep in step with lane-preamble.md.
+
+Dedup check: 26 items, near-duplicate titles (similarity 0.85 or more): none.
+
+## 4. Technical-direction decisions (ADRs)
+
+### ADR-1: Keep the flake ledger per host and untracked (pipeline), serves `flake-ledger-quarantine`
+
+- Status: proposed
+- Context: train_flake.sh decides REAL or FLAKE per run with a same-host baseline file whose header it checks (a baseline from another host is refused), and it keeps no per-test history beyond that baseline. preflight.py already keeps a per-repo timing cache file meant to be gitignored (.preflight-times.json), so a per-host untracked store has precedent, and flakiness depends on the host.
+- Options: (A) **Per-host untracked ledger beside the baseline**: Cheap, no merge conflicts, matches the same-host rule; each host learns its flakes separately. (B) **Committed ledger file**: Shared across hosts and visible in review; conflicts on every train and records one host's flakes as facts. (C) **Do nothing**: No new state; every run re-triages the same tests and keeps dropping PRs.
+- Decision: We will keep the ledger per host and untracked, and print its quarantine list in the train summary, because train_flake.sh already refuses a baseline from another host and a committed file would conflict on every train.
+- Consequences: Good: no shared state and no conflicts. Bad: each host re-learns flakes, and a quarantined test hides a real regression until its entry expires. Neutral: promotion to a committed skip list goes through an ordinary PR.
+- Reversal cost: Low, a two-way door: delete the file and the summary line; no other tool reads the format.
+
+### ADR-2: Compose the existing handback scripts in one thin entry point (tooling), serves `handback-automator`
+
+- Status: proposed
+- Context: A handback is six manual steps today (lane-preamble.md): wait, handback, clean_finished.sh, reap_own.sh, the changelog fragment and git diff --check. Each step already has a script and tests.
+- Options: (A) **A thin script that calls the existing scripts in order and prints the cleanup**: No duplicated logic; one more entry point to keep in step with lane-preamble.md. (B) **Grow lane_guard.py handback**: One entry point; mixes the start-of-lane guard and the end-of-lane automation in one file. (C) **Do nothing, prose only**: No code; the survey (P7) still asks for automation.
+- Decision: We will add a thin composer that calls the existing scripts and prints, never runs, the worktree cleanup and any base-branch fast-forward not covered by a human push grant, because every step already has a tested script and shared-state actions keep their human gate.
+- Consequences: Good: fewer steps with no new gate logic. Bad: a second entry point to maintain. Neutral: dry run is the default, so the first release automates less than the survey asked for.
+- Reversal cost: Low: delete one file and its preamble line.
+
+### ADR-3: Enforce the background-work rule at the SubagentStop hook (architecture), serves `background-work-guard`
+
+- Status: proposed
+- Context: lane-preamble.md says never end a turn with background jobs running, and the survey (P4) says lanes still do. handback_cap.py already blocks a handback while a git push from the worktree is live, by matching PUSH_RE against the process list and checking the cwd with lsof, but it matches nothing else.
+- Options: (A) **Extend handback_cap.py's process check to any process with its cwd in the worktree**: Reuses a tested mechanism with its bounded wait and fail-open path; may hold a handback on a long-lived dev server. (B) **Keep the rule in prose**: No code; it has not held (survey P4). (C) **Register every background launch in a wrapper**: Exact, but needs a harness feature and touches every lane.
+- Decision: We will extend the existing check to any process whose cwd is inside the worktree, with the same wait bound and the same COULD_NOT_CHECK fail-open path, because the hook already runs at the right moment and holds the cwd logic.
+- Consequences: Good: closes the gap where the push check is already enforced. Bad: a user-owned dev server inside the worktree can hold a handback until the bound expires. Neutral: the nested-worktree bug in issue 1530 must be fixed first or together.
+- Reversal cost: Low: revert one function; no data or format is involved.
+
+### ADR-4: Store survey counts as an aggregate CSV in the repo (tooling), serves `peer-survey-v2`
+
+- Status: proposed
+- Context: roadmap_rank.py reads each input's source as a path, a link or the word assumed, so measured reach needs a stable file that carries no personal data.
+- Options: (A) **Aggregate CSV under docs/, counts and n only**: Versioned with the roadmap, reproducible and checkable by the privacy gate; no raw answers are kept. (B) **Counts in an issue comment**: Easy to post; not versioned with the roadmap and lost if the tracker changes. (C) **A form tool's dashboard**: Zero setup; third-party data that cannot be cited or re-derived from the repo.
+- Decision: We will commit an aggregate CSV of counts and n only under docs/ and cite it from reach_src, because that keeps the roadmap reproducible and carries no names.
+- Consequences: Good: measured reach is checkable in review. Bad: raw answers are not kept, so a question cannot be re-sliced later. Neutral: the form itself stays outside the repo.
+- Reversal cost: Low: the CSV is data; delete it and reach goes back to assumed.
+
+
+## 5. Tracker-ready issues
+
+Priority is rank-derived (ranks 1-3 P1, 4-6 P2, the rest P3); P0 is a human call and is never assigned here. Issues are drafted for P1 and P2 only; a P3 item stays in the table until it is promoted.
+
+### P1: Peer survey v2: per-item counts, a very-disappointed question and a week-4 still-using question
+
+- Labels: `learning`, `CPO`, `stage:mvp`
+- Where: docs/ (a survey form and an aggregate CSV of counts with no free-text identifiers) and docs/roadmap-input.json (reach_src).
+- Done when: A fixed form went to the peers; counts per pain point, a very-disappointed share and a week-4 still-using share are committed as an aggregate CSV with n stated and no names; the form includes one question on how a failed session is diagnosed today (a rival shipped a diagnosis skill, see session-diagnosis-skill); the next roadmap run cites the counts as reach_src.
+- Verify: python3 .claude/skills/agentic-ceo/scripts/roadmap_rank.py docs/roadmap-input.json shows fewer assumed reach inputs than today; the privacy gate passes on the CSV.
+- Why: Product: the first measured reach and the first product-market-fit read; every later ranking in all five areas stands on them. (vision: aligned)
+- Success metric: Open items with a sourced (not assumed) reach: 0 now, at least half at the next run; product-market-fit read: UNVERIFIED now, a very-disappointed share with n stated.
+- Evidence: survey:2026-10-16; [SKILL.md](../.claude/skills/product-discovery/SKILL.md); [perun-vs-rivals.md#3-what-the-rivals-ha…](../docs/perun-vs-rivals.md#3-what-the-rivals-have-that-perun-lacks)
+- Risks: Small n and self-selection: report n beside every share and claim nothing about fit below the survey's own threshold, which product-discovery says to verify before asserting it.
+- Gate: owner: sending the form is an external send
+- Merged from: CPO lens: all reach inputs assumed; CMO lens: adoption and retention unverified (section 3)
+- Score: 4.50 = 3 × 2 × 0.5 ÷ 1 × 1.5 × 1 (rank 1 of 13)
+
+### P1: Benchmark the claimed differentiator (refusing to fabricate) with deterministic predicates, not a rubric judge
+
+- Labels: `learning`, `CPO`, `stage:mvp`
+- Where: scripts/eval_predicates.py (bindings), the product skills' evals, docs/bench/ (a preregistration for the run).
+- Done when: 5 golden refusals and 5 golden fabrications taken from rival runs separate under the predicates; the decision rule is committed before scoring; then at least 20 bait prompts run through Perun's product skills, one rival skill and a plain prompt, graded by the predicates, with a 95% interval per pair.
+- Verify: python3 scripts/eval_predicates.py --selftest stays green; the preregistration commit precedes the run in git log; the report states each pair's interval and says tie when it contains 0.
+- Why: Product skills: tests the axis Perun says it wins on, the 'superior to rivals in each' goal, with a grader that cannot be rubric-biased. (vision: aligned)
+- Success metric: Bait-prompt pass rate, Perun vs the best rival, graded without a model: unmeasured now; n of 20 or more with a 95% interval; claim superiority only if the interval excludes 0.
+- Evidence: [roadmap.md](../docs/roadmap.md); [self-improvement.md](../docs/self-improvement.md); [eval_predicates.py](../scripts/eval_predicates.py); [perun-vs-rivals.md#h1d-idea-critic-prod…](../docs/perun-vs-rivals.md#h1d-idea-critic-product-discovery-and-growth-analytics-re-tests-rubric-free-blind-judge-2026-10-16-425-of-a-6-cap-preregistered-in-docsbenchskill-rubricfree-1016)
+- Risks: The predicates are heuristics tuned on Perun's own fixtures and could favour Perun; calibrate them on rival outputs first. A tie is a valid result and would retire honesty as the stated differentiator in positioning.
+- Gate: owner: a small paid run under a cap, and a rival skill installed
+- Merged from: CPO lens: no rubric-free win (H1c, H1d); CMO lens: the stated differentiator is honesty (docs/roadmap.md)
+- Score: 1.50 = 2 × 2 × 0.5 ÷ 2 × 1.5 × 1 (rank 2 of 13)
+
+### P1: Lane-handback automator: gates, required-check names, base-branch fast-forward and tracker post; cleanup printed, never run
+
+- Labels: `velocity`, `COO`, `stage:mvp`
+- Where: .claude/skills/agentic-delivery/scripts/lane_guard.py (handback), clean_finished.sh, reap_own.sh and templates/lane-preamble.md.
+- Done when: One command runs the gates, prints the required check names for the sha, fast-forwards the base branch only under a human push grant (default: dry run), posts the tracker update, and prints, never runs, the worktree cleanup; a red gate exits non-zero and names the gate.
+- Verify: A fixture lane in the style of scripts/test-delivery-friction.sh with a green run and a red run; a grep proves the script contains no 'git worktree remove'; lane_guard.py handback still passes unchanged.
+- Why: Delivery: the handback is the last mile of every lane and the survey (P7) asks for it to be automated. (vision: aligned)
+- Success metric: Manual steps per handback: 6 (lane-preamble.md: wait, handback, clean_finished.sh, reap_own.sh, changelog fragment, git diff --check) to 1; handbacks needing a second pass: unmeasured, count for 2 weeks.
+- Evidence: survey:2026-10-16#P7; [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530; issue:#1531
+- Risks: Fast-forwarding the base branch and posting to a tracker are shared-state actions: dry-run by default, the human push grant stays, and cleanup is printed, never run.
+- Merged from: COO lens: survey P7; CTO lens: teardown standard (issue 1531) is the handback's tail; CISO lens: shared-state actions keep the human gate
+- Score: 1.25 = 3 × 2 × 0.5 ÷ 3 × 1.25 × 1 (rank 3 of 13)
+
+### P2: Measure the improvement loop against a plain 'what should we build next' prompt on two real repos
+
+- Labels: `learning`, `CPO`, `stage:mvp`
+- Where: docs/bench/ (a preregistration and a ledger) and the loop's reference.
+- Done when: Two real repos and at least 20 paired prompts judged by a rubric-free blind judge, the plain prompt as the control, spend capped and logged; the result and its interval are added to docs/perun-vs-rivals.md.
+- Verify: The preregistration commit precedes the run; the page states the interval and says tie when it contains 0.5.
+- Why: C-suite advice: the loop is the new capability, and a value claim needs a before-and-after measure, not an assertion. (vision: aligned)
+- Success metric: Win rate vs a plain prompt on a rubric-free judge: unmeasured now; 20 or more pairs; claim a win only if the lower bound is above 0.5.
+- Evidence: [improvement-loop.md](../.claude/skills/agentic-ceo/references/improvement-loop.md); [perun-vs-rivals.md#h3-skill-routing-age…](../docs/perun-vs-rivals.md#h3-skill-routing-agentic-ceo-pack-30-prompts-n1-per-prompt); [bench](../docs/bench)
+- Risks: The judge is from the same vendor family and rubric bias is shown elsewhere on the rivals page: use a rubric-free judge and report that caveat.
+- Gate: owner: paid bench
+- Merged from: CPO lens: the visible-improvement bar; CMO lens: advice quality is the least measured of the five areas
+- Score: 1.00 = 2 × 2 × 0.5 ÷ 3 × 1.5 × 1 (rank 4 of 13)
+
+### P2: Block a handback while any background test or build from the worktree is still running
+
+- Labels: `reliability`, `COO`, `stage:mvp`
+- Where: .claude/skills/agentic-delivery/scripts/handback_cap.py (the SubagentStop hook; its process check matches git push only).
+- Done when: The hook blocks while any process whose cwd is inside the worktree is alive, not only git push, bounded by the existing wait limit; when ps or lsof cannot answer it still fails open with COULD_NOT_CHECK; the nested-worktree case from issue 1530 is covered.
+- Verify: python3 .claude/skills/agentic-delivery/scripts/handback_cap.py --selftest with a live sleep-process fixture and a nested-worktree fixture.
+- Why: Delivery: the rule exists in prose (lane-preamble.md) and the survey shows it does not hold; enforce it where the push check already lives. (vision: aligned)
+- Success metric: Lanes handing back with a live background process: unmeasured now (survey P4), target 0; the guard blocks the planted fixture 1 of 1.
+- Evidence: survey:2026-10-16#P4; [handback_cap.py](../.claude/skills/agentic-delivery/scripts/handback_cap.py); [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530
+- Risks: False blocks on long-lived dev servers the user owns: scope the check to the worktree and keep the release valve.
+- Merged from: COO lens: survey P4; CTO lens: handback_cap.py matches git push only (PUSH_RE)
+- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (rank 5 of 13)
+
+### P2: Land the worktree janitor (PR 1382, open since 2026-10-07) and the teardown standard (issue 1531)
+
+- Labels: `reliability`, `COO`, `stage:mvp`
+- Where: PR 1382 (janitor), the teardown standard in issue 1531, .claude/skills/agentic-delivery/scripts/clean_finished.sh and reap_own.sh.
+- Done when: The standard (exact-PID teardown, EXIT traps, atomic claims) is written and the janitor follows it: it reports and prints cleanup commands first and removes only what it proves it owns; PR 1382 is merged or closed.
+- Verify: A fixture with one owned and one foreign worktree plus a foreign dev server: the janitor removes or prints only the owned one and never signals the foreign process; session_brief.py reports 0 finished worktrees afterwards.
+- Why: Delivery: stale worktrees and orphan dev servers are the cleanup cost of every fleet run, and the platform now guards hook-made worktree removal too (Claude Code 2.1.301), so Perun's own handling should not be weaker. (vision: aligned)
+- Success metric: Finished worktrees and leftover dev servers at session start: 130 or more in the field report behind session_brief.py, target 0 after a train; PR 1382 age 9 days to merged or closed.
+- Evidence: pr:#1382; issue:#1531; [session_brief.py](../.claude/skills/agentic-delivery/scripts/session_brief.py); https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
+- Risks: A janitor that deletes is itself a host-safety risk: report and print before it removes, and never act on a path it did not create.
+- Merged from: COO lens: stale worktrees (session_brief.py); CISO lens: a deleting janitor is a host-safety risk
+- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (rank 6 of 13)
+
+P3, no issue drafted until promoted: `review-cost-per-recall`, `flake-ledger-quarantine`, `judge-independence-rerun`, `derived-numbers-gate`, `real-host-smoke-tests`, `distribution-listing`, `product-skill-runnable-checks`.
+
+_Generated by `roadmap_rank.py` from the input JSON: edit the input and re-run, never this text._
+<!-- roadmap:end -->
+
+---
+
 # Agent suite roadmap (proposed / living)
 
 > **Status:** a design captured so nothing is lost — **proposed**, pending the
