@@ -51,6 +51,7 @@ import shlex
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -133,8 +134,17 @@ def load_json(path):
 
 
 def save_json(path, obj):
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(obj, fh, indent=1)
+    """Write `obj` as JSON through a temp file in the same directory, then os.replace: a crash or a TypeError
+    mid-dump leaves the old file whole (a resumable bundle must never be truncated)."""
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, indent=1)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 # --------------------------------------------------------------------------- command -> suite key
@@ -344,7 +354,7 @@ def _step(block):
             elif k in ("name", "uses", "if"):
                 step[k] = _unq(v)
             elif k == "continue-on-error":
-                step["coe"] = _unq(v).lower() == "true"
+                step["coe"] = _unq(v).lower() != "false"  # fail closed: an expression or any non-false value may not block
         i += 1
     return step
 
@@ -381,10 +391,12 @@ def parse_workflow(text):
                     jind = _ind(t) if jind is None else jind
                     m = re.match(r"^\s*([A-Za-z0-9_-]+):\s*$", t)
                     if _ind(t) == jind and m:
-                        cur = wf["jobs"].setdefault(m.group(1), {"name": m.group(1), "if": None, "steps": []})
+                        cur = wf["jobs"].setdefault(m.group(1), {"name": m.group(1), "if": None, "coe": False, "steps": []})
                     elif cur is not None and _ind(t) == jind + 2:
-                        m = re.match(r"^\s*(name|if):\s*(.*)$", t)
-                        if m:
+                        m = re.match(r"^\s*(name|if|continue-on-error):\s*(.*)$", t)
+                        if m and m.group(1) == "continue-on-error":
+                            cur["coe"] = _unq(m.group(2)).lower() != "false"  # fail closed, as for a step
+                        elif m:
                             cur[m.group(1)] = _unq(m.group(2))
                         elif re.match(r"^\s*steps:\s*$", t):
                             k, sind, blocks = j + 1, None, []
@@ -484,8 +496,14 @@ def _doc_commands(root):
     return out
 
 
+_EVENT_IF = re.compile(r"^github\.event_name\s*(==|!=)\s*'(merge_group|pull_request)'$")
+
+
 def _wf_stage(wf, st, job):
-    """Stages ('ci' on PR/push events, 'train' on merge_group) a workflow step runs at, honouring a simple `if:`."""
+    """-> (stages, enforced). Stages: 'ci' on PR/push events, 'train' on merge_group. `enforced` is True only when the
+    step provably gates a PR or the merge group: a push-only workflow never does, and an `if:` we do not recognise
+    (anything but none, success(), always() or an event_name test against merge_group / pull_request) may skip the
+    step, so it counts as not enforced. Fail closed: an unproven gate is never a reason to drop a local check."""
     ev = set(wf["on"])
     pk = wf.get("on_keys", {}).get("push", set())
     if "tags" in pk and "branches" not in pk:  # a tag-push workflow is a release, not a merge gate
@@ -495,10 +513,22 @@ def _wf_stage(wf, st, job):
         stages.append("ci")
     if "merge_group" in ev:
         stages.append("train")
-    cond = " ".join(x for x in (job.get("if"), st.get("if")) if x)
-    if "merge_group" in cond:
-        stages = [s for s in stages if (s == "train") == ("!=" not in cond)]
-    return stages
+    enforced = bool(ev & {"pull_request", "pull_request_target", "merge_group"})
+    for cond in (job.get("if"), st.get("if")):
+        if not cond:
+            continue
+        c = re.sub(r"^\$\{\{\s*|\s*\}\}$", "", cond.strip())
+        m = _EVENT_IF.match(c)
+        if m and m.group(2) == "merge_group":
+            stages = [s for s in stages if (s == "train") == (m.group(1) == "==")]
+        elif m:  # == 'pull_request' (!= is not a recognised form)
+            if m.group(1) == "==":
+                stages = [s for s in stages if s == "ci"]
+            else:
+                enforced = False
+        elif c not in ("success()", "always()"):
+            enforced = False
+    return stages, enforced
 
 
 def stage_map(root, extra=None):
@@ -523,8 +553,10 @@ def stage_map(root, extra=None):
                 for st in job["steps"]:
                     if not st["run"]:
                         continue
-                    for stage in _wf_stage(wf, st, job):
-                        add(stage, ".github/workflows/" + fn, commands(st["run"]), step_label(st), not st["coe"])
+                    stages, enforced = _wf_stage(wf, st, job)
+                    for stage in stages:
+                        add(stage, ".github/workflows/" + fn, commands(st["run"]), step_label(st),
+                            enforced and not st["coe"] and not job["coe"])
     step_names = {step_label(st): st for _, wf in wfs for job in wf["jobs"].values() for st in job["steps"]}
     for stage, paths in _hook_files(root).items():
         for p in paths:
@@ -533,7 +565,7 @@ def stage_map(root, extra=None):
             text = read(p) + "".join(read(q) for q in _hook_refs(root, p, read(p)))
             for name, st in step_names.items():  # a hook that quotes a CI step's name runs that step
                 if len(name) >= 8 and ('"%s"' % name) in text and st["run"]:
-                    add(stage, rel + " (runs CI step)", commands(st["run"]), name, not st["coe"])
+                    add(stage, rel + " (runs CI step)", commands(st["run"]), name, not st["coe"])  # a local hook is bypassable: never a server gate
     for stage, src, cmds in _doc_commands(root):
         add(stage, src, cmds)
     for stage, cmds in (extra or {}).items():
@@ -551,9 +583,9 @@ def stage_map(root, extra=None):
             continue
         blocking = [x for x in s["stages"] if any(e["stage"] == x and e["blocking"] for e in s["entries"])]
         server = [x for x in blocking if x in BLOCKING]
-        keep = (server or blocking or [None])[-1]
+        keep = server[-1] if server else None  # no proven server gate: keep every run, advise dropping none
         dups.append({"key": s["key"], "stages": s["stages"], "keep": keep,
-                     "drop": [x for x in s["stages"] if x != keep],
+                     "drop": [x for x in s["stages"] if x != keep] if keep else [],
                      "enforced": bool(server), "blocking_stages": blocking})
     return {"entries": entries, "suites": list(suites.values()), "duplicates": dups}
 
@@ -877,10 +909,10 @@ def dup_seconds(smap, ci_steps, local):
             secs[st] = med(loc.get((st, d["key"]), []))
             if secs[st] is None and local.get("stage_s", {}).get(st):
                 secs[st] = local["stage_s"][st] / len(stage_keys[st])
-        known = {s: v for s, v in secs.items() if v is not None and s != d["keep"]}
+        known = {s: v for s, v in secs.items() if v is not None and s in d["drop"]}
         out.append({**{k: d[k] for k in ("key", "stages", "keep", "drop", "enforced")}, "seconds": secs,
                     "waste_s": sum(known.values()),
-                    "unmeasured": [s for s in d["stages"] if secs[s] is None and s != d["keep"]]})
+                    "unmeasured": [s for s in d["stages"] if secs[s] is None and s in d["drop"]]})
     return out
 
 
@@ -1237,14 +1269,21 @@ def compare_profiles(before, after, metric, min_gain=MIN_GAIN, min_n=3):
                 return min([r["n"] for r in rows if r["name"].startswith("hook:") and r["stage"] == stage] or [0])
         if metric.startswith("local.by_name."):
             return min([r["n"] for r in rows if r["name"] == metric.split(".", 2)[2]] or [0])
-        return None
+        if metric in ("stages_s.ci_queue", "stages_s.ci_exec"):
+            return (P.get("ci") or {}).get("measured_runs") or 0
+        if metric == "stages_s.merge_wait":
+            return (P.get("lead") or {}).get("prs") or 0
+        return None  # unknown metric: no sample count to check, so no KEEP
 
     b, a = get(before), get(after)
     if not isinstance(b, (int, float)) or not isinstance(a, (int, float)):
         return {"verdict": "UNVERIFIED", "reason": "metric %r missing in %s" % (
             metric, "both" if b is None and a is None else "before" if b is None else "after")}
     ns = [x for x in (runs(before), runs(after)) if x is not None]
-    if ns and min(ns) < min_n:
+    if not ns:
+        return {"verdict": "UNVERIFIED", "reason": "no sample count known for metric %r; cannot call it a drop" % metric,
+                "before": b, "after": a}
+    if min(ns) < min_n:
         return {"verdict": "UNVERIFIED", "reason": "only %d sample(s) on the smaller side; need >= %d" % (min(ns), min_n),
                 "before": b, "after": a}
     delta = a - b
@@ -1269,8 +1308,11 @@ def print_map(smap):
     if smap["duplicates"]:
         print("\nDUPLICATES: run each blocking check once, at the latest gate that still blocks merge")
         for d in smap["duplicates"]:
-            tail = "" if d["enforced"] else "  [no server-enforced gate runs it: local-only, not a blocking check]"
-            print("  %s: keep at %s, drop from %s%s" % (d["key"], d["keep"], ", ".join(d["drop"]), tail))
+            if d["enforced"]:
+                print("  %s: keep at %s, drop from %s" % (d["key"], d["keep"], ", ".join(d["drop"])))
+            else:
+                print("  %s: no gate proven to block merge runs it (push-only, advisory or conditional): "
+                      "drop nothing" % d["key"])
     elif not ks:
         print("(no suites found: declare them with --stage STAGE=CMD)")
 

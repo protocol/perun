@@ -170,8 +170,8 @@ class StageMap(unittest.TestCase):
             write(d, ".githooks/pre-push", "#!/bin/sh\nbash scripts/unit.sh\n", 0o755)
             dup = pp.stage_map(d, {"train": ["bash scripts/unit.sh"]})["duplicates"][0]
             self.assertEqual((dup["stages"], dup["keep"]), (["push", "ci", "train"], "train"))
-            only = pp.stage_map(d)["duplicates"][0]  # the CI run is advisory, so no server-enforced gate runs it
-            self.assertEqual((only["keep"], only["enforced"]), ("push", False))
+            only = pp.stage_map(d)["duplicates"][0]  # the CI run is advisory, so no gate is proven to block: drop nothing
+            self.assertEqual((only["keep"], only["drop"], only["enforced"]), (None, [], False))
 
     def test_thin_hook_is_its_implementation_and_quoted_ci_step_names_count(self):
         with tempfile.TemporaryDirectory() as d:
@@ -481,7 +481,7 @@ class Compare(unittest.TestCase):
         self.assertEqual(pp.compare_profiles(self.prof(100.0), {}, m)["verdict"], "UNVERIFIED")
         self.assertEqual(pp.compare_profiles(self.prof(100.0), self.prof(10.0), "no.such.metric")["verdict"], "UNVERIFIED")
         self.assertEqual(pp.compare_profiles({"stages_s": {"ci_exec": 100.0}}, {"stages_s": {"ci_exec": 60.0}},
-                                             "stages_s.ci_exec", min_n=99)["verdict"], "KEEP")  # no sample count to check
+                                             "stages_s.ci_exec")["verdict"], "UNVERIFIED")  # no measured_runs behind it
 
     def test_a_timed_command_is_compared_by_name_and_needs_repeats(self):
         def prof(v, n):

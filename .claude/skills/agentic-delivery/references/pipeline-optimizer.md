@@ -23,7 +23,7 @@ A gate is **weakened** when a check that blocked merge stops blocking it: remove
 3. It runs on the SHA that merges, or on the union that merges.
 4. A planted failure turns that gate red (`gate-epistemology.md` principle 4).
 
-The earlier copies are then latency, not safety. `pipeline_profile.py map` flags a suite whose only blocking copy is advisory or a hook ("no server-enforced gate runs it").
+The earlier copies are then latency, not safety. `pipeline_profile.py map` flags a suite with no proven blocking copy and then advises dropping nothing. Blocking is proven, never assumed: a push-only workflow does not gate a PR, and a job or step with `continue-on-error` (any value but `false`) or an `if:` the script does not recognise counts as not enforced.
 
 This agrees with `host-enforcement.md` *Cost discipline* (run every gate locally once before pushing, so CI is not the first place a red appears): "once" means one blocking run. Run the quick tier locally, in seconds. A full local run on top of CI pays off only above the break-even red rate that `profile` prints: local seconds divided by (CI seconds + queue wait), compared with the observed red rate.
 

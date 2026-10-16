@@ -120,5 +120,61 @@ else
   record 1 "set but unusable: every selftest still runs, the runner still passes"
 fi
 
+# 7) A stamp directory we do not own with mode 700 is ignored (a shared or planted directory is never trusted).
+: >"$WORK/l7"
+mkdir -m 755 "$WORK/stamps7"
+run_gates "$WORK/l7" DCR_SELFTEST_STAMPS="$WORK/stamps7"
+run_gates "$WORK/l7" DCR_SELFTEST_STAMPS="$WORK/stamps7"
+if [ "$RC" -eq 0 ] && [ "$(calls "$WORK/l7" fix_class_gate)" -eq 2 ] && [ -z "$(ls -A "$WORK/stamps7")" ]; then
+  record 0 "set: a mode-755 stamp directory is ignored, nothing is read or written there"
+else
+  record 1 "set: a mode-755 stamp directory is ignored, nothing is read or written there"
+fi
+: >"$WORK/l7b"
+run_gates "$WORK/l7b" DCR_SELFTEST_STAMPS="$WORK/stamps7b"
+if [ "$(stat -c %a "$WORK/stamps7b" 2>/dev/null || stat -f %Lp "$WORK/stamps7b")" = 700 ]; then
+  record 0 "set: a missing stamp directory is created with mode 700"
+else
+  record 1 "set: a missing stamp directory is created with mode 700"
+fi
+
+# 8) The key carries the python version: a stamp from another interpreter does not skip the selftest.
+: >"$WORK/l8"
+mkdir -p "$WORK/shim"
+real_py="$(command -v python3)"
+printf '#!/bin/sh\n[ "$1" = "-V" ] && { echo "Python 9.9.9"; exit 0; }\nexec "%s" "$@"\n' "$real_py" >"$WORK/shim/python3"
+chmod +x "$WORK/shim/python3"
+run_gates "$WORK/l8" DCR_SELFTEST_STAMPS="$WORK/stamps8"
+run_gates "$WORK/l8" DCR_SELFTEST_STAMPS="$WORK/stamps8" PATH="$WORK/shim:$PATH"
+if [ "$RC" -eq 0 ] && [ "$(calls "$WORK/l8" fix_class_gate)" -eq 2 ]; then
+  record 0 "set: a stamp made under another python version is not reused"
+else
+  record 1 "set: a stamp made under another python version is not reused"
+fi
+
+# 9) The key hashes raw bytes: a .gitattributes eol rule must not make an edited (CRLF) script look unchanged.
+fx9="$WORK/repo9"
+cp -R "$fx" "$fx9"
+printf '*.py text eol=lf\n' >"$fx9/.gitattributes"
+git -C "$fx9" init -q
+: >"$WORK/l9"
+run9() { (cd "$fx9" && env STUB_LOG="$WORK/l9" DCR_SELFTEST_STAMPS="$WORK/stamps9" bash "$fx9/scripts/dcr-gates.sh" >"$WORK/out9.txt" 2>&1); }
+run9
+sed 's/$/\r/' "$fx9/.claude/skills/deep-code-review/scripts/token_differ.py" >"$WORK/crlf.py"
+cp "$WORK/crlf.py" "$fx9/.claude/skills/deep-code-review/scripts/token_differ.py"
+run9
+if [ "$(calls "$WORK/l9" token_differ)" -eq 2 ]; then
+  record 0 "set: raw bytes are hashed, an eol-only edit re-proves the script"
+else
+  record 1 "set: raw bytes are hashed, an eol-only edit re-proves the script"
+fi
+
+# 10) The suite case that asserts SELFTEST OK must not depend on stamps left by earlier cases.
+if grep -q 'env -u DCR_SELFTEST_STAMPS bash "\$gates_runner"' "$ROOT/scripts/test-ci-gates.sh"; then
+  record 0 "test-ci-gates: the SELFTEST OK case runs with DCR_SELFTEST_STAMPS unset"
+else
+  record 1 "test-ci-gates: the SELFTEST OK case runs with DCR_SELFTEST_STAMPS unset"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -43,15 +43,18 @@
 #   DCR_SELFTEST_STAMPS    a directory for selftest verdict stamps. Unset (the
 #                           default) -> every run proves every gate script
 #                           fires (`--selftest`), as always. Set -> a selftest
-#                           that PASSED for a script with the same bytes
-#                           (git hash-object) is not run again under that
-#                           directory, so a caller that invokes this runner
-#                           many times in one run (a test suite) pays each
-#                           selftest once. Only a pass is stamped; a failing
-#                           selftest re-runs and fails closed every time, and
-#                           an unusable directory means "run it". Use a
-#                           throwaway directory private to one run of the
-#                           caller, never a shared or committed path.
+#                           that PASSED for a script with the same raw bytes
+#                           (`git hash-object --no-filters`) under the same
+#                           `python3 -V` is not run again, so a caller that
+#                           invokes this runner many times in one run (a test
+#                           suite) pays each selftest once. Only a pass is
+#                           stamped; a failing selftest re-runs and fails
+#                           closed every time. The directory must be private to
+#                           ONE run of the caller (a fresh throwaway directory,
+#                           never shared, committed or reused across runs): it
+#                           is created with mode 700 and ignored (every
+#                           selftest runs) unless it is a real directory we own
+#                           with mode 700.
 #
 # OPT-IN gates (off unless the flag is exactly 1; any value other than unset,
 # 0, or 1 fails closed).
@@ -285,22 +288,28 @@ fi
 #    independent of this repo's own history/content.
 # ---------------------------------------------------------------------------
 # selftest_ok <script> — `python3 <script> --selftest`. With DCR_SELFTEST_STAMPS
-# set, a PASS for these exact script bytes is remembered there (keyed by
-# `git hash-object`) and a later call skips the run. The cache can only skip a
-# selftest that already passed, never invent a pass: a failure is not stamped,
-# and no git or an unusable stamp directory falls back to running it.
+# set, a PASS for these exact script bytes under this python is remembered there
+# and a later call skips the run. The key is `git hash-object --no-filters` (the
+# raw bytes, never an attribute-normalised copy) plus `python3 -V`. The cache can
+# only skip a selftest that already passed, never invent a pass: a failure is not
+# stamped, and no git, or a stamp directory we do not own with mode 700, falls
+# back to running it (a shared or foreign directory could hold planted stamps).
 selftest_ok() {
-  local script="$1" key="" stamp=""
-  if [ -n "${DCR_SELFTEST_STAMPS:-}" ]; then
-    key="$(git hash-object -- "${script}" 2>/dev/null || true)"
-    [ -z "${key}" ] || stamp="${DCR_SELFTEST_STAMPS}/${key}-$(basename "${script}")"
+  local script="$1" key="" stamp="" dir="${DCR_SELFTEST_STAMPS:-}" mode=""
+  if [ -n "${dir}" ]; then
+    [ -e "${dir}" ] || mkdir -p -m 700 "${dir}" 2>/dev/null || true
+    mode="$(stat -c %a "${dir}" 2>/dev/null || stat -f %Lp "${dir}" 2>/dev/null || true)"
+    if [ -d "${dir}" ] && [ ! -L "${dir}" ] && [ -O "${dir}" ] && [ "${mode}" = 700 ]; then
+      key="$(git hash-object --no-filters -- "${script}" 2>/dev/null || true)"
+      [ -z "${key}" ] || stamp="${dir}/${key}-$(python3 -V 2>&1 | tr -c 'A-Za-z0-9.\n' _ | tr -d '\n')-$(basename "${script}")"
+    fi
   fi
   if [ -n "${stamp}" ] && [ -f "${stamp}" ]; then
     return 0
   fi
   python3 "${script}" --selftest || return 1
   if [ -n "${stamp}" ]; then
-    { mkdir -p "${DCR_SELFTEST_STAMPS}" && : >"${stamp}"; } 2>/dev/null || true
+    : >"${stamp}" 2>/dev/null || true
   fi
   return 0
 }

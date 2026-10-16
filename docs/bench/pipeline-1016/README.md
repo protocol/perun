@@ -50,7 +50,7 @@ Alternatives considered (evil twin):
 | Bigger runner | `runner` prices a serial step at about zero (cpu/wall near 1). |
 | Cache between CI runs | The stamp key is the script content hash, but a cross-run cache would make a selftest vouch for a script it never ran against; per-run scope only. |
 
-Safety properties kept: only a PASS is stamped, a failure is never cached, the stamp key is `git hash-object` of the script plus its basename (an edited script re-runs), an unusable stamp directory means run. `scripts/test-selftest-stamps.sh` has six cases; three were red before the change.
+Safety properties kept: only a PASS is stamped, a failure is never cached, the stamp key is `git hash-object --no-filters` of the script (raw bytes, so an eol-only edit re-runs) plus `python3 -V` plus its basename, and the stamp directory must be a real directory we own with mode 700 (created that way; one throwaway directory per run, never shared) or it is ignored and every selftest runs. `scripts/test-selftest-stamps.sh` has eleven cases; three were red before the stamp existed and five more before this hardening.
 
 ## Runner micro A/B (deep-code-review gates only, 3 interleaved pairs, wall seconds)
 

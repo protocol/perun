@@ -1982,7 +1982,7 @@ fi
 #    proves itself with a passing --selftest (the same planted-violation
 #    self-proof CI's own "Shipped script self-tests" step requires).
 gates_run_log="$WORK/gates-run.log"
-bash "$gates_runner" >"$gates_run_log" 2>&1 || true
+env -u DCR_SELFTEST_STAMPS bash "$gates_runner" >"$gates_run_log" 2>&1 || true
 if grep -qF "using deep-code-review at $gates_fresh/.claude/skills/deep-code-review" "$gates_run_log" \
   && grep -q 'SELFTEST OK' "$gates_run_log"; then
   record 0 "install --with-gates: runner resolves the installed skill's own script paths"
