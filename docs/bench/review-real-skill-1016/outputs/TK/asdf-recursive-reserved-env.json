@@ -1,0 +1,36 @@
+{
+ "id": "asdf-recursive-reserved-env",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "cli.go",
+   "line": 338,
+   "severity": "medium",
+   "text": "The default `Action` that called `helpCommand` was removed and replaced with `CommandNotFound`. `CommandNotFound` only runs for unknown subcommands, so running bare `asdf` with no arguments no longer prints asdf's custom help (version and plugin list). urfave/cli's generic help prints instead. Unknown commands now also go through `CommandNotFound`, which logs the error and exits 1, but the no-argument case regresses."
+  },
+  {
+   "file": "cli.go",
+   "line": 340,
+   "severity": "low",
+   "text": "The error returned by `helpCommand` in `CommandNotFound` is discarded. `helpCommand` calls `cli.OsExiter(1)` itself on failure, so with a non-exiting `OsExiter` (such as one overridden in tests) the flow carries on and exits with 1 anyway. Several other converted sites, such as `failTest` and `installCommand`, also assume `cli.OsExiter` never returns. They fall through to later code if it does return."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The patch removes the app-level `Action` that called `helpCommand` and adds only a `CommandNotFound` handler, which never runs when no arguments are given, so bare `asdf` now shows urfave/cli's generic help instead of asdf's custom help with the version and plugin list."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "`cli.OsExiter` defaults to `os.Exit`, which never returns, and `helpCommand` already exits on its own failure paths, so discarding its error inside `CommandNotFound` has no effect in normal runs; the fall-through only happens under a hypothetical test override and has nothing to do with the env-var reference bug."
+  }
+ },
+ "verify_error": ""
+}

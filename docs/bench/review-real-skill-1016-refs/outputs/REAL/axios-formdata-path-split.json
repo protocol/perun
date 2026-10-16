@@ -1,0 +1,50 @@
+{
+ "id": "axios-formdata-path-split",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "high",
+   "confidence_score": 90,
+   "text": "Prototype pollution: the path segment is used as a key without a check. For a form field named `__proto__[polluted]`, `target['__proto__']` is the truthy `Object.prototype`, so the next step sets `Object.prototype.polluted = value` for every object in the process. `constructor[prototype][x]` is also reachable."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 43,
+   "severity": "medium",
+   "confidence_score": 80,
+   "text": "Repeated keys are wrapped instead of appended. `a=1, a=2, a=3` gives `[[1,2],3]` instead of `[1,2,3]`, because each duplicate wraps the existing value in a new array. A key whose existing value is already an array also gets nested wrongly."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 42,
+   "severity": "medium",
+   "confidence_score": 80,
+   "text": "The code calls `utils.hasOwnProperty(target, name)`, which looks like a two-argument helper. If utils does not export it, or exports a different signature, the first form field throws a TypeError. If it falls back to `Object.prototype.hasOwnProperty`, it is called with the wrong receiver and arguments."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "For `__proto__[polluted]` the path is ['__proto__','polluted']. `target['__proto__']` is Object.prototype, which is truthy and an object, so line 51 does not replace it, the code recurses into it, and the last step sets `Object.prototype.polluted` because no key is filtered."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "Line 43 always does `target[name] = [target[name], value]`, so a third duplicate wraps the existing array into `[[1,2],3]` instead of appending to it."
+  },
+  "2": {
+   "verdict": "unverifiable",
+   "reason": "The utils module is not in the patch or in ./context, so I can't check whether it exports a two-argument `hasOwnProperty(obj, prop)` helper; the finding is speculation either way."
+  }
+ },
+ "verify_error": ""
+}

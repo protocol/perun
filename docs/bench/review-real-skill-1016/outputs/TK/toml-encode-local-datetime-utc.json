@@ -1,0 +1,32 @@
+{
+ "id": "toml-encode-local-datetime-utc",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "encode.go",
+   "line": 170,
+   "severity": "high",
+   "text": "Local datetime, date and time values are converted with `v.In(time.UTC)` before formatting. They were parsed in a fixed zone with the local offset, so this shifts the wall-clock value by that offset. For example, `07:32:00` in a UTC+2 environment is written as `05:32:00`, and a local date near midnight can be written as the previous day. Round-trips corrupt the data unless the offset is 0. Fix: format `v` directly in its own location."
+  },
+  {
+   "file": "parse.go",
+   "line": 377,
+   "severity": "low",
+   "text": "`localOffset` is taken once from `time.Now().Zone()` and used as a fixed offset for every local value. Local datetimes in a different DST period than the process start time get the wrong offset, which makes them inconsistent with the `time.Local` zone used for offset datetimes."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The offset really is fixed when the process starts, but a TOML local datetime has no absolute instant, and the fixed zone keeps the wall-clock value it was parsed with, so it formats back unchanged; this is a deliberate design choice (upstream code is the same) and is separate from the encoder's `In(time.UTC)` shift."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,34 @@
+{
+ "id": "nvm-zsh-option-clobber",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 960,
+   "severity": "medium",
+   "confidence_score": 85,
+   "text": "`unsetopt local_options nomatch` turns off `local_options` and `nomatch` as two separate options. Nothing scopes the `nomatch` change to the function (the intended form is `setopt local_options nonomatch`), so it persists in the user's interactive zsh after `nvm ls`/`nvm alias` returns. After running `nvm ls`, a command such as `ls *.nonexistent` stops erroring with 'no matches found' and passes the literal pattern."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 960,
+   "severity": "low",
+   "confidence_score": 80,
+   "text": "The option change runs outside the `( ... )` subshell, so it affects the caller's shell, not only the loop. With `NVM_ALIAS_DIR` containing no match for `${ALIAS}*`, the loop now receives the literal glob string. Unless the loop skips non-existent paths, it will list a bogus alias named `${ALIAS}*`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The claimed defect is a bogus `${ALIAS}*` alias, but passing the literal glob through is exactly what nonomatch is meant to do, and upstream nvm's loop resolves each path through nvm_print_alias_path/nvm_alias, which prints nothing for a non-existent alias (inferred from upstream nvm, since ./context/ was not present to check). The leak into the caller's shell is real, but the finding blames the subshell boundary rather than `unsetopt local_options`, and a nearby symptom is not enough for gt_same."
+  }
+ },
+ "verify_error": ""
+}

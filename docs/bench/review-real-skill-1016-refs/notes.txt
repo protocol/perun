@@ -1,0 +1,18 @@
+DIFF-mode reference routing: does making the real skill read compact-mode.md help? (negative finding, skill edit reverted)
+
+Why the references were not read (diagnosed with probes, ../review-real-skill-1016/probe-result.json plus probe.py here):
+1. SKILL.md routes a small DIFF (<=300 lines, no blast-radius flag) to references/compact-mode.md ("method = compact-mode.md only") but states it as a description, not an action, 40 lines into the file.
+2. The bench prompt requires a final message that is only a JSON array. The reviewer batches SKILL.md and change.patch in turn 1, then answers in turn 2. 5 of 5 probes with only an in-body rewording ("your next tool call is Read references/compact-mode.md", bold) still answered without opening it.
+3. The size test it relies on (`git diff --shortstat`) cannot run: the reviewer has no shell in this arm.
+4. compact-mode.md's own routing line says "Read this when the model is not Claude", which points a Claude reviewer away from it.
+Only a one-line imperative placed directly under the H1 (first thing a reader sees), plus a "no shell: count +/- lines" hint and a reworded compact-mode.md routing line, made the reviewer open it: 3 of 3 probes read compact-mode.md. The exact edit that was benched is tested-skill-edit.patch.txt (+220 bytes SKILL.md, +11 bytes compact-mode.md; SKILL.md would then exceed its frozen size budget and its mustload floor pin by that amount).
+
+Bench: only the REAL arm re-run, same 22 cases, same driver logic (driver.py here is the committed driver restricted to REAL, with cap $6 and compare-to-old report), same Opus judge, one run per case. OLD REAL and TK are the committed outputs in ../review-real-skill-1016. Paired case-level bootstrap, 10000 resamples, seed 1.
+Results (results.json): NEW P .711 R .636 F1 .671; OLD P .686 R .591 F1 .635; TK P .667 R .545 F1 .600.
+NEW-OLD: precision +.025 [-.095, +.133]; recall +.045 [0.000, +.136]; F1 +.037 [-.033, +.117].
+NEW-TK: precision +.044 [-.056, +.152]; recall +.091 [0.000, +.227]; F1 +.071 [-.007, +.166].
+Cost per review $.0605 NEW vs $.0537 OLD (turns 4.1 vs 3.4). Ledger spend (reviews + judge) $2.06; probes and one diagnostic run add about $0.45.
+
+Decision: keep rule was "F1 or recall CI lower bound > 0 vs OLD with precision not dropping". Recall lower bound is 0.000 and F1 lower bound is -.033, so the rule is not met. The point estimates all move the right way (one more bug credited, 14 vs 13 of 22), which is within noise at n=22. Skill edit reverted; results committed as a negative finding. A larger n (all 43 train cases, or repeated runs) is needed to resolve a +4.5 point recall effect; that was out of the $6 cap.
+
+Caveats: n=22 and one run per arm; the reviewer's reads were confirmed by probes on one case, not logged per review in the main run (turns rose from 3.4 to 4.1, consistent with one extra read); same-vendor judge.

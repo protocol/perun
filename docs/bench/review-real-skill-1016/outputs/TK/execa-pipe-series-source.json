@@ -1,0 +1,25 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "medium",
+   "text": "In the chained `promise.pipe`, `pipeToProcess.bind(undefined, {...sourceInfo, spawned: destination})` keeps the ORIGINAL source's `stdioStreamsGroups` and `options` while replacing only `spawned`. Validation for the second pipe is therefore done against the wrong process. Example: `a.pipe(b).pipe(c, {from: 'all'})` checks `a`'s `options.all`, not `b`'s, and `from: 3` checks `a`'s stdio groups. This gives false errors or false passes, and `createNonCommandError` builds the error from the wrong process's options."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "`{...sourceInfo, spawned: destination}` swaps in only the process object and keeps the first process's `stdioStreamsGroups` and `options`, so a chained pipe's `from` checks and error messages in `getStreamIndex` and `getInvalidStdioOptionMessage` use the wrong process's configuration (for example `from: 3` fails when `b` has fd3 but `a` does not); this is a different defect from the reference bug, where the next pipe is bound to the subprocess instead of the previous pipe's promise when waiting."
+  }
+ },
+ "verify_error": ""
+}

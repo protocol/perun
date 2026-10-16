@@ -1,0 +1,26 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "medium",
+   "confidence_score": 85,
+   "text": "The chained `.pipe` is bound with `{...sourceInfo, spawned: destination}`, which swaps in the new source process but keeps the original process's `stdioStreamsGroups` and `options`. In `a.pipe(b).pipe(c, {from: 'all'})` where only `b` has `all: true`, `from: 'all'` is checked against `a`'s options and a valid pipe is rejected. In `a.pipe(b).pipe(c, {from: 3})` where only `b` has an fd 3, the check uses `a`'s `stdioStreamsGroups` and rejects it with 'that file descriptor does not exist'. The reverse also happens: an invalid `from` can pass validation, and error messages cite the wrong options."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "At setup.js:295 the chained pipe swaps in `spawned: destination` but keeps the first process's `stdioStreamsGroups` and `options`, and validate.js's getStreamIndex checks those stale values: `a.pipe(b).pipe(c, {from: 3})` is wrongly rejected as 'file descriptor does not exist' when only b has fd 3, and error messages cite a's options. This is a different problem from the reference bug, which is about the wrong promise being awaited. The finding's `from: 'all'` example is wrong, though: 'all' skips the stdioStreamsGroups check and reads `b.all` directly, so that pipe is not rejected."
+  }
+ },
+ "verify_error": ""
+}

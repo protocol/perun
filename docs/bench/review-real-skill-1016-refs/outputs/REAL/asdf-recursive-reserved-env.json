@@ -1,0 +1,36 @@
+{
+ "id": "asdf-recursive-reserved-env",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "cli.go",
+   "line": 338,
+   "severity": "medium",
+   "text": "The root `Action` (custom `helpCommand`) was replaced with `CommandNotFound`, which only fires for unknown commands. Running bare `asdf` with no arguments no longer prints asdf's help with the plugin list. It falls through to urfave/cli's default app help, and a regression of the no-args behavior is likely."
+  },
+  {
+   "file": "cli.go",
+   "line": 340,
+   "severity": "low",
+   "text": "`CommandNotFound` discards the error returned by `helpCommand`. If help fails (for example `plugins.List` errors), nothing extra is reported. The exit code is still 1, but the failure is swallowed, so `asdf bogus` with an unreadable plugins dir shows a partial or empty help."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The patch deletes the root `Action` that called `helpCommand` and adds only `CommandNotFound`, which urfave/cli runs only for unknown subcommands, so bare `asdf` now gets the library's default app help instead of asdf's custom help with the plugin list."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "`helpCommand` already calls `cli.OsExiter(1)` (by default `os.Exit`) as soon as `plugins.List` or `help.Print` fails, so ignoring its return value hides no error and the process stops right there."
+  }
+ },
+ "verify_error": ""
+}

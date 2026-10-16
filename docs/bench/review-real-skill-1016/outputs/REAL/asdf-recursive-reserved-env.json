@@ -1,0 +1,47 @@
+{
+ "id": "asdf-recursive-reserved-env",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "cli.go",
+   "line": 338,
+   "severity": "medium",
+   "text": "The top-level `Action` that called `helpCommand(logger, version, \"\", \"\")` was deleted and replaced with `CommandNotFound`. Running bare `asdf` with no arguments now falls back to urfave/cli's generic app help. That output no longer includes asdf's custom help from `help.Print`, such as the plugin and version listing."
+  },
+  {
+   "file": "cli.go",
+   "line": 340,
+   "severity": "low",
+   "text": "The `CommandNotFound` handler ignores the error returned by `helpCommand`. `helpCommand` can also call `cli.OsExiter(1)` internally. If `OsExiter` is overridden, for example in tests (the reason for this change), the handler can call it twice. It can also continue into the `cli.OsExiter(1)` after a failed help call."
+  },
+  {
+   "file": "cli.go",
+   "line": 1102,
+   "severity": "low",
+   "text": "Swapping `os.Exit` for `cli.OsExiter` makes the process continue past the exit call whenever `OsExiter` is stubbed, because several call sites have no `return` after it. In `installCommand`, a `NoVersionSetError` logs the message, calls `OsExiter(1)`, and then also logs `error installing version`. In `currentCommand`, `helpCommand` and `latestCommand`, execution continues after the exit call in the same way."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The patch deletes the app-level Action that called helpCommand, so bare `asdf` with no subcommand now gets urfave/cli's default app help instead of asdf's custom help.Print output; CommandNotFound runs only for unknown subcommands, not for an empty invocation."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "With the real cli.OsExiter (os.Exit), helpCommand's internal exit ends the process, so a second exit call cannot happen; the double call exists only under a test stub, and on success the handler is meant to exit 1 anyway."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "In production cli.OsExiter is os.Exit and stops the process exactly as before; the code continuing afterwards (like the extra log in installCommand) only runs under a stubbed exiter, and it was already unreachable code before the change, so behaviour does not change."
+  }
+ },
+ "verify_error": ""
+}

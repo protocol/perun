@@ -1,0 +1,38 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 1505,
+   "severity": "medium",
+   "confidence_score": 82,
+   "text": "The action-handler branch now emits `command:<name>` on `this.parent` instead of `this`. A top-level program with an action handler has no parent, so it no longer emits the event, and listeners registered with `program.on('command:'+name)` stop firing. Subcommands also now emit on the parent, so a listener on the subcommand itself no longer fires."
+  },
+  {
+   "file": "index.js",
+   "line": 1506,
+   "severity": "medium",
+   "confidence_score": 80,
+   "text": "The new `else if (this.parent && this.parent.listenerCount(commandEvent))` branch runs before the operands, `*` and help/unknown handling. A subcommand with no action handler whose parent has any `command:<name>` listener now only emits to the parent. For example, `prog sub extra` skips the `*` dispatch and the missing-handler help or unknown-command handling for `sub`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "This is deliberate legacy behaviour: the patch marks it `// legacy`, and from my knowledge of upstream Commander (the context files were missing, so I could not check the old code), `command:<name>` listeners are registered on the parent, so emitting there restores that contract and does not break a real use."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The patch deliberately treats a parent `command:<name>` listener as the action handler for a subcommand that has none (marked `// legacy`), so skipping the `*`, help and unknown-command handling in that case is intended."
+  }
+ },
+ "verify_error": ""
+}

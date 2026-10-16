@@ -1,0 +1,32 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 97,
+   "severity": "medium",
+   "text": "mergeMaps skips a key whenever the new value's dynamic type differs from the existing one, and only logs an error. Merging `port: \"8080\"` over an existing `port: 80` is silently ignored. Merging `key: null` (a nil `sv`) over an existing value is also ignored, so the later config cannot override it and MergeConfig still returns nil."
+  },
+  {
+   "file": "viper.go",
+   "line": 62,
+   "severity": "low",
+   "text": "castToMapStringInterface turns every key into a string, and mergeMaps then writes the merged result back into the original `map[interface{}]interface{}` using that string. A YAML map with non-string keys, such as `1: a`, gets a second `\"1\"` entry added next to the original int key `1`, so the merge produces duplicate keys instead of overriding."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "When both maps have the int key 1, both become \"1\" after stringification, so keyExists matches. The default branch then writes itgt[\"1\"] = sv into the original map[interface{}]interface{}, which leaves int key 1 untouched and adds a separate string key. That is a different defect from the nil-target type-mismatch bug."
+  }
+ },
+ "verify_error": ""
+}

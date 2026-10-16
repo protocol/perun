@@ -1,0 +1,50 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "In the already-installed branch the guard is inverted: `[ $EXIT_CODE -ne 0 ]` runs default-packages only after a failure. `EXIT_CODE` is also declared with `local EXIT_CODE` and never set, so without `--latest-npm` it expands to empty. `[ -ne 0 ]` then errors and is false. `nvm install 18` on an already-installed 18 silently skips default-packages and `--reinstall-packages-from`, which previously ran. If install-latest-npm succeeded (0), they are skipped too."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 59,
+   "severity": "high",
+   "text": "The same inverted or empty `EXIT_CODE` test guards `nvm alias` in the already-installed path. `nvm install 18 --alias=foo` (or a LTS alias) on an installed version never creates the alias. `return $EXIT_CODE` can also return an empty or stale status when `nvm use` fails, or when `nvm use` succeeds and nothing else sets `EXIT_CODE`."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 94,
+   "severity": "medium",
+   "text": "`nvm_install_default_packages` assigns `EXIT_CODE` without `local`, so it clobbers the caller's variable (or a global in other contexts). It also now reads the default-packages file itself, so a file error is only detected after node has been downloaded and installed. Previously the install aborted early with that error code, before any download."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 69,
+   "severity": "low",
+   "text": "The `EXIT_CODE=-1` initialisation was removed on the fresh-install path. If no install method sets it before the `-eq 0` checks (for example when the hook or binary path is skipped), `[ $EXIT_CODE -eq 0 ]` gets an empty value and errors. Default packages and reinstall-packages are then silently skipped."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "Every caller sets `EXIT_CODE=$?` right after `nvm_install_default_packages` returns, so the leaked non-local assignment does no harm, and reading the default-packages file inside the function (failing only after install) looks like a deliberate design choice, not a defect."
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "The patch removes `EXIT_CODE=-1` and leaves only a bare `local EXIT_CODE`, so on the fresh-install path the later numeric tests on `$EXIT_CODE` can see an empty value and fail with a test error, skipping steps; this is a separate defect from the inverted `-ne 0` gating (I couldn't check the full surrounding code because ./context/ was not present)."
+  }
+ },
+ "verify_error": ""
+}

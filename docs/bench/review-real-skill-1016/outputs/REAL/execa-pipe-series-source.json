@@ -1,0 +1,36 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "medium",
+   "text": "`promise.pipe` is bound with `{...sourceInfo, spawned: destination}`, so it keeps the first process's `stdioStreamsGroups` and `options`. When chaining, `from` and the `all` check for the middle process are validated against the wrong process. For example, `a.pipe(b).pipe(c, {from: 'all'})` checks `options.all` of `a`, not `b`. If `a` has `all: true` but `b` doesn't, validation passes, `b.all` is undefined, and the error comes out as a confusing failure or a wrong error message. The same mix-up applies to a `from: 3` fd check against `a`'s stdio, and to the options used when building the error."
+  },
+  {
+   "file": "setup.js",
+   "line": 299,
+   "severity": "medium",
+   "text": "The old call `pipe(target, 'stderr')` now silently pipes `stdout`. The second argument is destructured as `{from, signal} = {}`, so a string gives `from` undefined and defaults to stdout. There is no runtime check and no error. Existing JavaScript callers using `child.pipe(dest, 'stderr')` or `'all'` therefore send the wrong stream to the destination without any warning."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "`{...sourceInfo, spawned: destination}` keeps the first process's `stdioStreamsGroups` and `options`, so in a chain the middle process's `from`/`all`/fd checks and error messages use the wrong process's settings; this is a separate defect from the reference bug, which is about which promise `waitForBothProcesses` awaits."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The change deliberately replaces the string second argument with an options object (the type tests now reject `pipe(dest, 'stdout')`), so this is an intended breaking API change, not a defect in the new code."
+  }
+ },
+ "verify_error": ""
+}

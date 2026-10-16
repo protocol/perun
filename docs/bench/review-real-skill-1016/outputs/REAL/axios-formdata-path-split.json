@@ -1,0 +1,47 @@
+{
+ "id": "axios-formdata-path-split",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "high",
+   "text": "Prototype pollution. Path segments are used as keys with no own-property or `__proto__` guard. For a FormData entry named `__proto__[polluted]`, `target['__proto__']` is the truthy `Object.prototype`, so it is not replaced, and line 43 then writes `Object.prototype.polluted = value`. `constructor[prototype][x]` does the same through `Function.prototype`/`Object.prototype`, so attacker-controlled form field names can pollute every object."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 43,
+   "severity": "medium",
+   "text": "Repeated keys are wrapped instead of appended. `a=1&a=2&a=3` gives `[[1,2],3]` instead of `[1,2,3]`, because `[target[name], value]` nests the earlier array. Also, `hasOwnProperty(target, name)` is true for an existing key whose value is an array, so intermediate structures get mangled."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "low",
+   "text": "Data loss on conflicting keys. If `target[name]` already holds a non-object value, such as a string, it is silently replaced by `[]`. Input `a=1&a[b]=2` discards `a=1`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "For `__proto__[polluted]`, `target['__proto__']` is `Object.prototype`, which counts as an object, so it is never replaced with `[]`; the recursion then hits `hasOwnProperty(Object.prototype,'polluted')`, which is false, and line 45 assigns `Object.prototype.polluted = value`, with no guard anywhere against `__proto__` or `constructor`."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "Line 43 always builds `[target[name], value]`, so on the third duplicate the existing array `[1,2]` gets wrapped and you get `[[1,2],3]` instead of the value being appended."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "Line 51 replaces any non-object `target[name]`, such as the string from `a=1`, with `[]` before recursing, so `a=1&a[b]=2` silently drops the first value."
+  }
+ },
+ "verify_error": ""
+}

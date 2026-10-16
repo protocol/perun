@@ -1,0 +1,46 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "In the already-installed branch, `local EXIT_CODE` is declared with no value, and the new guards use `[ $EXIT_CODE -ne 0 ]`. With `nvm install <installed version>`, EXIT_CODE is empty, so the test errors out and default packages are never installed. If npm upgrade is requested and succeeds (EXIT_CODE=0), default packages are skipped. If the upgrade fails (non-zero), default packages are installed anyway. The condition is inverted and the variable is uninitialized."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 48,
+   "severity": "high",
+   "text": "The `reinstall-packages` step is guarded by `[ $EXIT_CODE -ne 0 ]` with the same uninitialized or inverted logic. With `nvm install --reinstall-packages-from=X` on an already-installed version, EXIT_CODE is empty or 0, so the reinstall is skipped."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 59,
+   "severity": "high",
+   "text": "`nvm alias` only runs when EXIT_CODE is non-zero. With `nvm install 18 --alias=foo` on an installed version, EXIT_CODE is empty or 0, so the alias is never created. If EXIT_CODE is empty, `[ -ne 0 ]` also prints an error. The final `return $EXIT_CODE` may return an empty or unset status, and it ignores the failure status of `nvm use`."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 94,
+   "severity": "medium",
+   "text": "`nvm_install_default_packages` assigns `EXIT_CODE` without declaring it local. This clobbers the caller's EXIT_CODE in shells where nvm's `local EXIT_CODE` is not in scope. It also changes behavior: a failing `nvm_get_default_packages` now aborts after node is already installed, rather than before the install starts as it did previously."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  true,
+  true,
+  false
+ ],
+ "verdicts": {
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "Both callers in the patch declare `local EXIT_CODE` in `nvm()` and set `EXIT_CODE=$?` right after calling `nvm_install_default_packages`, so the non-local assignment never clobbers anything meaningful; moving the default-packages read until after node is installed is a deliberate refactor that matches upstream nvm's current code, not the reference's inverted `-ne 0` gate."
+  }
+ },
+ "verify_error": ""
+}

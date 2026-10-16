@@ -1,0 +1,32 @@
+{
+ "id": "starlette-url-replace-empty-host",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "datastructures.py",
+   "line": 19,
+   "severity": "medium",
+   "text": "When the URL has no netloc, `hostname` is the empty string, so `hostname[-1]` raises IndexError. For example, `URL('/path').replace(port=8000)` or `.replace(username='x')` now crashes. The code needs a guard such as `if hostname and hostname[-1] != ']'`."
+  },
+  {
+   "file": "datastructures.py",
+   "line": 18,
+   "severity": "low",
+   "text": "An explicit `hostname=None` now means 'keep the existing host' because None is used as the sentinel. Separately, the unbracketed `rsplit(':', 1)` strips everything after the last colon, which could cut a host that has no port but contains a colon."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Treating an explicit hostname=None as 'keep the current host' is a reasonable choice (before this change, an explicit None would have produced a None/broken netloc anyway), and a valid netloc can only have an unbracketed colon as the port separator because IPv6 hosts are always bracketed, so rsplit cannot cut a legitimate portless host; the finding also never mentions the empty-hostname IndexError."
+  }
+ },
+ "verify_error": ""
+}

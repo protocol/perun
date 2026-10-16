@@ -1,0 +1,43 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 97,
+   "severity": "medium",
+   "text": "When the new value's type differs from the existing one, mergeMaps logs and skips the key, so the override is silently dropped and MergeConfig still returns nil. For example, merging `port: \"8080\"` over an existing `port: 80` (int), or `key: null` (nil type) over an existing value, leaves the old value in place."
+  },
+  {
+   "file": "viper.go",
+   "line": 113,
+   "severity": "low",
+   "text": "For nested map[interface{}]interface{} values, castToMapStringInterface turns keys into strings via fmt.Sprintf, and the update is written back with `itgt[tk]` using that string key. A YAML integer or bool key such as `1: a` therefore gets a new `\"1\"` entry added next to the original key `1` instead of being overwritten, leaving a duplicate key."
+  },
+  {
+   "file": "viper.go",
+   "line": 75,
+   "severity": "low",
+   "text": "keyExists iterates a map in random order and returns the first case-insensitive match. If the target holds both `Foo` and `foo`, the key that receives the merge differs from run to run. An existing empty-string key `\"\"` also returns `\"\"`, which the caller treats as not found, so it is overwritten instead of merged."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The nested map is rebuilt with keys made by fmt.Sprintf, and the write-back `itgt[tk] = sv` (and `itgt[sk] = sv`) then uses that string key on the original map[interface{}]interface{}, so a non-string key like int 1 gets a new \"1\" entry beside it instead of being overwritten."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "keyExists ranges over a Go map, whose order is random, and returns the first case-insensitive match, so with both `Foo` and `foo` present the merge target varies between runs; it also returns \"\" for an existing empty key, which the caller reads as not found, so that value is overwritten rather than merged."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,32 @@
+{
+ "id": "testify-mock-assert-objects-type-panic",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 40,
+   "severity": "medium",
+   "text": "The type assertion changed from `obj.(Mock)` to `obj.(*Mock)`. A `Mock` passed by value, such as `AssertExpectationsForObjects(t, myMock.Mock)`, no longer matches. It falls through to `obj.(assertExpectationser)`, which panics because a `Mock` value lacks pointer-receiver methods. The change also removes the deprecation path. Since `Mock` now holds a `sync.Mutex` by value, copying it would trip `go vet`'s copylocks check. The old code did exactly that copy, so this case needed handling and not removal."
+  },
+  {
+   "file": "mock.go",
+   "line": null,
+   "severity": "low",
+   "text": "Removing the `m.mutex = &sync.Mutex{}` reset in `On()` is fine for the mutex itself. However, a `Mock` that is copied by value after use now copies a locked or in-use mutex state. Any existing code that embeds `Mock` and copies it can deadlock or race."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Switching to a value `sync.Mutex` is intentional and removes the racy mutex reset in `On()`; the lock is only held inside method calls, so copying a `Mock` by value was already misuse that `go vet` flags, and the claimed deadlock or race is speculation the code doesn't show."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,43 @@
+{
+ "id": "toml-encode-local-datetime-utc",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "encode.go",
+   "line": 170,
+   "severity": "high",
+   "text": "For LocalDatetime, LocalDate and LocalTime values the code calls `v.In(time.UTC).Format(format)`. The value's wall clock is already the local wall clock in a fixed-offset zone, so converting to UTC shifts it by the offset. With a +02:00 offset, local time `07:32:00` is encoded as `05:32:00`, and a local date near midnight can change day. It should be `v.Format(format)`."
+  },
+  {
+   "file": "rm.go",
+   "line": 364,
+   "severity": "medium",
+   "text": "`parseTime` uses `time.Parse`, which returns a UTC time, and then calls `t.In(l)`. That shifts the wall-clock fields by the zone offset instead of attaching the zone. With a +02:00 local offset, `datetime-local` `1979-05-27T07:32:00` becomes `09:32:00`, so the comparison against decoder output fails. It should use `time.ParseInLocation(format, v, l)`."
+  },
+  {
+   "file": "parse.go",
+   "line": 377,
+   "severity": "medium",
+   "text": "The local zones are fixed offsets taken from `time.Now()` at package init, not `time.Local`. Local dates and datetimes in the other DST period are parsed with the wrong offset. Under a US-Eastern summer offset of -4h, `2020-01-15T12:00:00` gets -04:00 instead of -05:00, so the instant is off by an hour. The doc comment says these are parsed in the local timezone, which this contradicts."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "In internal/tag/rm.go, parseTime calls time.Parse, which yields a UTC time, and then t.In(l) moves the wall clock by the local offset instead of attaching the zone; that is a separate defect in the test helper (ParseInLocation is the right call), and the encoder's In(time.UTC) currently hides it rather than sharing its root cause."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "parse.go builds LocalDatetime, LocalDate and LocalTime with time.FixedZone using the offset from time.Now() at init, so values that fall in the other DST period get the wrong offset; this contradicts the doc's claim that they are parsed in the local timezone and is unrelated to the encoder's UTC conversion."
+  }
+ },
+ "verify_error": ""
+}

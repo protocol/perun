@@ -1,0 +1,25 @@
+Real deep-code-review skill vs pr-review-toolkit, patch-only, 22 cases (bench only, no skill edits)
+
+1. Which prompt the earlier "CF" arm used. CF was references/compact-mode.md (minus its first three lines: the "Read this when" routing line, the "Condensed method only" line and a blank line) passed as
+   --system-prompt, with the toolkit code-reviewer as the other arm. It was not the real skill. compact-mode.md says
+   so itself ("Use as the system prompt instead of SKILL.md"). The .488 vs .628 recall in docs/perun-vs-rivals.md is
+   therefore a compact-card result, not a deep-code-review SKILL.md result.
+
+2. This run. REAL arm = bench_corpus.PERUN user prompt, cwd holds change.patch plus a copy of this repo's
+   .claude/skills/deep-code-review (origin/main b9e42319 tree), --setting-sources project,local, tools Read/Grep/Glob.
+   TK arm = same toolkit code-reviewer system prompt as before (tk_system.txt), same PRODUCER request.
+   Both: claude-sonnet-5-5, one run per case, one retry on error. Judge: claude-opus-5-5, runner VERIFY prompt,
+   blind to arm, same strict scorer and crediting as the earlier bench. Cases: every 2nd of the 43 public patch-only
+   train cases (ids.txt, the perf/review-cost-1016 pilot set). Bootstrap: paired, case-level, 10000 resamples, seed 1.
+   Results: results.json. prior_run_same_cases = the earlier compact-mode (CF) and TK outputs restricted to the same
+   22 cases (no new spend; context only).
+
+3. Caveats.
+   - n=22 cases, 22 bugs, one run per arm: CIs are wide; recall differs by one bug (13 vs 12 credited).
+   - probe-result.json (one extra REAL review, stream-json): the reviewer read SKILL.md and change.patch but did not
+     open any DIFF-mode reference, although the prompt asks it to. The REAL arm is therefore close to "SKILL.md only".
+   - ledger.jsonl includes zero-cost error rows from a first launch that ran with the API host blocked by the sandbox;
+     that launch's stray worker threads kept overwriting a few outputs with error records for ~20 minutes after the
+     real run, so run/verify were re-run until every case had a clean record. No case was dropped (n=22 both arms).
+     Final spend: results.json spend (ledger, includes duplicate verifies) plus the probe, $0.05, which is not in the ledger.
+   - Same-vendor judge that sees only the patch; extra findings can be labelled unverifiable and count as not good.

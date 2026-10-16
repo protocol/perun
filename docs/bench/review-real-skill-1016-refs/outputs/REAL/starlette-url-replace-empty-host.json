@@ -1,0 +1,34 @@
+{
+ "id": "starlette-url-replace-empty-host",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "datastructures.py",
+   "line": 19,
+   "severity": "medium",
+   "confidence_score": 90,
+   "text": "`hostname[-1]` raises IndexError when the URL has an empty netloc. Before this change, `URL('/path').replace(port=8000)` and `URL('/path').replace(username='u')` returned a URL, because `self.hostname` was None or empty. Now the netloc is '' so the host is '' and the index fails."
+  },
+  {
+   "file": "datastructures.py",
+   "line": 17,
+   "severity": "low",
+   "confidence_score": 80,
+   "text": "The host is now taken from the raw netloc instead of the lowercased `self.hostname`, so mixed-case hosts keep their case. For example, `URL('http://EXAMPLE.com/').replace(port=81)` now gives `http://EXAMPLE.com:81/`, where it used to give `example.com`. Code that compares or normalizes the host will see a different result."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The patch does take the host from the raw netloc, so its original case is kept, but hostnames are case-insensitive and keeping the URL's own text (which also keeps IPv6 brackets) is the intended design, not a defect."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,25 @@
+{
+ "id": "execa-sync-duplicate-file-targets",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "duplicate.js",
+   "line": 93,
+   "severity": "high",
+   "text": "hasSameValue compares `value.path` for `filePath` items, but filePath values are `{file}` objects (see `filePath: ({value: {file}})` in handle-sync.js). Both sides are `undefined`, so any two filePath items count as duplicates. Example: `execaSync('cmd', {stdin: {file: 'in.txt'}, stdout: {file: 'out.txt'}})` throws 'must not target a file path string that is the same' because the directions differ. Example: `execa('cmd', {stdout: {file: 'a.txt'}, stderr: {file: 'b.txt'}})` reuses stdout's stream for stderr, so stderr goes to a.txt and b.txt is never written. It should compare `value.file`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "handle-sync.js destructures filePath values as `{file}`, so `value.path` and `secondValue.path` in hasSameValue are both undefined. Any two filePath items therefore count as the same file: execaSync throws when stdin and stdout use different files, and in async mode a later output reuses the first output's stream. This comparison bug is separate from the raw-path keying in writeToFiles."
+  }
+ },
+ "verify_error": ""
+}

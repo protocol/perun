@@ -1,0 +1,43 @@
+{
+ "id": "rich-repr-default-eq",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "repr.py",
+   "line": 114,
+   "severity": "medium",
+   "text": "The new auto-generated `__rich_repr__` wraps every exception, including the `AttributeError` from `getattr(self, param.name)`, in `ReprError`. `repr(obj)` therefore now raises for a class decorated with `@auto` whose `__init__(self, x)` stores the value as `self._x`, and the same happens on debuggers, logging and tracebacks. Previously this decorator never raised from `repr`."
+  },
+  {
+   "file": "repr.py",
+   "line": 119,
+   "severity": "low",
+   "text": "`if not hasattr(cls, \"__rich_repr__\")` is also true for inherited methods. A subclass decorated with `@auto(angular=True)` of a parent that already has `__rich_repr__` (for example an `@auto` parent) silently ignores `angular=True` and keeps the parent's setting."
+  },
+  {
+   "file": "repr.py",
+   "line": 110,
+   "severity": "low",
+   "text": "`param.default == param.empty` uses `==` on arbitrary default values. A default with an overloaded `__eq__`, such as a numpy array, can return an array or raise, which turns into a `ReprError` or an ambiguous-truth error. It should use `is`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The failing getattr would raise an AttributeError from repr even without the wrapper, so wrapping it in ReprError is a deliberate choice that makes the failure clearer, and the old decorator could also raise from repr whenever the user's __rich_repr__ raised."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "hasattr also returns True for an inherited __rich_repr__, so a subclass of an @auto parent never gets its own auto_rich_repr and auto_repr reads the parent function's angular attribute, which silently ignores the subclass's angular=True."
+  }
+ },
+ "verify_error": ""
+}

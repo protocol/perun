@@ -1,0 +1,32 @@
+{
+ "id": "testify-mock-assert-objects-type-panic",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 522,
+   "severity": "medium",
+   "text": "The type switch changed from `obj.(Mock)` to `obj.(*Mock)`, so the deprecated by-value call `AssertExpectationsForObjects(t, myMock.Mock)` no longer takes the compatibility branch. A `Mock` value has no pointer-receiver `AssertExpectations`, so `obj.(assertExpectationser)` panics instead of logging the deprecation and checking the mock. Passing `&myMock.Mock` now also logs the 'Deprecated' message even though that call is valid."
+  },
+  {
+   "file": "mock.go",
+   "line": 258,
+   "severity": "low",
+   "text": "`mutex` changed from `*sync.Mutex` to a `sync.Mutex` value, so any code that copies a `Mock` by value now copies a lock. A mock copied while another goroutine holds the lock, or one embedded in a struct that is copied after `On` or `Called`, gets a locked or duplicated mutex. That can deadlock the copy or break synchronization. Before, copies shared one pointer. `go vet` copylocks also now flags every by-value use of `Mock`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Switching to a value sync.Mutex is a deliberate fix: it removes the racy lazy nil-check and the reset to a fresh mutex inside On(), which itself broke synchronization, and Mock is meant to be used by pointer, so the copy hazard and the go vet copylocks warnings only hit code that was already misusing it."
+  }
+ },
+ "verify_error": ""
+}

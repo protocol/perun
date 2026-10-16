@@ -1,0 +1,36 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 18,
+   "severity": "medium",
+   "text": "The action-handler path now emits `command:<name>` on `this.parent` instead of `this`. A listener attached to the command itself, such as `sub.on('command:sub', fn)`, no longer fires. The root program (no parent) also never emits, so `program.on('command:prog')` with an action handler is silently dropped."
+  },
+  {
+   "file": "index.js",
+   "line": 19,
+   "severity": "medium",
+   "text": "The new `else if` branch fires when the parent has a listener for `command:<name>`, even if this command has no action handler. It runs before the `operands.length` branch, so unknown-subcommand handling is skipped. For a parent listening on `command:foo`, `foo bar` (where `bar` is not a subcommand) emits the event and never reaches the `*` handler, the `command:*` listener or `unknownCommand`. A command with neither an action handler nor subcommands also hits this branch, so the help/unknown-command fallthrough is bypassed."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "Emitting the legacy `command:<name>` event on the parent is deliberate: the documented pattern is `program.on('command:sub')`, and the root program has no parent command event to emit, so this restores the intended behaviour rather than breaking it."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "On purpose, a parent listener on `command:<name>` acts like an action handler for that command (legacy support), so dispatching to it before the unknown-command and help fallbacks is by design."
+  }
+ },
+ "verify_error": ""
+}

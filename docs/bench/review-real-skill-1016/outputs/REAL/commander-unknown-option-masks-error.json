@@ -1,0 +1,36 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 1505,
+   "severity": "medium",
+   "text": "The `command:<name>` event used to be emitted on the command itself (`this.emit`). It now goes only to `this.parent`, and only if a parent exists. Listeners registered on the command, such as `cmd.on('command:foo', fn)`, never fire. A root program with an action handler emits nothing, so `program.on('command:'+program.name(), fn)` is silently dropped."
+  },
+  {
+   "file": "index.js",
+   "line": 1506,
+   "severity": "medium",
+   "text": "The new `else if (this.parent && this.parent.listenerCount(commandEvent))` branch runs before the `operands.length` handling. If the parent has a listener for `command:foo` and `foo` has no action handler, the event is emitted and the `*` default-command, `command:*` and unknown-command handling is skipped. For example, `prog foo extra` is now swallowed with no unknown-command error or help when `foo` has operands and no action."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "Emitting `command:<name>` on the parent is deliberate: the patch marks it `// legacy`, and it restores the old behaviour where `program.on('command:foo')` listeners on the parent receive subcommand events. The command's own emit was the regression, so this is not a lost feature."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The `listenerCount` branch is intentional legacy support (it matches upstream commander): a parent listener on `command:foo` works as that subcommand's handler, so skipping the default-command, `command:*` and unknown-command handling when it is present is by design."
+  }
+ },
+ "verify_error": ""
+}

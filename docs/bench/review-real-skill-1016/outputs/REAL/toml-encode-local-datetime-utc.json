@@ -1,0 +1,36 @@
+{
+ "id": "toml-encode-local-datetime-utc",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "encode.go",
+   "line": 193,
+   "severity": "high",
+   "text": "For LocalDatetime, LocalDate and LocalTime values, the encoder formats `v.In(time.UTC)`. The parser stores these values with the wall clock in a fixed zone whose offset is the local offset, so converting to UTC shifts the wall clock by that offset. Example: with a UTC+2 local zone, `1979-05-27T07:32:00` is written back as `1979-05-27T05:32:00`. A time-only value such as `07:32:00` becomes `05:32:00`, and a local date near midnight can change day. It should call `v.Format(format)` directly, so the encode/decode round trip is lossy whenever the local offset is nonzero."
+  },
+  {
+   "file": "parse.go",
+   "line": 379,
+   "severity": "medium",
+   "text": "`localOffset` is captured once at init from `time.Now().Zone()`, and the Local* zones use that fixed offset. Local datetimes, dates and times are now parsed with the current DST offset instead of `time.Local`'s offset for that date. Example: in a DST zone, parsing `2020-01-15T12:00:00` in summer gives an instant that differs by an hour from the previous `time.Local` result. The offset is also frozen for the life of the process."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "This is the reference bug: for LocalDatetime/LocalDate/LocalTime values, encode.go calls v.In(time.UTC).Format(format), which moves the wall clock by the local offset that the parser attached to the fixed zone."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "parse.go now builds LocalDatetime/LocalDate/LocalTime with time.FixedZone using an offset taken once from time.Now().Zone() at init, so local values no longer get the DST-aware time.Local offset they got before; the doc still says they are 'parsed in the local timezone', yet the resulting instant can be off by an hour for dates in the other DST period."
+  }
+ },
+ "verify_error": ""
+}

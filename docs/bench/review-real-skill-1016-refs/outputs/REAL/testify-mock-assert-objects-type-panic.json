@@ -1,0 +1,43 @@
+{
+ "id": "testify-mock-assert-objects-type-panic",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 522,
+   "severity": "high",
+   "text": "The type assertion changed from `obj.(Mock)` to `obj.(*Mock)`, so the deprecated call `AssertExpectationsForObjects(t, myMock.Mock)`, which passes a `Mock` value, no longer matches. It falls through to `obj.(assertExpectationser)`, which panics because `AssertExpectations` has a pointer receiver and a `Mock` value doesn't implement it. Previously this case was handled with a deprecation log."
+  },
+  {
+   "file": "mock.go",
+   "line": 522,
+   "severity": "low",
+   "text": "The deprecation branch now fires for a `*Mock` argument, for example `AssertExpectationsForObjects(t, &myMock.Mock)`. That is a valid pointer usage and was never deprecated, so it now logs a misleading deprecation warning."
+  },
+  {
+   "file": "mock.go",
+   "line": 258,
+   "severity": "medium",
+   "text": "`mutex` changed from `*sync.Mutex` to a value `sync.Mutex`, so any code that copies a `Mock` by value (for example embedding it by value and copying the struct) now copies the lock state. Copies made while the lock is held stay locked forever and deadlock on the next `On` or `AssertExpectations`. Before, the pointer was lazily created and re-created in `On`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "With the new `obj.(*Mock)` check, a valid `*Mock` argument such as `&myMock.Mock` (and any `*Mock` passed directly) logs the deprecation message, even though pointer usage is the recommended form; this is a different defect from the unchecked assertion panic."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "Switching to a value `sync.Mutex` is the standard Go idiom and the intended fix (the old code replaced the mutex inside `On`, which was itself racy); copying a `Mock` by value is already flagged by `go vet` copylocks, so this is by design rather than a defect."
+  }
+ },
+ "verify_error": ""
+}

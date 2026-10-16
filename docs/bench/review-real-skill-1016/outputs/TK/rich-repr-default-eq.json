@@ -1,0 +1,36 @@
+{
+ "id": "rich-repr-default-eq",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "repr.py",
+   "line": 119,
+   "severity": "medium",
+   "text": "The auto-generated `__rich_repr__` is only installed when `hasattr(cls, '__rich_repr__')` is false, and `angular` is only set on that generated function. `@auto(angular=True)` on a class that defines its own `__rich_repr__`, or on a subclass of an already-decorated class, silently ignores `angular`. Such a class still reprs as `Foo(...)` instead of `<Foo ...>`."
+  },
+  {
+   "file": "repr.py",
+   "line": 114,
+   "severity": "medium",
+   "text": "The generated `__rich_repr__` wraps every exception in `ReprError`, for example an `AttributeError` when `__init__` has a parameter such as `def __init__(self, x)` that is not stored as `self.x`. `repr(obj)` then raises instead of returning a string, which breaks debuggers, logging and tracebacks that call `repr()`. The `from None` also discards the original traceback."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "`angular` is only set on the generated `auto_rich_repr` inside `if not hasattr(cls, '__rich_repr__')`, so `@auto(angular=True)` is silently ignored when the class defines its own `__rich_repr__` or inherits one from a decorated parent (later upstream versions set `angular` outside this check)."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Wrapping the failure in `ReprError` is a deliberate design choice, and an `__init__` parameter that isn't stored on `self` would raise `AttributeError` from `repr()` anyway, so the wrapper doesn't make `repr()` fail where it would otherwise have worked."
+  }
+ },
+ "verify_error": ""
+}

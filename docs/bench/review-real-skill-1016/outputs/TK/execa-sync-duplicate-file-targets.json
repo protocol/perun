@@ -1,0 +1,36 @@
+{
+ "id": "execa-sync-duplicate-file-targets",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "duplicate.js",
+   "line": 231,
+   "severity": "high",
+   "text": "hasSameValue compares `value.path` for filePath items, but filePath values have the shape `{file}`, as `handle-sync.js` destructures. Both sides are therefore `undefined` and always equal. With `{stdout: {file: 'a.txt'}, stderr: {file: 'b.txt'}}`, stderr is treated as a duplicate of stdout and reuses stdout's stream, so b.txt is never written. An input file on one fd plus a different output file on another throws a bogus 'must not target the same file' error. The fix is to compare `value.file`."
+  },
+  {
+   "file": "handle.js",
+   "line": 396,
+   "severity": "low",
+   "text": "On failure, `cleanupCustomStreams` only receives the descriptors already finalized. Streams created for earlier items in the descriptor that threw, such as a file stream created before a later duplicate-validation error, are never destroyed. This leaks file handles."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "filePath values have the shape {file} (handle-sync.js reads `{value: {file}}`), so `value.path === secondValue.path` compares undefined to undefined and is always true; every pair of filePath items then counts as a duplicate, which reuses the wrong stream or throws a bogus same-file error. This is a different defect from the writeToFiles raw-path keying."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "getFinalFileDescriptor builds its items with stdioItems.map and only pushes the result once the whole map finishes, so if a later item throws (for example from throwOnDuplicateStream), streams already created for earlier items in that descriptor are not in `fileDescriptors` and cleanupCustomStreams never destroys them."
+  }
+ },
+ "verify_error": ""
+}

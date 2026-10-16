@@ -1,0 +1,43 @@
+{
+ "id": "rich-repr-default-eq",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "repr.py",
+   "line": 119,
+   "severity": "medium",
+   "text": "The `if not hasattr(cls, \"__rich_repr__\")` guard is also true for inherited methods, so a subclass decorated with `@auto(angular=True)` whose parent was already decorated never gets the `angular` flag set. It keeps the parent's flag and renders as `Child(...)` instead of `<Child ...>`. The same happens when the class defines its own `__rich_repr__` without an `angular` attribute, because the decorator argument is silently ignored."
+  },
+  {
+   "file": "repr.py",
+   "line": 114,
+   "severity": "medium",
+   "text": "`auto_rich_repr` turns any failure into `ReprError`, and `repr()` now propagates it. For `@auto class A: def __init__(self, x): self._x = x`, `getattr(self, 'x')` fails and `repr(a)` raises `ReprError` instead of returning a string. This breaks logging, debuggers and tracebacks. The old `rich_repr` only ever used a user-written `__rich_repr__`."
+  },
+  {
+   "file": "repr.py",
+   "line": 110,
+   "severity": "low",
+   "text": "`param.default == param.empty` uses `==` instead of `is`. A default whose `__eq__` returns a non-bool, such as a numpy array, makes the `if` raise and the repr fails. `auto_repr` also does `default[0] == value`, which breaks the same way. `*args` and `**kwargs` parameters are silently dropped from the generated repr."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "At repr.py:119, `hasattr` also finds an inherited `__rich_repr__` or one the class defines itself, so the angular flag is only set when the auto method is installed; in those other cases `@auto(angular=True)` is silently ignored and the repr comes out as `Child(...)`."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The `ReprError` is raised on purpose (a dedicated exception class with explicit wrapping), so an `__init__` parameter with no matching attribute fails loudly by design; this is not an accidental defect."
+  }
+ },
+ "verify_error": ""
+}

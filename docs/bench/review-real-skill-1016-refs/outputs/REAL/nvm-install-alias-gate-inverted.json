@@ -1,0 +1,46 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "confidence_score": 92,
+   "text": "In the already-installed branch, the guards `[ $EXIT_CODE -ne 0 ]` are inverted, and `EXIT_CODE` is an unset local unless `install-latest-npm` ran. For `nvm install 18` when 18 is already installed, `[ \"\" -ne 0 ]` errors and evaluates false. Default packages, `reinstall-packages` (`--reinstall-packages-from`) and `nvm alias` (line 59) are then silently skipped. If npm upgrade succeeded (0), they are skipped too. They run only after a failure."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 65,
+   "severity": "medium",
+   "confidence_score": 80,
+   "text": "`return $EXIT_CODE` returns an empty value when `EXIT_CODE` was never set, for example when `nvm use` fails or `NVM_UPGRADE_NPM` is not 1. The status then comes from whatever ran last instead of reflecting the real outcome. The old `return $?` reported the alias status. With the inverted guards, a failed `npm` upgrade can also be returned as the final status even though later steps were skipped."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 285,
+   "severity": "low",
+   "confidence_score": 80,
+   "text": "`nvm_install_default_packages` now ignores its `$1` argument and assigns `EXIT_CODE` without `local`. Any other caller that passes a package list (for example `nvm reinstall-packages`) now gets the default-packages file contents instead. It also clobbers or leaks a global `EXIT_CODE`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The patch removes the `EXIT_CODE=-1` initialisation and only sets `EXIT_CODE` inside the `NVM_UPGRADE_NPM` branch, so on the already-installed path `[ $EXIT_CODE -ne 0 ]` is a test error and `return $EXIT_CODE` becomes a bare `return` that passes on the last command's status; that is an uninitialised-variable defect separate from the inverted test."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The only calls to `nvm_install_default_packages` in the patch are the two in `nvm install`, and both were updated to pass no argument; `reinstall-packages` doesn't call it in upstream nvm, though the context dir is missing so the full pre-fix file couldn't be searched; and its unqualified `EXIT_CODE=` just writes the caller's `local EXIT_CODE`, which is then overwritten with `$?`, so nothing leaks."
+  }
+ },
+ "verify_error": ""
+}

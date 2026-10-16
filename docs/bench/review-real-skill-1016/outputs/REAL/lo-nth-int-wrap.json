@@ -1,0 +1,32 @@
+{
+ "id": "lo-nth-int-wrap",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "find.go",
+   "line": 11,
+   "severity": "medium",
+   "text": "`n := int(nth)` is an unchecked narrowing or wrapping conversion. On 64-bit, `Nth(s, uint64(math.MaxUint64))` becomes -1 and silently returns the last element instead of an out-of-bounds error. `uint64(1<<63)` becomes MinInt, so `-n > l` is false (negating MinInt overflows) and `collection[l+n]` panics. On 32-bit, `int64(1<<32)` becomes 0 and returns element 0."
+  },
+  {
+   "file": "find.go",
+   "line": 10,
+   "severity": "low",
+   "text": "The signature now has a second type parameter `N`. Existing explicit instantiations such as `Nth[int](xs, 1)` no longer compile because `N` can't be inferred when only one type argument is supplied. This also breaks function-value uses like `f := lo.Nth[int]`. Separately, `constraints` must be imported in find.go. I couldn't confirm that, because the patch doesn't show the import block."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Go accepts partial type-argument lists and infers the rest from the call, so `Nth[int](xs, 1)` still compiles (N is inferred as int from the untyped constant); losing function values like `lo.Nth[int]` comes with the intentional move to a generic index type rather than being a defect; and the import block can't be checked because ./context/ is missing, so only the patch was available."
+  }
+ },
+ "verify_error": ""
+}

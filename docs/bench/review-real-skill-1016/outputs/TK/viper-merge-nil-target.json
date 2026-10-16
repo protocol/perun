@@ -1,0 +1,36 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 97,
+   "severity": "medium",
+   "text": "When the merged value's type differs from the existing value's type, mergeMaps logs an error and `continue`s, so the new value is silently dropped. For example, base `port: \"80\"` (string) merged with `port: 8080` (int) leaves the old value, and MergeConfig still returns nil. The same happens when a scalar is replaced by a map, or by a nil value. Later files therefore cannot override earlier ones, and the caller gets no error."
+  },
+  {
+   "file": "viper.go",
+   "line": 47,
+   "severity": "low",
+   "text": "keyExists returns \"\" both for 'not found' and for a real key that is the empty string. An existing \"\" key is therefore treated as missing and is overwritten instead of merged. Non-string yaml keys are also converted with Sprintf in castToMapStringInterface, so merging `1: a` into an existing int key `1` adds a duplicate string key \"1\" to the interface map."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding points to the `svType != tvType` check followed by `continue` at viper.go:97. That check is the root cause of the reference bug: a nil value has a different type, so the key gets logged as an error and skipped instead of merged."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "Two confirmed defects, separate from the reference bug. First, keyExists returns \"\" for a missing key, which is the same result as a real empty-string key. Second, castToMapStringInterface turns the int key 1 into the string \"1\", so the default branch writes `itgt[\"1\"]` next to the original int key 1 in the interface map, creating a duplicate."
+  }
+ },
+ "verify_error": ""
+}

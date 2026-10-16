@@ -1,0 +1,36 @@
+{
+ "id": "execa-sync-duplicate-file-targets",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "duplicate.js",
+   "line": 231,
+   "severity": "high",
+   "text": "`hasSameValue` compares `value.path` for `filePath` items, but a `filePath` value is `{file}` (handle-sync.js reads `value: {file}`), so both sides are `undefined` and any two file-path items count as the same. With `{stdout: {file: 'a.txt'}, stderr: {file: 'b.txt'}}`, async mode reuses a.txt's stream for stderr, so b.txt never gets its output. In sync mode, `{stdin: {file: 'in.txt'}, stdout: {file: 'out.txt'}}` throws a false 'must not target a file path string that is the same' TypeError."
+  },
+  {
+   "file": "output-sync.js",
+   "line": 111,
+   "severity": "medium",
+   "text": "Files are deduplicated by the raw string from `path.toString()`, so different spellings of one file are not recognised. With `stdout: {file: 'out.txt'}` and `stderr: {file: './out.txt'}`, or a string and an equivalent file URL, the second target calls `writeFileSync` again and truncates the stdout data just written."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The sync handler destructures a filePath value as `{file}`, so `value.path === secondValue.path` compares undefined with undefined and treats any two filePath items as duplicates; that wrongly reuses a stream in async mode and throws a false TypeError in sync mode."
+  },
+  "1": {
+   "verdict": "gt_same",
+   "reason": "writeToFiles keys outputFiles by the raw path string, so different spellings or a path and a URL for the same file are not recognised as one file and the file is rewritten; this is the reference bug's root cause."
+  }
+ },
+ "verify_error": ""
+}
