@@ -27,7 +27,7 @@ def hook(msg, active=False, env=None):
 
 class Terse(unittest.TestCase):
     def test_prose_blocked(self):
-        r = hook(PROSE)
+        r = hook(PROSE, env={"TERSE_MODE": "block"})  # default mode only reminds (test_reply_budget_prevention.py)
         self.assertEqual(r["decision"], "block")
         self.assertIn("Rewrite", r["reason"])
 
