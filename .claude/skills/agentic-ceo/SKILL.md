@@ -144,6 +144,11 @@ delivery by hand when a skill or lane should. Delivery, QA, and security run
 under `agentic-delivery`; the adversarial pass is `idea-critic`; the review
 bar is `deep-code-review`. Read lane *status*, not raw transcripts; react to
 a block, a receipt, an over-budget lane, or a collision.
+**Altitude is enforced, not just advised.** On taking the CEO seat run `agentic-delivery`'s
+`scripts/perun_policy.py set role ceo` (`ceo-strict` blocks instead of warning). `scripts/ceo_altitude_guard.py`
+(operating layer) then flags the main session's 2nd direct edit of source or tests in a turn, and its 4th build/test
+run, with `delegate: spawn a lane with the brief ...`. A lane is never flagged; the owner lifts it for a turn with
+`ceo:off`; `operating_selfcheck.py` prints direct edits per session.
 **Owner-gated actions never self-authorize** — a force-push, a rename, a
 delete, or a shared/external send needs an owner-authored grant, urgent or
 not; `agentic-delivery`'s **Human gates** names which actions gate and what
