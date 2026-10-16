@@ -180,7 +180,7 @@ below, on the owner's yes).
 
 ## Domain map (A–W)
 
-One-line each; twenty-one domains span A–W (**U, V and X–Z are unassigned — a
+Twenty-one domains span A–W (**U, V and X–Z are unassigned — a
 domain earns its letter**). **Checklists:** each row's first file, **only** for
 applicable domains. Language footguns:
 `language-stack-redflags.md` + only the languages present:
@@ -194,15 +194,15 @@ applicable domains. Language footguns:
 | B | AppSec (OWASP Top 10:2025) | `domain-b.md`, `security-appsec.md` → `appsec-edge.md`, `appsec-scan-tests.md`, `appsec-links.md`, `appsec-approvals.md`, `appsec-supply.md`, `appsec-crypto.md`, `appsec-ssti.md`, `appsec-files.md`, `appsec-tokens.md`, `appsec-login.md`, `appsec-design.md`, `threat-modeling.md` (new boundary); `security-api.md` (serves its own HTTP/GraphQL/gRPC/WebSocket API, any archetype), `mobile-appsec.md` (ships an iOS/Android/native mobile client; MASVS/MASTG deltas) |
 | C | AI / LLM / agents | `domain-c.md`, `security-ai-agents.md`, `security-agent-skills.md` |
 | D | Data integrity | `domain-d.md`, `data-quality.md` → `data-identity.md`, `data-scoring.md`, `data-metrics.md`, `data-freshness.md`, `data-ml.md`, `data-contracts.md`, `data-shapes.md`, `data-graph.md` |
-| E | Performance, efficiency & cost | `domain-e.md`, `performance-db-cost.md`, `model-tiering.md`, `billing-correctness.md` (when the target meters, subscribes, or charges) |
-| F | Reliability & error handling | `domain-f.md`, `reliability-error-handling.md` |
+| E | Performance, efficiency & cost | `domain-e.md`, `performance-db-cost.md`, `model-tiering.md`, `billing-correctness.md` (when the target meters, subscribes, or charges), `energy-efficiency.md` (battery, always-on, carbon) |
+| F | Reliability & error handling | `domain-f.md`, `reliability-error-handling.md`, `safety-critical.md` (can harm people or property) |
 | G | Concurrency & shared state | `domain-g.md`, `concurrency-shared-state.md` |
-| H | Tech debt, dead code, maintainability | `domain-h.md`, `skill-authoring-and-size.md` (when the target ships/installs skills or has `**/SKILL.md`: size ratchet) |
-| I | API, contracts, integration | `domain-i.md`, `api-contracts.md` |
+| H | Tech debt, dead code, maintainability | `domain-h.md`, `skill-authoring-and-size.md` (when the target ships/installs skills or has `**/SKILL.md`: size ratchet), `code-structure.md` (coupling, cycles) |
+| I | API, contracts, integration | `domain-i.md`, `api-contracts.md`, `compatibility-portability.md` (support matrix, installers) |
 | J | Testing & evaluation | `domain-j.md`, `testing-and-evals.md`; `testing-ui.md` (UI, E2E), `testing-ai-evals.md` (model output), `testing-ml.md` (ML, notebooks), `testing-situational.md` (flaky, fuzz, mutation) |
-| K | Build, CI, supply chain, release | `domain-k.md`, `dependency-currency-and-upgrades.md` → `dependency-bulk-upgrades.md`, `release-engineering.md` |
+| K | Build, CI, supply chain, release | `domain-k.md`, `dependency-currency-and-upgrades.md` → `dependency-bulk-upgrades.md`, `release-engineering.md`, `delivery-speed.md` (CI/build time, review friction) |
 | L | Infra / IaC / containers / cloud / serverless | `domain-l.md`, `infra-iac-containers.md` (how-to-secure existing), `infra-evolution-by-stage.md` (when-to-add, by stage) |
-| M | Observability | `domain-m.md`, `observability.md` |
+| M | Observability | `domain-m.md`, `observability.md`, `product-impact.md` (claimed outcome, analytics) |
 | N | Config, secrets, environments | `domain-n.md` |
 | O | Docs & DX | `domain-o.md`, `docs-and-dx.md`, `docs-evolution-by-stage.md` (which-docs-when, by stage), `readme-authoring.md` (writing/reviewing an onboarding README) |
 | P | Frontend / UI / a11y | `domain-p.md`, `frontend-a11y.md` → `a11y-aria.md`, `a11y-live.md`, `a11y-focus.md`, `a11y-color-motion.md`, `a11y-forms.md`, `frontend-security.md` (CSP/Referrer-Policy/URL-token), `web-fetch.md`, `web-render.md`; `product-ux-quality.md` → `ux-writes.md`, `ux-dataviz.md`, `ux-lists.md`, `ux-states.md`, `ux-components.md`, `ux-interaction.md`, `ux-sweep.md`, `ux-gates.md`; `rendered-parity.md` (design-parity port/restyle), `migration-parity.md` (matching a mockup/design-export) |
@@ -261,7 +261,7 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
    **Unstated → default to the stricter (later-stage) reading.** A review that
    assumed `prototype` and waved a Critical is a worse failure than one that
    over-asked for CI on a spike.
-2. **Security, secret-exposure, and data-loss/integrity findings never relax** — a
+2. **Security, secret-exposure, safety, and data-loss/integrity findings never relax** — a
    `prototype` with an exposed credential is still Critical. These have no "relax"
    entry at any stage; that is why the third column omits them on purpose.
 3. **Stage moves urgency, not intrinsic severity.** Every finding keeps its true
@@ -270,14 +270,10 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
    by stage-urgency; it does not downgrade them.
 
 **Stage-evolution lenses (when to add, not how to secure).** When the going-forward
-roadmap must say how a project's infrastructure/architecture or documentation should
-*evolve* for its stage — **read** `infra-evolution-by-stage.md` (infra,
-deploy, and architecture earned per stage, each step gated on an observable trigger;
-the security/backup floor never relaxes) and `docs-evolution-by-stage.md`
-(which documents acquire normative force at which stage; trigger-not-calendar). Both
-feed the going-forward roadmap in `report-format.md`. The *how-to-secure* depth for
-infra/docs already in place stays in `infra-iac-containers.md` (L) and
-`docs-and-dx.md` (O) — do not duplicate it here.
+roadmap must say how infrastructure/architecture or documentation should *evolve*
+for its stage, **read** `infra-evolution-by-stage.md` (the security/backup floor
+never relaxes) and `docs-evolution-by-stage.md`; both feed the roadmap in
+`report-format.md`. How-to-secure: `infra-iac-containers.md` (L), `docs-and-dx.md` (O).
 
 ---
 
@@ -389,4 +385,4 @@ separately. Persisted artifacts (code, PR bodies, docs) stay normal English
 either way.
 
 Compose with other packs; do not also run a second delivery OS on the same
-repo. This review skill always composes.
+repo.

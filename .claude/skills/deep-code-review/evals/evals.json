@@ -8109,6 +8109,75 @@
         "Tags shadow-rule findings and counts disabled-rule suppressions",
         "States the safety floor is not relaxed by the file"
       ]
+    },
+    {
+      "id": "safety-fail-closed-is-not-fail-safe-for-an-exit-door",
+      "prompt": "A PR adds a controller for a building's emergency-exit doors. On any controller fault, network loss or auth-service timeout the code denies the unlock command and keeps the door locked; the team says this is 'fail closed, per our security checklist'. Tests cover the happy path only. A reviewer is asked to sign off. What does the reviewer say?",
+      "expected_output": "The reviewer does not accept 'fail closed' as the safe state for an exit route. Fail-safe (the device will not endanger lives or property when it fails) and fail-secure/fail-closed (access or data will not fall into the wrong hands) can point opposite ways; for a fire-route door the safe state on a fault is often release, so denying unlock on a fault can itself trap people (safety-critical.md). The reviewer names the hazard and the safe state per control and surfaces the security-versus-safety conflict as an owner decision with both sides stated, instead of silently choosing one. Under the ISO/IEC 25010:2023 safety sub-characteristics it asks for: an operational constraint enforced at the last software boundary, a hazard analysis the controls trace to (risk identification), fault-injection tests that assert the safe state on fault, lost network and auth timeout with an actuator-side watchdog (fail safe), a hazard warning path that is itself monitored, and no simulation or debug bypass plus a tested rollback (safe integration). It does not certify the door controller as safe or compliant from a code read: status unverified, naming the hazard analysis, the safety case and a qualified safety engineer as what would resolve it. A reachable path to injury is Critical with no stage discount.",
+      "expectations": [
+        "Rejects 'fail closed per the security checklist' as sufficient: fail-safe and fail-closed can conflict, and denying unlock on a fault can itself trap people",
+        "Requires naming the hazard and the safe state per control, and surfaces the security-versus-safety conflict as an owner decision rather than silently choosing",
+        "Asks for fault-injection evidence that the safe state is reached on a fault, lost network and auth timeout (with an actuator-side watchdog), not a code-read assertion or happy-path tests",
+        "Refuses to certify the controller safe or compliant: marks it unverified and names the artifacts that would resolve it (hazard analysis, safety case, qualified safety engineer)",
+        "Rates a reachable path to injury as Critical, with no stage discount"
+      ]
+    },
+    {
+      "id": "energy-claim-needs-a-measurement-or-is-unmeasured",
+      "prompt": "A mobile app update adds a background location poll every 5 seconds and takes a wake lock while the app is open. The PR description says it 'cuts our carbon footprint by 30%' because the backend moved to a region with a greener grid. No energy or carbon measurements are attached. What does the reviewer report?",
+      "expected_output": "The 30% figure is unverified: with no energy or carbon measurement the reviewer reports UNMEASURED and does not invent a kWh or gCO2eq number (energy-efficiency.md). The Software Carbon Intensity frame is SCI = ((E x I) + M) per R: a greener region moves only I (carbon intensity), while the new 5-second poll and the held wake lock raise E on the user's device. Android's documentation warns that holding a wake lock can have a dramatic impact on battery life, to avoid one when a suitable alternative exists and to hold it as briefly as possible, so the findings are a background poll with no stop condition and a wake lock with no release on every exit path. Severity is Low or Medium by default and High here only because the drain is user-visible; never a Blocker. Correctness, security and accessibility are not traded for energy. Moving work across regions is an option for the owner subject to data-residency and latency checks, not a review patch.",
+      "expectations": [
+        "Treats the 30% carbon claim as unverified/UNMEASURED because no measurement is attached, and does not invent kWh or gCO2eq figures",
+        "Frames SCI as ((E x I) + M) per R and notes a greener region moves only I while the new polling and wake lock raise E",
+        "Flags the 5-second background poll and the held wake lock (no stop condition, no release on every exit path) as battery drain, citing that wake locks should be avoided when alternatives exist and held as briefly as possible",
+        "Rates it Low or Medium by default, High only for user-visible background drain, never a Blocker, and does not trade correctness or security for energy"
+      ]
+    },
+    {
+      "id": "delivery-speed-measure-then-probe-ci-and-review-friction",
+      "prompt": "Developers say CI is slow and pull requests sit for days. The workflow installs dependencies with no cache in every job, a lint job `needs` the build job although it reads none of its outputs, one 25-minute test job dominates a 10-job pipeline, and a retry-3 wrapper surrounds the tests. The median merged PR is 1,400 changed lines across 60 files. What does the review report, and in what order?",
+      "expected_output": "Measure first: p50 and p95 of time-to-green and queue wait from the run history (gh run list --json createdAt,startedAt,updatedAt, filtered to attempt 1, treated as proxies not billing) and the PR-cycle distribution (time to merge, size, first-review latency); with no history the answer is UNMEASURED, not a guess (delivery-speed.md). Attribute the p95 to a stage: the 25-minute test job is the critical path, so shard the suite before a bigger runner or a platform. Concrete probes: no dependency cache (the setup-* actions' cache or actions/cache with a lockfile-hash key; caches are branch-scoped, so the default branch must write them for PRs to be warm); the lint job's needs edge with no output or artifact use is a parallel candidate; the retry wrapper masks flakes and adds wall-clock on each one, so count reruns and fix the top offenders. Review friction: a 1,400-line, 60-file median PR is far past Google's rough guideline of about 100 lines reasonable and 1,000 too large (a judgment call, not a hard rule), and first-review latency should be compared with one business day. Rate Medium by default; High only if a gate is being skipped because it is slow. Take the free and cheap fixes before buying anything.",
+      "expectations": [
+        "Measures first (p50/p95 time-to-green, queue wait, PR size and first-review latency) and reports UNMEASURED when there is no run history rather than guessing",
+        "Attributes the p95 to the 25-minute test job and shards it before recommending a bigger runner or platform",
+        "Names the missing dependency cache and the lint needs edge with no data dependency (a parallel candidate) as concrete findings",
+        "Flags the retry wrapper as masking flakes and adding wall-clock, and counts reruns",
+        "Flags the 1,400-line, 60-file median PR against Google's rough 100-reasonable / 1,000-too-large guidance as a review-friction finding, framed as a guideline and not a hard rule"
+      ]
+    },
+    {
+      "id": "code-structure-run-read-only-probes-before-recommending-a-split",
+      "prompt": "A FULL review of a 200-file TypeScript service. Reviewers say 'the code is a mess, split it into packages'. No architecture tooling is configured and the repo has a full git history. What does the reviewer do before recommending any restructuring?",
+      "expected_output": "Run read-only probes and let the evidence decide; do not install an analyser into the target, since review is read-only and a package install runs third-party code (code-structure.md). The missing architecture tooling is itself a finding: layer and cycle rules are convention, not a gate. Without a configured tool, count fan-in and fan-out per module with rg, combine the god-module candidates with the churn ranking from the maintainability checklist, and compute co-change coupling from git log --name-only, skipping bulk commits. Lockstep surfaces such as version stamps, changelogs and checksum files will dominate the pair list and are expected; the lead is a pair in different modules with a high co-change count and no import edge. A shallow clone would make this probe empty, which must be said. Structure-to-speed links worth checking are import-time side effects, bundle shape, and hot versus cold paths. A split is a redesign: an owner decision under Decisions needed, never a Blocker, and structural findings are Medium or Low unless they cause a defect.",
+      "expectations": [
+        "Runs read-only probes (import cycles, fan-in/fan-out, co-change coupling) before recommending a split, and does not install analysers into the target",
+        "Treats the missing architecture tooling as a finding: the rules are convention, not an enforced gate",
+        "Uses co-change coupling from git history, expects lockstep surfaces (version, changelog, checksum files) to dominate the pair list, and looks for cross-module pairs with a high count and no import edge",
+        "Treats a restructure as an owner decision under Decisions needed and rates structural findings Medium or Low unless they cause a defect"
+      ]
+    },
+    {
+      "id": "product-impact-claim-needs-emitter-guardrail-and-exactly-once-event",
+      "prompt": "A PR titled 'Increase checkout conversion' removes a step from checkout and adds a trackPurchase() call inside a React component's useEffect that runs whenever the cart changes. It adds no feature flag, no guardrail metric and no baseline, and the description predicts +12% conversion. What does the reviewer report?",
+      "expected_output": "The +12% is unverified: there is no baseline and the reviewer never invents a target (product-impact.md). For a claimed outcome the review looks for four things: a named metric with a baseline, an emitter at a file:line, a guardrail metric that must not regress (latency, error rate, support contacts), and a decision rule with an owner. The emitter is also wrong: trackPurchase in an effect keyed on cart changes fires on every cart change, not once per confirmed purchase, and React's Strict Mode runs an extra effect setup in development so dev data double counts while production re-fires whenever the dependencies change. The event belongs after the server confirms the purchase (a server-side conversion event), with a failure as its own event. There is no flag, cohort or kill switch, so the change cannot be measured or undone. Removing a checkout step may well be a good change: the review verifies that the claim, the measurement and the way back exist and does not predict outcomes, since product ideas are owner decisions. Medium for the missing emitter and guardrail; High only if money or an irreversible action is involved with no kill switch.",
+      "expectations": [
+        "Treats the +12% as unverified (no baseline) and does not invent a target or a baseline",
+        "Asks for the four pieces: metric with baseline, an emitter file:line, a guardrail metric that must not regress, and a decision rule with an owner",
+        "Flags trackPurchase in a cart-keyed useEffect as firing on every cart change (and doubling in development under Strict Mode) rather than once per confirmed purchase, and moves it to after server confirmation",
+        "Flags the missing flag or cohort and kill switch, so the change can be neither measured nor undone, without predicting the outcome or ranking the product idea"
+      ]
+    },
+    {
+      "id": "compatibility-declared-versus-tested-support-matrix",
+      "prompt": "A Node CLI's package.json declares engines node >=14. CI runs only on macos-latest with Node 22. The README says it works on macOS, Linux and Windows. The repo ships bash install scripts, has no .gitattributes, and one module imports './utils' while the file on disk is Utils.js. A maintainer asks whether the support claims are accurate.",
+      "expected_output": "Compare three sets: declared (engines >=14 and the README's three operating systems), tested (CI: macOS and Node 22 only) and needed. The declared range is wider than the tested matrix, so Node 14 to 21, Linux and Windows are unverified support claims (compatibility-portability.md). npm's engines field is advisory only unless engine-strict is set, so >=14 is not enforced at install either, and Node 14 may be end of life. The './utils' import of Utils.js works on a case-insensitive default filesystem such as macOS and fails on case-sensitive Linux, which CI never exercises: reproduce on Linux. Bash install scripts with no .gitattributes eol rule can be checked out with CRLF line endings on Windows and then fail under bash. A declared-supported environment that is actually broken is High, because the claim is false for real users; the fix is to add the declared platforms to the CI matrix or narrow the declaration.",
+      "expectations": [
+        "Compares declared (engines >=14, README OS list) against tested (CI on macOS, Node 22 only) and calls the wider declared range an unverified support claim",
+        "States that npm's engines field is advisory unless engine-strict is set, so >=14 is not enforced at install",
+        "Flags the './utils' import of Utils.js as working on a case-insensitive default filesystem (macOS) and failing on Linux, which CI never exercises",
+        "Flags bash install scripts with no .gitattributes eol rule as a Windows line-ending risk",
+        "Rates a broken declared-supported environment High and proposes widening the CI matrix or narrowing the declaration"
+      ]
     }
   ]
 }
