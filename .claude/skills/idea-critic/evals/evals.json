@@ -331,7 +331,7 @@
     },
     {
       "id": "council-agreement-skips-critique",
-      "prompt": "Run the council on a high-blast plan; all three lenses return the same verdict with verified citations.",
+      "prompt": "Run Veche (the decision council) on a high-stakes, hard-to-reverse call; all seats return the same verdict with verified citations.",
       "expected_output": "Verdict by tally, no critique call, confidence computed from agreement and verified-claim share.",
       "expectations": [
         "Critique stage does not run when verdicts agree",
@@ -340,7 +340,7 @@
     },
     {
       "id": "council-disagreement-anonymized-critique",
-      "prompt": "Council lenses disagree (HOLD, HOLD, PASS_TO_USER).",
+      "prompt": "Veche seats disagree (HOLD, HOLD, PASS_TO_USER).",
       "expected_output": "One critique round with answers relabelled A/B/C and lens names stripped; minority answer kept verbatim in dissent.",
       "expectations": [
         "Critique prompts carry no lens or model names",
@@ -350,7 +350,7 @@
     },
     {
       "id": "council-unverifiable-citation-dropped",
-      "prompt": "A council member cites a file:line that does not exist.",
+      "prompt": "A Veche seat cites a file:line that does not exist.",
       "expected_output": "Claim lands in unsupported_claims and does not raise confidence.",
       "expectations": [
         "Citations are checked against the repo before counting",
@@ -359,7 +359,7 @@
     },
     {
       "id": "council-fails-closed",
-      "prompt": "The council command times out or the call cap is reached mid-run.",
+      "prompt": "The Veche command times out or the call cap is reached mid-run.",
       "expected_output": "verdict COULD_NOT_DECIDE with a reason, exit 3; no fabricated verdict.",
       "expectations": [
         "Caps are checked before each call",
@@ -374,6 +374,75 @@
         "Every objection ends with exactly one concrete next action (a named check, measurement or question)",
         "States what result would resolve the objection",
         "A bare objection with no next action is demoted to a note, not filed as a finding"
+      ]
+    },
+    {
+      "id": "decision-closes-with-one-call-kill-and-metric",
+      "prompt": "A team lead asks whether to adopt a new vendor for a core service and wants a stress test before taking it to the VP.",
+      "expected_output": "After the attack the answer closes with ONE decision (go, no-go or go-if, not a menu), observable kill criteria with a date and the action when they fire, the single leading metric to watch and a review date.",
+      "expectations": [
+        "Ends with exactly one decision, not a list of options for the requester to pick from",
+        "Kill criteria are observable tripwires with a date and a pre-committed action, not 'reassess'",
+        "Names one leading metric to watch and a review date"
+      ]
+    },
+    {
+      "id": "decision-compares-do-nothing-and-two-alternatives",
+      "prompt": "We should replace our nightly batch job with a streaming pipeline. Stress-test the idea.",
+      "expected_output": "The claim is set against do-nothing and the two strongest alternatives (including the cheapest), with cost, risk and reversibility for each; the recommendation must beat all three, not only the status quo.",
+      "expectations": [
+        "Do nothing is evaluated as a real option, not dismissed",
+        "Two strongest alternatives are named, one of them the cheapest, each with cost, risk and reversibility",
+        "The steelman of the claim is stated before the attack"
+      ]
+    },
+    {
+      "id": "decision-checks-strategy-fit-and-marks-assumed",
+      "prompt": "Propose adding an enterprise tier next quarter. No stage, vision or north star was provided.",
+      "expected_output": "Fit with stage, vision and north star is checked; absent context is stated and marked assumed (or reused from the CEO loop if present), a sound idea off the north star is a no or a later, and every unsupported claim is cited or marked assumed with the check that would settle it. The requester's own figures are recomputed.",
+      "expectations": [
+        "Strategy fit is checked against stage, vision and north star, with missing context marked assumed rather than invented",
+        "Every claim has a source or is marked assumed plus the check that would settle it",
+        "Pre-mortem, one-way or two-way door and the cost of delay are each stated"
+      ]
+    },
+    {
+      "id": "veche-criteria-fixed-before-scoring-and-chair-breaks-ties",
+      "prompt": "Following references/council.md, run Veche on a choice between two options with criteria impact:3,cost:1; seats score the options and two options tie.",
+      "expected_output": "The criteria and weights are given by the caller before any seat scores, shown identically to every seat and not changeable by a seat; the decision is the deterministic weighted mean; a tie goes to the chair's own top option, else to do-nothing.",
+      "expectations": [
+        "Every first-round prompt carries the same normalized criteria and options",
+        "A seat-reported weight does not change the aggregate",
+        "Tie-break is the chair, then option order with do-nothing first"
+      ]
+    },
+    {
+      "id": "veche-twin-minority-report-and-closing-record",
+      "prompt": "Run Veche with --twin on a decision; one seat disagrees.",
+      "expected_output": "After the decision the evil twin writes a pre-mortem and the strongest dissent; the record carries the minority report (twin plus dissenting seats verbatim), premortems, kill criteria, the leading metric and a review date; a closer no seat gave is UNVERIFIED, never invented.",
+      "expectations": [
+        "minority_report holds the twin's dissent and the dissenting seats' answers verbatim",
+        "decision, kill_criteria, leading_metric and an ISO review_date are present and validate",
+        "A missing closer is marked UNVERIFIED rather than fabricated"
+      ]
+    },
+    {
+      "id": "veche-convenes-only-high-stakes-or-hard-reversibility",
+      "prompt": "Convene Veche on a low-stakes call that is easy to reverse, with --stakes low --reversibility easy.",
+      "expected_output": "verdict NOT_CONVENED with a reason, exit 4 and zero calls; the inline hats are used instead. High stakes or hard reversibility convenes.",
+      "expectations": [
+        "No seat is called when both declarations say low stakes and easy reversal",
+        "Either high stakes or hard reversibility convenes the council",
+        "The seat and independence checks still hold: no seat sees another's answer before writing its own"
+      ]
+    },
+    {
+      "id": "veche-council-name-still-works",
+      "prompt": "An existing script runs scripts/council.py with the old flags.",
+      "expected_output": "council.py forwards every argument to veche.py and returns the same record and exit code; nothing breaks after the rename.",
+      "expectations": [
+        "The shim gives the same verdict and call count as veche.py on the same input",
+        "Exit codes 0, 3 and 4 pass through unchanged"
       ]
     }
   ]

@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SELF_REPO = "remigiusz-antczak/deep-code-review"
+SELF_REPO = "protocol/perun"
 sys.path.insert(0, str(HERE.parents[1] / "agentic-delivery" / "scripts"))  # installed layout: sibling skill
 MAX_CODE_LINES = 20
 MAX_AUTO_PER_DAY = 3
