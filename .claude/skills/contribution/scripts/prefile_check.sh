@@ -7,7 +7,7 @@
 # the matched text. Side effects: none. Deliberately strict: "and/or" or "src/foo" also match
 # the repo-ref pattern; rephrase. A project-only bug belongs in that project's tracker, not here.
 set -u
-SELF_REPO='remigiusz-antczak/deep-code-review'
+SELF_REPO='protocol/perun'
 [ "$#" -eq 2 ] && [ -f "$1" ] && [ -f "$2" ] || { echo "usage: prefile_check.sh <title-file> <body-file>" >&2; exit 2; }
 dir="${BANLIST_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 [ -s "$dir/.banlist.txt" ] || { echo "prefile_check: $dir/.banlist.txt missing or empty (fail closed)" >&2; exit 2; }

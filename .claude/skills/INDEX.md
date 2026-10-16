@@ -64,6 +64,7 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - refix_gate.py: re-touching a recently-fixed file requires a class-level… — --base REF --head REF [--window-hours…
 - review_digest.py: a returning reviewer's change digest, not a full re-read. — --since SHA [--head REF] [--paths PATH…
 - review_gate.py: pre-merge gate: every PR needs an independent deep-code-review… — check <pr> --head SHA [--repo R]
+- sandbox_preflight.py: autonomy advisor. — [REPO] [--home DIR]
 - sandbox_probe.py: first-run check that an agent can work autonomously inside the… — [REPO] [--verdict-only]
 - scrub_env.sh: run a test command without inherited git/DB env. — [cmd args...]
 - serial_gate.py: fail-closed test selection + a cross-lane serial run lock. — select --map map.tsv --base…
@@ -103,4 +104,4 @@ Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — argu
 - No documented CLI: binaries_gate.py, ci_cost_lint.py, closes_lint.py, reaper_lint.py, review_feedback.py, source_scan_tests.py, validate_status_claims.py
 
 ### idea-critic
-- No documented CLI: council.py, validate_verdict.py
+- No documented CLI: council.py, validate_verdict.py, veche.py

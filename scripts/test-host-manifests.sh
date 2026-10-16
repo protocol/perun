@@ -10,9 +10,9 @@ import json, os, sys
 ver = sys.argv[1]
 def load(p): return json.load(open(p))
 cx, mk, gm = load(".codex-plugin/plugin.json"), load(".agents/plugins/marketplace.json"), load("gemini-extension.json")
-assert cx["name"] == "deep-code-review" and cx["version"] == ver, "codex plugin name/version"
+assert cx["name"] == "perun" and cx["version"] == ver, "codex plugin name/version"
 assert os.path.isdir(cx["skills"]), "codex skills path must exist"
-assert gm["name"] == "deep-code-review" and gm["version"] == ver, "gemini name/version"
+assert gm["name"] == "perun" and gm["version"] == ver, "gemini name/version"
 assert os.path.isfile(gm["contextFileName"]), "gemini contextFileName must exist"
 (e,) = mk["plugins"]
 assert e["name"] == cx["name"] and e["source"] == {"source": "local", "path": "./"}, "marketplace source"
