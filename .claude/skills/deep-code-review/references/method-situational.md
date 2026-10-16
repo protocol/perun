@@ -29,6 +29,9 @@ Read this when `method.md` routes here: a gate verdict is disputed, a green, CI 
   the design that satisfies both, or route it as an owner trade-off (principle
   4) — never a unilateral weakening. (A ratified assert-absent test is the same
   shape: `testing-situational.md`'s never-loosen-a-negative-assertion rule.)
+  Moving a blocking check to one later blocking gate (same SHA, server-enforced,
+  still red on a planted failure) is not weakening it; removing it or making it
+  non-blocking is (`agentic-delivery`'s `pipeline-optimizer.md`).
 - **Reproduce a gate's finding with the gate's own detector, not a hand-rolled
   probe.** Validating a fix aimed at an automated gate (linter, schema/contract
   validator, audit/policy gate) with a **bespoke approximation** ("I grep for

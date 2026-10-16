@@ -350,11 +350,17 @@ has.
 | Format check | commit | Implementer | Zero diffs |
 | Lint | commit | Implementer | Zero warnings |
 | Type check | commit | Implementer | Clean |
-| Unit tests + count in the message | commit | Implementer + QA | Green; `Tests: X/X` recorded so a future drop is visible |
+| Unit tests (quick tier) + count in the message | commit | Implementer + QA | Green; `Tests: X/X` recorded so a future drop is visible |
 | Build + integration/E2E at the exact SHA | CI | QA | Green on the reviewed revision, local stack actually started (G5) |
 | Verify-visible-UX | CI | UX & QA | Real controls exercised in the running app; a disabled control **looks** disabled; unit-logic passing ≠ a working UI |
 | UX-evidence (screens-changed) | CI | UX | A page-changing diff shows the screens at a narrow + wide width, or an explicit `No UX change: <reason>` |
 | Dependency / supply-chain | CI | Security | No known-vulnerable or EOL dependency introduced |
+
+**Each blocking check runs once, at the latest gate that still blocks merge.** The
+commit tier holds seconds-long checks; a suite that takes over a minute runs at the
+merge gate (CI, merge queue or train) and not earlier. The same suite at two tiers
+is a duplicate to remove, not extra safety: `references/pipeline-optimizer.md`
+maps and prices them (`scripts/pipeline_profile.py map`).
 
 Every gate obeys the same epistemology (`SKILL.md` *Gate epistemology*;
 `ux-gates.md` for the three UX gates): it **tells "could not check"
@@ -394,7 +400,9 @@ eleventh gate.
   edit can race the lane's write-then-rename and vanish with no conflict.
 - **Collapsing a gate because "it's small."** Low-blast reversible work may
   collapse *adjacent* gates; it may never remove independent verification or a
-  human approval that actually applies (`SKILL.md` Gates).
+  human approval that actually applies (`SKILL.md` Gates). Moving a blocking
+  check to one later blocking gate is neither collapsing nor weakening it;
+  removing it or making it non-blocking is both.
 - **Reporting a running lane as a finished one.** A spawned hat/worker is *work
   in progress*, not delivered value — report what is running, and report the
   outcome only once it is verified (see `SKILL.md` *Worktrees and occupancy* and

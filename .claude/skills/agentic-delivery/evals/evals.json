@@ -2802,6 +2802,89 @@
         "Invokes agentic-delivery before listing or reading files",
         "Does not decline the build on the grounds that the directory is empty before routing"
       ]
+    },
+    {
+      "id": "pipeline-dedup-before-stage-tuning",
+      "prompt": "Delivery is slow: a commit takes minutes and a change takes hours to merge. You are asked to speed it up. The repo runs the same four suites (unit 30s, lint 5s, integration 90s, e2e 200s, 325s together) in the pre-commit hook, again in the pre-push hook, again in a documented 'make precheck' before opening a PR, and again in CI on the pull request. Teammates suggest a larger CI runner, pytest-xdist workers for the unit suite, and affected-test selection. What do you do first, and what do you expect it to save?",
+      "expected_output": "Builds the suite x stage map first (pipeline_profile.py map, references/pipeline-optimizer.md): 4 suites x 4 stages = 16 runs for 4 checks, 1300s per cycle. Duplicate removal ranks first: each blocking check runs once, at the latest gate that still blocks merge (CI or the merge gate); commit and push hooks keep quick checks only. That cuts 1300s to 325s, saving 975s per cycle, against about 163s for a 2x faster runner (it speeds one copy of four) and about 150s for 4-way sharding of the e2e suite at CI only. Moving the suites is not weakening the gate as long as the merge gate still blocks on red; prove it with a planted failure. Measure before and after and keep the change only if the time dropped.",
+      "expectations": [
+        "Draws the suite x stage map (suites against commit, push, precheck, CI) before proposing any fix, and counts the 16 runs of 4 checks",
+        "Ranks duplicate removal first: each blocking check runs once, at the latest gate that still blocks merge; hooks keep quick checks only",
+        "Computes the saving from the given numbers: 1300s per cycle falls to 325s (975s saved), and shows that a faster runner (about 163s) or CI-only sharding (about 150s) saves far less",
+        "Does not start with larger runners, xdist or affected-test selection, because each tunes one copy of four",
+        "Says moving the full suites to the merge gate is not weakening the gate while that gate still blocks red, and proves the gate with a planted failure",
+        "Measures before and after and keeps the change only if the measured time dropped (pipeline_profile.py compare), citing references/pipeline-optimizer.md"
+      ]
+    },
+    {
+      "id": "pipeline-map-first",
+      "prompt": "The owner says: 'CI is too slow, make delivery faster.' You have a repo with hooks, a CI workflow and a merge queue. No numbers exist yet. What is your first action?",
+      "expected_output": "Maps the pipeline and measures before changing anything (references/pipeline-optimizer.md): run pipeline_profile.py map for the suite x stage map (mandatory step 1, flag every suite at more than one stage), then profile for per-stage wall time on the critical path, queue wait, push-to-merge lead time, reruns and flakes, cache hit rate. Output is a ranked bottleneck table backed by numbers. No fix is applied to a symptom without a profile.",
+      "expectations": [
+        "First action is the suite x stage map (pipeline_profile.py map), not a fix",
+        "Then measures per-stage wall time, queue wait, push-to-merge lead time, reruns and flakes, and cache hit rate into a ranked bottleneck table",
+        "Refuses to change a stage (runner, workers, caching) before a profile exists",
+        "Reports the measured number at every step rather than a claim of progress",
+        "Names references/pipeline-optimizer.md or pipeline_profile.py as the procedure or mechanism"
+      ]
+    },
+    {
+      "id": "pipeline-moving-a-gate-is-not-weakening",
+      "prompt": "A lane proposes removing the full test suite from the pre-commit and pre-push hooks because it takes 20 minutes and CI runs it again on the pull request. Another lane objects: 'never weaken a gate'. Who is right?",
+      "expected_output": "Moving is not weakening (references/pipeline-optimizer.md; SKILL.md Gates). A check is weakened when it stops blocking merge: removed, made advisory (continue-on-error, || true), narrowed, or no longer tied to the merging SHA. A check moved to one later blocking gate that is server-enforced (a required CI check, merge queue or train), runs on the SHA that merges, and still goes red on a planted failure is not weakened. Hooks are bypassable (git documents --no-verify), so they are convenience, not the enforcement; the earlier copies are latency. Accept the move after proving the merge gate red with a planted failure and confirming the check is required.",
+      "expectations": [
+        "Distinguishes moving a blocking check to one later blocking gate (not weakening) from removing it or making it non-blocking (weakening)",
+        "Requires the remaining gate to be server-enforced, to run on the merging SHA, and to be proven red by a planted failure",
+        "Notes hooks can be bypassed (--no-verify) so they are not the enforcement and the repeated run is latency, not extra safety",
+        "Does not accept a continue-on-error or || true version of the check as a valid move",
+        "Cites references/pipeline-optimizer.md or the SKILL.md Gates clarification"
+      ]
+    },
+    {
+      "id": "pipeline-timebox-and-batched-escalation",
+      "prompt": "You are on the third day of speeding up a pipeline. The profile's top fix needs a required status check renamed in branch protection (owner-only) and a write into a protected folder your sandbox refuses. You have already tried the same workaround twice. What do you do?",
+      "expected_output": "Anti-stall rules (references/pipeline-optimizer.md): timebox each hypothesis, so after two equivalent failures change approach, never a third retry. Escalate the blocker once as ONE batched ask to the owner with the exact commands to run (the branch-protection change and the folder write), do not route around the sandbox or the permission, and continue with the next row of the ranked table that needs neither. Report the measured delta of every step taken, even zero.",
+      "expectations": [
+        "Does not retry the workaround a third time or route around the permission or sandbox",
+        "Sends one batched ask to the owner with the exact commands, not several questions",
+        "Continues with the next ranked fix that needs no blocked permission instead of stopping",
+        "Reports the measured delta (before, after, runs) for each step including the blocked one",
+        "Cites the timebox-per-hypothesis anti-stall rule from references/pipeline-optimizer.md"
+      ]
+    },
+    {
+      "id": "pipeline-keep-only-if-time-drops",
+      "prompt": "You enabled dependency caching. Median CI execution over 8 runs before: 612s. Over 8 runs after: 601s. Locally the install step looked much faster. The lane says 'speed-up delivered'. What is your verdict?",
+      "expected_output": "REVERT or not delivered (references/pipeline-optimizer.md; pipeline_profile.py compare): the drop is 11s, 1.8%, inside the 5% noise band, so the change does not stay. A local timing is not the CI surface; name the surface of every number. Report before 612s, after 601s, n=8 each, verdict REVERT, then move to the next row of the ranked table.",
+      "expectations": [
+        "Computes the delta (11s, about 1.8%) and rules it inside the noise band, so not a delivered speed-up",
+        "Keeps the change only if the measured time drops by more than the threshold; otherwise reverts it",
+        "Separates the local timing from the CI measurement and names the surface of each number",
+        "Reports before, after, number of runs and verdict, then moves on to the next ranked fix"
+      ]
+    },
+    {
+      "id": "pipeline-local-precheck-breakeven",
+      "prompt": "House doctrine says run every gate locally before pushing so CI is not the first place a red appears. The full suite takes 8 minutes locally. CI runs the same suite in 10 minutes with 1 minute of queue wait, and 12% of CI runs are red. Should the 8-minute local run before every push stay?",
+      "expected_output": "Compute the break-even (references/pipeline-optimizer.md, Step 3 dedup): a full local run pays off only if the red rate exceeds local / (CI + queue) = 8 / 11 = 73%. The observed red rate is 12%, so the local full run costs 8 minutes every cycle to avoid 0.12 x 11 = 1.3 minutes. It is a duplicate: run the quick tier locally (seconds) and the full suite once in CI, which still blocks. Re-measure after the change.",
+      "expectations": [
+        "Computes the break-even red rate 8/11, about 73%, against the observed 12%",
+        "Concludes the local full run is a duplicate costing about 8 minutes per cycle to save about 1.3 minutes",
+        "Keeps a quick local tier and one blocking full run in CI rather than dropping the gate",
+        "Treats the doctrine to run gates locally as satisfied by the quick tier plus one blocking run, and re-measures after the change"
+      ]
+    },
+    {
+      "id": "pipeline-dominant-step-drill-down",
+      "prompt": "The profile of a CI pipeline shows one step, a single 4000-line test script, at 82% of CI execution (10m27s of 12m46s). The fix pricing says sharding saves only 2m28s per PR and prints 'DOMINANT STEP ... unpriced until its internals are timed'. A teammate proposes a bigger runner. What do you do next, and what do you look for?",
+      "expected_output": "Drill into the dominant step before choosing a fix (references/pipeline-optimizer.md, Step 2 and the worked example). Print a timestamp at each section of the script, pass the section seconds to the profile (pipeline_profile.py profile --sections), and look for the same command repeated inside it: in the worked case, 97% of its time sat in six sections that each call a shared gate runner, and the runner re-proved the same idempotent selftests on every call, a duplicate run inside one stage that the suite x stage map cannot show. A verdict stamp (a selftest that passed for the same script bytes is not run again, a failure is never stamped) removes the repeats. A bigger runner would speed the repeats up, not remove them. Re-measure and keep the change only if the time dropped.",
+      "expectations": [
+        "Times the sections inside the dominant step instead of buying a bigger runner or sharding the whole script",
+        "Looks for the same command or selftest repeated inside the step, a duplicate run within one stage",
+        "Fixes it with a verdict cache keyed by the script's bytes that stamps only passes, so a failure is re-run and fails closed every time",
+        "Notes that sharding is capped by the largest dependency group of sections and a faster runner would only speed up the repeated runs",
+        "Re-measures before and after and keeps the change only if the measured time dropped, citing references/pipeline-optimizer.md"
+      ]
     }
   ]
 }

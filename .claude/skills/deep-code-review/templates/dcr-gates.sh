@@ -40,6 +40,18 @@
 #                           from the event (see the shipped workflow
 #                           template). Locally, defaults to HEAD~1..HEAD when
 #                           both are unset.
+#   DCR_SELFTEST_STAMPS    a directory for selftest verdict stamps. Unset (the
+#                           default) -> every run proves every gate script
+#                           fires (`--selftest`), as always. Set -> a selftest
+#                           that PASSED for a script with the same bytes
+#                           (git hash-object) is not run again under that
+#                           directory, so a caller that invokes this runner
+#                           many times in one run (a test suite) pays each
+#                           selftest once. Only a pass is stamped; a failing
+#                           selftest re-runs and fails closed every time, and
+#                           an unusable directory means "run it". Use a
+#                           throwaway directory private to one run of the
+#                           caller, never a shared or committed path.
 #
 # OPT-IN gates (off unless the flag is exactly 1; any value other than unset,
 # 0, or 1 fails closed).
@@ -272,6 +284,27 @@ fi
 #    proves each fires on a planted violation before its result is trusted,
 #    independent of this repo's own history/content.
 # ---------------------------------------------------------------------------
+# selftest_ok <script> — `python3 <script> --selftest`. With DCR_SELFTEST_STAMPS
+# set, a PASS for these exact script bytes is remembered there (keyed by
+# `git hash-object`) and a later call skips the run. The cache can only skip a
+# selftest that already passed, never invent a pass: a failure is not stamped,
+# and no git or an unusable stamp directory falls back to running it.
+selftest_ok() {
+  local script="$1" key="" stamp=""
+  if [ -n "${DCR_SELFTEST_STAMPS:-}" ]; then
+    key="$(git hash-object -- "${script}" 2>/dev/null || true)"
+    [ -z "${key}" ] || stamp="${DCR_SELFTEST_STAMPS}/${key}-$(basename "${script}")"
+  fi
+  if [ -n "${stamp}" ] && [ -f "${stamp}" ]; then
+    return 0
+  fi
+  python3 "${script}" --selftest || return 1
+  if [ -n "${stamp}" ]; then
+    { mkdir -p "${DCR_SELFTEST_STAMPS}" && : >"${stamp}"; } 2>/dev/null || true
+  fi
+  return 0
+}
+
 SELFTEST_SCRIPTS=(
   "${REVIEW_ROOT}/scripts/fix_class_gate.py"
   "${REVIEW_ROOT}/scripts/binaries_gate.py"
@@ -293,7 +326,7 @@ for script in "${SELFTEST_SCRIPTS[@]}"; do
     FAIL=1
     continue
   fi
-  if python3 "${script}" --selftest; then
+  if selftest_ok "${script}"; then
     :
   else
     printf 'dcr-gates: selftest FAILED for %s\n' "${script}" >&2
@@ -326,7 +359,7 @@ if opt_in DCR_REAPER_LINT; then
   if [ ! -f "${REAPER_LINT}" ]; then
     printf 'dcr-gates: reaper_lint.py not found at %s (FAIL, fail closed)\n' "${REAPER_LINT}" >&2
     FAIL=1
-  elif ! python3 "${REAPER_LINT}" --selftest; then
+  elif ! selftest_ok "${REAPER_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${REAPER_LINT}" >&2
     FAIL=1
   else
@@ -365,7 +398,7 @@ if opt_in DCR_SOURCE_SCAN_LINT; then
   if [ ! -f "${SOURCE_SCAN_LINT}" ]; then
     printf 'dcr-gates: source_scan_tests.py not found at %s (FAIL, fail closed)\n' "${SOURCE_SCAN_LINT}" >&2
     FAIL=1
-  elif ! python3 "${SOURCE_SCAN_LINT}" --selftest; then
+  elif ! selftest_ok "${SOURCE_SCAN_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${SOURCE_SCAN_LINT}" >&2
     FAIL=1
   else
@@ -408,7 +441,7 @@ if opt_in DCR_CLOSES_LINT; then
   if [ ! -f "${CLOSES_LINT}" ]; then
     printf 'dcr-gates: closes_lint.py not found at %s (FAIL, fail closed)\n' "${CLOSES_LINT}" >&2
     FAIL=1
-  elif ! python3 "${CLOSES_LINT}" --selftest; then
+  elif ! selftest_ok "${CLOSES_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${CLOSES_LINT}" >&2
     FAIL=1
   elif [ "${RANGE_STATE}" = partial ]; then
@@ -459,7 +492,7 @@ delivery_script() {
     printf 'dcr-gates: %s not found (agentic-delivery not installed?) (FAIL, fail closed)\n' "$1" >&2
     return 1
   fi
-  if ! python3 "${path}" --selftest >&2; then
+  if ! selftest_ok "${path}" >&2; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${path}" >&2
     return 1
   fi

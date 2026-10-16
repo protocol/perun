@@ -35,6 +35,7 @@ chat may be terse.
 | Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md` |
 | Start a lane | `templates/lane-preamble.md` |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
+| Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first |
 | Verify or relay a lane's result | `references/verification-handback.md` |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
 
@@ -64,9 +65,8 @@ build/product discipline, and the `deep-code-review` lens it maps to) is
 - **Conductor** — intent, scope, task graph, merge plan, evidence roll-up.
   Never self-approves.
 - **Product Analyst** — turns a real signal (feedback, an owner goal) into a
-  testable spec + feedback-coverage entry; enforces interaction-completeness,
-  benchmarks against named comparable products. Recommends; owner decides
-  scope. Feeds G0/G1.
+  testable spec + feedback-coverage entry (`references/roles.md`). Recommends;
+  owner decides scope. Feeds G0/G1.
 - **Builder / Implementer** — implements in a dedicated worktree to the build
   bar in `references/roles.md`. Never wears independent QA, security, or
   release-approval.
@@ -113,8 +113,8 @@ when verifying or relaying a lane's result; `references/dev-env-ownership.md`
 when a lane serves a dev server, re-runs a generator or ratchet, or shares files
 under an ownership map; `references/unattended-trackers.md` when closing tracker
 issues or running a multi-hour work loop; `references/work-tracking.md` when a
-repo uses a work tracker (issue/PR linking, status moves, auto-close hazards,
-the weekly project update, `tracker_check.py`). Paste `templates/lane-preamble.md` into every lane brief. Loop prompts and scheduled-task templates (coordinator, peer, cleanup; 20-minute floor): `templates/loops/*.md`.
+repo uses a work tracker (issue/PR linking, auto-close hazards, the
+weekly update, `tracker_check.py`). Paste `templates/lane-preamble.md` into every lane brief. Loop and scheduled-task templates (coordinator, peer, cleanup; 20-minute floor): `templates/loops/*.md`.
 
 **Drifting into a lane's work** — while a lane is in flight, two consecutive
 Conductor turns that query, build, edit, or mutate the target instead of
@@ -126,7 +126,9 @@ dispatching: stop, package a lane brief, dispatch it, resume status-reading —
 ## Gates (G0–G10)
 
 Low-blast reversible work may collapse adjacent gates. It may not remove
-independent verification or a human approval that actually applies.
+independent verification or a human approval that actually applies. Moving a
+blocking check to one later blocking gate is not weakening it; removing it or
+making it non-blocking is (`pipeline-optimizer.md`).
 
 | Gate | Input | Required output | Hard condition |
 |---|---|---|---|
@@ -286,10 +288,6 @@ procedure** (read it before sizing any fan-out); CI-offload:
 Delivery owns the running stack, not only the diff.
 
 Five steps — discover the documented one-command path, bring it up in the writer's worktree, **(3) verify against the running process**, tear down, never build into a served dir: `references/dev-env-ownership.md` **Local environment — the five-step stack procedure**; read it before any G5 run.
-
-G5 is not green until step 3 ran or is `UNVERIFIED` (prerequisite named); for a
-rendered-page change its receipt is the **headed-browser** evidence G5 needs
-(`product-ux-quality.md`).
 
 ---
 

@@ -70,6 +70,12 @@ model: prototype / mvp / growth / mature), the **area** of the ask, and the
 - "About to ask the owner a question, or present a recommendation or
   decision." → `idea-critic` first (an owner-requested change still gets the
   pass; it cannot HOLD) — an ask that skipped it is the default failure.
+- "The delivery pipeline is slow" (hooks, CI, merge wait) → `agentic-delivery`'s
+  `pipeline-optimizer.md`: the conductor owns it as COO (flow: lead time,
+  timebox, one batched escalation) with the Architect as CTO (the fix). Draw the
+  suite x stage map and profile before tuning any stage
+  (`agentic-delivery`'s `pipeline_profile.py`); a speed-up stays only if the
+  measured time drops.
 - "Send this message." / about to post a PR body, issue or PR comment, status
   update, report, plan, or summary → `communication-structure` **before you
   draft**, not after.
