@@ -9,3 +9,7 @@
 
 ### Fixed
 - `land-release.sh --regen` (and the land step) dropped any `size-budgets.tsv` row under `.claude/skills/` that was not a `SKILL.md` or `references/*.md`, so the entry index's budget row vanished on every regen. It now refreshes that row (or adds it when absent) and regenerates the indexes before measuring them.
+
+### Added
+- The always-injected host rules (`HOST_RULES`, injected at SessionStart and into every subagent) gain one line, "Find any Perun skill or tool: read .claude/skills/INDEX.md first.", so agents are pointed at the entry index: +16 est. tokens (91 instead of 75; `skill_index.py --tokens` total 3417 → 3433, host-injected 904 → 920).
+- `install.sh` copies the entry index to `<host>/skills/INDEX.md` for every host it installs into (refreshed on re-install; recorded in the marker only when written fresh, and `perun_uninstall.py` removes it when unchanged). It lists all eleven skills, including ones the target did not install. `scripts/test_index_pointer.py` pins the pointer line and the install and uninstall behaviour.

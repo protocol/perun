@@ -405,6 +405,18 @@ for skill in "${SKILLS[@]}"; do
   done
 done
 
+# The generated entry index (one line per skill, command and script): the host rules point agents at it.
+# Copied beside the skills of every host; refreshed on re-install; only a file written fresh is recorded for uninstall.
+if [[ -f "${SCRIPT_DIR}/.claude/skills/INDEX.md" ]]; then
+  for host in "${HOSTS[@]}"; do
+    dest="${TARGET_DIR}/${host}/skills/INDEX.md"
+    [[ -e "${dest}" ]] && cmp -s "${SCRIPT_DIR}/.claude/skills/INDEX.md" "${dest}" && continue
+    existed=0; [[ -e "${dest}" ]] && existed=1
+    cp "${SCRIPT_DIR}/.claude/skills/INDEX.md" "${dest}"
+    [[ "${existed}" -eq 1 ]] || COMMAND_FILES+=("${host}/skills/INDEX.md")
+  done
+fi
+
 # Host safety: one warning line per installed host, from the single-source table (docs/host-safety.md).
 HS_TSV="${SCRIPT_DIR}/.claude/skills/agentic-delivery/templates/host-safety.tsv"
 if [[ -f "${HS_TSV}" ]]; then

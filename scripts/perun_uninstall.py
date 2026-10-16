@@ -41,7 +41,7 @@ SRC = Path(__file__).resolve().parent.parent
 SKILL_RE = re.compile(r"^\.\w[\w.-]*/skills/\w[\w.-]*$")  # names start with a word char: "." and ".." never match
 BACKUP_RE = re.compile(r"^\.\w[\w.-]*/skill-backups/(\w[\w.-]*)-\d{8}-\d{6}(-\d+)?$")
 # The only loose files install writes (the marker `files` and `agent` keys): anything else in a marker is forged.
-OWN_FILE_RE = re.compile(r"^\.claude/(commands/\w[\w.-]*\.md|house-defaults\.md|settings\.local\.json\.bak\.[\w.-]+|agents/delivery-lane\.md)$")
+OWN_FILE_RE = re.compile(r"^(\.claude/(commands/\w[\w.-]*\.md|house-defaults\.md|settings\.local\.json\.bak\.[\w.-]+|agents/delivery-lane\.md)|\.\w[\w.-]*/skills/INDEX\.md)$")
 
 
 def plain(rel):

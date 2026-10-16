@@ -325,7 +325,8 @@ class Hardening(Base):
         before = tree(self.repo / ".claude/skills")
         p = uninstall(self.repo, "--apply")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(tree(self.repo / ".claude/skills"), before)
+        # skills/INDEX.md is a recorded loose file (hash-checked like a command), not a skill file
+        self.assertEqual([x for x in tree(self.repo / ".claude/skills") if x != "INDEX.md"], [x for x in before if x != "INDEX.md"])
         self.assertIn("KEEP", p.stdout)
 
     def test_sweeps_never_follow_a_symlink(self):  # (b)

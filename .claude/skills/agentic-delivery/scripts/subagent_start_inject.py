@@ -64,7 +64,8 @@ SKILL_ROUTE = ("Skill route: idea-critic before any owner ask or new plan; "
 HOST_RULES = ("Host rules: never `sleep N` to wait; background the command and act on its completion notification, "
               "or Monitor with an until-loop.\n"
               "In an isolated worktree run plain separate git commands from the worktree root; "
-              "no `cd X &&` chains or loops around git (the host refuses them as too complex to verify).")
+              "no `cd X &&` chains or loops around git (the host refuses them as too complex to verify).\n"
+              "Find any Perun skill or tool: read .claude/skills/INDEX.md first.")
 
 
 def build_context(house_text: str, agent_type: str, exempt_types: set) -> str:
