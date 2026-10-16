@@ -83,9 +83,10 @@ GENERATED='SHA256SUMS|scripts/size-budgets.tsv|\.claude/skills/(.*/)?INDEX\.md'
 SKILLS="deep-code-review agentic-delivery idea-critic"
 
 regen() {
+  python3 scripts/skill_index.py >/dev/null   # first: the entry index's own size row below must see the regenerated file
   # Rewrite size rows in place (comments, order and the hand-kept README.md row survive): existing skill
-  # rows take the current size, rows of deleted files drop, new files append.
-  git ls-files -co --exclude-standard .claude/skills | grep -E '(^|/)(SKILL\.md|references/[^/]*\.md)$' | LC_ALL=C sort |
+  # rows and the generated entry index's row take the current size, rows of deleted files drop, new files append.
+  git ls-files -co --exclude-standard .claude/skills | grep -E '(^|/)(SKILL\.md|references/[^/]*\.md)$|^\.claude/skills/INDEX\.md$' | LC_ALL=C sort |
     while IFS= read -r f; do printf '%s\t%s\n' "$f" "$(LC_ALL=C wc -c <"$f" | tr -d '[:space:]')"; done >sizes.new
   awk -F'\t' -v OFS='\t' 'NR==FNR{sz[$1]=$2; next}
     /^#/||/^$/{print; next}
@@ -93,7 +94,6 @@ regen() {
     $1 !~ /^\.claude\/skills\//{print}' sizes.new scripts/size-budgets.tsv >scripts/size-budgets.new
   awk -F'\t' 'NR==FNR{have[$1]=1; next} !($1 in have)' scripts/size-budgets.new sizes.new >>scripts/size-budgets.new
   mv scripts/size-budgets.new scripts/size-budgets.tsv; rm sizes.new
-  python3 scripts/skill_index.py >/dev/null
   bash scripts/write-checksums.sh >/dev/null   # pin LAST, after every skill-tree edit
 }
 

@@ -103,9 +103,13 @@ keeps that load small:
 - **Frozen budgets.** CI caps every skill map at 24,000 bytes, freezes each
   reference's byte size, and pins each review type's must-read token total.
   Raising a size budget needs an explicit `size-budget-raise:` marker.
-- **Lookup tables, not browsing.** Every skill ships a generated `INDEX.md`
-  (file → when to read it → estimated tokens → headings), so an agent opens one
-  file instead of scanning references. CI fails when an index goes stale.
+- **Lookup tables, not browsing.** `.claude/skills/INDEX.md` is the single
+  generated entry point: one line per skill, slash command and script
+  (`name: purpose — arguments`), under a frozen byte budget. Every skill also
+  ships a generated `INDEX.md` (file → when to read it → estimated tokens), so
+  an agent opens one file instead of scanning references. CI fails when an index
+  goes stale or leaves out a shipped script or command.
+  `python3 scripts/skill_index.py --tokens` prints the always-loaded surface.
 - **Short handbacks.** The handback cap and one-line reporting default stop
   per-lane narration multiplying across a fleet.
 - **Measure and cap it.** `agentic-ceo/scripts/token_report.py --session <transcript>`

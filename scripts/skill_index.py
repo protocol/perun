@@ -13,24 +13,34 @@ For every `.claude/skills/<name>/` that has a `SKILL.md`:
   usage line when its docstring/header documents one. The full trigger stays
   in the file's own header; the index exists to be cheap to read.
 
-And one repo-level table:
-  `.claude/skills/INDEX.md` — every skill's purpose (from its SKILL.md
-  frontmatter `description:`, trimmed to <=120 chars), entry file, and its
-  own INDEX.md path.
+And the single low-context entry point:
+  `.claude/skills/INDEX.md` — one line per skill (the first sentence of its
+  SKILL.md frontmatter `description:`: what it is for and when to use it), one
+  line per `commands/*.md` slash command and one line per shipped
+  `scripts/*.py|*.sh` (`name: purpose — arguments`, arguments only when the
+  script's own header documents them), plus where to read next: a skill's
+  SKILL.md when its line matches, its INDEX.md for references and scripts. It
+  points; it never restates a checklist. Its byte size is frozen by a row in
+  scripts/size-budgets.tsv (the only INDEX.md with one), because it is read whole.
 
 Output is deterministic: sorted paths, no timestamps, no run-dependent data.
-INDEX.md is a lookup aid, not a reference — it is NOT must-load and carries
+The per-skill INDEX.md files are lookup aids, not references: not must-load,
 no routing/size-budget obligation (scripts/ci-gates.sh's `routing` and `size`
-subcommands only look at SKILL.md and references/*.md).
+subcommands read SKILL.md and references/*.md, plus the one entry-index row).
 
 USAGE
   python3 scripts/skill_index.py             generate/overwrite every INDEX.md
   python3 scripts/skill_index.py --check     verify INDEX.md files match their
-                                              sources; no writes
+                                              sources and that every shipped
+                                              script and command is listed; no writes
+  python3 scripts/skill_index.py --tokens    print the always-loaded surface
+                                              (skill descriptions, entry index,
+                                              SessionStart host rules) in bytes and
+                                              estimated tokens (bytes // 4)
   python3 scripts/skill_index.py --selftest  run this script's own self-tests
 
-Exit codes: 0 ok; 1 stale INDEX.md (--check) or a self-test failed
-(--selftest); 2 usage error.
+Exit codes: 0 ok; 1 stale INDEX.md or a script/command missing from the entry
+index (--check), or a self-test failed (--selftest); 2 usage error.
 """
 from __future__ import annotations
 
@@ -45,7 +55,12 @@ SKILLS_DIRNAME = ".claude/skills"
 
 TRIGGER_MAX = 100
 BLOCK_MAX = 120
-DESC_MAX = 120
+# Entry-index caps (the file is read whole, so every line stays short), cut at a word.
+SKILL_LINE_MAX = 120
+PURPOSE_MAX = 64
+ARGS_MAX = 40
+COMMANDS_DIRNAME = "commands"
+NO_CLI = "- No documented CLI: "  # a bullet of its own, after a skill's script lines
 
 _UNDERLINE_RE = re.compile(r"^[-=]{3,}$")
 
@@ -54,22 +69,26 @@ def _collapse(text: str) -> str:
     return " ".join(text.split())
 
 
-def _truncate(text: str, limit: int) -> str:
+def _truncate(text: str, limit: int, words: bool = False) -> str:
+    """`text` collapsed to <= `limit` chars, ending in an ellipsis when cut (at a word boundary if `words`)."""
     text = _collapse(text)
     if len(text) <= limit:
         return text
-    return text[: limit - 1].rstrip() + "…"
+    cut = text[: limit - 1]
+    if words and " " in cut:
+        cut = cut.rsplit(" ", 1)[0].rstrip(",;:")
+    return cut.rstrip() + "…"
 
 
-def _short(text: str, limit: int = 0) -> str:
+def _short(text: str, limit: int = 0, words: bool = False) -> str:
     """First sentence of `text`, collapsed, truncated to `limit` (default TRIGGER_MAX)."""
     text = _collapse(text)
     m = re.search(r"[.;] ", text)
     if m and m.start() > 20:
         text = text[: m.start() + (m.group(0) == ". ")]
     # the column header says "Read this when...", and a script row's file cell names it
-    text = re.sub(r"^(?:read this when:?\s*|\S+\.(?:py|sh)\s+[—-]\s+)", "", text, flags=re.I)
-    return _truncate(text, limit or TRIGGER_MAX)
+    text = re.sub(r"^(?:read this when:?\s*|\S+\.(?:py|sh)\s+(?:—|--?)\s+)", "", text, flags=re.I)
+    return _truncate(text, limit or TRIGGER_MAX, words)
 
 
 def _strip_md(text: str) -> str:
@@ -108,10 +127,12 @@ def parse_reference_md(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Python script parsing: module docstring's first paragraph is the trigger;
-# a "Usage"/"Exit code(s)" section (heading line, optionally with inline
-# content, followed by a block of non-blank lines) supplies the CLI one-liner
-# and exit codes, only when the docstring actually documents them.
+# Script parsing. Both parsers return (trigger, usage parts): the first
+# paragraph is the trigger; the usage parts are the documented CLI, an empty
+# list when the script documents none (a bare script name is no usage).
+# Python: a "Usage" section (heading line, optionally with inline content,
+# followed by a block of non-blank lines), else a `name.py ARGS — purpose`
+# first line, else the first docstring line that is itself a call of the script.
 # ---------------------------------------------------------------------------
 def _docstring(path: Path) -> str:
     try:
@@ -121,36 +142,21 @@ def _docstring(path: Path) -> str:
     return ast.get_docstring(tree) or ""
 
 
-def _first_paragraph(doc: str) -> str:
+def _paragraphs(doc: str) -> list[str]:
+    """The docstring's paragraphs, each joined into one markdown-stripped line."""
+    out: list[str] = []
     para: list[str] = []
-    for line in doc.splitlines():
-        if not line.strip():
-            if para:
-                break
-            continue
-        para.append(line.strip())
-    return _short(_strip_md(" ".join(para)))
+    for line in [*doc.splitlines(), ""]:
+        if line.strip():
+            para.append(line.strip())
+        elif para:
+            out.append(_strip_md(" ".join(para)))
+            para = []
+    return out
 
 
-def _extract_section(doc_lines: list[str], header_re: re.Pattern[str]) -> str | None:
-    for idx, line in enumerate(doc_lines):
-        m = header_re.match(line.strip())
-        if not m:
-            continue
-        parts: list[str] = []
-        inline = m.group("inline").strip() if "inline" in m.groupdict() else ""
-        if inline:
-            parts.append(inline)
-        j = idx + 1
-        while j < len(doc_lines) and doc_lines[j].strip():
-            candidate = doc_lines[j].strip()
-            if not _UNDERLINE_RE.match(candidate):
-                parts.append(candidate)
-            j += 1
-        if parts:
-            return _truncate(_strip_md(" ".join(parts)), BLOCK_MAX)
-    return None
-
+# `name.py ARGS — purpose` (also ` - ` and ` -- `): the usual one-line script header.
+_HEADER_RE = re.compile(r"^(?P<cli>\S+\.(?:py|sh)\b.*?)\s+(?:—|--?)\s+(?P<rest>.+)$")
 
 # "usage" must stand alone as a heading word: followed by a colon, whitespace, or
 # end of line. Prose that merely starts a docstring line with "usage)." or
@@ -158,19 +164,67 @@ def _extract_section(doc_lines: list[str], header_re: re.Pattern[str]) -> str | 
 _USAGE_RE = re.compile(r"^usage(?=:|\s|$)\s*:?\s*(?P<inline>.*)$", re.IGNORECASE)
 
 
-def parse_script_py(path: Path) -> tuple[str, str | None]:
+def _split_header(para: str) -> tuple[str, str]:
+    """`name.py ARGS — purpose` -> (`name.py ARGS`, `purpose`); ("", para) for any other shape."""
+    m = _HEADER_RE.match(para)
+    return (m.group("cli"), m.group("rest")) if m else ("", para)
+
+
+def _usage_parts(doc_lines: list[str]) -> list[str]:
+    """The lines of the first non-empty `Usage` section: the heading's inline text, then the block under it."""
+    for idx, line in enumerate(doc_lines):
+        m = _USAGE_RE.match(line.strip())
+        if not m:
+            continue
+        parts = [m.group("inline").strip()]
+        j = idx + 1
+        while j < len(doc_lines) and doc_lines[j].strip():
+            candidate = doc_lines[j].strip()
+            if not _UNDERLINE_RE.match(candidate):
+                parts.append(candidate)
+            j += 1
+        parts = [_strip_md(p) for p in parts if p]
+        if parts:
+            return parts
+    return []
+
+
+def _invocation(doc_lines: list[str], name: str) -> str | None:
+    """The first docstring line that is itself a call of `name` with options or placeholders.
+
+    Column-aligned text after the call (2+ spaces: a description or `# comment`) is dropped; a shell
+    chain (`&&`) is an example inside prose, not the script's usage."""
+    call = re.compile(rf"^(?:python3?\s+|bash\s+)?(?:\S*/)?{re.escape(name)}\s+(?P<args>\S.*)$")
+    for line in doc_lines:
+        m = call.match(line.strip())
+        if m and "&&" not in line and re.search(r"(?:^|\s)(?:-{1,2}\w|\[|<)", m.group("args")):
+            args = re.split(r"\s{2,}", m.group("args"))[0]
+            return f"{name} {_strip_md(args)}"
+    return None
+
+
+def parse_script_py(path: Path) -> tuple[str, list[str]]:
+    """(trigger, usage parts) from a Python script's module docstring; see the section comment above."""
     doc = _docstring(path)
     if not doc:
-        return "(no module docstring)", None
-    trigger = _first_paragraph(doc)
+        return "(no module docstring)", []
+    paras = _paragraphs(doc)
+    cli, purpose = _split_header(paras[0])
+    if not cli and paras[0].startswith(path.name + " ") and len(paras) > 1:
+        cli, purpose = paras[0], re.sub(r"^WHY:\s*", "", paras[1])  # a bare usage line: the purpose is next
     doc_lines = doc.splitlines()
-    usage = _extract_section(doc_lines, _USAGE_RE)
-    return trigger, usage
+    parts = _usage_parts(doc_lines)
+    if not parts and " " in cli:
+        parts = [cli]
+    if not parts:
+        call = _invocation(doc_lines, path.name)
+        parts = [call] if call else []
+    return _short(purpose), parts
 
 
-def parse_script_sh(path: Path) -> tuple[str, str | None]:
-    """(trigger, usage) from a shell script's leading comment block: the first
-    paragraph is the trigger; `name.sh args — text` or `Usage: ...` gives the CLI."""
+def parse_script_sh(path: Path) -> tuple[str, list[str]]:
+    """Same pair from a shell script's leading comment block: `name.sh args — text`
+    or a `Usage: ...` line gives the CLI."""
     block: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("#!"):
@@ -186,23 +240,23 @@ def parse_script_sh(path: Path) -> tuple[str, str | None]:
             continue
         para.append(line)
     if not para:
-        return "(no header comment)", None
+        return "(no header comment)", []
     first = _strip_md(para[0])
     m = re.match(r"^(\S+\.sh\b[^—]*?)\s+[—-]\s+(.*)$", first)
     usage = None
     if m:
-        usage = _truncate(m.group(1), BLOCK_MAX)
+        usage = m.group(1)
         para[0] = m.group(2)
     else:
         u = next((l for l in block if l.lower().startswith("usage:")), None)
         if u:
-            usage = _truncate(_strip_md(u.split(":", 1)[1]), BLOCK_MAX)
-    return _short(_strip_md(" ".join(para))), usage
+            usage = _strip_md(u.split(":", 1)[1])
+    return _short(_strip_md(" ".join(para))), [usage] if usage else []
 
 
 # ---------------------------------------------------------------------------
-# SKILL.md frontmatter: pull the `description:` block scalar for the
-# repo-level table (trimmed to <=120 chars).
+# SKILL.md frontmatter: the whole `description:` (inline or block scalar),
+# whitespace-collapsed. The entry index keeps its first sentence only.
 # ---------------------------------------------------------------------------
 def read_description(skill_md: Path) -> str:
     lines = skill_md.read_text(encoding="utf-8").splitlines()
@@ -224,7 +278,7 @@ def read_description(skill_md: Path) -> str:
                 continue
             rest = m.group(1).strip()
             if rest and rest not in (">-", ">", "|", "|-"):
-                return _truncate(rest, DESC_MAX)
+                return _collapse(rest)
             capturing = True
             continue
         if line.strip() == "" or line.startswith(" "):
@@ -232,7 +286,20 @@ def read_description(skill_md: Path) -> str:
                 desc_lines.append(line.strip())
             continue
         break
-    return _truncate(" ".join(desc_lines), DESC_MAX)
+    return _collapse(" ".join(desc_lines))
+
+
+def read_command(path: Path) -> tuple[str, str]:
+    """(description, argument-hint) from a commands/*.md frontmatter; "" for an absent field."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    vals: dict[str, str] = {}
+    if lines and lines[0].strip() == "---":
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            key, _, val = line.partition(":")
+            vals[key.strip()] = val.strip().strip("\"'")
+    return vals.get("description", ""), vals.get("argument-hint", "")
 
 
 # ---------------------------------------------------------------------------
@@ -248,14 +315,27 @@ def find_skill_dirs(root: Path) -> list[Path]:
     )
 
 
+def shipped_scripts(skill_dir: Path) -> list[Path]:
+    """A skill's shipped scripts: `scripts/*.py|*.sh`, sorted (nested fixture dirs are data, not scripts)."""
+    d = skill_dir / "scripts"
+    return sorted([*d.glob("*.py"), *d.glob("*.sh")]) if d.is_dir() else []
+
+
+def shipped_commands(root: Path) -> list[Path]:
+    """The slash commands install.sh ships: `commands/*.md`, sorted."""
+    d = root / COMMANDS_DIRNAME
+    return sorted(d.glob("*.md")) if d.is_dir() else []
+
+
+def parse_script(path: Path) -> tuple[str, list[str]]:
+    """(trigger, usage parts) for a shipped script, by suffix."""
+    return parse_script_sh(path) if path.suffix == ".sh" else parse_script_py(path)
+
+
 def generate_skill_index(skill_dir: Path) -> str:
     name = skill_dir.name
     refs = sorted((skill_dir / "references").glob("*.md")) if (skill_dir / "references").is_dir() else []
-    scripts = (
-        sorted([*(skill_dir / "scripts").glob("*.py"), *(skill_dir / "scripts").glob("*.sh")])
-        if (skill_dir / "scripts").is_dir()
-        else []
-    )
+    scripts = shipped_scripts(skill_dir)
 
     out = [
         f"# INDEX — {name}",
@@ -279,33 +359,65 @@ def generate_skill_index(skill_dir: Path) -> str:
         out.append("| File | Trigger | CLI (— = open the header) |")
         out.append("|---|---|---|")
         for scr in scripts:
-            trigger, usage = parse_script_sh(scr) if scr.suffix == ".sh" else parse_script_py(scr)
-            out.append(f"| `scripts/{scr.name}` | {_table_cell(trigger)} | {_table_cell(usage or '')} |")
+            trigger, parts = parse_script(scr)
+            cli = _truncate(" ".join(parts), BLOCK_MAX)
+            out.append(f"| `scripts/{scr.name}` | {_table_cell(trigger)} | {_table_cell(cli)} |")
     else:
         out.append("_No scripts/*.py or *.sh in this skill._")
     out.append("")
     return "\n".join(out)
 
 
+def _args(parts: list[str], name: str) -> str:
+    """The arguments of the first documented call: the interpreter, path and script name are the line's key."""
+    i = parts[0].find(name)
+    return _truncate(parts[0][i + len(name):] if i >= 0 else parts[0], ARGS_MAX, words=True)
+
+
+def _entry(key: str, purpose: str, args: str) -> str:
+    """One entry-index line, `key: purpose — args`; the key is not repeated inside the purpose."""
+    purpose = re.sub(rf"^{re.escape(key)}\s*[:—-]+\s*", "", purpose)
+    line = f"- {key}: {_truncate(purpose, PURPOSE_MAX, words=True)}"
+    return f"{line} — {args}" if args else line
+
+
 def generate_repo_index(root: Path, skill_dirs: list[Path]) -> str:
     out = [
         "# Skills index",
         "",
-        "Generated by `scripts/skill_index.py`. Lookup table: each skill's purpose, "
-        "its entry file, and its own `INDEX.md` (which file answers which trigger). "
-        "Not must-load.",
+        "Single entry point, generated by `scripts/skill_index.py` (never hand-edit it). Paths are "
+        "relative to this directory. Find what to use here; open only what a line points to.",
         "",
-        "| Skill | Purpose | Entry | Index |",
-        "|---|---|---|---|",
+        "## Skills",
+        "",
+        "Read `<skill>/SKILL.md` when its line matches the task. `<skill>/INDEX.md` lists that skill's "
+        "`references/` (each with a read-when trigger) and `scripts/`.",
+        "",
     ]
-    for skill_dir in skill_dirs:
-        name = skill_dir.name
-        rel = skill_dir.relative_to(root)
-        purpose = read_description(skill_dir / "SKILL.md")
-        out.append(
-            f"| `{name}` | {_table_cell(purpose)} | `{rel.as_posix()}/SKILL.md` | "
-            f"`{rel.as_posix()}/INDEX.md` |"
-        )
+    out += [f"- {d.name}: {_short(read_description(d / 'SKILL.md'), SKILL_LINE_MAX, words=True)}" for d in skill_dirs]
+    commands = shipped_commands(root)
+    if commands:
+        out += ["", "## Commands", ""]
+        for cmd in commands:
+            purpose, hint = read_command(cmd)
+            out.append(_entry(f"/{cmd.stem}", purpose, _truncate(hint, ARGS_MAX, words=True)))
+    groups = [(d, [(s, *parse_script(s)) for s in shipped_scripts(d)]) for d in skill_dirs]
+    if any(scripts for _, scripts in groups):
+        out += [
+            "",
+            "## Scripts",
+            "",
+            "Run `python3 <skill>/scripts/<name>` (`bash` for `.sh`). `name: purpose — arguments` for a "
+            "script whose header documents a CLI; the rest (hooks, sourced helpers, undocumented tools) "
+            "are listed by name, their purpose is in `<skill>/INDEX.md`.",
+        ]
+        for d, scripts in groups:
+            if scripts:
+                out += ["", f"### {d.name}"]
+                out += [_entry(s.name, purpose, _args(parts, s.name)) for s, purpose, parts in scripts if parts]
+                bare = [s.name for s, _, parts in scripts if not parts]
+                if bare:
+                    out.append(NO_CLI + ", ".join(bare))
     out.append("")
     return "\n".join(out)
 
@@ -326,21 +438,86 @@ def cmd_generate(root: Path) -> int:
     return 0
 
 
+def _shipped(root: Path) -> set[str]:
+    """Every shipped script and command, as the keys the entry index lists: `<skill>/<script>`, `/<command>`."""
+    keys = {f"{d.name}/{s.name}" for d in find_skill_dirs(root) for s in shipped_scripts(d)}
+    return keys | {f"/{c.stem}" for c in shipped_commands(root)}
+
+
+def _listed(index_text: str) -> set[str]:
+    """The keys an entry index lists, read back from its text (not from the generator)."""
+    keys: set[str] = set()
+    section = skill = ""
+    for line in index_text.splitlines():
+        if line.startswith("### "):
+            skill = line[4:].strip()
+        elif line.startswith("## "):
+            section, skill = line[3:].strip(), ""
+        elif section == "Scripts" and skill and line.startswith(NO_CLI):
+            keys |= {f"{skill}/{name}" for name in line[len(NO_CLI):].split(", ")}
+        elif line.startswith("- ") and ":" in line:
+            key = line[2:].split(":", 1)[0]
+            if section == "Commands":
+                keys.add(key)
+            elif section == "Scripts" and skill:
+                keys.add(f"{skill}/{key}")
+    return keys
+
+
 def cmd_check(root: Path) -> int:
-    stale = []
-    for path, content in sorted(index_targets(root).items()):
+    problems = []
+    targets = index_targets(root)
+    for path, content in sorted(targets.items()):
         rel = path.relative_to(root)
         if not path.is_file():
-            stale.append(f"MISSING: {rel}")
-            continue
-        if path.read_text(encoding="utf-8") != content:
-            stale.append(f"STALE: {rel} (run: python3 scripts/skill_index.py)")
-    if stale:
-        for line in stale:
+            problems.append(f"MISSING: {rel}")
+        elif path.read_text(encoding="utf-8") != content:
+            problems.append(f"STALE: {rel} (run: python3 scripts/skill_index.py)")
+    # Coverage gate: read back from the file on disk, independent of the generator, so a filter
+    # added to the generator (or a hand edit) cannot hide a shipped script or command.
+    entry = root / SKILLS_DIRNAME / "INDEX.md"
+    shipped = _shipped(root)
+    if entry.is_file():
+        listed = _listed(entry.read_text(encoding="utf-8"))
+        problems += [f"NOT IN INDEX: {key} (not listed in {entry.relative_to(root)})" for key in sorted(shipped - listed)]
+    if problems:
+        for line in problems:
             print(line, file=sys.stderr)
-        print(f"skill_index --check: {len(stale)} stale/missing INDEX.md file(s)", file=sys.stderr)
+        print(f"skill_index --check: {len(problems)} problem(s)", file=sys.stderr)
         return 1
-    print(f"skill_index --check: ok ({len(index_targets(root))} INDEX.md file(s) current)")
+    print(f"skill_index --check: ok ({len(targets)} INDEX.md file(s) current, {len(shipped)} scripts/commands listed)")
+    return 0
+
+
+def _host_rules(root: Path) -> str:
+    """The fixed text SessionStart always injects (HOST_RULES in the delivery skill), read without importing it."""
+    src = root / SKILLS_DIRNAME / "agentic-delivery" / "scripts" / "subagent_start_inject.py"
+    try:
+        for node in ast.parse(src.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "HOST_RULES" for t in node.targets):
+                return ast.literal_eval(node.value)
+    except (OSError, SyntaxError, ValueError):
+        pass
+    return ""
+
+
+def cmd_tokens(root: Path) -> int:
+    """Print the always-loaded surface: what a session pays before any task work."""
+    index = root / SKILLS_DIRNAME / "INDEX.md"
+    descriptions = "".join(f"- {d.name}: {read_description(d / 'SKILL.md')}\n" for d in find_skill_dirs(root))
+    surface = [
+        ("skill descriptions", descriptions, "injected by the host every session"),
+        ("SessionStart host rules", _host_rules(root), "injected every session (fixed part)"),
+        (f"{SKILLS_DIRNAME}/INDEX.md", index.read_text(encoding="utf-8") if index.is_file() else "", "entry point, read first on demand"),
+    ]
+    total = 0
+    for label, text, how in surface:
+        size = len(text.encode("utf-8"))
+        total += size // 4
+        print(f"{label:<26} {size:>6} B {size // 4:>5} tok  {how}")
+    print(f"{'total':<26} {'':>6}   {total:>5} tok")
+    print("tok = bytes // 4, an estimate (this repo's chars/4), not a tokenizer count. The SessionStart "
+          "report lines (<=3) and a handoff (<=2048 B) vary per session and are not counted.")
     return 0
 
 
@@ -371,10 +548,9 @@ def run_selftest() -> int:
             "---\n"
             "name: widget-skill\n"
             "description: >-\n"
-            "  Use when the fixture needs a widget. Second line of the\n"
-            "  description block scalar, long enough to be truncated if it "
-            "  ever exceeds the one hundred twenty character budget by a wide "
-            "  and deliberate margin here.\n"
+            "  Use when the fixture needs a widget, a first sentence long enough to be\n"
+            "  truncated because it exceeds the one hundred fifty character cap by a wide "
+            "  and deliberate margin here. A second sentence is dropped.\n"
             "license: MIT\n"
             "---\n\n# Widget skill\n\nFixture only.\n",
         )
@@ -405,9 +581,8 @@ def run_selftest() -> int:
         case(skill_idx.is_file(), "generate: writes per-skill INDEX.md")
 
         repo_text = repo_idx.read_text(encoding="utf-8")
-        case("widget-skill" in repo_text, "repo index: lists the skill by name")
-        case("Use when the fixture needs a widget." in repo_text, "repo index: purpose captured")
-        case("…" in repo_text, "repo index: overlong description truncated with an ellipsis")
+        case("- widget-skill: Use when the fixture needs a widget" in repo_text, "repo index: lists the skill by name with its trigger")
+        case("…" in repo_text and "second sentence" not in repo_text, "repo index: overlong first sentence truncated with an ellipsis, rest dropped")
 
         skill_text = skill_idx.read_text(encoding="utf-8")
         case("references/one.md" in skill_text, "skill index: references row present")
@@ -492,13 +667,12 @@ def run_selftest() -> int:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    parser.add_argument("--check", action="store_true", help="verify INDEX.md files are current; no writes")
-    parser.add_argument("--selftest", action="store_true", help="run this script's own self-tests")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="verify INDEX.md files are current and list every shipped script and command; no writes")
+    mode.add_argument("--tokens", action="store_true", help="print the always-loaded surface in bytes and estimated tokens")
+    mode.add_argument("--selftest", action="store_true", help="run this script's own self-tests")
     parser.add_argument("--root", default=str(REPO_ROOT), help="repo root (default: this script's repo)")
     args = parser.parse_args(argv)
-
-    if args.selftest and args.check:
-        parser.error("--selftest and --check are mutually exclusive")
 
     if args.selftest:
         return run_selftest()
@@ -509,6 +683,8 @@ def main(argv: list[str]) -> int:
 
     if args.check:
         return cmd_check(root)
+    if args.tokens:
+        return cmd_tokens(root)
     return cmd_generate(root)
 
 

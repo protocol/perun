@@ -153,12 +153,16 @@ jobs:
       # on synthetic fixtures (never the real repo's prose); --check proves the
       # committed INDEX.md files are byte-identical to what the generator
       # would write today, so a routed reference added without regenerating
-      # goes stale loudly instead of silently.
+      # goes stale loudly instead of silently. --check also fails when a shipped
+      # script or slash command is missing from the entry index
+      # (.claude/skills/INDEX.md, whose byte size is frozen in size-budgets.tsv);
+      # test_skill_index_entry.py proves both gates fire on planted defects.
       - name: Skill index (INDEX.md lookup tables) selftest and freshness
         run: |
           set -euo pipefail
           python3 scripts/skill_index.py --selftest
           python3 scripts/skill_index.py --check
+          python3 scripts/test_skill_index_entry.py
 
       # A "`<file>.md` **<Section>**" pointer must resolve in that file, so a split or
       # rename of a reference cannot silently orphan the pointers to it.
