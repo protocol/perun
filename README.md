@@ -2,12 +2,21 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Perun replaces a plain "review this" request to an AI coding assistant with
-written instructions it follows the same careful way every time, showing the
-evidence for each problem it reports.**
+**Perun is a suite of written instructions that make an AI coding assistant work
+the same careful way every time, from review to delivery, showing the evidence
+for what it reports.**
 
-Its main part is a **skill**: a text file of instructions the AI assistant reads
-before it starts work.
+Each part is a **skill**: a text file of instructions the AI assistant reads
+before it starts work. The suite covers:
+
+- **Deep code review** (the flagship, and the default install): a repeatable
+  review with evidence for every problem.
+- **Token and cost optimisation:** token reports, auto-compact plus handoff, and
+  model-tier guidance.
+- **Gated agentic delivery** (opt-in): merge train, lanes, a destructive-command
+  guard and auto-update.
+- **An idea critic**, plus **product, growth, positioning, business-ops and
+  output-safety** specialists.
 
 **Not a developer?** Read [Perun for leaders](docs/for-leaders.md): what it gives
 your team, a pilot plan, limits and an FAQ.
@@ -125,24 +134,24 @@ skill into any AI chat instead: [getting started](docs/getting-started.md).
 **Fastest: Claude Code plugin.** Two commands, no download:
 
 ```
-/plugin marketplace add remigiusz-antczak/deep-code-review
-/plugin install deep-code-review@perun
+/plugin marketplace add protocol/perun
+/plugin install perun@perun
 ```
 
 The plugin installs every skill, while `install.sh` below defaults to review-only.
 
 Other hosts, one native command each:
 
-- **Codex:** `codex plugin marketplace add remigiusz-antczak/deep-code-review`, then `codex plugin add deep-code-review@perun` (smoke-tested against a local checkout).
-- **Gemini CLI:** `gemini extensions install https://github.com/remigiusz-antczak/deep-code-review` (loads `AGENTS.md` as context only; not smoke-tested, the CLI is not installed here).
-- **GitHub Copilot CLI:** `copilot plugin marketplace add remigiusz-antczak/deep-code-review`; Copilot also reads the shipped `.claude-plugin/marketplace.json` (not smoke-tested).
+- **Codex:** `codex plugin marketplace add protocol/perun`, then `codex plugin add perun@perun` (smoke-tested against a local checkout).
+- **Gemini CLI:** `gemini extensions install https://github.com/protocol/perun` (loads `AGENTS.md` as context only; not smoke-tested, the CLI is not installed here).
+- **GitHub Copilot CLI:** `copilot plugin marketplace add protocol/perun`; Copilot also reads the shipped `.claude-plugin/marketplace.json` (not smoke-tested).
 
 Or install with the script:
 
 1. **Download Perun:**
 
    ```bash
-   git clone --depth 1 https://github.com/remigiusz-antczak/deep-code-review.git
+   git clone --depth 1 https://github.com/protocol/perun.git
    ```
 
 2. **Install it into your project.** It copies text files only, with no
@@ -150,7 +159,7 @@ Or install with the script:
    and `.agents` folders ([`install.sh`](install.sh)):
 
    ```bash
-   deep-code-review/install.sh /path/to/your/project
+   perun/install.sh /path/to/your/project
    ```
 
 3. **Ask your agent to review a real file you care about.** Type
@@ -161,7 +170,7 @@ Or install with the script:
    below); it confirms Perun is installed and working:
 
    ```bash
-   python3 deep-code-review/scripts/perun_doctor.py /path/to/your/project
+   python3 perun/scripts/perun_doctor.py /path/to/your/project
    ```
 
 What step 2 prints (shortened; your version and paths will differ). The last
@@ -171,7 +180,7 @@ line names the check in step 4:
 installed: deep-code-review 1.535.0 (@ 84acfb19) -> your-project/.claude/skills/deep-code-review
 safety: Claude Code: OS sandbox is off by default; set sandbox.enabled=true (or run /sandbox) and keep allowUnsandboxedCommands=false. https://code.claude.com/docs/en/sandboxing
 Perun installed 1 skill(s) into 3 tool folder(s) of your-project.
-Next, run this one command to confirm it works: python3 deep-code-review/scripts/perun_doctor.py your-project
+Next, run this one command to confirm it works: python3 perun/scripts/perun_doctor.py your-project
 ```
 
 The "safety" line is the sandbox setting to switch on for that agent. The "3
@@ -195,8 +204,8 @@ it reviewed, not just suspected it.
 
 ## About the name
 
-Perun is the project's name (after the Slavic thunder god of order). This
-repository is called `deep-code-review`, after what it does.
+Perun is the project's name (after the Slavic thunder god of order). The
+code-review skill inside it is still called `deep-code-review`, after what it does.
 
 ## Who it's for
 
@@ -230,6 +239,6 @@ already sends it. Switch on your agent's sandbox and keep human review
   [`CLAUDE.md`](CLAUDE.md), verified standards in
   [`docs/standards-index.md`](docs/standards-index.md),
   [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md),
-  [CI status](https://github.com/remigiusz-antczak/deep-code-review/actions/workflows/ci.yml).
+  [CI status](https://github.com/protocol/perun/actions/workflows/ci.yml).
 
 [MIT](LICENSE). Credits and sources: [`docs/standards-index.md`](docs/standards-index.md).
