@@ -13,8 +13,8 @@ Verified path:
 
 ```bash
 git clone --branch vX.Y.Z --depth 1 \
-  https://github.com/remigiusz-antczak/deep-code-review.git
-cd deep-code-review
+  https://github.com/protocol/perun.git
+cd perun
 # optional: sha256sum -c SHA256SUMS
 ./install.sh /path/to/your/project
 ```
@@ -30,7 +30,7 @@ do not claim a signed skill.
 Optional marketplace path, still pinned:
 
 ```bash
-npx skills add remigiusz-antczak/deep-code-review#vX.Y.Z --skill deep-code-review
+npx skills add protocol/perun#vX.Y.Z --skill deep-code-review
 ```
 
 Prefer `--copy` over a symlink that auto-updates. `npx skills update`

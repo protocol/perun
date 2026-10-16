@@ -6,7 +6,7 @@
 #   installed : ~/.claude/skills/deep-code-review/VERSION
 #               (override with DCR_INSTALLED_VERSION_FILE)
 #   upstream  : .claude/skills/deep-code-review/VERSION on
-#               github.com/remigiusz-antczak/deep-code-review @ main
+#               github.com/protocol/perun @ main
 #               (read via the gh CLI; override the repo with DCR_REPO)
 #
 # Exit codes:
@@ -29,7 +29,7 @@
 
 set -uo pipefail   # deliberately NOT -e: every failure is handled explicitly.
 
-REPO="${DCR_REPO:-remigiusz-antczak/deep-code-review}"
+REPO="${DCR_REPO:-protocol/perun}"
 UPSTREAM_PATH=".claude/skills/deep-code-review/VERSION"
 INSTALLED_FILE="${DCR_INSTALLED_VERSION_FILE:-${HOME}/.claude/skills/deep-code-review/VERSION}"
 

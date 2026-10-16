@@ -6,6 +6,7 @@ Stdlib only. Reports field names, never file contents that might be private.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import sys
 from pathlib import Path
@@ -27,7 +28,7 @@ REQUIRED = (
     "dissent_ledger",
     "remaining_risk",
 )
-COUNCIL = (  # council.py decision record (has "tally"); see references/council.md
+COUNCIL = (  # veche.py decision record (has "tally"); see references/council.md
     "verdict", "independence", "origin", "claim", "steelman", "tally",
     "confidence", "dissent", "what_would_change_it", "cost",
 )
@@ -81,12 +82,24 @@ def main(argv: list[str]) -> int:
     steelman = data["steelman"]
     strongest_attack = data.get("strongest_attack_survived")
 
+    for k in ("decision", "leading_metric"):  # optional closers (SKILL.md Decision method step 6): never empty when present
+        if k in data and (not isinstance(data[k], str) or not data[k].strip()):
+            die(1, f"{k} must be a non-empty string when present")
     if council:
-        if verdict == "COULD_NOT_DECIDE":
+        if verdict in ("COULD_NOT_DECIDE", "NOT_CONVENED"):
             if not str(data.get("reason", "")).strip():
-                die(1, "COULD_NOT_DECIDE requires a non-empty reason")
+                die(1, f"{verdict} requires a non-empty reason")
         elif verdict not in VERDICTS:
-            die(1, "verdict must be HOLD | REVISE | PASS_TO_USER | COULD_NOT_DECIDE")
+            die(1, "verdict must be HOLD | REVISE | PASS_TO_USER | COULD_NOT_DECIDE | NOT_CONVENED")
+        if "decision" in data and verdict in VERDICTS:  # a Veche option decision carries its closers
+            if not isinstance(data.get("kill_criteria"), list) or not data["kill_criteria"]:
+                die(1, "a Veche decision requires a non-empty kill_criteria list")
+            try:
+                datetime.date.fromisoformat(str(data.get("review_date")))
+            except ValueError:
+                die(1, "a Veche decision requires an ISO review_date")
+            if "leading_metric" not in data:
+                die(1, "a Veche decision requires leading_metric")
         conf = data["confidence"]
         if isinstance(conf, bool) or not isinstance(conf, (int, float)) or not 0 <= conf <= 1:
             die(1, "confidence must be a number in [0, 1]")
