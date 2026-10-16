@@ -872,6 +872,15 @@ if [[ -z "${DCR_NO_PROBE:-}" && -f "${PROBE}" ]] && command -v python3 >/dev/nul
   python3 "${PROBE}" --verdict-only "${TARGET_DIR}" 2>/dev/null || true
 fi
 
+# Autonomy advice: read-only; prints the "To run autonomously, add:" section (what this repo's own flows need
+# granted, least privilege). Never writes a settings file; never fails the install.
+PREFLIGHT="${SCRIPT_DIR}/.claude/skills/agentic-delivery/scripts/sandbox_preflight.py"
+if [[ -f "${PREFLIGHT}" ]] && command -v python3 >/dev/null; then
+  echo
+  python3 "${PREFLIGHT}" "${TARGET_DIR}" 2>/dev/null || true
+  echo
+fi
+
 # Policy file pinned to the target: never $PERUN_POLICY, never a parent dir's file.
 PERUN_POLICY_FILE="$(cd "${TARGET_DIR}" && pwd)/.perun/policy.json"
 if [[ -n "${POLICY}" ]]; then

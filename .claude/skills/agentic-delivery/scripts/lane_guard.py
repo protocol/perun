@@ -45,7 +45,22 @@ origin/HEAD, the main checkout's branch, nor --default-branch names a branch
 ENVIRONMENT. GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR and GIT_INDEX_FILE are
 removed from every git call's environment, so an inherited variable (for
 example from a git hook) cannot point the check at a different repository than
-the cwd. Read-only: the guard never writes to the repository.
+the cwd. Read-only except for the one copy under BANLIST SEED: the guard never
+writes to a tracked file, the index, refs or any other path.
+
+BANLIST SEED. After an OK result only, when the main checkout has a
+`.banlist.local.txt` (the gitignored file holding private identifiers for the
+privacy gate) and this worktree has nothing at that path, the guard copies it in
+with a plain byte copy, so the lane's privacy gate sees the same private
+patterns as the main checkout instead of silently skipping them. Never a
+symlink; never an overwrite (the file is created exclusively, so an existing
+file, symlink or dangling symlink is left alone); skipped unless git ignores the
+path in this worktree (otherwise `git add -A` could commit a private file); any
+failure copies nothing and is not a refusal. The OK line then ends with
+`; copied .banlist.local.txt from the main checkout <path>`. Claude Code can also
+copy gitignored files at worktree creation through a `.worktreeinclude` file
+(https://code.claude.com/docs/en/worktrees); this copy covers every other host
+and a manual `git worktree add`.
 
     lane_guard.py --selftest    builds throwaway repos and proves every
                                 refusal fires (and that the OK case passes).
@@ -331,6 +346,41 @@ def check(cwd, expect_branch=None, default_branch=None, git="git", allow_any_bra
             "confirm the previous agent terminated before reusing this worktree"
         )
     return OK, f"LANE_GUARD OK: linked worktree {top} on branch '{branch}'"
+
+
+BANLIST = ".banlist.local.txt"
+
+
+def seed_banlist(cwd, git="git"):
+    """Copy the main checkout's gitignored `.banlist.local.txt` into the worktree at `cwd` when it has none.
+
+    Returns the text to append to the OK line ("" when nothing was copied). Plain byte copy, never a symlink;
+    the destination is created exclusively, so any existing path (file, symlink, dangling symlink) is never
+    overwritten. Copies only when git ignores the path in this worktree, so `git add -A` cannot stage it. Writes
+    only that one path; never raises: any failure copies nothing, except a write that dies midway, which is
+    named in the returned text so the lane's owner can fix it (the guard never deletes).
+    """
+    code, top = _git(["rev-parse", "--show-toplevel"], cwd, git)
+    code_w, listing = _git(["worktree", "list", "--porcelain"], cwd, git)
+    if code != 0 or code_w != 0 or not listing.startswith("worktree "):
+        return ""
+    main = listing.split("\n\n", 1)[0].splitlines()[0][len("worktree "):]
+    src, dst = os.path.join(main, BANLIST), os.path.join(top, BANLIST)
+    if os.path.realpath(main) == os.path.realpath(top) or not os.path.isfile(src) or os.path.lexists(dst):
+        return ""
+    if _git(["check-ignore", "-q", BANLIST], top, git)[0] != 0:
+        return ""
+    try:
+        with open(src, "rb") as s:
+            data = s.read()
+        with open(dst, "xb") as d:
+            d.write(data)
+        shutil.copymode(src, dst)
+    except FileExistsError:  # lost a race with another writer: theirs stays
+        return ""
+    except OSError:
+        return f"; WARNING: copying {BANLIST} may be incomplete, check {dst} by hand" if os.path.lexists(dst) else ""
+    return f"; copied {BANLIST} from the main checkout {main}"
 
 
 def _cite_problem(cwd, full, path, artifact_root, git):
@@ -653,6 +703,8 @@ def main(argv=None):
         return _selftest()
     code, line = check(os.getcwd(), args.expect_branch, args.default_branch,
                        allow_any_branch=args.allow_any_branch, allow_unverified=args.allow_unverified)
+    if code == OK:
+        line += seed_banlist(os.getcwd())
     print(line)
     return code
 
