@@ -3832,6 +3832,13 @@ else
   record 1 "train flake-on-base: a FLAKE lands only if the test also fails on the base, else CANT"; tail -8 "$WORK/train-flake-base.log"
 fi
 
+# train quarantine wiring: own per-feature file (scripts/test-train-flake-ledger.sh), one case here.
+if bash "$ROOT/scripts/test-train-flake-ledger.sh" >"$WORK/train-flake-ledger.log" 2>&1; then
+  record 0 "train flake ledger: an actively quarantined flake is non-blocking; expired, consistent and unlisted still block"
+else
+  record 1 "train flake ledger: an actively quarantined flake is non-blocking; expired, consistent and unlisted still block"; tail -8 "$WORK/train-flake-ledger.log"
+fi
+
 # peer pains: own per-feature file (scripts/test-peer-pains-2.sh), one case here.
 if bash "$ROOT/scripts/test-peer-pains-2.sh" >"$WORK/peer-pains-2.log" 2>&1; then
   record 0 "peer pains: train CANT rule, no unchecked-as-zero status, NOT CHECKED briefs"
