@@ -28,7 +28,7 @@ measured in this repository; adapt the settings to your own fleet and re-measure
    resume a worktree instead of spawning short lanes. See `model-tiering.md`, same section as tip 3.
 9. **Measure per session, then per project.** `agentic-ceo/scripts/token_report.py --session
    <transcript> --budget` reports main versus subagent tokens and flags lanes over their caps;
-   `/deep-code-review:cost-retro` turns that into "what would have been cheaper".
+   `/perun:cost-retro` turns that into "what would have been cheaper".
 10. **Attribute spend before capping it.** Name keys `<tracker-project-id>-<handle>`, prefer one key
     per project, set alerts first, caps last, and total an export with
     `agentic-delivery/scripts/spend_report.py`. See [`operating-discipline.md`](../.claude/skills/agentic-delivery/references/operating-discipline.md), item 9.

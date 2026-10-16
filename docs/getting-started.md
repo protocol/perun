@@ -2,8 +2,10 @@
 
 **You can try the review with no install by pasting one file into an AI chat.
 To make every agent in a project use it, run `install.sh` from a pinned
-release.** This page covers both, plus updating and removal. What Perun is and
-which skills exist: [the README](../README.md) and the [skill catalog](#skill-catalog) below.
+release.** This page covers both, plus updating and removal. Perun is a suite:
+deep code review, token and cost tools, gated agentic delivery, an idea critic and
+product, growth, positioning, business-ops and output-safety specialists. What it
+is and which skills exist: [the README](../README.md) and the [skill catalog](#skill-catalog) below.
 
 ## 1. Try it without installing
 
@@ -26,8 +28,8 @@ You need `git`, a terminal, and a coding agent that can open your project
 Kiro, or similar).
 
 ```bash
-git clone --depth 1 https://github.com/remigiusz-antczak/deep-code-review.git
-cd deep-code-review && shasum -a 256 -c SHA256SUMS   # Linux: sha256sum -c SHA256SUMS
+git clone --depth 1 https://github.com/protocol/perun.git
+cd perun && shasum -a 256 -c SHA256SUMS   # Linux: sha256sum -c SHA256SUMS
 ./install.sh --recommend /path/to/your/project       # optional: see a suggested pack, writes nothing
 ./install.sh /path/to/your/project                   # review only (the default)
 ```

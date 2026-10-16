@@ -11,6 +11,15 @@ per event"), exit code 2 on SubagentStop "prevents the subagent from
 stopping, continues the subagent" — so a block does not lose the subagent's
 work, it sends the same turn back to compose a shorter handback.
 
+WHAT COUNTS. Fenced code blocks (the fence lines included) and lines that start
+with `! ` (a command the owner copies and runs with the host's `!` prefix) are
+not counted toward MAX_CHARS or MAX_LINES, so a copy-paste command for the user
+never forces a rewrite. To keep a long deliverable from hiding in a fence, the
+whole message (those lines included) may not pass COPY_FACTOR (5) times
+MAX_CHARS; past that it is blocked like any over-long handback, and the fix is
+the same: put it in a file. An unclosed fence hides the rest of the message
+from the line and char counts, and only that total limit then applies.
+
 EXEMPTION IS A NAME LIST, NOT A TOOL CHECK. A subagent is exempt (never
 capped, at any length) iff its `agent_type` is listed in the comma-separated
 HANDBACK_EXEMPT_TYPES env var. The default list is four built-in agent types
@@ -51,6 +60,7 @@ import time
 MAX_CHARS = int(os.environ.get("HANDBACK_MAX_CHARS", "800"))
 MAX_LINES = int(os.environ.get("HANDBACK_MAX_LINES", "10"))
 MAX_BLOCKS = 3
+COPY_FACTOR = 5  # whole message, fenced code and `! ` lines included, may be at most this many times MAX_CHARS
 # Default exempt agent-type NAMES (chat IS their deliverable). Matched by name
 # only; override/extend via HANDBACK_EXEMPT_TYPES (replaces this list).
 DEFAULT_EXEMPT_TYPES = "Explore,Plan,claude-code-guide,statusline-setup"
@@ -123,6 +133,19 @@ def _push_running(cwd):
         return None
 
 
+def _counted(msg):
+    """Lines of `msg` that count toward the cap: all but fenced code blocks (fence lines included) and
+    lines starting with '! '. A one-line fence (an even number of ``` on a line starting with one) toggles
+    nothing; an unclosed fence hides the rest of the message."""
+    kept, fenced = [], False
+    for ln in msg.split("\n"):
+        if ln.lstrip().startswith("```"):
+            fenced ^= ln.count("```") % 2 == 1
+        elif not fenced and not ln.startswith("! "):
+            kept.append(ln)
+    return kept
+
+
 def check(data):
     """Return the hook exit code (0 pass, 2 block) for one hook-input dict."""
     if str(data.get("agent_type") or "") in _exempt_types():
@@ -146,9 +169,9 @@ def check(data):
             return 2
     msg = data.get("last_assistant_message") or ""
     agent_id = str(data.get("agent_id") or "unknown")
-    chars = len(msg)
-    lines = msg.count("\n") + 1 if msg else 0
-    too_long = chars > MAX_CHARS or lines > MAX_LINES
+    kept = _counted(msg) if msg else []
+    chars, lines = len("\n".join(kept)), len(kept)
+    too_long = chars > MAX_CHARS or lines > MAX_LINES or len(msg) > MAX_CHARS * COPY_FACTOR
     no_status = _require_status() and not STATUS_RE.search(msg)
     if not too_long and not no_status:
         return 0
@@ -168,7 +191,8 @@ def check(data):
         return 2
     sys.stderr.write(
         f"Handback too long ({chars} chars, {lines} lines; cap {MAX_CHARS} chars / "
-        f"{MAX_LINES} lines). Rewrite your final message as a fields-only handback: "
+        f"{MAX_LINES} lines, not counting fenced code or '! ' lines; whole message {len(msg)} chars, "
+        f"limit {MAX_CHARS * COPY_FACTOR}). Rewrite your final message as a fields-only handback: "
         "key=value lines only (verdict, branch/sha, file paths, gate results, open issues). "
         "No prose, no progress narration. Put any long content in a file and give its path. "
         "Start a line with VERIFIED or UNVERIFIED.\n"
