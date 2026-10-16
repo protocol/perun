@@ -3977,7 +3977,7 @@ pf_dir="$WORK/prefile"; mkdir -p "$pf_dir"
 printf 'AKIA[0-9A-Z]{16}\nZZTOPSECRET\n' > "$pf_dir/.banlist.txt"
 printf 'LOCALONLYNAME\n' > "$pf_dir/.banlist.local.txt"
 pf() { printf '%s' "$1" > "$pf_dir/t"; printf '%s' "$2" > "$pf_dir/b"; BANLIST_DIR="$pf_dir" bash "$PF" "$pf_dir/t" "$pf_dir/b" >/dev/null 2>&1; }
-if pf "Generalized lesson" "Mention remigiusz-antczak/deep-code-review only."; then record 0 "prefile: clean draft passes"; else record 1 "prefile: clean draft passes"; fi
+if pf "Generalized lesson" "Mention protocol/perun only."; then record 0 "prefile: clean draft passes"; else record 1 "prefile: clean draft passes"; fi
 for c in "ZZTOPSECRET here" "LOCALONLYNAME here" "see acme/widgets repo" "tracked as #12345" "at /Users/jane/proj"; do
   if pf "t" "$c"; then record 1 "prefile: refuses '$c'"; else record 0 "prefile: refuses '$c'"; fi
 done

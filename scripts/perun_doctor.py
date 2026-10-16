@@ -6,7 +6,9 @@ Usage: python3 scripts/perun_doctor.py [REPO] [--fix [--yes]] [--home DIR]
 Checks, in plain language: installed version vs this checkout (and the global copy),
 hook entries whose files exist, shipped hook scripts that nothing calls, forked copies
 that drifted from the checkout (sha256), janitor/scheduler presence, policy file, and the
-sandbox probe (git, ssl, network, local bind, ~/.cache write; DCR_NO_PROBE=1 skips it).
+sandbox probe (git, ssl, network, local bind, ~/.cache write; DCR_NO_PROBE=1 skips it), and an advisory
+"To run autonomously, add:" section from sandbox_preflight.py (read-only advice: the permissions, sandbox excludes and
+domains this repo's own flows need; it never changes the exit code).
 Exit 0 = nothing to fix, 1 = at least one WARN/FAIL (INFO rows are optional add-ons and never fail the exit code). `--fix` prints a plan (and what default-on would add), needs a typed yes on a TTY or --yes, then
 re-runs the recorded install flags via scripts/update-installed.sh (skills are backed up
 by install.sh first), and re-checks. Stdlib only; read-only without --fix.
@@ -178,6 +180,16 @@ def check(repo, home):
     return rows
 
 
+def advice(repo, home):
+    """The advisory 'To run autonomously, add:' text; never raises (an advisor bug must not break the doctor)."""
+    sys.path.insert(0, str(SRC / ".claude/skills/agentic-delivery/scripts"))
+    try:
+        import sandbox_preflight
+        return sandbox_preflight.advise(repo, home)
+    except Exception as e:  # noqa: BLE001
+        return f"To run autonomously: advice unavailable ({type(e).__name__})"
+
+
 def show(rows):
     w = max(len(r[1]) for r in rows)
     for s, c, d in rows:
@@ -237,6 +249,7 @@ def main(argv=None):
     rows = check(repo, home)
     print(verdict(rows, repo), "\n", sep="")
     show(rows)
+    print("\n" + advice(repo, home))
     bad = [r for r in rows if r[0] in ("WARN", "FAIL")]
     if a.fix and bad:
         if not any(r[1] in FIXABLE for r in bad):
