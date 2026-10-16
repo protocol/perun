@@ -53,7 +53,17 @@ import perun_policy  # noqa: E402
 THROTTLE = 6 * 3600
 STALE_LOCK = 24 * 3600  # a lock in a linked worktree older than this is leftover, not a live operation
 SKIP_WARN_AT = 3  # consecutive skips with the same reason before behind_warn surfaces it
-CANONICAL_REMOTE = "https://github.com/remigiusz-antczak/deep-code-review.git"  # same as install.sh's fallback
+CANONICAL_REMOTE = "https://github.com/protocol/perun.git"  # same as install.sh's fallback
+LEGACY_REMOTE = "https://github.com/remigiusz-antczak/deep-code-review.git"  # pre-move home: accepted only to migrate to CANONICAL_REMOTE
+
+
+def _norm(url: str) -> str:
+    return url.strip().rstrip("/").removesuffix(".git")
+
+
+def is_canonical(url: str) -> bool:
+    """True for the canonical or the legacy remote (exact match modulo a trailing `/` or `.git`); any other URL is foreign."""
+    return _norm(url) in (_norm(CANONICAL_REMOTE), _norm(LEGACY_REMOTE))
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -404,6 +414,8 @@ def run(target: Path) -> int:
         if not remote or have is None:
             log(target, "skip: install marker has no remote or version (reinstall once to record them)")
             return 0
+        if is_canonical(remote):  # a legacy-home install migrates: fetch from the canonical remote, not the old one
+            remote = CANONICAL_REMOTE
         why = blocker(target, marker)
         skips(target, why)
         if why:
@@ -412,7 +424,7 @@ def run(target: Path) -> int:
         src = cache() / "src"
         if legacy and (src / ".git").is_dir():  # install.sh records the clone's origin: a legacy install must never inherit a foreign one
             o = git("-C", str(src), "remote", "get-url", "origin").stdout.strip()
-            if o != CANONICAL_REMOTE:
+            if not is_canonical(o):
                 log(target, f"skip: cache clone origin {o or '(none)'} is not the canonical remote")
                 return 0
         ls = git("ls-remote", "--tags", "--refs", remote)
@@ -442,7 +454,7 @@ def run(target: Path) -> int:
             log(target, f"failed {marker['version']} -> {newest}: aborted, {why}")
             return 1
         r = subprocess.run(["bash", str(src / "scripts/update-installed.sh"), str(target)], capture_output=True,
-                           text=True, timeout=600, env={**os.environ, "DCR_NO_PULL": "1"})
+                           text=True, timeout=600, env={**os.environ, "DCR_NO_PULL": "1", "PERUN_REMOTE": remote})  # install.sh re-records this, not the clone origin
         if r.returncode != 0:
             log(target, f"failed {marker['version']} -> {newest}: update-installed.sh exit {r.returncode}: "
                 f"{((r.stderr or r.stdout).strip().splitlines() or ['?'])[-1]}")
