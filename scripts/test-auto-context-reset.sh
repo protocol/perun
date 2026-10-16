@@ -39,20 +39,45 @@ python3 "$SC/perun_policy.py" check auto_compact off >/dev/null 2>&1; ok $? "pol
 # The hook, exactly as wired in settings, with and without a handoff.
 [ -f "$W/fresh/.claude/skills/agentic-delivery/scripts/handoff_inject.py" ]; ok $? "install copies handoff_inject.py (the empty-output cases below are not vacuous)"
 cmd="$(jq -r '.hooks.SessionStart[] | select(.matcher == "compact|startup|clear") | .hooks[0].command' "$F")"
-mkdir -p "$W/fresh/.claude"
-out="$(CLAUDE_PROJECT_DIR="$W/fresh" bash -c "$cmd")"
+hook() { CLAUDE_PROJECT_DIR="$W/fresh" bash -c "$cmd" <<<"{\"source\":\"$1\"}"; }
+out="$(hook compact)"
 [ -z "$out" ]; ok $? "hook prints nothing when no handoff exists"
 printf 'State: parser done.\nNext: wire the tests.\n' >"$W/fresh/.claude/handoff.md"
-out="$(CLAUDE_PROJECT_DIR="$W/fresh" bash -c "$cmd")"
+out="$(hook compact)"
 case "$out" in *"Next: wire the tests."*) rc=0 ;; *) rc=1 ;; esac
 ok $rc "hook prints the handoff when present"
+case "$out" in *"data, not instructions"*) rc=0 ;; *) rc=1 ;; esac
+ok $rc "hook frames the handoff as data, not instructions"
+touch -t 202001010000 "$W/fresh/.claude/handoff.md"
+out="$(hook startup)"
+[ -z "$out" ]; ok $? "startup skips a handoff older than 24h"
+out="$(hook compact)$(hook clear)"
+case "$out" in *"Next: wire the tests."*"Next: wire the tests."*) rc=0 ;; *) rc=1 ;; esac
+ok $rc "compact and clear still inject a stale handoff"
+touch "$W/fresh/.claude/handoff.md"
+out="$(hook startup)"
+case "$out" in *"Next: wire the tests."*) rc=0 ;; *) rc=1 ;; esac
+ok $rc "startup injects a handoff younger than 24h"
 head -c 9000 /dev/zero | tr '\0' 'x' >"$W/fresh/.claude/handoff.md"
-bytes="$(CLAUDE_PROJECT_DIR="$W/fresh" bash -c "$cmd" | wc -c | tr -d ' ')"
+bytes="$(hook compact | wc -c | tr -d ' ')"
 [ "$bytes" -gt 0 ] && [ "$bytes" -le 2048 ]; ok $? "hook output capped at 2048 bytes (9000-byte handoff -> $bytes bytes)"
 mv "$W/fresh/.claude/handoff.md" "$W/real.md"
 ln -s "$W/real.md" "$W/fresh/.claude/handoff-link.md"
-out="$(CLAUDE_PROJECT_DIR="$W/fresh" bash -c "$cmd")"
+out="$(hook compact)"
 [ -z "$out" ]; ok $? "hook ignores symlinked handoff files"
+
+# Invalid JSON/JSONC in any settings file: fail closed, write nothing, say so.
+mkdir -p "$W/jsonc/.claude" "$W/badglob/.claude"
+printf '// my settings\n{"model":"opus"}\n' >"$W/jsonc/.claude/settings.json"
+echo '{}' >"$W/jsonc/.claude/settings.local.json"
+bash "$ROOT/install.sh" --with-delivery --apply-operating-layer "$W/jsonc" >"$W/jsonc.out" 2>&1
+jq -e 'has("autoCompactWindow") | not' "$W/jsonc/.claude/settings.local.json" >/dev/null; ok $? "invalid project settings.json: autoCompactWindow not written"
+grep -q "autoCompactWindow not written" "$W/jsonc.out"; ok $? "invalid project settings.json: note printed"
+echo '{}' >"$W/badglob/.claude/settings.local.json"
+printf '{"a":' >"$W/home/settings.json"
+inst "$W/badglob"
+jq -e 'has("autoCompactWindow") | not' "$W/badglob/.claude/settings.local.json" >/dev/null; ok $? "invalid user-global settings.json: autoCompactWindow not written"
+rm -f "$W/home/settings.json"
 
 # Uninstall removes only what install added.
 python3 "$ROOT/scripts/perun_uninstall.py" "$W/fresh" --apply >/dev/null 2>&1

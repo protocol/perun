@@ -556,7 +556,13 @@ HOUSE
     OPLAYER_AC=200000
     [[ ",${POLICY}," == *,auto_compact=off,* ]] || grep -qs '"auto_compact"[[:space:]]*:[[:space:]]*"off"' "${TARGET_DIR}/.perun/policy.json" && OPLAYER_AC=""
     for _f in "${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/settings.json" "${TARGET_DIR}/.claude/settings.json" "${OPLAYER_LOCAL}"; do
-      jq -e 'has("autoCompactWindow")' "${_f}" >/dev/null 2>&1 && OPLAYER_AC=""
+      [[ -f "${_f}" ]] || continue
+      if ! jq -e 'type == "object"' "${_f}" >/dev/null 2>&1; then  # invalid JSON/JSONC: cannot tell whether the user set it, so fail closed
+        [[ -n "${OPLAYER_AC}" ]] && echo "note: ${_f} is not plain JSON; autoCompactWindow not written (set it there yourself)" >&2
+        OPLAYER_AC=""
+      elif jq -e 'has("autoCompactWindow")' "${_f}" >/dev/null 2>&1; then
+        OPLAYER_AC=""
+      fi
     done
     jq --argjson t "${OPLAYER_JSON}" --arg ac "${OPLAYER_AC}" '
       def dm($a; $b): if ($a|type) == "object" and ($b|type) == "object"
