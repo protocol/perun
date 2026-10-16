@@ -651,7 +651,7 @@ python3 "${SCRIPT_DIR}/scripts/perun_marker.py" "${TARGET_DIR}" --dirs "${INSTAL
   ${BACKUP_DIRS[@]+--backups "${BACKUP_DIRS[@]}"} ${OPLAYER_LOCAL_NEW:+--settings-created} \
   ${OPLAYER_PRE:+--pre "${OPLAYER_PRE}" --template "${SCRIPT_DIR}/.claude/skills/agentic-delivery/templates/operating-layer.settings.json"} \
   ${OPLAYER_AGENT_NEW:+--agent-created} --version "${VERSION}" \
-  --remote "${RECORD_REMOTE:-https://github.com/remigiusz-antczak/deep-code-review.git}"
+  --remote "${RECORD_REMOTE:-https://github.com/protocol/perun.git}"
 if [[ "${NO_AUTO_UPDATE}" -eq 1 ]]; then
   python3 - "${TARGET_DIR}/.perun/policy.json" <<'PY'
 import json, sys
@@ -872,6 +872,15 @@ fi
 PROBE="${SCRIPT_DIR}/.claude/skills/agentic-delivery/scripts/sandbox_probe.py"
 if [[ -z "${DCR_NO_PROBE:-}" && -f "${PROBE}" ]] && command -v python3 >/dev/null; then
   python3 "${PROBE}" --verdict-only "${TARGET_DIR}" 2>/dev/null || true
+fi
+
+# Autonomy advice: read-only; prints the "To run autonomously, add:" section (what this repo's own flows need
+# granted, least privilege). Never writes a settings file; never fails the install.
+PREFLIGHT="${SCRIPT_DIR}/.claude/skills/agentic-delivery/scripts/sandbox_preflight.py"
+if [[ -f "${PREFLIGHT}" ]] && command -v python3 >/dev/null; then
+  echo
+  python3 "${PREFLIGHT}" "${TARGET_DIR}" 2>/dev/null || true
+  echo
 fi
 
 # Policy file pinned to the target: never $PERUN_POLICY, never a parent dir's file.

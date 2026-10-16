@@ -190,6 +190,18 @@ Skipped to stay inside the cap: positioning (deanpeters) and contribution (dayma
 
 Reading: the rubric rate fell in all three pairs (idea-critic 1.000 to 0.650, product-discovery 0.850 to 0.300, growth-analytics 0.850 to 0.700), and none meets the bar, so none of these skills is shown superior to its rival on a judge without a rubric. Judge reasons: where the rival won, it usually handed over filled-in thresholds, decision rules, sample sizes or a complete brief, where Perun left blanks or asked for inputs (product-discovery most clearly); where Perun won, reasons cite correct arithmetic and honestly named unknowns (growth-analytics, idea-critic). The rival for product-discovery is a three-skill selection I made (the first H1 run did not record which phuryn files it used), so a different selection could move that result. Same-vendor judge, one set of 10 per pair, no tools for either arm (Perun's references and scripts were unavailable), sampling not seeded. growth-analytics's first run stopped at n=8 on the driver's in-flight reserve and was resumed once to the full 10 with cached outputs; the n=8 interim was seen first, and nothing was changed (`docs/bench/growth-analytics-rubricfree-1016/README.txt`). The skills are unchanged.
 
+### H1e. idea-critic v2 on a fresh held-out decision set (2026-10-16, $1.49 of a $1.50 cap; preregistered in `docs/bench/idea-critic-v2-1016/`, Refs #1572)
+
+What changed: a six-step decision method in `SKILL.md` (steelman then attack; do nothing plus the 2 strongest alternatives; fit with stage, vision and north star; pre-mortem, door type and cost of delay; evidence or `assumed`; close with one decision, kill criteria, a leading metric and a review date), with `SKILL.md` 431 bytes smaller (15,519 against 15,950). Same rubric-free blind judge design and both orders as H1d, 10 new decision scenarios, one set, no edits after the result. Declared deviation: the judge and generator are both Sonnet (the cap made an Opus judge unaffordable), so the numbers are not comparable with H1d's 0.650.
+
+| Comparison | Win rate [95% CI] | Order splits | Result |
+|---|---|---|---|
+| new skill vs old skill | 0.650 [0.450, 0.850] (n=10) | 5 of 10 | No measured loss, not shown better; change kept under the preregistered rule |
+| new skill vs the H1d rival | incomplete: cap hit after 4 of 10 scenarios (0.875 on those 4, not a result) | n/a | Not measured |
+| new skill vs the plain model | not run (cap) | n/a | Not measured |
+
+The estimate that the cap would cover all three pairs was wrong (a Sonnet judge call cost $0.0167, not the $0.008 assumed); finishing the rival and plain pairs needs about $0.65 more. Judge reasons favour the new skill for dated kill criteria, a leading metric, branching decision rules and caught date errors, and the old skill where it was more specific on a fallback or a ready-to-send draft. The Council became Veche (`scripts/veche.py`; `council.py` forwards to it): its seats, fixed criteria, twin dissent and convene gate are unit-tested (`scripts/test_veche.py`), not measured for accuracy.
+
 ### H10. Install and update (1.583.0; timings measured on 1.582.0, host and uninstall fixes from the 1.583.0 release checks)
 
 Zero model spend. Host counts re-checked 2026-10-16 against the superpowers README. Timings and file counts come from one run per cell of the install bench on 1.582.0 (3 project fixtures, default, `--minimal` and `--full` modes); differences under about 0.05 s are noise. The rival columns are README reads only: no rival installer was run.

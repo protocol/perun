@@ -120,7 +120,7 @@ class ShareLearning(unittest.TestCase):
         sent = self.calls.read_text()
         for leak in ("Acme", "foo/bar", "/Users/jane", "jane@example.com"):
             self.assertNotIn(leak, sent)
-        self.assertIn("--repo remigiusz-antczak/deep-code-review", sent)
+        self.assertIn("--repo protocol/perun", sent)
         rec = json.loads(self.ledger.read_text().splitlines()[-1])
         self.assertEqual((rec["status"], rec["url"]), ("created", "https://example.com/i/9"))
         self.assertNotIn("pr create", sent)
