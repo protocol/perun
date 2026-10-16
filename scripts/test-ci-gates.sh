@@ -36,6 +36,11 @@ export HOME="$WORK/home"
 mkdir -p "$HOME"
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null
+# Dozens of cases run the shipped gate runner (dcr-gates.sh), and each run used to re-prove the same idempotent gate
+# selftests: most of this suite's wall time (docs/bench/pipeline-1016/). Stamps under this run's own root make each
+# selftest pass once per run per script; a failing selftest is never stamped, and the stamp tests are in
+# scripts/test-selftest-stamps.sh.
+export DCR_SELFTEST_STAMPS="$WORK/selftest-stamps"
 
 # Documented SKILL.md size budget (bytes). Exceeding it must WARN, not fail.
 SKILL_BUDGET=1024
@@ -1981,7 +1986,7 @@ fi
 #    proves itself with a passing --selftest (the same planted-violation
 #    self-proof CI's own "Shipped script self-tests" step requires).
 gates_run_log="$WORK/gates-run.log"
-bash "$gates_runner" >"$gates_run_log" 2>&1 || true
+env -u DCR_SELFTEST_STAMPS bash "$gates_runner" >"$gates_run_log" 2>&1 || true
 if grep -qF "using deep-code-review at $gates_fresh/.claude/skills/deep-code-review" "$gates_run_log" \
   && grep -q 'SELFTEST OK' "$gates_run_log"; then
   record 0 "install --with-gates: runner resolves the installed skill's own script paths"

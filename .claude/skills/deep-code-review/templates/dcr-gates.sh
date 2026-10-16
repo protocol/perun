@@ -40,6 +40,21 @@
 #                           from the event (see the shipped workflow
 #                           template). Locally, defaults to HEAD~1..HEAD when
 #                           both are unset.
+#   DCR_SELFTEST_STAMPS    a directory for selftest verdict stamps. Unset (the
+#                           default) -> every run proves every gate script
+#                           fires (`--selftest`), as always. Set -> a selftest
+#                           that PASSED for a script with the same raw bytes
+#                           (`git hash-object --no-filters`) under the same
+#                           `python3 -V` is not run again, so a caller that
+#                           invokes this runner many times in one run (a test
+#                           suite) pays each selftest once. Only a pass is
+#                           stamped; a failing selftest re-runs and fails
+#                           closed every time. The directory must be private to
+#                           ONE run of the caller (a fresh throwaway directory,
+#                           never shared, committed or reused across runs): it
+#                           is created with mode 700 and ignored (every
+#                           selftest runs) unless it is a real directory we own
+#                           with mode 700.
 #
 #   DCR_DERIVED_NUMBERS     ON BY DEFAULT. Set to 0 to turn off (any value other
 #                           than unset, 0, or 1 fails closed). Runs derived_numbers.py
@@ -304,6 +319,33 @@ esac
 #    proves each fires on a planted violation before its result is trusted,
 #    independent of this repo's own history/content.
 # ---------------------------------------------------------------------------
+# selftest_ok <script> — `python3 <script> --selftest`. With DCR_SELFTEST_STAMPS
+# set, a PASS for these exact script bytes under this python is remembered there
+# and a later call skips the run. The key is `git hash-object --no-filters` (the
+# raw bytes, never an attribute-normalised copy) plus `python3 -V`. The cache can
+# only skip a selftest that already passed, never invent a pass: a failure is not
+# stamped, and no git, or a stamp directory we do not own with mode 700, falls
+# back to running it (a shared or foreign directory could hold planted stamps).
+selftest_ok() {
+  local script="$1" key="" stamp="" dir="${DCR_SELFTEST_STAMPS:-}" mode=""
+  if [ -n "${dir}" ]; then
+    [ -e "${dir}" ] || mkdir -p -m 700 "${dir}" 2>/dev/null || true
+    mode="$(stat -c %a "${dir}" 2>/dev/null || stat -f %Lp "${dir}" 2>/dev/null || true)"
+    if [ -d "${dir}" ] && [ ! -L "${dir}" ] && [ -O "${dir}" ] && [ "${mode}" = 700 ]; then
+      key="$(git hash-object --no-filters -- "${script}" 2>/dev/null || true)"
+      [ -z "${key}" ] || stamp="${dir}/${key}-$(python3 -V 2>&1 | tr -c 'A-Za-z0-9.\n' _ | tr -d '\n')-$(basename "${script}")"
+    fi
+  fi
+  if [ -n "${stamp}" ] && [ -f "${stamp}" ]; then
+    return 0
+  fi
+  python3 "${script}" --selftest || return 1
+  if [ -n "${stamp}" ]; then
+    : >"${stamp}" 2>/dev/null || true
+  fi
+  return 0
+}
+
 SELFTEST_SCRIPTS=(
   "${REVIEW_ROOT}/scripts/fix_class_gate.py"
   "${REVIEW_ROOT}/scripts/binaries_gate.py"
@@ -326,7 +368,7 @@ for script in "${SELFTEST_SCRIPTS[@]}"; do
     FAIL=1
     continue
   fi
-  if python3 "${script}" --selftest; then
+  if selftest_ok "${script}"; then
     :
   else
     printf 'dcr-gates: selftest FAILED for %s\n' "${script}" >&2
@@ -359,7 +401,7 @@ if opt_in DCR_REAPER_LINT; then
   if [ ! -f "${REAPER_LINT}" ]; then
     printf 'dcr-gates: reaper_lint.py not found at %s (FAIL, fail closed)\n' "${REAPER_LINT}" >&2
     FAIL=1
-  elif ! python3 "${REAPER_LINT}" --selftest; then
+  elif ! selftest_ok "${REAPER_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${REAPER_LINT}" >&2
     FAIL=1
   else
@@ -398,7 +440,7 @@ if opt_in DCR_SOURCE_SCAN_LINT; then
   if [ ! -f "${SOURCE_SCAN_LINT}" ]; then
     printf 'dcr-gates: source_scan_tests.py not found at %s (FAIL, fail closed)\n' "${SOURCE_SCAN_LINT}" >&2
     FAIL=1
-  elif ! python3 "${SOURCE_SCAN_LINT}" --selftest; then
+  elif ! selftest_ok "${SOURCE_SCAN_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${SOURCE_SCAN_LINT}" >&2
     FAIL=1
   else
@@ -441,7 +483,7 @@ if opt_in DCR_CLOSES_LINT; then
   if [ ! -f "${CLOSES_LINT}" ]; then
     printf 'dcr-gates: closes_lint.py not found at %s (FAIL, fail closed)\n' "${CLOSES_LINT}" >&2
     FAIL=1
-  elif ! python3 "${CLOSES_LINT}" --selftest; then
+  elif ! selftest_ok "${CLOSES_LINT}"; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${CLOSES_LINT}" >&2
     FAIL=1
   elif [ "${RANGE_STATE}" = partial ]; then
@@ -492,7 +534,7 @@ delivery_script() {
     printf 'dcr-gates: %s not found (agentic-delivery not installed?) (FAIL, fail closed)\n' "$1" >&2
     return 1
   fi
-  if ! python3 "${path}" --selftest >&2; then
+  if ! selftest_ok "${path}" >&2; then
     printf 'dcr-gates: selftest FAILED for %s\n' "${path}" >&2
     return 1
   fi
