@@ -30,9 +30,15 @@ esac
 STUB
 chmod +x "$WORK/bin/gh"; export PATH="$WORK/bin:$PATH"
 echo 'echo "GREEN base=$B union=$U123"' >"$WORK/verify.sh"
-echo 'if [ "$UNION_SHA" = "$U123" ]; then echo "FAIL t1"; echo "FAILURES 1"; exit 1; fi; exit 0' >"$WORK/browser.sh"
+cat >"$WORK/browser.sh" <<'STUB'
+echo "${FLAKE_LEDGER_DIR-unset}" >>"$WORK/leak"
+if [ "$UNION_SHA" = "$U123" ]; then echo "FAIL t1"; echo "FAILURES 1"; exit 1; fi; exit 0
+STUB
 # rerun.sh: solo re-run of t1. On the union (f1 present) it pops $WORK/useq, on the base (f1 absent) $WORK/bseq; F = fail.
 cat >"$WORK/rerun.sh" <<'STUB'
+echo "${FLAKE_LEDGER_DIR-unset}" >>"$WORK/leak"
+# PR-controlled code forging a quarantine entry at a known path (FORGE_Q) while the train runs
+[ -z "${FORGE_Q:-}" ] || printf '{"t1": {"since": "2026-01-01", "expires": "2999-12-31"}}\n' >"$FORGE_Q"
 f=$WORK/useq; [ -e f1 ] || f=$WORK/bseq
 r=$(head -c1 "$f"); tail -c +2 "$f" >"$f.n"; mv "$f.n" "$f"; [ "$r" != F ] || { echo "FAIL $TEST"; exit 1; }
 STUB
@@ -46,7 +52,7 @@ quar() { printf '{"t1": {"since": "2026-01-01", "expires": "%s"}}\n' "$1" >"$LED
 # (1) active quarantine + a flake on the union -> quarantined-flake, lands, base check skipped (only the 1-run base-red guard read the base sequence)
 newled 1; quar 2999-12-31
 out=$(run FP PPPP); rc=$?
-[ $rc -eq 0 ] && grep -q '^quarantined-flake t1' <<<"$out" && ! grep -q '^FLAKE t1' <<<"$out" && [ -s "$WORK/merged.log" ] && [ "$(cat "$WORK/bseq")" = PPP ]
+[ $rc -eq 0 ] && grep -q '^quarantined-flake t1' <<<"$out" && ! grep -q '^FLAKE t1' <<<"$out" && grep -q 'were quarantined flakes only' <<<"$out" && ! grep -q 'each also flaky on the base' <<<"$out" && [ -s "$WORK/merged.log" ] && [ "$(cat "$WORK/bseq")" = PPP ]
 ok $? "train_land: an actively quarantined flake is quarantined-flake, non-blocking, no base check"
 # (2) control: same run, id not on the list -> plain FLAKE, never fails on the base -> CANT (exit 3), nothing landed
 newled 2
@@ -65,7 +71,7 @@ out=$(run FFF PPPP); rc=$?
 ok $? "train_land: a quarantined test that fails consistently is REAL, blocks"
 # (5) quarantined, but the ledger already shows it failing consistently on THIS union tree: a passing solo run does not excuse it
 newled 5; quar 2999-12-31
-printf 'REAL t1\n' | python3 "$SC/flake_ledger.py" --dir "$LED" record --tree "$TREE" >/dev/null
+printf 'SUITE t1\nFAIL t1\nFAIL t1\n' | python3 "$SC/flake_ledger.py" --dir "$LED" record --tree "$TREE" >/dev/null
 out=$(run FP PPPP); rc=$?
 [ $rc -eq 3 ] && ! grep -q 'quarantined-flake' <<<"$out" && [ ! -s "$WORK/merged.log" ]
 ok $? "train_land: a quarantined test already consistently failing on this tree still blocks"
@@ -74,6 +80,28 @@ newled 6; quar 2999-12-31
 run FP PPPP >/dev/null
 python3 "$SC/flake_ledger.py" --dir "$LED" report --n 1 | grep -q $'^FLAKY\tt1\tflake_trees=1'
 ok $? "train_land: the quarantined-flake run is still recorded as a flake in the ledger"
+
+# (7) f=0: the suite failed but every solo re-run passed -> not a quarantined-flake (that needs a solo failure); the base check applies (CANT)
+newled 7; quar 2999-12-31
+out=$(run PPPP PPPP); rc=$?
+[ $rc -eq 3 ] && grep -q '^FLAKE t1' <<<"$out" && ! grep -q 'quarantined-flake' <<<"$out" && [ ! -s "$WORK/merged.log" ]
+ok $? "train_land: a quarantined test that passes every solo re-run keeps the base check (CANT)"
+# (8) forgery: PR-controlled code writes a quarantine entry into the ledger dir while the train runs; the train reads a snapshot taken before
+newled 8
+out=$(FORGE_Q="$LED/quarantine.json" run FP PPPP); rc=$?
+[ $rc -eq 3 ] && ! grep -q 'quarantined-flake' <<<"$out" && [ ! -s "$WORK/merged.log" ]
+ok $? "train_land: a quarantine entry forged during the run is ignored (snapshot)"
+# (9) the ledger path is not handed to PR-controlled code (browser gate, solo re-runs)
+newled 9; quar 2999-12-31; : >"$WORK/leak"
+run FP PPPP >/dev/null
+[ -s "$WORK/leak" ] && ! grep -qv '^unset$' "$WORK/leak"
+ok $? "train_land: FLAKE_LEDGER_DIR is unset for BROWSER_CMD and RERUN_CMD"
+# (10) a ledger dir inside the worktree / git toplevel (PR-writable) is refused, nothing landed
+LED="$R/led.10"; mkdir -p "$LED"; quar 2999-12-31
+out=$(run FP PPPP); rc=$?
+[ $rc -eq 2 ] && [ ! -s "$WORK/merged.log" ] && grep -q 'FLAKE_LEDGER_DIR' <<<"$out"
+ok $? "train_land: a FLAKE_LEDGER_DIR under the worktree is refused (exit 2)"
+rm -r "$LED" 2>/dev/null
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
