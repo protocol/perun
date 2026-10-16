@@ -25,11 +25,21 @@ COMMANDS (state lives in --dir, default .claude/flake-ledger: ledger.jsonl appen
   report [--n N]                 per-test table (flake trees, status) plus the quarantine list with expiry state.
   quarantine [--n N] [--days D]  add FLAKY, non-consistent, unlisted tests. Prints `QUARANTINE id expires=DATE`.
   renew ID (--days D | --expires DATE)   owner review: set a new expiry for a listed id.
-  check ID... [--tree T] [--quarantine FILE]
+  check ID... [--tree T] [--quarantine -]
                                  `QUARANTINED id (expires DATE)` (non-blocking, report it) or `BLOCKING id (reason)`;
-                                 exit 1 when any id is BLOCKING, 2 on usage/IO error (fails closed). `--quarantine` reads a
-                                 snapshot of quarantine.json taken before untrusted code ran (train_flake.sh does this).
+                                 exit 1 when any id is BLOCKING, 2 on usage/IO error (fails closed). `--quarantine -` reads
+                                 the quarantine list from stdin: the caller holds it in memory, read before untrusted code ran
+                                 (train_land.sh / train_flake.sh), so no file can be overwritten to forge an entry.
   guard                          exit 2 when --dir resolves under the cwd or the git toplevel (a path PR code can write).
+DECISION (trust boundary) AND KNOWN CEILING
+  Context: the code under test (PR code in BROWSER_CMD / RERUN_CMD) runs as the same user as the train and could write the ledger
+  directory to forge a quarantine entry that excuses its own failure. Decision: reduce the easy paths (the train refuses a ledger
+  dir under the worktree or git toplevel, never exports the path to PR code, and reads quarantine.json once into memory before any
+  PR code runs, passing it on stdin) but do NOT sign the files (no HMAC: the key would have to live where the same user can read it).
+  Ceiling: same-uid code that learns the directory by other means (a config file, a guessed path) can still write it. The OS sandbox
+  is the boundary: run the train sandboxed with the ledger directory OUTSIDE its write set, and treat a ledger written from
+  inside the sandbox as untrusted. Consequence: the quarantine list is only as trustworthy as that directory's write permissions.
+
 `--today YYYY-MM-DD` pins the clock (tests). Exit 2 on bad input; a malformed ledger line is an error, never skipped,
 except an unterminated last line (a torn write).
 """
@@ -162,7 +172,7 @@ def main(argv=None):
     s = sub.add_parser("quarantine"); s.add_argument("--n", type=int, default=3); s.add_argument("--days", type=int, default=14)
     s = sub.add_parser("renew"); s.add_argument("id"); g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--days", type=int); g.add_argument("--expires")
-    s = sub.add_parser("check"); s.add_argument("ids", nargs="+"); s.add_argument("--tree"); s.add_argument("--quarantine")
+    s = sub.add_parser("check"); s.add_argument("ids", nargs="+"); s.add_argument("--tree"); s.add_argument("--quarantine", choices=["-"])
     sub.add_parser("guard")
     a = ap.parse_args(argv)
     today = day(a.today) if a.today else datetime.date.today()
@@ -211,7 +221,10 @@ def main(argv=None):
         for t, e in sorted(q.items()):
             print(f"{'EXPIRED' if day(e['expires']) < today else 'QUARANTINED'}\t{t}\texpires={e['expires']}")
         return 0
-    q = load_q(a.quarantine or qpath)  # check
+    try:  # check
+        q = json.loads(sys.stdin.read() or "{}") if a.quarantine == "-" else load_q(qpath)
+    except ValueError:
+        die("--quarantine -: stdin is not valid JSON")
     tree, bad = tree_of(a.tree), 0
     for t in a.ids:
         if t not in q:

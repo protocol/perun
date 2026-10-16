@@ -9,7 +9,8 @@
 # Optional: FLAKE_LEDGER_DIR=<dir> (outside the worktree and git toplevel, else exit 2) records each id's suite failure and every solo run in
 # flake_ledger.py's per-tree ledger (FLAKE_TREE, default HEAD's tree) and prints `quarantined-flake <id> (failed f of n alone)` instead of FLAKE for an
 # id on its active quarantine list that failed at least one but not all solo runs and is not consistently failing on the tree (non-blocking). The list is read
-# from a snapshot taken before any re-run (FLAKE_QUARANTINE_SNAPSHOT=<file> from the caller, else taken here); both variables are unset for the code under test.
+# from memory only, read before any re-run (stdin when FLAKE_QUARANTINE_STDIN=1, as train_land.sh passes it, else from the dir now), never from a file the code under
+# test could overwrite; FLAKE_LEDGER_DIR and the list are unset for the code under test.
 # Same-host baseline: a non-empty baseline file must start with the header `# baseline host=<h> inv=<hash>` written by
 # `train_flake.sh --record <failing-ids-file> > baseline` on the machine and invocation that measured it. The current host
 # (FLAKE_HOST, default hostname -s) and invocation hash (sha256 of FLAKE_INVOCATION, default BROWSER_CMD) must match, else exit 2:
@@ -22,7 +23,7 @@ inv=$(printf %s "${FLAKE_INVOCATION:-${BROWSER_CMD:-}}" | { shasum -a 256 2>/dev
 host=${FLAKE_HOST:-$(hostname -s)}
 T=${TMPDIR:-/tmp}
 # Ledger env (see the FLAKE_LEDGER_DIR note above): move it into shell variables and unset it so the code under test (RERUN_CMD, FLAKE_SETUP_CMD) never inherits the path.
-led=${FLAKE_LEDGER_DIR:-} qsnap=${FLAKE_QUARANTINE_SNAPSHOT:-}; unset FLAKE_LEDGER_DIR FLAKE_QUARANTINE_SNAPSHOT
+led=${FLAKE_LEDGER_DIR:-} qstdin=${FLAKE_QUARANTINE_STDIN:-}; unset FLAKE_LEDGER_DIR FLAKE_QUARANTINE_STDIN FLAKE_QUARANTINE_JSON qjson
 # norm: the ONE id normalizer (strip trailing whitespace incl. CR, nothing else). Every emit and match of a FAIL/REAL id goes through it
 # (`train_flake.sh --norm` filters stdin), so an id printed with a trailing space or CRLF still equals the listed one.
 norm() { sed -E 's/[[:space:]]+$//'; }
@@ -67,18 +68,19 @@ fi
 L="$(dirname "$0")/flake_ledger.py"
 if [ -n "$led" ]; then
   python3 "$L" --dir "$led" guard >&2 || exit 2  # a ledger dir the code under test can write (under the worktree/toplevel) is refused
-  if [ -z "$qsnap" ]; then  # no snapshot from the caller: take one now, before any re-run executes code under test
-    qsnap=$(mktemp "$T/flake-quar.XXXXXX") || exit 2; cp "$led/quarantine.json" "$qsnap" 2>/dev/null || echo '{}' >"$qsnap"
-  fi
+  # The quarantine list lives only in this unexported shell variable (never a file): stdin when the caller read it before any PR code ran
+  # (train_land.sh), else read now, before any re-run executes code under test.
+  if [ -n "$qstdin" ]; then qjson=$(cat); else qjson=$(cat "$led/quarantine.json" 2>/dev/null) || qjson=; fi
+  [ -n "$qjson" ] || qjson='{}'
 fi
 rep() { local i; for ((i = 0; i < $3; i++)); do printf '%s %s\n' "$1" "$2"; done; }  # rep <word> <id> <count>
 while IFS= read -r id; do
   [ -n "$id" ] || continue
   [ -z "${2:-}" ] || ! norm <"$2" | grep -qxF -- "$id" 2>/dev/null || continue
   f=0 p=0 qok=0
-  # Quarantine (flake_ledger.py): `check` against the pre-run snapshot, exit 0 = actively quarantined and not consistently failing on this tree.
+  # Quarantine (flake_ledger.py): `check` against the pre-run list (stdin), exit 0 = actively quarantined and not consistently failing on this tree.
   # Errors (exit 2) leave qok=0 (fail closed). A quarantined id runs ALL its solo re-runs (no early stop on the first pass) so a flake is seen failing.
-  [ -z "$led" ] || ! python3 "$L" --dir "$led" check "$id" --quarantine "$qsnap" ${FLAKE_TREE:+--tree "$FLAKE_TREE"} >/dev/null 2>&1 || qok=1
+  [ -z "$led" ] || ! printf '%s' "$qjson" | python3 "$L" --dir "$led" check "$id" --quarantine - ${FLAKE_TREE:+--tree "$FLAKE_TREE"} >/dev/null 2>&1 || qok=1
   for n in $(seq "$runs"); do
     one_run "$id" "$n"; r=$?
     [ "$r" -ne 125 ] || { echo "train_flake: fresh store or FLAKE_SETUP_CMD failed for $id" >&2; exit 2; }

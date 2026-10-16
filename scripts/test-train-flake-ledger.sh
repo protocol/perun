@@ -9,6 +9,7 @@ SC="$ROOT/.claude/skills/agentic-delivery/scripts"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/dcr-test-train-flake-ledger.XXXXXX")"
 trap '[ -n "$WORK" ] && rm -r "$WORK" 2>/dev/null' EXIT
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null PERUN_HEAVY_DIR="$WORK/hv/heavy" WORK SC
+mkdir -p "$WORK/tmp"; export TMPDIR="$WORK/tmp"  # the train's temp files (and PR code poking at them) stay inside this run
 pass=0 fail=0
 ok() { if [ "$1" -eq 0 ]; then echo "PASS  $2"; pass=$((pass + 1)); else echo "FAIL  $2"; fail=$((fail + 1)); fi; }
 
@@ -32,11 +33,16 @@ chmod +x "$WORK/bin/gh"; export PATH="$WORK/bin:$PATH"
 echo 'echo "GREEN base=$B union=$U123"' >"$WORK/verify.sh"
 cat >"$WORK/browser.sh" <<'STUB'
 echo "${FLAKE_LEDGER_DIR-unset}" >>"$WORK/leak"
+env | grep -c '^FLAKE_QUARANTINE\|^_flq' >>"$WORK/leak2"
+# PR-controlled code overwriting any train snapshot file in $TMPDIR with a forged quarantine list
+[ -z "${FORGE_SNAP:-}" ] || for q in "${TMPDIR:-/tmp}"/flake-quar.*; do [ ! -e "$q" ] || printf '{"t1": {"since": "2026-01-01", "expires": "2999-12-31"}}\n' >"$q"; done
 if [ "$UNION_SHA" = "$U123" ]; then echo "FAIL t1"; echo "FAILURES 1"; exit 1; fi; exit 0
 STUB
 # rerun.sh: solo re-run of t1. On the union (f1 present) it pops $WORK/useq, on the base (f1 absent) $WORK/bseq; F = fail.
 cat >"$WORK/rerun.sh" <<'STUB'
 echo "${FLAKE_LEDGER_DIR-unset}" >>"$WORK/leak"
+env | grep -c '^FLAKE_QUARANTINE\|^_flq' >>"$WORK/leak2"
+[ -z "${FORGE_SNAP:-}" ] || for q in "${TMPDIR:-/tmp}"/flake-quar.*; do [ ! -e "$q" ] || printf '{"t1": {"since": "2026-01-01", "expires": "2999-12-31"}}\n' >"$q"; done
 # PR-controlled code forging a quarantine entry at a known path (FORGE_Q) while the train runs
 [ -z "${FORGE_Q:-}" ] || printf '{"t1": {"since": "2026-01-01", "expires": "2999-12-31"}}\n' >"$FORGE_Q"
 f=$WORK/useq; [ -e f1 ] || f=$WORK/bseq
@@ -52,7 +58,7 @@ quar() { printf '{"t1": {"since": "2026-01-01", "expires": "%s"}}\n' "$1" >"$LED
 # (1) active quarantine + a flake on the union -> quarantined-flake, lands, base check skipped (only the 1-run base-red guard read the base sequence)
 newled 1; quar 2999-12-31
 out=$(run FP PPPP); rc=$?
-[ $rc -eq 0 ] && grep -q '^quarantined-flake t1' <<<"$out" && ! grep -q '^FLAKE t1' <<<"$out" && grep -q 'were quarantined flakes only' <<<"$out" && ! grep -q 'each also flaky on the base' <<<"$out" && [ -s "$WORK/merged.log" ] && [ "$(cat "$WORK/bseq")" = PPP ]
+[ $rc -eq 0 ] && grep -q '^quarantined-flake t1' <<<"$out" && ! grep -q '^FLAKE t1' <<<"$out" && grep -q '1 quarantined (base not checked)' <<<"$out" && ! grep -q 'each also flaky on the base' <<<"$out" && [ -s "$WORK/merged.log" ] && [ "$(cat "$WORK/bseq")" = PPP ]
 ok $? "train_land: an actively quarantined flake is quarantined-flake, non-blocking, no base check"
 # (2) control: same run, id not on the list -> plain FLAKE, never fails on the base -> CANT (exit 3), nothing landed
 newled 2
@@ -91,11 +97,16 @@ newled 8
 out=$(FORGE_Q="$LED/quarantine.json" run FP PPPP); rc=$?
 [ $rc -eq 3 ] && ! grep -q 'quarantined-flake' <<<"$out" && [ ! -s "$WORK/merged.log" ]
 ok $? "train_land: a quarantine entry forged during the run is ignored (snapshot)"
-# (9) the ledger path is not handed to PR-controlled code (browser gate, solo re-runs)
-newled 9; quar 2999-12-31; : >"$WORK/leak"
+# (8b) PR-controlled code overwrites every $TMPDIR/flake-quar.* file AND quarantine.json mid-run: no effect (the list is held in memory, never in a file)
+newled 11
+out=$(FORGE_SNAP=1 FORGE_Q="$LED/quarantine.json" run FP PPPP); rc=$?
+[ $rc -eq 3 ] && ! grep -q 'quarantined-flake' <<<"$out" && [ ! -s "$WORK/merged.log" ] && [ -z "$(ls "${TMPDIR:-/tmp}"/flake-quar.* 2>/dev/null)" ]
+ok $? "train_land: overwriting \$TMPDIR/flake-quar.* and quarantine.json mid-run has no effect, and no snapshot file exists"
+# (9) the ledger path and the quarantine list are not handed to PR-controlled code (browser gate, solo re-runs)
+newled 9; quar 2999-12-31; : >"$WORK/leak"; : >"$WORK/leak2"
 run FP PPPP >/dev/null
-[ -s "$WORK/leak" ] && ! grep -qv '^unset$' "$WORK/leak"
-ok $? "train_land: FLAKE_LEDGER_DIR is unset for BROWSER_CMD and RERUN_CMD"
+[ -s "$WORK/leak" ] && ! grep -qv '^unset$' "$WORK/leak" && [ -s "$WORK/leak2" ] && ! grep -qv '^0$' "$WORK/leak2"
+ok $? "train_land: FLAKE_LEDGER_DIR and the quarantine list are not in the environment of BROWSER_CMD and RERUN_CMD"
 # (10) a ledger dir inside the worktree / git toplevel (PR-writable) is refused, nothing landed
 LED="$R/led.10"; mkdir -p "$LED"; quar 2999-12-31
 out=$(run FP PPPP); rc=$?

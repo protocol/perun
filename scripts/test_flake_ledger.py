@@ -171,10 +171,13 @@ class Hardening(Base):
             self.run_cli("guard")  # the same dir is now under the cwd
         self.assertEqual(c.exception.code, 2)
 
-    def test_check_reads_the_snapshot_not_the_live_file(self):
-        snap = Path(self.d, "snap.json")
-        snap.write_text(json.dumps({"a": {"since": DAY, "expires": "2999-12-31"}}))
-        self.assertEqual(self.run_cli("check", "a", "--tree", "t1", "--quarantine", str(snap))[0], 0)
+    def test_check_reads_the_list_from_stdin_not_the_live_file(self):
+        held = json.dumps({"a": {"since": DAY, "expires": "2999-12-31"}})
+        self.assertEqual(self.run_cli("check", "a", "--tree", "t1", "--quarantine", "-", stdin=held)[0], 0)
+        self.assertEqual(self.run_cli("check", "a", "--tree", "t1", "--quarantine", "-", stdin="")[0], 1)  # empty list: not quarantined
+        with self.assertRaises(SystemExit) as c:  # a path is not accepted: no file can stand in for the in-memory list
+            self.run_cli("check", "a", "--tree", "t1", "--quarantine", str(Path(self.d, "x.json")))
+        self.assertEqual(c.exception.code, 2)
         self.assertEqual(self.run_cli("check", "a", "--tree", "t1")[0], 1)  # live quarantine.json has no entry
 
 

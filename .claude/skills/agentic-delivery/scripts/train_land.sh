@@ -36,12 +36,13 @@ HERE=$(cd "$(dirname "$0")" && pwd) GH=${GH:-$(dirname "$0")/gh_rest.py}
 . "$HERE/_clean_union.sh"
 . "$HERE/_dirty_guard.sh"
 echo "train_land: this lands to $BASE_BRANCH: if the host classifier denies the merge, stop and park for the owner; do not retry or route around." >&2
-# Flake ledger (FLAKE_LEDGER_DIR, flake_ledger.py): refuse a dir the code under test can write (under this worktree or git toplevel), snapshot the
-# quarantine list NOW (before VERIFY_CMD/BROWSER_CMD/RERUN_CMD run PR code), and keep the path out of the environment of everything but train_flake.sh.
-led=${FLAKE_LEDGER_DIR:-} qsnap=; unset FLAKE_LEDGER_DIR FLAKE_QUARANTINE_SNAPSHOT
+# Flake ledger (FLAKE_LEDGER_DIR, flake_ledger.py): refuse a dir the code under test can write (under this worktree or git toplevel), read the quarantine
+# list ONCE NOW (before VERIFY_CMD/BROWSER_CMD/RERUN_CMD run PR code) into an unexported shell variable (never a file), and keep the path out of the
+# environment of everything but train_flake.sh, which gets the list on stdin. Same-uid code can still read the path by other means: see flake_ledger.py (KNOWN CEILING).
+led=${FLAKE_LEDGER_DIR:-}; unset FLAKE_LEDGER_DIR FLAKE_QUARANTINE_JSON _flq
 if [ -n "$led" ]; then
   python3 "$HERE/flake_ledger.py" --dir "$led" guard >&2 || exit 2
-  qsnap=$(mktemp "${TMPDIR:-/tmp}/flake-quar.XXXXXX"); cp "$led/quarantine.json" "$qsnap" 2>/dev/null || echo '{}' >"$qsnap"
+  _flq=$(cat "$led/quarantine.json" 2>/dev/null) || _flq=
 fi
 require_clean_tree . || exit 2
 # .perun/policy.json: PERUN_JOBS (parallelism from local_cpu) and PERUN_GITHUB_ACTIONS reach VERIFY_CMD and
@@ -129,7 +130,7 @@ if :; then  # base-red guard: an id (not already in BASELINE_FAILS) that also fa
     grep -vxFf "$LOG.pre" "$LOG.fails" >"$LOG.new" || true; mv "$LOG.new" "$LOG.fails"
   fi
 fi
-renew; t=0; FLAKE_LEDGER_DIR=$led FLAKE_QUARANTINE_SNAPSHOT=$qsnap RERUN_CMD=$RERUN_CMD FLAKE_INVOCATION=${FLAKE_INVOCATION:-$BROWSER_CMD} bash "$HERE/train_flake.sh" "$LOG.fails" "$LOG.baseline" >"$LOG.flake" || t=$?
+renew; t=0; printf '%s' "${_flq:-}" | FLAKE_LEDGER_DIR=$led FLAKE_QUARANTINE_STDIN=1 RERUN_CMD=$RERUN_CMD FLAKE_INVOCATION=${FLAKE_INVOCATION:-$BROWSER_CMD} bash "$HERE/train_flake.sh" "$LOG.fails" "$LOG.baseline" >"$LOG.flake" || t=$?
 git checkout -q --detach "$REMOTE/$BASE_BRANCH"  # isolated re-runs above ran at the union; bisect below starts from the base
 cat "$LOG.flake"
 # Landable only when at least one NEW failure was listed and every new one re-ran and classified FLAKE: a red run with no
@@ -152,8 +153,9 @@ if [ "$t" -eq 0 ] && [ -n "$rn" ] && [ "$rn" -le "$listed" ]; then
       [ "$br" -ne 125 ] || { git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "fresh store or FLAKE_SETUP_CMD failed re-running $id on the base; nothing landed" >&2; exit 1; }
       [ "$br" -eq 0 ] || { git checkout -q --detach "$REMOTE/$BASE_BRANCH"; echo "CANT: flake $id never fails on the base, so it may be an intermittent regression; no PR blamed, nothing landed" >&2; exit 3; }
     done < <(sed -nE 's/^FLAKE (.*) \(failed [0-9]+ of [0-9]+ alone\)$/\1/p' "$LOG.flake")
-    if [ "$flk" -eq 0 ]; then echo "browser failures were quarantined flakes only (on the quarantine list, each failed a solo re-run, no base check); landing" >&2
-    else echo "browser failures were flakes only, each also flaky on the base; landing" >&2; fi; break
+    [ "$qf" -eq 0 ] || echo "$qf quarantined (base not checked)" >&2
+    [ "$flk" -eq 0 ] || echo "browser failures were flakes only, each also flaky on the base; landing" >&2
+    [ "$flk" -gt 0 ] || echo "browser failures were quarantined flakes only; landing" >&2; break
   fi
   if [ "$newn" -eq 0 ] && [ "$pre" -ge 1 ]; then echo "browser failures all pre-existing on the base; landing" >&2; break; fi
 fi
