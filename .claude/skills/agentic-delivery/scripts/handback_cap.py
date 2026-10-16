@@ -24,6 +24,15 @@ field lines within the target would drop; the hook cannot rewrite what the
 caller receives, so delivery is not altered. This is a SHAPE check, not a
 semantic one. The lever is the SubagentStart rule (subagent_start_inject.py).
 
+WHAT COUNTS. Fenced code blocks (the fence lines included) and lines that start
+with `! ` (a command the owner copies and runs with the host's `!` prefix) are
+not counted toward MAX_CHARS or MAX_LINES, so a copy-paste command for the user
+never forces a rewrite. To keep a long deliverable from hiding in a fence, the
+whole message (those lines included) may not pass COPY_FACTOR (5) times
+MAX_CHARS; past that it is blocked like any over-long handback, and the fix is
+the same: put it in a file. An unclosed fence hides the rest of the message
+from the line and char counts, and only that total limit then applies.
+
 EXEMPTION IS A NAME LIST, NOT A TOOL CHECK. A subagent is exempt (never
 capped, at any length) iff its `agent_type` is listed in the comma-separated
 HANDBACK_EXEMPT_TYPES env var. The default list is four built-in agent types
@@ -103,6 +112,7 @@ MAX_BLOCKS = 3
 TARGET_CHARS = int(os.environ.get("HANDBACK_TARGET_CHARS", "400"))
 TARGET_LINES = int(os.environ.get("HANDBACK_TARGET_LINES", "8"))
 CPT = 4  # characters per token for the audit's ESTIMATE; recorded in every ledger row
+COPY_FACTOR = 5  # whole message, fenced code and `! ` lines included, may be at most this many times MAX_CHARS
 # Default exempt agent-type NAMES (chat IS their deliverable). Matched by name
 # only; override/extend via HANDBACK_EXEMPT_TYPES (replaces this list).
 DEFAULT_EXEMPT_TYPES = "Explore,Plan,claude-code-guide,statusline-setup"
@@ -133,9 +143,11 @@ def _prose_lines(msg):
 
 
 def _shape(msg):
-    """`(chars, lines, too_long)`: `too_long` is the BLOCKING cap (MAX_CHARS / MAX_LINES)."""
-    chars, lines = len(msg), msg.count("\n") + 1 if msg else 0
-    return chars, lines, chars > MAX_CHARS or lines > MAX_LINES
+    """`(chars, lines, too_long)`: `too_long` is the BLOCKING cap (MAX_CHARS / MAX_LINES over the counted lines,
+    see _counted; the whole message may not pass MAX_CHARS * COPY_FACTOR)."""
+    kept = _counted(msg) if msg else []
+    chars, lines = len("\n".join(kept)), len(kept)
+    return chars, lines, chars > MAX_CHARS or lines > MAX_LINES or len(msg) > MAX_CHARS * COPY_FACTOR
 
 
 def _violations(msg):
@@ -208,6 +220,19 @@ def _push_running(cwd):
         return None
 
 
+def _counted(msg):
+    """Lines of `msg` that count toward the cap: all but fenced code blocks (fence lines included) and
+    lines starting with '! '. A one-line fence (an even number of ``` on a line starting with one) toggles
+    nothing; an unclosed fence hides the rest of the message."""
+    kept, fenced = [], False
+    for ln in msg.split("\n"):
+        if ln.lstrip().startswith("```"):
+            fenced ^= ln.count("```") % 2 == 1
+        elif not fenced and not ln.startswith("! "):
+            kept.append(ln)
+    return kept
+
+
 def check(data):
     """Return the hook exit code (0 pass, 2 block) for one hook-input dict."""
     if str(data.get("agent_type") or "") in _exempt_types():
@@ -248,7 +273,8 @@ def check(data):
     if no_status:
         why.append("no status field")
     sys.stderr.write(
-        f"Handback rejected: {'; '.join(why)}. Rewrite your final message as key=value fields only, "
+        f"Handback rejected: {'; '.join(why)} (the cap does not count fenced code or '! ' lines; whole message "
+        f"{len(msg)} chars, limit {MAX_CHARS * COPY_FACTOR}). Rewrite your final message as key=value fields only, "
         "one per line, no sentences: status=VERIFIED (a green gate or a confirmed effect at the exact SHA) "
         "or status=UNVERIFIED (anything else), sha=<sha>, result=<few words>, tests=<n/n>, "
         "blockers=<none|text>. Put any long content in a file and give report=<path>.\n"
