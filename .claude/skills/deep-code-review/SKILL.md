@@ -72,17 +72,13 @@ affected tests only (import graph), full suite once before land; batch all reads
 Domains outside the set: **N/A with a one-line reason + probe**. `other` has
 no default — derive from Phase 0 entry points.
 
-**Role overlay (optional lens).** Orders and assigns the same A–W domains; it
-never adds or drops one. The role → domain map, per-role checklists, colour
-model, and architecture / product-planning / SLO / release-sign-off lists:
-`role-coverage.md` — **read it when** the request is framed by
-delivery role or security-team colour.
-
-**Security-team colours** re-package the same evidence (no new rules); the
-Red/Blue/Purple/Yellow/Green/Orange/White model is tabulated in
-`role-coverage.md`. **Black Team — the agent boundary is absolute:**
-plan/tabletop/analyse owner-supplied evidence only; never perform or direct
-physical or social-engineering action.
+**Role overlay (optional lens).** Orders the same A–W domains; never adds or
+drops one. Role → domain map, role checklists, the security-team colour model
+(re-packages evidence, no new rules) and architecture / product-planning / SLO /
+release-sign-off lists: `role-coverage.md` — **read it when** the request is
+framed by delivery role or security-team colour. **Black Team — the agent
+boundary is absolute:** plan/tabletop/analyse owner-supplied evidence only;
+never perform or direct physical or social-engineering action.
 
 **Host-neutral tools.** Read files, `rg`, `git show`/`git log`, run the
 project's scripts. Fan-out contract: `parallel-audit.md`.
@@ -242,42 +238,15 @@ another axis (principle 4).
 
 ## Project stage (calibrates urgency, not severity)
 
-Context still counts: a two-day **prototype** and a production system do not
-warrant the same *demands*. Stage calibrates **what blocks now vs. what is
-tracked for the next stage** — it never rewrites what a defect is. Set it in the
-first-response block; it shapes the going-forward roadmap (`report-format.md`).
+`STAGE` (first-response block) sets what blocks now vs. what is tracked for the
+next stage; it never rewrites what a defect is. Unstated → the stricter
+(later-stage) reading. Stage table, the other guardrails and the stage-evolution
+lenses: `stage-and-closeout.md` — **read it when** setting `STAGE` on a FULL
+review or writing the going-forward roadmap.
 
-| Stage | What it is | Relax the *demand* on (urgency, not severity) |
-|---|---|---|
-| `prototype` | Throwaway spike / experiment; learning over durability | CI depth, full coverage, perf tuning, docs, tech-debt paydown |
-| `mvp` | First real shippable; finding product fit; keep it lean | scale/perf headroom, exhaustive tests, polish |
-| `growth` | Real users, scaling up | little — this is where CI, tests, observability, perf get hardened |
-| `mature` | Stable / maintenance | net-new scope; focus shifts to stability, tech-debt, supply chain |
-
-**Guardrails — a stage is a lens, never an excuse:**
-1. **Declared or evidenced, never guessed.** Stage is owner-stated, or the review
-   **names the signals** it read (tests/CI present, deploy config, users/traffic,
-   version ≥ 1.0, changelog depth) and marks it `UNVERIFIED` when it cannot.
-   **Unstated → default to the stricter (later-stage) reading.** A review that
-   assumed `prototype` and waved a Critical is a worse failure than one that
-   over-asked for CI on a spike.
+**Guardrail that never moves:**
 2. **Security, secret-exposure, and data-loss/integrity findings never relax** — a
-   `prototype` with an exposed credential is still Critical. These have no "relax"
-   entry at any stage; that is why the third column omits them on purpose.
-3. **Stage moves urgency, not intrinsic severity.** Every finding keeps its true
-   severity — reuse the latent-findings rule (intrinsic severity stays; stage
-   changes only what *blocks now*). The going-forward roadmap sequences findings
-   by stage-urgency; it does not downgrade them.
-
-**Stage-evolution lenses (when to add, not how to secure).** When the going-forward
-roadmap must say how a project's infrastructure/architecture or documentation should
-*evolve* for its stage — **read** `infra-evolution-by-stage.md` (infra,
-deploy, and architecture earned per stage, each step gated on an observable trigger;
-the security/backup floor never relaxes) and `docs-evolution-by-stage.md`
-(which documents acquire normative force at which stage; trigger-not-calendar). Both
-feed the going-forward roadmap in `report-format.md`. The *how-to-secure* depth for
-infra/docs already in place stays in `infra-iac-containers.md` (L) and
-`docs-and-dx.md` (O) — do not duplicate it here.
+   `prototype` with an exposed credential is still Critical.
 
 ---
 
@@ -300,27 +269,8 @@ reports are ID + severity + area only.
 
 Two checklists; they fail independently.
 
-**(a) Review method complete**
-- First-response block printed (`SCOPE`, `START_SHA`, `TREE_STATE`,
-  `VERIFY_SURFACE` on a web / port / restyle / parity task, `HISTORY_DEPTH`,
-  `REVERTS_CHECKED`, `BANNED_REMEDIES`, `ARCHETYPE`, `STAGE`,
-  `COVERAGE_LEDGER`); citations re-verified at that ref with a verbatim
-  snippet.
-- On a FULL review, `STAGE` is stated (or `UNVERIFIED`, defaulting stricter) and a
-  stage-calibrated going-forward roadmap is produced (`report-format.md`); stage
-  never downgraded a security, secret, or data-loss finding.
-- Every status meets the status rule (evidence surface + strongest reading; a
-  UI/parity claim names the URL/branch/sha of the tree under review or is
-  **invalid**) in `report-format.md`, screened by
-  `scripts/validate_status_claims.py`.
-- Gate self-test claimed only when run.
-- Coverage ledger reconciled; fan-out units attributed (finder + lead-read);
-  incomplete finder = `unverified`.
-- Affirmative "Invariants verified to hold" on a fan-out or hardened target.
-- Identity Arrival Map printed whenever a gate/middleware change is proposed;
-  security/authz changes on their own PR.
-- Standards not claimed unless walked.
-- `mechanism-unproven` fixes keep the finding open.
+**(a) Review method complete** — `stage-and-closeout.md`; **read it when**
+closing a review (FULL, or DIFF on the full method).
 
 **(b) Target ship-ready**
 - Builds and runs with the documented one-command setup.
@@ -366,27 +316,8 @@ SLSA:** never state a level you did not walk.
 
 ## Optional overlays (same repository, not default)
 
-This skill is the bar. Sibling skills, installed only on an explicit flag or
-an owner yes after a recommendation:
-
-| Skill | Install | Does |
-|---|---|---|
-| `agentic-delivery` | `--with-delivery` or `--full` | Gated G0–G10 delivery; independent QA/security; one writer per worktree; names this review skill at G1/G6/G7 |
-| `idea-critic` | `--with-critic` or `--full` | Pre-owner attack on plans and "we should" (3 hats; HOLD / REVISE / PASS_TO_USER) |
-
-Recommend, don't dump: `./install.sh --recommend <project>` inspects the
-target and prints a pack. Default `./install.sh <project>` stays review-only.
-
-`--with-gates` is a **mechanism, not a skill**: it wires this skill's own
-gate scripts (`fix_class_gate.py`, `binaries_gate.py`) into the target's own
-CI via `scripts/dcr-gates.sh` — **read `docs-and-dx.md`'s
-Standards-imprint section when pairing a Phase 6 standard with a mechanized
-gate**, not just a doc.
-
-Terse chat voice is **not** vendored here. If a project wants compressed
-assistant prose, add [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
-separately. Persisted artifacts (code, PR bodies, docs) stay normal English
-either way.
-
-Compose with other packs; do not also run a second delivery OS on the same
-repo. This review skill always composes.
+This skill is the bar; `agentic-delivery` and `idea-critic` are opt-in siblings
+(explicit flag or an owner yes after `./install.sh --recommend <project>`), and
+`--with-gates` wires this skill's gate scripts into the target's CI. Install
+table, `--with-gates` pairing rule, voice note, composition:
+`stage-and-closeout.md` — **read it when** recommending or installing an overlay.
