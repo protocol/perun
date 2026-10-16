@@ -1,0 +1,43 @@
+{
+ "id": "testify-compare-time-unixnano",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "assertion_compare.go",
+   "line": 45,
+   "severity": "high",
+   "text": "Times are compared via UnixNano(), which is undefined outside roughly years 1678\u20132262. For example, `Greater(t, time.Now(), time.Time{})` or `Less(t, time.Time{}, time.Now())` overflows the zero time, so the result is wrong and a correct assertion can fail. `Before`/`After`/`Compare` should be used instead."
+  },
+  {
+   "file": "assertion_compare.go",
+   "line": 42,
+   "severity": "medium",
+   "text": "Only obj1 is checked with CanConvert(timeType). obj2 is converted unchecked, and the Greater/Less callers only check that both values are the same Kind (struct). `Greater(t, time.Now(), struct{X int}{1})` therefore makes `obj2Value.Convert` panic instead of failing the assertion cleanly."
+  },
+  {
+   "file": "assertion_compare.go",
+   "line": 30,
+   "severity": "low",
+   "text": "`Value.CanConvert` needs Go 1.17 or later. Any module that still supports an older Go version will not build. Also, a time.Time-typed obj1 compared with a non-time obj2 takes the same unguarded path as the finding above."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "Only obj1 is checked with CanConvert(timeType). obj2Value.Convert(timeType) runs unguarded, and the callers only require both values to share the struct Kind, so a non-convertible struct as obj2 makes reflect panic instead of failing the assertion."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "reflect.Value.CanConvert was added in Go 1.17, so this breaks builds for a module that still targets older Go versions (testify's go.mod declared go 1.13; the later fix switched to Type.ConvertibleTo). This is a separate defect from the UnixNano overflow."
+  }
+ },
+ "verify_error": ""
+}

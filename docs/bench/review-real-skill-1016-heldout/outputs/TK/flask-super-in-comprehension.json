@@ -1,0 +1,32 @@
+{
+ "id": "flask-super-in-comprehension",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "cli.py",
+   "line": 318,
+   "severity": "high",
+   "text": "Zero-argument `super()` is now called inside a list comprehension, which has its own scope on Python < 3.12 (PEP 709 inlined comprehensions in 3.12). There `super()` raises `TypeError`/`RuntimeError: super(): no arguments`, because the first argument seen is the comprehension's `.0`. Any `SeparatedPathType` conversion fails, for example `flask run --extra-files a.txt:b.txt` or `FLASK_RUN_EXTRA_FILES`. The old code bound `super().convert` outside the comprehension for this reason."
+  },
+  {
+   "file": "cli.py",
+   "line": 151,
+   "severity": "low",
+   "text": "Keywords with `kw.arg is None` (`**kwargs` expansions) are now silently dropped. For `--app 'mod:create_app(**{\"a\": 1})'` the factory is called without `a` and no error is shown. The old code would have failed visibly."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The patch now skips `**` keywords (`kw.arg is None`), so a call like `create_app(**{\"a\": 1})` runs without those arguments and no error appears; the old code built `{None: {...}}`, and passing that as keyword arguments raises a TypeError, so the failure was visible. This is a separate problem from the `super()`-in-comprehension bug."
+  }
+ },
+ "verify_error": ""
+}

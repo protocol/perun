@@ -1,0 +1,32 @@
+{
+ "id": "flask-super-in-comprehension",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "cli.py",
+   "line": 861,
+   "severity": "high",
+   "text": "`super().convert(...)` now sits inside a list comprehension. Before Python 3.12 a comprehension is its own scope, so zero-argument `super()` has no first argument and raises `RuntimeError: super(): no arguments`. The original code bound `super_convert` outside the comprehension to avoid this. Any `SeparatedPathType` use fails, for example `flask run --extra-files a.txt:b.txt` or `FLASK_RUN_EXTRA_FILES`."
+  },
+  {
+   "file": "cli.py",
+   "line": 151,
+   "severity": "low",
+   "text": "The new `if kw.arg is not None` filter silently drops `**kwargs` entries in the factory call string. With `--app 'mod:create_app(**{\"a\": 1})'` the old code failed instead of running. Now the factory is called without those arguments and no error is shown."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "Before the change, `**{...}` produced `kwargs = {None: {...}}`, so calling the factory raised a TypeError ('keywords must be strings') and the user got an error; the new `if kw.arg is not None` filter drops that entry, so the factory now runs without those arguments and no error is shown \u2014 a real behavior change, separate from the super()-in-comprehension bug."
+  }
+ },
+ "verify_error": ""
+}

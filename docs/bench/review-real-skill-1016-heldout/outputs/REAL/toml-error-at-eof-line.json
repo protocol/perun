@@ -1,0 +1,43 @@
+{
+ "id": "toml-error-at-eof-line",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "lex.go",
+   "line": 401,
+   "severity": "high",
+   "text": "When the error occurs at EOF, errorf, error and errorPrevLine do `pos.Line--`. But lx.line is only incremented when a newline is consumed, so an input with no trailing newline is already on the correct line. For the single-line input `x = \"abc` (no newline), the 'unexpected EOF' error gets Line=0. ErrorWithPosition then indexes `lines[pe.Position.Line-1]` (error.go:124), which is `lines[-1]`, and panics. On multi-line input with no trailing newline the reported line is off by one."
+  },
+  {
+   "file": "error.go",
+   "line": 147,
+   "severity": "low",
+   "text": "column() uses `pos+ll >= Start`, so an offset at the first byte of the next line (pos+ll == Start) is matched to the previous line. That gives col = len(prev)+1, and the caret is drawn far to the right. For example, with `a=1\\n` followed by an error at the start of line 2, the column is computed against line 1. It should be `>`."
+  },
+  {
+   "file": "error.go",
+   "line": 125,
+   "severity": "low",
+   "text": "Position.Start and Len are byte offsets, and the caret line pads with `strings.Repeat(\" \", col)` using that byte column. For a line with multibyte UTF-8 before the error, such as `k = \"\u00e9\\x01\"`, the caret is misaligned. The single-char branch also prints `col+1` while the caret is drawn at `col`, so the reported column and the caret disagree."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "In column(), an offset at the first byte of a line (pos+ll == Start) satisfies `>=` while the loop is still on the previous line, so col becomes len(prev)+1 instead of 0 (e.g. 'a=1\\n' with Start=4 gives col=4), which is a different defect from the EOF line-number bug."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "col is a byte offset, but the caret is padded with one space per byte, so any multibyte UTF-8 character before the error pushes the caret too far right; the side claim that the single-char branch disagrees is wrong, because col+1 is just the 1-based form of the 0-based caret position."
+  }
+ },
+ "verify_error": ""
+}

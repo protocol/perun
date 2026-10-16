@@ -1,0 +1,43 @@
+{
+ "id": "toml-error-at-eof-line",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "lex.go",
+   "line": 401,
+   "severity": "high",
+   "text": "When the lexer is at EOF, errorf and errorPrevLine do `pos.Line--` without checking that the line is above 1. For single-line input with no trailing newline, such as `x = \"abc` (unterminated string), the error gets Line 0. `ParseError.Error()` then reports \"line 0\". `ErrorWithPosition` indexes `lines[pe.Position.Line-1]`, which is `lines[-1]`, and panics."
+  },
+  {
+   "file": "error.go",
+   "line": 147,
+   "severity": "medium",
+   "text": "`column()` uses `pos+ll >= Start`, which is off by one. An error that starts at the first byte of a line (Start == pos+ll) is attributed to the previous line. The column becomes len(prevLine)+1, and the caret is drawn far to the right of the real position."
+  },
+  {
+   "file": "error.go",
+   "line": 111,
+   "severity": "low",
+   "text": "The Len==1 branch prints `col+1` but the else branch prints `col` as the start column. Column numbering is therefore inconsistent: a one-byte error at byte 0 reports column 1, while a multi-byte error at byte 0 reports column 0."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "In column(), line i covers bytes pos..pos+ll-1, so when Start == pos+ll (the first byte of the next line) the `>=` check still matches line i and gives col = ll; the column and caret are then one past the end of the previous line, a separate bug from the lexer's EOF line handling."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "column() returns a 0-based offset, but the Len==1 branch prints col+1 while the multi-byte branch prints col, so the same start byte is reported as column 1 in one case and column 0 in the other."
+  }
+ },
+ "verify_error": ""
+}

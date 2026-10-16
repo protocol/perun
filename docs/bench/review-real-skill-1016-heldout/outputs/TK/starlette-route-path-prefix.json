@@ -1,0 +1,39 @@
+{
+ "id": "starlette-route-path-prefix",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "_utils.py",
+   "line": 26,
+   "severity": "high",
+   "text": "root_path is put into a regex without re.escape. If root_path has metacharacters, for example '/a+b' or '/app(1)', the pattern fails to match or raises re.error, so the prefix is not stripped or the request crashes. Use scope['path'].removeprefix(root_path), or check startswith, instead."
+  },
+  {
+   "file": "_utils.py",
+   "line": 26,
+   "severity": "medium",
+   "text": "The prefix is removed without checking for a path boundary, and without checking that the path starts with root_path at all. With root_path '/app' and path '/application/x', the result is 'lication/x'. That value has no leading slash, so route matching breaks. A root_path of '/' or '' behaves oddly too, because '/' would strip the leading slash from every path."
+  },
+  {
+   "file": "_utils.py",
+   "line": 13,
+   "severity": "low",
+   "text": "The new top-level import of starlette.types into _utils risks a circular import if starlette.types ever imports from _utils. Importing it only under TYPE_CHECKING avoids that."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  true,
+  false
+ ],
+ "verdicts": {
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "This is a hypothetical concern: starlette.types is a leaf module of type aliases that does not import starlette._utils, so the new top-level import creates no circular import (the module is not in ./context/, so this rests on Starlette's known layout)."
+  }
+ },
+ "verify_error": ""
+}

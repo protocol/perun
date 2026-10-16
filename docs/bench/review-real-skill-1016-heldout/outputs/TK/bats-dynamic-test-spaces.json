@@ -1,0 +1,54 @@
+{
+ "id": "bats-dynamic-test-spaces",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "test_functions.bash",
+   "line": 46,
+   "severity": "high",
+   "text": "`eval \"printf -v test_description '%s' \\\"$2\\\"\"` runs the description as shell code. A test named `x$(touch /tmp/pwn)` or one containing a double quote, backtick or `$(...)` executes commands or breaks parsing. Test names come from the file's own content, but the old code never evaluated them."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": 68,
+   "severity": "medium",
+   "text": "`[[ ${BATS_TEST_NAME-} == $* ]]` leaves `$*` unquoted on the right side, so it is treated as a glob pattern. A test named `test [a]` or `test *` can match other tests' names, or fail to match itself. That sets the wrong tags and command, or none. It should be `== \"$*\"`."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": 59,
+   "severity": "medium",
+   "text": "An unknown option makes the function call `exit 1`. The message also has no trailing newline. The old code treated any first argument that wasn't `--tags` as the test name. A name starting with `-` now aborts the whole run instead of being registered. Callers that don't pass `--` before the name break the same way."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": 13,
+   "severity": "medium",
+   "text": "The new `_bats_test_functions_setup` resets `BATS_TEST_NAMES` and `BATS_TEST_DIRNAME` only when it is called. The top-level initialization is gone, and `bats_test_begin` was removed with no replacement in this diff. Any caller that doesn't call the setup first (it needs `${1?}`) gets unset variables or an abort, and any remaining caller of `bats_test_begin` fails with command not found. Also, `BATS_TEST_NUMBER` is now overwritten per file."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The eval is deliberate: the comment says it resolves variable references in test names. The description comes from the test file itself, which is already shell code that bats runs, so evaluating it adds no new trust boundary."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The new interface is option-based and expects `--` before the test function name, so rejecting an unknown option is by design; the missing trailing newline is only cosmetic."
+  },
+  "3": {
+   "verdict": "unverifiable",
+   "reason": "The patch shows only test_functions.bash and ./context/ is empty, so nothing here shows whether other callers (such as bats-exec-test) now call `_bats_test_functions_setup` or still call `bats_test_begin`."
+  }
+ },
+ "verify_error": ""
+}

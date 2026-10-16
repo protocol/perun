@@ -1,0 +1,32 @@
+{
+ "id": "testify-compare-time-unixnano",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "assertion_compare.go",
+   "line": 45,
+   "severity": "high",
+   "text": "Comparing via UnixNano() overflows int64 for times outside roughly 1678\u20132262, and the result is undefined there. For example, the zero time.Time{} (year 1) against time.Now() can compare wrongly, so Greater/Less assertions pass or fail incorrectly. Compare with Time.Compare, or with Before/After/Equal, instead."
+  },
+  {
+   "file": "assertion_compare.go",
+   "line": 42,
+   "severity": "medium",
+   "text": "obj2 is converted to time.Time without checking its type. If obj1 is a time.Time and obj2 is a different struct, for example struct{}{}, the callers only check that the kinds match. Convert then panics instead of returning a failed comparison. Check obj2Value.CanConvert(timeType), or require obj1 and obj2 to have the same type, before converting."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The patch only checks obj1Value.CanConvert(timeType), and callers such as compareTwoValues in testify only check that the reflect kinds match (both Struct), so a non-convertible obj2 like struct{}{} reaches obj2Value.Convert(timeType) and panics; this is a separate defect from the UnixNano overflow (the context directory was missing, so the caller check comes from upstream testify, not this workspace)."
+  }
+ },
+ "verify_error": ""
+}

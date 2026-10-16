@@ -1,0 +1,69 @@
+{
+ "id": "testify-mock-option-funcname",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 1195,
+   "severity": "high",
+   "text": "`if ot.NumIn() == 0 { return }` sits inside the per-option loop and returns \"\", \"\" (a match) at the first zero-argument option, so every later option is never compared. Expected `FunctionalOptions(WithNoArgs(), WithX(1))` against actual `(WithNoArgs(), WithX(2))` reports PASS, which is a false match. It should be `continue`."
+  },
+  {
+   "file": "mock.go",
+   "line": 1210,
+   "severity": "high",
+   "text": "The inner loop variable `i` shadows the option index, so `expectedNames[i]` indexes by parameter position rather than option position. This labels the wrong option, and for an option with more parameters than there are options it panics with index out of range. The actual-side label also uses `expectedNames[i]` instead of `actualNames`."
+  },
+  {
+   "file": "mock.go",
+   "line": 1199,
+   "severity": "medium",
+   "text": "`ot.In(i).Elem()` panics when an option's parameter is not a pointer or interface, such as `func(string)` or `func(int)`. It also panics for variadic or non-func elements, and `Call` can panic when an option dereferences nested nil fields of the zero-valued target. These panics happen inside matching instead of producing a mismatch."
+  },
+  {
+   "file": "mock.go",
+   "line": 973,
+   "severity": "medium",
+   "text": "`reflect.TypeOf(actual).String()` panics with a nil pointer dereference when the actual argument is nil, because `TypeOf(nil)` is a nil Type. With an empty expected `FunctionalOptions()` the type guard is skipped and `assertOpts` calls `reflect.ValueOf(actual).Len()`, which panics for a nil or non-slice actual. A call with a non-slice or nil argument therefore panics instead of reporting FAIL."
+  },
+  {
+   "file": "mock.go",
+   "line": 968,
+   "severity": "low",
+   "text": "`reflect.TypeOf(tValue.Index(0).Interface()).String()` panics if the first expected option is nil, because `TypeOf(nil)` is nil. The same pattern in `FunctionalOptionsArgument.String` makes `callString` panic while formatting a failure message."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "At line 1195, `if ot.NumIn() == 0 { return }` is inside the per-option loop and returns empty strings, which the caller treats as a match, so options after a zero-argument option are never compared."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The inner `for i := 0; i < ot.NumIn(); i++` shadows the option index, so `expectedNames[i]` uses the parameter index: it labels the wrong option and goes out of range when an option has more parameters than there are options."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "`ot.In(i).Elem()` is called on every parameter type with no kind check, so a non-pointer parameter such as `func(int)` makes reflect panic during matching instead of producing a mismatch."
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "For a nil actual, `reflect.TypeOf(actual)` is nil, so `.String()` panics; with an empty `FunctionalOptions()` the type guard is skipped and `assertOpts` calls `.Len()` on a nil or non-slice value, which also panics."
+  },
+  "4": {
+   "verdict": "real",
+   "reason": "If the first expected option is nil, `reflect.TypeOf(tValue.Index(0).Interface())` is nil and `.String()` panics, both in `Diff` and in `FunctionalOptionsArgument.String`, which `callString` uses."
+  }
+ },
+ "verify_error": ""
+}

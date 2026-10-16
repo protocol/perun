@@ -1,0 +1,50 @@
+{
+ "id": "testify-unset-iteration",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 31,
+   "severity": "high",
+   "text": "The loop removes elements from `c.Parent.ExpectedCalls` with `append` while ranging over the original slice. After one removal the indexes shift, so a consecutive matching call is skipped and stays registered. Worse, the range still sees a stale duplicate of the last element. With `[A, B]` where both match the same args, removing A and then B at `i=1` evaluates `ExpectedCalls[2:]` on a length-1 slice and panics.",
+   "confidence_score": 90
+  },
+  {
+   "file": "mock.go",
+   "line": 27,
+   "severity": "medium",
+   "text": "`call.Arguments.Diff(c.Arguments)` treats the stored expectation's matchers as the expected side, so matching is asymmetric. If `On(\"f\", mock.Anything)` is registered and `On(\"f\", \"x\").Unset()` is called, the Anything expectation matches and is removed, so the wrong handler is deleted. If the registrations are the other way round, `Unset` fails with 'Could not find expected call'. Argument-matcher expectations can also be invoked against the other call's arguments.",
+   "confidence_score": 80
+  },
+  {
+   "file": "mock.go",
+   "line": 25,
+   "severity": "medium",
+   "text": "`Unset` matches on method name and arguments only, not on the `*Call` identity. It therefore removes every expectation with equal arguments, including other independently configured calls. Example: `m.On(\"f\", 1).Return(1)` and `m.On(\"f\", 1).Return(2).Unset()` removes both.",
+   "confidence_score": 80
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "This is the reference bug: elements are removed with append using the original range index, so the next match is skipped and the code can reslice past the shortened slice and panic."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Unset is designed to match by method name and argument matching (its doc comment shows `On(\"func\", mock.Anything).Unset()`); also, as I recall testify's Diff, mock.Anything matches on either side, so the claimed 'Could not find expected call' in the reverse order would not happen (./context/ was missing, so I couldn't check this against the code)."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "Matching on method and arguments rather than on the *Call identity is the intended behaviour of Unset, so removing every expectation with equal arguments is by design and not a separate defect."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,43 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2641,
+   "severity": "high",
+   "text": "`source < existing_source` compares `ParameterSource` members, and `ParameterSource` is a plain `enum.Enum`, not an `IntEnum`, so it defines no ordering. Any second parameter that shares a name with an already-processed one, such as `--upper/--lower` with `flag_value` and `default=True`, raises `TypeError: '<' not supported between instances of 'ParameterSource'`. This replaces the old skip-if-already-set behaviour for feature-switch groups, so it is a crash on a normal path."
+  },
+  {
+   "file": "core.py",
+   "line": 2641,
+   "severity": "medium",
+   "text": "Even if the enum were made orderable, the declaration order puts PROMPT last, so a prompted value ranks as less explicit than DEFAULT. In a shared-name group, an option that prompted the user would lose its slot to another option that merely fell back to its default."
+  },
+  {
+   "file": "core.py",
+   "line": 2655,
+   "severity": "low",
+   "text": "When an option loses arbitration, its `consume_value` and `process_value` still run, but its source is never recorded. With `expose_value=False` or a UNSET existing value, the slot can be claimed by whichever option ran later, so `get_parameter_source` reflects the last writer rather than the actual winner."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "unverifiable",
+   "reason": "The patch only changes core.py and never shows how ParameterSource is defined, and ./context/ is missing, so I can't tell whether the enum already supports `<` or whether this comparison would raise TypeError."
+  },
+  "1": {
+   "verdict": "unverifiable",
+   "reason": "This depends on how ParameterSource members are ordered, if they're ordered at all, and that definition isn't in the patch and there's no pre-fix source to check, so I can't confirm that PROMPT ranks below DEFAULT."
+  }
+ },
+ "verify_error": ""
+}

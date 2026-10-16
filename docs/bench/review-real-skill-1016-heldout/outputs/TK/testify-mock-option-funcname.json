@@ -1,0 +1,76 @@
+{
+ "id": "testify-mock-option-funcname",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 134,
+   "severity": "high",
+   "text": "In assertOpts, `if ot.NumIn() == 0 { return }` returns from the whole function on the first zero-arg option. Any options after it are never compared, so the check passes wrongly. Example: expected [Opt1(), Opt2(5)] against actual [Opt1(), Opt2(9)] reports a match."
+  },
+  {
+   "file": "mock.go",
+   "line": 149,
+   "severity": "medium",
+   "text": "The inner loop reuses `i` and indexes expectedNames[i] with the parameter index instead of the option index. It reports the wrong option name, and it panics with index out of range when an option has more parameters than there are options. The actual-side message also uses expectedNames."
+  },
+  {
+   "file": "mock.go",
+   "line": 139,
+   "severity": "high",
+   "text": "`ot.In(i).Elem()` panics if an option's parameter is not a pointer, for example `func(o *opts)` is fine but `func(int)` is not. Calling the option on `reflect.New` values also panics when the option func is nil, or when it dereferences or mutates its argument unexpectedly. The mock then crashes instead of reporting a mismatch."
+  },
+  {
+   "file": "mock.go",
+   "line": 76,
+   "severity": "high",
+   "text": "`tValue.Len()` and `reflect.ValueOf(actual)` assume the actual argument is a slice. In assertOpts, `actualOpts.Len()` panics when the actual is not a slice or array (an int or a nil interface, for example). Diff also calls `reflect.TypeOf(actual).String()`, which panics when actual is nil. The expected and actual option lists can also have the same names but different lengths. That is only caught via the names comparison, so it is fine."
+  },
+  {
+   "file": "mock.go",
+   "line": 81,
+   "severity": "medium",
+   "text": "When the expected list is empty (`FunctionalOptions()` with no values), the type check is skipped. assertOpts then runs against whatever actual is. An actual of any non-empty options slice fails correctly, but a non-slice actual panics."
+  },
+  {
+   "file": "mock.go",
+   "line": 161,
+   "severity": "medium",
+   "text": "funcName uses the runtime function name. Closures returned by the same constructor, such as `Opt(1)` and `Opt(2)`, share the name `pkg.Opt.func1`, so they are only told apart by calling them. Anonymous functions are then called with fresh zero-value pointers, so options that don't mutate their arguments, or that need real state, compare as equal."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "When an option takes no arguments, `if ot.NumIn() == 0 { return }` exits assertOpts with empty strings, so any later options are never compared and the call is reported as a match."
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The inner loops shadow `i`, so on a value mismatch `expectedNames[i]` uses the parameter index instead of the option index; this prints the wrong name on both sides and panics when the parameter index is beyond the number of options."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "`ot.In(i).Elem()` panics for any non-pointer parameter type such as `func(int)`, so the mock crashes instead of reporting a mismatch."
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "When actual is nil, `reflect.TypeOf(actual)` returns nil and `.String()` on it at line 81 panics; a non-slice actual can also reach `actualOpts.Len()` and panic."
+  },
+  "4": {
+   "verdict": "real",
+   "reason": "With an empty expected list, the `tValue.Len() != 0` guard skips the type check, so assertOpts calls `reflect.ValueOf(actual).Len()` on a non-slice actual and panics."
+  }
+ },
+ "verify_error": ""
+}

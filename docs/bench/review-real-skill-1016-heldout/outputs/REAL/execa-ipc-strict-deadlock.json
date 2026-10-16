@@ -1,0 +1,69 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 30,
+   "severity": "medium",
+   "text": "`ipcEmitter.emit('message', ...)` runs inside the async `onMessage` loop with no try/catch. If a listener throws synchronously, the loop dies and the rejection is unhandled. The thrown message was already shifted, but any messages queued behind it stay in the array. Later messages then see `length > 1` and return, so nothing is ever emitted again. `onDisconnect` also loops on `once(ipcEmitter,'message')` and never resolves, so `disconnect` is never emitted."
+  },
+  {
+   "file": "incoming.js",
+   "line": 39,
+   "severity": "medium",
+   "text": "`onDisconnect` waits for a `message` event whenever the queue is non-empty. If the `message` listener has already been removed or nobody is consuming, or the debounce loop has died, that wait never ends. The process then never reports disconnect and `connected` stays true. For example, the subprocess sends a message and exits immediately, and the consumer has stopped listening."
+  },
+  {
+   "file": "validation.js",
+   "line": 153,
+   "severity": "medium",
+   "text": "`throwOnEarlyDisconnect` changed from `(methodName, isSubprocess)` to `(isSubprocess)`. The diff doesn't update any callers. A caller still using the old order passes the method name string as `isSubprocess`, which is always truthy. The error then omits the `subprocess.` prefix and names the wrong other process. The message is also hardcoded to `getOneMessage()` even when raised from another method such as `exchangeMessage`."
+  },
+  {
+   "file": "validation.js",
+   "line": 163,
+   "severity": "medium",
+   "text": "`handleSerializationError` changed from an object argument to positional arguments, and `sendOneMessage` was removed from `send.js`. Any other caller, such as `exchangeMessage`, still passing `{error,isSubprocess,methodName,message}` gets the object as `error`. `isSerializationError` then misbehaves and the better message is lost. The old export `sendOneMessage` now fails to import."
+  },
+  {
+   "file": "send.js",
+   "line": 7,
+   "severity": "low",
+   "text": "The import changed from './forward.js' to './reference.js'. The diff doesn't show `reference.js` being added, and other modules may still import `addReference` and `removeReference` from `forward.js`. If `reference.js` doesn't exist, the module fails to load."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 5,
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "`ipcEmitter.emit` is called inside the async while loop with no try/catch, so a listener that throws synchronously rejects `onMessage` and leaves queued messages stuck; later messages see `length > 1` and return, so nothing is emitted again."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "`once()` adds its own listener and the debounce loop emits whether or not users are listening, so the claimed hang when consumers stop listening does not happen; the only hang path is the dead loop already covered by finding 0."
+  },
+  "2": {
+   "verdict": "unverifiable",
+   "reason": "No callers of `throwOnEarlyDisconnect` are in the patch and ./context/ is empty, so whether any caller still uses the old `(methodName, isSubprocess)` signature cannot be checked."
+  },
+  "3": {
+   "verdict": "unverifiable",
+   "reason": "The patch removes `sendOneMessage` and the `exchangeMessage` mention, but with no context files there is no way to confirm that any other module still imports it or uses the object signature."
+  },
+  "4": {
+   "verdict": "unverifiable",
+   "reason": "Neither `reference.js` nor `forward.js` is provided, so whether `reference.js` exists cannot be determined."
+  }
+ },
+ "verify_error": ""
+}

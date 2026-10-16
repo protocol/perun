@@ -1,0 +1,18 @@
+Held-out check of the DIFF quick-path edit (negative finding, skill edit stays reverted)
+
+Edit under test: tested-skill-edit.patch.txt in ../review-real-skill-1016-refs (one imperative line under the H1 telling the reviewer to read references/compact-mode.md, a "no shell: count +/- lines" hint in the quick-path, a reworded routing line in compact-mode.md). It was tuned on the 22 cases in ../review-real-skill-1016/ids.txt, so this run uses the other 21 of the 43 public patch-only train cases (every case not in ids.txt).
+
+Run: NEW (edited skill, same prompt as the REAL arm) and TK (same toolkit system prompt) on the 21 held-out cases, claude-sonnet-5-5, one run per case, Opus judge blind to arm, same scorer. Paired case-level bootstrap, 10000 resamples, seed 1. Results: results.json. No case dropped.
+
+Held-out 21 (NEW vs TK):
+  NEW P .630 R .571 F1 .599; TK P .667 R .524 F1 .587
+  NEW-TK precision -.036 [-.184, +.119]; recall +.048 [-.095, +.190]; F1 +.013 [-.111, +.152]
+Pooled 43 (NEW on all 43 = 22 from ../review-real-skill-1016-refs + these 21; TK = 22 from ../review-real-skill-1016 + these 21):
+  NEW P .667 R .605 F1 .634; TK P .667 R .535 F1 .594
+  NEW-TK precision .000 [-.096, +.098]; recall +.070 [-.023, +.163]; F1 +.041 [-.037, +.127]
+Pooled NEW-OLD is not possible: OLD (the unedited skill) was only run on the first 22 (NEW-OLD there: recall +.045 [0.000, +.136], F1 +.037 [-.033, +.117], see ../review-real-skill-1016-refs/results.json).
+Cost per review: NEW $.0603, TK $.0156. Spend for this run (ledger, reviews + judge) $3.02, cap $4.
+
+Decision: keep rule was held-out NEW-TK F1 or recall CI lower bound > 0 with no significant precision drop. Held-out recall lower bound is -.095 and F1 lower bound is -.111, so the rule is not met. Skill edit stays reverted; no size-budget raise or mustload re-pin. The pooled recall gain (+.070, lower bound -.023) is directionally positive but not distinguishable from zero at n=43.
+
+Harness note: the first verify pass stopped at "cap $4.0 would be exceeded" after 7 of 21 cases because the driver reserved $1.00 per in-flight Opus judge call (4 parallel) although a judge call costs about $.06. verify-output1-capstopped.txt is that pass. The reserve was lowered to $0.25 in driver.py and verify re-run for the remaining cases (verify skips cases already judged); actual spend stayed under the cap. Caveats: one run per arm, same-vendor judge, reads of compact-mode.md were confirmed by probes on one case, not logged per review.

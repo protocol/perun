@@ -1,0 +1,47 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 106,
+   "severity": "medium",
+   "text": "`path.resolve(parsed.options.cwd, resolved)` throws a TypeError when `options.cwd` is undefined, and the surrounding `catch` turns that into `undefined`. Every lookup then looks like a miss. For example, `execa('foo.cmd')` with no `cwd` set is never resolved, so `.exe` detection, shebang handling and `.cmd` double-escaping are all skipped. A `.cmd` file would then get single escaping, which allows argument injection. Use `path.resolve(parsed.options.cwd ?? process.cwd(), resolved)`."
+  },
+  {
+   "file": "command-file.js",
+   "line": 59,
+   "severity": "low",
+   "text": "The code sets `parsed.options.windowsVerbatimArguments = true` on the caller's options object, even though the arguments array is deliberately cloned. If the caller reuses those options for a later spawn, such as a shell spawn or an `.exe` spawn, verbatim mode stays on and that spawn gets wrongly quoted arguments."
+  },
+  {
+   "file": "command-file.js",
+   "line": 153,
+   "severity": "low",
+   "text": "For a non-env shebang that has an argument, such as `#!/bin/sh -e`, the code returns the string `sh -e` as the file name. `which` cannot resolve that string, so `resolvedFile` is undefined. The script path stays unshifted into the arguments and `parsed.file` becomes `sh -e`, so the escaped command line is wrong and the script does not run. The same happens with `#!/usr/bin/env -S node --flag`, which returns `-S` as the interpreter."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The code comment says `cwd` is already an absolute path because execa normalizes it to `process.cwd()` by default before this parser runs, so `path.resolve` never gets an undefined `cwd` (context/ was not present, so this relies on execa's upstream normalization)."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "This `options` object is the normalized copy execa builds for each call, not the caller's object, so setting `windowsVerbatimArguments` on it cannot leak into a later spawn, just as in cross-spawn."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "parseShebang returns `sh -e` (or `-S` for `env -S`) as the file name, which `which` cannot resolve, and the space gets caret-escaped, so cmd.exe looks for a nonexistent command and the script fails to run (the script path is actually unshifted, though, so that detail in the finding is wrong)."
+  }
+ },
+ "verify_error": ""
+}

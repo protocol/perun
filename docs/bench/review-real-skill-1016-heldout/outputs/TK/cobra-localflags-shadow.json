@@ -1,0 +1,50 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 1226,
+   "severity": "high",
+   "text": "The rewritten mergePersistentFlags drops the old step that added flag.CommandLine (the Go/pflag global flags) to the root command's persistent flags. LocalFlags also drops its root-level CommandLine merge. Flags registered with AddGoFlagSet or pflag.CommandLine are no longer parsed or inherited. For example, `root --v=2` now fails with 'unknown flag'."
+  },
+  {
+   "file": "command.go",
+   "line": 1083,
+   "severity": "high",
+   "text": "LocalFlags now returns the cached c.lflags and adds to it, rather than building a fresh set each call. Flags are only ever added, never removed or refreshed. A flag added to c.Flags() or to a parent's persistent flags after the first call is handled inconsistently. A flag that is later promoted or shadowed stays stale in lflags. Callers that mutate the returned set, such as help or completion code that calls LocalFlags().MarkHidden or adds flags, now corrupt the command's own state."
+  },
+  {
+   "file": "command.go",
+   "line": 1105,
+   "severity": "medium",
+   "text": "InheritedFlags caches c.iflags and only appends to it. If a parent's persistent flags change, or the command is re-parented, after the first call, the inherited set keeps stale flags. Likewise, parentsPflags never drops entries once added. A flag that later becomes local will still appear as inherited, because iflags is only checked against local when adding."
+  },
+  {
+   "file": "command.go",
+   "line": 1096,
+   "severity": "medium",
+   "text": "LocalFlags skips any flag that is in parentsPflags, so a local flag with the same name as a parent's persistent flag is excluded from LocalFlags. The old code kept it. Parent flags are also merged into c.flags, so the lflags check only works if it runs before the merge is cached. The result depends on call order: the old lflags snapshot was taken before the merge, but now c.flags already contains the parent's flags, and they are excluded only through the parentsPflags lookup."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The patch removes both places that read flag.CommandLine (the root persistent-flag merge in mergePersistentFlags and the root merge in LocalFlags), and nothing replaces them, so Go/pflag global flags are no longer added to the root command's flag sets."
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "iflags and parentsPflags are now cached on the command and only ever added to, never rebuilt, so moving the command to a new parent (RemoveCommand then AddCommand) leaves the old parent's persistent flags in its inherited set; the old code rebuilt this set on every call."
+  }
+ },
+ "verify_error": ""
+}

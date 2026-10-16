@@ -1,0 +1,43 @@
+{
+ "id": "testify-unset-iteration",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 31,
+   "severity": "high",
+   "text": "The code removes elements from ExpectedCalls while iterating over it with a range loop that uses the original slice header and index. After a removal, the next element shifts into index i and is skipped. The last iteration then reads a stale duplicate. Two consecutive matching expectations, such as two On(\"f\", Anything) calls, leave the second one in place after Unset. Fix this by building a filtered slice, or by iterating backwards."
+  },
+  {
+   "file": "mock.go",
+   "line": 27,
+   "severity": "medium",
+   "text": "call.Arguments.Diff(c.Arguments) treats Anything, matchers and AnythingOfType as wildcards. Unset(\"f\", 1) therefore also removes an expectation registered with Anything, and an Unset with Anything removes every expectation for that method regardless of its specific arguments. Unset should compare the expectations' arguments exactly, or use ObjectsAreEqual."
+  },
+  {
+   "file": "mock.go",
+   "line": 21,
+   "severity": "low",
+   "text": "c.lock() takes the Parent mutex, but the loop modifies c.Parent.ExpectedCalls. The code also never filters on the call's Repeatability or on whether it is the same *Call. Unset therefore removes already-consumed calls (Repeatability -1) and calls that are not c itself, which can delete unrelated expectations."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Using Arguments.Diff gives Unset the same wildcard matching semantics that On/Called use, and the doc comment itself shows Unset being used with mock.Anything, so this is intended behaviour rather than a defect."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "c.lock() locks c.Parent.mutex, which is exactly the mutex that guards ExpectedCalls, and removing every expectation that matches by method and arguments (whatever its Repeatability) is the intended Unset semantics, not a confirmed defect."
+  }
+ },
+ "verify_error": ""
+}

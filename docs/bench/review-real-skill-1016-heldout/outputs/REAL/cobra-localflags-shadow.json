@@ -1,0 +1,50 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 1098,
+   "severity": "medium",
+   "text": "addToLocal skips any flag whose name is in parentsPflags. A child's own flag that shadows a parent persistent flag, such as a local `--verbose` when the parent has a persistent `--verbose`, is dropped from LocalFlags(). InheritedFlags() then reports the parent's flag as inherited, so help output is wrong and the child's flag is hidden."
+  },
+  {
+   "file": "command.go",
+   "line": 1245,
+   "severity": "medium",
+   "text": "The `flag.CommandLine` merge was removed from mergePersistentFlags and LocalFlags. Flags registered on pflag.CommandLine, for example by `pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)` for glog-style flags, are no longer added to the root's persistent flags. They are no longer parsed as `--flag` and no longer appear in help."
+  },
+  {
+   "file": "command.go",
+   "line": 1112,
+   "severity": "medium",
+   "text": "c.lflags, c.iflags and c.parentsPflags are cached and only ever added to, never rebuilt. If a command is re-parented with AddCommand, or a local flag later shadows a parent flag, stale entries remain. A parent flag that iflags already holds is still reported as inherited after the child defines its own flag with that name."
+  },
+  {
+   "file": "command.go",
+   "line": 1098,
+   "severity": "low",
+   "text": "LocalFlags() and InheritedFlags() used to return a fresh FlagSet each call and now return the shared cached c.lflags and c.iflags. A caller that adds to or removes from the returned set, for example `cmd.LocalFlags().AddFlag(...)`, silently mutates the command's internal state and changes later results."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The patch removes the code in mergePersistentFlags that copied pflag's global flag.CommandLine into the root's PersistentFlags, and the code in LocalFlags that added it; nothing replaces either, so globally registered flags are no longer parsed by cobra or shown in help."
+  },
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "Returning the cached c.lflags/c.iflags is a deliberate caching design (upstream cobra does the same), pflag has no way to remove a flag, and the finding only describes a hypothetical caller misusing the returned set, not a defect in the change itself."
+  }
+ },
+ "verify_error": ""
+}

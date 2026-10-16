@@ -1,0 +1,65 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 133,
+   "severity": "medium",
+   "text": "`readShebang` allocates a zero-filled 150-byte buffer, ignores the byte count `readSync` returns, and calls `buffer.toString()`. A script shorter than 150 bytes with no trailing newline, e.g. `#!/usr/bin/env node`, therefore yields an interpreter like `node\\0\\0\u2026`. `trim()` does not strip NULs, so the interpreter is never resolved. The spawn then fails with ENOENT instead of running the script."
+  },
+  {
+   "file": "command-file.js",
+   "line": 147,
+   "severity": "low",
+   "text": "`parseShebang` splits on a single space. `#!/usr/bin/env  node` (two spaces) gives an empty argument, so the shebang is ignored. `#!/usr/bin/env -S node --flag` returns `-S` as the interpreter. `#!/bin/sh -e` returns the single string `sh -e`, which is then used as the command name and fails to resolve."
+  },
+  {
+   "file": "command-file.js",
+   "line": 59,
+   "severity": "low",
+   "text": "`parsed.options` is the caller's object, not a copy, and `windowsVerbatimArguments = true` is written onto it. If the caller reuses one options object for a later spawn of a `.exe`, Node no longer quotes that command's arguments, so an argument like `a b` is split in two."
+  },
+  {
+   "file": "command-file.js",
+   "line": 106,
+   "severity": "low",
+   "text": "When `process.chdir` is unavailable (worker thread) or throws (nonexistent or invalid `cwd`), `which` resolves relative to the process cwd. `path.resolve(parsed.options.cwd, resolved)` then re-bases that relative result onto `options.cwd`, so `./tool.cmd` resolves to the wrong or nonexistent path. The command is then misclassified: an `.exe`/`.cmd` is treated as unresolved, and `doubleEscape` is skipped for batch files."
+  },
+  {
+   "file": "command-file.js",
+   "line": 191,
+   "severity": "low",
+   "text": "Caret-escaping cannot stop `cmd.exe` from expanding `%VAR%` inside a `/d /s /c` command line, including inside the quoted argument. An argument such as `%CMDCMDLINE%`, or any environment variable whose value contains `\"` and `&`, is expanded after escaping and can break out of the quotes."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  true,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "`shebangLine.split(' ')` makes an empty token when there are two spaces, so `argument` is '' and the shebang is ignored; it also returns `-S` for `env -S` and joins `sh -e` into one command name that cannot be resolved."
+  },
+  "2": {
+   "verdict": "unverifiable",
+   "reason": "The patch does write `windowsVerbatimArguments` onto the options object it was given, but the caller isn't included, so whether that object is shared with later spawns can't be checked."
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "If `process.chdir` is disabled or fails, `which.sync` checks a relative command against the process cwd, and `path.resolve(options.cwd, resolved)` then puts it under a different directory, so the result can be wrong or undefined and the batch-file check is affected."
+  },
+  "4": {
+   "verdict": "not_a_bug",
+   "reason": "The opening quote is itself caret-escaped, so cmd never enters quote mode and every `%` stays caret-escaped; `^%VAR^%` names an undefined variable, so cmd leaves it unexpanded and then strips the carets."
+  }
+ },
+ "verify_error": ""
+}

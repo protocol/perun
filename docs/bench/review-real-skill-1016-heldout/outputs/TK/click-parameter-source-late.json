@@ -1,0 +1,47 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2637,
+   "severity": "high",
+   "text": "`source < existing_source` compares `ParameterSource` members. `ParameterSource` is a plain `enum.Enum` with no ordering, so this raises `TypeError` whenever a second parameter shares a name with an already-processed one. For example, a feature-switch group `--a/--b` with `flag_value` and the same name would crash. Even with ordering, the numeric order (DEFAULT_MAP=4, PROMPT=5) does not rank explicitness correctly."
+  },
+  {
+   "file": "core.py",
+   "line": 2655,
+   "severity": "medium",
+   "text": "`same_source` lets a later parameter overwrite the slot, so the last one wins. The old code kept the first value. For example, when two shared-name options both come from DEFAULT, or both from COMMANDLINE, the later option's value now replaces the earlier one. This is a regression for existing feature-switch groups."
+  },
+  {
+   "file": "core.py",
+   "line": 2646,
+   "severity": "low",
+   "text": "The `slot_empty` check relies on `ctx.params`, but `expose_value=False` parameters never write to it. Such a parameter therefore always counts as the winner and overwrites the recorded parameter source for that name, even when a more explicit source was already recorded."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "unverifiable",
+   "reason": "The patch does not define ParameterSource, and ./context/ is missing, so the code available cannot show whether the enum supports `<` ordering or what its member order is."
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "Shared-name options read the same parser slot, so COMMANDLINE values are identical anyway, and for DEFAULT the new `auto_would_downgrade_explicit` guard is a deliberate tie-break, not an accidental last-wins regression."
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "If an exposed parameter has already filled `ctx.params`, `slot_empty` is False and the `expose_value=False` parameter does not win automatically; the old code also overwrote the parameter source unconditionally, so the claimed regression does not hold."
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,32 @@
+{
+ "id": "bats-junit-ansi-regex",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "bats-format-junit",
+   "line": 111,
+   "severity": "medium",
+   "text": "The old code escaped every ESC char to `&#27;`. The new code only strips complete `ESC[...m` color sequences. Any other ESC byte survives, such as cursor codes like `ESC[2K` or `ESC[1A`, or a bare ESC. Raw 0x1B is invalid in XML 1.0, so the JUnit file is malformed and parsers will reject it. This is a regression, for example for test output containing `\\033[K`."
+  },
+  {
+   "file": "bats-format-junit",
+   "line": 111,
+   "severity": "low",
+   "text": "`${output//${BASH_REMATCH[0]}/}` uses the matched text as a glob pattern. It is unquoted, so `[0-9;]` in the match acts as a bracket expression instead of a literal. For input `ESC[1m`, the pattern `ESC[1m` matches ESC followed by '1' or 'm', not the full sequence. That leaves `[`... in the output, and the loop may not remove the sequence correctly. It can also loop forever if the pattern never matches the literal text."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The matched text can only contain ESC, '[', digits, ';' and 'm', so it never has a closing ']'; bash glob treats an unclosed '[' as a literal, so the unquoted pattern removes the exact sequence and the loop ends."
+  }
+ },
+ "verify_error": ""
+}

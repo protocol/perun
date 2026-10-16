@@ -1,0 +1,39 @@
+{
+ "id": "bats-junit-ansi-regex",
+ "arm": "REAL",
+ "findings": [
+  {
+   "file": "bats-format-junit",
+   "line": 13,
+   "severity": "high",
+   "text": "The loop removes the match with an unquoted `${output//${BASH_REMATCH[0]}/}`, so the glob treats `[31m` as a bracket class instead of literal text. Output containing `\\033[31m` never gets stripped, the `=~` test stays true, and the `while` loop never ends, hanging the formatter."
+  },
+  {
+   "file": "bats-format-junit",
+   "line": 12,
+   "severity": "medium",
+   "text": "The old code escaped every ESC byte, and the new code only strips `ESC[digits;m` color sequences. Other escapes such as `\\033[K`, `\\033[2J`, `\\033[1;32;mX` or a bare ESC now pass through as raw 0x1B bytes, which makes the JUnit XML invalid."
+  },
+  {
+   "file": "bats-format-junit",
+   "line": 12,
+   "severity": "low",
+   "text": "The regex needs at least one character (`[0-9;]+`), so the bare reset sequence `\\033[m` is not stripped. With the glob bug fixed, it would still leave a stray `ESC[m` in the output."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "matched": [
+  false,
+  true,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The regex only matches ESC, '[', digits, ';' and 'm', so the matched text never contains a closing ']'. Bash treats an unclosed '[' in a pattern as a literal character, so the unquoted substitution does remove the sequence and the loop ends."
+  }
+ },
+ "verify_error": ""
+}
