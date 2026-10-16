@@ -96,52 +96,47 @@ never assert a cross-host conformance result you did not observe.
 
 ## Subagent handback: fields-only, mechanically capped (a Host-enforced instance)
 
-Chat narration a subagent hands back to its caller is billed output nobody
-re-reads — `fanout-host-sizing.md`'s cost argument, made a **hook** here
-instead of a prompt instruction alone (a prompt-level "keep it short" stays
-Protocol above, never Host-enforced). The cap is on **chat narration only**:
-deliverables (code, reports, long findings) go in files, which are
-uncapped — a compliant handback names the file path instead of pasting its
-content into chat. **The default handback is one line:** `status | evidence |
-next` (verdict; branch/SHA, gate results, or file paths as the checkable
-evidence; the next action or open issue) — key=value or short fields, never
-prose. **No polling.** Never sleep/loop waiting on background work in a
-subagent turn — end the turn and let the notification resume it; a poll loop
-bills chat narration nobody reads, the same waste this cap targets. The 800-char/10-line hook below is the **backstop** that catches a
-drift back to narration; it is not itself the target shape, and passing it
-is not a substitute for actually being one line. The orchestrator never
-relays a subagent's prose; it reads the fields and the named files.
+Chat a subagent produces is billed output nobody re-reads —
+`fanout-host-sizing.md`'s cost argument, made a **hook** here instead of a
+prompt instruction alone (a prompt-level "keep it short" stays Protocol above,
+never Host-enforced). A lane runs **tool calls only, zero prose between them**,
+and its final message is **`key=value` fields only**, one per line, no
+sentences: `status=VERIFIED|UNVERIFIED`, `sha=`, `result=`, `tests=`,
+`blockers=`, `report=<path>`. Deliverables (code, reports, long findings) go in
+files, which no hook caps; a handback names the path. **No polling.** Never
+sleep/loop waiting on background work in a subagent turn — end the turn and let
+the notification resume it. `subagent_start_inject.py` states the rule to every
+lane at spawn; the hook below is the **backstop** for a miss, not the target,
+because a rejection costs a turn that re-reads the lane's whole context. The
+orchestrator never relays a subagent's prose; it reads the fields and the named
+files.
 
-Install (`SubagentStop`; no `matcher` runs on every agent, a `matcher` scopes
-it to named agent types):
-
-```json
-"hooks": {
-  "SubagentStop": [
-    { "hooks": [{ "type": "command",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/agentic-delivery/scripts/handback_cap.py\"" }] }
-  ]
-}
-```
-
-`scripts/handback_cap.py` — **use this when** a subagent's chat handback is
-landing in an orchestrator's context uncapped. Stdlib-only; blocks (exit 2,
-which per the host's docs continues the subagent instead of stopping it, so no
-work is lost) a chat handback over 800 chars / 10 lines; exempts only agent
+Install: a `SubagentStop` entry running `scripts/handback_cap.py` (no `matcher`
+runs on every agent; a `matcher` names the types), as in
+`templates/operating-layer.settings.json`. **Use this when** a subagent's chat
+handback is landing in an orchestrator's context uncapped. Stdlib-only; blocks
+(exit 2, which per the host's docs continues the subagent, so no work is lost) a
+handback over 400 chars / 8 lines or with a non-field line; exempts only agent
 types named in `HANDBACK_EXEMPT_TYPES` (default: 4 built-in types) — it never
-inspects tools, so a custom read-only review lane is capped by default too;
-releases after 3 blocks per agent so it never loops forever. `--selftest`
-proves it fires. Its `VERIFIED`/`UNVERIFIED` status check and the `lane_cap.py` tool-call cap: `cost-quality-guardrails.md` §2.
+inspects tools, so a custom read-only review lane is capped too; releases after
+3 blocks per agent. Knobs, `--selftest`: its header. The `VERIFIED`/`UNVERIFIED`
+status check and `lane_cap.py` tool-call cap: `cost-quality-guardrails.md` §2.
+
+**Lane audit.** When a stop is allowed it appends one line per lane to a local
+ledger (`$XDG_CACHE_HOME/perun/lane-audit.jsonl`): estimated text tokens
+(narration vs handback) against tool-call tokens, counts only, read from the
+lane's own `agent_transcript_path` (`transcript_path` is the parent's).
+`--report` and `--scan <dir> --since-days N` print aggregates; details: the
+script header.
 
 **A harness with no report file** (a review lane's findings ARE its chat
-answer) still needs a cap — never exempt it: exempt means uncapped, which
-reopens the cost problem. Raise the cap for that agent type only, via a
-second, `matcher`-scoped `SubagentStop` entry with env overrides:
-
-```json
-{ "matcher": "security-reviewer", "hooks": [{ "type": "command",
-    "command": "HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000 python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/agentic-delivery/scripts/handback_cap.py\"" }] }
-```
+answer) still needs a cap, never an exemption (exempt = uncapped). Matching
+hooks run in parallel and any block wins, so give that type its own entry
+(`matcher` = the type, env `HANDBACK_FIELDS_ONLY=0 HANDBACK_MAX_LINES=25
+HANDBACK_MAX_CHARS=2000`, as in the template), list it in
+`LANE_RULES_SKIP_TYPES`, and scope the default entry's `matcher` to leave it
+out: a matcher with other characters is a JavaScript regex, e.g.
+`^(?!security-reviewer$).*`.
 
 ## Standing modes at SubagentStart, with per-type exemptions (a Host-enforced instance)
 
@@ -168,23 +163,17 @@ Exceptions are carved **mechanically, by agent type**, not left to each lane's m
    exemption** — already the two-tier `SubagentStop` rule above; this hook does not
    touch the cap.
 
-```json
-"hooks": {
-  "SubagentStart": [
-    { "hooks": [{ "type": "command",
-        "command": "HOUSE_DEFAULTS_FILE=\"$CLAUDE_PROJECT_DIR/.claude/house-defaults.md\" python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/agentic-delivery/scripts/subagent_start_inject.py\"" }] }
-  ]
-}
-```
-
 `scripts/subagent_start_inject.py` — **use this when** a house standard is drifting
 because a subagent spawned without it in its brief ran verbose or wrote more than
-requested. Stdlib-only; a missing `HOUSE_DEFAULTS_FILE`, an unreadable file, a
-non-`SubagentStart` event, or malformed stdin all print nothing and exit 0 —
-`SubagentStart` cannot block subagent creation at all, and this hook never tries to.
-The hook also appends a one-line skill-route reminder (idea-critic before an owner ask,
-communication-structure before a human-facing message, agentic-ceo to choose); set
-`SKILL_ROUTE_REMINDER=0` to drop it. `--selftest` proves the tag-strip/exempt/fail-open branches.
+requested. Install: a `SubagentStart` entry, as in
+`templates/operating-layer.settings.json`. Stdlib-only; it always injects the fixed
+`LANE_RULES` (zero prose between tool calls, a fields-only handback; skipped for
+`HANDBACK_EXEMPT_TYPES` and `LANE_RULES_SKIP_TYPES`; `LANE_RULES=0` drops it) and `HOST_RULES`, plus the house
+file when readable; a non-`SubagentStart` event or malformed stdin prints nothing and
+exits 0 — `SubagentStart` cannot block subagent creation at all, and this hook never
+tries to. The hook also appends a one-line skill-route reminder (idea-critic before an
+owner ask, communication-structure before a human-facing message, agentic-ceo to choose);
+`SKILL_ROUTE_REMINDER=0` drops it. `--selftest` proves the tag-strip/exempt/fail-open branches.
 
 ## Attended-to-unattended profile switch: one env var (a Host-enforced instance)
 

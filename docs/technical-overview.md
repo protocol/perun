@@ -14,7 +14,7 @@ Each row is a shipped mechanism; the version is where
 | Problem | Without Perun | With Perun | Since |
 |---|---|---|---|
 | A design port looks right but is incomplete | A pixel or size diff passes a page with a missing button or row. | `parity_differ.py` compares each section's element inventory (headings, text, controls, images, list rows) between design and app. Sizes are never inputs; one missing element shows completeness below 100%. A structurally wrong port fails even when the pixel difference is tiny. | 1.442.0, 1.447.0 |
-| Subagents flood the chat | Every helper agent returns a long report, multiplied across a fleet. | A `SubagentStop` hook blocks a final message over 800 characters or 10 lines; the deliverable goes in a file. | 1.434.0 |
+| Subagents flood the chat | Every helper agent returns a long report, multiplied across a fleet. | A `SubagentStop` hook blocks a final message over 400 characters or 8 lines, or one that is not `key=value` fields; the deliverable goes in a file. | 1.434.0 |
 | Lessons stay advice | A lesson is written into the instructions and an agent skips it. | Perun's CI fails a commit that edits skill instructions without also touching a test, eval, or script, unless it states a `No-Mechanism-Reason:`. | 1.436.0 |
 | "Deployed" is taken on faith | A green CI badge counts as proof the change is live. | `surface_check.py` compares the running app's build id with the commit; a missing id reports `COULD_NOT_CHECK`, never a pass. | 1.441.0 |
 | Owner requests get lost | Asks disappear when an agent's context is compacted. | `task_ledger.py` keeps every ask verbatim; "done" needs evidence (a commit, URL, issue, or test id). | 1.442.0 |
@@ -48,7 +48,8 @@ conductor overlay (`--with-ceo`) ship fleet rules as scripts that exit
 non-zero instead of prose an agent may skip:
 
 - **Handback cap:** an opt-in `SubagentStop` hook blocks a subagent's final
-  chat message over 800 characters or 10 lines; the deliverable goes in a file.
+  chat message over 400 characters or 8 lines, or one that is not `key=value`
+  fields; the deliverable goes in a file.
 - **Owner priority and ledgers:** `focus_gate.py` blocks work outside an
   owner-committed priority until its acceptance command passes or the work is
   blocked on someone else. `task_ledger.py` keeps every owner ask verbatim, so

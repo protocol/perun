@@ -38,7 +38,7 @@ skips.
 
 | Need | Script | Blocks or reports | Switch on |
 |---|---|---|---|
-| Short subagent handbacks | `agentic-delivery/scripts/handback_cap.py` | A subagent's final chat message over 800 characters or 10 lines (defaults; `HANDBACK_MAX_CHARS`, `HANDBACK_MAX_LINES`). With `HANDBACK_REQUIRE_STATUS=1`, also a handback with no status line (`verified`, `unverified`, or `done | evidence | next`). The subagent is sent back to fix it, not killed. | `SubagentStop` hook in `.claude/settings.json`; `install.sh --with-gates` prints the snippet. |
+| Short subagent handbacks | `agentic-delivery/scripts/handback_cap.py` | A subagent's final chat message over 400 characters or 8 lines, or with a line that is not a field such as `sha=1a2b3c` (defaults; `HANDBACK_MAX_CHARS`, `HANDBACK_MAX_LINES`; `HANDBACK_FIELDS_ONLY=0` keeps the caps only). With `HANDBACK_REQUIRE_STATUS=1`, also a handback with no status line (`verified`, `unverified`, or `done | evidence | next`). The subagent is sent back to fix it, not killed. It also appends one line per lane to a local ledger (`~/.cache/perun/lane-audit.jsonl`: estimated text tokens against tool-call tokens, no content); `handback_cap.py --report` summarises it. `subagent_start_inject.py` tells every lane up front: tool calls only, then a fields-only handback. | `SubagentStop` hook in `.claude/settings.json`; `install.sh --with-gates` prints the snippet. |
 | Lane tool-call cap | `agentic-delivery/scripts/lane_cap.py` | Never blocks. Counts a subagent lane's tool calls (never the main thread); at 80% of the cap it tells the lane to checkpoint an `UNVERIFIED` handback, at the cap to stop and hand back. | `PostToolUse` hook with `LANE_TOOL_CAP=<n>` or `LANE_TOOL_CAP_<TYPE>=<n>` |
 | Strong model and independent review on critical paths | `agentic-delivery/scripts/tier_gate.py` | A commit touching a tier-1 path (`templates/review-tiers.tsv`) without `Model: opus` and an independent `Reviewed-By: <id> receipt:<ref>` trailer whose receipt exists; a tier-2 commit without the reviewer trailer. `--github <PR>` instead requires an APPROVED review from another login. One shared account cannot prove independence; use a separate reviewer account. | Run `tier_gate.py <base>..<head>` (or `--github <PR>`) as a required check |
 | Cost cuts that let a defect escape | `agentic-delivery/scripts/escaped_defects.py` | An escaped Blocker (`Regression-Of:` fix) traced to a `Cost-Cut:` commit (revert it), two cuts in one window, or a cut inside the 4-week baseline. | Run per measurement window |
@@ -62,8 +62,10 @@ documents itself in its header and prints usage with `--help`.
 
 ## Keep token cost down
 
-- Brief lanes to a one-line handback (`status | evidence | next`) with the
-  deliverable in a file; the cap above is the backstop.
+- Brief lanes to tool calls only and a `key=value` fields handback (`status=`,
+  `sha=`, `result=`, `tests=`, `blockers=`, `report=<path>`) with the
+  deliverable in a file; `subagent_start_inject.py` does this for every lane at
+  spawn, and the cap above is the backstop.
 - Apply the Claude Code settings that cut per-turn tokens (Bash output cap,
   skill-listing budget, subagent prompt cache), documented with starting values
   in [`host-enforcement.md`](../.claude/skills/agentic-delivery/references/host-enforcement.md).

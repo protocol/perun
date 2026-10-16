@@ -30,9 +30,10 @@ class HouseDefaults(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             f = Path(d) / ".claude/house-defaults.md"
             txt = f.read_text()
-            for key in ("token cap", "Hand-back", "public caveman repository"):
+            for key in ("token cap", "public caveman repository"):
                 self.assertIn(key, txt)
             self.assertNotIn("caveman ultra", txt)
+            self.assertNotIn("Hand-back", txt)  # the lane rules (subagent_start_inject.LANE_RULES) own the hand-back shape
             f.write_text("mine\n")
             self.assertEqual(sh("bash", str(ROOT / "install.sh"), "--with-delivery", "--apply-operating-layer", d).returncode, 0)
             self.assertEqual(f.read_text(), "mine\n")

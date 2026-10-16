@@ -539,7 +539,6 @@ if [[ "${WITH_OPERATING_LAYER}" -eq 1 ]]; then
     cat > "${OPLAYER_HOUSE}" <<'HOUSE'
 Lane budget: stay inside the lane token cap. Read only the line ranges you need, never re-read a file you just edited, and stop as soon as the task is done.
 Optional chat voice: add your own line here; compressed assistant prose is available from the public caveman repository. Code, commits, PR bodies and docs stay normal prose.
-Hand-back: one line `status | evidence (sha/path/test) | next`, at most 10 lines and 800 characters; deliverables go to files, never into chat.
 HOUSE
     COMMAND_FILES+=(".claude/house-defaults.md")
     echo "wrote default ${OPLAYER_HOUSE} (edit freely; an existing file is never overwritten)"
