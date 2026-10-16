@@ -38,6 +38,8 @@ plugin manifest (`.claude-plugin/plugin.json`) ships every skill.
   fetched this session. Record the URL + verification date in
   `docs/standards-index.md`. Anything you couldn't fetch goes in the by-name list
   **without** a URL. Never paste a remembered link.
+- **Docs map.** `docs/INDEX.md` has one line per doc. Open a doc only when its row
+  matches; `bash scripts/land-release.sh --regen` rebuilds it and CI checks it.
 
 ## Definition of done (for a change here)
 - The skill still reads as one coherent method; scope modes, report template, and

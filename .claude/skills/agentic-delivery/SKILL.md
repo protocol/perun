@@ -36,6 +36,7 @@ chat may be terse.
 | Start a lane | `templates/lane-preamble.md` |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
+| Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
 
 ---
@@ -151,8 +152,7 @@ the two are not substitutes.
 the quality bar in G3 rather than discover the gaps in G6 review:
 `references/production-grade-product-playbook.md` — **read it when** shaping a
 product surface's information architecture, ranking, relationship-vs-record
-framing, or density. It is the positive, build-time companion to
-`deep-code-review` domain P, which verifies each choice at G6.
+framing, or density.
 
 **Durable state, recovery, and non-code receipts** — one canonical project
 record with a single writer, the resume / crash-after-effect reconciliation
@@ -194,7 +194,7 @@ dead-man reminders, or a succession note. It reuses the blameless
 `references/template-postmortem.md`; **breach notification routes to G2 + counsel, never
 asserted here**, and executing any notification or succession is the owner's.
 
-**Support & feedback operations (the compounding solo time-drain).** When the
+**Support & feedback operations.** When the
 product has users filing tickets: `references/support-ops.md` — **read it when**
 building an intake/triage taxonomy, an SLA, canned-response drafts, or the
 ticket→work-item loop. **Hard gate:** never auto-send an external reply or make
@@ -205,7 +205,7 @@ gate this skill applies to push/deploy.
 conductor).** Two or more agent sessions coordinating over a shared async
 channel instead of one orchestrator's own lanes:
 `references/multi-session-coordination.md` — **read it when** designing a
-claim/lock registry (an announcement comment is not an atomic claim: the claim is a token whose second create fails, e.g. `O_CREAT|O_EXCL`; the registry row only records the winner), a pre-write collision probe, a peer-liveness check, a
+claim/lock registry (a claim is a token whose second create fails, not a comment), a pre-write collision probe, a peer-liveness check, a
 shared-board reader, pushing a house comms/review default down to spawned
 subagents, retracting your own in-flight lane, or any peer trigger in that
 file's **Routed triggers** (broadcast asks, crossed splits, merge-holds, shared budgets).

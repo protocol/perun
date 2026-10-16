@@ -4,8 +4,9 @@
 Long sessions re-read their whole context from cache on every turn, so cost grows with size. This hook reads the
 hook JSON on stdin, takes the last assistant message's usage (input + cache_read + cache_creation tokens) from
 `transcript_path` as the current context size, and when it is at least `PERUN_CONTEXT_NUDGE_TOKENS` (default
-250000) prints ONE line (UserPromptSubmit stdout enters context) telling the agent to write `.claude/handoff.md`
-(handoff_inject.py re-injects it after auto-compact) and not to ask the owner to restart. It repeats only after another 50000 tokens of growth, tracked in a stamp under
+250000) prints ONE line (UserPromptSubmit stdout enters context) telling the agent to update `.claude/handoff.md`
+with `focus_kit.py handoff set` (handoff_inject.py re-injects it after auto-compact) and not to ask the owner to
+restart. It repeats only after another 50000 tokens of growth, tracked in a stamp under
 `$XDG_CACHE_HOME/perun/context-nudge/` (default `~/.cache`). Silent otherwise; any error exits 0 silently; only
 the last 1 MB of the transcript is read.
 
@@ -60,8 +61,9 @@ def check(payload):
         return None
     root.mkdir(parents=True, exist_ok=True)
     stamp.write_text(str(size))
-    return (f"Context is {size // 1000}k tokens and every turn re-reads it: write .claude/handoff.md (state, open work, "
-            "next step) now. Auto-compact then re-injects it; do not tell the owner to restart the session.")
+    return (f"Context is {size // 1000}k tokens and every turn re-reads it: update .claude/handoff.md now with "
+            f"`python3 {Path(__file__).resolve().with_name('focus_kit.py')} handoff set <section> <text>` (goal, stage, "
+            "next, in flight, blockers, decisions). Auto-compact then re-injects it; do not tell the owner to restart the session.")
 
 
 def main():
@@ -102,7 +104,9 @@ def _selftest():
         write(100_000)
         res.append(("silent-below-threshold", check(pl) is None))
         write(260_000, "garbage\n" + json.dumps({"type": "user"}) + "\n")
-        res.append(("fires-over-threshold-skipping-junk-tail", "260k" in (check(pl) or "")))
+        line = check(pl) or ""
+        res.append(("fires-over-threshold-skipping-junk-tail", "260k" in line))
+        res.append(("nudge-names-the-handoff-updater", "focus_kit.py handoff set" in line))
         write(290_000)
         res.append(("silent-within-50k-growth", check(pl) is None))
         write(310_000)

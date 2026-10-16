@@ -43,68 +43,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIRNAME = ".claude/skills"
 
-TRIGGER_MAX = 100
+# The index-line helpers (_short, _truncate, _strip_md, _table_cell, token_est, parse_reference_md) live in the
+# shipped focus_kit.py, which cuts a project's docs/INDEX.md the same way: one home, no copy. A reference's
+# trigger is its first paragraph after the H1 (no headings column: the routed file's own headings are one open
+# away, and the column cost ~7K tokens per session).
+sys.path.append(str(REPO_ROOT / SKILLS_DIRNAME / "agentic-delivery" / "scripts"))
+from focus_kit import _short, _strip_md, _table_cell, _truncate, parse_reference_md, token_est  # noqa: E402
+
 BLOCK_MAX = 120
 DESC_MAX = 120
 
 _UNDERLINE_RE = re.compile(r"^[-=]{3,}$")
-
-
-def _collapse(text: str) -> str:
-    return " ".join(text.split())
-
-
-def _truncate(text: str, limit: int) -> str:
-    text = _collapse(text)
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
-
-
-def _short(text: str, limit: int = 0) -> str:
-    """First sentence of `text`, collapsed, truncated to `limit` (default TRIGGER_MAX)."""
-    text = _collapse(text)
-    m = re.search(r"[.;] ", text)
-    if m and m.start() > 20:
-        text = text[: m.start() + (m.group(0) == ". ")]
-    # the column header says "Read this when...", and a script row's file cell names it
-    text = re.sub(r"^(?:read this when:?\s*|\S+\.(?:py|sh)\s+[—-]\s+)", "", text, flags=re.I)
-    return _truncate(text, limit or TRIGGER_MAX)
-
-
-def _strip_md(text: str) -> str:
-    return text.replace("**", "").replace("`", "")
-
-
-def _table_cell(text: str) -> str:
-    """Escape a value for a Markdown table cell (pipes would break columns)."""
-    return text.replace("|", "\\|") if text else "—"
-
-
-def token_est(path: Path) -> int:
-    """Rough token estimate: bytes // 4 (this repo's chars/4 convention)."""
-    return path.stat().st_size // 4
-
-
-# ---------------------------------------------------------------------------
-# Markdown reference parsing: first paragraph after the H1 title is the
-# "Read this when..." trigger. (No headings column: the routed file's own
-# headings are one open away, and the column cost ~7K tokens per session.)
-# ---------------------------------------------------------------------------
-def parse_reference_md(path: Path) -> str:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    i = 0
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    if i < len(lines) and lines[i].lstrip().startswith("#"):
-        i += 1
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    para: list[str] = []
-    while i < len(lines) and lines[i].strip() and not lines[i].lstrip().startswith("#"):
-        para.append(lines[i].strip())
-        i += 1
-    return _short(_strip_md(" ".join(para)))
 
 
 # ---------------------------------------------------------------------------

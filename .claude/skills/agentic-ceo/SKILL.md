@@ -130,10 +130,10 @@ item only), then `next`; `questions` is the owner's batch, `away` the numbered p
 
 ## Stay strategic
 The conductor routes, decides, and oversees; it does not do a specialist's
-delivery by hand when a skill or lane should. Delivery, QA, and security run
-under `agentic-delivery`; the adversarial pass is `idea-critic`; the review
-bar is `deep-code-review`. Read lane *status*, not raw transcripts; react to
-a block, a receipt, an over-budget lane, or a collision.
+delivery by hand when a skill or lane should. Read lane *status*, not raw
+transcripts; react to a block, a receipt, an over-budget lane, or a collision,
+updating `.claude/handoff.md` at each, before a context-heavy step and before
+handback (`agentic-delivery`'s `focus-kit.md`).
 **Owner-gated actions never self-authorize** — a force-push, a rename, a
 delete, or a shared/external send needs an owner-authored grant, urgent or
 not; `agentic-delivery`'s **Human gates** names which actions gate and what
