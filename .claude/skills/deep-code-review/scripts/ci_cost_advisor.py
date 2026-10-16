@@ -472,6 +472,18 @@ def _concurrency_missing(wf: dict) -> bool:
     return not (civ is True or (isinstance(civ, str) and civ.strip().lower() not in ("", "false")))
 
 
+def _drop_branch_push(new: dict) -> None:
+    """Remove only the branch (and path) part of `new['push']`: a tags / tags-ignore filter stays, and an unfiltered
+    push (which also fires on every tag) becomes `tags: ['**']`, so a release-on-tag workflow keeps firing."""
+    d = new["push"] if isinstance(new.get("push"), dict) else {}
+    if "tags" in d or "tags-ignore" in d:
+        new["push"] = {k: v for k, v in d.items() if k in ("tags", "tags-ignore")}
+    elif "branches" in d or "branches-ignore" in d:
+        del new["push"]
+    else:
+        new["push"] = {"tags": ["**"]}
+
+
 def edit_workflow(path: str, text: str, ctx: Ctx) -> tuple[str | None, list]:
     """(patched text or None, one human line per edit). The patched text is re-parsed: jobs and every other
     top-level key must be unchanged and `on:` must equal the intended trigger set, else no edit is offered."""
@@ -488,18 +500,18 @@ def edit_workflow(path: str, text: str, ctx: Ctx) -> tuple[str | None, list]:
     pushd = push if isinstance(push, dict) else {}
     branch_push = "push" in on and not _tags_only(push)
     if req is False and ctx.local_gate and lint.TEST_SIGNAL_RE.search(text) and ("pull_request" in on or branch_push):
-        for k in ("pull_request", "push"):
-            if k in new and (k == "pull_request" or branch_push):
-                del new[k]
+        new.pop("pull_request", None)
+        if branch_push:
+            _drop_branch_push(new)
         new.setdefault("workflow_dispatch", None)
         steps.append("move to `workflow_dispatch`: not a required check and the full gate runs locally before the push")
     else:
         if "pull_request" in on and branch_push:
             if ctx.strict is True:
-                del new["push"]
-                steps.append("drop `push`: strict protection means the PR run already tested what merges")
+                _drop_branch_push(new)
+                steps.append("drop the branch part of `push`: strict protection means the PR run already tested what merges (tag triggers stay)")
             elif "branches" not in pushd and "branches-ignore" not in pushd:
-                new["push"] = {**pushd, "branches": [ctx.default_branch]}
+                new["push"] = {**pushd, "branches": [ctx.default_branch], "tags": ["**"]}  # an unfiltered push also fires on tags: keep that
                 steps.append(f"limit `push` to {ctx.default_branch}: PR-branch pushes were running the workflow twice (push + pull_request)")
         skip = 1 - _share({"paths-ignore": list(ctx.docs)}, ctx) if ctx.files else 0
         for k in ("pull_request", "push"):
@@ -541,7 +553,26 @@ def build_patch(texts: dict, ctx: Ctx) -> tuple[dict, dict, str]:
         if new is not None:
             patched[path] = new
             diff += difflib.unified_diff(text.splitlines(True), new.splitlines(True), f"a/{path}", f"b/{path}")
+    if _pr_workflows(texts) and not _pr_workflows(patched):
+        # nothing would block a merge any more (a wrong --required list, or `none`): offer no patch at all
+        return dict(texts), {W_ALL: ["refused: this patch would leave no workflow on pull_request, so no check could block a merge;"
+                                     " check --required names the workflow files branch protection requires"]}, ""
     return patched, steps, "".join(diff)
+
+
+W_ALL = ".github/workflows/(all)"
+
+
+def _pr_workflows(texts: dict) -> int:
+    """How many workflows still run on pull_request or pull_request_target."""
+    n = 0
+    for text in texts.values():
+        try:
+            on = lint._normalize_on(lint.parse_workflow_yaml(text).get("on"))
+        except Exception:
+            continue
+        n += "pull_request" in on or "pull_request_target" in on
+    return n
 
 
 # ---- inputs: git history, visibility ---------------------------------------------------------------------
@@ -766,6 +797,13 @@ def main(argv: list | None = None) -> int:
              f"pushes per PR today: {a.pushes_per_pr:g} (assumed; --pushes-per-pr). Local-first assumes 1.",
              f"job minutes: {jm} (assumed unless you passed measured numbers with --job-minutes)"]
     required = None if a.required is None else frozenset() if a.required.strip() == "none" else frozenset(x.strip() for x in a.required.split(",") if x.strip())
+    unknown = sorted(n for n in (required or ()) if n not in {os.path.basename(p) for p in texts})
+    if unknown:  # a typo or a check name would make every workflow look non-required
+        print(f"ci_cost_advisor: --required names no workflow file: {', '.join(unknown)} (have: {', '.join(sorted(os.path.basename(p) for p in texts))})", file=sys.stderr)
+        return lint.ERROR
+    if required is not None and not required:
+        print("ci_cost_advisor: WARNING --required none: every workflow is treated as NOT required, so a patch may move gates out of Actions."
+              " Use it only when branch protection requires no status check.", file=sys.stderr)
     strict = True if a.strict_protection else (lint._lookup_strict(a.repo, a.default_branch) if a.repo else None)
     ctx = Ctx(private=vis[0] != "public", allowance=PLANS[a.plan], prs=a.prs if a.prs is not None else (len(files) or ASSUMED_PRS),
               pushes=a.pushes_per_pr, files=files, tags=tags, default_branch=a.default_branch, strict=strict, required=required,

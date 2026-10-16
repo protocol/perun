@@ -280,7 +280,7 @@ class Plan(unittest.TestCase):
     def test_required_known_and_local_gate_moves_a_non_required_test_workflow_to_dispatch(self):
         ctx = A.Ctx(required=frozenset({"ci.yml"}), local_gate=True)
         new, steps = A.edit_workflow(W + "unit.yml", UNIT, ctx)
-        self.assertEqual(L._normalize_on(L.parse_workflow_yaml(new)["on"]), {"workflow_dispatch": None})
+        self.assertEqual(L._normalize_on(L.parse_workflow_yaml(new)["on"]), {"push": {"tags": ["**"]}, "workflow_dispatch": None})
         self.assertIn("workflow_dispatch", steps[0])
         held = A.edit_workflow(W + "unit.yml", UNIT, A.Ctx(required=frozenset({"ci.yml"}), local_gate=False))[0]
         self.assertNotIn("workflow_dispatch", held)  # no local gate: the cloud run is the only gate, keep it
@@ -289,8 +289,8 @@ class Plan(unittest.TestCase):
 
     def test_strict_protection_drops_the_duplicate_push(self):
         new, steps = A.edit_workflow(W + "unit.yml", UNIT, A.Ctx(strict=True))
-        self.assertEqual(L._normalize_on(L.parse_workflow_yaml(new)["on"]), {"pull_request": None})
-        self.assertIn("drop `push`", steps[0])
+        self.assertEqual(L._normalize_on(L.parse_workflow_yaml(new)["on"]), {"pull_request": None, "push": {"tags": ["**"]}})
+        self.assertIn("drop the branch part of `push`", steps[0])
         self.assertIn("concurrency", new)
 
     def test_concurrency_group_is_per_pr_so_push_runs_never_collide(self):
@@ -393,6 +393,61 @@ class Plan(unittest.TestCase):
         self.assertIn("no workflows", advise(empty, "--visibility", "private")[1])
 
 
+TAGGED = """name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+"""
+
+
+class ReviewRegressions(unittest.TestCase):
+    def on(self, text):
+        return L._normalize_on(L.parse_workflow_yaml(text)["on"])
+
+    def test_tag_triggers_survive_every_trigger_edit(self):
+        for ctx in (A.Ctx(strict=True), A.Ctx(required=frozenset(), local_gate=True)):  # drop push / move to dispatch
+            new = A.edit_workflow(W + "t.yml", TAGGED, ctx)[0]
+            self.assertEqual(self.on(new).get("push"), {"tags": ["v*"]}, ctx)  # branches gone, the release tag trigger kept
+        unfiltered = A.edit_workflow(W + "unit.yml", UNIT, A.Ctx(strict=True))[0]  # an unfiltered push also fires on tags
+        self.assertEqual(self.on(unfiltered).get("push"), {"tags": ["**"]})
+        limited = A.edit_workflow(W + "unit.yml", UNIT, A.Ctx())[0]
+        self.assertEqual(self.on(limited)["push"], {"branches": ["main"], "tags": ["**"]})
+        gate = A.edit_workflow(W + "unit.yml", UNIT, A.Ctx(required=frozenset(), local_gate=True))[0]
+        self.assertEqual(self.on(gate), {"push": {"tags": ["**"]}, "workflow_dispatch": None})
+
+    def test_required_naming_no_workflow_is_an_error(self):
+        d = make_repo({"ci.yml": MATRIX, "unit.yml": UNIT})
+        for bad in ("gates", "ci.yml,Ci.yml", "ci"):  # a typo, a check name, a missing extension
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                rc = A.main([str(d), "--visibility", "private", "--required", bad, "--patch"])
+            self.assertEqual(rc, 2, bad)
+            self.assertIn("--required names no workflow file", err.getvalue())
+        self.assertEqual(advise(d, "--visibility", "private", "--required", "ci.yml,unit.yml")[0], 0)
+
+    def test_required_none_warns_loudly(self):
+        d = make_repo({"ci.yml": MATRIX})
+        rc, _, err = advise(d, "--visibility", "private", "--required", "none")
+        self.assertEqual(rc, 0)
+        self.assertIn("WARNING --required none", err)
+
+    def test_a_patch_that_leaves_no_workflow_on_pull_request_is_refused(self):
+        ctx = A.Ctx(required=frozenset(), local_gate=True)  # as if every check were non-required
+        patched, steps, diff = A.build_patch({W + "unit.yml": UNIT, W + "t.yml": TAGGED}, ctx)
+        self.assertEqual(diff, "")
+        self.assertEqual(patched, {W + "unit.yml": UNIT, W + "t.yml": TAGGED})
+        self.assertIn("refused", steps[A.W_ALL][0])
+        ok = A.build_patch({W + "unit.yml": UNIT, W + "lint.yml": LINT}, ctx)  # lint.yml stays on pull_request
+        self.assertNotEqual(ok[2], "")
+
+
 class Decide(unittest.TestCase):
     def test_public_cloud_heavy_private_local_first_tiny_private_cloud(self):
         heavy = make_repo({"ci.yml": MATRIX})
@@ -426,8 +481,8 @@ class Patch(unittest.TestCase):
         git(d, "apply", "p.diff")
         new = L.load_workflows(d)
         ci, unit = (L.parse_workflow_yaml(new[W + n]) for n in ("ci.yml", "unit.yml"))
-        self.assertEqual(L._normalize_on(ci["on"]), {"push": {"branches": ["main"]}, "pull_request": None})
-        self.assertEqual(L._normalize_on(unit["on"]), {"workflow_dispatch": None})
+        self.assertEqual(L._normalize_on(ci["on"]), {"push": {"branches": ["main"], "tags": ["**"]}, "pull_request": None})
+        self.assertEqual(L._normalize_on(unit["on"]), {"push": {"tags": ["**"]}, "workflow_dispatch": None})
         self.assertNotIn("CONCURRENCY", {f[0] for f in L.lint_workflow(W + "ci.yml", new[W + "ci.yml"], matrix_max=99, strict=None)})
         self.assertEqual(ci["jobs"], L.parse_workflow_yaml(before["ci.yml"])["jobs"])  # jobs untouched
         git(d, "diff", "--check")
