@@ -114,7 +114,7 @@ class GoldenGood(unittest.TestCase):
         res = L.lint("status", good)
         self.assertEqual(res["kind"], "leadership")
         self.assertEqual(failed("status", good), [])
-        self.assertEqual(flagged("status", good), ["ask"])  # WARN only: the old fixture names no owner on its decision
+        self.assertEqual(flagged("status", good), [])  # no source: the ask check does not run, nothing is demanded
         fixed = good.replace("Recommended: A, merge and publish today. B, keep holding.",
                              "Recommended: A, merge and publish today. Dana to reply A or B by Tue 2026-10-20.")
         self.assertEqual(failed("status", fixed), [])
@@ -154,33 +154,38 @@ class Rules(unittest.TestCase):
     def test_numbers_needs_a_figure_in_the_lead_zone_for_long_bodies(self):
         body = "The migration is going to finish soon and the team is aligned on the plan for the remaining services.\n" + \
                "Nothing else is blocked and the rest of the work proceeds as planned by the same people today.\n" * 3
-        self.assertIn("numbers", failed("decision", body + "Ask: none.\n"))
-        self.assertNotIn("numbers", failed("decision", body.replace("soon", "by 2026-10-27") + "Ask: none.\n"))
-        self.assertNotIn("numbers", failed("decision", "No figures here at all.\nAsk: none.\n"))  # under 60 words
+        self.assertIn("numbers", flagged("decision", body))
+        self.assertTrue(L.lint("decision", body)["ok"])  # WARN only: the input may hold no figure
+        self.assertNotIn("numbers", flagged("decision", body.replace("soon", "by 2026-10-27")))
+        self.assertNotIn("numbers", flagged("decision", "No figures here at all.\n"))  # under 60 words
 
-    def test_ask_needs_owner_and_date_or_none(self):
-        base = GOOD["decision"]
+    def test_ask_is_checked_only_against_an_ask_in_the_source(self):
+        base, src = GOOD["decision"], "Elena has to approve A or B by Friday 2026-10-23."
+        ask = "Ask: Elena to approve A or B by Fri 2026-10-23."
         for bad, miss in (("Ask: choose A or B.", "owner"), ("Ask: Elena to approve A or B.", "date"), ("Ask: approve.", "date")):
-            res = rules("decision", base.replace("Ask: Elena to approve A or B by Fri 2026-10-23.", bad))[0]["ask"]
+            res = rules("decision", base.replace(ask, bad), src)[0]["ask"]
             self.assertFalse(res["ok"], bad)
             self.assertTrue(res["advisory"])  # WARN: forcing owner and date taught stand-ins readers rejected
             self.assertIn(miss, res["hits"][0]["problem"])
-        self.assertEqual(flagged("decision", base.replace("Elena to approve A or B by Fri 2026-10-23.", "none.")), [])
-        self.assertIn("ask", flagged("decision", base.replace("Ask: Elena to approve A or B by Fri 2026-10-23.\n", "")))
+        self.assertNotIn("ask", flagged("decision", base, src))
+        self.assertNotIn("ask", flagged("decision", base.replace(ask, "Ask: choose A or B.")))  # no source: nothing demanded
+        self.assertNotIn("ask", flagged("decision", base.replace(ask, "Ask: approve."), "Please decide."))  # source has no owner or date to carry over
+        quiet = " ".join(["Costs are 12 percent lower and triage takes 15 minutes."] * 8) + "\n"
+        self.assertIn("ask", flagged("decision", quiet, src))  # the draft drops the source's ask
         for stand_in in ("Ask: owner unassigned, no deadline.", "Ask: Elena to approve; no deadline given.", "Rollback: not stated."):
-            self.assertIn("placeholder", failed("decision", base.replace("Ask: Elena to approve A or B by Fri 2026-10-23.", stand_in)), stand_in)
+            self.assertIn("placeholder", failed("decision", base.replace(ask, stand_in)), stand_in)
 
     def test_ask_heading_form_reads_the_next_line(self):
         text = GOOD["decision"].replace("Ask: Elena to approve A or B by Fri 2026-10-23.", "**Decision needed**\nElena to approve A or B by Fri 2026-10-23.")
-        self.assertEqual(failed("decision", text), [])
+        self.assertNotIn("ask", flagged("decision", text, "Elena must approve by Friday 2026-10-23."))
 
-    def test_pr_ask_is_required_only_when_the_text_asks(self):
-        quiet = GOOD["pr"].replace("; Priya, please approve the schema change before Tue 2026-10-20", "").replace("**Ask:** Priya to approve by Tue 2026-10-20.\n", "")
-        quiet = quiet.replace("; Priya to decide if it blocks, by Tue 2026-10-20", "")
-        self.assertEqual(failed("pr", quiet), [])
-        asking = quiet + "Please approve before merge.\n"
-        self.assertIn("ask", flagged("pr", asking))
-        self.assertNotIn("ask", flagged("pr", quiet))
+    def test_pr_ask_check_needs_an_ask_in_the_source(self):
+        pr = GOOD["pr"].replace("**Ask:** Priya to approve by Tue 2026-10-20.\n", "")
+        self.assertNotIn("ask", flagged("pr", pr))
+        self.assertNotIn("ask", flagged("pr", pr, "Priya, please approve before Tuesday."))  # the draft still asks ("please approve")
+        quiet = " ".join(["The index cuts p95 from 1.8 s to 35 ms on 42M rows."] * 8) + "\n"
+        self.assertIn("ask", flagged("pr", quiet, "Priya, please approve before Tuesday."))
+        self.assertNotIn("ask", flagged("pr", quiet, "The index cuts p95."))
 
     def test_markers_are_advisory(self):
         base = GOOD["status"]
@@ -204,12 +209,13 @@ class Rules(unittest.TestCase):
 
     def test_timezone(self):
         text = GOOD["incident"]
-        self.assertIn("timezone", failed("incident", text.replace("09:12 to 13:20 UTC", "09:12 to 13:20")))
-        self.assertNotIn("timezone", failed("incident", text.replace("09:12 to 13:20 UTC", "09:12 to 13:20 (zone not given)")))
-        self.assertNotIn("timezone", failed("incident", text.replace("09:12 to 13:20 UTC", "09:12 PT to 13:20 PT")))
+        self.assertIn("timezone", flagged("incident", text.replace("09:12 to 13:20 UTC", "09:12 to 13:20")))
+        self.assertTrue(L.lint("incident", text.replace("09:12 to 13:20 UTC", "09:12 to 13:20"))["ok"])  # WARN only
+        self.assertNotIn("timezone", flagged("incident", text.replace("09:12 to 13:20 UTC", "09:12 to 13:20 (zone not given)")))
+        self.assertNotIn("timezone", flagged("incident", text.replace("09:12 to 13:20 UTC", "09:12 PT to 13:20 PT")))
 
     def test_verified_for_pr_and_command_for_readme(self):
-        self.assertIn("verified", failed("pr", GOOD["pr"].replace("**Verified:** ✅ staging query 35 ms over 3 runs  ⏳ insert throughput at peak, not measured; Priya to decide if it blocks, by Tue 2026-10-20\n", "")))
+        self.assertIn("verified", flagged("pr", GOOD["pr"].replace("**Verified:** ✅ staging query 35 ms over 3 runs  ⏳ insert throughput at peak, not measured; Priya to decide if it blocks, by Tue 2026-10-20\n", "")))
         no_cmd = GOOD["readme"].replace("`python3 scripts/ci-gates.sh routing .claude/skills/deep-code-review`", "Run the gates.").replace("`routing: ok`", "ok")
         longer = no_cmd + "The gates cover routing, version stamps, privacy and size budgets across eleven skill folders and run the same way in CI as on a laptop, so a local failure predicts a pull request failure before anything is pushed or reviewed by anyone.\n"
         self.assertIn("command", failed("readme", longer))

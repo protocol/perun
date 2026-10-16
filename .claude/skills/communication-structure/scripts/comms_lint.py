@@ -6,9 +6,10 @@ Kinds, word/line budgets and the optional checks per kind come from the table in
 sentence <=35, no greeting/background opener), budget (fails only above BUDGET_SLACK x the table value), dates (a
 weekday must fit its date, computed from the calendar), filler (AI-slop phrases), placeholder (TBD, [owner], and the
 stand-ins "owner unassigned", "no deadline", "not stated"), vague (numberless "significantly", "on track"). Advisory
-WARNs that never put a draft below the bar: hedge, length (over the table value), ask (owner and date when the
-source gives them), markers (check/hourglass lines). Optional per kind: numbers (a figure in the first 4 content
-lines), vocab (status_vocab_lint), timezone
+WARNs that never put a draft below the bar: hedge, length (over the table value), markers (check/hourglass lines),
+numbers (a figure in the first 4 content lines), verified, timezone, and ask (runs only with --source, only when the
+source has an ask, and flags a missing owner or date only if the source gives one: nothing demands what the input
+lacks). Optional per kind: vocab (status_vocab_lint), timezone
 (clock times carry a zone), structure (status_update_lint, leadership form), verified (PR: a check with a result),
 command (README: a command). `meeting-notes` drops lead and checks table (open items are rows of Item | Needs | Notes |
 Next steps, never bullets above it), numeric (short numeric top-level lines, no emoji, status key or repeated fact),
@@ -37,7 +38,7 @@ REFERENCE = os.path.join(os.path.dirname(HERE), "references", "artifact-template
 MIN_WORDS = 60  # below this the structural rules would demand ceremony from a one-line body
 LEAD_WORDS, SENTENCE_WORDS, LONG_FORM_LABELS = 60, 35, 4
 STRUCTURAL = ("numbers", "ask", "markers", "verified", "command")
-ADVISORY = ("hedge", "ask", "markers", "length")  # reported as WARN, never below the bar: forcing them taught stand-ins ("owner unassigned") that readers rejected
+ADVISORY = ("hedge", "ask", "markers", "length", "numbers", "verified", "timezone")  # WARN, never below the bar: a rule that demands what the input lacks taught stand-ins ("owner unassigned") that readers rejected
 BUDGET_SLACK = 1.5  # budget fails only above this multiple of the table value; between 1x and the slack it is a WARN (length)
 
 
@@ -238,8 +239,11 @@ def lint(kind, text, source=None):
         del res["lead"]
         res.update({r: [] for r in ("table", "numeric", "dri", "links")})
     res.update({r: [] for r in STRUCTURAL if r in checks and words >= MIN_WORDS})
-    if "askif" in checks and words >= MIN_WORDS and (IMPLICIT_ASK.search(text) or any(ASK.search(ln) for _, ln in prose)):
-        res["ask"] = []  # askif: the text asks something, so the ask must be explicit
+    res.pop("ask", None)  # non-forcing: the ask check runs only when the source has an ask (below)
+    src_asks = source is not None and words >= MIN_WORDS and ("ask" in checks or "askif" in checks) and (
+        IMPLICIT_ASK.search(source) or any(ASK.search(ln) for ln in source.splitlines()))
+    if src_asks:
+        res["ask"] = []
     res.update({r: [] for r in ("vocab", "timezone", "structure") if r in checks})
     if source is not None:
         res["grounded"] = []
@@ -279,14 +283,15 @@ def lint(kind, text, source=None):
         res["numbers"].append(_hit(lead[0], "no figure in the first 4 content lines",
                                    "add the number that matters (X → Y, X of Y, a count or a date); if none is known, say what is unmeasured"))
     if "ask" in res:
-        asks = [(n, ln) for n, ln in prose if ASK.search(ln)]
+        asks = [(n, ln) for n, ln in prose if ASK.search(ln) or IMPLICIT_ASK.search(ln)]
         if not asks:
-            res["ask"].append(_hit(None, "no ask line", "if the text asks something, say who and by when, using only what the source gives; else `Ask: none.`"))
-        for n, ln in asks:
+            res["ask"].append(_hit(None, "the source asks something but the draft does not", "state the ask, with the owner and date the source gives"))
+        for n, ln in [a for a in asks if ASK.search(a[1])]:  # owner and date are judged on labelled ask lines only
             val = ln.split(":", 1)[1].strip() if ":" in ln else ""  # a bare heading takes its value from the next line
             nxt = "" if val else next((t for m, t in prose if m == n + 1), "")
             full, val = ln + " " + nxt, val or nxt
-            miss = [w for w, ok in (("a date", DATE.search(full)), ("an owner", _owner(full))) if not ok]
+            miss = [w for w, ok, given in (("a date", DATE.search(full), DATE.search(source)), ("an owner", _owner(full), _owner(source)))
+                    if not ok and given]  # only what the source itself contains
             if miss and not NONE.search(val):
                 res["ask"].append(_hit(n, "ask lacks " + " and ".join(miss), "name the owner and date if the source gives them; if it gives none, leave them out (never 'owner unassigned', 'no deadline')"))
     if "markers" in res:

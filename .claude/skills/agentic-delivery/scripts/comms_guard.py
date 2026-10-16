@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""comms_guard.py — PreToolUse hook: lint a PR or tracker write against its artifact template; ask for one rewrite below the bar.
+"""comms_guard.py — PreToolUse hook: lint a PR or tracker write against its artifact template and WARN, never block.
 
-WHY: agents post PR bodies, status updates and comments that bury the lead, skip the numbers and leave the ask
-vague, and nothing checked them before they went out. This hook runs communication-structure's comms_lint.py on the
-body of the write and, when the draft is below the bar, denies it once with the exact fix per failing rule.
+WHY: agents post PR bodies, status updates and comments that bury the lead, pad with filler and repeat a wrong
+weekday, and nothing checked them before they went out. This hook runs communication-structure's comms_lint.py on the
+body of the write and, when the draft is below the bar, adds the exact fix per failing rule to Claude's context; the
+write itself always goes ahead (the hook cannot make an agent invent an owner or date the input never had).
 
 Covers: Linear MCP `save_status_update` (kind status) and `save_comment` (message) from any server whose name contains
 "linear"; Bash `gh pr create|edit` (pr), `gh pr comment` and `gh issue create|edit|comment` (message), `gh release
@@ -11,25 +12,17 @@ create|edit` (release); `curl` or `gh api` calls to repos/<owner>/<repo>/pulls (
 `body`. The body is read from `--body`/`-b`/`--notes`, a heredoc, `$(cat FILE)`, `--body-file`/`-F FILE`, `-d` JSON,
 `-d @FILE`, `--input FILE` or `-f body=...`. A command with no readable body is allowed.
 
-Decision: a JSON `permissionDecision: "deny"` whose reason is the lint report (Claude reads it and rewrites); exit 0,
-never 2. A draft already denied in the last 30 minutes (same kind and text, sha1 in a ledger) is allowed, so a false
-positive costs one resend and a stuck agent cannot loop. Register it as `python3 ".../comms_guard.py" || true`.
-
-Fail open: bad stdin, a missing communication-structure skill, an unreadable file or any error allows the call.
-Opt out for a session or a project with `PERUN_COMMS_GUARD=off` (settings `env`). `PERUN_COMMS_GUARD_DIR` moves the
-ledger (default: the temp dir). Side effects: one small ledger file; no network. Test: scripts/test_comms_guard.py.
+Output: a JSON `hookSpecificOutput.additionalContext` (the lint report); never a `permissionDecision`, never exit 2.
+Register it as `python3 ".../comms_guard.py" || true`. Fail open: bad stdin, a missing communication-structure skill,
+an unreadable file or any error prints nothing. Opt out for a session or a project with `PERUN_COMMS_GUARD=off`
+(settings `env`). Side effects: none (reads the body file, no network). Test: scripts/test_comms_guard.py.
 """
-import fcntl
-import hashlib
 import json
 import os
 import re
 import sys
-import tempfile
-import time
 from pathlib import Path
 
-WINDOW = 30 * 60
 LINT_DIR = Path(__file__).resolve().parent.parent.parent / "communication-structure" / "scripts"
 MCP = re.compile(r"^mcp__.*linear.*__(save_status_update|save_comment)$", re.I)
 GH = re.compile(r"\bgh\s+(pr|issue|release)\s+(create|edit|comment)\b")
@@ -126,23 +119,6 @@ def extract(tool_name, tool_input, cwd=""):
     return (kind, body) if isinstance(body, str) and body.strip() else None
 
 
-def seen_before(kind, body, now=None):
-    """True when this exact draft was already denied within WINDOW (so the resend is allowed); records it otherwise."""
-    now = time.time() if now is None else now
-    d = Path(os.environ.get("PERUN_COMMS_GUARD_DIR") or tempfile.gettempdir())
-    d.mkdir(parents=True, exist_ok=True)
-    f, key = d / "perun-comms-guard.json", hashlib.sha1(f"{kind}\0{body}".encode()).hexdigest()
-    with open(d / "perun-comms-guard.lock", "a") as lk:
-        fcntl.flock(lk, fcntl.LOCK_EX)
-        led = json.loads(f.read_text()) if f.is_file() else {}
-        led = {k: t for k, t in led.items() if now - t < WINDOW}
-        hit = led.pop(key, None) is not None
-        if not hit:
-            led[key] = now
-        f.write_text(json.dumps(led))
-    return hit
-
-
 def main():
     if os.environ.get("PERUN_COMMS_GUARD", "").lower() in ("off", "0", "false"):
         return 0
@@ -155,15 +131,14 @@ def main():
         import comms_lint
         kind, body = got
         res = comms_lint.lint(kind, body)
-        if res["ok"] or seen_before(kind, body):
+        if res["ok"]:
             return 0
         lines = comms_lint.render(res).splitlines()
         report = "\n".join([ln for ln in lines[:-1] if ln.startswith("FAIL")][:8] + lines[-1:])
-        reason = (f"Below the comms bar for a {res['kind']} write; rewrite it and resend.\n{report}\n"
-                  "Template: .claude/skills/communication-structure/references/artifact-templates.md. "
-                  "Add nothing the source lacks. A false positive: resend the identical text once and it goes through.")
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-                                                 "permissionDecisionReason": reason}}))
+        note = (f"Comms check on the {res['kind']} you just sent (advisory, the write went ahead):\n{report}\n"
+                "Fix the text if you edit it again; template: .claude/skills/communication-structure/references/artifact-templates.md. "
+                "Add nothing the source lacks, and never write a stand-in for an owner or date the input does not give.")
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": note}}))
     except Exception:  # fail open: a broken quality hook must never block work
         return 0
     return 0

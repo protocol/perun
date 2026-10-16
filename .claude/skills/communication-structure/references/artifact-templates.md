@@ -4,7 +4,7 @@ Read this when you draft a status update, PR body, release note, decision memo o
 summary, README section, or a tracker or PR comment. Each artifact has one shape, a word and line budget, and a check:
 `python3 .claude/skills/communication-structure/scripts/comms_lint.py --kind <kind> --file <draft.md> [--source <notes.md>]`
 scores every rule and prints the exact fix per failure (exit 1 = below the bar). With the operating layer installed,
-`agentic-delivery/scripts/comms_guard.py` runs the same check before a PR or tracker write and asks for one rewrite.
+`agentic-delivery/scripts/comms_guard.py` runs the same check before a PR or tracker write and warns with the fixes; it never blocks.
 
 ## Every artifact
 
@@ -31,8 +31,9 @@ scores every rule and prints the exact fix per failure (exit 1 = below the bar).
 | `meeting-notes` | 250 | 30 | nolead, table, numeric, dri, links |
 
 `nolead` drops the lead check (meeting-notes has no BLUF). Always checked: lead, budget, dates, filler, placeholder,
-vague. Advisory (WARN, never below the bar): hedge, ask, markers, length (over the table value, under 1.5 times it).
-`askif` = the ask check runs only when the text asks something ("please", "approve", "waiting on"). `status` with four
+vague. Advisory (WARN, never below the bar): hedge, ask, markers, length (over the table value, under 1.5 times it),
+numbers, verified, timezone. Nothing demands what the input lacks: `ask` (and `askif`, ask only when the text asks) runs
+only with `--source` and only when the source has an ask, and flags a missing owner or date only if the source gives one. `status` with four
 or more of the seven leadership labels is checked as `leadership`. Bodies under 60 words skip numbers, ask, markers,
 verified and command. Fenced code does not count toward the budget.
 

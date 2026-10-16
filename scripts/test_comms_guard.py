@@ -101,29 +101,28 @@ class Decision(unittest.TestCase):
     def setUp(self):
         self.d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.d, True)
-        self.env = {"PERUN_COMMS_GUARD_DIR": self.d}
+        self.env = {}
 
-    def test_denies_once_with_exact_fixes_then_allows_the_identical_resend(self):
+    def test_warns_with_exact_fixes_and_never_blocks(self):
         payload = {"tool_name": "mcp__claude_ai_Linear__save_comment", "tool_input": {"issueId": "x", "body": BAD}}
         rc, out = run(payload, self.env)
         self.assertEqual(rc, 0)
         res = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual((res["hookEventName"], res["permissionDecision"]), ("PreToolUse", "deny"))
-        self.assertRegex(res["permissionDecisionReason"], r"FAIL lead L1: .*Fix: ")
-        self.assertIn("resend the identical text", res["permissionDecisionReason"])
-        self.assertEqual(run(payload, self.env), (0, ""))  # same text again: a false positive costs one resend
-        rc, out = run({**payload, "tool_input": {"issueId": "x", "body": BAD + " More."}}, self.env)
-        self.assertIn("deny", out)  # a different failing text is checked again
+        self.assertEqual(res["hookEventName"], "PreToolUse")
+        self.assertNotIn("permissionDecision", res)  # advisory: the write always goes ahead
+        self.assertRegex(res["additionalContext"], r"FAIL lead L1: .*Fix: ")
+        self.assertIn("advisory", res["additionalContext"])
+        self.assertEqual(run(payload, self.env)[1], out)  # no ledger: the same text warns again, never blocks
 
-    def test_a_draft_that_meets_the_bar_passes_silently_and_leaves_no_ledger(self):
-        rc_out = run(bash(f"gh pr comment 5 --body '{GOOD}'"), self.env)
-        self.assertEqual(rc_out, (0, ""))
-        self.assertFalse(os.path.exists(os.path.join(self.d, "perun-comms-guard.json")))
+    def test_a_draft_that_meets_the_bar_passes_silently(self):
+        self.assertEqual(run(bash(f"gh pr comment 5 --body '{GOOD}'"), self.env), (0, ""))
 
     def test_bash_gh_and_curl_writes_are_checked(self):
         cmds = (f"gh pr create --title t --body '{BAD}'", f"curl -X POST https://api.github.com/repos/o/r/issues -d '{json.dumps({'body': BAD})}'")
-        for i, cmd in enumerate(cmds):
-            self.assertIn('"deny"', run(bash(cmd), {"PERUN_COMMS_GUARD_DIR": os.path.join(self.d, str(i))})[1], cmd)
+        for cmd in cmds:
+            out = run(bash(cmd), self.env)[1]
+            self.assertIn("additionalContext", out, cmd)
+            self.assertNotIn("deny", out, cmd)
 
     def test_opt_out_and_uncovered_calls_and_bad_input_allow(self):
         self.assertEqual(run(bash(f"gh pr create --body '{BAD}'"), {**self.env, "PERUN_COMMS_GUARD": "off"}), (0, ""))
@@ -137,15 +136,6 @@ class Decision(unittest.TestCase):
         shutil.copy(GUARD, lone)  # no sibling communication-structure skill
         rc, out = run(bash(f"gh pr create --body '{BAD}'"), self.env, guard=os.path.join(lone, "comms_guard.py"))
         self.assertEqual((rc, out), (0, ""))
-
-    def test_ledger_entries_expire(self):
-        os.environ["PERUN_COMMS_GUARD_DIR"] = self.d
-        self.addCleanup(os.environ.pop, "PERUN_COMMS_GUARD_DIR", None)
-        self.assertFalse(G.seen_before("pr", "x", now=1000.0))
-        self.assertTrue(G.seen_before("pr", "x", now=1100.0))
-        self.assertFalse(G.seen_before("pr", "x", now=1200.0))  # the hit consumed the entry
-        self.assertFalse(G.seen_before("pr", "y", now=1300.0))
-        self.assertFalse(G.seen_before("pr", "y", now=1300.0 + G.WINDOW + 1))  # expired
 
 
 class Wiring(unittest.TestCase):

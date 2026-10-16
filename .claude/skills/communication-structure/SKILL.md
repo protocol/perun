@@ -40,7 +40,7 @@ shorthand. This is about shape and length, not vocabulary. Lookup table:
   `references/artifact-templates.md` before you draft. `comms_lint.py --kind <kind>
   --file <draft>` scores each rule and prints the exact fix (exit 1 = below the bar).
   The operating layer's `agentic-delivery/scripts/comms_guard.py` hook runs it
-  before a PR or tracker write and asks for one rewrite.
+  before a PR or tracker write and warns; it never blocks.
 - **Under 30 seconds.** ~150 words by default; the budgets in the reference
   are the ceilings. Longer needs a reason per block, or a cut.
 - **Scannable.** Bold the one load-bearing sentence. Short paragraphs. A list
