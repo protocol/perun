@@ -50,7 +50,7 @@ Read-only research lane. Role: <ROLE> (looks for: <Looks for>). Strategy context
 Read: <Reads>. Apply: <Applies>. Write nothing except the return file <path>.
 Return a JSON array, one object per recommendation, with exactly: id (slug), title, role, lever
 (learning|reliability|velocity|growth|scale|cost|polish|security), evidence [paths, links or tag:ref],
-reach + reach_src, impact + impact_src, confidence + confidence_src, effort + effort_src,
+reach + reach_src, impact + impact_src, effort + effort_src,
 metric (baseline, target, how measured; it has a number), risks.
 Every *_src is a link or "assumed: why". Never invent a number. A source you cannot read is UNVERIFIED.
 Market size, legal and tax questions are routed to the owner, never entered as reach. At most <N> items, best first.
@@ -59,14 +59,18 @@ Final message: status | file | next.
 
 ## 2. Cluster and dedupe
 
-Group the evidence by underlying user problem, not by symptom or role: one item per problem. Merge the same problem returned by two roles into one item and record `merged_from`. The script fails on a duplicate `id` and flags near-duplicate titles. Drop what already shipped (check the changelog and the code; record it as `reject: already shipped <ref>`). Work already in flight is listed with `status: in_flight` and not re-ranked. Add `vision`, `vision_reason`, `where`, `done_when`, `verify` and any `gate` (an owner approval, a paid run or an external send).
+Group the evidence by underlying user problem, not by symptom or role: one item per problem. Merge the same problem returned by two roles into one item and record `merged_from`. The script fails on a duplicate `id` and flags near-duplicate titles. Drop what already shipped (check the changelog and the code; record it as `reject: already shipped <ref>`). Work already in flight gets `status: in_flight`: it is still scored and shown, flagged, so a misallocation is visible. Add `vision`, `vision_reason`, `where`, `done_when`, `verify` (open items), each `gate` (an owner approval, a paid run or an external send; a list for several) and `wait_days` for a calendar wait.
 
 ## 3. Score (the script)
 
 `python3 .claude/skills/agentic-ceo/scripts/roadmap_rank.py <input.json> [--strict] [--update docs/roadmap.md]`. The input shape is in the script's docstring; a CSV carries items only, with `--context` for the rest. The report prints the formula and the stage-weight table it used, and the script holds the only copy of the weights. The rules that matter:
 
 - `reach` is a 1 to 5 share of our own users or runs, never a market size.
-- `confidence` is capped at 0.5 while reach or impact is `assumed`, so an assumption can never read as a measurement. If every reach is assumed, say so: the order is a hypothesis, and measuring reach is often the first item.
+- `reach` counts our own users or runs touched. An item that only helps later rankings (a survey, a dashboard) touches only its respondents; "it informs every later ranking" is not a reach.
+- `confidence` is computed, never typed: 1.0 when both reach and impact cite a real locator (a URL, an existing repo path or an issue or PR; a committed measurement, survey row or issue), else 0.5. `assumed`, `estimate:`, `~assumed` or any other text counts as assumed, so wording cannot bypass it. The report lists the assumed inputs per item; if every reach is assumed, say so: the order is a hypothesis.
+- Owner gates and waits are priced into effort: +2 lane-days per owner approval, paid run or external send, +0.25 per calendar-wait day. A gated item does not rank as if it could start today.
+- Equal scores rank fewer assumed inputs first, then lower effort, then id, so evidence-backed items beat guesses.
+- The loop scores itself, which departs from `product-discovery`'s "the user supplies the numbers": that rule guards external facts (market size, quotes, PMF verdicts), which stay routed. Internal estimates may be self-scored only because the report prints which inputs are assumed and the formula penalises them.
 - Stage changes the weights (pre-fit favours learning and core reliability over polish, scale and growth); vision gates the item: `aligned` 1, `partial` 0.5, `misaligned` (it contradicts the vision, the direction or a constraint) is rejected with the stated reason.
 - `product-discovery` names ICE for a solo builder. This adds reach and divides by effort because it ranks many sourced items; set every reach to 1 to fall back to an ICE-like order.
 - Same input, same output. Re-run after any change.
@@ -88,7 +92,7 @@ The script renders a BLUF and then, in this order: 1 strategy context (with the 
 | Excuse | Rebuttal |
 |---|---|
 | "The backlog is obvious, skip the strategy step." | A ranking means nothing without stage and vision; the items they reject are the random builds this loop exists to stop. |
-| "Estimate reach so the table has no gaps." | Mark it `assumed`; the script caps confidence. An invented reach is fabricated evidence. |
+| "Estimate reach so the table has no gaps." | Mark it `assumed`; confidence drops to 0.5 and the report lists it. An invented reach is fabricated evidence. |
 | "Run all six roles to be thorough." | Run the relevant ones; a role with no evidence source returns noise and burns tokens. |
 | "Rank by the loudest feedback." | Loud is one source: cluster by problem, then score. |
 | "Skip the critic, the top item is clearly good." | The top 3 are what the owner will act on, so an unattacked claim costs most there. |

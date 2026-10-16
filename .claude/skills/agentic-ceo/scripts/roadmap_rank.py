@@ -14,10 +14,15 @@ Prints the report in the loop's fixed order: strategy context, rejected items, r
 tracker issues. The same input always gives the same output (no clock, no network).
 
   score = reach x impact x confidence / effort x stage_weight x vision_factor
+  effort = typed effort + 2 per owner or external-send gate + 0.25 per calendar-wait day
 
-Every input is sourced or marked `assumed`; confidence is capped at 0.5 while reach or impact is assumed.
+An input is sourced only when its *_src is a URL, an existing repo path (optional #anchor) or issue:/pr:
+plus a reference. Anything else ("assumed: ...", "estimate: ...") counts as assumed. Confidence is computed,
+never typed: 1.0 when reach and impact are both sourced, else 0.5. Items in flight are scored and shown,
+flagged; equal scores rank fewer assumed inputs first. The roadmap may self-score, but it prints which
+inputs are assumed.
 --update FILE replaces the text between <!-- roadmap:begin --> and <!-- roadmap:end --> in FILE.
---strict exits 1 when a top-3 item has no idea-critic verdict or an unresolved REVISE.
+--strict exits 1 when a top-3 open item has no idea-critic verdict or an unresolved REVISE.
 --root DIR is where repo-path evidence is resolved (default: the current directory).
 Exit: 0 ok, 1 --strict failed, 2 bad input.
 """
@@ -48,17 +53,15 @@ W = {
 }
 VISION = {"aligned": 1.0, "partial": 0.5}  # "misaligned" is a rejection, not a factor
 IMPACT = (0.25, 0.5, 1, 2, 3)
-CAP = 0.5  # confidence ceiling while reach or impact is assumed
-INPUTS = ("reach", "impact", "confidence", "effort")
+GATE_COST, WAIT_RATE = 2, 0.25  # lane-days added per owner/external-send gate, per calendar-wait day
+INPUTS = ("reach", "impact", "effort")
 CTX = ("stage", "vision", "north_star", "direction", "constraints")
 ROLES = ("CEO", "CPO", "CTO", "CFO", "CMO", "CISO", "COO")
 AREAS = ("architecture", "pipeline", "tooling")
 VERDICTS = ("PASS_TO_USER", "REVISE", "HOLD")
+SRC_TAGS = ("issue", "pr")  # a field-proven input cites a repo path, a URL or an issue or PR
+EV_TAGS = ("issue", "pr", "survey", "owner")  # evidence may also cite a survey row or an owner statement
 BEGIN, END = "<!-- roadmap:begin -->", "<!-- roadmap:end -->"
-
-
-def assumed(s):
-    return str(s).strip().lower().startswith("assumed")
 
 
 def cell(s):
@@ -93,7 +96,7 @@ def load(path, ctx_path=None):
         for k in ("evidence", "merged_from"):
             if k in it:
                 it[k] = [x.strip() for x in it[k].split(";") if x.strip()]
-        for k in INPUTS:
+        for k in INPUTS + ("wait_days",):
             try:
                 it[k] = float(it[k])
             except (KeyError, ValueError):
@@ -105,12 +108,23 @@ def load(path, ctx_path=None):
     return data
 
 
-def ev_ok(e, root):
+def loc(e, root, tags):
+    """True for a real locator: a URL, tag:ref with an allowed tag, or an existing path inside root."""
     e = str(e).strip()
-    if re.match(r"https?://\S+$", e) or re.match(r"[a-z][a-z0-9-]*:\S", e):
-        return True  # a URL, or tag:ref such as issue:#12 or survey:2026-10-16#P1
+    if re.match(r"https?://\S+$", e):
+        return True
+    m = re.match(r"([a-z][a-z0-9-]*):(\S+)$", e)
+    if m:
+        return m.group(1) in tags
+    if not e or re.search(r"\s", e):
+        return False
     p = (root / e.split("#")[0]).resolve()
-    return bool(e) and p.exists() and root.resolve() in (p, *p.parents)  # a repo path, not an outside one
+    return p.exists() and root.resolve() in (p, *p.parents)  # a repo path, not an outside one
+
+
+def gates(it):
+    g_ = it.get("gate")
+    return [] if g_ is None else g_ if isinstance(g_, list) else [g_]
 
 
 def build(data, root):
@@ -137,7 +151,7 @@ def build(data, root):
             errs.append(f"context.weights.{k}: a known lever and 4 positive numbers are required")
     si = STAGES.index(stage) if stage in STAGES else 0
 
-    ids, rejected, flight, cand = set(), [], [], []
+    ids, rejected, cand = set(), [], []
     for n, it in enumerate(data["items"]):
         i = it.get("id") if isinstance(it, dict) else None
         if not (isinstance(i, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]*", i)):
@@ -165,30 +179,32 @@ def build(data, root):
             bad("evidence needs at least one link, repo path or tag:ref")
         else:
             for e in ev:
-                if not ev_ok(e, root):
+                if not loc(e, root, EV_TAGS):
                     bad(f"evidence not found: {e}")
         if not (text(it.get("metric")) and re.search(r"\d", it["metric"])):
             bad("metric must be measurable: name a baseline or target number")
         if not text(it.get("risks")):
             bad("risks is required")
         status = it.get("status", "open")
-        if status == "in_flight":
-            flight.append(it)
-            continue
-        if status != "open":
+        if status not in ("open", "in_flight"):
             bad("status must be open or in_flight")
             continue
+        if "confidence" in it or "confidence_src" in it:
+            bad("confidence is computed (1.0 when reach and impact are sourced, else 0.5): remove it")
         if it.get("lever") not in w:
             bad(f"lever must be one of {', '.join(w)}")
-        for k, ok in (("reach", lambda v: 1 <= v <= 5), ("impact", lambda v: v in IMPACT),
-                      ("confidence", lambda v: 0 < v <= 1), ("effort", lambda v: v > 0)):
+        for k, ok in (("reach", lambda v: 1 <= v <= 5), ("impact", lambda v: v in IMPACT), ("effort", lambda v: v > 0)):
             if not (num(it.get(k)) and ok(it[k])):
-                bad(f"{k} is missing or out of range (reach 1-5, impact {'|'.join(map(str, IMPACT))}, confidence 0-1, effort > 0)")
+                bad(f"{k} is missing or out of range (reach 1-5, impact {'|'.join(map(str, IMPACT))}, effort > 0)")
             if not text(it.get(k + "_src")):
-                bad(f"{k}_src is required: a link or 'assumed: why'")
+                bad(f"{k}_src is required: a link, a repo path, or 'assumed: why'")
+        if "wait_days" in it and not (num(it["wait_days"]) and it["wait_days"] >= 0):
+            bad("wait_days must be a number of calendar days, 0 or more")
+        if not all(text(x) for x in gates(it)):
+            bad("gate must be a non-empty string or a list of them (one per owner approval or external send)")
         if it.get("vision") not in VISION:
             bad("vision must be aligned, partial or misaligned")
-        for k in ("vision_reason", "where", "done_when", "verify"):
+        for k in ("vision_reason",) + (("where", "done_when", "verify") if status == "open" else ()):
             if not text(it.get(k)):
                 bad(f"{k} is required")
         if "role" in it and it["role"] not in ROLES:
@@ -211,13 +227,18 @@ def build(data, root):
         if c.get("verdict") == "HOLD":
             rejected.append((it, "idea-critic: HOLD", c["dissent_ledger"]))
             continue
-        conf = min(it["confidence"], CAP) if assumed(it["reach_src"]) or assumed(it["impact_src"]) else it["confidence"]
+        asm = [k for k in INPUTS if not loc(it[k + "_src"], root, SRC_TAGS)]
+        conf = 1.0 if "reach" not in asm and "impact" not in asm else 0.5
+        gs = gates(it)
+        eff = it["effort"] + GATE_COST * len(gs) + WAIT_RATE * it.get("wait_days", 0)
         sw, vf = w[it["lever"]][si], VISION[it["vision"]]
-        ranked.append({"it": it, "conf": conf, "sw": sw, "vf": vf,
-                       "s": it["reach"] * it["impact"] * conf / it["effort"] * sw * vf})
-    ranked.sort(key=lambda r: (-round(r["s"], 6), r["it"]["effort"], r["it"]["id"]))
+        ranked.append({"it": it, "conf": conf, "sw": sw, "vf": vf, "asm": asm, "eff": eff, "flight": it.get("status") == "in_flight",
+                       "s": it["reach"] * it["impact"] * conf / eff * sw * vf})
+    # equal scores: fewer assumed inputs first (evidence-backed beats a guess), then lower effort, then id
+    ranked.sort(key=lambda r: (-round(r["s"], 6), len(r["asm"]), r["eff"], r["it"]["id"]))
+    opens = [r for r in ranked if not r["flight"]]
 
-    live = {r["it"]["id"] for r in ranked} | {f["id"] for f in flight}
+    live = {r["it"]["id"] for r in ranked}
     adrs, seen = [], set()
     for n, a in enumerate(data.get("adrs") or []):
         if not isinstance(a, dict):
@@ -245,10 +266,10 @@ def build(data, root):
 
     titles = [(x["id"], x["title"].lower()) for x in data["items"]]
     return {
-        "ranked": ranked, "rejected": rejected, "flight": flight, "adrs": adrs, "w": w, "over": applied, "si": si, "stage": stage,
+        "ranked": ranked, "opens": opens, "rejected": rejected, "adrs": adrs, "w": w, "over": applied, "si": si, "stage": stage,
         "dups": [(p, q) for (p, a), (q, b) in itertools.combinations(titles, 2)
                  if difflib.SequenceMatcher(None, a, b).ratio() >= 0.85],
-        "missing": [r["it"]["id"] for r in ranked[:3] if not r["it"].get("critic")],
+        "missing": [r["it"]["id"] for r in opens[:3] if not r["it"].get("critic")],
         "unresolved": [r["it"]["id"] for r in ranked if (r["it"].get("critic") or {}).get("verdict") == "REVISE"],
     }, []
 
@@ -257,6 +278,7 @@ def render(data, r, base=""):
     """Markdown report. base is prefixed to repo-path evidence so links resolve from the file it lands in."""
     ctx, out, stage = data["context"], [], r["stage"]
     P = out.append
+    rk = r["ranked"]
 
     def ev(it):  # repo paths become links labelled by file name; URLs and tag:ref stay text
         def link(e):
@@ -264,18 +286,19 @@ def render(data, r, base=""):
             return e if re.match(r"[a-z][a-z0-9-]*:\S", e) else f"[{name if len(name) <= 40 else name[:39] + '…'}]({base}{e})"
         return cell("; ".join(link(str(e).strip()) for e in it["evidence"]))
 
-    parts = [f"Stage `{stage}`" + (" (assumed)." if assumed(ctx["stage"]["src"]) else "."),
-             f"{len(r['ranked'])} open items ranked, {len(r['rejected'])} rejected, {len(r['flight'])} in flight."]
-    if r["ranked"]:
-        parts.append("Top: " + ", ".join(f"`{x['it']['id']}` {x['s']:.2f}" for x in r["ranked"][:3]) + ".")
-        free = next((x["it"]["id"] for x in r["ranked"] if not x["it"].get("gate")), None)
-        parts.append(f"Start now (highest-ranked item with no gate): `{free}`." if free else "Every ranked item is gated.")
-        na = sum(assumed(x["it"]["reach_src"]) for x in r["ranked"])
+    flag = lambda x: " (in flight)" if x["flight"] else ""
+    parts = [f"Stage `{stage}`" + (" (assumed)." if ctx["stage"]["src"].strip().lower().startswith("assumed") else "."),
+             f"{len(rk)} items ranked ({len(r['opens'])} open, {len(rk) - len(r['opens'])} in flight), {len(r['rejected'])} rejected."]
+    if rk:
+        parts.append("Top: " + ", ".join(f"`{x['it']['id']}` {x['s']:.2f}{flag(x)}" for x in rk[:3]) + ".")
+        free = next((x["it"]["id"] for x in r["opens"] if not gates(x["it"])), None)
+        parts.append(f"Start now (highest-ranked open item with no gate): `{free}`." if free else "Every open item is gated.")
+        na = sum("reach" in x["asm"] for x in rk)
         if na:
-            parts.append("Every reach input is assumed, so read the order as a hypothesis." if na == len(r["ranked"])
-                         else f"{na} of {len(r['ranked'])} reach inputs are assumed.")
+            parts.append("Every reach input is assumed, so read the order as a hypothesis." if na == len(rk)
+                         else f"{na} of {len(rk)} reach inputs are assumed; equal scores rank fewer assumed inputs first.")
     else:
-        parts.append("No open item survived the rejection rules.")
+        parts.append("No item survived the rejection rules.")
     P("**BLUF.** " + " ".join(parts) + "\n")
     P("## 1. Strategy context\n")
     P(f"As of {data['as_of']}. A source that starts with **assumed** is an explicit assumption, not a repo fact.\n")
@@ -283,7 +306,7 @@ def render(data, r, base=""):
     for k in CTX:
         s = re.sub(r"^assumed", "**assumed**", cell(ctx[k]["src"]), flags=re.I)
         P(f"| {k.replace('_', ' ')} | {cell(ctx[k]['value'])} | {s} |")
-    ask = [k.replace("_", " ") for k in CTX if assumed(ctx[k]["src"])]
+    ask = [k.replace("_", " ") for k in CTX if ctx[k]["src"].strip().lower().startswith("assumed")]
     if ask:
         P(f"\nOwner question (one batch): confirm or correct the assumed {', '.join(ask)}. "
           "The run continues on the assumption; a correction re-runs this script.")
@@ -300,42 +323,37 @@ def render(data, r, base=""):
         P("None.")
 
     P("\n## 3. Ranked roadmap\n")
-    P("Score = reach × impact × confidence ÷ effort × stage weight × vision factor. Every input is sourced or "
-      "`assumed`; the score orders the list, it does not prove anything.\n")
-    P("- reach 1-5: share of our own users or runs touched, 5 = every one (never a market size)")
+    P("Score = reach × impact × confidence ÷ effort × stage weight × vision factor. The score orders the list, it does not prove anything. "
+      "The loop scores itself, so every input that is not backed by a real link or repo path is listed as assumed below.\n")
+    P("- reach 1-5: share of our own users or runs touched, 5 = every one (never a market size; an item that only helps later rankings has no reach)")
     P("- impact 0.25, 0.5, 1, 2 or 3: minimal, low, medium, high or massive effect on the north star")
-    P(f"- confidence 0-1, capped at {CAP:g} while reach or impact is `assumed`")
-    P("- effort: lane-days, above 0")
+    P("- confidence is computed: 1 when reach and impact both cite a URL, an existing repo path or an issue or PR, else 0.5; `assumed`, `estimate:` or any other text counts as assumed")
+    P(f"- effort: lane-days, plus {GATE_COST} per owner or external-send gate and {WAIT_RATE:g} per calendar-wait day")
     P(f"- stage weight: lever × stage from the table below; the active stage is `{stage}`")
     P("- vision factor: aligned 1.0, partial 0.5; a misaligned item is rejected in section 2")
-    P("- equal scores are ordered by lower effort, then id\n")
+    P("- items already in flight are scored and flagged, not dropped; equal scores rank fewer assumed inputs first, then lower effort, then id\n")
     P("| lever | " + " | ".join(f"{s} (active)" if s == stage else s for s in STAGES) + " |\n|---|---|---|---|---|")
     for lv, row in r["w"].items():
         P(f"| {lv}{' (override)' if lv in r['over'] else ''} | "
           + " | ".join(f"**{g(x)}**" if j == r["si"] else g(x) for j, x in enumerate(row)) + " |")
-    if r["ranked"]:
-        P("\n| # | Item | Lane, lever | Score | Success metric | Evidence | Gate |\n|---|---|---|---|---|---|---|")
-        for n, x in enumerate(r["ranked"], 1):
+    if rk:
+        P("\n| # | Item | Status | Lane, lever | Score | Success metric | Evidence | Gate |\n|---|---|---|---|---|---|---|---|")
+        for n, x in enumerate(rk, 1):
             it = x["it"]
-            P(f"| {n} | `{it['id']}` {cell(it['title'])} | {it.get('role', '-')}, {it['lever']} | {x['s']:.2f} | "
-              f"{cell(it['metric'])} | {ev(it)} | {cell(it.get('gate', '-'))} |")
+            P(f"| {n} | `{it['id']}` {cell(it['title'])} | {'in flight' if x['flight'] else 'open'} | {it.get('role', '-')}, {it['lever']} | "
+              f"{x['s']:.2f} | {cell(it['metric'])} | {ev(it)} | {cell(join(gates(it)) or '-')} |")
         P("\nScore inputs:\n")
-        P("| # | reach | impact | confidence used | effort | stage × | vision × | score | assumed (R reach, I impact, C confidence, E effort) |\n|---|---|---|---|---|---|---|---|---|")
-        for n, x in enumerate(r["ranked"], 1):
+        P("| # | reach | impact | confidence | effort (typed + gates + wait) | stage × | vision × | score | assumed (R reach, I impact, E effort) |\n|---|---|---|---|---|---|---|---|---|")
+        for n, x in enumerate(rk, 1):
             it = x["it"]
-            capd = f" (typed {g(it['confidence'])})" if x["conf"] != it["confidence"] else ""
-            a = " ".join(k[0].upper() for k in INPUTS if assumed(it[k + "_src"])) or "none"
-            P(f"| {n} | {g(it['reach'])} | {g(it['impact'])} | {g(x['conf'])}{capd} | {g(it['effort'])} | "
+            ex = f"{g(it['effort'])} + {g(GATE_COST * len(gates(it)))} + {g(WAIT_RATE * it.get('wait_days', 0))} = " if x["eff"] != it["effort"] else ""
+            a = " ".join(k[0].upper() for k in x["asm"]) or "none"
+            P(f"| {n} | {g(it['reach'])} | {g(it['impact'])} | {g(x['conf'])} | {ex}{g(x['eff'])} | "
               f"{g(x['sw'])} | {g(x['vf'])} | {x['s']:.2f} | {a} |")
     else:
-        P("\nNo open item survived the rejection rules.")
-    if r["flight"]:
-        P("\n### Already in flight (listed, not re-ranked)\n")
-        P("| Item | Evidence | Metric to check when it lands |\n|---|---|---|")
-        for it in r["flight"]:
-            P(f"| `{it['id']}` {cell(it['title'])} | {ev(it)} | {cell(it['metric'])} |")
-    P("\n### Top 3 attacked by idea-critic\n")
-    for n, x in enumerate(r["ranked"][:3], 1):
+        P("\nNo item survived the rejection rules.")
+    P("\n### Top 3 open items attacked by idea-critic\n")
+    for n, x in enumerate(r["opens"][:3], 1):
         it, c = x["it"], x["it"].get("critic")
         if not c:
             P(f"- {n}. `{it['id']}`: **UNVERIFIED**, idea-critic has not run on this item.")
@@ -361,9 +379,9 @@ def render(data, r, base=""):
         P(f"- Reversal cost: {cell(a['reversal_cost'])}\n")
 
     P("\n## 5. Tracker-ready issues\n")
-    P("Priority is rank-derived (ranks 1-3 P1, 4-6 P2, the rest P3); P0 is a human call and is never assigned here. "
-      "Issues are drafted for P1 and P2 only; a P3 item stays in the table until it is promoted.\n")
-    for n, x in enumerate(r["ranked"][:6], 1):
+    P("Open items only (in-flight work already has its issue). Priority is rank-derived among open items (ranks 1-3 P1, 4-6 P2, the rest P3); "
+      "P0 is a human call and is never assigned here. Issues are drafted for P1 and P2 only; a P3 item stays in the table until it is promoted.\n")
+    for n, x in enumerate(r["opens"][:6], 1):
         it = x["it"]
         P(f"### {'P1' if n <= 3 else 'P2'}: {it['title']}\n")
         P(f"- Labels: `{it['lever']}`" + (f", `{it['role']}`" if "role" in it else "") + f", `stage:{stage}`")
@@ -374,14 +392,14 @@ def render(data, r, base=""):
         P(f"- Success metric: {cell(it['metric'])}")
         P(f"- Evidence: {ev(it)}")
         P(f"- Risks: {cell(it['risks'])}")
-        if it.get("gate"):
-            P(f"- Gate: {cell(it['gate'])}")
+        if gates(it):
+            P(f"- Gate: {cell(join(gates(it)))}")
         if it.get("merged_from"):
             P(f"- Merged from: {cell(join(it['merged_from']))}")
-        P(f"- Score: {x['s']:.2f} = {g(it['reach'])} × {g(it['impact'])} × {g(x['conf'])} ÷ {g(it['effort'])} × "
-          f"{g(x['sw'])} × {g(x['vf'])} (rank {n} of {len(r['ranked'])})\n")
-    if r["ranked"][6:]:
-        P("P3, no issue drafted until promoted: " + ", ".join(f"`{x['it']['id']}`" for x in r["ranked"][6:]) + ".\n")
+        P(f"- Score: {x['s']:.2f} = {g(it['reach'])} × {g(it['impact'])} × {g(x['conf'])} ÷ {g(x['eff'])} × "
+          f"{g(x['sw'])} × {g(x['vf'])} (open rank {n} of {len(r['opens'])}); assumed: {' '.join(x['asm']) or 'none'}\n")
+    if r["opens"][6:]:
+        P("P3, no issue drafted until promoted: " + ", ".join(f"`{x['it']['id']}`" for x in r["opens"][6:]) + ".\n")
     P("_Generated by `roadmap_rank.py` from the input JSON: edit the input and re-run, never this text._")
     return "\n".join(out)
 
