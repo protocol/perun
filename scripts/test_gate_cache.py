@@ -200,6 +200,36 @@ class NeverSkipsWhenUnprovable(Base):
         self.assertIn("cached PASS", self.gc("-c", SUITE).stdout)  # clean again: the entry was never lost
         self.assertEqual(self.runs(), 3)
 
+    def test_sparse_checkout_neither_reads_nor_writes_the_cache(self):
+        self.gc("-c", SUITE)  # a full-checkout PASS exists for this tree
+        self.assertEqual((self.runs(), len(self.entries())), (1, 1))
+        self.git("config", "core.sparseCheckout", "true")
+        for _ in range(2):
+            self.assertNotIn("cached PASS", self.gc("-c", SUITE).stdout)  # not READ
+        self.assertEqual(self.runs(), 3)
+        (self.repo / "b.txt").write_text("x\n")
+        self.git("add", "b.txt")
+        self.git("commit", "-q", "-m", "b")
+        self.gc("-c", SUITE + " # new tree")
+        self.assertEqual(len(self.entries()), 1)  # not WRITTEN
+        self.git("config", "core.sparseCheckout", "false")
+        self.gc("-c", SUITE + " # new tree")  # a full checkout records again
+        self.assertIn("cached PASS", self.gc("-c", SUITE + " # new tree").stdout)
+
+    def test_skip_worktree_and_assume_unchanged_entries_neither_read_nor_write(self):
+        for flag in ("--skip-worktree", "--assume-unchanged"):
+            self.gc("-c", SUITE + " # " + flag)  # clean full checkout: recorded
+            before = (self.runs(), len(self.entries()))
+            self.git("update-index", flag, "a.txt")
+            (self.repo / "a.txt").write_text("red tree: differs from the index but git is told not to look\n")
+            self.assertEqual(self.git("status", "--porcelain"), "")  # invisible to status and diff, which is the hole
+            p = self.gc("-c", SUITE + " # " + flag)
+            self.assertNotIn("cached PASS", p.stdout)
+            self.assertEqual(self.runs(), before[0] + 1)
+            self.assertEqual(len(self.entries()), before[1])
+            self.git("update-index", "--no-skip-worktree" if flag == "--skip-worktree" else "--no-assume-unchanged", "a.txt")
+            self.git("checkout", "-q", "--", "a.txt")
+
     def test_ignore_glob_exempts_only_the_stages_own_untracked_files(self):
         (self.repo / "train7.log.base").write_text("log\n")
         self.gc("-c", SUITE)

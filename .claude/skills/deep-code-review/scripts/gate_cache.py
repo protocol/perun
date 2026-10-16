@@ -46,8 +46,9 @@ WHAT IS NEVER CACHED OR SKIPPED
 -------------------------------
 - A FAIL, a signal, or a command that could not start: only exit 0 is recorded.
 - A dirty or ambiguous tree: unstaged edits, untracked files (bar `--ignore GLOB` paths the stage itself
-  writes), an unmerged index, no git, or a failed `write-tree` all mean "cannot prove which tree passed",
-  so the suite simply runs.
+  writes), an unmerged index, a sparse checkout (`core.sparseCheckout`), skip-worktree or assume-unchanged
+  entries (`git ls-files -v` shows `S` or a lowercase tag), no git, or a failed `write-tree` all mean "cannot
+  prove which tree passed", so the suite simply runs and the cache is neither read nor written.
 - A run that changed tracked files or the index while it ran: the verdict belongs to a different tree.
 - Anything older than 7 days: ignored on lookup, deleted on the next write.
 Cache a suite for its verdict only: a skipped run also skips its side effects (build output, generated files,
@@ -114,7 +115,8 @@ def checked_out_tree(cwd: str | None = None, rev: str | None = None, ignore: tup
 
     Requires: `git write-tree` succeeds (no unmerged entries), tracked files equal the index, no untracked
     non-ignored files (except paths matching an `ignore` fnmatch glob: files the stage itself writes, such as
-    its own logs), and, when `rev` is given, `rev`'s tree equals the staged tree.
+    its own logs), no sparse checkout and no skip-worktree / assume-unchanged entries, and, when `rev` is given,
+    `rev`'s tree equals the staged tree.
     """
     tree = _git(["write-tree"], cwd)
     if not tree:
@@ -122,6 +124,14 @@ def checked_out_tree(cwd: str | None = None, rev: str | None = None, ignore: tup
     if rev is not None and _git(["rev-parse", "--verify", "-q", rev + "^{tree}"], cwd) != tree:
         return None
     if _git(["diff", "--quiet"], cwd) is None:
+        return None
+    # `diff --quiet` and the status checks cannot see files git was told to skip: a sparse checkout, skip-worktree
+    # (`S`) or assume-unchanged (`h`, any lowercase tag) entries may differ on disk or be absent, so the staged tree
+    # is not what was tested. Refuse to read or write the cache for such a checkout.
+    if (_git(["config", "--get", "core.sparseCheckout"], cwd) or "").lower() in ("true", "1", "yes", "on"):
+        return None
+    tags = _git(["ls-files", "-v", "-z"], cwd)
+    if tags is None or any(t[:1] == "S" or t[:1].islower() for t in tags.split("\0") if t):
         return None
     others = _git(["ls-files", "-z", "--others", "--exclude-standard", "--full-name", "--", ":/"], cwd)  # whole repo, not just cwd
     if others is None:
