@@ -124,9 +124,9 @@ def verdict(policy_cpu="efficient") -> tuple:
     slots = perun_policy.heavy_slots(cores, load1)
     if policy_cpu == "maximize":
         slots = max(slots, cores)
-    held = len(perun_policy.active_leases(perun_policy.lease_dir()))
+    held = perun_policy.lease_load(perun_policy.lease_dir())  # weighted: a light lane counts a fraction of a heavy one
     if held >= slots:
-        return f"HOLD heavy-lease-full {held}/{slots}", load1, cores, ram
+        return f"HOLD heavy-lease-full {held:g}/{slots}", load1, cores, ram
     return None, load1, cores, ram
 
 

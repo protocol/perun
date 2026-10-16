@@ -48,38 +48,41 @@
 # they cannot drift) and runs them over merge-base(default branch)..HEAD,
 # not just the pushed delta. No ci.yml: skipped.
 #
-# VERDICT CACHE (issue #1153): under heavy concurrent load (many agent lanes
-# committing and pushing on one host), this hook re-running DCR_PREPUSH_CMD
-# every time the identical push is retried or re-invoked (a flaky network
-# retry, a second `git push` after the first already verified this exact
-# commit) pays the full gate's cost again -- observed at 13-16 minutes per
-# push. Before running DCR_PREPUSH_CMD this hook checks for a stamp keyed by
-# the exact pushed commit sha (`local_sha`, NOT its tree: two different
-# commits can share a tree -- an amended message, a reworded commit -- and
-# must NOT share a verdict, since the thing actually being pushed and
-# reviewed is the commit, not its content alone), this ref's BASE_SHA
-# (DCR_PREPUSH_CMD may itself consult BASE_SHA/HEAD_SHA -- e.g. to run only
-# diff-affected tests -- so its verdict is a function of the range, not the
-# commit alone; two refs sharing a commit but pushing against different bases
-# must never share a stamp), and a hash of both DCR_PREPUSH_CMD and this
-# script's OWN content (editing the gate's logic is a "gate version" change
-# too, so it must miss every existing stamp, not just a changed command
-# string). DCR_PREPUSH_CACHE_KEY, if set, is folded into that same hash --
-# an operator-supplied toolchain/environment fingerprint (e.g. a language
-# runtime version) the command's actual behavior can depend on but that
-# nothing else here observes. A matching stamp is a cached PASS --
-# DCR_PREPUSH_CMD is skipped for that ref. A stamp is written only after
-# DCR_PREPUSH_CMD actually exits 0, and only under `bash -c` with `set -o
-# pipefail` (see DCR_PREPUSH_CMD below) so a piped command's real failure
-# can never be cached as a pass. The stamp lives under
-# `$(git rev-parse --git-common-dir)/dcr-prepush-stamps/` -- inside .git, so
-# it is local to this clone/worktree pool and is never a tracked file a
-# commit could carry; a successful write also prunes any stamp in that
-# directory older than 14 days, so a long-lived clone's stamp directory
-# never grows unbounded. This cache never replaces CI: CI runs the reviewed
-# SHA independently regardless of any local stamp (see "Self-report ≠
-# control" above). DCR_PREPUSH_SKIP_CACHE=1 forces a full re-run and still
-# refreshes the stamp on success.
+# VERDICT CACHE (issue #1153; shared and tree-keyed since the gate-cache
+# change): under heavy concurrent load (many agent lanes committing and
+# pushing on one host), re-running DCR_PREPUSH_CMD every time the identical
+# push is retried or re-invoked -- or again after pre-commit, a precheck
+# script and the train gate already ran it on the same tree -- pays the full
+# gate's cost again (13-16 minutes per push). Before running DCR_PREPUSH_CMD
+# this hook asks scripts/gate_cache.py, the one PASS cache every stage
+# shares. Its header owns the mechanism: key = (git tree of the pushed
+# commit, gate-set version, config hash), stored under
+# `$(git rev-parse --git-common-dir)/perun-gate-cache/`, entries at most 7
+# days old, only an exit 0 is ever recorded (never a FAIL, never a run that
+# edited tracked files), and editing any hook file, the cache script or a
+# $PERUN_GATE_FILES path is a new gate set that misses every older entry.
+# The command runs under `bash -c` with `set -o pipefail` (see
+# DCR_PREPUSH_CMD below), so a piped command's real failure can never be
+# cached as a pass.
+#
+# RANGE-AWARE BY DEFAULT: DCR_PREPUSH_CMD may itself consult BASE_SHA/HEAD_SHA
+# -- e.g. to run only diff-affected tests, or `dcr-gates.sh`, whose fix-class
+# check reads commit messages -- so its verdict is a function of the pushed
+# range, not the tree alone (the rule #1153 established). By default the
+# range (this ref's BASE_SHA and the pushed commit sha) therefore joins the
+# config hash: a reworded commit or a different base never shares a verdict.
+# When the tier is a pure function of the tree (lint, unit tests), declare
+# DCR_PREPUSH_TREE_PURE=1: the range leaves the key, so the verdict is then
+# shared across amends, rebases that keep the tree, and every other stage
+# (pre-commit, precheck, the train gate) that runs the same command text
+# through `gate_cache.py run`. `gate_map.py` lists which suites each stage
+# runs and flags the ones that run more than once per tree.
+#
+# This cache never replaces CI: CI runs the reviewed SHA independently
+# regardless of any local entry (see "Self-report ≠ control" above). The
+# conflict-marker, mechanism and fast CI-parity checks below are range- or
+# commit-message-based and cheap: they run on every push, never from cache.
+# Without python3 or gate_cache.py the command simply runs uncached.
 #
 # CONFIGURATION (env vars):
 #   DCR_PREPUSH_CMD             the fast tier to run before allowing the
@@ -108,20 +111,28 @@
 #                                "main" if that ref is not set locally (run
 #                                `git remote set-head <remote> --auto` once
 #                                to set it).
-#   DCR_PREPUSH_SKIP_CACHE       "1" ignores an existing verdict-cache stamp
+#   DCR_PREPUSH_SKIP_CACHE       "1" ignores an existing verdict-cache entry
 #                                and always reruns DCR_PREPUSH_CMD (see
 #                                VERDICT CACHE above); a passing run still
-#                                writes a fresh stamp. Unset/"0": use the
+#                                writes a fresh entry. Unset/"0": use the
 #                                cache.
+#   PERUN_GATE_CACHE             "0"/"off" turns the shared verdict cache off
+#                                entirely (no read, no write) for this push
+#                                and every other gate_cache.py caller.
+#   DCR_PREPUSH_TREE_PURE        "1" declares DCR_PREPUSH_CMD a pure function
+#                                of the tree, so its verdict is shared across
+#                                commits with the same tree and across stages
+#                                (see RANGE-AWARE BY DEFAULT above). Unset:
+#                                the pushed range joins the cache key.
 #   DCR_PREPUSH_CACHE_KEY        optional extra text folded into the verdict-
-#                                cache stamp key (see VERDICT CACHE above) --
+#                                cache key (see VERDICT CACHE above) --
 #                                widen it with a toolchain/environment
 #                                fingerprint (e.g. a language runtime
 #                                version) whenever DCR_PREPUSH_CMD's real
 #                                behavior depends on something this hook
 #                                cannot otherwise see. Unset: the key is
-#                                commit + base + command + this script's own
-#                                content only.
+#                                tree + gate set + command (+ the range
+#                                unless DCR_PREPUSH_TREE_PURE=1).
 #
 # For each pushed ref this script exports BASE_SHA / HEAD_SHA (the same
 # convention `dcr-gates.sh` uses) describing the commit range being pushed,
@@ -214,23 +225,14 @@ resolve_default_branch() {
   printf 'main'
 }
 
-# gate_stamp_path <commit-sha> <base-sha> <cmd> — stamp file path for one
-# (commit, base, gate) triple (see VERDICT CACHE above). `git hash-object`
-# keys the base sha, command text, this script's own content, and
-# DCR_PREPUSH_CACHE_KEY together without needing sha256sum on every
-# platform; `git hash-object -- "$0"` reads this running script's file, no
-# repository context required.
-gate_stamp_path() {
-  common_dir="$(git rev-parse --git-common-dir)"
-  self_hash="$(git hash-object -- "$0")"
-  cmd_key="$(printf '%s\n%s\n%s\n%s' "$2" "$3" "${self_hash}" "${DCR_PREPUSH_CACHE_KEY:-}" | git hash-object --stdin)"
-  printf '%s/dcr-prepush-stamps/%s-%s' "${common_dir}" "$1" "${cmd_key}"
-}
-
-# prune_stamp_dir <dir> — delete stamp files older than 14 days (best-effort;
-# a missing dir or a `find` that can't run is never a failure).
-prune_stamp_dir() {
-  find "$1" -maxdepth 1 -type f -mtime +14 -delete 2>/dev/null || true
+# find_gate_cache — print the path of gate_cache.py (next to this template's
+# own scripts/ dir when run from the skill tree, else the installed skill
+# path under the repo root), or nothing when python3 or the script is absent.
+find_gate_cache() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  for gc_try in "$(dirname "$0")/../scripts/gate_cache.py" ".claude/skills/deep-code-review/scripts/gate_cache.py"; do
+    if [ -f "${gc_try}" ]; then printf '%s' "${gc_try}"; return 0; fi
+  done
 }
 
 print_unset_help() {
@@ -396,21 +398,23 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     die "DCR_PREPUSH_CMD unset (see above)"
   fi
 
-  stamp_file="$(gate_stamp_path "${local_sha}" "${base_sha}" "${DCR_PREPUSH_CMD}")"
-  if [ "${DCR_PREPUSH_SKIP_CACHE:-0}" != "1" ] && [ -f "${stamp_file}" ]; then
-    printf 'pre-push-verify: %s (%s..%s): cached PASS -- skipping DCR_PREPUSH_CMD (stamp %s; DCR_PREPUSH_SKIP_CACHE=1 to force a rerun)\n' \
-      "${local_ref}" "${base_sha}" "${local_sha}" "${stamp_file}"
-    continue
+  run_msg="$(printf 'pre-push-verify: %s (%s..%s): running: %s' "${local_ref}" "${base_sha}" "${local_sha}" "${DCR_PREPUSH_CMD}")"
+  gate_cache="$(find_gate_cache)"
+  if [ -n "${gate_cache}" ]; then
+    gc_args=(run --stage pre-push --tree "${local_sha}" --key "${DCR_PREPUSH_CACHE_KEY:-}" --say "${run_msg}")
+    [ "${DCR_PREPUSH_TREE_PURE:-0}" = "1" ] || gc_args+=(--base "${base_sha}" --head "${local_sha}")
+    gc_mode="${PERUN_GATE_CACHE:-}"
+    if [ "${DCR_PREPUSH_SKIP_CACHE:-0}" = "1" ]; then
+      case "${gc_mode}" in 0|off|false|no) ;; *) gc_mode=refresh ;; esac
+    fi
+    gate_cmd=(env PERUN_GATE_CACHE="${gc_mode}" python3 "${gate_cache}" "${gc_args[@]}" -c "${DCR_PREPUSH_CMD}")
+  else
+    printf '%s\n' "${run_msg}"
+    gate_cmd=(bash -c "set -o pipefail; ${DCR_PREPUSH_CMD}")
   fi
-
-  printf 'pre-push-verify: %s (%s..%s): running: %s\n' "${local_ref}" "${base_sha}" "${local_sha}" "${DCR_PREPUSH_CMD}"
-  if ! bash -c "set -o pipefail; ${DCR_PREPUSH_CMD}" </dev/null; then
+  if ! "${gate_cmd[@]}" </dev/null; then
     printf 'pre-push-verify: FAIL -- rejecting push of %s (DCR_PREPUSH_CMD exited non-zero)\n' "${local_ref}" >&2
     fail=1
-  else
-    stamp_dir="$(dirname "${stamp_file}")"
-    mkdir -p "${stamp_dir}" 2>/dev/null && date -u +%Y-%m-%dT%H:%M:%SZ >"${stamp_file}" 2>/dev/null || true
-    prune_stamp_dir "${stamp_dir}"
   fi
 done
 

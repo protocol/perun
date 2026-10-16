@@ -24,7 +24,9 @@ that the committed-version WARN compares against (a base missing on origin skips
   perun_policy.py skip-ci        print `[skip ci]` when github_actions is off, else nothing
   perun_policy.py lanes          parallel-lane count from local_cpu (see lanes())
   perun_policy.py heavy-slots    heavy-command concurrency = max(2, free cores) (see heavy_slots())
-  perun_policy.py heavy-acquire  take a machine-wide heavy lease (exit 0 + prints pid) or exit 1 when full
+  perun_policy.py heavy-acquire [--kind light]  take a machine-wide heavy lease (exit 0 + prints pid) or exit 1 when full;
+                                 `--kind light` (a read-only or doc lane) holds a quarter slot, see lane_weight()
+  perun_policy.py heavy-load     print the weighted live-lease count (heavy = 1, light = 0.25), e.g. for host_probe.py --live-lanes
   perun_policy.py heavy-exclusive[-release|-renew]  take/drop/renew the EXCLUSIVE lease (train gate); heavy_gate denies heavy commands while held
   perun_policy.py heavy-release  drop this shell's lease (idempotent)
   perun_policy.py --selftest
@@ -34,6 +36,7 @@ Exit 0 ok, 2 usage / malformed policy / unknown dimension.
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -184,29 +187,89 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def active_leases(d: Path, now: float | None = None) -> list:
-    """Pids holding a live lease. One file per heavy job named `<pid>`, content `<pid> <start epoch>`.
-    A lease with a dead pid, a start older than LEASE_TTL (2h) or unreadable content is ignored, never deleted."""
-    now = time.time() if now is None else now
+LIGHT_WEIGHT = 0.25  # a light lane (read-only, docs) holds this fraction of a heavy lane's slot
+LIGHT_KINDS = ("light", "doc", "docs", "read-only", "readonly")
+LIGHT_CPU_PCT = 15.0  # an undeclared lane whose process tree burns less than this % of one core counts as light...
+WARMUP = 60  # ...once its lease is this many seconds old: a heavy job's CPU takes a moment to ramp up
+
+
+def _leases(d: Path, now: float, exclude: int | None = None) -> list:
+    """`(pid, start, kind)` for every live lease. One file per heavy job named `<pid>`, content `<pid> <start epoch>`
+    plus an optional declared kind word (`light`, ...). A lease with a dead pid, a start older than LEASE_TTL (2h)
+    or unreadable/malformed content is ignored, never deleted."""
     out = []
     for f in d.glob("*") if d.is_dir() else []:
         try:
-            pid, start = (int(x) for x in f.read_text().split())
-        except (OSError, ValueError):
+            t = f.read_text().split()
+            pid, start = int(t[0]), int(t[1])
+        except (OSError, ValueError, IndexError):
             continue
-        if now - start < LEASE_TTL and _alive(pid):
-            out.append(pid)
+        if len(t) in (2, 3) and pid != exclude and now - start < LEASE_TTL and _alive(pid):
+            out.append((pid, start, t[2] if len(t) == 3 else None))
     return out
 
 
-def heavy_acquire(d: Path, slots: int, pid: int) -> bool:
-    """Take a lease for `pid` unless other active leases already fill `slots`. Re-acquire by the same pid
-    refreshes it. Side effect: creates `d`. ponytail: check-then-write is racy across simultaneous starts;
-    the host_probe HOLD retry absorbs it, add O_EXCL slot files if overshoot is measured."""
-    if len([p for p in active_leases(d) if p != pid]) >= slots:
+def active_leases(d: Path, now: float | None = None) -> list:
+    """Pids holding a live lease (see `_leases` for the file format and what is ignored)."""
+    return [pid for pid, _, _ in _leases(d, time.time() if now is None else now)]
+
+
+def _proc_table() -> dict | None:
+    """`{pid: (ppid, %cpu)}` from one `ps` read; None when ps is unavailable or unparseable (callers then fail closed)."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,pcpu="], capture_output=True, text=True, timeout=5).stdout
+        return {int(r[0]): (int(r[1]), float(r[2])) for r in (ln.split() for ln in out.splitlines() if ln.strip())} or None
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+def tree_cpu(table: dict | None, root: int) -> float | None:
+    """Summed %CPU of `root` and every descendant in a `_proc_table()`; None when the table or `root` is missing."""
+    if not table or root not in table:
+        return None
+    kids: dict = {}
+    for pid, (ppid, _) in table.items():
+        kids.setdefault(ppid, []).append(pid)
+    total, todo, seen = 0.0, [root], set()
+    while todo:
+        p = todo.pop()
+        if p not in seen:
+            seen.add(p)
+            total += table[p][1]
+            todo += kids.get(p, [])
+    return total
+
+
+def lane_weight(kind: str | None, age: float, cpu: float | None) -> float:
+    """What one live lease counts toward the slot cap. A declared light kind is LIGHT_WEIGHT; any other declared kind
+    is 1. Undeclared: LIGHT_WEIGHT only when its measured CPU is known, below LIGHT_CPU_PCT and the lease is past
+    WARMUP; every unknown counts 1, so a lane that cannot be measured is assumed heavy (fail closed)."""
+    if kind is not None:
+        return LIGHT_WEIGHT if kind.lower() in LIGHT_KINDS else 1.0
+    return LIGHT_WEIGHT if cpu is not None and age >= WARMUP and cpu < LIGHT_CPU_PCT else 1.0
+
+
+def lease_load(d: Path, now: float | None = None, exclude: int | None = None, table: dict | None = None) -> float:
+    """Weighted count of live leases (heavy = 1, light = LIGHT_WEIGHT), the number a slot cap is compared with.
+    `ps` is read once, only when an undeclared lease is old enough to be measured; `table` injects it for tests."""
+    now = time.time() if now is None else now
+    rows = _leases(d, now, exclude)
+    if table is None and any(k is None and now - s >= WARMUP for _, s, k in rows):
+        table = _proc_table()
+    return sum(lane_weight(k, now - s, tree_cpu(table, p) if k is None else None) for p, s, k in rows)
+
+
+def heavy_acquire(d: Path, slots: int, pid: int, kind: str | None = None) -> bool:
+    """Take a lease for `pid` unless other live leases already weigh `slots` or more (see lease_load). Declare
+    `kind="light"` for a read-only or doc lane so it counts LIGHT_WEIGHT. Re-acquire by the same pid refreshes it.
+    Side effect: creates `d`. ponytail: check-then-write is racy across simultaneous starts; the host_probe HOLD
+    retry absorbs it, add O_EXCL slot files if overshoot is measured."""
+    if kind is not None and not re.fullmatch(r"[A-Za-z][A-Za-z-]{0,15}", kind):
+        raise ValueError(f"bad lane kind {kind!r}")
+    if lease_load(d, exclude=pid) >= slots:
         return False
     d.mkdir(parents=True, exist_ok=True)
-    (d / str(pid)).write_text(f"{pid} {int(time.time())}")
+    (d / str(pid)).write_text(f"{pid} {int(time.time())}" + (f" {kind}" if kind else ""))
     return True
 
 
@@ -307,14 +370,18 @@ def main(argv: list) -> int:
             ok = exclusive_acquire(lease_dir(), os.getppid())
             print(os.getppid() if ok else "HELD")
             return 0 if ok else 1
-        if argv in (["heavy-acquire"], ["heavy-release"]):
+        if argv == ["heavy-load"]:
+            print(f"{lease_load(lease_dir()):g}")
+            return 0
+        if argv == ["heavy-release"] or argv[:1] == ["heavy-acquire"] and (len(argv) == 1 or len(argv) == 3 and argv[1] == "--kind"):
             pid = os.getppid()  # the calling shell outlives this CLI; its death frees the lease
             if argv == ["heavy-release"]:
                 heavy_release(lease_dir(), pid)
                 return 0
             import host_probe
             load1, cores = host_probe.read_load1_and_cores()
-            ok = heavy_acquire(lease_dir(), heavy_slots(cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct()), pid)
+            ok = heavy_acquire(lease_dir(), heavy_slots(cores or os.cpu_count() or 1, load1, pol["tokens"], host_probe.read_cpu_idle_pct()),
+                               pid, argv[2] if len(argv) == 3 else None)
             print(pid if ok else "FULL")
             return 0 if ok else 1
     except (ValueError, OSError) as e:

@@ -40,7 +40,8 @@ In order, first hit wins:
    (`--baseline-file`); above `CANARY_HOLD_RATIO` (~2x) is `HOLD canary`; a
    missing/unreadable baseline is `COULD_NOT_CHECK canary`.
 6. **The live-lane cap** (`--live-lanes`/`--max-lanes`, only when both given):
-   at or over the cap is `HOLD lane-cap`.
+   at or over the cap is `HOLD lane-cap`. `--live-lanes` may be fractional: pass the weighted count
+   (`perun_policy.py heavy-load`) so light read-only/doc lanes do not fill the cap like heavy test lanes.
    `--lane-type heavy` (a heavy local command, not a fan-out lane) adds an admission brake before this
    step: `load1` > cores is `HOLD load-high` unless CPU idle is known and >= 25% (IO-inflated load; load1 alone is the fallback when idle is unreadable), and the free-RAM veto in
    step 2 already defers it when RAM is low. Unreadable load never holds.
@@ -296,7 +297,9 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--baseline-file", help="recorded idle-run elapsed seconds for --canary")
     parser.add_argument("--sample-interval", type=float, default=1.0,
                         help="seconds between the two swap samples (the trend 'beat')")
-    parser.add_argument("--live-lanes", type=int, help="caller's own count of running heavy lanes")
+    parser.add_argument("--live-lanes", type=float,
+                        help="caller's own count of running heavy lanes; fractions allowed, so weight light lanes "
+                             "(`perun_policy.py heavy-load` prints the weighted lease count)")
     parser.add_argument("--max-lanes", type=int, help="caller's own concurrency ceiling")
     parser.add_argument("--per-lane-disk-bytes", type=int, help="measured disk footprint of one heavy lane")
     parser.add_argument("--swap-used-pct-hold", type=float,

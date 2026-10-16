@@ -20,7 +20,8 @@
 # Exit: 0 landed, 1 base/browser red or lock held, 2 usage/refused, 3 no GREEN union or CANT (nothing landed; CANT = a real browser failure
 # not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame).
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
-# "BASE RED" and exits 1, so a red base is never blamed on a PR), RATCHET_CMD (run via bash -c on each PR
+# "BASE RED" and exits 1, so a red base is never blamed on a PR; a PASS is cached by the base tree through gate_cache.py, shared with
+# pre-commit/pre-push, so a base that already passed this command skips it: PERUN_GATE_CACHE=0 opts out), RATCHET_CMD (run via bash -c on each PR
 # merged alone onto the base, with PR=<n>; when no union is GREEN, prints "CULPRIT #n" for each PR that fails it),
 # BROWSER_CMD (run via bash -c in this worktree checked out at the GREEN union, with UNION_SHA and BASE_SHA set,
 # before anything lands: the AFFECTED browser specs plus the smoke set, NEVER the full suite (a full run against a base that
@@ -63,7 +64,9 @@ done
 
 git fetch -q "$REMOTE" "$BASE_BRANCH"
 git checkout -q --detach "$REMOTE/$BASE_BRANCH"
-if [ -n "${BASE_AUDIT_CMD:-}" ] && ! bash -c "$BASE_AUDIT_CMD" >"$LOG.base" 2>&1 </dev/null; then
+GC="$HERE/../../deep-code-review/scripts/gate_cache.py"  # shared tree-keyed PASS cache (gate_cache.py): absent = run uncached
+audit=(bash -c "${BASE_AUDIT_CMD:-}"); [ ! -f "$GC" ] || audit=(python3 "$GC" run --stage train --no-pipefail --ignore 'train*.log*' -c "${BASE_AUDIT_CMD:-}")
+if [ -n "${BASE_AUDIT_CMD:-}" ] && ! "${audit[@]}" >"$LOG.base" 2>&1 </dev/null; then
   echo "BASE RED: audit fails on bare $REMOTE/$BASE_BRANCH (see $LOG.base); no PR to blame, nothing landed" >&2; exit 1
 fi
 PRS=("$@")

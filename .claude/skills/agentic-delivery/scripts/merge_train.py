@@ -145,7 +145,11 @@ exponential backoff (--gate-backoff seconds, default 5, doubling, capped at
 300 s: a test re-run needs no long cool-down). A re-run that passes is reported
 `FLAKY` and counts as a pass; failing every attempt is deterministic. The
 verdict is cached per git tree SHA for the run: an identical tree (a bisect
-prefix that equals a rebuilt union) is never tested twice (`CACHED`). A failed
+prefix that equals a rebuilt union) is never tested twice (`CACHED`). A PASS is
+also kept across runs and stages in deep-code-review's `gate_cache.py` store
+(key: tree, gate set, the verify command; `CACHED ... (gate_cache)`), so a union
+tree that pre-commit, pre-push or an earlier train already passed is not
+re-tested; a FAIL is never persisted, `PERUN_GATE_CACHE=0` opts out. A failed
 `gh pr merge` and every other gh retry use --backoff (default 30, doubling,
 capped at 300 s). Parking a member never sleeps.
 
@@ -200,6 +204,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -221,6 +226,24 @@ import focus_gate as fg  # noqa: E402  (resolve_owners, _owner_problem: the stan
 from refix_gate import load_fix_class_gate  # noqa: E402  (fix_class_gate's glob grammar)
 
 _FCG = load_fix_class_gate()
+
+
+def _load_gate_cache():
+    """deep-code-review's `gate_cache.py` (the tree-keyed PASS cache pre-commit and pre-push share), or None when
+    the sibling skill is not installed. Callers treat None as "no cache": the gate just runs."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "deep-code-review", "scripts", "gate_cache.py")
+    if not os.path.isfile(path):
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("gate_cache", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception:  # a broken cache script must not take the train down: no cache, the gate just runs
+        return None
+    return module
+
+
+_GC = _load_gate_cache()
 
 OK, RED, ERROR, HALT = 0, 1, 2, 3
 GATE_CONTEXT = "perun/train-gate"
@@ -543,8 +566,27 @@ class Train:
             if sha in self.verdicts:
                 self.say(f"CACHED {label} tree {sha[:7]} verdict={self.verdicts[sha] or 'pass'}")
                 return self.verdicts[sha]
+            ctx = self._pass_cache_key(wt)
+            if ctx and _GC.lookup(ctx):  # a PASS from any earlier run or stage (pre-commit, pre-push, a past train)
+                self.say(f"CACHED {label} tree {sha[:7]} verdict=pass (gate_cache)")
+                self.verdicts[sha] = ""
+                return ""
             self.verdicts[sha] = why = self._gate(wt, label)
+            if ctx and not why:  # only a PASS is persisted; a FAIL is re-tested every run
+                _GC.store(ctx, "train verify", "train")
         return why
+
+    def _pass_cache_key(self, wt):
+        """gate_cache key for the union tree checked out in `wt`: None when the cache is absent, opted out
+        (PERUN_GATE_CACHE=0) or `wt` is not provably that exact tree. The key text is the verify command, so the
+        same command run by another stage shares it; a count/cap gate is part of the verdict, so it joins the text."""
+        if _GC is None:
+            return None
+        text = self.a.verify_cmd + (f"\n# count: {self.a.count_cmd} <= {self.a.cap}" if self.a.count_cmd else "")
+        try:
+            return _GC.context(text, cwd=wt, rev="HEAD")
+        except Exception:  # the cache must never be the reason the gate does not run
+            return None
 
     def _gate(self, wt, label):
         """Run the gate (re-runs on failure) and the cap count once in `wt`: '' or 'verify' or 'cap C>N'."""
