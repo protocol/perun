@@ -35,9 +35,9 @@ LANE RULES (always injected, no house file needed)
 ---------------------------------------------------
 `LANE_RULES` is a fixed constant, like `HOST_RULES`: every lane runs tool calls
 only (zero prose between them) and ends with a key=value fields-only handback.
-`handback_cap.py` (SubagentStop) is the backstop that rejects a miss, and a
-rejection costs the lane a turn that re-reads its whole context, so the rule
-is stated here, up front, with the exact shape and size the backstop accepts.
+`handback_cap.py` (SubagentStop) only logs a miss of the shape (a rewrite would
+re-read the lane's whole context and cost more than it saves), so this short
+rule, about 48 estimated tokens, is the only lever.
 Skipped for a type whose chat is its deliverable: `HANDBACK_EXEMPT_TYPES`
 (same env var and same default list as `handback_cap.py`) plus
 `LANE_RULES_SKIP_TYPES` (comma-separated, default empty) for a read-only review
@@ -77,12 +77,10 @@ HOST_RULES = ("Host rules: never `sleep N` to wait; background the command and a
               "or Monitor with an until-loop.\n"
               "In an isolated worktree run plain separate git commands from the worktree root; "
               "no `cd X &&` chains or loops around git (the host refuses them as too complex to verify).")
-# Zero-chat lane rules, injected for every type except those in CHAT_TYPES. The size and shape named here are the ones
-# handback_cap.py accepts (its default MAX_CHARS 400); scripts/test_zero_chat_lanes.py pins both and CHAT_TYPES.
-LANE_RULES = ("Lane output: tool calls only, zero prose between them (no narration, plans, recaps, \"now I will\").\n"
-              "Final message: key=value fields only, one per line, no sentences, under 400 characters: "
-              "status=VERIFIED|UNVERIFIED, sha=<sha>, result=<few words>, tests=<n/n>, blockers=<none|text>, "
-              "report=<path> for any detail.")
+# Zero-chat lane rules, injected for every type except those in CHAT_TYPES. The size and shape named here are the target
+# handback_cap.py logs against (its default TARGET_CHARS 400); scripts/test_zero_chat_lanes.py pins both and CHAT_TYPES.
+LANE_RULES = ("Lane output: tool calls only, no prose between them. Final message: key=value fields only, "
+              "under 400 characters: status=VERIFIED|UNVERIFIED, sha=, result=, tests=, blockers=, report=<path>.")
 CHAT_TYPES = "Explore,Plan,claude-code-guide,statusline-setup"  # equals handback_cap.DEFAULT_EXEMPT_TYPES
 
 

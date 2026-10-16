@@ -91,76 +91,87 @@ class Tmp(unittest.TestCase):
         return [json.loads(x) for x in self.ledger.read_text().splitlines()] if self.ledger.exists() else []
 
 
-class FieldsOnly(Tmp):
-    def test_key_value_fields_pass(self):
-        msg = "status=VERIFIED\nsha=1a2b3c4\nresult=lane rules shipped\ntests=12/12\nblockers=none\nreport=/tmp/x.md"
-        self.assertEqual(self.stop(msg)[0], 0)
+class NeverSecondHandback(Tmp):
+    """Coordinator rule: the fields-only target and the 400/8 target never force a rewrite (a rewrite re-reads the
+    lane's whole context and costs more than a shorter handback saves); a miss is only logged."""
 
-    def test_older_pipe_list_bare_token_colon_and_bullet_forms_pass(self):
-        for msg in ("done | 4b2765b | next=merge", "VERIFIED", "status: VERIFIED\nsha: abc", "- sha=abc\n- tests=3/3"):
-            self.assertEqual(self.stop(msg, agent_id="x" + str(abs(hash(msg))))[0], 0, msg)
+    def test_prose_and_over_target_handbacks_are_let_through_first_time(self):
+        for i, msg in enumerate(("Done. All the tests pass and I pushed the branch.", "sha=abc\nI also fixed the docs.",
+                                 "I set x=3 and everything passed", "k=" + "v" * 700, "\n".join(["k=v"] * 9))):
+            rc, _, err = self.stop(msg, agent_id=f"n{i}")
+            self.assertEqual(rc, 0, msg[:20])
+            self.assertNotIn("rejected", err)
 
-    def test_a_sentence_is_rejected_with_the_line_and_the_fix(self):
-        rc, _, err = self.stop("Done. All the tests pass and I pushed the branch.")
-        self.assertEqual(rc, 2)
-        self.assertIn("prose on line 1", err)
-        self.assertIn("key=value", err)
+    def test_the_stop_hook_has_no_prose_block_path_left(self):
+        self.assertEqual(hc.check({"agent_id": "n9", "last_assistant_message": "A sentence. " * 30}), 0)  # 360 chars: under the legacy cap
 
-    def test_one_prose_line_among_fields_is_named(self):
-        rc, _, err = self.stop("sha=abc\ntests=3/3\nI also tidied the docs while there.")
-        self.assertEqual((rc, "prose on line 3" in err), (2, True))
+    def test_a_miss_is_logged_with_violations_and_the_tokens_a_truncation_would_drop(self):
+        t = write(self.d / "t.jsonl", [tool("Bash", command="ls")])
+        msg = "sha=abc123\n" + "I fixed the thing and then I also tidied up some of the docs while I was there. " * 5  # prose, 400+ chars
+        self.assertEqual(self.stop(msg, transcript=t)[0], 0)
+        (row,) = self.rows()
+        self.assertEqual(sorted(row["viol"]), ["long", "prose"])
+        self.assertEqual(row["blocks"], 0)
+        self.assertEqual(row["cut_tok"], -(-len(msg) // 4) - -(-len("sha=abc123") // 4))  # only the field line survives
 
-    def test_sentence_with_equals_sign_inside_is_still_prose(self):
-        self.assertEqual(self.stop("I set x=3 and everything passed")[0], 2)
+    def test_a_compliant_handback_logs_no_violation(self):
+        t = write(self.d / "t.jsonl", LANE)
+        self.stop(FINAL, transcript=t)
+        (row,) = self.rows()
+        self.assertEqual((row["viol"], row["cut_tok"]), ([], 0))
 
-    def test_fields_only_knob_off_keeps_the_caps(self):
-        off = dict(HANDBACK_FIELDS_ONLY="0")
-        self.assertEqual(self.stop("Done. All the tests pass.", agent_id="k1", **off)[0], 0)
-        self.assertEqual(self.stop("word " * 100, agent_id="k2", **off)[0], 2)  # 500 chars: over the 400 cap
+    def test_truncation_keeps_fields_within_the_target_and_drops_prose(self):
+        self.assertEqual(hc._truncate("sha=1a2b3c\nI also fixed the docs.\ntests=3/3"), "sha=1a2b3c\ntests=3/3")
+        self.assertEqual(len(hc._truncate("\n".join(["k=" + "v" * 100] * 9))), hc.TARGET_CHARS)  # cut at the char target
+        self.assertEqual(len(hc._truncate("\n".join(["k=v"] * 20)).splitlines()), hc.TARGET_LINES)
 
-    def test_exempt_types_skip_the_check(self):
+    def test_fields_only_knob_off_drops_the_prose_violation_only(self):
+        self.assertEqual(hc._violations("Done. All the tests pass."), ["prose"])
+        os.environ["HANDBACK_FIELDS_ONLY"] = "0"
+        self.addCleanup(os.environ.pop, "HANDBACK_FIELDS_ONLY", None)
+        self.assertEqual(hc._violations("Done. All the tests pass."), [])
+        self.assertEqual(hc._violations("k=" + "v" * hc.TARGET_CHARS), ["long"])
+
+    def test_key_value_fields_pipe_list_bare_token_colon_and_bullet_forms_are_fields(self):
+        for msg in ("status=VERIFIED\nsha=1a2b3c4\nresult=lane rules shipped\ntests=12/12", "done | 4b2765b | next=merge", "VERIFIED",
+                    "status: VERIFIED\nsha: abc", "- sha=abc\n- tests=3/3"):
+            self.assertEqual(hc._violations(msg), [], msg)
+        self.assertEqual(hc._violations("I set x=3 and everything passed"), ["prose"])
+
+    def test_exempt_types_are_never_capped(self):
         for t in hc.DEFAULT_EXEMPT_TYPES.split(","):
-            self.assertEqual(self.stop("A long answer in prose. " * 30, agent_id="e" + t, agent_type=t)[0], 0, t)
-
-    def test_release_valve_after_max_blocks(self):
-        rcs = [self.stop("Prose only, no fields at all.", agent_id="v1")[0] for _ in range(hc.MAX_BLOCKS + 1)]
-        self.assertEqual(rcs, [2] * hc.MAX_BLOCKS + [0])
-
-    def test_max_blocks_knob_bounds_the_rewrite_cost_of_a_lane_that_cannot_comply(self):
-        rcs = [self.stop("Prose only, no fields at all.", agent_id="v2", HANDBACK_MAX_BLOCKS="1")[0] for _ in range(3)]
-        self.assertEqual(rcs, [2, 0, 0])
+            self.assertEqual(self.stop("A long answer in prose. " * 60, agent_id="e" + t, agent_type=t)[0], 0, t)
 
 
-class Caps(Tmp):
-    def test_default_caps_are_pinned_lower_than_the_old_800_and_10(self):
-        out = subprocess.run([sys.executable, "-c", "import handback_cap as h; print(h.MAX_CHARS, h.MAX_LINES, h.MAX_BLOCKS)"],
+class LegacyCap(Tmp):
+    """The old 800 character / 10 line block is unchanged: it is the only thing that can still send a lane back."""
+
+    def test_default_caps_are_the_legacy_800_and_10_and_targets_400_and_8(self):
+        out = subprocess.run([sys.executable, "-c", "import handback_cap as h; print(h.MAX_CHARS, h.MAX_LINES, h.MAX_BLOCKS, h.TARGET_CHARS, h.TARGET_LINES)"],
                              capture_output=True, text=True, env=clean_env(PYTHONPATH=str(SC))).stdout.split()
-        self.assertEqual(out, ["400", "8", "3"])
+        self.assertEqual(out, ["800", "10", "3", "400", "8"])
 
     def test_boundaries_chars_and_lines(self):
-        ok = "k=" + "v" * 398  # exactly 400 chars
-        self.assertEqual(self.stop(ok, agent_id="b1")[0], 0)
-        self.assertEqual(self.stop(ok + "v", agent_id="b2")[0], 2)
-        self.assertEqual(self.stop("\n".join(["k=v"] * 8), agent_id="b3")[0], 0)
-        self.assertEqual(self.stop("\n".join(["k=v"] * 9), agent_id="b4")[0], 2)
+        self.assertEqual(self.stop("k=" + "v" * 798, agent_id="b1")[0], 0)
+        self.assertEqual(self.stop("k=" + "v" * 799, agent_id="b2")[0], 2)
+        self.assertEqual(self.stop("\n".join(["k=v"] * 10), agent_id="b3")[0], 0)
+        self.assertEqual(self.stop("\n".join(["k=v"] * 11), agent_id="b4")[0], 2)
 
-    def test_env_knobs_move_the_caps(self):
-        msg = "\n".join(["k=" + "v" * 50] * 10)  # 10 lines, 520 chars: over both defaults
+    def test_release_valve_after_max_blocks(self):
+        rcs = [self.stop("x" * 900, agent_id="v1")[0] for _ in range(hc.MAX_BLOCKS + 1)]
+        self.assertEqual(rcs, [2] * hc.MAX_BLOCKS + [0])
+
+    def test_env_knobs_move_the_caps_and_the_targets(self):
+        msg = "\n".join(["k=" + "v" * 50] * 12)  # 12 lines, 624 chars
         self.assertEqual(self.stop(msg, agent_id="c1")[0], 2)
-        self.assertEqual(self.stop(msg, agent_id="c2", HANDBACK_MAX_CHARS="800", HANDBACK_MAX_LINES="10")[0], 0)
+        self.assertEqual(self.stop(msg, agent_id="c2", HANDBACK_MAX_LINES="25", HANDBACK_MAX_CHARS="2000")[0], 0)
+        out = subprocess.run([sys.executable, "-c", "import handback_cap as h; print(h.TARGET_CHARS, h.TARGET_LINES)"], capture_output=True, text=True,
+                             env=clean_env(PYTHONPATH=str(SC), HANDBACK_TARGET_CHARS="300", HANDBACK_TARGET_LINES="5")).stdout.split()
+        self.assertEqual(out, ["300", "5"])
 
-    def test_message_names_every_problem_once(self):
-        rc, _, err = self.stop("sentence one. " * 40, agent_id="m1")
-        self.assertEqual(rc, 2)
-        self.assertIn("too long", err)
-        self.assertIn("prose on line 1", err)
-
-    def test_review_lane_entry_in_the_template_turns_fields_only_off(self):
-        tpl = json.loads((ROOT / ".claude/skills/agentic-delivery/templates/operating-layer.settings.json").read_text())
-        cmds = [h["command"] for e in tpl["hooks"]["SubagentStop"] for h in e["hooks"]]
-        relaxed = [c for c in cmds if "HANDBACK_MAX_CHARS=2000" in c]
-        self.assertEqual(len(relaxed), 1)
-        self.assertIn("HANDBACK_FIELDS_ONLY=0", relaxed[0])
+    def test_status_check_stays_opt_in_and_blocking(self):
+        self.assertEqual(self.stop("result=ok", agent_id="s1")[0], 0)
+        self.assertEqual(self.stop("result=ok", agent_id="s2", HANDBACK_REQUIRE_STATUS="1")[0], 2)
 
 
 class AuditCounts(Tmp):
@@ -216,9 +227,9 @@ class AuditLedger(Tmp):
         self.stop(FINAL, agent_id="a2", transcript=t)
         self.assertEqual([r["agent_id"] for r in self.rows()], ["a1", "a2"])
 
-    def test_a_blocked_stop_is_not_logged_the_allowed_one_is_with_its_rewrite_count(self):
+    def test_a_legacy_cap_block_is_not_logged_the_allowed_stop_is_with_its_rewrite_count(self):
         t = write(self.d / "t.jsonl", LANE)
-        self.assertEqual(self.stop("Done. I finished everything.", transcript=t)[0], 2)
+        self.assertEqual(self.stop("x" * 900, transcript=t)[0], 2)
         self.assertEqual(self.rows(), [])
         self.assertEqual(self.stop(FINAL, transcript=t)[0], 0)
         (row,) = self.rows()
@@ -284,7 +295,7 @@ class AuditLedger(Tmp):
 class Report(Tmp):
     ROWS = [
         {"type": "a", "exempt": False, "text_tok": 100, "narr_tok": 60, "final_tok": 40, "tool_tok": 1000, "fields_ok": True, "blocks": 0},
-        {"type": "a", "exempt": False, "text_tok": 300, "narr_tok": 250, "final_tok": 50, "tool_tok": 3000, "fields_ok": False, "blocks": 1},
+        {"type": "a", "exempt": False, "text_tok": 300, "narr_tok": 250, "final_tok": 50, "tool_tok": 3000, "fields_ok": False, "viol": ["prose"], "cut_tok": 7, "blocks": 1},
         {"type": "a", "exempt": False, "text_tok": 200, "narr_tok": 100, "final_tok": 100, "tool_tok": 2000, "fields_ok": True, "blocks": 0},
         {"type": "Explore", "exempt": True, "text_tok": 9999, "narr_tok": 0, "final_tok": 9999, "tool_tok": 1, "fields_ok": False, "blocks": 0},
     ]
@@ -297,8 +308,10 @@ class Report(Tmp):
         self.assertRegex(s, r"tool_tok\s+median=2000 ")
         self.assertIn("9.1%", s)  # 600 / (600 + 6000)
         self.assertIn("fields_ok: 66.7%", s)
-        self.assertIn("needing a rewrite under the current caps: 33.3%", s)
-        lim = min(hc.MAX_CHARS // hc.CPT, 70)  # median of today's fields-only handbacks (40, 100) is 70
+        self.assertIn("off target (over 400 chars / 8 lines, or prose): 33.3% of handbacks, never blocked", s)
+        self.assertIn("would drop 7 tokens", s)
+        self.assertIn("legacy-cap rewrites forced (over 800 chars / 10 lines): 1", s)
+        lim = min(hc.TARGET_CHARS // hc.CPT, 70)  # median of today's fields-only handbacks (40, 100) is 70
         after = [min(f, lim) for f in (40, 50, 100)]
         self.assertIn(f"projection (ESTIMATE; assumes every lane complies", s)
         self.assertIn(f"text_tok median={sorted(after)[1]} total={sum(after)}", s)
@@ -317,11 +330,12 @@ class Report(Tmp):
         os.utime(lane, (1, 1))  # 1970: outside the window
         self.assertIn("lanes=0", run("handback_cap.py", ["--scan", str(self.d), "--since-days", "1"])[1])
 
-    def test_scan_marks_a_prose_handback_as_needing_a_rewrite(self):
+    def test_scan_marks_a_prose_handback_as_off_target_but_not_a_rewrite(self):
         prose = write(self.d / "p/s/subagents/agent-bbb.jsonl", [text("n" * 8), tool("Bash", command="ls"), tool("SubagentHandback", message="Everything is done and pushed.")])
         out = run("handback_cap.py", ["--scan", prose])[1]
         self.assertIn("fields_ok: 0.0%", out)
-        self.assertIn("needing a rewrite under the current caps: 100.0%", out)
+        self.assertIn("or prose): 100.0% of handbacks, never blocked", out)
+        self.assertIn("legacy-cap rewrites forced (over 800 chars / 10 lines): 0", out)
 
     def test_scan_marks_exempt_types_from_the_meta_file(self):
         write(self.d / "p/s/subagents/agent-ccc.jsonl", LANE)
@@ -379,15 +393,16 @@ class LaneRules(unittest.TestCase):
 
     def test_rule_text_pins_zero_prose_and_fields_only_and_the_cap_it_states(self):
         r = si.LANE_RULES
-        for needle in ("tool calls only", "zero prose", "no narration, plans, recaps", "key=value", "no sentences", "status=VERIFIED|UNVERIFIED", "sha=", "tests=", "blockers=", "report=<path>"):
+        for needle in ("tool calls only", "no prose between them", "key=value", "status=VERIFIED|UNVERIFIED", "sha=", "tests=", "blockers=", "report=<path>"):
             self.assertIn(needle, r)
-        default_cap = int(subprocess.run([sys.executable, "-c", "import handback_cap as h; print(h.MAX_CHARS)"], capture_output=True, text=True,
-                                         env=clean_env(PYTHONPATH=str(SC))).stdout)
-        self.assertEqual(int(re.search(r"under (\d+) characters", r).group(1)), default_cap)  # injection and backstop agree
+        target = int(subprocess.run([sys.executable, "-c", "import handback_cap as h; print(h.TARGET_CHARS)"], capture_output=True, text=True,
+                                    env=clean_env(PYTHONPATH=str(SC))).stdout)
+        self.assertEqual(int(re.search(r"under (\d+) characters", r).group(1)), target)  # injection and logged target agree
 
-    def test_rule_is_small_next_to_the_plain_caveman_ultra_line(self):
-        # The plain caveman-ultra subagent line is ~161 chars (measured 2026-10-16); the lane rules stay under 2.5x of it.
-        self.assertLessEqual(len(si.LANE_RULES), 400)
+    def test_rule_adds_at_most_80_estimated_tokens_over_the_plain_caveman_ultra_line(self):
+        # Coordinator budget: the injected rule stays small (chars / 4, the audit's own estimate). It is ~48 tokens.
+        self.assertLessEqual(-(-len(si.LANE_RULES) // 4), 80)
+        self.assertLessEqual(len(si.LANE_RULES), 200)
 
     def test_the_shape_the_rule_teaches_passes_the_backstop_first_try(self):
         saved, hc.STATE_DIR = hc.STATE_DIR, tempfile.mkdtemp()
@@ -403,19 +418,20 @@ class Docs(unittest.TestCase):
 
     def test_preamble_states_zero_chat_and_the_fields_shape_and_keeps_its_older_rules(self):
         lp = self.read(".claude/skills/agentic-delivery/templates/lane-preamble.md")
-        for needle in ("Zero chat between tool calls", "now I will", "`key=value` fields only", "400 characters and 8 lines", "`status=VERIFIED|UNVERIFIED`", "`handback_cap.py` rejects"):
+        for needle in ("Zero chat between tool calls", "now I will", "`key=value` fields only", "400 characters and 8 lines", "`status=VERIFIED|UNVERIFIED`", "only logs a miss, it never sends you back"):
             self.assertIn(needle, lp)
         self.assertNotIn("`status | evidence | next`", lp)
         self.assertIn("never `git add -A`", lp)
         self.assertIn("hand back its path", lp)
 
-    def test_docs_state_the_new_defaults_not_the_old_ones(self):
-        for rel in ("docs/for-fleets.md", "docs/technical-overview.md", ".claude/skills/agentic-delivery/references/host-enforcement.md"):
+    def test_docs_state_the_legacy_cap_and_that_the_target_is_only_logged(self):
+        for rel in ("docs/for-fleets.md", ".claude/skills/agentic-delivery/references/host-enforcement.md"):
             t = self.read(rel)
-            self.assertNotIn("800 char", t, rel)
-            self.assertNotIn("10 lines", t, rel)
-            self.assertRegex(t, r"400 char", rel)
-            self.assertRegex(t, r"8 lines", rel)
+            self.assertRegex(t, r"800 char", rel)
+            self.assertRegex(t, r"400.char", rel)
+            self.assertRegex(t.replace("\n", " "), r"logged", rel)
+            self.assertNotIn("HANDBACK_FIELDS_ONLY=0 HANDBACK_MAX", t, rel)  # no second handback, so no relaxed-type opt-out needed
+        self.assertIn("800 characters or 10 lines", self.read("docs/technical-overview.md"))
 
     def test_host_enforcement_explains_why_the_review_lane_entry_needs_a_scoped_default_entry(self):
         he = self.read(".claude/skills/agentic-delivery/references/host-enforcement.md")

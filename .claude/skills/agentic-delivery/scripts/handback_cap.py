@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
-"""SubagentStop hook: enforce a zero-chat, fields-only subagent handback, and audit each lane's prose.
+"""SubagentStop hook: cap a subagent handback, log how far it is from fields-only, and audit each lane's prose.
 
 Caps CHAT NARRATION only — a subagent's final chat message to its caller.
 Deliverables (code, reports, long findings) belong in FILES, which are
 uncapped by this hook; a compliant handback names the file path instead of
 pasting its content into chat. Blocks (exit 2) a message longer than
-MAX_CHARS or MAX_LINES (defaults 400 characters / 8 lines) or one that is not
-fields-only; stderr carries the rewrite instruction. Per the
+MAX_CHARS or MAX_LINES (defaults 800 characters / 10 lines, the legacy cap);
+stderr carries the rewrite instruction. Per the
 official docs (https://code.claude.com/docs/en/hooks, "Exit code 2 behavior
 per event"), exit code 2 on SubagentStop "prevents the subagent from
 stopping, continues the subagent" — so a block does not lose the subagent's
 work, it sends the same turn back to compose a shorter handback.
 
-FIELDS-ONLY (default on; HANDBACK_FIELDS_ONLY=0 turns it off, the caps stay).
-Every non-blank line must be a field: `key=value` (`sha=1a2b3c`; `key: value`
-and a leading `- ` also pass, so a harmless style slip costs no rewrite turn),
-the older `status | evidence | next` list, or one bare token (`VERIFIED`). A
-sentence is prose and is rejected, so a lane cannot pass the cap by writing a
-short paragraph. This is a SHAPE check, not a semantic one: a long sentence put
-inside a `result=` value still passes if it fits the cap. A rejection costs the
-lane one more turn that re-reads its whole context, so the cap is a backstop for
-the SubagentStart rule (subagent_start_inject.py), not the primary lever.
+FIELDS-ONLY TARGET (log only, NEVER blocks). A rewrite costs the lane one more
+turn that re-reads its whole context, more than a shorter handback saves, so a
+miss is recorded, not sent back. The target is TARGET_CHARS / TARGET_LINES
+(defaults 400 / 8; HANDBACK_TARGET_CHARS, HANDBACK_TARGET_LINES) and, unless
+HANDBACK_FIELDS_ONLY=0, every non-blank line a field: `key=value` (`sha=1a2b3c`;
+`key: value` and a leading `- ` also pass), the older `status | evidence | next`
+list, or one bare token (`VERIFIED`). A sentence is prose. The ledger row gets
+`viol` (`long`, `prose`) and `cut_tok`, the estimated tokens a truncation to the
+field lines within the target would drop; the hook cannot rewrite what the
+caller receives, so delivery is not altered. This is a SHAPE check, not a
+semantic one. The lever is the SubagentStart rule (subagent_start_inject.py).
 
 EXEMPTION IS A NAME LIST, NOT A TOOL CHECK. A subagent is exempt (never
 capped, at any length) iff its `agent_type` is listed in the comma-separated
@@ -30,14 +32,13 @@ whose chat answer is itself the deliverable: `Explore`, `Plan`,
 agent's tools — it cannot tell whether a type has a Write tool. Do NOT add a
 custom read-only review lane's type here: exempt means uncapped, which
 reopens the cost problem on a harness with no report file. Instead raise
-MAX_CHARS/MAX_LINES (and set HANDBACK_FIELDS_ONLY=0) for that type only via a
+MAX_CHARS/MAX_LINES for that type only via a
 matcher-scoped SubagentStop entry, and scope the default entry so it does not
 also match that type (agentic-delivery/references/host-enforcement.md).
 Setting HANDBACK_EXEMPT_TYPES REPLACES the default list, so repeat the
 defaults you still want.
 
-After MAX_BLOCKS blocks for one agent_id (default 3; HANDBACK_MAX_BLOCKS, e.g. 1
-to bound the cost of a lane that cannot comply), this hook lets the stop through
+After MAX_BLOCKS (3) blocks for one agent_id, this hook lets the stop through
 unconditionally, so a subagent that cannot comply never loops forever. Block
 counters live in per-agent_id state files under a temp dir (sanitized id;
 directory overridable via HANDBACK_STATE_DIR, e.g. for isolated tests).
@@ -58,8 +59,8 @@ flagged `exempt`), one JSON line per lane is appended to a local ledger so
 prose waste is measurable: the lane's assistant TEXT tokens (`narr_tok`
 between tool calls, `final_tok` the handback, `text_tok` their sum) against
 its tool-call tokens (`tool_tok`, name plus input JSON), plus `calls`,
-`fields_ok` (the handback passed the fields-only shape), `blocks` (rewrites
-this hook forced) and `cpt` (characters per token used). Every token figure is
+`fields_ok` (the handback passed the fields-only shape), `viol`/`cut_tok` (see
+FIELDS-ONLY TARGET), `blocks` (legacy-cap rewrites this hook forced) and `cpt` (characters per token used). Every token figure is
 an ESTIMATE, characters / CPT (4, a rule of thumb: no tokenizer is available
 offline). The transcript's own `usage.output_tokens` is not used: on 60 real
 lane transcripts it summed to 157k against 461k estimated from the content
@@ -95,9 +96,12 @@ import sys
 import tempfile
 import time
 
-MAX_CHARS = int(os.environ.get("HANDBACK_MAX_CHARS", "400"))
-MAX_LINES = int(os.environ.get("HANDBACK_MAX_LINES", "8"))
-MAX_BLOCKS = int(os.environ.get("HANDBACK_MAX_BLOCKS", "3"))  # each block is one more turn that re-reads the lane's context
+MAX_CHARS = int(os.environ.get("HANDBACK_MAX_CHARS", "800"))  # the only BLOCKING cap (legacy, unchanged)
+MAX_LINES = int(os.environ.get("HANDBACK_MAX_LINES", "10"))
+MAX_BLOCKS = 3
+# Soft target a handback should meet: never blocks, only logged (a rewrite re-reads the lane's whole context).
+TARGET_CHARS = int(os.environ.get("HANDBACK_TARGET_CHARS", "400"))
+TARGET_LINES = int(os.environ.get("HANDBACK_TARGET_LINES", "8"))
 CPT = 4  # characters per token for the audit's ESTIMATE; recorded in every ledger row
 # Default exempt agent-type NAMES (chat IS their deliverable). Matched by name
 # only; override/extend via HANDBACK_EXEMPT_TYPES (replaces this list).
@@ -129,9 +133,24 @@ def _prose_lines(msg):
 
 
 def _shape(msg):
-    """`(chars, lines, too_long, prose_line_numbers)` of one handback under the current caps and fields-only setting."""
+    """`(chars, lines, too_long)`: `too_long` is the BLOCKING cap (MAX_CHARS / MAX_LINES)."""
     chars, lines = len(msg), msg.count("\n") + 1 if msg else 0
-    return chars, lines, chars > MAX_CHARS or lines > MAX_LINES, _prose_lines(msg) if _fields_only() else []
+    return chars, lines, chars > MAX_CHARS or lines > MAX_LINES
+
+
+def _violations(msg):
+    """Soft violations of the target shape, logged never blocked: `long` (over TARGET_*) and, with fields-only on,
+    `prose` (a non-field line). Empty list = within target."""
+    chars, lines = len(msg), msg.count("\n") + 1 if msg else 0
+    v = ["long"] if chars > TARGET_CHARS or lines > TARGET_LINES else []
+    return v + (["prose"] if _fields_only() and _prose_lines(msg) else [])
+
+
+def _truncate(msg):
+    """The handback cut to its field lines within the target. The hook cannot rewrite what the caller receives, so
+    this only measures what a truncation would drop (`cut_tok`)."""
+    keep = [ln for ln in msg.splitlines() if ln.strip() and FIELD_RE.fullmatch(ln.strip())][:TARGET_LINES]
+    return "\n".join(keep)[:TARGET_CHARS]
 
 
 def _exempt_types():
@@ -212,9 +231,9 @@ def check(data):
             return 2
     msg = data.get("last_assistant_message") or ""
     agent_id = str(data.get("agent_id") or "unknown")
-    chars, lines, too_long, prose = _shape(msg)
+    chars, lines, too_long = _shape(msg)  # fields-only and the 400/8 target never block: audit() logs them
     no_status = _require_status() and not STATUS_RE.search(msg)
-    if not (too_long or prose or no_status):
+    if not (too_long or no_status):
         return 0
     os.makedirs(STATE_DIR, exist_ok=True)
     path = _state_path(agent_id)
@@ -226,8 +245,6 @@ def check(data):
     why = []
     if too_long:
         why.append(f"too long ({chars} chars, {lines} lines; cap {MAX_CHARS} chars / {MAX_LINES} lines)")
-    if prose:
-        why.append("prose on line " + ", ".join(map(str, prose[:3])))
     if no_status:
         why.append("no status field")
     sys.stderr.write(
@@ -310,6 +327,13 @@ def _ledger_path():
     return None if p in ("", "off") else p
 
 
+def _shape_row(fin):
+    """Ledger fields for one final message: `fields_ok` (non-empty, every line a field), `viol` (soft target
+    violations, see _violations) and `cut_tok` (estimated tokens a truncation to the fields would drop)."""
+    return {"fields_ok": bool(fin.strip()) and not _prose_lines(fin), "viol": _violations(fin),
+            "cut_tok": max(_tok(len(fin)) - _tok(len(_truncate(fin))), 0) if _violations(fin) else 0}
+
+
 def audit(data):
     """Append one JSON line for this lane to the local ledger (see LANE AUDIT in the module docstring).
     Side-effects: one append to the ledger plus a `<agent_id>.audited` marker in STATE_DIR so a lane that two hook
@@ -330,7 +354,7 @@ def audit(data):
             return
         agent_type = str(data.get("agent_type") or "")
         row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "agent_id": agent_id, "type": agent_type,
-               "exempt": agent_type in _exempt_types(), **stats, "fields_ok": bool(fin.strip()) and not _prose_lines(fin),
+               "exempt": agent_type in _exempt_types(), **stats, **_shape_row(fin),
                "blocks": _read_blocks(_state_path(agent_id)), "cpt": CPT}
         os.makedirs(os.path.dirname(ledger) or ".", exist_ok=True)
         # ponytail: append-only, no rotation (about 200 bytes a lane); delete the file to reset.
@@ -363,11 +387,12 @@ def summary(rows):
     prose, tool = sum(r.get("text_tok") or 0 for r in live), sum(r.get("tool_tok") or 0 for r in live)
     out.append(f"text share of assistant output (text / (text + tool)): {100 * prose / max(prose + tool, 1):.1f}%")
     out.append(f"fields_ok: {100 * sum(bool(r.get('fields_ok')) for r in live) / len(live):.1f}% of handbacks already fields-only")
-    rew = sum(r.get("blocks") or 0 for r in live)
-    out.append(f"needing a rewrite under the current caps: {100 * sum(bool(r.get('blocks')) for r in live) / len(live):.1f}% "
-               f"of handbacks ({rew} rewrite turns, each one re-reads the lane's whole context)")
+    out.append(f"off target (over {TARGET_CHARS} chars / {TARGET_LINES} lines, or prose): "
+               f"{100 * sum(bool(r.get('viol')) for r in live) / len(live):.1f}% of handbacks, never blocked; "
+               f"a truncation to the fields would drop {sum(r.get('cut_tok') or 0 for r in live)} tokens (delivery is not altered)")
+    out.append(f"legacy-cap rewrites forced (over {MAX_CHARS} chars / {MAX_LINES} lines): {sum(r.get('blocks') or 0 for r in live)}")
     fo = [r.get("final_tok") or 0 for r in live if r.get("fields_ok")]
-    lim = min(MAX_CHARS // CPT, median(fo) if fo else MAX_CHARS // CPT)
+    lim = min(TARGET_CHARS // CPT, median(fo) if fo else TARGET_CHARS // CPT)
     after = [min(r.get("final_tok") or 0, lim) for r in live]
     out.append(f"projection (ESTIMATE; assumes every lane complies: narration 0, handback no larger than {lim:.0f} tokens = the "
                f"smaller of the cap and today's median fields-only handback): text_tok median={median(after):.0f} total={sum(after)}")
@@ -412,9 +437,7 @@ def _cli(args):
                     t = str(json.load(fh).get("agentType") or "")
             except (OSError, ValueError, AttributeError):
                 t = ""
-            _, _, long_, prose = _shape(got[1])  # `blocks` here = would this handback be sent back once under today's caps
-            rows.append({"type": t, "exempt": t in _exempt_types(), **got[0], "fields_ok": bool(got[1].strip()) and not _prose_lines(got[1]),
-                         "blocks": int(bool(got[1]) and (long_ or bool(prose)))})
+            rows.append({"type": t, "exempt": t in _exempt_types(), **got[0], **_shape_row(got[1]), "blocks": int(_shape(got[1])[2])})
     else:
         ap.error("give --report or --scan")
     print(summary(rows))
@@ -489,15 +512,13 @@ def _selftest():
     # short message passes
     case("short-passes", check({"agent_id": "a1", "last_assistant_message": "VERIFIED | verdict=ok"}), 0)
 
-    # fields-only: key=value lines pass, a sentence is prose and blocks, the knob turns it off
+    # fields-only is log-only: prose never blocks (no second handback), it is only classified
     case("fields-pass", check({"agent_id": "f1", "last_assistant_message": "status=VERIFIED\nsha=1a2b3c\ntests=3/3\nblockers=none"}), 0)
-    case("sentence-blocks", check({"agent_id": "f2", "last_assistant_message": "Done. All the tests pass and I pushed."}), 2)
-    case("prose-line-among-fields-blocks", check({"agent_id": "f3", "last_assistant_message": "sha=1a2b3c\nI also fixed the docs."}), 2)
-    os.environ["HANDBACK_FIELDS_ONLY"] = "0"
-    try:
-        case("fields-only-off-via-env", check({"agent_id": "f4", "last_assistant_message": "Done. All the tests pass."}), 0)
-    finally:
-        os.environ.pop("HANDBACK_FIELDS_ONLY", None)
+    case("sentence-never-blocks", check({"agent_id": "f2", "last_assistant_message": "Done. All the tests pass and I pushed."}), 0)
+    case("sentence-is-a-violation", _violations("Done. All the tests pass and I pushed."), ["prose"])
+    case("fields-are-no-violation", _violations("status=VERIFIED\nsha=1a2b3c"), [])
+    case("over-target-is-a-violation", _violations("k=" + "v" * TARGET_CHARS), ["long"])
+    case("truncation-keeps-only-fields", _truncate("sha=1a2b3c\nI also fixed the docs.\ntests=3/3"), "sha=1a2b3c\ntests=3/3")
 
     # status token is opt-in: off by default, a status-less short handback passes
     case("status-check-off-by-default", check({"agent_id": "s0", "last_assistant_message": "verdict=ok"}), 0)

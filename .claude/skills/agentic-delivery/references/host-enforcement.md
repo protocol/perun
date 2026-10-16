@@ -106,8 +106,8 @@ sentences: `status=VERIFIED|UNVERIFIED`, `sha=`, `result=`, `tests=`,
 files, which no hook caps; a handback names the path. **No polling.** Never
 sleep/loop waiting on background work in a subagent turn — end the turn and let
 the notification resume it. `subagent_start_inject.py` states the rule to every
-lane at spawn; the hook below is the **backstop** for a miss, not the target,
-because a rejection costs a turn that re-reads the lane's whole context. The
+lane at spawn; a miss of that shape is only **logged**, never sent back, because
+a rewrite re-reads the lane's whole context and costs more than it saves. The
 orchestrator never relays a subagent's prose; it reads the fields and the named
 files.
 
@@ -116,10 +116,11 @@ runs on every agent; a `matcher` names the types), as in
 `templates/operating-layer.settings.json`. **Use this when** a subagent's chat
 handback is landing in an orchestrator's context uncapped. Stdlib-only; blocks
 (exit 2, which per the host's docs continues the subagent, so no work is lost) a
-handback over 400 chars / 8 lines or with a non-field line; exempts only agent
+handback over 800 chars / 10 lines (the 400-char fields-only target is logged
+only); exempts only agent
 types named in `HANDBACK_EXEMPT_TYPES` (default: 4 built-in types) — it never
 inspects tools, so a custom read-only review lane is capped too; releases after
-3 blocks per agent. Knobs, `--selftest`: its header. The `VERIFIED`/`UNVERIFIED`
+3 blocks per agent. Knobs: its header. The `VERIFIED`/`UNVERIFIED`
 status check and `lane_cap.py` tool-call cap: `cost-quality-guardrails.md` §2.
 
 **Lane audit.** When a stop is allowed it appends one line per lane to a local
@@ -132,8 +133,8 @@ script header.
 **A harness with no report file** (a review lane's findings ARE its chat
 answer) still needs a cap, never an exemption (exempt = uncapped). Matching
 hooks run in parallel and any block wins, so give that type its own entry
-(`matcher` = the type, env `HANDBACK_FIELDS_ONLY=0 HANDBACK_MAX_LINES=25
-HANDBACK_MAX_CHARS=2000`, as in the template), list it in
+(`matcher` = the type, env `HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000`,
+as in the template), list it in
 `LANE_RULES_SKIP_TYPES`, and scope the default entry's `matcher` to leave it
 out: a matcher with other characters is a JavaScript regex, e.g.
 `^(?!security-reviewer$).*`.
