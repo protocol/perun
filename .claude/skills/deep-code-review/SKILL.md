@@ -271,8 +271,9 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
 
 **Stage-evolution lenses (when to add, not how to secure).** When the going-forward
 roadmap must say how infrastructure/architecture or documentation should *evolve*
-for its stage, **read** `infra-evolution-by-stage.md` (the security/backup floor
-never relaxes) and `docs-evolution-by-stage.md`; both feed the roadmap in
+for its stage, **read** `infra-evolution-by-stage.md` (each step gated on an observable
+trigger; the security/backup floor never relaxes) and `docs-evolution-by-stage.md`
+(trigger-not-calendar); both feed the roadmap in
 `report-format.md`. How-to-secure: `infra-iac-containers.md` (L), `docs-and-dx.md` (O).
 
 ---
@@ -385,4 +386,4 @@ separately. Persisted artifacts (code, PR bodies, docs) stay normal English
 either way.
 
 Compose with other packs; do not also run a second delivery OS on the same
-repo.
+repo. This review skill always composes.
