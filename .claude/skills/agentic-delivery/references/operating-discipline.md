@@ -44,10 +44,10 @@ newest release tag, skipping on a merge/train lock or an edited managed file; po
 `auto_update: off` or `install.sh --no-auto-update` disables it. Auto-compact plus re-inject replaces "restart the session" (a session cannot `/clear` itself): the layer sets
 `autoCompactWindow: 200000` only when no user, project or local settings file sets it (policy `auto_compact: off` skips it), and a SessionStart hook
 (`compact|startup|clear`, `scripts/handoff_inject.py`) re-injects the newest `.claude/handoff*.md`, 2KB max. Agents write that handoff
-before any reset and never tell the owner to restart. Two advisory cost hooks ride along: `scripts/context_nudge.py` (UserPromptSubmit) prints one line
-telling the agent to write it once the main context passes 250k tokens (`PERUN_CONTEXT_NUDGE_TOKENS`), again only per 50k of growth; `scripts/lane_resume_nudge.py` (PreToolUse `Agent|Task`)
+before any reset and never tell the owner to restart. Two advisory cost hooks ride along: `scripts/context_nudge.py` (UserPromptSubmit) prints at most two lines:
+past 250k tokens (`PERUN_CONTEXT_NUDGE_TOKENS`, again per 50k of growth) the handoff nudge plus the host's session commands (host from env or `PERUN_HOST`), and a model/effort hint on a work-kind change; `scripts/lane_resume_nudge.py` (PreToolUse `Agent|Task`)
 advises resuming an earlier same-domain lane with SendMessage instead of paying a new lane's startup re-read. Neither
-ever blocks, and both fail open. The layer also wires `scripts/lane_cap.py` (PostToolUse) with `LANE_TOOL_CAP=250`:
+blocks; both fail open. The layer also wires `scripts/lane_cap.py` (PostToolUse) with `LANE_TOOL_CAP=250`:
 a lane is told to checkpoint at 80% and stop at the cap; `LANE_TOOL_CAP_<TYPE>` overrides per lane type.
 
 `scripts/operating_selfcheck.py [--settings F] [--skill-root D]` reports, per item above,
