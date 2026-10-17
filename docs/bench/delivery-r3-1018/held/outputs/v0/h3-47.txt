@@ -1,0 +1,51 @@
+### Delivery Plan: Search Endpoint P99 Optimization
+
+**Objective:** Reduce P99 latency from 1200ms to <400ms for date-filtered searches without altering ranking logic or result ordering.
+
+#### 1. Lanes & Parallelism
+*   **Lane A: Profiling & Baseline (Serial Start)**
+    *   **Actor:** Builder (Discovery Team).
+    *   **Work:** Run local load simulation against production snapshot (last Tuesday's data). Identify specific aggregation queries causing spikes. Establish exact byte-for-byte baseline output for 50 critical test cases.
+    *   **Output:** Profiling report + Baseline hash manifest.
+*   **Lane B: Optimization Implementation (Parallel to A's analysis, Serial to A's findings)**
+    *   **Actor:** Builder.
+    *   **Work:** Implement caching/indexing strategies in the data aggregation layer. **Constraint:** Zero changes to the read-only ranking library.
+    *   **Output:** Patch set with new cache logic.
+*   **Lane C: Independent Verification (Serial to B)**
+    *   **Actor:** QA (Independent of Builder).
+    *   **Work:** Execute functional tests on the optimized build. Compare output payloads byte-for-byte against the Baseline hash manifest. Run local load tests to verify P99 < 400ms.
+    *   **Constraint:** Ignore staging network timeout errors if local logs confirm success (known flake).
+    *   **Output:** Verification receipt (Pass/Fail) + Latency metrics.
+*   **Lane D: Compliance & Security Review (Parallel to C)**
+    *   **Actor:** Security/Compliance Officer.
+    *   **Work:** Audit code diff to ensure ranking algorithm integrity. Verify cache invalidation logic prevents stale data exposure.
+    *   **Output:** Compliance sign-off.
+
+#### 2. Gates & Checks
+*   **G1 (Spec):** Confirm acceptance criteria: P99 < 400ms, byte-for-byte payload identity, no ranking changes. Pin base SHA.
+*   **G4 (Implement):** Builder commits patch. Must include local benchmark logs showing improvement.
+*   **G5 (Verify):**
+    *   **Check 1:** Local CI suite (mandatory to save $45/hardware cost). Must pass green.
+    *   **Check 2:** Byte-for-byte diff check against baseline manifest. Any deviation blocks.
+    *   **Check 3:** Local load test P99 metric < 400ms.
+*   **G6 (Review):**
+    *   **Code Review:** Senior Engineer (not the Builder) reviews aggregation logic.
+    *   **Compliance Review:** Compliance Officer verifies ranking library was untouched.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected tests on final SHA.
+
+#### 3. Review Strategy
+*   **Independence:** The Builder cannot self-approve. QA must be a distinct actor verifying the exact revision SHA.
+*   **Focus:** Reviewers must specifically check that the read-only shared library was not modified and that cache keys include all factors influencing result order to prevent compliance drift.
+
+#### 4. Landing & Human Gates
+*   **Merge Strategy:** Squash merge to `main` only after G6 approval.
+*   **Human Approvals Required:**
+    1.  **Team Lead (Jane Smith):** Approves code quality and performance gains.
+    2.  **Compliance Officer:** Explicitly signs off on "No Ranking Algorithm Alteration" via the internal portal.
+*   **Deployment:**
+    *   Deploy behind a feature flag initially.
+    *   Monitor P99 latency and error rates for 1 hour.
+    *   **Rollback Plan:** If P99 > 400ms or payload mismatch detected in canary, immediately revert the commit and disable the feature flag. Full system rollback available if the shared library state is somehow compromised (though unlikely given read-only constraint).
+*   **Post-Deploy:** Verify holiday surge readiness using the optimized path.
+
+**Risk Note:** Production data snapshots are stale (Tuesday only). Local verification is the primary truth source; staging timeout flakes are to be disregarded if local logs are green.

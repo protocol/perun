@@ -1,0 +1,53 @@
+### Delivery Plan: CSP Reporting Enablement
+
+**Objective:** Deploy a reporting-only CSP policy to inventory third-party scripts without blocking resources or impacting checkout stability.
+
+#### 1. Lanes & Parallelization
+*   **Lane A (Configuration - Serialized):**
+    *   **Owner:** Builder.
+    *   **Task:** Draft the CSP header configuration (`report-only` mode) pointing to the centralized monitoring endpoint. Ensure the endpoint configuration includes buffering to handle high volume without blocking page loads.
+    *   **Constraint:** Must edit the shared configuration file outside business hours to avoid race conditions.
+    *   **Dependency:** None, but execution is serialized against the config lock window.
+*   **Lane B (Instrumentation & Validation - Parallel):**
+    *   **Owner:** QA / Security.
+    *   **Task:** Define the acceptance criteria for the "48-hour data summary" and verify the monitoring dashboard's ingestion capacity. Create a lightweight unit test to assert the header structure exists, avoiding the heavy browser rendering farm for this config-only change.
+    *   **Constraint:** Explicitly exclude the flaky analytics module check from the required pass list to prevent false negatives.
+*   **Lane C (Rollback Prep - Parallel):**
+    *   **Owner:** Release Engineer.
+    *   **Task:** Document the manual database rollback procedure (2-hour window) and prepare the SQL script. Verify access credentials with the Security Officer.
+
+#### 2. Gates & Checks
+*   **G1 Spec (Immediate):** Confirm the monitoring endpoint URL and authentication method. Define the exact schema for the violation log summary.
+*   **G3 Design (Pre-Implementation):** Architect review of the buffering strategy to ensure non-blocking behavior during peak traffic.
+*   **G4 Implement (Off-Hours):** Builder commits the config change to a dedicated worktree.
+    *   **Exact Revision:** Commit SHA must be recorded before merging.
+    *   **Check:** Static analysis only (no CI browser farm triggered).
+*   **G5 Verify (Staging):**
+    *   **Environment:** Staging cluster (account for 15-min cold start).
+    *   **Action:** Deploy to Staging. Trigger synthetic traffic to generate sample violations.
+    *   **Success Criteria:** Dashboard receives logs; page load times remain within baseline; checkout flow functions identically to production.
+    *   **Exclusion:** Ignore flaky analytics memory errors.
+*   **G6 Review (Independent):**
+    *   **Reviewer:** Security Officer (independent of Builder).
+    *   **Scope:** Verify `report-only` directive is present; confirm no `enforce` directives exist; validate rollback script.
+*   **G7 Integrate:** Merge to the release branch.
+
+#### 3. Review Strategy
+*   **Code Review:** Conducted by the Lead Architect (focusing on config structure) and Security Officer (focusing on CSP directive safety). Neither may be the Builder.
+*   **Security Review:** Specific sign-off required from the Security Officer confirming the policy is non-blocking and the endpoint is secure.
+*   **QA Review:** Verification of the staging data receipt, ensuring the flaky test did not obscure real results.
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:** Merge to the integration branch only after G6 approval.
+*   **Human Approval Required:**
+    1.  **Lead Architect:** Approval to deploy config changes to the shared file.
+    2.  **Security Officer:** Final authorization to enable the header in Production.
+    3.  **Deployment Timing:** Human decision to schedule the deployment outside business hours to respect the config lock.
+*   **Rollback Plan:**
+    *   **Trigger:** Any degradation in checkout conversion rate or page load latency >5%.
+    *   **Action:** Execute the pre-prepared manual database rollback script.
+    *   **Timeline:** Expect up to 2 hours for full reversion.
+*   **Post-Deployment:**
+    *   Monitor for 48 hours.
+    *   **Deliverable:** Extract and summarize violation data from the dashboard.
+    *   **Completion:** Ticket closes upon delivery of the summary report; enforcement mode remains a separate future ticket.

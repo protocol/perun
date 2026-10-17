@@ -1,0 +1,74 @@
+### Delivery Plan: Error Budget Burn Auto-Pause
+
+**Binding Facts & Constraints**
+*   **Critical Path:** Gatekeeper service (centralized for 6 teams).
+*   **Cost/Risk:** Core ledger CI is 55min/$120; redundant retries forbidden.
+*   **Security Gate:** Modifying the shared SRE config triggers a mandatory 48h security review.
+*   **Data Integrity:** Audit log is append-only; testing must occur in sandbox to avoid pollution.
+*   **Approval:** Current deploy requires 2 senior engineer signatures.
+*   **Requirement:** Hard stop on budget exhaustion; audited override for leadership only.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Logic & Interface (Builder)**
+*   **Work:** Implement the budget-check logic within the Gatekeeper service code (not the shared config file, to avoid the 48h review delay). Create the override API endpoint requiring user identity, timestamp, and justification.
+*   **Parallelism:** Can run parallel to Lane 2.
+*   **Output:** Patch set A (Gatekeeper logic).
+
+**Lane 2: Sandbox Verification (QA)**
+*   **Work:** Stand up a sandbox instance of Gatekeeper. Simulate budget exhaustion and verify the hard stop. Execute override attempts with missing/invalid justifications to ensure rejection. Write valid test entries to the sandbox audit log to verify schema.
+*   **Dependency:** Requires Lane 1's initial logic build.
+*   **Output:** Test receipts proving "Hard Stop" and "Audit Capture" in isolation.
+
+**Lane 3: Configuration Strategy (Architect/SRE)**
+*   **Work:** Define the threshold values and reset windows. Determine if these can be passed as environment variables to Gatekeeper (bypassing the shared config file modification) or if the 48h security review must be initiated immediately for the shared file update.
+*   **Serialization:** Must complete before G4 (Implementation) finalizes the deployment config.
+
+**Lane 4: Integration & Cost Guard (Conductor)**
+*   **Work:** Serialize the merge to prevent triggering the $120 ledger CI unnecessarily. Ensure the "no redundant retries" rule is enforced by gating the ledger pipeline behind the Gatekeeper's new "Green" status explicitly.
+*   **Serialization:** Runs after Lane 2 verification.
+
+---
+
+#### Gates & Checks
+
+*   **G1 (Spec):** Pin base SHA. Explicitly state: "No modification to shared SRE config file unless absolutely unavoidable due to architectural constraint."
+*   **G3 (Design):** ADR required for the Override mechanism. Must detail cryptographic signing of the justification note and identity propagation.
+*   **G4 (Implement):**
+    *   **Revision:** Exact SHA from Lane 1.
+    *   **Check:** Unit tests for logic paths.
+    *   **Constraint:** Do not touch shared config until Lane 3 confirms necessity.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from G4 deployed to **Sandbox only**.
+    *   **Check:** Functional proof of pause. Proof of audit log entry (sandbox).
+    *   **Failure Condition:** Any write to production audit log during testing.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Security Engineer (not the Builder).
+    *   **Scope:** Full diff of Gatekeeper service + Override logic.
+    *   **Condition:** If Lane 3 forces a shared config change, the 48h security review clock starts here.
+*   **G7 (Integrate):** Merge to integration branch. Re-run Gatekeeper tests. Do not trigger Ledger CI yet.
+
+---
+
+#### Landing & Human Decisions
+
+**Merge Strategy:**
+1.  Merge Lane 1 (Logic) to `main` (or integration branch) only after G6 pass.
+2.  If shared config change is required (Lane 3), submit that PR immediately to start the 48h timer, but do not merge until the timer expires and G6 passes.
+3.  **Human Gate (G8):** Deployment to Production requires:
+    *   Confirmation that Sandbox G5 passed.
+    *   **Two distinct senior engineer signatures** (existing policy).
+    *   Explicit written approval from Leadership defining the "Override" authorized users list.
+
+**Rollback Plan:**
+*   **Trigger:** False positive pause (budget calculated incorrectly) or Override failure during a real incident.
+*   **Action:** Revert the Gatekeeper deployment immediately.
+*   **Fallback:** Manual bypass of Gatekeeper (emergency procedure) requires CTO verbal approval + written post-incident justification within 1 hour.
+
+**Cost Control:**
+*   The Ledger CI ($120) will only be triggered once, after the Gatekeeper logic is live and verified in Sandbox. No speculative runs.
+
+**Final Output:**
+A hardened Gatekeeper service that enforces the stop, an append-only audit trail of overrides, and a deployment that respects the 48h security window without stalling the code rollout.

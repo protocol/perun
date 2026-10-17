@@ -1,0 +1,53 @@
+### Delivery Plan: Byte-Stable Image Resizer Replacement
+
+**Scope & Constraints**
+*   **Goal:** Replace the resizing library to ensure byte-for-byte output stability.
+*   **Non-Goals:** Refactoring unrelated shared utilities; changing the media pipeline architecture.
+*   **Critical Risk:** The current library is embedded in shared utilities used by three other microservices. Changes here risk breaking downstream services.
+*   **Constraint:** CI is 45 minutes and costly; one flaky thumbnail check exists.
+
+**Lane Decomposition & Ownership**
+
+1.  **Lane A: Specification & Baseline (Product Analyst + Conductor)**
+    *   **Work:** Define the exact set of test images (golden set) covering all edge cases. Document the "byte-stable" acceptance criteria explicitly.
+    *   **Output:** A pinned list of input/output hashes and a testable spec.
+    *   **Parallelism:** Runs first; blocks Lane B.
+
+2.  **Lane B: Isolation & Implementation (Builder)**
+    *   **Work:** Create a dedicated worktree. Refactor shared utilities to abstract the resizing backend (minimizing surface area). Swap the library. Implement the new logic.
+    *   **Constraint:** Must not modify code paths unrelated to resizing in the shared utilities.
+    *   **Parallelism:** Starts after Lane A spec is frozen.
+
+3.  **Lane C: Downstream Impact Analysis (Security/Architect)**
+    *   **Work:** Static analysis of the three dependent microservices. Verify interface compatibility. Plan integration tests for these services using the new library build.
+    *   **Parallelism:** Runs parallel to Lane B, merges only after Lane B's unit tests pass.
+
+4.  **Lane D: Verification & Flaky Check Mitigation (QA)**
+    *   **Work:** Run the full suite against the exact SHA from Lane B. Isolate the known flaky thumbnail check; if it fails, prove it is pre-existing (compare against baseline) and document it, do not block on it unless new. Verify byte-identity on the golden set.
+    *   **Parallelism:** Starts when Lane B claims "Ready for QA".
+
+**Gates & Checks**
+
+*   **G1 (Spec):** Review golden set and acceptance criteria. *Owner: Lead Engineer.*
+*   **G4 (Implement):** Code review of the abstraction layer and swap. *Reviewer: Senior Engineer (independent of Builder).* Focus: Did we touch too much in shared utils?
+*   **G5 (Verify):**
+    *   **Condition:** CI pipeline green on the exact commit SHA.
+    *   **Flake Handling:** If the thumbnail check fails, QA must reproduce it on the *previous* stable release. If reproducible, it is ignored for this ticket; if new, it blocks.
+    *   **Byte Stability:** Automated diff of output hashes for the golden set.
+*   **G6 (Review):** Aggregate QA receipt, Security impact assessment, and Code Review. *Decision: Lead Engineer + SRE On-Call.*
+*   **G7 (Integrate):** Merge to `main` (or integration branch). Re-run the costly CI *once* on the merge commit to confirm no integration drift.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Squash merge to keep history clean.
+*   **Human Gates:**
+    1.  **Approval to Merge:** Requires explicit sign-off from Lead Engineer and SRE On-Call (due to downstream risk).
+    2.  **Deployment:** Manual trigger to Staging first, then Production.
+*   **Rollback Plan:**
+    *   **Trigger:** CDN cost spike continues, or error rates in downstream services > 0.1% within 1 hour of deploy.
+    *   **Action:** Revert the merge commit immediately. Do not attempt a "fix forward" on the hot path.
+    *   **Decider:** SRE On-Call has authority to execute rollback without further consultation if metrics breach thresholds.
+
+**Execution Notes**
+*   **CI Cost:** Do not re-run the full 45-minute pipeline for every minor commit. Run lint/type checks locally and on push; reserve the full integration run for the final PR head and the pre-merge integration check.
+*   **Downstream Services:** Coordinate with owners of the three dependent microservices to schedule their regression runs against the staged artifact before production promotion.

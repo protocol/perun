@@ -1,0 +1,53 @@
+**Ruling: Scope is TLS 1.3 enablement via blue-green swap only.** No certificate rotation or downstream code changes are in scope; those are pre-conditions verified by downstream teams. **Cost if wrong:** Scope creep misses the Tuesday window; audit fails.
+
+**Human Gates:**
+1.  **Jane Smith (Sr. Network Architect):** Merge approval to `main` (Before Tuesday 00:00 UTC).
+2.  **Security Lead + Platform Director:** Dual sign-off for production flip (Tuesday maintenance window).
+3.  **Owner:** Authorization to proceed with rollback if handshake errors > 0.1% during canary.
+
+### Delivery Plan
+
+**Lane 1: Configuration & Static Verification (Builder)**
+*   **Work:** Draft LB config enabling TLS 1.3, disabling older protocols per audit. Add unit tests for config syntax.
+*   **Parallel?** Yes.
+*   **Gate:** Local lint + syntax check. No CI yet.
+*   **Output:** PR draft with config diff.
+
+**Lane 2: Downstream Certificate Validation (Coordinated External)**
+*   **Work:** Notify 12 product teams. Require written confirmation that their certs support TLS 1.3.
+*   **Parallel?** Yes (broadcast).
+*   **Gate:** Collect 12 "GO" receipts. Missing any = Blocker.
+*   **Serialization:** Must complete before Lane 4 (Integration).
+
+**Lane 3: Rollback Mechanism Proof (QA)**
+*   **Work:** Script the reversion command. Execute in a isolated staging environment simulating a "flip." Measure time-to-restore.
+*   **Parallel?** Yes.
+*   **Gate:** Verified receipt: "Rollback executed in < X minutes, traffic restored."
+*   **Serialization:** Must pass before G8 (Release).
+
+**Lane 4: Integration & Flake Mitigation (CI Engineer)**
+*   **Work:** Merge Lane 1 into integration branch. Run 45-min CI.
+*   **Constraint:** If `certificate-validation` flakes, trigger manual re-run immediately (max 2 attempts). If it fails twice, halt for network analysis (do not merge).
+*   **Serialization:** Waits for Lane 2 (Downstream GOs) to avoid false negatives.
+*   **Gate:** Green CI on exact SHA.
+
+**Lane 5: Blue-Green Staging Swap (Release)**
+*   **Work:** Deploy Lane 4's SHA to the "Green" (inactive) LB pool. Run synthetic traffic against Green only.
+*   **Serialization:** Waits for Lane 4 CI green.
+*   **Gate:** 100% handshake success on Green pool.
+
+### Review Strategy
+*   **Config Review:** Independent Senior Network Engineer (not the Builder) reviews Lane 1 diff against TLS 1.3 RFC and audit requirements.
+*   **Security Review:** Security Lead verifies Lane 3 (Rollback) and Lane 2 (Downstream receipts).
+*   **Final Audit:** Conductor aggregates all receipts (Code, Downstream GOs, Rollback Proof, CI Green, Staging Success) into a single "Release Manifest" for the Human Gates.
+
+### Landing & Rollout
+1.  **Pre-Window (Monday):** Lane 1 merges to `main` (Approved by Jane Smith). Lane 5 completes staging validation. System sits ready with Green pool warm.
+2.  **Maintenance Window (Tuesday):**
+    *   **Check:** Confirm all 12 downstream receipts are present.
+    *   **Action:** Dual sign-off (Security + Platform) to flip traffic to Green.
+    *   **Verify:** Monitor handshake errors for 15 minutes.
+3.  **Rollback Trigger:** If errors exceed threshold, execute Lane 3 script immediately to revert to Blue. This triggers the 1-hour freeze; thus, the decision to flip is binary and final until the window closes or the freeze lifts.
+4.  **Completion:** If stable, decommission Blue pool. Close ticket.
+
+**Risk:** CI cost (200 credits) is incurred only once per candidate SHA. Flake handling is explicit to prevent silent failures.

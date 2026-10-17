@@ -1,0 +1,59 @@
+**Ruling: Parallelize implementation by component, serialize integration and security verification.**
+*Why:* Shared module risk requires isolated builds before combined testing.
+*Cost if wrong:* Regression in legacy auth blocks all tenants.
+
+**Human Gates:**
+1.  **Security Lead & VP Product:** Written approval required before enabling the feature flag in Production (G8).
+2.  **Safe Default:** Feature flag remains `OFF` for all tenants until explicit approval.
+
+### Delivery Plan
+
+**Lane 1: Core Identity Logic (Builder)**
+*   **Work:** Implement tenant-aware auth router in `core-identity`. Add logic to select SSO or Legacy based on tenant config. Ensure legacy cookie format remains untouched.
+*   **Parallelism:** Runs parallel to Lane 2.
+*   **Output:** Patch to `core-identity` with unit tests for routing logic.
+*   **Constraint:** Must pass local type-check and unit tests before merge.
+
+**Lane 2: Frontend & API Adaptation (Builder)**
+*   **Work:** Update login page to dynamically render SSO button vs. standard form based on API response. Wire mobile API to pass tenant context.
+*   **Parallelism:** Runs parallel to Lane 1.
+*   **Output:** UI patches and API contract updates.
+*   **Constraint:** Must include mock-tests for both states (Enterprise/Small Business).
+
+**Lane 3: Flaky Test Mitigation (QA Engineer)**
+*   **Work:** Isolate the mock IdP timeout issue. Create a deterministic test harness or stub that simulates SSO success/failure without external flakiness.
+*   **Serialization:** Must complete before Lane 4 (Integration) begins full regression.
+*   **Output:** Stabilized test suite for the login stream.
+
+**Gates & Checks**
+
+*   **G2 (Plan):** Define acceptance criteria: "Globex Corp admin can enforce IdP rules," "Small Business login unchanged," "Zero downtime deployment." Pin base SHA for all lanes.
+*   **G4 (Implement):**
+    *   Lane 1 & 2 commit to separate branches off main.
+    *   Run cheap lint/type checks immediately.
+    *   Run unit tests (exclude heavy DB seeding).
+*   **G5 (Verify):**
+    *   **Exact Revision:** Merge Lane 1 & 2 into a temporary integration branch.
+    *   **Action:** Run full regression suite using Lane 3's stabilized harness.
+    *   **Specific Check:** Verify legacy session cookies are byte-for-byte identical for existing users.
+    *   **UI Check:** Headed-browser evidence on login route for both tenant types.
+*   **G6 (Review):**
+    *   **Security Review:** Independent Security Engineer reviews `core-identity` changes (no Builder self-review). Focus: backward compatibility and data flow.
+    *   **QA Review:** Verify flake mitigation effectiveness.
+*   **G7 (Integrate):**
+    *   Merge to `main` (feature flag `OFF`).
+    *   Re-run smoke tests on `main` to ensure no merge corruption.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Merge to `main` behind the feature flag. This is a code deployment, not a feature release.
+*   **Staging Verification:** Enable flag for `Globex Corp` only in Staging. Monitor for 24 hours.
+*   **Production Release (G8):**
+    *   **Trigger:** Written approval from Security Lead + VP Product.
+    *   **Action:** Flip feature flag for Enterprise tenants.
+    *   **Rollback:** Immediate flag toggle to `OFF` reverts behavior to Legacy Auth for all users without code redeploy.
+*   **Post-Deploy (G9):** Monitor login failure rates and SSO timeout errors. If error rate > baseline, auto-toggle flag off.
+
+**Cost Control:**
+*   Heavy CI (45m) runs only once per candidate SHA on the integration branch, not per individual lane commit.
+*   Lane 3's stabilization prevents wasted CI cycles on mock IdP flakiness.

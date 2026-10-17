@@ -1,0 +1,64 @@
+**Delivery Plan: Wiki Migration & Link Remediation**
+
+**Objective:** Migrate wiki content to docs-as-code, map 40+ external deep links, ensure zero downtime, and automate search indexing before the quarterly audit (Tuesday).
+
+### 1. Lanes & Parallelism
+*Worktrees must be isolated; one writer per tree.*
+
+*   **Lane A (Content Extraction & Transformation) [Builder]**
+    *   **Task:** Extract read-only wiki DB content; transform to Markdown; generate initial navigation manifest.
+    *   **Constraint:** Must complete before Lane B starts mapping.
+    *   **Output:** Raw content files + draft `nav-manifest.json`.
+*   **Lane B (Link Mapping & Redirects) [Builder]**
+    *   **Task:** Inventory 40+ external hard-links; create redirect rules mapping old URLs to new file paths; update `nav-manifest.json`.
+    *   **Dependency:** Waits for Lane A's draft manifest to resolve target paths.
+    *   **Output:** Redirect configuration + updated `nav-manifest.json`.
+*   **Lane C (Search Index Automation) [Builder]**
+    *   **Task:** Implement/verify post-merge hook to trigger search index rebuild; simulate sitemap generation with >500 files to validate stability.
+    *   **Parallel:** Can run independently once repo structure is known.
+    *   **Output:** CI workflow patch + sitemap stress-test receipt.
+
+### 2. Gates & Checks (Exact Revisions)
+*No gate passes without evidence at a specific SHA.*
+
+*   **G1 Spec (SHA: `pending`):** Define URL mapping schema and acceptance criteria for "zero broken deep links."
+*   **G2 Plan (SHA: `pending`):** Acyclic graph confirming Lane A → Lane B serialization. Budget: Cap CI runs to avoid redundant 22-min builds.
+*   **G3 Design (SHA: `pending`):** ADR for redirect strategy (server-side vs. client-side) and sitemap retry logic.
+*   **G4 Implement (SHA: `pending` per lane):**
+    *   Lane A: Content committed.
+    *   Lane B: Redirect rules committed.
+    *   Lane C: CI hook committed.
+    *   *Check:* Local build successful; `nav-manifest.json` validated against 2-person rule preview.
+*   **G5 Verify (SHA: `integration-candidate`):**
+    *   **Link Integrity:** Run full link checker on staging (accounting for 4-hour lag; verify cache purge trigger).
+    *   **Sitemap Stress Test:** Force generate with >500 files; verify no flake or manual retry needed.
+    *   **Search Index:** Confirm hook fires on merge simulation.
+    *   *Hard Condition:* If staging lags, verify via local serve of the exact build artifact, not just remote URL.
+*   **G6 Review (SHA: `integration-candidate`):**
+    *   **Independent QA:** Verify 5 random deep-link mappings end-to-end.
+    *   **Security:** Scan redirect rules for open redirect vulnerabilities.
+    *   **Navigation Manifest:** Requires **two distinct approvers** (per repo rule). Builder cannot be one of them.
+
+### 3. Integration & Landing
+*   **G7 Integrate:**
+    *   Serialize Lane A, B, C into a single integration branch.
+    *   Run **one** final CI pipeline (22 mins) on the exact merge commit.
+    *   Verify sitemap generator stability on the full set.
+*   **G8 Release (Human Gate):**
+    *   **Decision:** Owner approves the cutover timing relative to the 4-hour staging lag and audit deadline.
+    *   **Action:** Merge to main. Trigger manual cache purge if automation is unproven in prod.
+    *   **Rollback:** Revert merge commit immediately if >0 deep links fail in production or search index stalls.
+*   **G9 Production Verify:**
+    *   Sample 10 critical external links (incident dashboard, trackers) live.
+    *   Confirm search index updated within expected window.
+*   **G10 Learn:**
+    *   Record sitemap flake threshold and redirect mapping pattern for future migrations.
+
+### Critical Constraints & Risks
+*   **Serialization:** Lane B cannot finalize until Lane A defines file paths.
+*   **CI Cost:** Pre-validate links locally to prevent redundant 22-minute CI runs.
+*   **Staging Lag:** Do not rely solely on staging URL for verification; test the build artifact directly to bypass the 4-hour cache delay.
+*   **Database Deadline:** All extraction (Lane A) must complete before the 10-day DB deletion window closes.
+*   **Approval Bottleneck:** Secure the two required manifest approvers early; do not wait for G6 to identify them.
+
+**Status:** Ready for G0 Intake (Brief) and G1 Spec definition. No work begins until specs are testable and budgets capped.

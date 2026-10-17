@@ -1,0 +1,66 @@
+**Delivery Plan: Edge Agent Image Footprint Reduction**
+
+**Binding Facts & Constraints**
+*   **Target:** `<150MB` image size for `northstar-daemon`.
+*   **Risk:** Shared base image layer with `logging-sidecar`. Modification breaks sidecar checksums (irreversible without manual rollback).
+*   **Approvals:** Production deploy requires dual sign-off (Site Reliability Lead + Security Officer).
+*   **Cost:** CI runs on shared runners ($0.45/min); current build 22m. Budget alert at 30m.
+*   **Environment:** `staging-edge` mimics low bandwidth but lacks real packet loss.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Baseline & Dependency Audit (Serial Start)**
+    *   **Actor:** Builder.
+    *   **Work:** Analyze current image layers. Identify non-essential debug tools, locales, and redundant libraries *excluding* the shared base layer. Generate a "strip list" and a "protected list" (shared dependencies).
+    *   **Output:** `audit-report.md` and a proposed `Dockerfile` diff that does not touch the shared base layer.
+    *   **Gate:** G3 Design Review. Security Officer must verify the "protected list" ensures sidecar checksum integrity.
+
+2.  **Lane B: Isolated Build Optimization (Parallel to C, after A)**
+    *   **Actor:** Builder (in isolated worktree).
+    *   **Work:** Implement the strip list in a new build context. Use multi-stage builds to exclude dev tools.
+    *   **Constraint:** Must not alter the shared base layer ID.
+    *   **Output:** Candidate image `<SHA-B>`.
+
+3.  **Lane C: Sidecar Compatibility Verification (Parallel to B, after A)**
+    *   **Actor:** QA (Independent).
+    *   **Work:** Build the *current* logging sidecar against the *proposed* base layer changes (simulated) to prove checksum stability before the agent build finishes.
+    *   **Output:** Compatibility receipt. If the base layer must change, this lane triggers a stop; a joint migration plan is required (out of scope for this ticket).
+
+4.  **Lane D: Remote Condition Simulation (After B)**
+    *   **Actor:** QA.
+    *   **Work:** Deploy `<SHA-B>` to `staging-edge`. Inject artificial packet loss to mimic Northern Ridge conditions. Verify OTA update completes within the maintenance window.
+    *   **Output:** Performance receipt (update time, success rate).
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirmed above. Appetite: 2 days.
+*   **G2 (Plan):** This plan. Token budget set per lane (LLM usage for script generation capped at $5/lane).
+*   **G3 (Design):** **Hard Gate.** Security Officer signs off on the "protected list" to prevent sidecar breakage. No code changes until signed.
+*   **G4 (Implement):** Builder commits to feature branch. CI runs lint/type checks.
+*   **G5 (Verify):**
+    *   Build must complete in `<25 mins` (cost safety).
+    *   Image size `<150MB`.
+    *   Sidecar checksum verification **PASS** (critical).
+    *   `staging-edge` OTA simulation **PASS** under injected packet loss.
+*   **G6 (Review):**
+    *   **Code Review:** Senior Engineer (not the Builder).
+    *   **Security Review:** Security Officer (verifies no sensitive tools removed/added inadvertently, confirms sidecar safety).
+    *   **QA Review:** SRE Lead (verifies performance receipts).
+*   **G7 (Integrate):** Merge to `main` only after G6 full approval. Re-run full pipeline on merge commit.
+*   **G8 (Release):** **Human Gate.** Dual approval (SRE Lead + Security Officer) required to tag and push to production registry.
+*   **G9 (Production Verify):** Monitor first 5 remote deployments. Rollback trigger: Any node failing to report post-update.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Squash merge to `main` after G7 integration receipt.
+*   **Deployment:** Manual trigger to production registry post-G8 approval.
+*   **Rollback Plan:**
+    *   **Scenario:** Sidecar checksum failure or node offline > 15 mins.
+    *   **Action:** Immediate revert of the registry tag to the previous stable version.
+    *   **Constraint:** If the base layer was inadvertently changed, the manual rollback script (identified in Repo Facts) must be executed by an authorized operator. This script is pre-validated in Lane C.
+*   **Human Decisions Required:**
+    1.  G3: Approval of dependency strip list (Security).
+    2.  G8: Authorization to deploy to production (SRE + Security).
+    3.  Emergency: Execution of manual rollback script if automated revert fails.
+
+**Cost Control:** All CI jobs monitored. If a build exceeds 25 minutes, the job is auto-cancelled to prevent budget alerts, forcing immediate optimization review.

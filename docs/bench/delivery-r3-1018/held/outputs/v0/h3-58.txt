@@ -1,0 +1,58 @@
+### Delivery Plan: Auto-Rollback for Slow-Warmup Service
+
+**G0 Intake & G1 Spec**
+*   **Conductor** defines the scope: Implement a deployment guard that monitors the specific warm-up endpoint for 10 minutes.
+*   **Product Analyst** clarifies acceptance: Rollback triggers *only* on warm-up timeout or specific failure codes, explicitly excluding network latency suite flakiness. Schema migrations are excluded from rollback scope.
+*   **Evil Twin** attacks the plan: Verify that "immediate revert" does not race with ongoing database writes and that the 10-minute window accounts for the caching layer's known slowness without being excessive.
+
+**G2 Plan & Lanes**
+*   **Lane A (Logic Implementation)**: *Builder* writes the deployment guard script.
+    *   **Constraint**: Must poll the specific warm-up endpoint, not generic health checks. Must ignore network latency metrics.
+    *   **Parallelism**: Can run parallel to Lane B.
+*   **Lane B (Pipeline Integration)**: *Builder* modifies the CI/CD configuration.
+    *   **Constraint**: Integrate the guard into the monolithic pipeline. Ensure the retry logic is efficient (no busy-waiting) to protect the 40-credit/minute budget.
+    *   **Serialization**: Must wait for Lane A's script to be unit-tested before integration.
+*   **Lane C (Safety Validation)**: *QA* designs a simulation of the slow-warmup scenario.
+    *   **Constraint**: Since staging lacks traffic, QA will mock the caching layer delay to verify the 10-minute timeout and subsequent rollback trigger.
+    *   **Serialization**: Depends on Lane A's interface definition.
+
+**G3 Design**
+*   **Architect** approves the state machine: `Deploying` → `Warming` (10m max) → `Ready` OR `Rolling Back`.
+*   **Security** verifies that the auto-rollback credential scope is limited to application code reversion and cannot trigger database schema downgrades.
+
+**G4 Implement**
+*   **Builder** commits code to isolated worktrees.
+*   **Check**: Unit tests for the polling logic must pass locally before push. No integration tests in the main pipeline yet to save credits.
+
+**G5 Verify**
+*   **QA** executes the simulation in a dedicated ephemeral environment.
+*   **Check**:
+    1.  Verify deployment pauses while warm-up endpoint returns "initializing."
+    2.  Verify rollback triggers exactly at 10 minutes if "Ready" is not received.
+    3.  **Crucial**: Confirm network latency flakiness does *not* trigger the rollback.
+    4.  Confirm database schema remains untouched during the application revert.
+*   **Evidence**: Logs showing the transition from `Warming` to `Rolling Back` and the final state matching the previous stable version.
+
+**G6 Review**
+*   **Independent Reviewer** (not the Builder) audits the code against the "no schema rollback" requirement and the credit-cost efficiency.
+*   **Security** reviews the automated permission scope.
+*   **Gate**: Blocker if the rollback logic could trigger on the known flaky network check.
+
+**G7 Integrate**
+*   **Conductor** merges lanes into a single integration branch.
+*   **Check**: Run the full pipeline once on the integration SHA to verify no merge conflicts break the guard logic.
+
+**G8 Release (Human Gate)**
+*   **Action**: Deploy to Production.
+*   **Human Decision Required**: **Dave Miller (Site Reliability Lead)** must explicitly approve the initial deployment of this new mechanism.
+*   **Automation**: Once approved and deployed, the *auto-rollback* function itself bypasses human intervention if triggered by the defined conditions.
+
+**G9 Production Verify**
+*   **Monitor**: Observe the next scheduled deployment.
+*   **Check**: Confirm the warm-up phase is recognized and the system stabilizes without manual interference.
+
+**G10 Learn**
+*   **Retrospective**: If the mechanism triggers, analyze if the 10-minute window was sufficient or if the caching layer behavior has changed. Update the "known flaky check" documentation if new false positives emerge.
+
+**Rollback Strategy**
+*   If the new guard itself causes a deployment failure, the manual override is to disable the guard script in the pipeline configuration and revert the pipeline definition to the previous SHA. This requires a human operator but restores the prior manual rollback process immediately.

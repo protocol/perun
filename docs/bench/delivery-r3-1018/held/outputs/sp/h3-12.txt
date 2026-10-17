@@ -1,0 +1,27 @@
+### Delivery Plan: Pricing Page Sync
+
+**1. Lanes & Parallelism**
+*   **Lane A (Content Extraction):** Marketing Lead extracts exact numerical limits and descriptions from the source document. This is a manual, non-technical task.
+*   **Lane B (Source of Truth Verification):** Backend Engineer queries the live billing engine configuration to confirm the hard-coded limits (e.g., verifying the "400" vs "500" discrepancy).
+*   **Lane C (Implementation):** Frontend Developer waits for outputs from Lane A and Lane B. Once both are received and matched, they update the shared JSON file. No other code changes are permitted.
+
+*Parallel Execution:* Lanes A and B run simultaneously immediately. Lane C is serialized and begins only after A and B converge.
+
+**2. Gates & Checks**
+*   **Gate 1 (Data Reconciliation):** Before coding, Lane A and Lane B outputs must be compared in a shared ticket comment. If the marketing copy does not match the billing engine config, work stops for resolution. No code is written until these numbers match exactly.
+*   **Gate 2 (Pre-Commit Review):** The JSON diff is reviewed by a Senior Engineer *not* involved in the implementation. The review checklist contains only one item: "Do values match the reconciled data in Gate 1?" Layout changes are automatic rejects.
+*   **Gate 3 (CI Execution):** The change is pushed to a feature branch. The full CI pipeline (45 mins) is triggered exactly once on this specific revision. No intermediate pushes are allowed to avoid queueing multiple expensive runs.
+*   **Gate 4 (Staging Limitation Acknowledgement):** Since staging uses a mock service, the QA check is limited to verifying the JSON renders correctly in the DOM. No functional limit testing occurs here.
+
+**3. Review Protocol**
+*   **Independent Reviewer:** The Senior Engineer reviewing the PR must not be the implementer or the person who extracted the copy.
+*   **Scope Lock:** The reviewer is instructed to ignore all lines except the specific data keys being updated. Any whitespace or formatting changes outside these keys must be reverted before approval.
+*   **Sign-off:** Approval requires a comment explicitly stating: "Values verified against Ticket #[ID] reconciliation data."
+
+**4. Landing & Deployment**
+*   **Timing Window:** Deployment is scheduled for 08:15 AM EST. This accounts for the 45-minute CI window and ensures completion before the 09:00 AM deadline, while falling within the Revenue Operations lead's availability (08:00–10:00 AM local time).
+*   **Human Decision:** The Revenue Operations lead provides the explicit production approval button only after CI passes and the PR is merged to the release branch.
+*   **Cache Strategy:** Because the cache cannot be purged for 15 minutes, the deployment must complete by 08:45 AM EST at the latest to ensure fresh content is served by the 09:00 AM email blast.
+*   **Rollback Plan:** If post-deployment visual verification (via production URL) shows incorrect numbers, the immediate action is to revert the merge commit and redeploy the previous stable tag. No hotfixes are attempted due to the tight timeline and cache constraints.
+
+**Critical Path:** CI Duration (45 mins) + Approval Latency. All handoffs must be immediate to meet the 09:00 AM hard deadline.

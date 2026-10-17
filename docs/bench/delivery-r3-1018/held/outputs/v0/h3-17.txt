@@ -1,0 +1,57 @@
+### Delivery Plan: Public Feed API Cursor Migration
+
+**Objective:** Implement offset-to-cursor translation for legacy mobile clients (v4.2-) while maintaining response schema stability and accurate rate limiting.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Core Logic - Builder):** Implement the translation layer in the public feed endpoint.
+    *   *Logic:* Detect `offset` parameter → internally resolve to cursor → execute cursor query → map results back to offset-style response if necessary (or ensure schema compatibility).
+    *   *Constraint:* Must handle 400ms DB replica lag without timing out token validation.
+    *   *Serialization:* Must complete before Lane B.
+*   **Lane B (Rate Limit & Header Logic - Builder):** Implement side-effects.
+    *   *Logic:* Ensure rate limit counters increment correctly on the *original* request identity, not the translated internal call. Add `Deprecation-Warning` header *only* if the incoming request used native cursor params (not offset).
+    *   *Dependency:* Requires Lane A's interface definition to mock the translation path.
+*   **Lane C (Local Verification - QA):** Execute local regression suite.
+    *   *Trigger:* Runs only after Lane A & B code is committed to a feature branch.
+    *   *Scope:* Simulate legacy offset requests, new cursor requests, and mixed traffic. Verify no data duplication and correct header presence.
+    *   *Constraint:* Mandatory before any CI run (cost cap: 3 runs/day).
+
+#### 2. Gates & Checks
+*   **G1 Spec (Conductor):** Define exact translation algorithm for offset→cursor to prevent duplication. Confirm `Deprecation-Warning` logic triggers exclusively on native cursor usage.
+*   **G3 Design (Architect):** Address the 400ms replica lag. Design timeout handling or async token resolution to prevent request failures during translation.
+*   **G4 Implement (Builder):**
+    *   *Base SHA:* Pin to current `main` head before starting.
+    *   *Output:* Patch files for Lane A and B.
+    *   *Local Check:* Run unit tests locally. Verify rate limit counter logic via unit mocks.
+*   **G5 Verify (QA - Independent):**
+    *   *Environment:* Local stack with simulated DB lag (400ms+).
+    *   *Checks:*
+        1.  Legacy offset request → No duplication, correct data, no deprecation header.
+        2.  New cursor request → Correct data, deprecation header present.
+        3.  Rate limits → Counter increments exactly once per external request.
+    *   *Evidence:* Local test logs proving schema stability and header logic.
+*   **G6 Review (Security + Mobile Platform):**
+    *   *Security:* Verify translation logic doesn't bypass auth or expose internal cursor mechanics.
+    *   *Mobile Platform:* Confirm backward compatibility for v4.2 clients.
+    *   *Constraint:* Independent of Builder.
+
+#### 3. Landing & Human Gates
+*   **Integration (G7):**
+    *   Merge Lane A and B into a single integration branch.
+    *   Run *one* CI regression suite (consuming 1 of 3 daily slots) on the exact integration SHA.
+    *   *Rollback Plan:* Prepare immediate revert commit. Note: LB caches errors for 5 mins; monitor specifically for cached 5xx responses post-deploy.
+*   **Human Approval (G8 - Mandatory):**
+    *   **Approvers:** Security Lead AND Mobile Platform Owner.
+    *   **Action:** Explicit written approval required before merging to `main` (which triggers production deploy).
+    *   **Context:** Provide CI green receipt, local verification logs, and rollback strategy.
+*   **Production Verify (G9):**
+    *   Monitor real-time traffic for offset requests.
+    *   Check rate limit metrics for anomalies.
+    *   Verify no spike in rejected traffic.
+    *   *Constraint:* If silent failure occurs (LB cache issue), trigger rollback immediately; do not wait for cache expiry.
+
+#### 4. Risk Mitigation
+*   **DB Lag:** If cursor validation times out, fallback to offset logic temporarily rather than failing the request.
+*   **CI Cost:** Local verification is strict gate; no CI runs until local tests pass 100%.
+*   **Frozen Auth:** Do not touch shared authentication library; implement translation strictly within the feed service scope.
+
+**Next Step:** Conductor to draft G1 Spec confirming the offset-to-cursor algorithm and timeout thresholds for owner review.

@@ -1,0 +1,56 @@
+**Delivery Plan: Free Tier Sunset & Migration**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Migration script execution (reversal requires 6h full backup restore).
+*   **Hard Gate:** Dual human approval (Finance Lead + Chief Legal Officer) required for production deployment.
+*   **Serialization Point:** `LedgerCore` config file shared with reporting; analytics jobs must be manually frozen during edit.
+*   **Risk:** Notification service flakiness under load; 4h CI duration limits retry windows.
+*   **Scope:** 12,000 accounts; mandatory 30-day notice; auto-provision to 'Basic' with discount; zero data loss.
+
+**Lanes & Parallelism**
+
+1.  **Lane A: Notification Sequence (Immediate Start)**
+    *   **Work:** Trigger 30-day notice via comms engine. Implement rate-limiting to bypass flaky high-volume checks.
+    *   **Parallelism:** Runs independently of code changes.
+    *   **Gate:** Verify delivery receipts for 12,000 users.
+
+2.  **Lane B: Billing Logic & Migration Script (Builder)**
+    *   **Work:** Update `LedgerCore` to provision 'Basic' plan + discount. Write idempotent migration script. Add "no data purge" assertions.
+    *   **Constraint:** Isolated worktree; config edit requires analytics freeze coordination.
+    *   **Gate:** Unit tests (critical paths only) + dry-run against staging snapshot.
+
+3.  **Lane C: Independent Verification (QA + Security)**
+    *   **Work:** Verify exact revision from Lane B. Validate billing math, discount application, and data retention guarantees.
+    *   **Independence:** Distinct from Builder; receives final SHA, not narrative.
+    *   **Gate:** Functional receipt on staging; security sign-off on data handling.
+
+4.  **Lane D: Audit & Rollback Prep (Release)**
+    *   **Work:** Prepare audit log schema. Verify 6h backup restore procedure is viable. Draft rollback runbook.
+    *   **Gate:** Rollback proven dry-run; audit format approved.
+
+**Gates & Checks (Exact Revisions)**
+
+*   **G0/G1 (Spec):** Confirm 30-day timer start date and discount logic with Legal/Finance *before* coding.
+*   **G2 (Plan):** Explicit token/cost budget for CI runs (limited suites). Define analytics freeze window.
+*   **G3 (Design):** ADR for `LedgerCore` config lock strategy and freeze protocol.
+*   **G4 (Implement):** Code frozen. Tests committed. Base SHA pinned.
+*   **G5 (Verify):** **Local stack up.** CI green (4h suite) at exact SHA. Staging migration dry-run successful (subset of users). Notification burst test passed.
+*   **G6 (Review):** Independent QA + Security verdicts. No Blockers/Criticals.
+*   **G7 (Integrate):** Merge to release branch. Re-run critical CI on integrated SHA.
+*   **G8 (Release - Human Gate):** **Dual Approval Required.** Finance Lead + Chief Legal Officer must explicitly approve the deployment manifest and rollback plan. No auto-deploy.
+*   **G9 (Production Verify):** Post-deploy audit log generation. Verify 12,000 accounts migrated, discounts active, data intact.
+*   **G10 (Learn):** Retro on notification flakiness and CI cost vs. coverage.
+
+**Landing Strategy**
+
+*   **Merge Train:** Single commit to release branch after G7.
+*   **Human Decision:** Deployment to production is **blocked** until both Finance and Legal approve (G8). This is a hard stop; no workaround.
+*   **Rollback:** If G9 fails (mismatch in count, data loss, billing error), immediately trigger full system backup restore (6h downtime). No partial rollback possible.
+*   **Audit:** Final artifact is the signed audit log showing 12,000/12,000 success, attached to the release ticket.
+
+**Risk Mitigation**
+*   **CI Cost:** Only critical paths tested; flaky notification check isolated in Lane A.
+*   **Config Collision:** Analytics jobs frozen *before* `LedgerCore` config touch; serialized via manual gate.
+*   **Irreversibility:** Backup restore verified (Lane D) before G8 approval sought.
+
+**Next Step:** Await confirmation of 30-day window start date to trigger Lane A.

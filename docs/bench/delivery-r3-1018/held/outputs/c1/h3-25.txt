@@ -1,0 +1,70 @@
+### Delivery Plan: Per-Tenant Throttling for Bulk Data Export
+
+**Binding Facts & Constraints**
+*   **Scope:** `data-pipeline` cluster only; no global caps.
+*   **Limits:** 5 concurrent jobs/org, 2M rows/day/org.
+*   **Risk:** 45m CI cost per failure; schema locks irreversible without full restore.
+*   **Approvers:** Backend Lead + Database Administrator (DBA) required for deploy.
+*   **Observability Gap:** Current metrics aggregate throttled requests with failures; new log tags required.
+*   **Environment:** Staging data volume is insufficient for stress validation.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Specification & Contract (Serial, G1)**
+*   **Actor:** Product Analyst + Conductor.
+*   **Work:** Define exact error payloads, log tag schema (to distinguish throttling from failure), and the "2M row" counting mechanism (sliding window vs. fixed day).
+*   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+*   **Gate:** G1 Spec approval (Owner sign-off on logic).
+
+**Lane 2: Implementation (Parallel, G4)**
+*   **Actor:** Builder (Dedicated Worktree).
+*   **Work:** Implement concurrency limiter (semaphore) and row counter. Inject specific log tags. Ensure non-blocking error returns.
+*   **Constraint:** Must run full local stack verification before any push (CI cost prohibition).
+*   **Output:** Patch + Local test receipts.
+
+**Lane 3: Independent Verification (Parallel, G5)**
+*   **Actor:** QA (Separate Worktree).
+*   **Work:** Synthesize high-volume load tests locally (since staging is inadequate). Verify 5-job cap and 2M row cutoff. Confirm error messages and log tags.
+*   **Output:** Functional receipts at exact Builder SHA.
+
+**Lane 4: Security & DB Impact (Parallel, G6)**
+*   **Actor:** Security + DBA.
+*   **Work:** Review schema locks for reversibility risks. Verify isolation (ensure small tenants like Beta Corp are unaffected).
+*   **Output:** Security/DBA verdicts.
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Completed before Lane 2 starts. Defines the "2M row" logic explicitly.
+*   **G4 (Implement):** Builder must prove local stack up, build green, and unit tests passing *before* pushing. No "push to see" allowed.
+*   **G5 (Verify):** QA runs synthetic load tests locally against the exact Builder SHA. **Hard Condition:** If the local stack does not start or logs do not show the new tags, status is `UNVERIFIED`.
+*   **G6 (Review):** Independent review by Backend Lead (logic) and DBA (schema/locks). Security reviews supply chain and isolation.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected subset of CI (if possible) or full pipeline only after human pre-check.
+*   **G8 (Release):** **Human Gate.** Requires explicit approval from Backend Lead AND DBA.
+*   **G9 (Production Verify):** Monitor new log tags immediately post-deploy. Confirm Apex Logistics is capped and Beta Corp latency drops.
+
+---
+
+#### Review Strategy
+
+*   **Builder** never reviews their own code.
+*   **Backend Lead** reviews algorithmic correctness and error handling.
+*   **DBA** reviews schema changes and lock implications (critical path).
+*   **Security** reviews tenant isolation to prevent cross-tenant leakage.
+*   **QA** provides independent functional proof via local stress simulation.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Single PR to `main` (or release branch) only after G6 green.
+*   **Human Decision:** Deploy requires dual approval (Backend Lead + DBA) due to irreversible schema risk.
+*   **Rollback Plan:**
+    1.  If schema lock causes deadlock: Immediate revert of code + DBA-executed restore from pre-deploy backup (verified in G3).
+    2.  If logic errors cause false positives: Feature flag flip (if implemented) or hotfix revert.
+*   **Post-Deploy:** Verify SLOs for mid-tier customers within 1 hour. If delays persist, trigger G9 breach protocol.
+
+**Timeline:** All lanes execute in parallel post-G1. Target G8 approval by Thursday EOD to allow Friday stabilization.

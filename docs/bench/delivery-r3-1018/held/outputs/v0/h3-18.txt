@@ -1,0 +1,56 @@
+### Delivery Plan: v4.2 Extension Store Submission
+
+**Objective:** Submit a production-ready, signed v4.2 build of the browser helper to the public marketplace, ensuring the data synchronization fix is included, manifest version is correct, and privacy links are valid.
+
+#### 1. Lanes & Serialization
+
+Work is split into three lanes. Lanes 1 and 2 run in parallel; Lane 3 is strictly serialized after both succeed.
+
+*   **Lane A: Build & Artifact Verification (Builder)**
+    *   **Task:** Trigger the manual build via the internal dashboard for the `browser-plugin` directory. Verify the build completes without errors.
+    *   **Constraint:** Monitor runtime to ensure it stays under the 30-minute free tier limit. If it exceeds, halt and report immediately.
+    *   **Output:** Unsigned build artifact and build logs.
+*   **Lane B: Compliance & Manifest Audit (QA + Security Acting Manager)**
+    *   **Task:** Inspect the source code in `browser-plugin` to confirm:
+        1.  Manifest version is incremented to v4.2.
+        2.  Privacy policy links are valid and reachable.
+        3.  No experimental flags are present in the configuration.
+        4.  The data synchronization bug fix is present in the diff.
+    *   **Task:** Perform manual accessibility verification (bypassing the flaky macOS automated check) on the built artifact.
+    *   **Output:** Audit report confirming compliance and accessibility.
+*   **Lane C: Signing & Submission (Release Engineer + Security Acting Manager + Product Director)**
+    *   **Prerequisite:** Requires successful completion of Lane A (artifact) and Lane B (audit report).
+    *   **Task:** Coordinate with the acting Security Manager to access the legacy hardware token. Sign the verified artifact.
+    *   **Task:** Prepare the release ticket with the signed artifact and audit report.
+    *   **Task:** Obtain digital signature from the Director of Product.
+    *   **Task:** Execute the final submission to the store.
+
+#### 2. Gates & Checks
+
+*   **Gate G4 (Implementation Complete):** Lane A produces the build artifact. **Check:** Build logs show success; runtime < 30 mins.
+*   **Gate G5 (Verification):** Lane B completes the audit. **Check:**
+    *   Manifest version == 4.2.
+    *   Privacy links return HTTP 200.
+    *   Zero experimental flags found.
+    *   Manual accessibility check passed.
+    *   Data sync fix verified in code.
+*   **Gate G6 (Security & Release Readiness):** Artifact is signed. **Check:** Signature valid via hardware token; Acting Security Manager confirms access log.
+*   **Gate G8 (Human Approval):** Final submission authorization. **Check:** Digital signature of the Director of Product present on the release ticket.
+
+#### 3. Review Strategy
+
+*   **Code/Config Review:** Performed by **QA** (independent of the Builder) focusing on the manifest, flags, and privacy links.
+*   **Security Review:** Performed by the **Acting Security Manager** (independent of Builder/QA) specifically for the hardware token access and signing process.
+*   **Final Verification:** The **Product Director** reviews the aggregated evidence (Build logs, Audit report, Signature proof) before applying their digital signature. No self-approval is permitted at any stage.
+
+#### 4. Landing & Rollback
+
+*   **Merge/Landing:** This is a direct submission to the external store, not a git merge. The "landing" occurs when the submission portal confirms receipt.
+*   **Human Decision Points:**
+    1.  **Acting Security Manager:** Must physically authorize hardware token usage.
+    2.  **Product Director:** Must apply digital signature to the release ticket. No submission occurs without this.
+*   **Rollback Strategy:**
+    *   **Pre-submission:** If any gate fails, discard the build artifact and revert source changes if necessary.
+    *   **Post-submission:** As stated in the ticket, **no hotfix or rollback is possible** once submitted. If the build is rejected by the store, a new v4.3 cycle must be initiated immediately. If accepted but defective, a crisis communication plan must be enacted to warn enterprise clients until v4.3 is approved.
+
+**Risk Note:** The inability to rollback post-submission makes Gate G5 (Verification) the critical failure point. Manual accessibility checking and strict flag auditing are mandatory, not optional.

@@ -1,0 +1,53 @@
+### Delivery Plan: Pricing Page Sync
+
+**Objective:** Update pricing page copy to match billing engine limits before 9 AM EST launch.
+**Constraint:** Zero layout changes; strict data accuracy; time-boxed approval window.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Data Verification - Human/Machine Pair):**
+    *   **Actor:** Product Analyst (Human) + Builder (Agent).
+    *   **Task:** Extract hard limits from the live billing engine configuration. Compare against the marketing team's attached document.
+    *   **Output:** A signed "Source of Truth" manifest confirming the exact numbers to be coded.
+    *   **Parallelism:** Runs immediately. Must complete before Lane B starts.
+*   **Lane B (Implementation):**
+    *   **Actor:** Builder (Agent).
+    *   **Task:** Edit the shared JSON file. Update only the specific data points and descriptions confirmed in Lane A. No layout touches.
+    *   **Worktree:** Isolated branch `feat/pricing-sync-[date]`.
+    *   **Parallelism:** Starts only after Lane A manifest is ready.
+*   **Lane C (Verification Prep):**
+    *   **Actor:** QA (Agent).
+    *   **Task:** Prepare a targeted verification script that parses the JSON and validates it against the Lane A manifest. Skip full CI regression (45m cost) for this text-only change; rely on unit parsing and manual visual check on a local build.
+    *   **Parallelism:** Runs parallel to Lane B.
+
+#### 2. Gates & Checks
+*   **G1 Spec (Immediate):** Define the "Source of Truth" manifest. Pin the base SHA of the JSON file before editing.
+*   **G4 Implement:** Builder commits the JSON change. Commit message references the Lane A manifest.
+*   **G5 Verify (Local/Targeted):**
+    *   **Check 1:** Unit test confirming JSON validity and exact value match against the manifest.
+    *   **Check 2:** Local build render. Human visual confirmation that *only* text changed, layout intact.
+    *   **Constraint:** Do not rely on Staging (mock billing). Verification must be against the manifest, not the mock service.
+    *   **Revision:** Verification runs on the exact commit SHA from G4.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (Independent of Builder).
+    *   **Scope:** Diff review only. Confirm no layout drift, correct numbers, and valid JSON.
+    *   **Decision:** Pass/Fail based on manifest alignment.
+
+#### 3. Landing & Human Decisions
+*   **G7 Integrate:** Merge to `main` (or release branch) immediately upon G6 pass.
+*   **G8 Release (Human Gate):**
+    *   **Approver:** Revenue Operations Lead.
+    *   **Window:** 8:00 AM – 10:00 AM Local Time.
+    *   **Action:** Explicit approval to deploy.
+    *   **Timing Strategy:** Target deployment for **8:15 AM**. This allows the 15-minute cache purge to complete by 8:30 AM, ensuring the 9:00 AM email blast sees correct data.
+*   **G9 Production Verify:**
+    *   **Action:** Post-deploy curl/wget of the live pricing page at 8:35 AM. Verify numbers match the manifest.
+*   **Rollback Plan:**
+    *   If G9 fails or numbers are incorrect: Immediate revert of the merge commit.
+    *   **Fallback:** If deployment misses the 8:15 AM window (risking cache issues), delay the email blast or hold the deploy until the next safe window (do not deploy late and risk mismatch).
+
+#### 4. Risk Mitigation
+*   **CI Cost:** Full 45-minute regression is skipped for this lane. Only JSON linting and unit parsing run. Full regression can run post-launch if policy allows, or be waived for text-only changes.
+*   **Cache Timing:** The 15-minute cache lock is the critical path. Deployment must not occur later than 8:45 AM.
+*   **Data Integrity:** The "Source of Truth" manifest (Lane A) is the single authority. If the attached document conflicts with the billing engine, the billing engine wins; marketing must be notified before coding.
+
+**Next Step:** Initiate Lane A to generate the manifest.

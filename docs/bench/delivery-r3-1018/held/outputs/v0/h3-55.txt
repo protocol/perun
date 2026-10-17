@@ -1,0 +1,46 @@
+### Delivery Plan: Robot Status Feed Integration
+
+**Objective:** Integrate robot status feed with strict stale-data safeguards (2s timeout) to prevent dispatcher conflicts.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Data Pipeline & Validation):** Implement timestamp validation logic. Must reject any coordinate older than 2 seconds.
+    *   *Constraint:* Runs in isolation; cannot touch the shared read-only config file used by Billing.
+    *   *Serialization:* Must complete before Lane B starts rendering logic to ensure the contract is defined.
+*   **Lane B (Dashboard Rendering):** Update UI to vanish/gray-out icons when Lane A flags data as stale.
+    *   *Constraint:* Must not cache legacy entries locally if it risks audit trail loss.
+*   **Lane C (Load Verification):** Simulate high-load network latency to trigger the "flaky" position-validity check.
+    *   *Parallelism:* Can run once Lane A produces a testable build artifact.
+
+#### 2. Gates & Checks
+*   **G1 Spec (Immediate):** Define the exact timestamp threshold (2s) and the "gray/vanish" state behavior. Pin base SHA before work begins.
+*   **G4 Implement:**
+    *   Lane A commits validation logic with unit tests for latency spikes.
+    *   Lane B commits UI changes.
+    *   *Critical:* No changes to the shared Billing config file.
+*   **G5 Verify (Exact Revision):**
+    *   Run efficient unit tests first to respect the 12-minute CI timeout.
+    *   Execute Lane C's load simulation. If the "position-validity" check fails due to latency, **do not auto-retry**. Flag for Shift Lead manual approval immediately.
+    *   **UI Proof:** Must demonstrate icons vanishing within 2s of simulated signal loss on the exact build SHA.
+*   **G6 Review:**
+    *   **Security/Data:** Independent review of the timestamp logic to ensure no race conditions allow stale data.
+    *   **QA:** Independent verification of the UI behavior under load.
+    *   *Constraint:* Reviewers must not be the implementers of Lane A or B.
+
+#### 3. Human Gates & Decisions
+*   **Shift Lead Approval:** Required *only* if the "position-validity" check fails during G5 due to network latency. This is a manual retry authorization, not a code change.
+*   **Senior Operations Manager:** Sole authority for **G8 Release**. Must explicitly approve the production deploy after reviewing G7 integration receipts.
+*   **Audit Trail Protection:** Before any final merge, confirm no logic exists that deletes the legacy cache entry. This action is irreversible and forbidden without separate, explicit migration approval.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:**
+    1.  Lane A merges to integration branch after G6 pass.
+    2.  Lane B merges to integration branch after G6 pass.
+    3.  Run final integration suite (G7) on the combined SHA. Ensure total CI time remains under 12 minutes.
+*   **Deployment:**
+    *   Trigger deploy to 'Logistics-Prime' cluster only after Senior Operations Manager approval.
+    *   Monitor specifically for the "stale coordinate" incident pattern.
+*   **Rollback Plan:**
+    *   If stale data appears or dispatchers report confusion: Immediate rollback to the pre-integration SHA.
+    *   Do not attempt to "fix forward" on production if the 2s safeguard fails; the risk of human-robot collision is too high.
+
+**Risk Note:** The flaky validity check is the primary bottleneck. Lane C must prove stability or secure the Shift Lead's standing approval for latency-induced failures before the Senior Operations Manager will authorize release.

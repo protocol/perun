@@ -1,0 +1,67 @@
+### Delivery Plan: Orders Table PK Migration to UUID
+
+#### 1. Lanes and Parallelism
+**Lane A: Schema & Data Migration (Platform Team)**
+*   **Work:** Develop idempotent migration scripts for blue-green swap. Implement dual-write logic (integer + UUID) during transition.
+*   **Constraint:** Must execute within the 30-second schema lock window to prevent failover.
+*   **Parallelism:** Runs parallel to Lane B after interface contracts are signed.
+
+**Lane B: Application Logic & Adapters (Core Commerce Team)**
+*   **Work:** Refactor Orders service to accept/generate UUIDs. Update Legacy Billing Adapter to cast UUIDs to strings without truncation.
+*   **Constraint:** Must maintain backward compatibility with integer inputs during the transition phase.
+
+**Lane C: Downstream Coordination (Data & Audit Team)**
+*   **Work:** Refactor `daily-reconciliation` shared library to handle string IDs. Coordinate updates for the five dependent services.
+*   **Serialization:** **Critical Path.** Lane C must complete and verify audit trail integrity *before* Lane A enables UUID-only traffic. Breaking this library breaks the audit trail irreversibly.
+
+#### 2. Gates and Checks
+**Gate 1: Contract Freeze (Revision: `feat/uuid-contracts-v1`)**
+*   **Check:** Sign-off on ID format (string representation of UUID) between Lane B and Lane C.
+*   **Location:** Staging environment.
+*   **Requirement:** Verified handling of UUIDs in Billing Adapter and Reconciliation Lib.
+
+**Gate 2: Migration Dry-Run (Revision: `feat/uuid-migration-dryrun`)**
+*   **Check:** Execute migration script against a production snapshot clone.
+*   **Metric:** Schema lock time < 25 seconds (buffer for 30s limit).
+*   **Location:** Isolated performance environment (bypass flaky staging network checks).
+
+**Gate 3: Multi-AZ Verification (Revision: `release/uuid-candidate`)**
+*   **Check:** Deploy to all three availability zones in "Shadow Mode" (dual-write active, reads still serve integers).
+*   **Metric:** Zero collision rate; UUID generation consistency across AZs.
+*   **Override:** Manual verification required to bypass flaky staging network false-negatives during high-load sim.
+
+**Gate 4: Audit Trail Integrity (Revision: `release/uuid-candidate`)**
+*   **Check:** Run `daily-reconciliation` job against shadow data.
+*   **Requirement:** 100% match with legacy integer-based audit logs. No irreversible breaks.
+
+#### 3. Review Strategy
+**Independent Code Review:**
+*   **Reviewer 1 (Security/DBA):** Reviews Lane A migration scripts. Focus: Data loss prevention, rollback mechanics, lock duration.
+*   **Reviewer 2 (Senior Engineer, non-CoreCommerce):** Reviews Lane B and C changes. Focus: Type safety, string casting in Billing Adapter, shared library compatibility.
+*   **Constraint:** Reviewers must not be authors of the code they inspect. Cross-team review required for Lane C due to shared library impact.
+
+**Compliance Review:**
+*   **Approvers:** Lead Architect AND Data Governance Officer.
+*   **Timing:** Post-Gate 3, Pre-Gate 4. Both must approve the "Go/No-Go" for traffic switching.
+
+#### 4. Landing and Rollback
+**Merge Strategy:**
+1.  Merge Lane C (Shared Lib) first. Deploy to all dependent services. Verify audit trail for 24 hours.
+2.  Merge Lane B (App Logic) in "Dual-Read/Write" mode.
+3.  Merge Lane A (Schema) during lowest traffic window.
+
+**Traffic Switch:**
+*   **Action:** Flip feature flag to read UUIDs primarily, fallback to integer.
+*   **Human Decision:** Data Governance Officer must explicitly authorize the switch after reviewing Gate 4 results.
+
+**Rollback Plan:**
+*   **Trigger:** Any audit mismatch or >1% error rate in Billing Adapter.
+*   **Action:**
+    1.  Immediately revert feature flag to integer-primary.
+    2.  If schema commit occurred, execute inverse migration script (UUID -> Integer mapping table must be preserved).
+    3.  Halt `daily-reconciliation` until data consistency is manually verified.
+*   **Constraint:** Rollback must also complete within the 30-second lock window.
+
+**Post-Landing:**
+*   Remove dual-write logic and integer fallback after 7 days of stable operation.
+*   Deprecate integer parsing in shared library only after all historical batches are processed.

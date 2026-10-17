@@ -1,0 +1,33 @@
+### Delivery Plan: Build Agent OS Image Upgrade
+
+#### 1. Lanes and Parallelism
+*   **Lane A (Image Preparation):** Platform Trust engineers update the `golden-image` definition with the new kernel and security patches. This lane runs independently of code changes.
+*   **Lane B (CA Compatibility Validation):** A dedicated test job validates the new image against internal Certificate Authorities. This must verify that the proprietary signing tools can successfully handshake and retrieve certificates without timing out.
+*   **Lane C (Stakeholder Alignment):** Simultaneously, the requestor secures written approval from Jane Smith and the Compliance Officer. Since the image is shared across four products, this approval is a hard gate before any merge.
+
+**Serialization Constraint:** Lane B cannot finalize until Lane A produces a candidate image. Lane C must complete before the final merge gate.
+
+#### 2. Gates and Checks
+*   **Gate 1 (Pre-Merge Review):** The pull request updating the `golden-image` definition requires explicit approval from both Jane Smith and the Compliance Officer. No automated check substitutes this.
+*   **Gate 2 (Integrity & Timeout Check):** The CI job must run on the isolated hardware enclave using the new image candidate.
+    *   **Revision:** Runs on the specific commit containing the image definition change.
+    *   **Success Criteria:** Signing process completes with valid integrity checks and no timeouts.
+    *   **Flake Handling:** If the network handshake check fails on a Tuesday, one retry is permitted immediately. A second failure triggers a manual investigation; do not auto-retry further.
+*   **Gate 3 (Security Lead Green-Light):** Even with passing CI and stakeholder approval, the deployment to the production signing environment requires a manual "green-light" from the Security Lead. This is a non-negotiable human decision point.
+
+#### 3. Review Strategy
+*   **Independent Reviewer:** The code change (image definition) must be reviewed by a senior engineer from a team *other than* Platform Trust to ensure no product-specific assumptions were broken.
+*   **Compliance Audit Trail:** All test logs, specifically the hardware attestation results and CA handshake success markers, must be archived in the ticket for the external audit next Tuesday.
+
+#### 4. Landing and Rollback
+*   **Merge Strategy:** Once Gates 1, 2, and 3 are cleared, merge to the main release branch during a low-traffic window to minimize risk, though the goal is zero downtime.
+*   **Deployment:** The Security Lead triggers the production deployment manually.
+*   **Rollback Protocol:**
+    *   **Critical Constraint:** Reverting is irreversible once old binaries are purged from the cache (4-hour window).
+    *   **Procedure:** If the new image fails post-deployment, the rollback must be initiated immediately within the 4-hour window. If the window closes, a new "hotfix" image based on the old OS version must be built and fast-tracked through the same gates, as direct reversion is impossible.
+*   **Human Decision Points:**
+    1.  Approval from Jane Smith/Compliance Officer (Shared resource impact).
+    2.  Security Lead green-light (Production access).
+    3.  Decision to proceed if the flaky network check fails twice (Risk acceptance).
+
+This plan prioritizes the audit deadline while respecting the irreversible nature of the cache purge and the shared dependency of the golden image.

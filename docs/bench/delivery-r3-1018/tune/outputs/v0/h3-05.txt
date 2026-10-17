@@ -1,0 +1,49 @@
+### Delivery Plan: Sidecar Proxy Rollout (Non-Critical Namespaces)
+
+**Objective:** Inject sidecar proxy into `billing-reporting` and `audit-log` namespaces only, verifying zero latency impact and automatic rollback on CPU throttling, while strictly isolating `real-time-trading` and `user-checkout`.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Configuration Writer):** Isolated worktree. Modifies injection rules in `global-mesh-policy.yaml` targeting only the two allowed namespaces.
+    *   *Constraint:* Must serialize against the business-hours lock. If locked, wait; do not force edit.
+    *   *Exclusion:* Explicitly verify no diff touches `real-time-trading` frozen branch or `user-checkout` selectors.
+*   **Lane B (Observability Setup):** Parallel to A. Prepares monitoring queries for error rates and CPU throttling specific to the target namespaces. Defines the automatic rollback trigger logic (script-based, not manual).
+*   **Lane C (Security & Cost Gate):** Runs once per unique image/manifest change. Triggers the 45-minute CI security scan.
+    *   *Optimization:* Run only on the final merged manifest to avoid redundant $12 executions. Retry the flaky network policy validator exactly twice before failing.
+
+#### 2. Gates & Checks
+*   **G2 (Plan Approval):** Human review of the namespace selector logic. Must prove mathematically that `real-time-trading` and `user-checkout` are excluded.
+*   **G3 (Design/ADR):** Document the irreversible nature of the image publish. Define the "full cluster restore" rollback path as the only fallback if automatic script rollback fails.
+*   **G4 (Implementation):** Lane A commits the change. Base SHA pinned.
+*   **G5 (Verify - Pre-Deploy):**
+    *   Run CI pipeline (Security Scan). Handle flaky check (max 2 retries).
+    *   Dry-run injection in a staging clone of `billing-reporting`.
+*   **G6 (Independent Review):**
+    *   **Reviewer:** Senior Architect 1 (Security focus).
+    *   **Reviewer:** Senior Architect 2 (Latency focus).
+    *   *Independence:* Neither reviewer is Lane A. Both must approve the exact SHA before promotion.
+*   **G7 (Integration):** Merge to the integration branch. This triggers the immutable image publish.
+*   **G8 (Release - Human Gate):**
+    *   **Action:** Manual promotion to production clusters across three availability zones.
+    *   **Approvers:** Requires approval from **two senior architects** (manual gate).
+    *   **Timing:** Outside market hours if possible, or during lowest traffic window.
+
+#### 3. Verification & Monitoring (G9)
+*   **Exact Revision:** Monitor the deployed SHA in production.
+*   **Success Criteria:**
+    *   Sidecar present in `billing-reporting` and `audit-log`.
+    *   Error rates ≤ baseline.
+    *   No CPU throttling alerts.
+*   **Automatic Rollback:** If CPU throttling alert fires, the script from Lane B executes immediate reversion to the previous stable manifest.
+*   **Reporting:** Friday report includes: Deployment SHA, namespace coverage proof, error rate comparison graphs, and confirmation of zero throttling events.
+
+#### 4. Landing & Rollback Strategy
+*   **Merge Strategy:** Single commit to the main configuration branch. No merge train needed for this scope, but strict serialization on the config file.
+*   **Human Decisions Required:**
+    1.  Approval of the namespace exclusion logic (G2).
+    2.  Final sign-off by two senior architects to promote the integrated SHA to production (G8).
+    3.  Authorization to proceed if the flaky check fails after two retries (requires human triage, not auto-pass).
+*   **Rollback:**
+    *   *Primary:* Automated script reverts config upon CPU throttling alert.
+    *   *Secondary (Catastrophic):* Full cluster restore (as per repo facts, image publish is irreversible). This is the only path if the sidecar causes silent data corruption or unmonitored latency spikes not caught by the CPU alert.
+
+**Risk Mitigation:** The `real-time-trading` branch is physically separate and frozen; Lane A must not attempt to merge or rebase onto it. The `global-mesh-policy.yaml` lock is respected by pausing Lane A during business hours if contention occurs.

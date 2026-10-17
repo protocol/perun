@@ -1,0 +1,27 @@
+### Delivery Plan: Loyalty Tier Backfill
+
+#### 1. Lanes and Parallelism
+*   **Lane A (Script Development):** Develop the idempotent backfill script. This lane runs independently of production access. The script must calculate `loyalty_tier` based on 3-year spend, process in batches of 5,000 rows, and enforce a 200ms sleep between batches. It must include a "dry-run" mode that logs calculated values without writing.
+*   **Lane B (Governance & Scheduling):** Prepare the change request for Jane Smith (DBA). Since the job affects 200M rows, this requires manual approval in the governance portal. Coordinate with operations to schedule the execution window strictly outside business hours to mitigate any residual risk, despite the non-locking design.
+*   **Lane C (Validation Harness):** Build a lightweight verification script that samples 10,000 random rows post-backfill and compares them against analytics dashboard estimates. This must run in under 45 minutes to avoid CI budget caps.
+
+**Parallel Execution:** Lanes A and C can proceed immediately. Lane B proceeds once Lane A produces the estimated runtime and batch parameters.
+
+#### 2. Gates and Checks
+*   **Gate 1 (Code Review):** Lane A's script is reviewed by a Senior Backend Engineer not involved in writing the code. Check specifically for transaction boundaries (must commit per batch) and error handling (must resume from last successful batch ID).
+*   **Gate 2 (Dry-Run Verification):** Execute Lane A's script in "dry-run" mode against a recent production read-replica. Compare the output distribution of tiers against the analytics dashboard. If the variance exceeds 2%, halt and recalibrate the calculation logic.
+*   **Gate 3 (DBA Approval):** Submit the finalized script and dry-run report to Jane Smith via the governance portal. Do not proceed without the explicit "Approved for >1M rows" token.
+*   **Gate 4 (Pre-Flight Check):** Immediately before execution, verify replication lag on the two read-only analytics nodes is under 5 seconds to ensure the source data is stable.
+
+#### 3. Review Strategy
+*   **Independent Reviewer:** The Senior Backend Engineer reviews the script logic.
+*   **Data Integrity Review:** The Data Analytics Lead reviews the Dry-Run Verification results (Gate 2) to sign off on the calculation logic before the write begins.
+*   **Operational Review:** The DBA (Jane Smith) reviews the load impact strategy during the approval process.
+
+#### 4. Landing and Rollback
+*   **Execution:** Run the script during the approved off-hours window. Monitor database CPU and checkout latency. If checkout latency increases by more than 5%, pause the script immediately.
+*   **Verification:** Upon completion, run Lane C's validation harness. If the sample match rate is <98%, flag for manual investigation.
+*   **Schema Flakiness Handling:** If the schema migration tool fails to detect 0% nulls due to the known flaky check, perform a manual SQL count on a sampled partition to confirm completion, then manually mark the migration step as successful in the pipeline.
+*   **Merge/Completion:** Once validation passes, commit the script to the repository with a tag `backfill-loyalty-tier-complete`. Update the ticket status.
+*   **Rollback:** Since deleting the column is prohibited and the data is currently null, "rollback" means stopping the script immediately. Partially backfilled data is acceptable; the remaining nulls can be backfilled in a subsequent run. No data deletion will occur.
+*   **Human Decision Point:** If the script triggers a pause due to latency, or if the final validation fails the 98% threshold, the Incident Commander must decide whether to resume, adjust batch sizes, or abort the remainder.

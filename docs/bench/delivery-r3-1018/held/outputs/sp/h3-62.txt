@@ -1,0 +1,57 @@
+# Delivery Plan: Fraud Score Integration
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic (Serialized)**
+1.  **Modify `UserRegistrationPipeline`:** Insert the fraud check step post-contact submission. Implement the 150ms timeout wrapper.
+2.  **Decision Logic:** Code the branching: High-risk (hard fail), Medium-risk (provisional create + queue push), Low-risk (proceed).
+3.  **Fallback Implementation:** Code the "fail-open" logic (allow signup) if the risk service is unreachable or times out.
+
+**Lane B: Infrastructure & Observability (Parallel to A)**
+1.  **Rate Limiting Guard:** Implement a local token bucket or semaphore in `CoreAuth` to ensure outgoing traffic to `fraud-service` never exceeds 490 req/s (leaving headroom below the 500 limit).
+2.  **Dashboard Integration:** Verify the manual-review queue writer targets the correct table. Document the 30s read-replica lag in the UI tooltip for Trust reviewers.
+
+**Lane C: Test Strategy (Parallel to A & B)**
+1.  **Unit Tests:** Mock the external service to test timeout, high/medium/low scores, and connection failures.
+2.  **Integration Stubs:** Create a lightweight mock service to simulate latency >150ms and rate limit responses without hitting the shared production endpoint.
+
+## Gates & Checks
+
+**Gate 1: Pre-Merge Static Analysis**
+*   **Trigger:** On Pull Request creation against `develop`.
+*   **Check:** Verify rate-limiting logic exists. Ensure no synchronous blocking calls exceed the 150ms budget in code review.
+*   **Revision:** Latest commit on the feature branch.
+
+**Gate 2: Targeted Regression (Cost Control)**
+*   **Trigger:** Before merging to `staging`.
+*   **Check:** Run *only* the `UserRegistrationPipeline` test suite and the new unit tests. Do **not** run the full 45-minute suite unless core files outside the pipeline are touched.
+*   **Revision:** Release candidate build on `staging`.
+
+**Gate 3: Load & Failure Simulation**
+*   **Trigger:** In `staging` environment.
+*   **Check:** Spike traffic to 550 req/s locally to confirm the internal guard caps outgoing requests at 490 req/s. Simulate `fraud-service` downtime to confirm "fail-open" behavior allows signups.
+*   **Revision:** Deployed `staging` build.
+
+## Review Process
+
+**Independent Code Review:**
+*   **Reviewer 1 (Backend Lead):** Reviews Lane A and B code. Focus: Timeout implementation, race conditions in provisional creation, and rate-limiting algorithm correctness.
+*   **Reviewer 2 (Head of Trust & Safety):** Reviews Lane A decision logic and Lane C test scenarios. Focus: Correct routing of medium-risk users and safety of the "fail-open" default.
+*   **Constraint:** Reviewers must not be the author of the code. Reviews occur on the Pull Request before Gate 2.
+
+## Landing Strategy
+
+**Deployment Window:**
+*   Target: Thursday or Friday prior to the holiday push (allowing weekend monitoring).
+*   **Requirement:** Dual approval (Backend Lead + Head of Trust & Safety) explicitly recorded in the deployment ticket.
+
+**Rollout:**
+1.  Deploy to 5% of traffic. Monitor latency and error rates.
+2.  If latency >150ms increases significantly or rate limits are hit, halt rollout.
+3.  Expand to 100% only after 2 hours of stable metrics.
+
+**Rollback & Human Decisions:**
+*   **Irreversibility Warning:** Since audit logs are immutable, a rollback does not delete created users.
+*   **Rollback Procedure:** Revert the `CoreAuth` deployment to the previous tag. This disables the fraud check (returning to pure "fail-open" legacy behavior).
+*   **Human Decision Required:** If high-risk users were incorrectly allowed due to a logic bug, the Head of Trust & Safety must manually trigger a data remediation script to flag/review those specific accounts. This cannot be automated during rollback.
+*   **Trigger for Rollback:** Any increase in signup failure rate >1% (indicating false positives) or latency spikes causing user drop-off.

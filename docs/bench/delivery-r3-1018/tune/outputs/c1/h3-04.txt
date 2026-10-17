@@ -1,0 +1,51 @@
+### Delivery Plan: Webhook Signature v2 Migration
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Manual DB rollback required for failure; log indexing breaks if hash input changes without parser sync.
+*   **Windows:** External sandbox available 02:00–05:00 UTC; CI duration 45m.
+*   **Approvers:** Lead Architect + Security Officer (Production); Finance (if crypto lib touched).
+*   **Scope:** `acme-events` dispatcher, log parser, feature flag. Common crypto lib is **out of scope** (requires separate finance approval).
+
+**Lanes & Serialization**
+Work splits into three serialized phases to protect the audit log integrity, with parallel verification within phases.
+
+1.  **Lane A: Core Logic & Flag (Builder)**
+    *   **Work:** Implement v2 signing in dispatcher behind a feature flag (`webhook.sig.v2`). Update log parser to handle new hash inputs simultaneously.
+    *   **Constraint:** Must not modify the shared crypto library. If v2 logic requires it, stop and escalate for a separate finance ticket.
+    *   **Output:** Patch set + Unit tests for hash generation and log formatting.
+
+2.  **Lane B: Integration Contracts (QA)**
+    *   **Work:** Draft validation scripts for the top three integrators based on the updated guide. Prepare staging data seeds.
+    *   **Parallel:** Runs alongside Lane A development but blocks on Lane A's code freeze.
+
+3.  **Lane C: Security & Compliance (Security)**
+    *   **Work:** Review v2 implementation against the integration guide. Verify no PII leakage in new payload structures.
+    *   **Trigger:** Starts when Lane A commits the candidate SHA.
+
+**Gates & Checks**
+*   **G1 Spec:** Confirm v2 algorithm details and exact log parser changes. Pin base SHA.
+*   **G3 Design:** ADR confirming the feature flag strategy and rollback procedure (DB snapshot point).
+*   **G4 Implement:** Code committed to isolated worktree. Tests included.
+*   **G5 Verify (Staging Window 02:00–05:00 UTC):**
+    *   Deploy to staging with flag **OFF**.
+    *   Enable flag for test tenants only.
+    *   **Hard Gate:** Successful validation receipts from all three top integrators in the sandbox.
+    *   **Hard Gate:** Audit logs index correctly with new hash format.
+    *   *Failure Condition:* Any validation failure or log indexing error triggers immediate flag disable and DB restore point verification.
+*   **G6 Review:** Independent Security review of the final SHA + QA receipts. Architect review of the flag/rollback plan.
+*   **G7 Integrate:** Merge to release branch. Run subset of CI (45m full suite may be skipped if targeted regression passes, per pipeline rules).
+
+**Landing & Human Decisions**
+*   **Merge Strategy:** Merge to `main` only after G6 approval. The feature flag remains **OFF** in production initially.
+*   **Human Approval (G8):** Explicit sign-off required from **Lead Architect** and **Security Officer** to:
+    1.  Enable the flag in Production.
+    2.  Confirm the DB rollback snapshot is taken immediately prior.
+*   **Rollback:** If validation fails post-enable:
+    1.  Disable feature flag immediately (no code revert needed).
+    2.  If log corruption occurred, execute manual DB rollback to the pre-deployment snapshot (irreversible for events processed in between).
+*   **Completion:** G10 retrospective to capture the migration timing and validator response once keys are revoked.
+
+**Risk Mitigation**
+*   **CI Bottleneck:** Run targeted regression tests for the dispatcher and parser modules first; trigger full suite only if those pass to save time within the maintenance window.
+*   **Coupling:** The log parser update is mandatory in the same commit/PR as the dispatcher change to prevent indexing drift.
+*   **Compliance:** Security Officer's G6 sign-off is the compliance certificate proxy; do not proceed without it.

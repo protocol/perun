@@ -1,0 +1,64 @@
+# Delivery Plan: Parallel Log Aggregation Cutover
+
+## Lanes and Parallelism
+
+**Lane A: Configuration & Pipeline (SRE Lead + DevOps)**
+*   **Work:** Modify `infra-core` to enable dual-write logic (LegacyStream + NovaFlow) with the 200ms latency circuit breaker.
+*   **Parallelism:** Can proceed immediately alongside Lane B.
+*   **Serialization:** Must complete and merge before Lane C begins.
+
+**Lane B: Compliance & Access (Security Architect + Legal)**
+*   **Work:** Verify NovaFlow retention policies match the 7-year legal mandate. Prepare audit access credentials for the read-only replica.
+*   **Parallelism:** Runs parallel to Lane A.
+*   **Serialization:** Must sign off before the Pull Request (PR) in Lane A can be approved.
+
+**Lane C: Historical Backfill (Data Engineering)**
+*   **Work:** Script weekly batch jobs for historical data migration to NovaFlow.
+*   **Serialization:** **Strictly blocked** until Dual-Write Stability is confirmed (Gate 2). Cannot start until Lane A is live in production for 90 days minimum.
+
+## Gates and Checks
+
+**Gate 1: Pre-Merge Validation (Target Revision: `main` branch, HEAD)**
+*   **Trigger:** PR submission to `infra-core`.
+*   **Checks:**
+    *   CI Pipeline (45 min runtime).
+    *   **Flaky Check Handling:** If network connectivity suite fails on a Thursday, verify error signature against known issue documentation. If it matches, ignore; otherwise, block.
+    *   **Approvals:** Requires explicit approval from **both** Site Reliability Lead and Security Architect.
+*   **Timing:** Submit by Friday to avoid Thursday flaky check complications during the review window.
+
+**Gate 2: Switchover Stability (Target Revision: Merged PR from Gate 1)**
+*   **Trigger:** Deployment to Production next Tuesday.
+*   **Check:** Monitor dual-write latency.
+    *   **Condition:** If latency > 200ms, the system must automatically pause NovaFlow ingestion.
+    *   **Verification:** Generate "Zero Data Loss" confirmation report comparing LegacyStream receipt timestamps vs. NovaFlow receipt timestamps for the first 24 hours.
+*   **Pass Criteria:** Report shows 100% parity; no automatic pauses triggered for 48 consecutive hours.
+
+**Gate 3: Backfill Readiness (Target Revision: Same as Gate 2)**
+*   **Trigger:** 90 days post-Tuesday launch.
+*   **Check:** Query parity verification between vendors.
+*   **Constraint:** Schema changes for backfill must be applied to the primary node only during the Sunday maintenance window.
+
+## Review Process
+
+*   **Code Review:** Independent review of the dual-write logic by a Senior Engineer **not** on the SRE or Security teams to ensure objectivity.
+*   **Compliance Review:** Security Architect reviews the configuration specifically for the 7-year retention enforcement and the irreversibility warning regarding the backfill job.
+*   **Operational Review:** SRE Lead validates the automatic pause mechanism (circuit breaker) logic before approval.
+
+## Landing and Rollback
+
+**Merge Strategy:**
+*   Merge via Pull Request only after Gate 1 approvals.
+*   Deployment scheduled strictly for **next Tuesday** to align with business requirements.
+
+**Human Decisions Required:**
+1.  **Go/No-Go for Tuesday:** Based on Gate 1 CI results and Security sign-off.
+2.  **Backfill Initiation:** After 90 days, a human must explicitly trigger the first weekly backfill batch, acknowledging the irreversibility of the action.
+3.  **LegacyStream Sunset:** After 90+ days, a human must decide to stop writes to LegacyStream based on the audit completion.
+
+**Rollback Plan:**
+*   **Scenario A (Pre-Backfill):** If dual-write fails or latency spikes persistently, revert the `infra-core` PR. Since backfill has not started, this is reversible. LegacyStream continues as sole provider.
+*   **Scenario B (Post-Backfill Start):** **No technical rollback possible.** The ticket states reverting is irreversible once backfill starts. Mitigation requires maintaining NovaFlow as primary and attempting to repair LegacyStream connectivity manually if needed, but the cutover is permanent.
+
+**Risk Mitigation:**
+*   To avoid unnecessary CI costs (15 credits/run), ensure local validation of the latency logic is thorough before pushing.
+*   Schedule schema changes for backfill strictly on Sundays to comply with the read-only replica constraint.

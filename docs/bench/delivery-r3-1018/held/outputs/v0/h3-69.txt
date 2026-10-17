@@ -1,0 +1,40 @@
+### Delivery Plan: Orion Live Dashboard Result Caching
+
+**Objective:** Implement global query result caching with a 30s TTL, config toggle, admin invalidation, and stale-data warnings (>45s), resolving before next Tuesday.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Architecture & Config):** Define cache key schema (global only), memory budget to prevent session eviction, and the `global-config.yaml` change request. *Serialized:* Must complete before Lane B starts to define the interface.
+*   **Lane B (Implementation):** Implement caching logic on main aggregation endpoints. Add the config toggle, admin invalidation hook, and stale-data warning header. Write unit tests for cache hits/misses and invalidation. *Parallel:* None initially; depends on Lane A.
+*   **Lane C (QA & Performance):** Build a load simulation script to verify timeout reduction and memory stability under peak load. Verify stale warnings trigger at >45s. *Parallel:* Can prepare scripts while Lane B codes, but execution waits for Lane B's build.
+
+#### 2. Gates & Checks
+*   **G1 Spec (Now):** Freeze acceptance criteria: 30s cache, immediate invalidation on admin refresh, no user-filter caching, >45s warning. Pin base SHA.
+*   **G2 Plan:** Confirm memory budget calculation to avoid session eviction. Schedule Platform team ticket for `global-config.yaml` edit (business hours constraint).
+*   **G3 Design:** Review cache key collision risks and memory sharing implications.
+*   **G4 Implement:** Lane B commits code. Unit tests run locally (avoiding $40 CI cost for logic changes).
+*   **G5 Verify:**
+    *   **Revision:** Exact SHA from Lane B.
+    *   **Checks:** Run Lane C's load simulation in staging. Ignore known flaky network check failures. Verify memory usage does not evict sessions. Confirm config toggle works without redeploy.
+    *   **Constraint:** Do not trigger full CI suite for config-only validation steps; use targeted integration tests.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer 1 (Independent of Builder).
+    *   **Scope:** Security of cache invalidation, memory safety, and correctness of stale-warning logic.
+*   **G7 Integrate:** Merge to integration branch. Run targeted CI (skip full suite if possible based on file paths).
+
+#### 3. Review Strategy
+*   **Code Review:** Conducted by a senior engineer not involved in Lane B. Focus on thread safety of the cache and correct invalidation logic.
+*   **Performance Review:** QA (Lane C) validates the 30s/45s thresholds and system stability under load.
+*   **Config Review:** Platform team reviews the `global-config.yaml` change during their business hours.
+
+#### 4. Landing & Human Decisions
+*   **Merge:** Automated merge to `main` upon G6 approval and green targeted CI.
+*   **Human Gates:**
+    1.  **Platform Team:** Approval/edit of `global-config.yaml` (during business hours).
+    2.  **Deployment:** Requires explicit approval from **two senior engineers**. This is a hard gate; the deployment is irreversible without a full database rollback.
+*   **Rollback Plan:** Since deployments are irreversible via simple revert, the rollback procedure is a full database restore to the pre-deployment snapshot. This must be rehearsed in staging before the production window.
+*   **Timing:** Target completion by Monday EOD to allow a buffer before the Tuesday Q3 review. Deployment scheduled for a low-traffic window post-approval.
+
+**Risks:**
+*   Memory contention evicting user sessions (mitigated by strict budgeting in Lane A).
+*   Platform team delay on config file (mitigated by early ticket submission).
+*   Irreversible deployment (mitigated by rigorous staging verification and rollback rehearsal).

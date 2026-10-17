@@ -1,0 +1,62 @@
+**Delivery Plan: Parallel Log Aggregation Cutover**
+
+**Binding Facts & Constraints**
+*   **Locked Scope:** `infra-core` repo; requires PR approval from Site Reliability Lead (SRL) and Security Architect (SA).
+*   **Irreversible Step:** Historical backfill initiation locks the path; no revert possible after start.
+*   **Windows:** Schema changes restricted to Sunday maintenance; Dual-write start target is next Tuesday.
+*   **Cost/Time:** CI is 45 mins/15 credits; avoid unnecessary runs. Thursday network flake is known/ignorable.
+*   **Compliance:** 7-year retention on LegacyStream; zero data loss proof required for compliance officer.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Dual-Write Configuration (Builder)**
+    *   **Work:** Modify ingestion pipeline in `infra-core` to dual-write to NovaFlow while maintaining LegacyStream. Implement auto-pause logic if latency >200ms.
+    *   **Parallelism:** Can run immediately.
+    *   **Serialization:** Must complete and merge before Lane B starts.
+
+2.  **Lane B: Backfill Orchestration (Builder)**
+    *   **Work:** Create weekly batch job for historical data migration to NovaFlow.
+    *   **Serialization:** Blocked until Lane A is live and stable. Requires Sunday window if schema changes are needed on the primary node.
+
+3.  **Lane C: Verification & Compliance (QA)**
+    *   **Work:** Execute query parity tests between vendors. Generate "zero data loss" report. Monitor latency thresholds.
+    *   **Serialization:** Runs against the exact SHA of Lane A (post-merge) and Lane B (post-batch).
+
+**Gates & Checks**
+
+*   **G2 Plan (Now):** Define token budget for CI runs (max 4 runs: dev, staging, pre-prod, final). Confirm approvers (SRL, SA) are available before Tuesday.
+*   **G3 Design:** Document the auto-pause mechanism and the irreversible backfill point in an ADR.
+*   **G4 Implement:**
+    *   Lane A commits to a feature branch.
+    *   **Check:** Run CI once on feature branch. Ignore Thursday network flake if signature matches documentation.
+*   **G5 Verify (Staging):**
+    *   Deploy Lane A to staging.
+    *   **Check:** Inject test events; verify dual-receipt. Simulate >200ms latency to confirm auto-pause.
+    *   **Check:** QA validates query parity on sample dataset.
+*   **G6 Review:**
+    *   **Reviewers:** Security Architect (independent of Builder) + Site Reliability Lead.
+    *   **Scope:** Full diff on `infra-core` at the exact staging SHA.
+    *   **Condition:** Both must approve. No self-approval.
+*   **G7 Integrate:**
+    *   Merge to main via PR.
+    *   **Check:** Final CI run on merge commit (45 min cost).
+    *   **Action:** Deploy dual-write config to production before Tuesday deadline.
+*   **G8 Release (Human Gate):**
+    *   **Decision:** Owner/SRL approves the "Go" for historical backfill (Lane B) only after Lane A stability is confirmed (90-day window starts).
+    *   **Decision:** Owner approves the final cutover plan presentation to the compliance officer.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Single PR for Lane A. Lane B will be a separate PR later, gated by the 90-day verification period.
+*   **Human Decisions Required:**
+    1.  Approval to merge Lane A (SRL + SA).
+    2.  Authorization to start Lane B (Backfill) – irreversible.
+    3.  Sign-off on compliance report.
+*   **Rollback:**
+    *   **Pre-Backfill:** If dual-write fails or latency spikes persistently, revert the Lane A PR immediately. LegacyStream remains the sole source of truth.
+    *   **Post-Backfill:** No rollback possible. Mitigation involves fixing NovaFlow ingestion while maintaining LegacyStream as the audit source.
+
+**Risk Mitigation**
+*   **CI Cost:** Only trigger builds on verified green local states.
+*   **Thursday Flake:** Explicitly document the ignore-rule in the PR body to prevent build blocking.
+*   **Data Loss:** The "zero data loss" report is a hard gate for the compliance presentation; no presentation without it.

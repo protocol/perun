@@ -1,0 +1,77 @@
+### Delivery Plan: Default Branch Rename (master → main)
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Renaming the default branch in the central registry triggers an immediate, non-reversible switch without a full database restore.
+*   **Critical Risk:** `global-hooks` is read-only and mounted in 12 downstream services; incorrect modification breaks all webhook delivery instantly.
+*   **Cost/Flake:** CI is expensive (45m/run); known flaky network check requires Shift Lead approval on retry.
+*   **Approvals:** Production deploy requires dual sign-off (Security Officer + Platform Architect). Staging verification is mandatory before production.
+*   **Scope:** Central config, build pipelines, chatbot integration, documentation redirects, orphaned job cleanup.
+
+---
+
+### Lanes & Serialization
+
+**Lane 1: Configuration & Hooks (Serialized First)**
+*   **Worker:** Builder (Config Specialist).
+*   **Work:** Update central configuration registry definitions and generate the new `global-hooks` payload.
+*   **Constraint:** Must complete and verify read-only mount compatibility before any pipeline changes.
+*   **Output:** Patch for config registry; validated `global-hooks` snippet.
+
+**Lane 2: Pipeline & Chatbot (Parallel to Lane 3, Dependent on Lane 1)**
+*   **Worker:** Builder (DevOps).
+*   **Work:** Modify build pipeline definitions to target `main`; update chatbot merge event listeners.
+*   **Constraint:** Cannot merge until Lane 1's config is verified in Staging.
+*   **Output:** Pipeline YAML diffs; Chatbot integration patch.
+
+**Lane 3: Documentation & Redirects (Parallel to Lane 2)**
+*   **Worker:** Builder (Docs).
+*   **Work:** Update documentation portal redirects for historical references; prepare migration guide.
+*   **Output:** Redirect rules; updated docs.
+
+**Lane 4: Independent Verification (QA)**
+*   **Worker:** QA Engineer (Independent of Builders).
+*   **Work:** Execute full regression on Staging after Lane 1 & 2 merge to staging branch. Specifically target the flaky network check; prepare manual retry request for Shift Lead if needed. Verify no orphaned jobs.
+*   **Output:** Test receipts at exact Staging SHA; Shift Lead approval record for flake.
+
+**Lane 5: Security & Compliance Review**
+*   **Worker:** Security Officer (Independent).
+*   **Work:** Audit `global-hooks` changes and pipeline permissions; verify rollback procedure.
+*   **Output:** Security verdict.
+
+---
+
+### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Define appetite (one maintenance window); pin base SHA for all lanes.
+*   **G2 (Plan):** Confirm serialization: Lane 1 → Staging Deploy → Lane 2/3 Merge → Full Staging Cycle. Set per-lane token budgets (CI cost control).
+*   **G3 (Design):** ADR for the irreversible registry switch; explicit rollback plan (database restore procedure).
+*   **G4 (Implement):** Builders commit to isolated worktrees. Tests included with pipeline changes.
+*   **G5 (Verify - Staging):**
+    *   Deploy Lane 1 config to Staging.
+    *   Merge Lane 2/3 to Staging branch.
+    *   **Check:** Run full regression (45m). If flaky network check fails, halt for Shift Lead manual retry approval.
+    *   **Check:** Verify webhook delivery to all 12 downstream services.
+    *   **Check:** Confirm zero orphaned jobs.
+*   **G6 (Review):**
+    *   **QA:** Sign-off on Staging receipts.
+    *   **Security:** Sign-off on hooks and permissions.
+    *   **Deep Code Review:** Audit diffs against base SHA.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected gates on final SHA.
+*   **G8 (Release - Production):**
+    *   **Human Gate:** Dual sign-off (Security Officer + Platform Architect) required before renaming default branch in central registry.
+    *   **Action:** Execute registry rename.
+*   **G9 (Production Verify):** Monitor deployment notifications; confirm chatbot announcements; verify no immediate job failures.
+*   **G10 (Learn):** Retrospective on flake handling and CI cost.
+
+---
+
+### Landing & Rollback
+
+*   **Merge Strategy:** Train land. Lane 1 lands first to Staging. Lanes 2/3 follow only after Staging config verification.
+*   **Human Decisions:**
+    1.  Shift Lead approval for flaky test retry (if triggered in Staging).
+    2.  Dual sign-off (Security + Architect) for Production registry rename.
+*   **Rollback:**
+    *   **Pre-Rename:** Revert PRs in integration branch.
+    *   **Post-Rename:** Irreversible via git; requires full database restore as per G3 ADR.
+*   **Completion:** Item closes at G7 (integration). G8/G9 are downstream production events.

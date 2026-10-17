@@ -1,0 +1,62 @@
+### Delivery Plan: Dynamic Permission Cache Invalidation
+
+**1. Work Lanes & Parallelization**
+*   **Lane A (Core Logic - Serialized):** Modify the shared permission library.
+    *   *Task:* Introduce a versioned cache key or timestamp mechanism. Instead of snapshotting on session start, the cache must validate against a `role_version` stored in the user record.
+    *   *Constraint:* Maintain backward-compatible function signatures to prevent breaking the three dependent internal tools. Use optional parameters or overloaded methods if the language permits; otherwise, wrap the new logic in a new function while deprecating the old one gradually.
+    *   *Dependency:* None. Starts immediately.
+*   **Lane B (High-Privilege Interceptor - Parallel to A):** Implement the "fresh lookup" trigger.
+    *   *Task:* Create a middleware or decorator for high-privilege actions that bypasses the cache entirely or forces a re-validation step before execution.
+    *   *Dependency:* Requires the interface definition from Lane A to ensure correct calling convention.
+*   **Lane C (Test Infrastructure - Parallel to A & B):** Develop the manual verification script.
+    *   *Task:* Since staging data is scrambled, write a standalone script that injects specific role flags into a isolated test user record, triggers a permission check, modifies the role, and asserts the permission change is detected without logout.
+    *   *Dependency:* None.
+
+**2. Gates & Checks**
+*   **Gate 1: Interface Stability Check (Local/Pre-Commit)**
+    *   *Revision:* Feature branch head.
+    *   *Action:* Compile/build the three dependent internal tools against the modified shared library.
+    *   *Pass Criteria:* Zero build errors. If builds break, the change is rejected immediately.
+*   **Gate 2: Incremental Unit Testing (CI Pipeline)**
+    *   *Revision:* Feature branch head.
+    *   *Action:* Run only unit tests related to the permission module and the new interceptor. Do not run the full 45-minute suite yet.
+    *   *Pass Criteria:* 100% pass rate on affected modules.
+*   **Gate 3: Concurrency Simulation (Local/Isolated Environment)**
+    *   *Revision:* Post-unit-test head.
+    *   *Action:* Run a localized load test simulating concurrent role updates and permission checks using the script from Lane C.
+    *   *Pass Criteria:* No race conditions detected; no stale permissions served after update.
+*   **Gate 4: Full Regression Suite (CI Pipeline - Final)**
+    *   *Revision:* Only after Gates 1-3 pass.
+    *   *Action:* Trigger the full 45-minute test suite.
+    *   *Pass Criteria:* Zero regressions in unrelated systems.
+
+**3. Review Process**
+*   **Code Review:**
+    *   *Reviewer:* Senior Engineer from Identity Squad (not the author).
+    *   *Focus:* Verify backward compatibility of the shared library interface and correctness of the cache invalidation logic.
+    *   *Independence:* Must be someone who did not contribute to Lane A or B.
+*   **Security Review:**
+    *   *Reviewer:* Security Lead.
+    *   *Focus:* Verify that high-privilege actions strictly enforce fresh lookups and that no race conditions allow privilege escalation.
+    *   *Timing:* After Code Review approval, before merge.
+*   **Operational Review:**
+    *   *Reviewer:* Jane Smith.
+    *   *Focus:* Validate the manual test script results (Lane C) demonstrating real-time updates without global logout.
+
+**4. Landing Strategy**
+*   **Merge Protocol:**
+    *   Merge to `staging` only after Security Lead and Jane Smith explicitly approve the pull request.
+    *   Deploy to staging requires a dual-approval workflow in the deployment pipeline.
+*   **Verification:**
+    *   Execute the manual test script (Lane C) against the staging environment using a dedicated test account. Confirm dynamic updates work despite scrambled data flags (by controlling the specific test user).
+*   **Production Rollout:**
+    *   Deploy to production during a low-traffic window.
+    *   Monitor cache hit/miss ratios and error logs for 30 minutes.
+*   **Rollback Plan:**
+    *   If race conditions or performance degradation occur, immediately revert the deployment to the previous stable tag.
+    *   Since the library interface is backward compatible, dependent tools will continue functioning with the reverted logic.
+    *   Notify support team to resume standard triage if the fix fails.
+
+**Human Decisions Required:**
+1.  **Jane Smith & Security Lead:** Explicit approval to deploy to staging and production.
+2.  **Identity Squad Lead:** Confirmation that the backward-compatible approach satisfies the dependent teams' long-term roadmap.

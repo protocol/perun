@@ -1,0 +1,48 @@
+### Delivery Plan: Property-Based Validation for Legacy Pricing Engine
+
+**Objective:** Establish a safety net of property-based tests for the legacy pricing engine using observed historical behavior, without refactoring logic.
+
+#### 1. Lanes & Parallelism
+*   **Lane A: Behavior Archaeology (Serial Prerequisite)**
+    *   **Actor:** Product Analyst + Builder
+    *   **Work:** Analyze `mock-ledger` dataset to extract input/output patterns. Define explicit invariants (e.g., "discounts ≤ base price", "tax monotonicity").
+    *   **Output:** `spec/legacy-invariants.md` and a set of seed inputs covering edge cases.
+    *   **Constraint:** Must complete before Lane B starts. No code changes yet.
+*   **Lane B: Test Harness Implementation (Parallelizable internally)**
+    *   **Actor:** Builder (dedicated worktree)
+    *   **Work:** Implement property-based tests using the seeds from Lane A. Integrate with the existing CI pipeline, ensuring tests run against the sanitized dataset.
+    *   **Optimization:** Batch tests to minimize CI runs; isolate currency conversion checks to handle known flakiness (retry logic or separate job).
+    *   **Output:** Patch containing new test files and CI configuration updates.
+*   **Lane C: Independent Verification (Parallel to B, post-A)**
+    *   **Actor:** QA (independent of Builder)
+    *   **Work:** Review `legacy-invariants.md` for completeness. Verify that the test harness correctly fails when fed mutated (bad) data in a dry-run.
+    *   **Output:** QA sign-off on spec and test strategy.
+
+#### 2. Gates & Checks
+*   **G1 Spec Gate:** Review `legacy-invariants.md`. Must explicitly list all codified rules and seed sources.
+*   **G4 Implementation Gate:** Builder commits tests. CI must run on the exact commit SHA.
+    *   **Check:** Unit/Property tests pass on `mock-ledger`.
+    *   **Flake Handling:** Currency conversion failures trigger an automatic retry; >2 failures flag for human triage.
+*   **G5 Verification Gate:** QA runs the suite on the exact G4 SHA in `staging-fin` (read-only mode).
+    *   **Condition:** Tests must pass consistently; no reliance on "local green."
+*   **G6 Review Gate:**
+    *   **Reviewer:** Senior Engineer (not the Builder).
+    *   **Scope:** Full diff + `deep-code-review` lens. Focus: Are invariants correctly translated to code? Is the flaky check properly isolated?
+*   **G7 Integration:** Merge to integration branch. Re-run full 45-minute suite once on the final merged SHA to ensure no regression.
+
+#### 3. Review Strategy
+*   **Independence:** Builder implements; QA verifies behavior; Senior Engineer reviews code quality and safety.
+*   **Focus:** The review prioritizes the correctness of the *oracle* (the test logic) over the legacy code itself, as the goal is validation, not refactoring.
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:** Land via merge train after G7 success.
+*   **Human Approval Required:**
+    *   **Deploy to `staging-fin`:** Requires dual approval from **Jane Smith** and the **Compliance Lead**. This is a hard gate; no automation bypasses this.
+    *   **Flake Triage:** If the currency check fails twice consecutively, a human must decide if it's a real regression or infrastructure noise.
+*   **Rollback Plan:**
+    *   Since no logic is changed, rollback is simply reverting the test merge if the CI pipeline becomes blocked or flaky beyond tolerance.
+    *   If tests reveal critical legacy bugs (expected), the feature flag for the new cloud migration remains off; the ticket converts to a bug-fix initiative.
+
+**Cost Control:** Test batches optimized to reduce the $12/run CI cost. No unlimited retries; budget capped per lane.
+
+**Next Step:** Await owner approval on the `legacy-invariants.md` spec before starting Lane B.

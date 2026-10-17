@@ -1,0 +1,37 @@
+### Delivery Plan: Sidecar Proxy Deployment (Non-Critical Namespaces)
+
+#### 1. Lanes and Parallelism
+Work is divided into three lanes to maximize parallelism while respecting serialization constraints.
+
+*   **Lane A (Configuration & Policy):** Prepares the injection rules for `billing-reporting` and `audit-log`. This lane operates on a feature branch derived from `main`. It must serialize access to `global-mesh-policy.yaml` outside business hours to avoid lock conflicts.
+*   **Lane B (Image Verification):** Validates the existing sidecar image in the production registry. Since publishing is irreversible, no new builds are triggered unless a critical vulnerability is found in the current tag. This runs in parallel with Lane A.
+*   **Lane C (Observability Setup):** Configures dashboards and alerts specifically for CPU throttling and error rates in the target namespaces. This runs in parallel with Lanes A and B.
+
+**Serialization Point:** Lane A must complete and merge before the injection controller is updated. Lane B must confirm image safety before any pod restarts occur.
+
+#### 2. Gates and Checks
+All checks run on the specific commit hash resulting from the merge of Lane A's configuration changes.
+
+*   **Gate 1: Configuration Integrity (Pre-Merge):** Automated validation of YAML syntax and namespace selectors. The known flaky network policy check will be configured with an automatic retry logic (max 2 retries) before failing the pipeline.
+*   **Gate 2: Security Scan (Post-Merge, Pre-Deploy):** Trigger the 45-minute CI security scan *only* on the merged configuration commit. No code changes mean no rebuilds; this scan verifies the configuration payload against policy.
+*   **Gate 3: Architect Approval (Manual):** Two senior architects must approve the deployment plan via the promotion gate interface. This occurs after the security scan passes but before the controller applies changes.
+*   **Gate 4: Canary Health (Post-Deploy):** Automated check 15 minutes after injection starts. If CPU throttling alerts fire or error rates rise above baseline in either target namespace, the gate fails.
+
+#### 3. Review Strategy
+Reviews are structured to ensure independence between authors and approvers.
+
+*   **Configuration Review:** A network engineer not involved in Lane A reviews the injection selectors to ensure `real-time-trading` and `user-checkout` are explicitly excluded. This review happens before Gate 1.
+*   **Operational Readiness Review:** An SRE from a different team reviews Lane C's alerting thresholds and the rollback procedure. This happens before Gate 3.
+*   **Final Sign-off:** The two senior architects perform the final review at Gate 3, focusing solely on the risk assessment and rollback readiness, relying on the previous independent reviews for technical details.
+
+#### 4. Landing and Rollback
+*   **Merge Strategy:** The configuration branch merges to `main` only after Gate 2 passes. The deployment controller watches `main` but requires the manual promotion gate (Gate 3) to apply changes to the cluster.
+*   **Deployment Window:** Injection begins immediately after Gate 3 approval, scheduled outside peak market hours if possible, though the request implies immediate need.
+*   **Automated Rollback:** If Gate 4 fails (CPU throttling or error rate spike), an automated script reverts the `global-mesh-policy.yaml` to the previous commit hash and triggers a controller reload. This action does not require human intervention but sends an immediate high-priority alert.
+*   **Human Decision Points:**
+    *   Approval at Gate 3 (Two architects).
+    *   Decision to proceed if the flaky network check fails after two retries (requires engineer investigation).
+    *   Decision to halt or proceed if "minor" latency increases are observed without triggering hard alerts.
+*   **Reporting:** By Friday, a report will be generated comparing pre- and post-deployment error rates and CPU metrics for the two target namespaces, confirming success or detailing rollback events.
+
+This plan isolates risk to non-critical namespaces, respects the irreversible nature of the image registry, and accounts for the flaky test and locked configuration file constraints.

@@ -1,0 +1,59 @@
+**Delivery Plan: Critical Payment Gateway Patch (Freeze Exception)**
+
+**Strategy:** Isolate the security fix to prevent checkout destabilization while adhering to the Winter Celebration freeze. We will execute a targeted verification path rather than a full regression, strictly serializing database changes and brand-impacting code.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Security Implementation (Builder)**
+    *   **Work:** Implement the patch in a dedicated worktree isolated from the main branch.
+    *   **Constraint:** Must not modify shared marketing libraries until Lane C clears.
+    *   **Parallelism:** Can run immediately.
+
+2.  **Lane B: Targeted Verification (QA)**
+    *   **Work:** Execute unit tests and a focused integration suite *only* on the checkout flow.
+    *   **Constraint:** Explicitly excludes the full 55-minute regression suite.
+    *   **Special Rule:** The Stage 3 flaky network check is ignored if unit tests pass; a failure here does not block progress.
+    *   **Parallelism:** Runs parallel to Lane A once a candidate commit exists.
+
+3.  **Lane C: Brand Impact Analysis (Product/Brand Liaison)**
+    *   **Work:** Static analysis to determine if the patch touches shared libraries used by the marketing site.
+    *   **Gate:** If shared libraries are touched, this lane halts all further progress until explicit written sign-off from the Brand team is obtained.
+    *   **Serialization:** Must complete before Lane D (Integration).
+
+4.  **Lane D: Database Safety Audit (Security/DBA)**
+    *   **Work:** Review migration scripts for irreversibility.
+    *   **Constraint:** If the patch requires a database migration, a manual backup verification step is mandatory before any deployment attempt.
+    *   **Serialization:** Must pass before human approval for deploy.
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Defined by this ticket. Scope is strictly the vulnerability fix; no refactoring allowed.
+*   **G4 (Implement):** Builder commits to a unique SHA. No push yet.
+*   **G5 (Verify):** QA runs targeted suite on the exact G4 SHA.
+    *   *Pass Condition:* Unit tests green + Checkout integration green. Stage 3 network flake ignored.
+    *   *Fail Condition:* Any functional regression in checkout.
+*   **G6 (Review):** Independent Security review of the patch logic. Independent Code Review of the implementation.
+    *   *Constraint:* Reviewers must verify the "Brand Impact" status from Lane C.
+*   **G7 (Integration):** Merge to a release candidate branch only after Brand sign-off (if needed) and DB audit pass.
+
+**Human Gates & Decisions**
+
+*   **Brand Sign-off:** Required *only* if Lane C detects shared library usage. No merge without this artifact.
+*   **VP of Engineering Approval:** Mandatory to override the production freeze policy. The request must include:
+    1.  The security severity justification.
+    2.  Evidence of targeted testing (G5 results).
+    3.  Confirmation of Brand sign-off (if applicable).
+    4.  The rollback plan.
+*   **Deployment Authorization:** No agent may trigger deployment. The VP must manually unlock the production environment or authorize the specific deployment window.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Once all gates are green and human approvals secured, merge via a fast-forward to the integration branch. Do not rebase or rewrite history.
+*   **Deployment:** Manual trigger by authorized personnel only.
+*   **Rollback Plan:**
+    *   *Code:* Immediate revert commit prepared in advance.
+    *   *Database:* If migrations were executed, the rollback procedure is a full restore from the pre-deployment backup verified in Lane D. This is a high-cost operation; thus, the DB audit is a hard blocker.
+*   **Post-Deploy:** Monitor checkout error rates exclusively for 30 minutes. If anomalies appear, execute rollback immediately without waiting for further analysis.
+
+**Risk Mitigation**
+By skipping the full regression suite, we accept the risk of unknown side effects in non-checkout modules. This is mitigated by the Brand impact check and the narrow scope of the fix. The irreversible nature of DB scripts dictates that if any doubt exists in Lane D, the deployment is aborted regardless of the security urgency.

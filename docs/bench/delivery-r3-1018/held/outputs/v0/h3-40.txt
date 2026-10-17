@@ -1,0 +1,49 @@
+### Delivery Plan: Gated Settings Redesign
+
+**Objective:** Merge the new settings interface with the `neo-settings-v2` flag strictly `off`, ensuring zero user impact until support training completes next Tuesday.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Implementation):** Refactor the settings module and global state file.
+    *   *Constraint:* Must include the billing dashboard in the local test scope to prevent regression in the shared state.
+    *   *Output:* Code patch with feature flag guards defaulting to `off`.
+*   **Lane B (Documentation & Support Prep):** Draft help documentation and support scripts.
+    *   *Constraint:* Cannot be published until training begins.
+    *   *Output:* Draft docs ready for internal review.
+*   **Lane C (Verification Strategy):** Define the exact visual regression suite scope.
+    *   *Constraint:* Must isolate "Settings + Billing" paths to avoid running the full 45-minute suite unnecessarily.
+    *   *Output:* Targeted test manifest.
+
+**Serialization:** Lane A must complete and pass local integration checks before Lane C executes the full CI pipeline to avoid wasted compute costs on broken builds. Lane B runs in parallel but gates the final release decision.
+
+#### 2. Gates & Checks
+*   **G1 (Spec Freeze):** Confirm the flag default is hardcoded `off` and the fallback logic (toggle off mid-session) is explicitly defined in the spec.
+*   **G4 (Implementation Review):**
+    *   *Check:* Static analysis on the global state file changes.
+    *   *Check:* Unit tests for the flag toggle mechanism (on/off/on) within a single session.
+    *   *Revision:* Exact commit SHA of the feature branch.
+*   **G5 (Targeted Verification):**
+    *   *Check:* Run the targeted visual regression suite (Lane C output) on the staging environment.
+    *   *Condition:* Staging data must be fresh; if stale, refresh is required before testing.
+    *   *Check:* Verify fallback to legacy view works instantly when the flag is disabled mid-session.
+    *   *Revision:* The exact SHA tested on staging.
+*   **G6 (Independent Review):**
+    *   *Reviewer:* Senior Frontend Engineer (not the author of Lane A).
+    *   *Focus:* Shared state safety (Billing vs. Settings) and flag integrity.
+    *   *Security:* Confirm no irreversible database migration logic is triggered while the flag is `off`.
+
+#### 3. Landing Strategy
+*   **Merge Method:** Merge to the main integration branch only after G6 approval. The code lives in production but remains inactive.
+*   **Human Decisions (Hard Gates):**
+    1.  **Merge Approval:** Requires sign-off from the Product Lead confirming the code is safe to sit behind the flag.
+    2.  **Flip Switch:** Requires explicit written approval from **both** the Product Lead and the Support Director via the internal ticketing system. This action is forbidden until next Tuesday's training completion is verified.
+*   **Rollback Plan:**
+    *   *Pre-Flip:* If issues are found before enabling the flag, revert the merge immediately. No data impact expected.
+    *   *Post-Flip:* If enabled and critical errors occur, toggle the flag `off` instantly to revert users to the legacy view.
+    *   *Catastrophic Failure:* If the irreversible database migration was triggered erroneously, execute a full system restore from the pre-Tuesday backup.
+
+#### 4. Risk Mitigation
+*   **Cost Control:** The CI pipeline will only run the targeted visual regression suite defined in Lane C. Full suites are skipped unless the targeted scope changes significantly.
+*   **Data Safety:** The irreversible migration is guarded by the flag state; verification must prove the migration command cannot execute while `neo-settings-v2` is `off`.
+*   **Support Readiness:** The "Flip Switch" gate is physically blocked in the deployment tooling until the Support Director's ticket approval ID is entered.
+
+**Final State:** Code merged, flag `off`, documentation prepared, team trained. The system awaits the dual-authorization signal to activate.

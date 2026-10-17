@@ -1,0 +1,51 @@
+### Delivery Plan: End-to-End Request Tracing
+
+**Objective:** Inject unified trace IDs into internal services and correlate external calls (Globex, Initech) via timestamp heuristics/gateway logs to satisfy Q3 compliance.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Core Injection):** Implement trace ID generation, header injection, and logging middleware for all internal Nexus services.
+    *   *Worker:* Builder.
+    *   *Constraint:* Must run in an isolated worktree; no shared state with Lane B.
+*   **Lane B (Correlation Logic):** Develop the heuristic engine to match internal logs with external gateway logs using timestamps for Globex/Initech black boxes.
+    *   *Worker:* Builder (different worktree).
+    *   *Dependency:* Requires schema from Lane A but can proceed with mocked data initially.
+*   **Lane C (Observability & Dashboard):** Update logging pipelines and create the support team's visualization view.
+    *   *Worker:* Builder.
+    *   *Dependency:* Waits for Lane A and B completion to integrate real data flows.
+*   **Lane D (Independent QA):** Functional verification of trace continuity and regression testing.
+    *   *Worker:* QA (Independent of Builders).
+    *   *Serialization:* Must wait for G4 (Implementation) of Lanes A, B, C to complete before G5 (Verify).
+
+#### 2. Gates & Checks
+*   **G0/G1 (Intake/Spec):** Define exact heuristic tolerance windows for timestamp matching. Confirm "ignore flaky network latency check" rule is codified in test config (ignore only if logs show zero errors).
+*   **G2 (Plan):** Budget approval. Each integration suite costs $45; limit runs to 6/day. Plan must prioritize high-value paths to avoid budget exhaustion.
+*   **G3 (Design):** ADR for the correlation algorithm. Security review of header injection to ensure no PII leakage in trace IDs.
+*   **G4 (Implement):** Code committed to isolated worktrees. Base SHA pinned.
+*   **G5 (Verify):**
+    *   Run on exact merged SHA of A+B+C.
+    *   Execute integration suite (max 2 runs initially to preserve budget).
+    *   **Flake Handling:** If network latency module fails, inspect logs. If no actual errors, mark as passed; otherwise, block.
+*   **G6 (Review):**
+    *   **Code:** Independent review by Senior Engineer (not the Builder).
+    *   **Security:** Independent review by Security Lead (mandatory for header changes).
+    *   **Config:** `shared-config` changes require explicit approval from Jane Smith AND Security Lead.
+
+#### 3. Landing Strategy
+*   **Integration (G7):** Merge Lanes A, B, C into a release candidate branch. Run one final full integration suite ($45, 18 mins) to generate the final receipt.
+*   **Staging Deployment:** Automatic upon G7 success. Verify trace visibility in Staging logs.
+*   **Production Deployment (G8):**
+    *   **Human Gate:** Requires manual sign-off from VP of Engineering.
+    *   **Timing:** Must occur during business hours.
+    *   **Rollback Plan:** If production fails, revert immediately. Acknowledge this triggers an automatic 24-hour code freeze on `main`. Rollback script must be dry-run in Staging first.
+
+#### 4. Risk & Constraints
+*   **Cost Control:** With only 6 daily runs allowed ($270 max/day), no speculative testing. Tests must be deterministic.
+*   **Black Box Dependency:** Correlation is probabilistic. Success criteria defined as "95% of journeys reconstructable" rather than 100%, documented in G1 spec.
+*   **Frozen State:** If a production revert occurs, the 24-hour freeze halts all further merges. The G8 sign-off includes a "Go/No-Go" confidence check to mitigate this.
+
+#### 5. Immediate Next Steps
+1.  Draft G1 Spec with heuristic tolerance metrics.
+2.  Request pre-approval from Jane Smith and Security Lead for `shared-config` changes to prevent G6 bottlenecks.
+3.  Schedule VP of Engineering for a potential G8 window post-verification.
+
+**Status:** Ready for G0/G1 initiation. No code written yet.

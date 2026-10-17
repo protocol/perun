@@ -1,0 +1,72 @@
+### Delivery Plan: Legacy Batch Job Migration
+
+**Binding Facts & Constraints**
+*   **Locked Asset:** `shared-config.yaml` requires two senior lead approvals; changes here dictate a serialized gate.
+*   **Irreversible Step:** Database migration script cannot be rolled back once started; requires dry-run verification.
+*   **Cost/Time:** CI is 45 mins/$12; minimize re-runs via local verification before push.
+*   **Risk:** Data loss is unacceptable; duplicates are acceptable if handled gracefully.
+*   **Environment:** Staging mirrors prod data volume but has different timeout thresholds (must verify timeouts specifically in Staging).
+*   **Flake:** Known flaky network check in tests; ignore only if logs confirm connectivity.
+
+---
+
+### Lanes & Execution Order
+
+**Lane 1: Specification & Idempotency Design (Serial Pre-requisite)**
+*   **Actor:** Product Analyst + Builder
+*   **Work:** Define the "at-least-once" contract. Explicitly document how existing job logic handles duplicates (idempotency keys or state checks). Define the exact schema changes for the queue.
+*   **Output:** Testable spec with acceptance criteria for data integrity and duplicate handling.
+*   **Gate:** G1 Spec Review (Owner sign-off on data safety approach).
+
+**Lane 2: Database Migration Preparation (Parallel to Lane 3, Serial before Merge)**
+*   **Actor:** Builder
+*   **Work:** Draft the irreversible migration script. Create a "dry-run" simulation script that validates the migration against a Staging snapshot without applying changes.
+*   **Output:** Migration script + Dry-run receipt showing zero data loss on Staging clone.
+*   **Gate:** G5 Verify (Dry-run success on Staging exact revision).
+
+**Lane 3: Submission Layer Implementation (Parallel to Lane 2)**
+*   **Actor:** Builder
+*   **Work:** Refactor the job submission layer to push to the managed queue. Implement retry logic for queue failures. Ensure no inline execution remains for targeted jobs.
+*   **Output:** Code patch + Unit tests for queue interaction (mocked).
+*   **Gate:** G4 Implement (Local build green, unit tests pass).
+
+**Lane 4: Configuration Update (Serialized Gate)**
+*   **Actor:** Conductor
+*   **Work:** Prepare the diff for `shared-config.yaml`.
+*   **Gate:** G6 Review + Human Approval. Requires explicit sign-off from two senior leads before merging. This lane waits for Lane 3's code review to ensure config matches implementation.
+
+**Lane 5: Integrated Staging Verification (Serial Post-Merge)**
+*   **Actor:** QA (Independent)
+*   **Work:** Deploy merged candidate to Staging. Run full nightly suite. Monitor for timeout spikes and data integrity. Explicitly validate timeout thresholds on cheaper hardware. Ignore flaky network check *only* if logs show connectivity.
+*   **Output:** Verification receipt confirming "every job runs at least once" and no latency spikes.
+*   **Gate:** G5 Verify (Staging success at exact merged SHA).
+
+---
+
+### Review Strategy
+
+*   **Code Review:** Independent Senior Engineer (not the Builder) reviews Lane 3 code. Focus: Idempotency logic and error handling.
+*   **Security/Data Review:** Independent Security Engineer reviews Lane 2 migration script and Lane 3 data flow. Focus: Data loss prevention and PII handling in queue payloads.
+*   **Config Review:** Two Senior Leads (mandatory) review Lane 4 change.
+*   **QA Verification:** QA Engineer executes Lane 5. Builder is excluded from this verification step.
+
+---
+
+### Landing & Rollback Plan
+
+**Merge Strategy:**
+1.  Merge Lane 3 (Code) and Lane 4 (Config) into a release branch only after all G6 reviews are approved.
+2.  Trigger CI once for the combined change to save cost/time.
+3.  **Human Decision:** Operations Director must sign off on the Staging Verification Receipt (Lane 5) before Production deployment.
+
+**Production Deployment:**
+1.  **Step 1:** Apply Database Migration (Lane 2). *Point of no return.* Verify success immediately.
+2.  **Step 2:** Deploy Application Code (Lane 3 + 4).
+3.  **Step 3:** Enable Queue Routing via feature flag (if available) or immediate cutover.
+
+**Rollback:**
+*   **Pre-Migration:** Standard code revert.
+*   **Post-Migration:** Code can revert to inline execution *only if* the database schema remains compatible. If the migration breaks backward compatibility, rollback involves manual data reconciliation and is considered a major incident.
+*   **Contingency:** If Staging verification fails (timeouts or data loss), halt immediately. Do not proceed to Production.
+
+**Final Gate:** G8 Release (Operations Director approval).

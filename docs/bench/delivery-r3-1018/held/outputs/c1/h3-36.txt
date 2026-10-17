@@ -1,0 +1,52 @@
+**Delivery Plan: NovaPay EU Dispute Lifecycle**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** DB migration on production replicas (requires strict serialization).
+*   **Shared Dependency:** `transaction-state` library modification requires written approval from Jane Smith (Principal Architect).
+*   **Risk:** Incorrect status mapping causes financial loss; legacy reporting parser breaks on new codes.
+*   **Cost/Time:** CI is 40 mins (fraud simulation); avoid redundant runs.
+*   **Scope:** Additive only; do not touch existing checkout flow.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Contract & Approval (Serialized First)**
+    *   **Work:** Draft ADR for new dispute states (`PENDING_DISPUTE_45D`) and email triggers. Submit change request for `transaction-state` library to Jane Smith.
+    *   **Gate:** Written approval from Jane Smith (G2). No code merges until this artifact exists.
+    *   **Output:** Signed ADR, approved library diff.
+
+2.  **Lane B: Backend Lifecycle & Migration (Serialized after A)**
+    *   **Work:** Implement 45-day hold logic, state machine transitions, and irreversible DB migration script. Update legacy reporting parser to handle new codes (prevents nightly job flake).
+    *   **Dependency:** Must wait for Lane A approval. Must run migration dry-run on staging before commit.
+    *   **Gate:** G5 Verify on exact SHA including fraud-simulation suite (single run only).
+    *   **Output:** Patch with migration, parser fix, backend logic.
+
+3.  **Lane C: Admin Panel & Notifications (Parallel to B, after A)**
+    *   **Work:** Add "Pending Dispute" status to admin dashboard. Implement automated merchant email trigger on window close.
+    *   **Dependency:** Depends on Lane A's state definitions. Independent of DB migration execution.
+    *   **Gate:** G5 Verify (unit/integration, no full fraud suite needed if isolated).
+    *   **Output:** UI patch, email service patch.
+
+**Verification Strategy (G5/G6)**
+*   **Exact Revision:** All lanes verify against the specific commit SHA containing the approved library changes.
+*   **QA Independence:** QA team verifies financial reconciliation logic using a synthetic 45-day timeline simulation. They do not rely on developer assertions.
+*   **Security:** Independent review of the email trigger to prevent spoofing and the migration script for data integrity.
+*   **Critical Check:** Verify legacy reporting parser passes with new codes *before* merging Lane B to prevent nightly job failure.
+
+**Review & Approval (G6)**
+*   **Reviewer 1 (Backend):** Senior Ledger Engineer (independent of Lane B author). Focus: State machine accuracy, migration safety.
+*   **Reviewer 2 (Frontend/Ops):** Product Engineer (independent of Lane C author). Focus: Dashboard clarity, email content.
+*   **Security/AppSec:** Mandatory review of fund-holding logic and PII in emails.
+*   **Constraint:** Builder never reviews their own lane. Jane Smith's approval satisfies the architectural gate; she does not need to re-review the implementation if the ADR is followed.
+
+**Landing Plan (G7/G8)**
+*   **Integration:** Merge Lane A (library) first. Rebase Lanes B and C onto the merged library SHA.
+*   **Merge Train:** Serialize Lane B (migration) before Lane C (UI) to ensure backend readiness, though they can merge in the same train if B's migration is backward compatible during rollout.
+*   **Human Gates (G8):**
+    *   **Deploy Migration:** Owner approval required before executing irreversible migration on EU-West replicas.
+    *   **Feature Flag Flip:** Owner approval to enable new status mapping in production.
+*   **Rollback:**
+    *   **Code:** Revert PRs immediately if reconciliation fails.
+    *   **Data:** Migration is irreversible; rollback plan requires a compensating transaction script to reverse state logic, not a DB revert. This script must be drafted and reviewed in G3.
+
+**Cost Control**
+*   Run full 40-minute fraud suite only once on the integrated SHA (G7), not on every intermediate commit, provided unit tests cover isolated logic in Lanes B and C.

@@ -1,0 +1,53 @@
+### Delivery Plan: Multi-Currency Ledger Support
+
+**Strategy:** Isolate high-risk components (DB migration, exchange rate logic) into serialized lanes to prevent collision on the `global-config` file and mitigate the irreversible migration risk. Parallelize safe API scaffolding.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Schema & Migration) [Serialized, First]:**
+    *   **Work:** Design immutable schema for `currency_code` on new transactions and the `daily_exchange_rates` audit table. Write the irreversible migration script with a pre-flight dry-run mode.
+    *   **Constraint:** Must complete and verify locally before any other lane touches the database layer. No changes to historical rows.
+*   **Lane B (Exchange Rate Service) [Serialized with A]:**
+    *   **Work:** Implement the auditable table writer and the historical rate lookup logic. Mock external fetches to bypass flaky staging network checks.
+    *   **Constraint:** Depends on Lane A's schema definition. Must not read `global-config` during EU business hours to avoid lock conflicts.
+*   **Lane C (API & Reporting) [Parallel]:**
+    *   **Work:** Update transaction ingestion to accept currency codes. Implement dynamic report calculation (Native + Base Value) using Lane B's lookup logic.
+    *   **Constraint:** Uses mocked rates until Lane B is merged.
+*   **Lane D (Compliance & Audit Prep) [Parallel]:**
+    *   **Work:** Draft the audit trail documentation proving historical immutability. Prepare the rollback runbook (4-hour restore procedure).
+
+#### 2. Gates & Checks
+*   **G1 Spec (Conductor):** Freeze the "No Historical Rewrite" rule as a hard test assertion. Define the exact base SHA for all lanes.
+*   **G3 Design (Architect):** Review schema immutability and exchange rate auditability. **Gate:** Must explicitly sign off on the irreversible migration strategy.
+*   **G4 Implement (Builders):**
+    *   Lane A: Run migration dry-run against a cloned production snapshot.
+    *   Lane B/C: Unit tests with mocked time/rates.
+*   **G5 Verify (QA - Independent):**
+    *   **Exact Revision:** Test the integrated SHA, not individual branches.
+    *   **Critical Check:** Verify reports calculate correctly using *historical* rates, not just current ones.
+    *   **Environment:** Execute network-dependent tests outside EU business hours to avoid `global-config` locks. Ignore flaky staging fetch failures if mocks pass; verify only the internal logic.
+    *   **Stack:** Must start the full service; "green tests" on a stopped stack are invalid.
+*   **G6 Review (Security & Compliance):**
+    *   **Security:** Independent review of the new table for injection risks.
+    *   **Compliance:** Finance Platform lead verifies the audit trail meets legal standards.
+
+#### 3. Review & Independence
+*   **Builder (Lane A/B/C):** Cannot review their own code.
+*   **Reviewer 1 (Backend Lead):** Reviews Lane A (Migration) and Lane B (Rates). Must not be the author of the migration script.
+*   **Reviewer 2 (Compliance Officer):** Reviews Lane D (Audit docs) and the G5 verification receipts.
+*   **Security Engineer:** Performs independent threat modeling on the new exchange rate endpoint.
+
+#### 4. Landing & Human Gates
+*   **Integration (G7):**
+    *   Merge Lane A, then B, then C into a temporary integration branch.
+    *   Run one final 45-minute CI pipeline on this exact SHA.
+    *   **Collision Avoidance:** Schedule the final merge window outside EU business hours to bypass `global-config` locking.
+*   **Human Approval (G8 - Mandatory):**
+    *   **Approver:** Chief Compliance Officer.
+    *   **Trigger:** Presentation of G5 verification receipts, G6 compliance sign-off, and the confirmed rollback runbook.
+    *   **Action:** Manual sign-off required before deploying to the 'Vault' environment.
+*   **Deployment & Rollback:**
+    *   Deploy to 'Vault' only after CCO approval.
+    *   **Rollback Plan:** If the migration fails or data corruption is detected, immediately trigger the 4-hour full restore from the nightly backup. Do not attempt partial fixes on the irreversible script.
+    *   **Post-Deploy (G9):** Verify one live transaction reports both native and base values correctly.
+
+**Risk Mitigation:** The irreversible migration is the single point of failure. It is isolated, dry-run tested, and gated behind the highest human authority. Flaky networks are bypassed via mocking to prevent false-negative blocking.

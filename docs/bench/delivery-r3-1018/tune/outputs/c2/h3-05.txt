@@ -1,0 +1,58 @@
+### Delivery Plan: Sidecar Proxy Deployment (Non-Critical Namespaces)
+
+**Scope & Constraints**
+*   **Target:** `billing-reporting`, `audit-log` namespaces only.
+*   **Excluded (Hard Lock):** `real-time-trading`, `user-checkout`. No changes to the frozen `real-time-trading` branch.
+*   **Critical Window:** Avoid business hours for any configuration edits due to `global-mesh-policy.yaml` lock.
+*   **Rollback Trigger:** Any CPU throttling alert or error rate increase >0%.
+*   **Deadline:** Friday EOD.
+
+#### Lanes & Ownership
+
+**Lane 1: Configuration & Policy Update (Serialized)**
+*   **Owner:** Senior Architect A (Writer).
+*   **Work:** Modify injection rules in `global-mesh-policy.yaml` to target only specified namespaces.
+*   **Constraint:** Must execute outside business hours to avoid file lock.
+*   **Dependency:** None, but must complete before Lane 2.
+
+**Lane 2: Security & Compliance Scan (Parallel Prep)**
+*   **Owner:** Security Bot / Analyst.
+*   **Work:** Run security scan on the sidecar image *once* against the target SHA.
+*   **Optimization:** Trigger only on the final candidate SHA to avoid $12/retry cost. If the flaky network policy validator fails, retry exactly twice; fail on third attempt.
+
+**Lane 3: Observability & Rollback Automation (Parallel)**
+*   **Owner:** SRE Engineer.
+*   **Work:** Configure monitoring dashboard for `billing-reporting` and `audit-log`. Script automatic rollback command triggered by CPU throttling alerts or error rate spikes.
+*   **Verification:** Dry-run rollback script in a non-prod environment.
+
+#### Gates & Checks
+
+*   **G1 Spec (Complete):** Confirmed namespace allow-list and hard exclusion list.
+*   **G3 Design Review:** Senior Architect B reviews the `global-mesh-policy.yaml` diff. Must explicitly sign off on namespace isolation logic.
+*   **G4 Implementation:** Lane 1 commits change to a feature branch. Base SHA recorded.
+*   **G5 Verification (Pre-Merge):**
+    *   Run CI pipeline (45 mins) on the feature branch.
+    *   **Check:** Network policy validator (max 2 retries).
+    *   **Check:** Confirm sidecar image digest matches the scanned SHA.
+*   **G6 Independent Review:** Senior Architect B (who did not write Lane 1) approves the merge. Security sign-off required.
+*   **G7 Integration:** Merge to main. **Exact Revision:** Record the merge commit SHA immediately.
+*   **G8 Human Gate (Deployment):** Two Senior Architects must manually approve the promotion to production clusters across the three availability zones.
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Single PR containing only the policy change. No other changes bundled.
+*   **Deployment:** Manual promotion gate. Deploy to Zone 1 first, wait 15 minutes, then Zones 2 & 3.
+*   **Rollback Plan:**
+    *   **Trigger:** Automated script detects CPU throttling or error rate anomaly.
+    *   **Action:** Revert `global-mesh-policy.yaml` to the pre-deployment SHA recorded in G7.
+    *   **Constraint:** Since image publication is irreversible, rollback reverts the *injection*, not the image. If sidecar causes cluster instability requiring image removal, a full cluster restore is the only path (escalate immediately).
+*   **Reporting:** By Friday, deliver a report showing:
+    1.  Sidecar running in target namespaces (pod status).
+    2.  Error rate graphs (pre vs. post) confirming no spike.
+    3.  Confirmation that `real-time-trading` and `user-checkout` remain untouched.
+
+#### Risk Mitigation
+*   **Flaky Test:** Hard limit of 2 retries on network policy validator before manual triage.
+*   **Cost:** CI triggered only once per candidate SHA.
+*   **Collision:** All config edits scheduled outside business hours.
+*   **Scope Creep:** Explicit exclusion of sensitive namespaces verified in G3 and G6 reviews.

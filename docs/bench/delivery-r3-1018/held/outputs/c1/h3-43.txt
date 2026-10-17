@@ -1,0 +1,76 @@
+### Delivery Plan: Event-Driven Catalog Cache Warm-up
+
+**Binding Facts & Constraints**
+*   **Scope:** `core-inventory` monorepo; impacts Pricing and Search teams.
+*   **Approvals:** Dual approval (Pricing Lead + Search Lead) required for production deploy.
+*   **Pipeline:** CI cost $0.45/min, 18m timeout. Heavy integration tests must run in parallel to avoid timeout.
+*   **Risk:** DB migration step has a known 10% flake (requires manual log verification before retry). Event bus schema is immutable; incompatible payloads poison the DLQ (requires manual DB purge).
+*   **Goal:** Replace 4 AM cron with real-time invalidation on admin update; handle burst traffic; eliminate stale data.
+
+---
+
+#### Lanes & Parallelism
+
+**Lane 1: Event Schema & Contract (Serial Pre-requisite)**
+*   **Actor:** Architect + Security.
+*   **Work:** Define immutable event payload for "Product Update." Verify backward compatibility to prevent DLQ poisoning.
+*   **Output:** Versioned schema artifact.
+*   **Dependency:** Must complete before Lane 2 starts.
+
+**Lane 2: Core Implementation (Parallel)**
+*   **Actor:** Builder.
+*   **Work:** Implement event listener in catalog service; replace cron logic with SKU-specific refresh; add burst-handling backpressure.
+*   **Output:** Patch with unit tests.
+*   **Constraint:** Isolated worktree; no shared state with Lane 3.
+
+**Lane 3: Independent Verification (Parallel)**
+*   **Actor:** QA (Independent of Builder).
+*   **Work:** Build functional test suite for burst traffic and stale-data scenarios. Prepare integration job to run parallel to CI lint/build.
+*   **Output:** Test receipts and parallel CI job configuration.
+
+**Lane 4: Migration Safety (Serial Gate)**
+*   **Actor:** DBA + Conductor.
+*   **Work:** Draft migration script. Explicitly document the manual log-verification step for the known flake.
+*   **Output:** Migration runbook with "Stop/Verify" checkpoint.
+
+---
+
+#### Gates & Checks
+
+*   **G1 Spec:** Acceptance criteria must include "Zero stale data complaints for 24h post-deploy" and "DLQ count = 0 during burst test." Pin base SHA.
+*   **G3 Design:** ADR required for event schema versioning strategy. Security sign-off on payload structure.
+*   **G4 Implement:** Unit tests included in commit. Builder names review skill + base SHA.
+*   **G5 Verify:**
+    *   **Local:** Stack up, run unit tests.
+    *   **CI:** Run lint/type/build in main job. **Trigger heavy integration tests as a separate parallel job** to respect the 18m timeout.
+    *   **UI/Flow:** Verify cache invalidation on exact route after admin action.
+*   **G6 Review:**
+    *   **Code:** Independent reviewer (not Builder) applies `deep-code-review`.
+    *   **Security:** Independent AppSec review of event payload to prevent DLQ poisoning.
+    *   **Flake Protocol:** If DB migration check fails, **manual log verification** is mandatory before retry. No blind re-runs.
+
+---
+
+#### Landing & Rollback
+
+**Integration (G7)**
+*   Merge lanes into a throwaway integration branch.
+*   Run aggregate gate on exact final SHA.
+*   Generate `deep-code-review DIFF`.
+
+**Human Gates (G8)**
+*   **Approval:** Explicit written approval from **both** Pricing and Search team leads required.
+*   **Soak:** Deploy to `staging-east`. Enforce mandatory **2-hour soak period**. Monitor latency and DLQ metrics.
+
+**Production Release (G9)**
+*   **Trigger:** Only after successful soak and dual approval.
+*   **Verification:** Monitor mobile app latency and DB load immediately post-deploy.
+*   **Rollback:** If DLQ errors appear or latency spikes > baseline, immediate rollback to previous SHA. Note: DLQ poisoning requires manual DB purge; rollback alone does not clear poisoned events.
+
+**Learning (G10)**
+*   If the DB migration flake triggers, update the runbook with specific log patterns to verify.
+*   Record burst handling metrics for future capacity planning.
+
+**Cost Control:**
+*   Lane 3 ensures heavy tests run in parallel to prevent CI timeout ($0.45/min waste).
+*   Schema strictness in Lane 1 prevents costly manual DLQ purges.

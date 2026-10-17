@@ -1,0 +1,49 @@
+**Delivery Plan: Dynamic Permission Cache Invalidation**
+
+**Scope & Constraints**
+Refactor permission caching to invalidate on role update without global logouts. Must maintain backward compatibility with the shared library used by three internal tools. High-privilege actions require fresh lookups. Staging E2E is impossible; verification requires a dedicated manual script against sanitized data.
+
+**Lanes & Parallelism**
+*   **Lane A (Core Logic - Serialized):** Implement cache invalidation trigger within the Identity Squad's permission module.
+    *   *Constraint:* Must not alter the shared library interface. Changes here block all other lanes until unit-tested locally.
+    *   *Worker:* Builder (Identity Squad).
+*   **Lane B (High-Privilege Enforcement - Parallel):** Inject "fresh lookup" logic into high-privilege action handlers.
+    *   *Dependency:* Requires Lane A's invalidation mechanism to be defined, but implementation can proceed in parallel if the interface is agreed upon in G3.
+    *   *Worker:* Builder (Secondary).
+*   **Lane C (Concurrency & Load Tests - Parallel):** Develop stress tests simulating peak traffic and concurrent role updates.
+    *   *Worker:* QA Engineer.
+*   **Lane D (Verification Script - Parallel):** Create the manual test script for staging (since automated E2E is blocked by data scrambling).
+    *   *Worker:* QA Engineer + Product Analyst (to define valid test scenarios).
+
+**Gates & Checks**
+*   **G1 Spec:** Define the invalidation signal (e.g., event bus message vs. version bump) and the exact "high-privilege" endpoint list. Pin base SHA.
+*   **G3 Design:** **Critical Gate.** Verify no breaking changes to the shared library interface. If the interface must change, a migration plan for the three dependent tools is required before G4.
+*   **G4 Implement:**
+    *   Lane A & B: Unit tests must run locally (incremental) before commit.
+    *   Lane C & D: Scripts committed to `scripts/verification`.
+*   **G5 Verify:**
+    *   *Unit/Integration:* Run on exact revision in CI. Use incremental test flags to save cluster budget.
+    *   *Staging:* Execute Lane D's manual script. Evidence: Screenshots/logs of role update propagating to active session without logout.
+    *   *Load:* Run Lane C suite. Pass criteria: No race conditions, latency < threshold during peak simulation.
+*   **G6 Review:**
+    *   *Code:* Independent Senior Engineer (not Identity Squad).
+    *   *Security:* Security Lead (mandatory for permission logic). Focus on race conditions and cache poisoning vectors.
+    *   *Compatibility:* Lead from one of the three dependent tool teams (or their automated build receipt).
+
+**Landing Strategy**
+*   **Merge Train:** Lanes A and B merge only after G6 approval. Lane C and D merge with A/B or immediately after.
+*   **Integration (G7):** A throwaway integration branch will be created to run the full 45-minute test suite one final time before production promotion. This ensures the shared library interaction is stable.
+*   **Human Gates (G8):**
+    *   **Approval Required:** Jane Smith AND Security Lead.
+    *   **Condition:** Both must sign off on the G5 staging evidence and G6 security verdict.
+*   **Rollback Plan:**
+    *   Feature flag the new invalidation logic.
+    *   If race conditions or performance degradation occur in production, flip the flag to revert to "session-start snapshot" behavior immediately.
+    *   No database migration rollback needed (logic only).
+
+**Risk Mitigation**
+*   *Shared Library Breakage:* Mitigated by G3 interface freeze and dependent team build check.
+*   *CI Cost:* Mitigated by mandatory incremental testing in G4; full suite only on integration branch.
+*   *Verification Gap:* Mitigated by Lane D's custom script; no reliance on standard staging E2E.
+
+**Next Step:** Product Analyst to draft G1 Spec listing exact high-privilege endpoints and proposed invalidation signal for owner approval.

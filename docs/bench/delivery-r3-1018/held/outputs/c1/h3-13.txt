@@ -1,0 +1,60 @@
+**Delivery Plan: Stabilize E2E Suite Against Sandbox Quota Limits**
+
+**Binding Facts & Constraints**
+*   **Locked Files/Modules:** `sandbox-adapter` (shared dependency), network layer retry policy.
+*   **Windows:** Production pushes locked to Tuesday; Staging requires Security Lead sign-off.
+*   **Irreversible/Costly Steps:** Live payment flow verification (quota cost); CI runs >45 mins trigger suspension.
+*   **Approvers:** Security Lead (Staging), Release Owner (Tuesday Production).
+*   **Known Risk:** Network layer flakiness exacerbates quota consumption via retries.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Adapter Circuit-Breaker & Cache Logic (Builder)**
+    *   **Work:** Refactor `sandbox-adapter` to detect quota exhaustion headers/errors. Implement "cached response mode" for non-destructive scenarios using local fixtures.
+    *   **Parallelism:** Can run parallel to Lane C. Must complete before Lane D.
+    *   **Gate:** Unit tests for state transition (Live → Cached) must pass locally.
+
+2.  **Lane B: Retry Policy Decorrelation (Builder)**
+    *   **Work:** Modify network layer retry logic to distinguish between transient latency (retry allowed) and quota/rate limits (no retry, fail fast or switch cache). Prevents false-positive loops.
+    *   **Parallelism:** Independent of Lane A, but shares the `sandbox-adapter` interface contract.
+    *   **Gate:** Unit tests verifying retry counts under simulated high-latency vs. quota-error conditions.
+
+3.  **Lane C: Test Orchestration & Tagging (QA Lead)**
+    *   **Work:** Update E2E suite to tag scenarios as "destructive" (live only) or "non-destructive" (cache-eligible). Configure the runner to force "destructive" tests to run early in the suite while quota is guaranteed.
+    *   **Serialization:** Must wait for Lane A's interface definition to ensure tags map correctly to the new adapter modes.
+    *   **Gate:** Dry-run simulation showing suite duration <40 mins (buffer for alert).
+
+4.  **Lane D: Integration & Security Verification (Independent QA + Security)**
+    *   **Work:** Merge A, B, C into a staging branch. Run full suite against Staging. Verify "cached mode" does not leak PII and that "live mode" still hits the real partner endpoint for payment flows.
+    *   **Serialization:** Requires A, B, C complete.
+    *   **Gate:** **Security Lead Sign-off** required before merging to staging branch. Verification receipt must show exact SHA.
+
+**Gates & Checks**
+
+*   **G0/G1 (Spec):** Confirm "cached response" data source is sanitized (no stale PII). Define exact error codes triggering the switch.
+*   **G2 (Plan):** Budget cap set for CI minutes (target <35 mins to avoid 45-min hard stop).
+*   **G4 (Implement):** Code review of `sandbox-adapter` by a senior engineer *not* involved in Billing/Onboarding (cross-squad independence).
+*   **G5 (Verify):**
+    *   Run on exact revision SHA.
+    *   **Condition:** Suite must complete green.
+    *   **Evidence:** Logs showing switch to cache mode occurred; no quota-exhaustion aborts.
+    *   **UI/Flow:** Critical payment flows verified against live env (logged as "Live OK"); others verified against cache (logged as "Cache OK").
+*   **G6 (Review):** Security Lead reviews the data flow in cached mode. QA Lead verifies the flaky network check no longer triggers excessive retries.
+
+**Landing Strategy**
+
+*   **Merge Train:**
+    1.  Land Lanes A & B to `main` (after code review).
+    2.  Land Lane C (after A/B merge).
+    3.  Create Release Candidate branch for Staging.
+*   **Human Decisions:**
+    *   **Security Lead:** Must explicitly approve the Staging deployment of the RC branch.
+    *   **Release Owner:** Must approve the Tuesday production push.
+*   **Rollback:**
+    *   If E2E suite fails in Staging (timeout or logic error), revert the RC branch immediately.
+    *   If production deployment fails, rollback to previous Tuesday's build.
+*   **Post-Merge:** Monitor first Tuesday run. If quota alerts fire, the circuit breaker logic is insufficient; trigger immediate hotfix lane.
+
+**Risk Mitigation**
+*   **Flaky Network Check:** The new retry policy (Lane B) must explicitly exclude quota errors from the retry loop to prevent immediate re-failure.
+*   **CI Cost:** If the suite approaches 40 minutes, the "destructive" test set must be further pruned or parallelized within the runner constraints.

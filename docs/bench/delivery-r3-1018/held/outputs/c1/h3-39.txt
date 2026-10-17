@@ -1,0 +1,55 @@
+**Delivery Plan: Rotate Field Device Signing Key v2**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Pushing config to Hardware Security Module (HSM) is manual; error bricks remote updates.
+*   **Approvals:** Security Lead and Operations Manager required for deploy.
+*   **Risk:** Staging latency spikes are false positives; do not block on staging perf metrics alone.
+*   **Scope:** Dual-key window (48h) then legacy rejection. Zero connectivity loss.
+*   **Deadline:** Before weekend maintenance window closes.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Cryptographic Implementation (Builder)**
+    *   **Work:** Modify `auth-service` token validation to accept both Legacy and New keys. Implement the 48h timer logic and automatic legacy rejection fallback.
+    *   **Parallelism:** Can run parallel to Lane B.
+    *   **Output:** Code patch, unit tests for dual-key acceptance and time-based rejection.
+
+2.  **Lane B: Verification Strategy & Staging Calibration (QA)**
+    *   **Work:** Define verification receipts that distinguish real failures from staging hardware latency spikes. Prepare a "dry-run" simulation of the 48h window using historical traffic logs.
+    *   **Parallelism:** Runs parallel to Lane A.
+    *   **Serialization:** Must complete before G5 (Verify) to interpret results correctly.
+
+3.  **Lane C: HSM Sync Procedure Drafting (Security/Ops)**
+    *   **Work:** Draft the exact manual steps for syncing the config to the HSM. Include rollback steps for physical reset if bricking occurs.
+    *   **Serialization:** Must be reviewed and approved *before* G8 (Release).
+
+**Gates & Checks**
+
+*   **G1 (Spec):** Pin base SHA. Define "seamless" as 0% 4xx errors during switchover in simulation.
+*   **G3 (Design):** ADR confirming the 48h timer source (server-side vs. token-embedded) and data safety for active sessions.
+*   **G4 (Implement):** Builder commits to isolated worktree. Unit tests included.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run simulation against historical logs (bypassing staging latency noise). Verify active session persistence.
+    *   **Condition:** Green only if simulation shows 0 dropped connections and correct 48h expiry.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Security Engineer (not the Builder).
+    *   **Scope:** Full diff + Simulation receipts. Focus on crypto logic and timer edge cases.
+*   **G7 (Integrate):** Merge to release candidate branch. Re-run smoke tests on the integrated SHA.
+
+**Landing & Human Gates**
+
+*   **Human Decision 1 (Pre-Deploy):** Security Lead and Operations Manager must approve the G6 Review verdict and the Lane C HSM procedure.
+*   **Deployment Sequence:**
+    1.  Deploy `auth-service` update (software only).
+    2.  **Human Gate:** Operator manually syncs new key config to HSM (Lane C procedure).
+    3.  **Verification:** Monitor live traffic for 1 hour. Confirm dual-key acceptance.
+*   **Rollback:**
+    *   If connectivity drops post-HSM sync: Immediately revert HSM config to legacy-only (physical reset if necessary) and rollback software to previous SHA.
+    *   If software bug found pre-HSM sync: Standard software rollback.
+*   **Closure:** After 48h, verify automatic legacy rejection via logs. Close ticket only after successful expiry confirmation.
+
+**Cost & Risk Control**
+*   CI costs minimized by running full crypto simulation only on the Release Candidate (G7), not every commit.
+*   No automated push to HSM; strictly human-executed to prevent bricking.
+*   Staging latency alerts suppressed for this specific deployment; reliance is on log simulation receipts.

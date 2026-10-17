@@ -1,0 +1,65 @@
+### Delivery Plan: NexusWrite Autosave & Spell-Check
+
+**G0/G1 Intake & Spec**
+*   **Scope:** Implement 30s non-blocking autosave with crash recovery and real-time spell-check (5 languages, red underline, click suggestions).
+*   **Constraints:** Zero changes to comment threads/version history. Graceful degradation on slow networks.
+*   **Non-Goals:** Refactoring collaboration engine beyond necessary state hooks.
+*   **Appetite:** Time-boxed to 3 days for implementation; 1 day for verification.
+*   **Base SHA:** Pin to current `stable-prod` head before branching.
+
+**G2 Plan: Lanes & Serialization**
+*   **Lane A (State & Autosave):** *Builder 1*. Isolated worktree. Modifies global state file and draft storage.
+    *   *Risk:* High collision with collaboration engine.
+    *   *Serialization:* Must complete and pass unit tests before Lane B integrates.
+*   **Lane B (Spell-Check UI):** *Builder 2*. Isolated worktree. Implements dictionary engine, UI underlining, and suggestion popover.
+    *   *Parallelism:* Can run parallel to Lane A development, but integration waits for A.
+*   **Lane C (Migration & Safety):** *DBA Lead (Human)*. Prepares irreversible migration script for regional shards.
+    *   *Gate:* Dry-run only until G6 approval.
+*   **Lane D (Verification):** *QA Agent*. Independent worktree. Runs functional, regression, and network-throttling tests.
+
+**G3 Design**
+*   **ADR:** Define state handshake between autosave and collaboration engine to prevent live-edit breaks.
+*   **Contract:** Autosave must queue locally if network < 100kbps; flush on restore.
+
+**G4 Implementation**
+*   **Builder 1:** Commits state logic + local queueing. Tests: Unit tests for state race conditions.
+*   **Builder 2:** Commits UI logic + language packs. Tests: Snapshot tests for suggestion UI.
+*   **Cost Control:** Run lint/type checks locally; avoid full CI ($45/50m) until G5 pre-check passes.
+
+**G5 Verification (Exact Revision)**
+*   **Revision:** The merged SHA of Lane A + Lane B on a temporary integration branch.
+*   **Checks:**
+    *   **Functional:** Crash simulation (browser kill) → verify draft recovery.
+    *   **UI:** Spell-check triggers on typing; suggestions appear on click; 5 languages loaded.
+    *   **Network:** Throttle to 2G; verify no UI freeze, local queue active.
+    *   **Regression:** Verify comment threads and version history remain untouched.
+    *   **Flake Handling:** If auth check fails, verify local logs show success; mark flake in ledger, do not block.
+*   **Evidence:** Video capture of crash recovery; screenshot of spell-check UI; logs of throttled network handling.
+
+**G6 Review**
+*   **Security:** Independent review of draft storage (PII risk) and external dictionary API calls.
+*   **Code Review:** Senior Engineer (not Builder 1 or 2) reviews state modifications for collaboration safety.
+*   **Verdict:** Blocker/Critical fixes required before G7. High findings need Shift Lead acceptance.
+
+**G7 Integration**
+*   **Merge:** Rebase Lanes A and B onto latest `stable-prod`.
+*   **Final Check:** Run targeted integration suite (not full 50m suite if possible, else trigger once).
+*   **Receipt:** Commit SHA integrated, all gates green.
+
+**G8 Release (Human Gate)**
+*   **Approvers:** Jane Smith AND Shift Lead (Dual approval required).
+*   **Action:** Merge to `stable-prod`.
+*   **Migration:** DBA executes irreversible migration on regional shards post-merge approval.
+*   **Rollback:** If data loss reported within 1 hour, revert merge and restore DB from pre-migration snapshot (must be proven ready in G3).
+
+**G9 Production Verify**
+*   **Monitor:** Watch for autosave failure logs and spell-check latency spikes.
+*   **SLO:** Zero data loss incidents; spell-check latency < 200ms.
+
+**G10 Learn**
+*   **Retro:** If any draft is lost, add specific crash scenario to regression suite immediately.
+
+**Failure Mode:**
+*   If Lane A breaks collaboration, stop immediately; do not attempt "quick fix" in production.
+*   If CI costs exceed budget, switch to targeted test suites defined in G5.
+*   No merge without dual human approval.

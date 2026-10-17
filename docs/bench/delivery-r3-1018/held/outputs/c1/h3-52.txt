@@ -1,0 +1,82 @@
+### Delivery Plan: CoreUtils v4.0 Release
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Version registry is immutable; no overwrites allowed.
+*   **Protected Branch:** `stable` requires Tech Lead + Security Officer sign-off.
+*   **CI Cost:** 45m runtime; re-runs need manager approval.
+*   **Risk:** Breaking schema change; downstream auto-tests must be suppressed to prevent noise.
+*   **Approvers:** Tech Lead, Security Officer, Platform Guild (comms), Change Management (prod).
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Implementation & Isolation (Serial)**
+*   **Actor:** Builder
+*   **Work:** Implement payload schema changes in a dedicated worktree. Draft the migration guide for the three dependent teams.
+*   **Constraint:** Must complete before Lane 2.
+*   **Output:** Commit patch, draft migration guide, updated `CHANGELOG`.
+
+**Lane 2: Independent Verification (Parallel to Comms, Serial to Lane 1)**
+*   **Actor:** QA (Independent of Builder)
+*   **Work:** Run functional/regression tests against the exact revision from Lane 1. Explicitly verify the new schema handles edge cases.
+*   **Constraint:** Must skip the known flaky network latency check (documented exception). Must **not** trigger downstream integration tests yet.
+*   **Output:** Test receipts (green), verification statement.
+
+**Lane 3: Security & Privacy Review (Parallel to Lane 2)**
+*   **Actor:** Security
+*   **Work:** Review data handling changes in the new schema. Verify no PII exposure or supply-chain risks.
+*   **Output:** Security verdict (Green/Red).
+
+**Lane 4: Stakeholder Coordination (Parallel)**
+*   **Actor:** Product Analyst / Conductor
+*   **Work:** Draft release announcement for Platform Guild. Prepare direct outreach to the three dependent teams with the migration guide.
+*   **Output:** Draft comms, confirmed receipt from Guild lead.
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Confirmed breaking change scope; appetite defined as "immediate release."
+*   **G2 (Plan):** This plan. Budget set: 1 CI run (45m).
+*   **G3 (Design):** Migration guide reviewed by Product Analyst for clarity.
+*   **G4 (Implement):** Builder commits to feature branch. Base SHA pinned.
+*   **G5 (Verify):** QA runs suite on **exact commit SHA**. Flaky network check explicitly excluded in config. Downstream tests **disabled**.
+    *   *Condition:* Stack must start; UI/API contracts verified.
+*   **G6 (Review):**
+    *   **Code:** Independent review (not Builder).
+    *   **Security:** Security Officer sign-off required.
+    *   **Quality:** Tech Lead sign-off required.
+*   **G7 (Integrate):** Merge to `stable`. Re-run affected gates on final merge SHA (manager approval obtained for CI cost if re-run needed).
+*   **G8 (Release):**
+    *   Publish to immutable registry.
+    *   Send announcement (Human gate: Platform Guild approval).
+    *   **Decision:** Manual ticket submission for Production promotion.
+
+---
+
+#### Review Strategy
+
+*   **Code Review:** Senior Engineer (not the Builder). Focus: Schema correctness, backward compatibility flags.
+*   **Security Review:** Security Officer. Focus: Data integrity, access controls.
+*   **QA Review:** QA Lead. Focus: Test coverage of new schema, exclusion of flaky test justified.
+*   **Independence:** Builder never reviews own code. Security and QA operate on the final SHA, not the Builder's narrative.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Squash merge to `stable` after G6 approvals.
+*   **Human Decisions Required:**
+    1.  Tech Lead & Security Officer approve `stable` merge.
+    2.  Manager approves CI re-run if flake occurs.
+    3.  Platform Guild approves announcement timing.
+    4.  Change Management approves Production promotion ticket.
+*   **Deployment:**
+    *   Staging: Automatic upon merge.
+    *   Production: Manual trigger post-approval.
+*   **Rollback:**
+    *   Since registry is immutable, rollback involves publishing a patch version (v4.0.1) reverting the schema or fixing critical bugs, then updating consumer manifests.
+    *   Immediate action: Revert merge on `stable` if staging fails, preventing production promotion.
+
+**Risk Mitigation:** Downstream integration tests remain disabled until the three dependent teams confirm migration readiness, preventing false alarms.

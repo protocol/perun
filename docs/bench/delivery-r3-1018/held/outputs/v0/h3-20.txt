@@ -1,0 +1,50 @@
+### Delivery Plan: Edge Agent Image Reduction (<150MB)
+
+**Objective:** Reduce `northstar-daemon` image size to <150MB to enable reliable OTA updates at Northern Ridge stations without breaking the shared logging sidecar.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Analysis & Baseline):** *Builder*
+    *   Action: Run `dive` or `docker history` on the current image to identify bloated layers (debug tools, locales, redundant libs).
+    *   Constraint: Read-only analysis. Must document the exact byte count of the shared base layer to ensure sidecar checksum stability.
+    *   Parallel: Yes.
+*   **Lane B (Refactor & Strip):** *Builder*
+    *   Action: Modify Dockerfile to use a multi-stage build or alpine/minimal base. Explicitly exclude debugging tools and locales.
+    *   Constraint: **Must not** alter the shared base layer bytes that the sidecar verifies. If the base image must change, this lane halts for G3 Design approval.
+    *   Parallel: Yes (after Lane A identifies targets).
+*   **Lane C (Simulation & Verification):** *QA*
+    *   Action: Build the candidate image. Run in `staging-edge` with artificial packet loss injected (since native simulation lacks it). Verify deployment succeeds within the maintenance window.
+    *   Parallel: No (depends on Lane B output).
+
+#### 2. Gates & Checks
+*   **G1 Spec:** Define "non-essential" explicitly. Confirm the exact byte-range tolerance for the shared base layer to prevent sidecar breakage.
+*   **G3 Design (Critical):** Review the proposed base image change. **Hard Gate:** If the base layer checksum changes, a manual rollback script and sidecar update plan must be approved by Security before proceeding.
+*   **G4 Implement:** Builder commits changes. Tests included: unit tests for agent startup, integration test for sidecar checksum match.
+*   **G5 Verify:**
+    *   **Check 1:** Image size < 150MB.
+    *   **Check 2:** Sidecar checksum verification passes (local mock).
+    *   **Check 3:** Deployment success in `staging-edge` with injected packet loss.
+    *   **Check 4:** CI build time < 30 mins (cost guardrail).
+*   **G6 Review:**
+    *   **Security Officer:** Reviews stripped components for any removal of required security binaries (e.g., SSL certs, specific auth tools).
+    *   **Independent Engineer:** Reviews Dockerfile changes (not the Builder).
+
+#### 3. Review Strategy
+*   **Independence:** The Builder (Lane B) cannot approve the G6 Security or G5 QA gates.
+*   **Focus:** Security review focuses on "what was removed" to ensure no capability gaps. QA review focuses on "did it deploy under loss."
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:** Single PR to `main`. No merge train needed for a single feature, but the PR must be rebased on the latest `main` to ensure the sidecar base layer hasn't shifted upstream.
+*   **Human Approval (G8 Release):**
+    *   **Required:** Dual approval from Site Reliability Lead AND Security Officer.
+    *   **Trigger:** Before merging to the production deployment branch.
+    *   **Reason:** Production deployment involves irreversible failure modes (sidecar checksum mismatch).
+*   **Rollback Plan:**
+    *   **Condition:** If post-deploy monitoring shows node offline or sidecar verification failure.
+    *   **Action:** Execute the pre-approved manual rollback script to restore the previous image tag.
+    *   **Constraint:** Rollback requires physical site visit if the OTA mechanism itself is broken; hence the strict G5 simulation requirement.
+
+#### 5. Risk Mitigation
+*   **Sidecar Breakage:** The highest risk. If the base layer is modified, the sidecar will fail. The plan prioritizes stripping *application-layer* bloat first. Only if insufficient will the base layer be touched, triggering the G3 Design emergency protocol.
+*   **Cost Overrun:** CI builds are monitored. If the refactor causes build times to spike (e.g., complex multi-stage downloads), the pipeline will be optimized before merging.
+
+**Next Step:** Assign Builder to Lane A immediately. Await Analysis Report before authorizing Lane B code changes.

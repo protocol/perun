@@ -1,0 +1,57 @@
+**Delivery Plan: Free Tier Sunset & Migration**
+
+**Strategy**
+This is a high-risk, irreversible data migration with legal exposure. We will execute in three serialized phases: Notification, Dry-Run Validation, and Production Migration. Parallel work is limited to non-interfering verification tasks.
+
+**Lane 1: Notification Sequence (Immediate Start)**
+*   **Actor:** Builder (Comms Specialist).
+*   **Work:** Trigger the 30-day notification sequence for the 12,000 affected accounts via the comms engine. Implement a retry-backoff mechanism to mitigate the known flaky check during high-volume bursts.
+*   **Verification:** QA verifies a statistical sample (n=500) of sent emails and logs.
+*   **Gate:** G5 Verify. Must show 100% dispatch success rate in logs, accounting for retries.
+*   **Constraint:** Runs independently of billing code changes but must complete before the hard cutoff.
+
+**Lane 2: Billing Logic & Migration Script (Parallel to Lane 1)**
+*   **Actor:** Builder (Backend).
+*   **Work:**
+    1.  Develop the migration script to provision 'Basic' plans with the introductory discount.
+    2.  Implement the "freeze" logic for analytics jobs to safely edit the shared `LedgerCore` configuration.
+    3.  Ensure explicit "no-purge" safeguards are coded into the data transition layer.
+*   **Verification:**
+    *   Unit tests on critical billing paths only (to manage CI costs).
+    *   **Dry-Run:** Execute script against a production snapshot in an isolated staging environment. Verify 12,000 accounts transition correctly with discounts applied and zero data loss.
+*   **Gate:** G5 Verify. Requires green CI on critical paths and a signed receipt from the Dry-Run showing 100% fidelity.
+*   **Serialization:** This lane must pause before the final commit to coordinate the analytics freeze window.
+
+**Lane 3: Independent Audit & Security (Parallel to Lane 2)**
+*   **Actor:** Security & QA (Independent of Builder).
+*   **Work:**
+    1.  Review the migration script for data integrity (no purges) and idempotency.
+    2.  Verify the "irreversible" nature of the script and confirm the 6-hour backup restore procedure is tested and ready.
+    3.  Audit the notification logs from Lane 1 for compliance.
+*   **Gate:** G6 Review. Security must sign off on the "no data purge" guarantee. QA must sign off on the rollback readiness.
+
+**Integration & Landing (Serialized)**
+*   **Pre-Merge Freeze:** Coordinate a manual freeze of all analytics jobs.
+*   **Integration (G7):** Merge Lane 2 into the release branch. Run the critical path CI suite (4 hours).
+*   **Human Gates (G8 - Mandatory):**
+    *   **Approval 1:** Finance Lead (verifies billing accuracy and discount application).
+    *   **Approval 2:** Chief Legal Officer (verifies compliance with sunset terms and notification completion).
+    *   *No deployment occurs without both signatures.*
+*   **Execution:** Once approved, execute the migration script in production.
+*   **Post-Deploy Verification (G9):**
+    *   Generate the final audit log showing successful migration for all 12,000 accounts.
+    *   Confirm billing profiles are updated.
+    *   Verify analytics jobs resume correctly.
+
+**Rollback Plan**
+*   **Trigger:** Any failure in the audit log, billing mismatch, or data corruption detection.
+*   **Action:** Immediate halt. Initiate full system backup restore (6-hour window).
+*   **Communication:** Legal and Finance notified immediately of the breach in the cutoff timeline.
+
+**Risk Management**
+*   **CI Cost:** Limited to critical paths; reliance on the Dry-Run (Lane 2) for broader confidence.
+*   **Flaky Service:** Lane 1 includes specific retry logic; manual intervention ready if automated retries fail.
+*   **Irreversibility:** The 6-hour restore time is the primary risk; the Dry-Run must be flawless.
+
+**Final Output**
+A signed audit log confirming 12,000 migrations, 0 data purges, and valid billing profiles, delivered by month-end.

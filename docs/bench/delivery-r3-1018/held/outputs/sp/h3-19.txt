@@ -1,0 +1,29 @@
+### Delivery Plan: Multi-Currency Ledger Support
+
+**Lanes & Parallelism**
+*   **Lane A (Database & Compliance):** Design the immutable schema for the new `currency_rates` table and the extended transaction columns. This lane must run **serially first**. No code changes can proceed until the schema is finalized and approved by Legal/Compliance to ensure historical immutability is preserved.
+*   **Lane B (Core Logic):** Once the schema is frozen, implement the internal ledger logic to write new transactions with currency codes and read rates from the new table. This runs in parallel with Lane C.
+*   **Lane C (API & Reporting):** Implement the API response transformation to return both `native_amount` and `base_converted_amount`. This depends only on the interface definition from Lane A, not the full implementation.
+*   **Lane D (Infrastructure):** Prepare the "Vault" deployment scripts and coordinate the lock window for the `global-config` file. This runs parallel to B and C but must finalize before the merge gate.
+
+**Gates & Checks**
+*   **Gate 1 (Schema Freeze):** Before any code commit, the Schema Design (Lane A) requires explicit written sign-off from the Chief Compliance Officer. This check runs on the **current main revision**. Failure here stops all lanes.
+*   **Gate 2 (Migration Dry-Run):** The irreversible migration script must be executed against a production-sized clone in an isolated environment. Success is defined as zero data loss and sub-4-hour execution time. This runs on the **release candidate revision**.
+*   **Gate 3 (Network Flakiness Filter):** CI tests involving external currency fetches must be mocked or tagged to ignore false negatives in staging. The check passes only if deterministic unit tests pass 100% and flaky integration tests are explicitly excluded from the blocking suite.
+*   **Gate 4 (Config Lock Coordination):** The merge to the release branch must occur strictly outside EU business hours to avoid `global-config` lock conflicts. The check verifies the merge timestamp against the EU holiday/business calendar.
+
+**Review Strategy**
+*   **Independent Code Review:** A senior engineer from a non-Finance team (to ensure fresh eyes) reviews Lanes B and C. They must verify that no logic attempts to rewrite historical rows.
+*   **Compliance Audit Review:** The Chief Compliance Officer (or delegate) reviews the final diff specifically for the migration script and the immutability constraints. This is a mandatory human gate; automated checks are insufficient for legal compliance.
+*   **Security Review:** Since this deploys to the "Vault" environment, a security specialist must review the encryption handling of the new currency data fields.
+
+**Landing & Rollback**
+*   **Merge Strategy:** Do not merge to main until all gates pass. Merge the release candidate to a `release/q3-audit` branch first.
+*   **Deployment Window:** Deployment occurs during a pre-approved maintenance window (non-EU hours). The CI pipeline runs once on the exact revision tagged for release. If it fails, **do not retry** immediately; investigate to avoid billing waste and potential race conditions.
+*   **Human Decision Point:** The "Deploy to Vault" button requires manual triggering by the Release Manager only after the Compliance Officer confirms the audit trail looks correct in the staging preview.
+*   **Rollback Plan:** Since the DB migration is irreversible, a standard code revert is insufficient. If critical failure occurs post-deployment:
+    1.  Immediately halt all write traffic to the ledger.
+    2.  Initiate the full restore from the pre-deployment nightly backup (estimated 4 hours downtime).
+    3.  Do not attempt partial fixes; the legal chain requires total consistency.
+
+**Critical Constraint:** Under no circumstances should a job be created to migrate existing single-currency rows. The system must support dual modes: legacy rows (implicit base currency) and new rows (explicit currency code). Reports must handle both seamlessly.

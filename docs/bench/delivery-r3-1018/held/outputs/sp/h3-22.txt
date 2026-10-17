@@ -1,0 +1,43 @@
+### Delivery Plan: Per-Tenant Timezone Digest
+
+#### 1. Work Lanes & Parallelism
+*   **Lane A (Core Logic):** Modify the digest scheduler to read `timezone` from the tenant profile. Implement the UTC offset calculation. Handle the backward compatibility fallback (null preference → UTC).
+    *   *Constraint:* Must use the existing deprecated timezone library; do not attempt removal.
+*   **Lane B (Configuration & Data):** Prepare test data fixtures for tenants with varied timezones (UTC, UTC+5, UTC-8) and null preferences.
+    *   *Constraint:* Do not modify `global_rules.json` during business hours. If changes are needed, schedule for off-hours or file the change request immediately.
+*   **Lane C (Observability):** Update logging to record the calculated execution window per tenant for audit trails.
+
+**Parallel Execution:** Lanes A, B, and C can proceed simultaneously. Lane A depends on the interface defined in Lane B (data shape) but not the physical file lock.
+
+#### 2. Gates & Checks
+*   **Pre-Commit Gate:** Static analysis and unit tests must pass locally before pushing. This is critical to avoid triggering the 45-minute CI pipeline on broken builds.
+*   **CI Pipeline Trigger:** Run only on the `feature/digest-timezone` branch.
+    *   *Revision:* Latest commit on the feature branch.
+    *   *Optimization:* If staging network checks fail, verify logs for successful data processing. If logs confirm success, mark the check as a false negative and proceed; do not re-run the pipeline.
+*   **Staging Verification:** Deploy to the isolated staging environment. Verify digest generation times for the three test fixtures.
+    *   *Check:* Confirm tenants without preferences still receive digests at 06:00 UTC.
+
+#### 3. Review Process
+*   **Code Review:** Conducted by a senior engineer from the Data Platform team (peer review).
+    *   *Independence:* Reviewer must not be the author of Lane A.
+    *   *Focus:* Verify the fallback logic for null preferences and ensure no regression in the legacy library usage.
+*   **Architecture Gate:** Manual approval required from the Lead Architect.
+    *   *Timing:* After successful staging verification and peer review.
+    *   *Input:* Provide the CI logs (ignoring known flaky network errors) and a summary of the fallback testing.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:** Squash merge to `main` only after Lead Architect approval.
+*   **Deployment Window:** Schedule deployment immediately after merge to ensure coverage before the billing cycle starts on the 1st.
+*   **Human Decision Point:** The Lead Architect must explicitly approve the promotion to Production. No automated promotion.
+*   **Rollback Plan:**
+    *   *Trigger:* If >5% of tenants report missing digests or incorrect times within 2 hours of deployment.
+    *   *Action:* Revert the merge commit and redeploy the previous stable version.
+    *   *Fallback:* If revert fails, hotfix the scheduler to force all tenants to UTC (restoring previous behavior) while preserving the new code path for future fixing.
+
+#### 5. Critical Constraints Summary
+*   **Cost Control:** Ensure local testing is exhaustive to minimize 45-minute CI runs.
+*   **File Lock:** Coordinate `global_rules.json` access outside business hours if modification is unavoidable.
+*   **Legacy Debt:** Accept the deprecated library usage; do not refactor it in this ticket.
+*   **Flaky Tests:** Trust logs over staging network status flags.
+
+This plan prioritizes the Q3 retention deadline by isolating risks (legacy lib, flaky tests) and enforcing strict gatekeeping on the expensive CI pipeline.

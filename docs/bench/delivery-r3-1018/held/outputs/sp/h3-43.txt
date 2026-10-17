@@ -1,0 +1,65 @@
+### Delivery Plan: Event-Driven Catalog Cache Warm-up
+
+#### 1. Work Lanes & Parallelism
+Work is split into three parallel lanes to maximize throughput while respecting team boundaries.
+
+*   **Lane A (Core Inventory Team): Event Producer & Schema**
+    *   Define the immutable event schema for `ProductUpdated` (SKU, timestamp, change-type).
+    *   Modify the admin portal's save handler to publish events to the bus.
+    *   *Dependency:* None. Can start immediately.
+*   **Lane B (Core Inventory Team): Consumer & Cache Logic**
+    *   Build the event consumer service to subscribe to `ProductUpdated`.
+    *   Implement the specific SKU cache refresh logic (replacing the full-table scan).
+    *   Implement burst-handling (backpressure/retry) to prevent event drops.
+    *   *Dependency:* Requires the finalized schema from Lane A.
+*   **Lane C (QA/DevOps): Infrastructure & Staging**
+    *   Provision the `staging-east` environment mirrors.
+    *   Configure the separate parallel job for extensive integration tests to bypass the 18-minute CI timeout.
+    *   Script the manual log verification step for the flaky migration check.
+
+**Serialization Point:** Lane B cannot finalize code until Lane A freezes the event schema. Lane C must be ready before the soak period begins.
+
+#### 2. Gates & Checks
+All checks run on the specific commit hash resulting from the merge of Lanes A and B.
+
+*   **Gate 1: Schema Compatibility Check (Pre-Merge)**
+    *   *Runner:* Automated CI on Lane A's branch.
+    *   *Check:* Validates that the new `ProductUpdated` payload matches the immutability rules.
+    *   *Failure Mode:* Immediate block. Incompatible payloads poison the dead-letter queue.
+*   **Gate 2: Unit & Burst Testing (Pre-Merge)**
+    *   *Runner:* Standard CI pipeline.
+    *   *Check:* Verifies consumer logic and backpressure handling under simulated load.
+    *   *Constraint:* Must complete within the remaining CI time budget after linting.
+*   **Gate 3: Integration Suite (Parallel Job)**
+    *   *Runner:* Separate parallel job triggered on the release candidate branch.
+    *   *Check:* End-to-end flow from Admin Save → Event Bus → Cache Refresh.
+    *   *Timing:* Runs concurrently with the initial staging deployment preparation.
+*   **Gate 4: Migration Flakiness Check (Manual)**
+    *   *Runner:* On-call Engineer.
+    *   *Trigger:* If the database migration step fails.
+    *   *Action:* Manually verify logs to distinguish real errors from the known 10% false positive before authorizing a retry.
+
+#### 3. Review Process
+Reviews are strictly independent to ensure dual-approval integrity.
+
+*   **Code Review 1 (Producer):** Conducted by the **Search Team Lead**. They verify that the event payload provides sufficient data for downstream search indexing without coupling.
+*   **Code Review 2 (Consumer):** Conducted by the **Pricing Team Lead**. They verify that the cache invalidation logic does not introduce race conditions affecting price accuracy.
+*   **Architecture Review:** Conducted by a **Staff Engineer** (neutral party) focusing on the burst traffic handling and dead-letter queue safety.
+*   **Independence Rule:** No reviewer may approve code written by their own direct reports or their own lane.
+
+#### 4. Landing Strategy
+The merge and deployment follow a strict safety protocol due to the shared monorepo nature.
+
+*   **Merge Window:** Tuesday or Wednesday only (avoiding weekend incidents).
+*   **Deployment Sequence:**
+    1.  Merge to `main` only after Gates 1-3 pass and both Team Leads approve.
+    2.  Deploy to `staging-east`.
+    3.  **Mandatory Soak:** System must run in `staging-east` for exactly 2 hours with production traffic mirroring.
+    4.  Monitor dead-letter queue depth; any growth indicates schema poisoning.
+*   **Human Decision Points:**
+    *   Authorization to retry the migration step upon failure.
+    *   Go/No-Go decision after the 2-hour soak based on latency metrics.
+*   **Rollback Plan:**
+    *   If latency spikes or event drops occur in staging: Revert the merge immediately.
+    *   If the dead-letter queue is poisoned: Halt deployment, purge the queue manually (DBA action), fix the schema, and restart the cycle.
+    *   Fallback: Re-enable the nightly cron job temporarily if the real-time system fails critical health checks during the soak.

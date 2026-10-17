@@ -1,0 +1,68 @@
+### Delivery Plan: Legacy Secrets Migration
+
+**Objective:** Migrate hardcoded credentials to the Central Vault with zero downtime, ensuring full bootability across Development, Staging, and Production.
+
+#### 1. Lanes & Parallelism
+Work is divided into three logical lanes. Lanes 1 and 2 run in parallel; Lane 3 is strictly serialized.
+
+*   **Lane A: Vault & Code Integration (Parallel)**
+    *   **Owner:** Backend Engineering Team.
+    *   **Tasks:** Provision secrets in the Central Vault for all zones. Refactor application code to read from the Vault at runtime while retaining fallback logic to local config files.
+    *   **Constraint:** Code must support dual-read (Vault primary, File fallback) to ensure bootability during transition.
+
+*   **Lane B: Configuration Preparation (Parallel)**
+    *   **Owner:** DevOps Engineer.
+    *   **Tasks:** Prepare the updated `global-config` file with placeholder values (no real secrets). Draft the revocation schedule for legacy credentials.
+    *   **Constraint:** Requires explicit sign-off from **Jane Smith** and the **Security Lead** before merging any changes touching `global-config`.
+
+*   **Lane C: Validation & Cutover (Serialized)**
+    *   **Owner:** Release Manager.
+    *   **Sequence:** Development → Staging → Production.
+    *   **Constraint:** No environment proceeds until the previous one confirms successful boot and secret retrieval. All cutover activities must occur within the **Tuesday Maintenance Window**.
+
+#### 2. Gates & Checks
+All checks run on the specific commit hash designated for release.
+
+*   **Gate 1: Pre-Merge Sign-off**
+    *   **Trigger:** Pull Request modifying `global-config`.
+    *   **Requirement:** Explicit approval from Jane Smith AND Security Lead.
+    *   **Action:** Block merge until both approvals are recorded.
+
+*   **Gate 2: CI Pipeline Optimization**
+    *   **Trigger:** Push to integration branch.
+    *   **Constraint:** Due to high cost ($120) and duration (45m), runs are limited to one per lane per environment. No speculative retries.
+    *   **Exception Handler:** If the Staging build fails specifically on the "network check," auto-approve this step as a known false positive. Any other failure halts the pipeline.
+
+*   **Gate 3: Bootability Verification**
+    *   **Timing:** Immediately post-deployment in each zone.
+    *   **Check:** Automated health probe confirming the service starts and successfully retrieves *either* a Vault secret or the local fallback.
+    *   **Success Criteria:** 100% of instances report "Ready" status.
+
+*   **Gate 4: Revocation Authorization**
+    *   **Timing:** Only after Gate 3 passes in **Production**.
+    *   **Check:** Confirmation that Production has been running on Vault secrets for at least 30 minutes with no fallback usage logs.
+    *   **Action:** Security Lead authorizes the irreversible revocation of legacy hardcoded credentials.
+
+#### 3. Review Strategy
+*   **Code Review:** Independent Senior Engineer (not the author) reviews the Vault integration logic. Focus: Fallback mechanism reliability and error handling when Vault is unreachable.
+*   **Security Review:** Security Lead reviews the Vault policy configurations and the revocation plan. Focus: Ensuring no secrets are exposed in logs during the switch.
+*   **Operational Review:** DevOps Lead reviews the rollback procedure and the `global-config` changes. Focus: Verifying the Tuesday window alignment.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:**
+    1.  Merge Lane A (Code) to `main` after Code Review.
+    2.  Merge Lane B (Config) to `main` after Dual Sign-off.
+    3.  Deploy to Dev → Staging → Production sequentially during the Tuesday window.
+
+*   **Human Decision Points:**
+    *   Approval to proceed from Staging to Production.
+    *   Final authorization to revoke legacy secrets (irreversible).
+
+*   **Rollback Plan:**
+    *   **Trigger:** Failed bootability check in any zone.
+    *   **Action:** Revert the deployment to the previous stable commit immediately. Since the code supports fallback to local files, the system will automatically revert to using legacy secrets without requiring a config rollback, restoring service instantly.
+    *   **Post-Rollback:** Investigate Vault connectivity or configuration errors before rescheduling.
+
+*   **Completion:**
+    *   Once Production is stable and legacy secrets are revoked, update the ticket with the final status for all environments.
+    *   Schedule a post-mortem to remove the fallback code in a future iteration.

@@ -1,0 +1,79 @@
+### Delivery Plan: Enterprise SSO with Legacy Coexistence
+
+**Scope & Constraints**
+We will introduce SSO for Enterprise tenants while preserving legacy username/password flows for Small Business users. The login page will dynamically select the method based on tenant configuration.
+**What we will NOT touch:** The legacy session cookie format (irreversible without full reset). Existing Small Business user data.
+**Risk Window:** Database migrations and feature flag flips.
+**Rollback Strategy:**
+*   **Code:** Revert PR to disable feature flag logic.
+*   **Config:** Flip feature flag `enterprise_sso_enabled` to `false`.
+*   **Data:** No data rollback needed if cookie format is untouched; if migration fails, restore from pre-deployment snapshot.
+
+---
+
+### Lanes & Ownership
+
+**Lane 1: Core Logic & Feature Flag (Builder A)**
+*   **Owner:** Builder
+*   **Work:** Implement tenant-aware routing in `core-identity`. Add `enterprise_sso_enabled` flag. Ensure legacy path remains default.
+*   **Parallel?** Yes, independent of Lane 2 until integration.
+*   **Start Condition:** G1 Spec approved.
+
+**Lane 2: Mock IdP Stabilization (QA Engineer)**
+*   **Owner:** QA
+*   **Work:** Fix flaky timeouts in the staging mock identity provider to ensure reliable regression testing.
+*   **Parallel?** Yes.
+*   **Start Condition:** G1 Spec approved.
+
+**Lane 3: Migration & Backward Compatibility (Security Engineer)**
+*   **Owner:** Security
+*   **Work:** Verify database schema changes do not impact legacy cookie reading. Define "no-touch" boundaries for session data.
+*   **Parallel?** No. Must complete before Lane 4.
+*   **Start Condition:** Lane 1 code draft ready for review.
+
+**Lane 4: Pilot Integration (Conductor + QA)**
+*   **Owner:** Conductor
+*   **Work:** Configure staging for "Globex Corp" pilot. Execute end-to-end login flows for both tenant types.
+*   **Parallel?** No. Depends on Lanes 1, 2, and 3.
+*   **Start Condition:** Lanes 1-3 verified green.
+
+---
+
+### Gates & Checks
+
+*   **G1 Spec:** Define acceptance criteria: "Enterprise user redirects to IdP; SB user sees login form." Pin base SHA.
+*   **G2 Plan:** Confirm token budgets for CI runs (45m cost). Classify `core-identity` as provider; web/mobile as consumers.
+*   **G3 Design:** ADR confirming cookie format immutability.
+*   **G4 Implement:** Builder commits to isolated worktree. Unit tests included.
+*   **G5 Verify:**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run full regression suite (optimized by Lane 2 fixes).
+    *   **Requirement:** Green build on staging with mock IdP. UI evidence of dynamic selection.
+*   **G6 Review:**
+    *   **Security:** Independent review of auth flow (not by Builder).
+    *   **QA:** Independent verification of legacy non-regression.
+*   **G7 Integrate:** Merge to integration branch. Re-run affected smoke tests on final SHA.
+
+---
+
+### Landing & Human Decisions
+
+**Merge Strategy:**
+1.  Merge Lane 1-3 results to integration branch.
+2.  Deploy to Staging.
+3.  Enable flag for "Globex Corp" only.
+4.  Monitor for 48 hours.
+
+**Human Gates (Required Before Production):**
+1.  **Security Lead Approval:** Written sign-off on G6 Security verdict.
+2.  **VP of Product Approval:** Written sign-off to enable flag in Production after successful Staging pilot.
+
+**Deployment:**
+*   Deploy code with flag `OFF` by default.
+*   Human operator flips flag for Enterprise tenants only post-approval.
+
+**Failure Response:**
+If Staging pilot fails or latency spikes >10%, immediately flip flag `OFF`. No code revert required for immediate mitigation. Code revert follows for root cause analysis.
+
+**Cost Control:**
+CI runs limited to one full suite per candidate SHA. Lane 2 must stabilize mock IdP to prevent wasted compute on flaky retries.

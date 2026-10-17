@@ -1,0 +1,60 @@
+### Delivery Plan: Search Endpoint P99 Optimization
+
+**Binding Facts & Constraints**
+*   **Goal:** Reduce P99 latency from 1200ms to <400ms.
+*   **Invariant:** Ranking algorithm and result order must remain byte-for-byte identical (Compliance).
+*   **Bottleneck:** Data aggregation layer.
+*   **Approvers:** Jane Smith (Team Lead) + Compliance Officer (Portal).
+*   **Cost Gate:** CI is $45/run; local verification is mandatory before push.
+*   **Risk:** Flaky staging network check (ignore if local logs confirm success); Production data snapshots only available Tuesdays.
+
+#### Lanes & Serialization
+
+**Lane 1: Profiling & Baseline (Serial Start)**
+*   **Actor:** Product Analyst / Builder
+*   **Work:** Run local profilers against the latest Tuesday snapshot to isolate specific aggregation queries causing the 1200ms spike. Establish a local benchmark script that asserts byte-for-byte payload identity.
+*   **Output:** Identified query IDs and baseline latency metrics.
+
+**Lane 2: Optimization Implementation (Parallel to Lane 3 start)**
+*   **Actor:** Builder (Isolated Worktree)
+*   **Work:** Implement caching or indexing strategies on the identified aggregation queries. Strictly forbid changes to the read-only ranking library.
+*   **Constraint:** Must pass local byte-for-byte payload comparison against current production output.
+*   **Output:** Patch with local latency <400ms and identical payloads.
+
+**Lane 3: Independent Verification (Parallel)**
+*   **Actor:** QA (Independent of Builder)
+*   **Work:** Execute the benchmark script on the Builder's exact revision. Verify P99 <400ms under simulated load.
+*   **Gate Logic:** If staging network check fails, inspect local logs; if logs show success, mark check as flake and proceed. Verify payload hash matches production exactly.
+*   **Output:** QA Receipt with latency graphs and hash verification.
+
+**Lane 4: Security & Compliance Review (Serial after L2/L3)**
+*   **Actor:** Security / Compliance Officer
+*   **Work:** Review that no ranking logic was modified (diff against read-only lib). Confirm caching strategy does not serve stale data violating accuracy requirements.
+*   **Output:** Compliance sign-off in portal.
+
+#### Gates & Checks
+
+*   **G1 (Spec):** Define acceptance as "P99 <400ms on Tuesday snapshot, payload hash match 100%."
+*   **G4 (Implement):** Builder commits patch only after local green (lint, type, unit, payload diff).
+*   **G5 (Verify):** QA runs full suite locally. **Hard Condition:** CI is NOT triggered until local logs confirm success and cost is justified. Staging flake ignored per repo facts if local logs pass.
+*   **G6 (Review):** `deep-code-review` focused on aggregation logic changes. Security verifies no side-channels in cache.
+*   **G7 (Integrate):** Merge to integration branch. Re-run payload diff on the merge commit.
+
+#### Review Strategy
+*   **Builder** implements; **QA** verifies performance and payload integrity independently.
+*   **Security/Compliance** reviews the diff specifically for forbidden ranking changes.
+*   **No self-approval:** Builder cannot merge or approve their own performance claims.
+
+#### Landing & Rollback
+
+*   **Merge Train:** Once Lanes 2, 3, and 4 report green receipts at the exact same SHA:
+    1.  Open PR targeting the integration branch.
+    2.  Trigger CI (single run, cost accepted due to prior local verification).
+    3.  Request approval from Jane Smith and Compliance Officer via the internal portal.
+*   **Human Decision:** Deployment requires explicit portal approval from both approvers.
+*   **Rollback:** If P99 >400ms in production or payload mismatch detected:
+    1.  Immediate revert of the merge commit.
+    2.  Restore previous binary (ranking lib remains untouched, simplifying rollback).
+    3.  Post-mortem to analyze why local profiling missed the production variance.
+
+**Schedule:** Execution begins immediately to allow buffer before month-end. Load testing fidelity limited to Tuesday snapshots; monitor closely post-deploy.

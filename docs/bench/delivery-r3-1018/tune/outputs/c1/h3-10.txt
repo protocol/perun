@@ -1,0 +1,68 @@
+### Delivery Plan: Enterprise SSO with Legacy Coexistence
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Modifying legacy session cookie format requires full user reset; backward compatibility is mandatory.
+*   **Approvals:** Production deploy requires explicit written approval from Security Lead and VP of Product.
+*   **Cost/Time:** CI pipeline is 45 minutes; flaky mock IdP in staging causes false negatives.
+*   **Scope:** `core-identity` module (web + mobile); dynamic selection based on tenant config; feature-flagged.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Spec & Contract (Serial, First)**
+*   **Actor:** Product Analyst + Security.
+*   **Work:** Define tenant config schema, feature flag logic, and exact "dynamic selection" rules. Document the immutable legacy cookie contract.
+*   **Gate:** G1 Spec (Testable acceptance criteria, pinned base SHA).
+
+**Lane 2: Core Implementation (Parallel after G1)**
+*   **Actor:** Builder (dedicated worktree).
+*   **Work:** Implement SSO flow, tenant resolver, and flag gating in `core-identity`. Ensure legacy path remains untouched.
+*   **Gate:** G4 Implement (Tests included, immutable base SHA).
+
+**Lane 3: Independent Verification Setup (Parallel after G1)**
+*   **Actor:** QA + Security.
+*   **Work:** Prepare test scripts for both flows. Configure a stable mock IdP or stub to bypass staging flakiness for functional checks.
+*   **Gate:** G3 Design (Test strategy approved).
+
+**Lane 4: Integration & Staging Pilot (Serial, after Lanes 2+3)**
+*   **Actor:** Conductor + QA.
+*   **Work:** Merge to integration branch, deploy to staging, verify with Globex Corp pilot data.
+*   **Gate:** G5 Verify (Exact revision, green gates on stable mock, UI journey evidence).
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1:** Intake and Spec. Must include `idea-critic` review of the approach before owner sign-off.
+*   **G2 Plan:** Acyclic graph. Lane 2 cannot start until Lane 1 defines the cookie contract. Lane 4 waits for 2+3.
+*   **G3 Design:** ADR for tenant resolution logic; security review of IdP integration.
+*   **G4 Implement:** Builder commits to dedicated worktree. Unit tests for legacy path must pass locally before push.
+*   **G5 Verify:** **Critical.** Run on exact merged SHA.
+    *   Legacy login: Full regression (subset if cost-prohibitive, but must cover session cookie integrity).
+    *   SSO login: Verified against stable stub (bypass flaky mock).
+    *   UI Evidence: Headed browser journey showing dynamic toggle based on tenant.
+*   **G6 Review:** Independent review by Security (no builder involvement) + QA verdict.
+*   **G7 Integrate:** One integration receipt. Re-run affected gates on final SHA.
+*   **G8 Release:** **Human Gate.** Written approval from Security Lead + VP of Product required before enabling flag in production.
+
+---
+
+#### Review Strategy
+
+*   **Builder** never reviews their own code.
+*   **Security Review:** Independent AppSec review of SSO integration and cookie handling (G6).
+*   **QA Review:** Independent functional verification of both legacy and SSO paths (G5/G6).
+*   **Deep Code Review:** Automated audit on exact SHA for `core-identity` changes.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge:** Lane 4 merges to main via merge train (G7). Feature flag remains OFF for production.
+*   **Deploy:** Deploy artifact to production with flag OFF.
+*   **Enablement:** Human gate (G8) to flip flag for Globex Corp only.
+*   **Rollback:** Instant via feature flag toggle. If cookie format was accidentally altered, rollback requires full user reset (prevented by G5/G6 checks).
+*   **Post-Deploy:** G9 Production verify (SLOs, login success rates) before widening flag.
+
+**Cost Control:** Lane 2 must name a token budget before G4. CI optimization (Lane 3) to skip heavy DB seeding for unit-only lanes.

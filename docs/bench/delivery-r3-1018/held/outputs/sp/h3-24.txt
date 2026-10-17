@@ -1,0 +1,45 @@
+### Delivery Plan: A11y Core UI Kit Patches
+
+**Lanes & Parallelism**
+Work is split into three serialized lanes to prevent CI waste and ensure strict compliance. Parallel work is forbidden until Lane 1 completes.
+
+*   **Lane 1: Implementation & Local Verification (Owner: Engineer)**
+    *   Modify focus states and `aria-labels` for Button and Input families on a fresh branch `fix/a11y-q3-audit`.
+    *   Run local visual regression checks manually against the read-only staging data mirror.
+    *   Commit changes with detailed messages linking specific legal requirements to code changes.
+*   **Lane 2: Design & Accessibility Review (Owners: Design Lead, Accessibility Officer)**
+    *   Triggered only after Lane 1 pushes a Pull Request (PR).
+    *   Both reviewers must inspect the visual diffs side-by-side with the legal audit report.
+    *   **Constraint:** Approval requires explicit sign-off from *both* parties. One cannot override the other.
+*   **Lane 3: CI Validation & Merge (Owner: CI System + Engineer)**
+    *   Triggered only after Lane 2 approvals are recorded.
+    *   Engineer manually restarts the snapshot service job if the initial run hits the known timeout flake.
+    *   Final merge occurs only after snapshot tests pass green.
+
+**Gates & Checks**
+Strict gates prevent expensive CI runs on unverified code.
+
+1.  **Pre-Flight Gate (Local):** Before pushing, the Engineer must verify visual rendering locally. No code is pushed if local inspection shows unintended regressions.
+2.  **Review Gate (PR):** The PR remains in "Draft" status until the Design Lead and Accessibility Officer add their specific approval comments. Automated merging is disabled.
+3.  **CI Gate (Cloud):** The CI pipeline runs on the exact revision tagged by the dual approvals.
+    *   *Check:* Snapshot comparison on 4 parallel browser instances.
+    *   *Contingency:* If the job times out (known flake), the Engineer manually restarts the job once. If it fails a second time, the build is paused for infrastructure investigation before retrying.
+
+**Review Process**
+Independence is critical to satisfy legal and design constraints.
+
+*   **Who:** Design Lead (visual fidelity) and Accessibility Officer (compliance).
+*   **Independence:** Reviews are conducted independently. The Design Lead does not defer to the Accessibility Officer on visual rendering, and the Officer does not defer to Design on A11y semantics.
+*   **Artifact:** Reviews must reference specific commit hashes. General "LGTM" comments are insufficient; reviewers must confirm specific components against the Q3 audit list.
+
+**Landing Strategy**
+*   **Merge Method:** Squash and Merge to `main` to keep history clean, preserving the detailed commit message from Lane 1 as the squash message.
+*   **Human Decision Point:** If snapshot tests fail despite local verification and dual approval, the Engineer must halt. Do not force merge. Escalate to the Platform Guild lead to determine if the baseline update mechanism is flawed or if the implementation introduced a subtle regression.
+*   **Rollback Plan:**
+    *   If a critical regression is found post-merge, immediately revert the squash commit.
+    *   Notify all twelve internal product teams via the Platform Guild channel that the library version is rolled back.
+    *   Re-open the ticket; do not attempt a "quick fix" on main.
+
+**Risk Mitigation**
+*   **CI Cost:** By enforcing strict local verification and dual-approval gates before triggering CI, we ensure the expensive 4-browser snapshot run executes only once (plus one potential retry for flakiness).
+*   **Staging Data:** Since staging is read-only and refreshed nightly, all verification happens locally against a static snapshot of production data to avoid environment drift issues during testing.

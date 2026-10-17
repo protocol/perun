@@ -1,0 +1,40 @@
+### Delivery Plan: Dark Mode Tokens
+
+**Lanes & Parallelism**
+Work splits into three parallel lanes after the initial spec lock:
+1.  **Core Token Lane:** Senior Staff Engineer defines the semantic token map (light/dark pairs) in `acme-core`. This is the critical path; no other lane proceeds without this signed-off schema.
+2.  **Portal Integration Lane:** Frontend team implements the theme switcher logic in the main Acme Portal, consuming the new tokens. This runs parallel to widget work once the token schema is frozen.
+3.  **Widget Compatibility Lane:** Two sub-streams here.
+    *   *Sales Widget:* Standard integration using dynamic tokens.
+    *   *Support Widget:* Specialized stream to implement the static fallback asset generator for the legacy engine. This must run in parallel with Sales but requires a distinct build script.
+
+**Serialization Constraints**
+*   **Token Freeze Gate:** No integration code merges until the Senior Staff Engineer approves the token configuration file. This prevents rework if the schema changes.
+*   **Fallback Generation:** The Support Widget's static asset generation must occur *after* the token values are finalized but *before* the visual regression suite runs, as the suite tests against these generated assets.
+
+**Gates & Checks**
+*   **Revision Control:** All checks run on the specific feature branch head, rebased daily against `main` to catch upstream conflicts early.
+*   **Accessibility Gate:** Automated contrast ratio checks run on every commit to the Core Token Lane. Failure blocks merge immediately.
+*   **CI Timeout Mitigation:** The visual regression suite for widgets will be split into two shards (Critical Paths vs. Edge Cases) to stay under the 30-minute limit. If the "Critical Paths" shard passes but the full suite times out, the build is marked "Warn" rather than "Fail" to prevent false negatives blocking progress, pending a manual retry by the Platform Team.
+*   **Backward Compatibility Check:** A dedicated build job verifies that consuming applications using the *previous* version of `acme-core` still build successfully with the new package published to the staging registry.
+
+**Review Process**
+*   **Token Configuration:** Reviewed by a *different* Senior Staff Engineer (peer review). The author cannot approve their own token changes.
+*   **Integration Code:** Reviewed by mid-level engineers from the respective teams (Portal, Sales, Support).
+*   **Cross-Team Audit:** Before final merge, one representative from the Platform Team reviews the CI sharding strategy and the Support Widget's fallback generation logic to ensure operational stability. This review is independent of the feature teams.
+
+**Landing Strategy**
+*   **Phased Rollout:**
+    1.  **Phase 1:** Publish `acme-core` with dark tokens to the staging registry. Verify backward compatibility builds.
+    2.  **Phase 2:** Merge Support Widget changes first (highest risk due to legacy engine). Deploy to a canary environment.
+    3.  **Phase 3:** Merge Sales Widget and Portal changes.
+*   **Human Decision Points:**
+    *   Approval of the initial token schema (Senior Staff Engineer).
+    *   Authorization to bypass the "full suite" timeout failure if critical paths pass (Platform Team Lead).
+    *   Final go/no-go for production deployment based on canary metrics.
+*   **Rollback Plan:**
+    *   If tokens cause breakage: Revert the `acme-core` version bump in all three consumers immediately. The private registry retains the previous stable version for instant rollback.
+    *   If Support Widget fallback fails: Disable the dark mode feature flag for the Support Widget only; other apps remain unaffected.
+
+**Timeline Target**
+All lanes aim for code freeze 5 days prior to the quarterly review to allow for a full 3-day canary observation window and buffer for any required manual CI retries.

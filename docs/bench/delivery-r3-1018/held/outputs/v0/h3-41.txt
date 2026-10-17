@@ -1,0 +1,50 @@
+### Delivery Plan: Safe Payment Gateway Retry & Circuit Breaker
+
+**Objective:** Implement idempotent-safe retry logic with a circuit breaker for the checkout flow, ensuring zero double-billing risk.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Spec & Safety Contract) – Product Analyst + Fraud Team Lead**
+    *   **Work:** Define the exact "definitely did not reach processor" condition. Document the idempotency key strategy.
+    *   **Dependency:** Must complete before Lane B starts.
+    *   **Parallelism:** Runs independently of infrastructure setup.
+*   **Lane B (Implementation) – Builder**
+    *   **Work:** Implement retry logic and circuit breaker in the checkout service. Ensure `transaction_validator` interface remains unchanged to protect the refund processor.
+    *   **Constraint:** Isolated worktree. No changes to shared module interfaces.
+    *   **Parallelism:** Starts after Lane A spec is signed off.
+*   **Lane C (Test Stabilization) – QA Engineer**
+    *   **Work:** Create a deterministic harness for the flaky `latency_check`. Isolate it from peak-hour noise to prevent false negatives.
+    *   **Parallelism:** Runs parallel to Lane B.
+
+#### 2. Gates & Checks
+*   **G0/G1 (Intake/Spec):** Fraud Team Lead must sign off on the safety contract (Lane A output) before code is written.
+*   **G2 (Plan):** Verify acyclic graph. Confirm no interface changes to `transaction_validator`.
+*   **G3 (Design):** ADR required for the circuit breaker state storage and idempotency key generation.
+*   **G4 (Implement):** Code frozen on a dedicated branch. Unit tests must cover: network glitch, confirmed failure, ambiguous timeout (must *not* retry), and circuit open state.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run full integration suite in sandbox.
+    *   **Constraint:** Trigger CI only once per major iteration to respect the $120 cost/45min constraint. Use the stabilized `latency_check` harness.
+    *   **Pass Criteria:** Zero double-bill simulations; circuit breaker trips correctly under load.
+*   **G6 (Review):**
+    *   **Reviewer 1 (Security/Fraud):** Independent review of the idempotency logic (not the Builder).
+    *   **Reviewer 2 (Payments Squad):** Review of `transaction_validator` usage to ensure no side effects on refunds.
+    *   **Tool:** `deep-code-review` with `FULL` scope on the exact G4 SHA.
+
+#### 3. Landing & Human Decisions
+*   **G7 (Integrate):** Merge to the integration branch only after G6 passes. Re-run affected integration tests on the merge commit.
+*   **G8 (Release Approval – Human Gate):**
+    *   **Approvers:** Jane Smith AND On-call Lead via 'GateKeeper' portal.
+    *   **Input:** G6 verdicts, G5 receipts, and the signed Safety Contract from Lane A.
+    *   **Decision:** Explicit approval to promote to 'Gold'.
+*   **Rollback Strategy:**
+    *   **Constraint:** 'Gold' artifacts are immutable; no direct rollback.
+    *   **Plan:** If production issues arise, the fallback is a **feature flag toggle** to disable retries immediately (must be implemented in Lane B). If the flag fails, a full hotfix release (new artifact) is required.
+    *   **Verification (G9):** Monitor error rates and duplicate transaction alerts immediately post-deploy.
+
+#### 4. Risk Mitigation
+*   **Double-Billing:** Prevented by the strict "ambiguous timeout = no retry" rule defined in Lane A.
+*   **Refund Breakage:** Prevented by freezing the `transaction_validator` interface.
+*   **CI Cost/Time:** Mitigated by local verification of non-flaky tests before triggering the 45-minute sandbox run.
+*   **Flaky Tests:** The `latency_check` is run via the new deterministic harness, not the raw suite.
+
+**Next Step:** Initiate Lane A to draft the Safety Contract for Fraud Team review.

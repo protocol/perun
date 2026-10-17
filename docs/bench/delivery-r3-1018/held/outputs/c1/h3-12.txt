@@ -1,0 +1,58 @@
+### Delivery Plan: Sync Pricing Page Copy
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Deployment to production (requires Revenue Ops lead approval).
+*   **Time Window:** Must go live before 9 AM EST; Approver available 8–10 AM local time (assume alignment or verify timezone offset immediately).
+*   **Collision Risk:** Shared JSON file affects Marketing Site and Customer Portal.
+*   **Verification Gap:** Staging mock service does not validate limit logic; visual check there is insufficient.
+*   **Cost Constraint:** Full CI regression is 45 minutes; minimize re-runs.
+*   **Cache Latency:** 15-minute cache purge delay post-deploy.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Source of Truth Extraction (Serialized First)**
+    *   **Actor:** Product Analyst (or Conductor if analyst unavailable).
+    *   **Work:** Query the *production* billing engine configuration (not staging) to extract the exact hard limits for the 'Pro' tier. Compare these against the marketing team's attached document.
+    *   **Output:** A verified "Golden Record" of values. If the document differs from the engine, halt and alert owner immediately.
+    *   **Gate:** G1 Spec sign-off on the exact numbers to be updated.
+
+2.  **Lane B: Content Update & Local Verification (Parallel to Lane A completion)**
+    *   **Actor:** Builder.
+    *   **Work:** Update the shared JSON file in a dedicated worktree. Modify *only* the specific data points and descriptions; touch no layout code.
+    *   **Check:** Run a lightweight local script to validate JSON syntax and schema compliance. Do not trigger full CI yet.
+    *   **Output:** Patch commit with the exact SHA.
+
+3.  **Lane C: Independent Verification (Serialized after Lane B)**
+    *   **Actor:** QA (Independent of Builder).
+    *   **Work:** Apply Lane B's patch to a clean checkout. Since staging mocks are invalid for logic, verify by parsing the JSON directly against the "Golden Record" from Lane A. Confirm the Customer Portal and Marketing Site both read the correct values from this single source.
+    *   **Gate:** G5 Verify receipt confirming exact match to billing engine limits.
+
+**Review & Integration**
+
+*   **Review (G6):**
+    *   **Reviewer:** Senior Engineer or Tech Lead (Independent of Builder).
+    *   **Scope:** `DIFF` review of the JSON changes only. Verify no whitespace/layout drift.
+    *   **Condition:** Must see the G5 receipt confirming the numbers match the live billing engine, not just the marketing doc.
+
+*   **Integration (G7):**
+    *   Merge to the release branch only after G6 pass.
+    *   Trigger CI *once* on the final merge commit. Given the 45-minute runtime, this must start immediately upon review approval to meet the morning window.
+
+**Landing & Human Gates**
+
+*   **Human Approval (G8):**
+    *   **Approver:** Revenue Operations Lead.
+    *   **Timing:** Request approval at 8:00 AM sharp (or their local start time). Provide the CI status link and the "Golden Record" comparison proof.
+    *   **Action:** Explicit approval to deploy to production.
+
+*   **Deployment Strategy:**
+    *   Deploy immediately upon approval.
+    *   **Wait Period:** Observe the 15-minute cache purge window.
+    *   **Production Verify (G9):** At T+20 mins, hit the live public pricing page and customer portal. Verify the displayed numbers match the "Golden Record."
+
+*   **Rollback Plan:**
+    *   If live values are incorrect or cache fails to update by 8:45 AM EST: Immediate rollback to the previous commit. Notify owner. Do not attempt a second fix before the 9 AM deadline without explicit owner direction.
+
+**Risk Mitigation**
+*   **CI Flakiness:** If CI hangs >30 mins, escalate to infrastructure immediately; do not wait silently.
+*   **Data Mismatch:** If Lane A finds the billing engine differs from the marketing doc, the plan stops. Do not update the web to match a wrong document.

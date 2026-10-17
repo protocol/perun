@@ -1,0 +1,69 @@
+# Delivery Plan: SQL Migration Tooling
+
+## Lanes & Parallelism
+
+**Lane A: Conversion & Formatting (Data Platform Team)**
+*   **Work:** Parse the 80 legacy SQL files. Extract logic, strip dependencies on the shared global temporary table, and reformat into the new tool's manifest syntax.
+*   **Parallelism:** Can run immediately. Files 1–40 and 41–80 can be processed in parallel by two engineers, provided the global sequence ID is reserved centrally to prevent collisions.
+*   **Constraint:** Must preserve the exact logical order of the original date-prefix sequence.
+
+**Lane B: Tooling & Validation Logic (DevOps/Automation)**
+*   **Work:** Configure the new migration tool's pre-flight validation hooks. Implement the "schema state check" to halt execution if the target database does not match the expected prior version.
+*   **Parallelism:** Runs parallel to Lane A. Requires only the tool's documentation, not the converted scripts.
+*   **Dependency:** Must be merged before Lane C can begin integration testing.
+
+**Lane C: Pipeline Integration (Release Engineering)**
+*   **Work:** Modify the CI pipeline to invoke the new tool instead of the legacy script bundle. Isolate the flaky networking check to prevent false negatives on database jobs.
+*   **Serialization:** Must wait for Lane A (scripts) and Lane B (validation logic) to be complete.
+*   **Optimization:** Implement a caching layer for the cloned production dataset to reduce the 45-minute integration test window.
+
+## Gates & Checks
+
+**Gate 1: Syntax & Order Verification (Automated)**
+*   **Trigger:** On every commit to the migration branch.
+*   **Check:** The new tool's dry-run mode must confirm all 80 steps load successfully and report the correct execution sequence.
+*   **Revision:** Runs against the latest commit on the feature branch.
+
+**Gate 2: State Validation & Rollback Drill (Staging)**
+*   **Trigger:** Before merging to the release candidate branch.
+*   **Check:** Deploy to Staging. Force a schema mismatch to verify the tool aborts safely. Execute a full migration, then trigger the rollback mechanism *before* any irreversible data truncation step.
+*   **Critical Constraint:** Since reverting after truncation is impossible, this gate verifies the system stops *before* that point during a rollback simulation.
+*   **Revision:** Requires a clean clone of the Staging database.
+
+**Gate 3: Integration Stability (Staging)**
+*   **Trigger:** Post-Gate 2 success.
+*   **Check:** Run the full 45-minute suite. The flaky networking check must be quarantined; if it fails, the job auto-retries once without human intervention.
+*   **Revision:** Same Staging deployment as Gate 2.
+
+## Review Process
+
+**Technical Review (Independent)**
+*   **Reviewer:** One Senior Engineer *not* on the Data Platform team (to avoid conflict of interest regarding the legacy scripts).
+*   **Scope:** Verify that the conversion logic correctly removed the global temporary table dependency and that the new validation hooks match the spec.
+*   **Timing:** Before Gate 2.
+
+**Process Review (Compliance)**
+*   **Reviewer:** The second Senior Engineer (required for Staging approval).
+*   **Scope:** Confirm the rollback drill evidence and the irreversibility safeguards.
+*   **Timing:** Before Staging promotion.
+
+**Executive Sign-off**
+*   **Approver:** VP of Engineering.
+*   **Scope:** Final authorization for Production deployment based on the Staging success report.
+*   **Timing:** Before Production promotion.
+
+## Landing Strategy
+
+**Merge Strategy:**
+1.  Merge Lane A and B into a `feature/migration-tool` branch.
+2.  Merge Lane C once tests pass.
+3.  Create a Release Candidate tag.
+
+**Deployment:**
+*   **Staging:** Automated upon RC tag, pending two Senior Engineer approvals.
+*   **Production:** Manual trigger pending VP sign-off. The pipeline will execute the tool with `--validate-only` first, then `--apply`.
+
+**Rollback & Human Decisions:**
+*   **Automatic Rollback:** If the pre-flight schema check fails, the tool exits non-zero; no database changes occur.
+*   **Human Decision Point:** If the migration fails *after* starting but *before* the irreversible truncation step, the tool auto-rolls back. If it fails *during* truncation, **no automatic rollback exists**. The human on-call must restore from the pre-deployment backup.
+*   **Fallback:** If the new tool exhibits critical instability in Staging, revert the CI pipeline change to point back to the legacy script bundle immediately. The legacy scripts remain in the repo until the new tool runs successfully in Production for one full cycle.

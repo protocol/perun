@@ -1,0 +1,56 @@
+**Delivery Plan: Incremental Backup Strategy for Mercury Ledger**
+
+**Binding Facts & Constraints**
+*   **Locked:** Retention policy (no changes until audit closes), existing daily full dump scripts (must remain intact), Security team's Friday credential rotation cron (do not modify), immutable audit log storage (no test pollution).
+*   **Risks:** Network latency flake (Tuesdays), high CI cost ($45/55m), production deploy requires dual approval (CTO + Compliance Officer).
+*   **Approvals:** Change Management Portal (CTO + Compliance Officer) for G8 Release.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Specification & Design (Serial, First)**
+    *   **Actor:** Product Analyst + Architect.
+    *   **Work:** Define incremental logic (e.g., WAL archiving or timestamp-based diffs) that coexists with current full dumps. Specify checksum algorithm for compliance ledger. Define "no-delete" guardrails.
+    *   **Output:** G1 Spec (testable criteria), G3 ADR (data flow, immutability proof).
+    *   **Gate:** G3 Design Review (Security + Data Integrity lead). No code until ADR signed.
+
+2.  **Lane B: Implementation (Parallelizable after G3)**
+    *   **Actor:** Builder (isolated worktree).
+    *   **Work:** Implement 4-hour cron job logic. Integrate checksum logging to immutable audit store. Ensure backward compatibility with existing full dump scripts. Add dry-run mode for validation.
+    *   **Constraint:** Do not touch Friday credential cron. Mock audit log writes in test env to avoid pollution.
+    *   **Output:** G4 Patch + Unit Tests (mocked).
+
+3.  **Lane C: Independent Verification (Serial, after B)**
+    *   **Actor:** QA (independent of Builder).
+    *   **Work:** Execute dry-run in staging. Verify checksums appear in audit log. Simulate Tuesday network flake to ensure retry logic holds. Validate RTO improvement without altering retention.
+    *   **Gate:** G5 Verify (Exact SHA). Must prove checksums logged and full dumps untouched. UI/Log evidence required: `journey: backup_run <steps> PASS`.
+
+4.  **Lane D: Security & Compliance Review (Serial, after C)**
+    *   **Actor:** Security (AppSec) + Compliance Liaison.
+    *   **Work:** Review code for credential handling (ensure Friday cron untouched). Verify immutable log write permissions. Confirm retention policy unchanged.
+    *   **Gate:** G6 Review (Security + Compliance verdict).
+
+**Integration & Landing**
+
+*   **G7 Integrate:** Merge Lanes B, C, D into integration branch. Re-run affected CI gates (skip Tuesday flake if applicable, document as known flake). Generate `deep-code-review DIFF`.
+*   **G8 Release (Human Gate):**
+    *   **Action:** Submit change request to Change Management Portal.
+    *   **Approvers:** CTO + External Compliance Officer.
+    *   **Condition:** Dual approval mandatory before deploy. No auto-deploy.
+    *   **Rollback:** Immediate revert to previous SHA using preserved full dump scripts (verified in Lane C). Rollback plan must be proven in G5.
+
+**Cost & Risk Controls**
+*   **CI Cost:** Limit pipeline runs to G3 (design dry-run), G5 (staging verify), G7 (integration). No iterative CI loops; rely on local dry-runs for B.
+*   **Flake Mitigation:** If G5/G7 runs on Tuesday, network latency failure is triaged via `references/red-gate-triage.md` (confirm flake, do not block unless real).
+*   **Audit Safety:** Test data generation must use ephemeral IDs; never write real transaction IDs to immutable log during testing.
+
+**Timeline**
+*   G0-G3: 1 day (Spec + ADR).
+*   G4: 2 days (Build + local dry-run).
+*   G5-G6: 1 day (QA + Security review).
+*   G7-G8: Pending approval window (dual sign-off).
+
+**Failure Mode**
+*   If checksum logging fails or pollutes audit log: Stop immediately, rollback, and report incident. No silent retries on immutable storage writes.
+*   If dual approval delayed: Park at G7; do not deploy.
+
+**Next Step:** Initiate Lane A (Spec & Design) upon owner confirmation of this plan.

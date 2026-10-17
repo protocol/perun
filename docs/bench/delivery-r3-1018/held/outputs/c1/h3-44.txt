@@ -1,0 +1,60 @@
+**Delivery Plan: Approval Workflow & Retention**
+
+**Binding Facts & Constraints**
+*   **Scope:** New manager approval for expenses >500 units; 7-year retention for rejected items (even post-account-deletion); dashboard visibility for auditors.
+*   **Irreversible/Serialized Steps:** Database migration (DBA only, Tuesday window); Production deploy (Lead Architect + Compliance Officer sign-off).
+*   **Risk:** Shared `transactions` table (legacy payroll dependency); flaky notification check (ignore if logs show success); high CI cost (45 mins).
+*   **Appetite:** Live before next fiscal quarter.
+
+**Lanes & Parallelism**
+
+1.  **Lane A: Schema & Migration (Serialized, DBA-Gated)**
+    *   **Work:** Design non-intrusive schema changes (new `approval_status`, `retention_flag`, `audit_link` columns) avoiding direct `transactions` table modification if possible, or using safe views/triggers. Draft migration script.
+    *   **Constraint:** Must execute during Tuesday maintenance window by DBA.
+    *   **Parallelism:** Blocked until G3 (Design) approval; runs independently of code implementation but must complete before G5 (Verify) integration tests.
+
+2.  **Lane B: Core Logic & Workflow (Parallel)**
+    *   **Work:** Implement approval state machine (Pending → Approved/Rejected); enforce >500 unit trigger; implement retention logic (soft-delete protection, 7-year lock); ensure existing approved records remain untouched.
+    *   **Parallelism:** Can run immediately after G2 (Plan).
+
+3.  **Lane C: Dashboard & Audit Visibility (Parallel)**
+    *   **Work:** Add "Rejected" filter/view for auditors; ensure instant visibility without custom queries.
+    *   **Parallelism:** Can run immediately after G2 (Plan).
+
+4.  **Lane D: Independent QA & Security (Serialized after Implementation)**
+    *   **Work:** Functional verification of workflow, retention enforcement (simulate account deletion), audit trail integrity, and regression testing on payroll reconciliation. Security review of data retention and access controls.
+    *   **Constraint:** Must test against the exact SHA including the DB migration state.
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirm "500 units" currency context and "7-year" legal requirement with Compliance Officer. Define acceptance criteria: "Rejected item remains queryable 7 years post-user-deletion."
+*   **G2 (Plan):** Finalize acyclic graph. **Budget Cap:** Set per-lane token/cost limits before starting (no unlimited spend).
+*   **G3 (Design):** ADR for schema strategy (protecting `transactions` table). Lead Architect approval required.
+*   **G4 (Implement):** Code + Unit Tests. Base SHA pinned.
+*   **G5 (Verify):**
+    *   **Local Stack:** Bring up Monolith + DB snapshot.
+    *   **Checks:** Build, Lint, Type-check. Run unit/integration tests.
+    *   **Specifics:** Verify payroll reconciliation jobs still pass. Verify retention logic survives account deletion.
+    *   **Flake Handling:** If notification check fails, verify logs for success before marking red.
+    *   **Revision:** All checks run on the exact commit SHA including migration script.
+*   **G6 (Review):**
+    *   **Reviewer:** Senior Engineer (not the Builder) + Compliance Officer (for retention logic).
+    *   **Scope:** Full diff + QA receipts. Security review for data privacy.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected tests on final merge SHA.
+*   **G8 (Release):** **Human Gate:** Lead Architect + Compliance Officer explicit approval. Deploy to staging, then production.
+*   **G9 (Prod Verify):** Monitor first >500 unit expense flow; confirm audit trail persistence.
+
+**Landing Strategy**
+
+*   **Merge Train:** Single PR containing Lanes B & C. Lane A (migration) is a separate, DBA-executed script tied to the same release version.
+*   **Human Decisions:**
+    1.  Schema design approval (Lead Architect).
+    2.  Retention logic validation (Compliance Officer).
+    3.  Final Deploy authorization (Lead Architect + Compliance Officer).
+    4.  DBA execution of migration (Tuesday window).
+*   **Rollback:**
+    *   **Code:** Revert PR if G9 fails.
+    *   **Data:** Migration script must include a down-migration (safe to run if no data written yet, or archival step if data exists).
+    *   **Trigger:** Any failure in payroll reconciliation or audit trail loss.
+
+**Cost Control:** Minimize CI runs by ensuring local green (G5) before pushing. Only one full pipeline run per lane before integration.

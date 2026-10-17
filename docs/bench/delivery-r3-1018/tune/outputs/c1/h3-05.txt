@@ -1,0 +1,72 @@
+**Delivery Plan: Sidecar Proxy Rollout (Non-Critical Namespaces)**
+
+**Binding Facts & Constraints**
+*   **Scope:** Inject sidecar only into `billing-reporting` and `audit-log`. Explicitly exclude `real-time-trading` and `user-checkout`.
+*   **Irreversibility:** Image publish to prod registry is irreversible without full cluster restore.
+*   **Gates:** Manual promotion requires approval from two senior architects.
+*   **Locks:** `global-mesh-policy.yaml` locked during business hours.
+*   **Cost/Time:** CI pipeline = 45 mins, $12/run. Avoid unnecessary rebuilds.
+*   **Flake:** Network policy validator flaky; retry logic (2x) required before fail.
+*   **Branch Constraint:** Do not merge into or touch `real-time-trading` frozen branch.
+*   **Deadline:** Report by Friday.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Configuration & Policy Prep (Serial)**
+    *   **Worker:** Builder (Network Specialist).
+    *   **Work:** Draft sidecar injection config targeting only `billing-reporting` and `audit-log`. Verify exclusion of critical namespaces in diff.
+    *   **Constraint:** Must execute outside business hours to acquire lock on `global-mesh-policy.yaml`.
+    *   **Output:** PR with config changes; dry-run validation logs.
+
+2.  **Lane B: Image Verification (Parallel to A, if image exists)**
+    *   **Worker:** QA (Security/Performance).
+    *   **Work:** If image is not yet published, build and scan in staging. If published, verify digest against security baseline.
+    *   **Gate:** Security scan must pass before Lane C starts.
+
+3.  **Lane C: Staging Deployment & Load Test (Serial, after A & B)**
+    *   **Worker:** QA (Performance).
+    *   **Work:** Deploy to staging mirror of target namespaces. Run load test simulating market traffic patterns.
+    *   **Check:** Monitor CPU throttling and latency spikes.
+    *   **Flake Handling:** If network policy validator fails, auto-retry twice. If fails third time, block and alert.
+
+4.  **Lane D: Production Rollout (Serial, Human Gated)**
+    *   **Worker:** Release Engineer (Human).
+    *   **Work:** Execute promotion to production `billing-reporting` and `audit-log`.
+    *   **Gate:** Requires manual approval from two senior architects based on Lane C evidence.
+
+**Gates & Checks**
+
+*   **G2 (Plan):** Confirm namespace allow-list/deny-list logic. Verify `real-time-trading` branch is untouched.
+*   **G3 (Design):** ADR confirming rollback strategy (namespace-level deletion vs. cluster restore limitation).
+*   **G4 (Implement):** PR opened on main config branch. CI triggered once (optimize for single run).
+*   **G5 (Verify):**
+    *   **Exact Revision:** The specific commit SHA of the merged config.
+    *   **Checks:** CI pipeline (45 min) must pass (with flake retry logic).
+    *   **Performance:** Latency baseline comparison (pre/post) in staging.
+*   **G6 (Review):** Independent review by Security (image) and Network Architect (policy). Builder cannot approve.
+*   **G8 (Release):** **Human Gate.** Two senior architects approve promotion.
+*   **G9 (Production Verify):** Automated monitoring for CPU throttling and error rates.
+    *   **Auto-Rollback Trigger:** If CPU throttling alerts fire or error rate > baseline, immediately revert namespace injection (not full cluster restore).
+
+**Review Strategy**
+*   **Config Review:** Senior Network Architect (independent of Builder). Focus: Namespace selectors, exclusion rules.
+*   **Security Review:** AppSec Engineer. Focus: Image digest, supply chain integrity.
+*   **Performance Review:** SRE Lead. Focus: Staging load test results, latency delta.
+
+**Landing & Rollback**
+*   **Merge:** Merge config PR to main only after G6 approval.
+*   **Deploy:** Manual promotion to prod namespaces (G8).
+*   **Rollback:**
+    *   *Scenario 1 (Pre-Publish):* Discard image build, revert config PR.
+    *   *Scenario 2 (Post-Deploy, Throttling):* Automated script removes sidecar injection from affected namespaces. **Do not** attempt full cluster restore unless catastrophic failure occurs.
+*   **Reporting:** Friday report includes: Deployment SHA, latency comparison graphs, CPU throttling alert status, and confirmation of zero impact on `real-time-trading`/`user-checkout`.
+
+**Human Decisions Required**
+1.  Approval of staging load test results (Go/No-Go for Prod).
+2.  Two senior architect signatures for production promotion.
+3.  Authorization of auto-rollback thresholds (confirming specific CPU/Error limits).
+
+**Risk Mitigation**
+*   **Flake CI:** Explicit retry logic (2x) baked into pipeline step; failure on 3rd attempt blocks merge.
+*   **Cost:** Single CI trigger per unique revision; no re-runs without code change.
+*   **Collision:** Config edits scheduled for non-business hours to respect file lock.

@@ -1,0 +1,61 @@
+### Delivery Plan: Offline Kill Switch
+
+**Objective:** Implement an independent kill switch to revert to cached static suggestions upon model failure, ensuring seamless user experience.
+**Deadline:** Production deploy by Friday.
+**Constraints:** No staging health checks (flaky); CI is expensive (45m); production deploy requires David Chen's approval; fallback schema is immutable.
+
+#### 1. Lanes & Serialization
+
+**Lane A: Core Logic Implementation (Builder)**
+*   **Work:** Implement the circuit breaker pattern in `core-engines`. The checker must ping a lightweight, independent endpoint (or check a local flag/file) rather than the heavy model service to avoid false positives from the flaky staging network check. Logic must catch timeouts/errors and instantly swap the data source to the local cache directory.
+*   **Isolation:** Dedicated worktree.
+*   **Dependency:** None. Starts immediately.
+
+**Lane B: Integration & Schema Verification (QA/Security)**
+*   **Work:** Verify the fallback data file read logic does not alter the schema. Run local integration tests simulating model downtime (mocked network failure) to ensure zero visible error messages to the user.
+*   **Isolation:** Dedicated worktree.
+*   **Dependency:** Waits for Lane A's initial commit to test against the exact implementation.
+
+**Serialization Point:** Lane B cannot finalize verification until Lane A produces a candidate commit. Lane A and B run in parallel only after Lane A's first push.
+
+#### 2. Gates & Checks
+
+*   **G1 Spec (Immediate):** Confirm the "independent health check" mechanism (e.g., local file flag vs. external ping) to bypass the flaky staging network issue.
+*   **G2 Plan:** Define the exact error thresholds (latency ms, error count) that trigger the switch.
+*   **G3 Design:** Explicitly document that the fallback schema remains untouched to protect the billing aggregator.
+*   **G4 Implement (Lane A):**
+    *   **Check:** Local unit tests must pass before any push.
+    *   **Revision:** Commit to a feature branch off `main`.
+*   **G5 Verify (Lane B):**
+    *   **Check:** Local simulation of total model blackout. Assert UI renders static content without spinners/errors.
+    *   **Revision:** Must verify the exact SHA produced by Lane A.
+    *   **Constraint:** Do not rely on staging CI health checks; use local mocks.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (not the Builder).
+    *   **Focus:** Independence of the switch logic and schema immutability.
+    *   **Revision:** Exact SHA from G5.
+*   **G7 Integrate:** Merge to `main` only after G6 approval. Re-run critical CI path (accepting the 45m cost once) to validate the merge.
+
+#### 3. Review Strategy
+
+*   **Code Review:** Performed by a Senior Engineer independent of the Builder. Focus on the "independence" requirement—ensuring the kill switch logic does not import or depend on the failing model service modules.
+*   **Security Review:** Mandatory manual review by the security team (pre-requisite for David Chen's deploy approval) to ensure no new exposure in the fallback mechanism.
+
+#### 4. Landing & Human Gates
+
+*   **Merge Strategy:** Squash merge to `main` after G7 integration receipt.
+*   **Human Decision (G8 Release):**
+    *   **Approver:** David Chen (Senior Lead).
+    *   **Trigger:** Request deployment only after successful CI on `main` and completed security review.
+    *   **Action:** David manually approves the production deploy.
+*   **Rollback Plan:**
+    *   If latency spikes or errors increase post-deploy, immediately revert the `main` commit.
+    *   The fallback mechanism itself acts as a runtime rollback; the code revert is the structural rollback.
+*   **Post-Deploy (G9):** Monitor latency metrics directly in production (bypassing flaky staging checks) for 1 hour.
+
+**Risk Mitigation:**
+*   **Flaky Staging:** All validation relies on local mocking, not staging environment signals.
+*   **CI Cost:** Strict local testing gate (G4/G5) ensures only one high-confidence CI run is consumed.
+*   **Schema Breakage:** Lane B explicitly asserts the fallback file is read-only regarding structure.
+
+**Next Step:** Await confirmation of the specific "independent health check" method (file flag vs. separate ping) to finalize G2.

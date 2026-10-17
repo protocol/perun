@@ -1,0 +1,64 @@
+### Delivery Plan: Auto-publish Status Page with False-Positive Guard
+
+**Binding Facts & Constraints**
+*   **Irreversible Data:** Incident logs marked 'resolved' are immutable; corrections require full migration.
+*   **Human Gates:** Production deploy requires dual approval (Shift Lead + Director).
+*   **Cost/Time:** CI is 45 mins; shared clusters capped at $200/hr.
+*   **Risk:** False positives during maintenance destroy trust; known flaky check in notification module.
+*   **External Dependency:** SSL certs rotate every 48h.
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Maintenance Window Integration (Serial Pre-requisite)**
+*   **Owner:** Builder
+*   **Work:** Integrate with the internal maintenance calendar API. Implement logic to suppress or label status updates occurring within scheduled windows.
+*   **Output:** Unit tests proving suppression during mocked maintenance windows.
+
+**Lane 2: Verification & Delay Mechanism (Parallel to Lane 1)**
+*   **Owner:** Builder
+*   **Work:** Build the "Verification Layer." Implement a configurable delay (e.g., 2-minute hold) and a multi-signal confirmation requirement (e.g., 2/3 probes must fail) before state changes to "Critical."
+*   **Output:** Logic preventing single-spike false alarms; configuration for delay thresholds.
+
+**Lane 3: Status Portal Adapter (Parallel to Lane 1 & 2)**
+*   **Owner:** Builder
+*   **Work:** Develop the push integration to `comms-gateway`. Ensure idempotency to handle retries without duplicating incident records.
+*   **Output:** Adapter code with dry-run mode.
+
+**Lane 4: Independent QA & Chaos Simulation (Sequential after Lanes 1-3 merge)**
+*   **Owner:** QA (Independent)
+*   **Work:** Replay historical false-positive data against the new logic. Simulate high-concurrency to trigger the known flaky check and verify the system degrades gracefully without posting fake incidents.
+*   **Output:** Verification receipt confirming zero false positives during simulated maintenance.
+
+#### Gates & Checks
+
+*   **G1 Spec:** Define exact delay duration and confirmation thresholds. Owner must sign off on the "False Positive Tolerance" spec.
+*   **G2 Plan:** Explicitly budget CI costs. Limit parallel jobs to stay under the $200/hr cap.
+*   **G3 Design:** ADR required for the immutable schema handling. Define how "resolved" entries are protected from accidental updates.
+*   **G4 Implement:** Code committed to isolated worktrees. Tests included.
+*   **G5 Verify:**
+    *   Run on exact revision SHA.
+    *   **Critical:** Full stack up. Verify the delay mechanism actually waits.
+    *   **Flake Mitigation:** Run the notification module tests 5x; if flake persists, isolate it but do not block the core logic if the verification layer holds.
+*   **G6 Review:**
+    *   **Security:** Review SSL rotation handling (48h cycle) to ensure no downtime during cert swaps.
+    *   **QA:** Independent sign-off on the chaos simulation results.
+*   **G7 Integrate:** Merge to integration branch. Run full 45-min CI pipeline once on the final SHA.
+
+#### Review Strategy
+
+*   **Builder:** Implements Lanes 1-3. Cannot review their own code.
+*   **Reviewer 1 (Platform Reliability):** Reviews Lane 3 (Portal Adapter) for API contract adherence.
+*   **Reviewer 2 (SRE/Security):** Reviews Lane 1 & 2 (Logic) specifically for the maintenance window edge cases and SSL rotation safety.
+*   **QA Lead:** Owns G5 verification receipt. Must be independent of the Builder.
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Squash merge to `main` only after G7 integration CI passes.
+*   **Human Decision (G8):**
+    *   Request dual approval from Shift Lead and Director of Operations.
+    *   Present evidence: "Zero false positives in simulation," "Maintenance suppression verified," "SSL rotation tested."
+*   **Deployment:** Manual trigger post-approval.
+*   **Rollback Plan:**
+    *   If false positive occurs: Immediate feature flag flip to disable auto-publish (revert to manual).
+    *   If data corruption occurs: Since schema is immutable, rollback involves stopping the writer and preparing a migration script; this is a high-severity incident requiring immediate human intervention.
+*   **Post-Deploy (G9):** Monitor first 24h of real-world maintenance windows closely.

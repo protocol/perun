@@ -1,0 +1,72 @@
+### Delivery Plan: Nightly Synthetic Order Health Check
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Exceeding 5,000 daily sandbox API calls locks partner access for 24 hours.
+*   **Serialization Window:** Cleanup must complete before 04:00 UTC to avoid collision with partner batch jobs (04:00–05:00).
+*   **Approval Gate:** Dual approval required (Jane Smith + Security Lead) for deployment.
+*   **Cost Constraint:** CI pipeline cost ($0.45/min) prohibits long-running synthetic tests in the main build flow.
+*   **Compliance:** Manual compliance review mandatory before merge.
+
+---
+
+#### Lanes & Parallelism
+
+**Lane 1: Service Account & Secret Provisioning (Serialized First)**
+*   **Actor:** Security Lead (Human) + Conductor.
+*   **Work:** Create dedicated service account; generate credentials; restrict IAM to sandbox-only; document cleanup protocol.
+*   **Gate:** Security sign-off on scope and least-privilege policy.
+*   **Dependency:** Must complete before Lane 2 coding begins to ensure valid test credentials.
+
+**Lane 2: Synthetic Journey Script (Parallel with Lane 3)**
+*   **Actor:** Builder.
+*   **Work:** Implement order creation, status verification, and explicit cleanup logic. Include retry mechanism (e.g., 3 attempts with exponential backoff) before alerting. Ensure hard timeout < 15 mins to protect CI costs if run locally/dry-run.
+*   **Constraint:** Logic must verify current API usage count before executing to prevent lockout.
+*   **Output:** Patch commit with unit tests mocking the external API.
+
+**Lane 3: Scheduler & Alerting Wiring (Parallel with Lane 2)**
+*   **Actor:** Builder (Infra).
+*   **Work:** Configure cron job (03:00 UTC). Wire failure alerts to on-call channel. Ensure job kills strictly by 03:45 UTC to leave 15-min buffer before partner jobs.
+*   **Output:** Infrastructure-as-Code patch.
+
+**Lane 4: Independent Verification (Serialized after Lanes 2+3)**
+*   **Actor:** QA (Independent of Builder).
+*   **Work:** Execute dry-run in a isolated lower-env (not shared sandbox) to validate logic flow. Review retry logic and cleanup guarantees.
+*   **Gate:** QA receipt confirming "No side effects" and "Cleanup verified."
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Confirm service account exists and API limit buffer is calculated. Define "Success" as order created + verified + cleaned + alert silent.
+*   **G2 (Plan):** Explicit budget cap on API calls per run (e.g., max 10 calls). Define retry limits to ensure total calls never threaten the 5,000 daily cap.
+*   **G3 (Design):** ADR confirming 03:45 UTC hard stop.
+*   **G4 (Implement):** Code committed. Unit tests green.
+*   **G5 (Verify):** **Critical:** Run in a non-production sandbox clone. Verify cleanup actually removes data. Verify alert fires only after retries exhausted.
+*   **G6 (Review):**
+    *   **Code Review:** Senior Engineer (not the Builder).
+    *   **Security Review:** Security Lead (credentials handling).
+    *   **Compliance Review:** Manual compliance gate (mandatory).
+*   **G7 (Integrate):** Merge to release branch only after all reviews pass.
+
+---
+
+#### Landing & Human Decisions
+
+**Merge Strategy**
+*   **Branch:** Feature branch → Release Branch.
+*   **Condition:** All gates green. Compliance review signed off.
+*   **Human Approval:** Explicit merge approval required from **Jane Smith** AND **Security Lead**. No auto-merge.
+
+**Rollback Plan**
+*   **Trigger:** If the job runs but fails to cleanup, or if API usage spikes unexpectedly.
+*   **Action:** Immediate disablement of the cron job via config toggle (no code revert needed initially).
+*   **Recovery:** Manual cleanup script execution by on-call engineer.
+
+**Post-Deploy (G9)**
+*   **Verification:** Monitor first nightly run (03:00 UTC). Confirm alert silence and sandbox data cleanliness by 04:00 UTC.
+*   **Fallback:** If the job hangs, the 03:45 UTC hard kill switch must trigger automatically.
+
+**Risk Mitigation**
+*   **False Positives:** Retry logic must be deterministic.
+*   **Data Contamination:** Service account isolation is non-negotiable.
+*   **Partner Impact:** The 03:45 UTC hard stop is the primary safeguard against the 04:00 partner batch collision.

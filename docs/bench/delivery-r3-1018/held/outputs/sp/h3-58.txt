@@ -1,0 +1,63 @@
+# Delivery Plan: Auto-Rollback for Slow-Warmup Service
+
+## Lanes and Parallelism
+
+**Lane A: Pipeline Logic (CI Engineer)**
+*   **Work:** Modify the deployment pipeline to insert a "Warm-up Wait" stage between "Deploy" and "Mark Stable." Implement a polling loop that hits the specific warm-up endpoint every 30 seconds.
+*   **Constraint:** The loop must terminate exactly at 10 minutes (600 seconds) or upon success. No infinite retries.
+*   **Parallelism:** Can develop concurrently with Lane B, but must wait for Lane C's configuration before merging.
+
+**Lane B: Rollback Executor (SRE Automation)**
+*   **Work:** Script the reversion logic. This script must identify the previous stable tag, redeploy that specific application artifact, and verify its health.
+*   **Constraint:** Explicitly exclude database migration scripts from the rollback routine. The script must verify the schema version matches the current production state before executing code reversion.
+*   **Parallelism:** Develop concurrently with Lane A.
+
+**Lane C: Configuration & Exclusions (DevOps)**
+*   **Work:** Update the pipeline configuration to whitelist the warm-up endpoint as the sole authority for stability. Add the "network latency suite" to the ignore-list for rollback triggers to prevent false positives from the known flaky check.
+*   **Parallelism:** Must be completed before Lane A and B can integrate.
+
+**Serialization Point:** Lanes A and B cannot be finalized until Lane C defines the exact endpoint URL and ignore-list syntax. Integration testing (Lane D) requires all three lanes complete.
+
+## Gates and Checks
+
+**Gate 1: Logic Review (Pre-Merge)**
+*   **Revision:** Feature branch head.
+*   **Checker:** Senior Backend Engineer (independent of the implementer).
+*   **Check:** Verify the polling interval is ≥30 seconds to respect CI credit costs. Confirm the 10-minute hard cap is enforced. Ensure the rollback script explicitly skips database migrations.
+
+**Gate 2: Staging Simulation (Pre-Production)**
+*   **Revision:** Release candidate on Staging.
+*   **Checker:** Automated Suite + SRE Observation.
+*   **Check:** Simulate a failed warm-up (mock the endpoint to return 503). Verify the pipeline triggers rollback automatically at the 10-minute mark. Verify the network latency flaky check fails during this window but does *not* trigger the rollback.
+*   **Note:** Since staging lacks traffic to trigger the cache bug, this gate validates the *mechanism*, not the specific cache behavior.
+
+**Gate 3: Production Readiness (Final Approval)**
+*   **Revision:** The exact commit passing Gate 1 and Gate 2.
+*   **Checker:** Dave Miller (Site Reliability Lead).
+*   **Check:** Final authorization to enable the auto-rollback toggle in production. This is the only human gate; the rollback itself bypasses this.
+
+## Review Strategy
+
+*   **Code Review:** Conducted by a Senior Backend Engineer who did not write the pipeline or rollback scripts. Focus on the "no DB rollback" constraint and the credit-cost efficiency of the polling loop.
+*   **Logic Audit:** Conducted by an SRE (distinct from Dave Miller) to verify the exclusion of the flaky network latency suite.
+*   **Independence:** The implementer cannot approve their own code. The approver (Dave) does not review code line-by-line but relies on the two independent technical reviews above.
+
+## Landing and Rollback
+
+**Merge Strategy:**
+1.  Merge to `main` only after Gate 3 approval.
+2.  The feature is deployed behind a configuration flag, defaulting to "OFF" for the first production release.
+3.  Dave Miller manually flips the flag to "ON" after observing the first successful deployment with the new logic.
+
+**Human Decisions Required:**
+*   **Dave Miller:** Must approve the initial enablement of the auto-rollback feature in production.
+*   **Dave Miller:** Must be notified immediately if an auto-rollback occurs (via alert), though he does not need to approve the action itself.
+
+**Rollback of the Fix:**
+If the new auto-rollback logic itself causes issues (e.g., reverting too aggressively):
+1.  Revert the pipeline configuration commit via a standard hotfix PR.
+2.  This requires a standard PR review and merge (no auto-rollback applies to the pipeline definition itself).
+3.  No database changes are involved in reverting this fix.
+
+**Failure Mode:**
+If the warm-up endpoint is unreachable due to network partition (not service failure), the system will wait the full 10 minutes and then rollback. This is the accepted trade-off to prevent deploying broken code.

@@ -1,0 +1,54 @@
+### Delivery Plan: A11y Core UI Kit Patches
+
+**Objective:** Remediate critical accessibility gaps (focus states, aria-labels) in Button and Input families to satisfy legal audit requirements, ensuring visual fidelity via dual human approval before merging.
+
+#### 1. Lanes & Serialization
+*   **Lane A: Spec & Baseline (Serial, Pre-flight)**
+    *   **Actor:** Product Analyst + Conductor.
+    *   **Work:** Define exact A11y requirements per component. Catalog current snapshot count to estimate CI cost.
+    *   **Output:** A testable spec listing every component/variant requiring change.
+*   **Lane B: Implementation (Parallelizable by Component Family)**
+    *   **Actor:** Builder (isolated worktree per family: Buttons, Inputs).
+    *   **Work:** Apply focus state and aria-label fixes. **Do not** update snapshot baselines yet.
+    *   **Constraint:** One writer per worktree. Changes must be locally verifiable without CI.
+*   **Lane C: Visual Verification (Serial, Human-Gated)**
+    *   **Actor:** Design Lead + Accessibility Officer.
+    *   **Work:** Inspect local rendering of patched components against the spec.
+    *   **Gate:** Dual sign-off required. No code moves forward without both signatures on the specific visual changes.
+*   **Lane D: Snapshot Re-baselining (Serial, Post-Approval)**
+    *   **Actor:** Builder (same worktree as Lane B).
+    *   **Work:** Update snapshot baselines *only* for components approved in Lane C.
+    *   **Constraint:** Strictly limited to approved changes to minimize CI flake and cost.
+
+#### 2. Gates & Checks
+*   **G1 (Spec):** Spec pinned to a base SHA. Must explicitly list "visual alteration expected" for every targeted component.
+*   **G4 (Implement):** Unit tests pass locally. No CI triggered yet.
+*   **G5 (Verify - Local):**
+    *   **Action:** Run local build.
+    *   **Check:** Manual visual inspection (Lane C).
+    *   **Evidence:** Signed checklist from Design Lead AND Accessibility Officer attached to the PR.
+*   **G6 (Review):**
+    *   **Reviewers:** Independent Senior Engineer (not the Builder) + Security (for A11y compliance validation).
+    *   **Check:** Code diff matches the signed visual checklist.
+*   **G7 (Integrate):**
+    *   **Action:** Trigger CI snapshot suite on the exact merged SHA.
+    *   **Mitigation:** If the snapshot service times out (known flake), manually restart once. If it fails again, pause and investigate; do not blind-retry.
+    *   **Pass Condition:** All snapshots green based on the new baselines.
+
+#### 3. Review Strategy
+*   **Code Review:** Independent Senior Engineer verifies implementation correctness and ensures no non-A11y logic was altered.
+*   **Compliance Review:** Accessibility Officer verifies the fix meets the legal standard (not just "passes a linter").
+*   **Design Review:** Design Lead verifies no unintended visual regressions were introduced during the fix.
+*   **Rule:** The Builder never approves their own code. The Design Lead cannot approve the Accessibility compliance alone; the Accessibility Officer cannot approve visual fidelity alone. Both are required for the G5 handoff.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:** Single PR containing all approved families to minimize pipeline spins.
+    *   **Human Decision:** Merge requires explicit confirmation from the Conductor that both human signatures (Design + A11y) are present in the PR body.
+    *   **Timing:** Merge during low-traffic hours to mitigate impact if the flaky snapshot service blocks the train.
+*   **Rollback Plan:**
+    *   **Trigger:** If post-merge production issues arise or if the snapshot suite reveals a false negative that slipped through.
+    *   **Action:** Immediate revert of the merge commit.
+    *   **Preparation:** The revert command must be drafted and ready before the merge button is clicked.
+*   **Post-Merge:** Monitor the next nightly staging refresh to ensure read-only data integration does not break the new A11y states.
+
+**Cost Control:** By verifying visually *before* updating baselines, we ensure the expensive CI snapshot run happens only once with high confidence of passing, avoiding credit waste on repeated failures due to unverified visual regressions.

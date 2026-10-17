@@ -1,0 +1,44 @@
+### Delivery Plan: Auto-publish Status Page with False-Positive Guard
+
+**Objective:** Integrate internal monitoring with the `comms-gateway` status portal, implementing a verification layer to suppress false positives during maintenance windows.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Spec & Logic Design):** Product Analyst defines "Maintenance Window" signals and the verification delay algorithm. Must complete before implementation.
+*   **Lane B (Implementation - Core):** Builder implements the ingestion pipeline and the new verification layer in a dedicated worktree. Includes unit tests for the delay logic.
+*   **Lane C (Implementation - Integration):** Builder connects the pipeline to the staging monitoring feed. Requires Lane B's core logic to be merged.
+*   **Lane D (Security & Compliance):** Security review of data flow, PII exposure, and external SSL certificate rotation handling. Runs parallel to Lane B.
+*   **Lane E (Load & Flakiness Mitigation):** QA isolates the known flaky notification check. Runs a targeted stress test to distinguish real concurrency failures from the known flake. Serialized after Lane C.
+
+#### 2. Gates & Checks
+*   **G0/G1 (Intake/Spec):** Owner approves the definition of "Maintenance Window" and the maximum allowable delay (e.g., 5 mins) before public posting.
+*   **G2 (Plan):** Work graph approved. Token budget set for load testing (capped at $200/hr equivalent).
+*   **G3 (Design):** ADR approved for the immutable database schema strategy (append-only corrections vs. edits).
+*   **G4 (Implement):** Code committed to feature branch. Unit tests green. Base SHA pinned.
+*   **G5 (Verify):**
+    *   **Staging:** Pipeline runs on exact revision. Must pass heavy load test *excluding* the known flaky check (marked as allowed failure with evidence).
+    *   **Simulation:** Replay historical maintenance window data to prove zero false public alarms.
+    *   **UI:** Headed-browser verification that the status page updates correctly only after the delay/verification passes.
+*   **G6 (Review):**
+    *   **Code:** Independent senior engineer review (not the Builder).
+    *   **Security:** AppSec verdict on the integration boundary.
+    *   **QA:** Sign-off on the flake mitigation evidence.
+
+#### 3. Review Strategy
+*   **Builder:** Implements Lanes B and C. Never reviews their own code.
+*   **Independent Reviewer:** Reviews Lane B/C code against the G1 spec. Focus: Does the delay logic strictly prevent premature posting?
+*   **Security Engineer:** Reviews Lane D findings. Focus: SSL rotation handling and data integrity given the immutable schema.
+*   **QA Engineer:** Owns Lane E. Verifies the system does not scream "Critical" during simulated maintenance.
+
+#### 4. Landing & Human Gates
+*   **Integration (G7):** Merge to `main` only after G6 approval. Re-run the full 45-minute CI pipeline on the merge commit. If the known flake triggers, the merge owner must verify it is the documented flake (via logs) and not a regression before proceeding.
+*   **Human Approval (G8 - Mandatory):**
+    *   **Dual Approval Required:** Shift Lead AND Director of Operations must explicitly approve the deployment to production.
+    *   **Trigger:** Deployment script is dry-run ready but blocked until both approvals are recorded in the governance board system.
+*   **Rollback Plan:**
+    *   Since the database schema is immutable for resolved incidents, a "false positive" cannot be edited. The rollback procedure is:
+        1.  Immediately disable the auto-publisher via feature flag.
+        2.  Post a manual correction notice on the status page (human action).
+        3.  Do not attempt database migration during an incident.
+*   **Post-Deploy (G9):** Monitor the first 24 hours of live traffic. Verify SSL certificates rotate successfully without interrupting the service.
+
+**Risk Note:** The 45-minute CI time and cost cap require precise lane scheduling. Load tests (Lane E) should run during off-peak hours if possible to avoid hitting the $200/hr cap prematurely. The known flaky check is a critical risk; if it fails during the final merge gate, the merge is blocked until a human confirms it is the known issue.

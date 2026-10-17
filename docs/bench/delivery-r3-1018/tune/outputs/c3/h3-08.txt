@@ -1,0 +1,61 @@
+### Delivery Plan: Byte-Stable Image Resizer Replacement
+
+**Ruling:** We will treat the "intermittent cache invalidation" as the primary failure mode. The scope is strictly the `acme-media-core` repository. Downstream services are verified via contract testing in staging, not by deploying to them immediately. The known flaky thumbnail check will be quarantined, not fixed, to avoid scope creep.
+
+**Human Gates:**
+1.  **Lead Engineer:** Approves the library selection ADR (G3) and the final merge to main (G7).
+2.  **SRE On-Call:** Approves the production deployment manifest and rollback triggers (G8).
+
+#### Lanes & Parallelism
+
+**Lane 1: Isolation & Interface (Serial Pre-requisite)**
+*   **Owner:** Builder
+*   **Work:** Create a dedicated worktree. Extract the current resizing logic into a distinct interface/adapter pattern to decouple the new library from shared utilities.
+*   **Constraint:** Must complete before Lane 2 starts to ensure the new library plugs into the existing contract without refactoring three downstream microservices.
+*   **Output:** Refactored interface with the old library still attached; unit tests passing.
+
+**Lane 2: Implementation & Byte-Stability Verification (Parallel with Lane 3)**
+*   **Owner:** Builder
+*   **Work:** Swap the library implementation behind the interface. Generate a "golden set" of 50 representative images (various formats/sizes). Run both old and new resizers against this set.
+*   **Check:** Hash comparison (SHA-256) of outputs. Any mismatch fails the lane immediately.
+*   **Output:** Patch with new library; `byte_stability_report.md` showing 100% match on the golden set.
+
+**Lane 3: Downstream Contract Testing (Parallel with Lane 2)**
+*   **Owner:** QA
+*   **Work:** Spin up the staging environment using the smaller dataset. Deploy the refactored interface (Lane 1 output) with the *old* library to establish a baseline. Then, inject the *new* library build from Lane 2.
+*   **Check:** Verify downstream microservices receive identical payloads (headers + body hash). Monitor for timeout regressions.
+*   **Output:** Staging verification receipt confirming no downstream disruption.
+
+**Lane 4: Flaky Check Quarantine (Parallel)**
+*   **Owner:** QA
+*   **Work:** Analyze the known flaky thumbnail check. Confirm it is unrelated to the resizer logic.
+*   **Action:** Tag the test as `flaky:quarantined` in the CI config for this specific PR only, documenting the hash-seed instability. Do not attempt to fix the flake in this ticket.
+*   **Output:** CI config update; justification note.
+
+#### Gates & Checks
+
+*   **G1 Spec:** Frozen upon acceptance of this plan. Base SHA: `[Current Main Head]`.
+*   **G3 Design:** **ADR-042** (New Library Selection). Must explicitly justify byte-stability guarantees of the chosen library.
+*   **G4 Implement:** Code review on the exact SHA of the merged Lanes 1 & 2.
+*   **G5 Verify:**
+    *   **Unit/Integration:** Run full CI (45 mins). The flaky check is excluded. All other tests must be green.
+    *   **Byte-Stability:** The `byte_stability_report.md` must be attached to the PR.
+    *   **Staging:** SRE confirms metrics (latency, error rate) in staging match baseline within 1%.
+*   **G6 Review:**
+    *   **Code:** Senior Engineer (independent of Builder).
+    *   **Security/Supply Chain:** Automated scan + Manual review of the new library's license and dependency tree.
+*   **G7 Integrate:** Merge to `main` via merge train. Re-run the subset of integration tests on the merge commit.
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Squash merge to `main` after G7 verification.
+*   **Deployment:**
+    1.  Deploy to 5% of production traffic (Canary).
+    2.  **Monitor:** CDN cache-hit ratio and re-processing count for 30 minutes.
+    3.  **Human Gate:** SRE On-Call approves widening to 100% based on metrics.
+*   **Rollback Plan:**
+    *   **Trigger:** Cache-hit ratio drops >2% or error rate spikes >0.1% in Canary.
+    *   **Action:** Immediate revert of the merge commit. No hotfixes; revert to the previous stable SHA.
+    *   **Preparation:** The revert command script is drafted and dry-run in staging during G5.
+
+**Cost Control:** CI runs are limited to one full run per candidate SHA. Local verification of the golden set is mandatory before pushing to save cloud costs.

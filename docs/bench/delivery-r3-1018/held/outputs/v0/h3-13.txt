@@ -1,0 +1,51 @@
+**Delivery Plan: Stabilize E2E Suite Against Sandbox Quota Limits**
+
+**G0/G1: Intake & Spec**
+*   **Goal:** Refactor test orchestration to detect quota exhaustion and switch non-destructive scenarios to cached responses.
+*   **Constraints:** Max 45m runtime; no quota increase; Security Lead sign-off for staging; Production Tuesdays only.
+*   **Spec:** Define "non-destructive" vs. "critical payment" flows. Acceptance: Suite completes green under simulated quota exhaustion; critical flows hit live sandbox; cache hit rate >90% for non-critical. Base SHA pinned at G1.
+
+**G2: Plan & Lanes**
+*   **Lane A (Builder):** Implement quota detection logic in `sandbox-adapter`. Add circuit-breaker to switch to cache on 429/503 or header-based quota warning.
+*   **Lane B (Builder):** Create/curate cached response fixtures for non-destructive scenarios. Ensure data freshness strategy (e.g., daily snapshot).
+*   **Lane C (QA):** Isolate the flaky network check. Implement a dedicated retry policy that does not consume quota (e.g., exponential backoff with jitter, or skip if quota low).
+*   **Serialization:** Lane A and B run in parallel. Lane C depends on Lane A's interface stability. Integration (G7) requires all three.
+
+**G3: Design**
+*   **ADR:** Document the circuit-breaker state machine and cache invalidation strategy.
+*   **Security:** Explicitly map which fields in cached responses are sanitized. No PII in cache unless encrypted at rest.
+
+**G4: Implementation**
+*   **Worktrees:** Three isolated worktrees (A, B, C). One writer per tree.
+*   **Tests:** Lane A/B must include unit tests for the switch logic. Lane C must prove the flaky test no longer burns quota on retry.
+
+**G5: Verification (Exact Revision)**
+*   **Environment:** Spin up local stack.
+*   **Checks:**
+    1.  Run suite with mocked quota exhaustion mid-run. Verify switch to cache occurs without abort.
+    2.  Run critical payment flow; verify it bypasses cache and hits live sandbox.
+    3.  Inject high latency; verify Lane C's retry logic holds without triggering false positives or burning quota.
+    4.  **Runtime Gate:** Total suite duration must be <40m (buffer for CI overhead).
+*   **Evidence:** Logs showing quota detection, cache activation, and final pass/fail status.
+
+**G6: Review**
+*   **Code Review:** Independent senior engineer (not A/B/C). Focus: race conditions in circuit-breaker, cache consistency.
+*   **Security Review:** Security Lead reviews the data flow in cached responses and the circuit-breaker logic (staging sign-off prerequisite).
+*   **QA Sign-off:** Confirms flaky test stabilization and runtime budget compliance.
+
+**G7: Integration**
+*   **Merge Train:** Serialize A, B, C into a single integration branch. Re-run full suite on the merged SHA.
+*   **Collision Check:** Ensure no other changes to `sandbox-adapter` or test runners merged during work.
+
+**G8: Release & Human Gates**
+*   **Staging Deploy:** Requires explicit **Security Lead approval** (Human Gate). Provide them with the security review verdict and cache sanitization proof.
+*   **Production Deploy:** Locked to **Tuesday window**. Requires owner approval to flip the feature flag enabling the new orchestration.
+*   **Rollback:** Immediate revert of the merge commit if quota errors persist or critical flows fail in staging. Feature flag allows disabling cache mode without redeploy.
+
+**Failure Modes & Escalation**
+*   If Lane A fails twice to stabilize the circuit-breaker, escalate to a architectural refactor of the adapter (G2 change).
+*   If runtime exceeds 45m in G5, strip non-essential assertions before merging; do not waive the time limit.
+*   If the flaky test remains unstable, quarantine it from the main suite rather than letting it block the pipeline.
+
+**Output Contract**
+Final handback includes: The merged SHA, security sign-off artifact, runtime profile (<45m), and a run-log demonstrating successful cache failover under induced quota stress.

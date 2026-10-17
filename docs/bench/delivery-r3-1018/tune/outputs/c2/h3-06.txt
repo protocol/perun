@@ -1,0 +1,69 @@
+**Delivery Plan: Legacy Portal Merge with Live Sync**
+
+**Scope & Constraints**
+*   **Goal:** Bi-directional sync between 'HelpDesk Alpha' (legacy) and 'SupportCentral' (new) without downtime, data loss, or duplicate threads.
+*   **Hard Constraints:** No table locks (shared billing DB), no staging E2E (missing gateway), CI cost/time limits ($45/28m), mandatory dual human approval (Security + VP Ops).
+*   **Non-Goals:** Closing open cases, migrating historical data older than the sync window (handled separately), modifying billing schema.
+
+**Lane Decomposition & Owners**
+*Worktrees are isolated; one writer per tree. Parallel execution where dependencies allow.*
+
+1.  **Lane A: Ingestion Engine (Builder A)**
+    *   **Task:** Build real-time listener for Alpha emails; ingest into Central without creating duplicates (idempotency keys based on Message-ID + Timestamp).
+    *   **Parallelism:** Can run parallel to Lane B.
+    *   **Dependency:** Must complete before Lane D (Integration).
+
+2.  **Lane B: Notification Relay (Builder B)**
+    *   **Task:** Implement webhook/trigger in Central to push agent updates back to Alpha's notification system.
+    *   **Parallelism:** Can run parallel to Lane A.
+    *   **Dependency:** Must complete before Lane D.
+
+3.  **Lane C: Zero-Downtime Migration Script (Builder C)**
+    *   **Task:** Write row-level migration script for open cases. Must use non-locking reads/writes (chunked processing) to satisfy billing DB constraints.
+    *   **Serialization:** Must be reviewed *before* Lane D integration.
+    *   **Risk:** Highest data integrity risk.
+
+4.  **Lane D: Integration & Orchestration (Conductor)**
+    *   **Task:** Assemble A, B, and C. Configure feature flags for gradual cutover.
+    *   **Dependency:** Waits for A, B, C completion.
+
+**Gates & Verification Strategy**
+*Exact revision required for all gates. No "latest branch" checks.*
+
+*   **G1 Spec (Now):** Define idempotency logic and chunking strategy. Pin base SHA.
+*   **G3 Design (ADR):** Document how we handle the "flaky notification check" (will be quarantined, not ignored) and the missing staging gateway.
+    *   *Mitigation for Missing Staging:* Use contract testing with recorded Alpha payloads. No live gateway needed for unit/integration verification.
+*   **G4 Implement:**
+    *   Lane A/B/C submit patches to isolated worktrees.
+    *   **Cost Control:** CI runs only on candidate SHAs, not every commit. Flaky check is marked `allow-failure` but logged for manual triage; >2 failures trigger a hard stop.
+*   **G5 Verify (The Hard Part):**
+    *   **Local Stack:** Bring up local Central + mocked Alpha interface.
+    *   **Data Integrity:** Run migration script against a production read-replica snapshot (sanitized). Verify zero locks and row counts match.
+    *   **UI/Flow:** Since E2E is impossible locally, verify via "Journey Receipts": specific API call sequences proving thread continuity and attachment mapping.
+*   **G6 Review:**
+    *   **Security Lead:** Reviews Lane C (data access) and Lane A/B (injection risks). Independent of builders.
+    *   **Senior Dev (Platform):** Reviews logic, specifically the flaky test handling and idempotency.
+*   **G7 Integrate:** Merge to `release/candidate-sync`. Run one final costly CI ($45) on this exact SHA.
+
+**Landing & Rollback**
+
+*   **Human Gates (G8):**
+    *   **Required Approvals:** Security Lead AND VP of Operations.
+    *   **Action:** Deploy to production behind a feature flag (`sync-enabled=false`).
+    *   **Go/No-Go:** VP Ops authorizes flag flip after observing 1 hour of shadow-mode traffic.
+
+*   **Rollback Plan:**
+    *   **Trigger:** Data corruption detected, duplicate threads > 1%, or sync latency > 5 mins.
+    *   **Action:** Instant feature flag toggle to `false`.
+    *   **Data Reversion:** Since migration is row-level and append-only initially, rollback involves stopping the writer and replaying a "reverse-delta" log for any moved tickets. No database schema rollback needed.
+
+*   **Post-Deploy (G9):**
+    *   Monitor duplicate rate and latency.
+    *   Verify sender notifications arrive in Alpha within 60 seconds.
+
+**Risks & Mitigations**
+*   **Flaky CI:** Explicitly quarantined; green requires manual confirmation if it triggers, preventing silent bypasses.
+*   **DB Locking:** Mitigated by chunked, read-replica validated script (Lane C).
+*   **Missing Staging:** Mitigated by contract tests and read-replica dry runs.
+
+**Next Step:** Conductor to draft G1 Spec and ADR for review before code generation begins.

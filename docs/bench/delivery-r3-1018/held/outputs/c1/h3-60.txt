@@ -1,0 +1,74 @@
+### Delivery Plan: Zeta-9 Compression & Legacy Compatibility
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Production deploy (us-east) requires 4h cold backup restore to rollback.
+*   **Cost Gate:** CI runs on bare-metal ($45/suite); no unnecessary retries.
+*   **Human Gate:** Lead Architect Jane Smith must approve changes to `codec-interface`.
+*   **Risk:** Staging lacks hardware acceleration; performance benchmarks there are unreliable.
+*   **Flake:** `legacy-interop` test flaky on Tuesdays (network contention).
+*   **Priority:** Fallback mechanism validation > raw compression speed.
+*   **Constraint:** Do not delete raw files until 99.9% adoption (Q3).
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Core Implementation (Serial Start)**
+*   **Work:** Implement Zeta-9 dual-write strategy in `core-archive`. Ensure raw files persist.
+*   **Writer:** Builder.
+*   **Constraint:** Touches `codec-interface`. Must pause for **G3 Design Review** before coding proceeds to completion.
+*   **Parallelism:** Cannot start until G3 approval granted.
+
+**Lane 2: Decompression Gateway & Fallback (Parallel to Lane 1 after G3)**
+*   **Work:** Build on-the-fly decompression gateway for older clients (firmware v2.4-).
+*   **Writer:** Builder (distinct worktree from Lane 1).
+*   **Focus:** Priority on correctness and latency over throughput.
+
+**Lane 3: Validation & Evidence (Independent)**
+*   **Work:** Author integration tests verifying Zeta-9 → Legacy round-trip.
+*   **Writer:** QA (Independent of Builders).
+*   **Constraint:** Must schedule `legacy-interop` runs avoiding Tuesdays.
+*   **Environment:** Must account for staging hardware limitations; rely on logical correctness there, flagging perf for production canary.
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Confirm "dual-write" implies storage bloat acceptance until Q3. Define "99.9% adoption" metric source.
+*   **G2 (Plan):** Explicitly budget CI runs. Cap Lane 3 retries to prevent cost overrun.
+*   **G3 (Design - BLOCKING):** **Human Approval Required.** Present interface changes to Jane Smith. No code merges to integration branch without her sign-off.
+*   **G4 (Implement):** Builders commit to isolated worktrees. Tests written alongside code.
+*   **G5 (Verify):**
+    *   Run `legacy-interop` on a non-Tuesday.
+    *   **Gate Condition:** Green build + successful round-trip test on exact SHA.
+    *   **Perf Note:** Mark performance benchmarks as "Staging-Limited; Prod-Canary Required" in the receipt.
+*   **G6 (Review):** Independent Security/Architect review of the decompression gateway (supply chain & DoS risk). Builder does not self-review.
+*   **G7 (Integrate):** Merge train serialization. One integration SHA. Re-run `legacy-interop` on the merged SHA.
+
+---
+
+#### Landing & Rollback
+
+**Merge Strategy**
+*   Use a merge train (`scripts/merge_train.py`) to serialize Lane 1 and Lane 2 into the integration branch.
+*   **Human Decision:** Jane Smith approves the PR merge (G7) given the `codec-interface` touch.
+
+**Deployment (G8)**
+*   **Action:** Deploy to us-east.
+*   **Pre-Condition:** Cold backup verified accessible.
+*   **Strategy:** Feature-flag the Zeta-9 write path. Enable for 1% traffic initially.
+*   **Rollback:** If fallback fails (older clients cannot read), immediately disable the feature flag. If data corruption occurs, initiate 4-hour cold backup restore.
+
+**Post-Deploy (G9)**
+*   Monitor client error rates for firmware v2.4-.
+*   Verify raw file retention (no deletion scripts triggered).
+
+**Cost Control**
+*   If `legacy-interop` fails, do not auto-retry. Investigate locally first to avoid $45 wasted runs. Only re-run CI if a code fix is committed.
+
+**Summary of Critical Path**
+1.  Draft Design (G3) → **Jane Smith Approval**.
+2.  Implement Dual-Write & Gateway (G4).
+3.  Verify Round-Trip (Non-Tuesday) (G5).
+4.  Independent Review (G6).
+5.  Merge & Flagged Deploy (G8).

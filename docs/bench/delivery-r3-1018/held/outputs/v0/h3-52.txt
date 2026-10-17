@@ -1,0 +1,50 @@
+**Delivery Plan: CoreUtils v4.0 Release**
+
+**Strategy:** Serialized preparation followed by a gated, human-approved landing. No parallel execution of write-lanes due to the immutable registry and breaking nature of the change.
+
+**Lane 1: Artifact & Documentation Preparation (Builder)**
+*   **Work:** Cut the v4.0 tag from the current `main` head. Draft the migration guide specifically addressing the three dependent teams' schema changes. Prepare the release announcement draft for the Platform Guild.
+*   **Constraint:** Do not trigger downstream integration tests.
+*   **Output:** Release candidate artifacts, migration guide draft, announcement draft.
+*   **Gate:** G4 (Implement). Builder verifies local build success and linting.
+
+**Lane 2: Security & Risk Assessment (Security Hat)**
+*   **Work:** Review the breaking payload schema changes for security implications (injection risks, data exposure). Validate that the "break" is purely structural and not a vulnerability introduction.
+*   **Dependency:** Runs in parallel with Lane 1 but must complete before G6.
+*   **Output:** Security verdict (Pass/Fail) with specific findings.
+*   **Gate:** G6 (Review). Independent of Builder.
+
+**Lane 3: Verification & Staging Validation (QA Hat)**
+*   **Work:** Deploy the Release Candidate to the staging environment (triggered by merge to a release branch, not `stable` yet). Verify the new ingestion module functions correctly with *new* schema inputs. Confirm old schema inputs are rejected gracefully (not crashing).
+*   **Constraint:** Explicitly skip the flaky network latency suite; document this skip in the test receipt.
+*   **Output:** Staging verification receipt, explicit note on skipped flaky check.
+*   **Gate:** G5 (Verify). Must run on the exact SHA of the release candidate.
+
+**Serialization & Integration**
+1.  **Merge to Release Branch:** Once L1 (docs/artifacts), L2 (security), and L3 (staging validation) are green, merge to a temporary `release/v4.0` branch. This triggers staging deployment automatically.
+2.  **Human Gate (G8 - Release Approval):**
+    *   **Decision Required:** Tech Lead and Security Officer must sign off on the `stable` branch merge.
+    *   **Input:** Migration guide, Security verdict, Staging receipt, Platform Guild announcement draft.
+    *   **Action:** Owner approves the production promotion ticket in the change management system.
+3.  **Final Merge:** Merge `release/v4.0` into `stable`. This publishes to the immutable registry.
+
+**Review Protocol**
+*   **Code/Schema:** Reviewed by a senior engineer not involved in the implementation (Independent of Builder).
+*   **Security:** Reviewed by the Security Officer (Independent of Builder and QA).
+*   **Documentation:** Reviewed by a representative from one of the three dependent teams (ensures clarity).
+
+**Landing & Rollback**
+*   **Merge Strategy:** Squash merge to `stable` to maintain a clean history for the major version jump.
+*   **Human Decision:** The merge to `stable` requires manual approval from both the Tech Lead and Security Officer. Production promotion requires a separate manual ticket submission.
+*   **Rollback Plan:** Since the registry is immutable, v4.0 cannot be deleted. If a critical failure occurs post-release:
+    1.  Immediately deprecate v4.0 in the registry metadata.
+    2.  Revert the `stable` branch to the v3.x head.
+    3.  Publish a hotfix v3.x+1 if necessary to bridge gaps while teams migrate.
+    4.  Notify all twelve internal services via the Platform Guild channel.
+
+**Risk Mitigation**
+*   **Flaky Check:** Explicitly documented as skipped in the QA receipt; does not block the hotpath.
+*   **Downstream Flood:** Downstream integration tests remain disabled until the three key teams confirm migration readiness via the guide.
+*   **Compute Cost:** Only one full CI run permitted on the release candidate; no re-runs without manager approval.
+
+**Next Step:** Await confirmation of the exact commit SHA to begin Lane 1 and Lane 2.

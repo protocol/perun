@@ -1,0 +1,61 @@
+### Delivery Plan: Loyalty Tier Backfill
+
+**Binding Facts & Constraints**
+*   **Scope:** 200M rows in `transactions` (Acme Payments cluster).
+*   **Constraint:** Zero locking/downtime; statement-based replication to 2 analytics nodes.
+*   **Gate:** DBA (Jane Smith) manual approval required for any batch >1M rows.
+*   **Risk:** CI budget cap (45 mins) forbids long validation jobs; schema tool has flaky null-checks.
+*   **Irreversibility:** Column deletion requires forbidden full table rebuild this quarter.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Safe-Write Script (Builder)**
+*   **Work:** Write a chunked backfill script (e.g., Python/SQL) processing 10k–50k rows per transaction. Implements exponential backoff and explicit `SLEEP` between batches to throttle load. Includes a dry-run mode estimating duration without writing.
+*   **Serialization:** Must complete before Lane 2.
+*   **Output:** Script + Dry-run load profile.
+
+**Lane 2: Governance Approval (Conductor → Human)**
+*   **Work:** Execute dry-run to confirm batch size <1M rows. Submit execution plan to Jane Smith via governance portal.
+*   **Serialization:** Blocks Lane 3 until approved.
+*   **Gate:** Human approval (Jane Smith).
+
+**Lane 3: Execution (Builder + Ops)**
+*   **Work:** Run approved script against primary cluster during off-peak window. Monitor replication lag to analytics nodes.
+*   **Serialization:** Blocks Lane 4.
+*   **Constraint:** If runtime exceeds 45 mins, script must checkpoint to allow CI-resume or run outside CI.
+
+**Lane 4: Independent Verification (QA)**
+*   **Work:** Sample 0.1% of backfilled rows; compare `loyalty_tier` against analytics dashboard estimates. Verify replication consistency on read-only nodes.
+*   **Serialization:** Final gate before merge/close.
+*   **Note:** Do not rely on the flaky schema null-check tool; use direct row counting/sample queries.
+
+---
+
+#### Gates & Checks
+
+*   **G2 (Plan):** Script must prove batch size <1M rows (auto-fail if ≥1M). Token budget capped for CI; long runs designated for off-CI execution.
+*   **G4 (Implement):** Code review focuses on transaction boundaries, lock avoidance (`NOLOCK`/`READ COMMITTED SNAPSHOT`), and checkpointing logic.
+*   **G5 (Verify):**
+    *   **Primary:** Sample verification passes (match dashboard).
+    *   **Secondary:** Replication lag on analytics nodes remains <5 seconds during run.
+    *   **Exclusion:** Ignore flaky schema tool null-percentage check; verify via `SELECT COUNT(*) WHERE tier IS NULL`.
+*   **G8 (Release):** Human confirmation from Jane Smith that write operation completed within approved parameters.
+
+#### Review Strategy
+
+*   **Code Review:** Senior Backend Engineer (independent of Builder). Focus: Concurrency safety, batch sizing logic, error handling.
+*   **Security/Data Review:** Data Engineer. Focus: PII exposure in logs, correctness of "last 3 years" spend calculation.
+*   **QA Verification:** QA Analyst (independent). Executes sampling script on the *exact* post-backfill SHA/State.
+
+#### Landing & Rollback
+
+*   **Merge:** Script lands in `scripts/backfill/` via standard PR. The *execution* is a separate operational event, not a code merge.
+*   **Human Decision:** Jane Smith must explicitly approve the specific batch parameters before execution starts. No auto-merge for the execution trigger.
+*   **Rollback:**
+    *   **Partial Failure:** Script resumes from last checkpoint on retry.
+    *   **Data Corruption:** Immediate stop. Since column deletion is prohibited, a "compensation script" must be prepared to reset `loyalty_tier` to NULL for affected batches if logic errors are detected, pending DBA approval.
+*   **Completion:** Ticket closes only after G5 sampling confirms alignment with analytics dashboard and replication lag is nominal.
+
+**Risk Note:** If CI kills the validation job at 45 minutes, the verification lane must run locally or on a dedicated long-running runner, not the default CI pool.

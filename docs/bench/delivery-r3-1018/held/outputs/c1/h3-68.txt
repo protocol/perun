@@ -1,0 +1,52 @@
+**Delivery Plan: Critical Security Patch (Freeze Exception)**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Database migrations cannot be rolled back without full restore; must be verified in staging before production.
+*   **Freeze Policy:** Production deploy requires VP of Engineering override; no merges until cleared.
+*   **Collision Risk:** Checkout module shares dependencies with Marketing landing pages; Brand team sign-off required if shared libs are touched.
+*   **Pipeline Constraint:** Full regression ($45, 55m) is too slow; partial testing requested, but "ignoring" flaky network checks is prohibited (Gate Epistemology: missing evidence is UNVERIFIED).
+*   **Cost/Time:** Must minimize CI cost while ensuring stability during peak traffic.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Scope & Impact Analysis (Conductor + Security)**
+    *   **Work:** Isolate the patch. Determine exact file changes. Verify if shared libraries used by Marketing are touched.
+    *   **Output:** Impact report listing touched paths.
+    *   **Parallel?** Yes, runs immediately.
+    *   **Gate:** G2 Plan. If shared libs touched → Trigger Lane B. If not → Skip Lane B.
+
+2.  **Lane B: Brand Sign-off (Product Analyst)**
+    *   **Trigger:** Only if Lane A confirms shared library changes.
+    *   **Work:** Present diff to Brand team. Obtain explicit written approval.
+    *   **Gate:** Human Gate (Brand Lead). No code moves without this artifact.
+
+3.  **Lane C: Targeted Verification (Builder + QA)**
+    *   **Work:** Build patch in isolated worktree. Run unit tests + specific integration tests for checkout flow.
+    *   **Constraint:** Do *not* skip the Stage 3 network check. Instead, run it in a controlled, low-load staging environment to distinguish false positives from real failures. If it fails, investigate; do not ignore.
+    *   **Serialization:** Must wait for Lane A (scope) and Lane B (if triggered).
+    *   **Gate:** G5 Verify. Requires green build, green unit tests, and successful staging deployment *without* triggering irreversible migrations yet (dry-run migration script).
+
+4.  **Lane D: Migration Dry-Run (QA + DBA)**
+    *   **Work:** Execute migration scripts against a cloned staging database. Verify rollback procedure works *before* production consideration.
+    *   **Serialization:** After Lane C builds successfully.
+    *   **Gate:** G5 Verify. Proof of successful apply and rollback.
+
+**Review Strategy**
+*   **Code Review:** Independent Senior Engineer (not the Builder). Scope: Security fix correctness and side effects on shared libs.
+*   **Security Review:** Independent Security Specialist. Scope: Vulnerability closure, no new vectors introduced.
+*   **QA Review:** Independent QA lead. Scope: Verification receipts from Lane C & D.
+*   **Rule:** Builder never reviews builder. All reviews target the exact SHA from Lane C.
+
+**Landing & Human Gates**
+*   **Merge Strategy:** Do not merge to main yet. Merge to a `hotfix/payment-gateway` branch.
+*   **Human Decision 1 (Brand):** Required only if shared libs touched (Lane B).
+*   **Human Decision 2 (VP Engineering):** Required to override freeze policy for production deploy. Presentation must include: Security severity, Lane C/D receipts, Brand sign-off (if applicable), and confirmed rollback plan.
+*   **Deploy:** Once VP approves, merge to main. Trigger deploy.
+*   **Rollback:** If production metrics degrade within 15 minutes, execute verified rollback immediately.
+
+**Risk Mitigation**
+*   **Flaky Test:** Addressed by controlled staging run, not ignorance.
+*   **Destabilization:** Mitigated by targeted testing and dry-run migrations.
+*   **Freeze Violation:** Prevented by VP gate before any production action.
+
+**Next Step:** Execute Lane A immediately. Report impact scope to determine if Brand sign-off is needed.

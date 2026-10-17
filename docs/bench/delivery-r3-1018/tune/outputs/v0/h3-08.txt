@@ -1,0 +1,44 @@
+**Delivery Plan: Byte-Stable Image Resizer Migration**
+
+**1. Lanes & Serialization**
+*   **Lane A (Isolation & Spec):** *Role: Product Analyst + Builder.* Define the exact input/output contract for the resizer. Create a "golden set" of 50 representative images covering edge cases. **Serialized:** Must complete before Lane B.
+*   **Lane B (Implementation):** *Role: Builder.* Swap the library in `acme-media-core` shared utilities. Implement byte-stable output logic. Write new unit tests comparing old vs. new output hashes. **Parallel:** Can run alongside Lane C once the interface is frozen.
+*   **Lane C (Downstream Impact):** *Role: Builder + QA.* Update the three dependent microservices to align with any interface shifts. Run integration tests against the staging environment using the golden set.
+*   **Lane D (Verification):** *Role: Independent QA.* Re-run the full CI pipeline on the exact merged SHA. Specifically target the known flaky thumbnail check to distinguish regression from noise. Verify CDN cache hit rates in staging.
+
+**2. Gates & Checks**
+*   **G1 (Spec):** Freeze the input/output contract and golden set.
+*   **G3 (Design):** Approve the rollback strategy (feature flag vs. hard swap) and define "anomaly" thresholds for production metrics.
+*   **G4 (Implement):** Code complete. Unit tests must pass locally. The builder provides the patch and the exact base SHA.
+*   **G5 (Verify):** **Critical Gate.** Run the 45-minute CI pipeline on the *exact* commit SHA.
+    *   *Condition:* All tests green except the known flaky check (which must be logged as "pre-existing").
+    *   *Requirement:* Byte-for-byte hash match confirmation on the golden set.
+    *   *Staging:* Deploy to staging; verify no downstream service errors.
+*   **G6 (Review):**
+    *   *Code:* Lead Engineer (independent of Builder).
+    *   *Ops:* SRE On-Call (reviews rollback plan and monitoring alerts).
+*   **G7 (Integrate):** Merge to the integration branch. Re-run affected downstream tests on the final merge SHA.
+
+**3. Review Strategy**
+*   **Independence:** The Builder implements the change. The Lead Engineer reviews code correctness and test coverage. The SRE reviews operational safety (rollback, metrics). Neither reviewer is the implementer.
+*   **Focus:** Reviewers must verify that the "byte-stable" claim is backed by hash-comparison tests, not just assertions.
+
+**4. Landing & Human Decisions**
+*   **Merge Strategy:** Merge into the main integration branch only after G6 approval.
+*   **Human Gates:**
+    1.  **Lead Engineer:** Approves the code merge.
+    2.  **SRE On-Call:** Approves the production deployment trigger.
+*   **Deployment:**
+    *   Deploy behind a feature flag if available; otherwise, direct swap during low-traffic window.
+    *   Monitor CDN costs and error rates immediately post-deploy.
+*   **Rollback Plan:**
+    *   *Trigger:* Error rate spike >0.1% or CDN cost anomaly within 1 hour.
+    *   *Action:* Immediate revert of the merge commit or flag flip to the legacy library.
+    *   *Verification:* Confirm cache invalidation stops and downstream services recover.
+
+**5. Risk Mitigation**
+*   **Flaky Test:** Explicitly document the thumbnail flake status before G5. If it fails differently than historical patterns, block the merge.
+*   **Cost/Time:** Since CI is expensive (45 mins), ensure Lane A's golden set tests run locally or in a fast-path pipeline before triggering the full suite.
+*   **Coupling:** Because the library is deeply embedded, Lane C must verify all three microservices individually before G7.
+
+**Status:** Ready for G0 Intake confirmation. Awaiting owner approval on the defined "anomaly" thresholds for the rollback trigger.

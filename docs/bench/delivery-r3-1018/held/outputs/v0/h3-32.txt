@@ -1,0 +1,70 @@
+### Delivery Plan: Deprecate Legacy Auth Token Format v1
+
+**Scope & Constraints**
+Work targets `/svc/auth` and the shared validation library. No changes to the legacy audit logger. Staging crypto tests are known flaky; verification relies on log assertions and unit coverage there. Production deploy requires VP-signed change ticket.
+
+#### 1. Lanes & Parallelism
+
+**Lane A: Specification & Comms (Serial Pre-requisite)**
+*   **Owner:** Product Analyst + Conductor
+*   **Work:** Define the exact error message payload for v1 rejections. Draft the "dual-response" logic spec (log + allow vs. hard fail). Identify the top five affected accounts from existing logs.
+*   **Output:** Spec document + Draft customer notifications.
+*   **Dependency:** None. Must complete before Lane B starts coding.
+
+**Lane B: Implementation (Parallel with Lane C)**
+*   **Owner:** Builder (Identity Team)
+*   **Worktree:** Isolated worktree branching from `main` at pinned SHA `abc123...`.
+*   **Work:**
+    1.  Modify shared validation library to detect v1 tokens.
+    2.  Implement "dual-response" mode controlled by a feature flag (default: log+allow).
+    3.  Implement "hard fail" mode (future state).
+    4.  Add unit tests for v1 detection and error messaging.
+    5.  *Exclusion:* Do not modify legacy audit logger.
+*   **Output:** Patch set, unit test results, feature flag configuration.
+
+**Lane C: Security & Risk Review (Parallel with Lane B)**
+*   **Owner:** Security Lead + Platform Architect
+*   **Work:** Review the spec and the proposed code changes in Lane B (via diff review, not running code). Validate that the shared library changes do not break billing/gateway services. Confirm the grace period logic prevents immediate enterprise outages.
+*   **Output:** Written approval to proceed to integration.
+
+**Lane D: Customer Coordination (Serial Post-Spec)**
+*   **Owner:** Customer Success Lead (Human) + Conductor
+*   **Work:** Send notifications to the top five accounts using drafts from Lane A. Confirm receipt and migration timelines.
+*   **Output:** Confirmation log that top 5 accounts are notified.
+
+#### 2. Gates & Checks
+
+*   **G1 (Spec Freeze):** Conductor validates Lane A output. **Gate:** Spec must explicitly define the feature flag name and the exact error JSON structure.
+*   **G4 (Build & Unit):** Lane B runs local build and unit tests. **Gate:** All unit tests pass; no changes to audit logger detected in diff.
+*   **G5 (Verification):**
+    *   *Environment:* Staging.
+    *   *Action:* Deploy Lane B build. Inject v1 tokens.
+    *   *Check:* Verify logs capture v1 usage. Verify HTTP 200 is returned (grace period active). Verify error message structure in response headers/body if applicable.
+    *   *Constraint:* Ignore flaky crypto warnings; assert log presence instead.
+*   **G6 (Independent Review):**
+    *   *Reviewers:* Security Lead (confirms no new vulnerabilities), Platform Architect (confirms downstream safety).
+    *   *Input:* Exact SHA from G5 + Test Receipts.
+    *   *Gate:* Explicit written sign-off from both.
+
+#### 3. Landing Strategy
+
+**Phase 1: Grace Period (Weeks 1-2)**
+*   **Merge:** Merge approved lanes to `main` via merge train.
+*   **Deploy:** Human operator (Release Manager) deploys to Production with feature flag `legacy_auth_mode=log_only`.
+*   **Human Gate:** VP of Engineering signs change ticket for the initial deploy.
+*   **Monitor:** Conductor monitors logs for v1 hit count.
+
+**Phase 2: Hard Fail (Week 3)**
+*   **Trigger:** Only after Lane D confirms top 5 accounts notified AND 14 days have elapsed.
+*   **Action:** Update feature flag `legacy_auth_mode=hard_fail` in Production.
+*   **Human Gate:** VP of Engineering signs second change ticket for the behavior flip.
+*   **Rollback:** If critical enterprise outage occurs, immediately revert flag to `log_only`. Full code rollback requires database restore (last resort).
+
+**Serialized Dependencies:**
+1.  Lane A must finish before Lane B codes.
+2.  Lane D (notifications) must complete before Phase 2 (Hard Fail).
+3.  Security/Architect approval (Lane C) is required before merging.
+
+**Cost Control:**
+*   CI triggered only once per lane (B) and once for integration. No redundant runs.
+*   Staging used strictly for log verification, not crypto validation.

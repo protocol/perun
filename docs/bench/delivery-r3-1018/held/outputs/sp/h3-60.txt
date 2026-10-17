@@ -1,0 +1,29 @@
+### Delivery Plan: Zeta-9 Compression Rollout
+
+**Lanes & Parallelism**
+Work is split into three parallel lanes to maximize velocity while respecting constraints:
+1.  **Core Implementation Lane:** Develops the dual-write logic in `core-archive`. This includes the Zeta-9 encoder and the legacy fallback reader. This lane owns the migration script logic but cannot merge to `main` without approval.
+2.  **Validation Lane:** Builds the verification harness. Since staging lacks hardware acceleration, this lane focuses on logical correctness and the "on-the-fly decompression" gateway simulation using mocked hardware responses. They verify that Zeta-9 blobs can be served to v2.4 clients.
+3.  **Governance Lane:** Prepares the change package for Lead Architect Jane Smith. This includes a risk assessment of the `codec-interface` modification and a scheduled maintenance window proposal for the us-east deployment.
+
+**Serialization Points**
+*   The **Validation Lane** must wait for the **Core Implementation Lane** to produce the initial dual-write binary before full integration testing can begin.
+*   The **Merge Gate** is strictly serialized behind Jane Smith's manual approval. No code touching `codec-interface` enters the release branch without her signed ticket.
+
+**Gates & Checks**
+*   **Pre-Commit Gate:** All units run local unit tests. No CI submission occurs until the developer confirms the "fallback mechanism" tests pass locally, prioritizing validation over speed as requested.
+*   **CI Execution Gate:** The full regression suite runs exactly once per candidate revision on the bare-metal instances. Retries are forbidden to avoid the $45 cost penalty. If the suite fails, the candidate is discarded, not re-run.
+*   **Flakiness Bypass:** CI jobs triggering `legacy-interop` are scheduled automatically for Wednesdays through Mondays. Any Tuesday failure in this specific test is flagged for manual triage rather than automatic rejection, acknowledging the known network bandwidth issue.
+*   **Performance Gate:** Benchmarks are executed *only* on the production canary nodes, not staging. Staging results are discarded as unreliable due to missing hardware acceleration cards.
+
+**Review Strategy**
+*   **Code Review:** Conducted by a senior engineer from the Data Persistence team who did not author the changes. This reviewer focuses strictly on the safety of the dual-write path and the guarantee that raw files remain untouched.
+*   **Architecture Review:** Independent review by Jane Smith. She verifies the `codec-interface` contract stability and the rollback feasibility. Her review is the final gate before merging.
+*   **Validation Review:** The QA lead reviews the "fallback mechanism" test logs, specifically confirming that v2.4 clients successfully retrieve decompressed content from Zeta-9 stores.
+
+**Landing & Rollback**
+*   **Merge Strategy:** Changes merge to a `release/zeta-9` branch only after Jane's approval.
+*   **Deployment:** Deployment to us-east is a canary rollout. 5% of traffic shifts to the new dual-write mode. Monitoring focuses on decompression latency for legacy clients.
+*   **Human Decision Point:** Expansion beyond 5% traffic requires a explicit "Go" decision from the Incident Commander after observing 24 hours of stable metrics.
+*   **Rollback Plan:** If decompression failures exceed 0.1%, the deployment is halted immediately. Since us-east deploys are irreversible without a restore, the "rollback" is a configuration flag flip to disable Zeta-9 writes, reverting to legacy-only writes instantly. The Zeta-9 blobs already written are ignored by the reader until the fix is redeployed. A full cluster restore from cold backup (4-hour duration) is reserved only for data corruption scenarios, not logic errors.
+*   **Post-Landing:** Raw files are retained indefinitely. The script to delete them is written but locked behind a quarterly adoption metric (99.9%) check, ensuring no premature deletion occurs.

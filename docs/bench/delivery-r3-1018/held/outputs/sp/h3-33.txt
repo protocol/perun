@@ -1,0 +1,66 @@
+### Delivery Plan: Checkout Load Test Isolation
+
+**Objective:** Execute high-volume checkout load testing without corrupting shared staging data or triggering full CI pipelines.
+
+#### 1. Lanes (Workstreams & Parallelism)
+
+*   **Lane A: Infrastructure & Data (Serialized Pre-requisite)**
+    *   *Owner:* Database Lead / Ops Scripting
+    *   *Task:* Create a temporary database instance (`checkout-load-sandbox`) using the latest nightly production-mimic backup.
+    *   *Constraint:* Must be completed before Lane B begins. No schema changes allowed on the shared instance.
+    *   *Parallelism:* None. This blocks all other work.
+
+*   **Lane B: Traffic Routing & Configuration (Parallel to Lane C)**
+    *   *Owner:* Backend Engineer
+    *   *Task:* Develop the isolation script/config to route traffic tagged `load-test: true` exclusively to the `checkout-load-sandbox` connection string.
+    *   *Constraint:* Must include a fail-safe to default to the shared staging DB if the sandbox is unreachable (preventing test downtime), but log a critical alert.
+
+*   **Lane C: Test Harness Preparation (Parallel to Lane B)**
+    *   *Owner:* QA Engineer
+    *   *Task:* Tag the specific commit for testing to bypass the full 45-minute CI seed process. Configure the load runner to inject the routing tag.
+    *   *Constraint:* Must explicitly exclude the known flaky inventory sync module from failure criteria to prevent false negatives.
+
+#### 2. Gates & Checks
+
+*   **Gate 1: Sandbox Verification (Pre-Execution)**
+    *   *Revision:* The specific commit tagged in Lane C.
+    *   *Check:* Run a single transaction against `checkout-load-sandbox`. Verify data appears *only* in the sandbox and not the shared staging DB.
+    *   *Approver:* Database Lead.
+
+*   **Gate 2: Routing Validation (Pre-Load)**
+    *   *Revision:* Same tagged commit.
+    *   *Check:* Execute a "dry run" with 5 concurrent users. Verify network logs show 100% of traffic hitting the sandbox IP.
+    *   *Approver:* Operations Manager.
+
+*   **Gate 3: Flakiness Filter (During Execution)**
+    *   *Check:* Automated suppression of alerts from the inventory sync module. Any other failure triggers an immediate abort.
+
+#### 3. Review (Independent Verification)
+
+*   **Reviewer:** Senior SRE (not involved in script writing).
+*   **Scope:**
+    1.  Review the isolation script logic for race conditions where traffic might bleed to the shared DB.
+    2.  Verify the "fail-safe" logic does not accidentally revert to the shared DB during high load (it should fail closed, not open).
+    3.  Confirm the commit tag correctly skips the expensive CI seeding.
+*   **Timing:** After Lane B & C completion, before Gate 1.
+
+#### 4. Landing (Merge & Rollback)
+
+*   **Merge Strategy:**
+    *   The isolation script and config changes are **not** merged to `main` immediately. They reside on a temporary `feat/load-test-isolation` branch.
+    *   Upon successful test completion and validation report generation (Thursday deadline), the branch is archived.
+    *   Only generic configuration hooks (if any) required for future testability are merged to `main` via a standard PR, requiring dual approval (DB Lead + Ops Manager).
+
+*   **Human Decisions Required:**
+    1.  **Go/No-Go:** Operations Manager must explicitly approve the start of the load test after Gate 2.
+    2.  **Abort Authority:** Any team member can halt the test if data bleeding is detected; only the Ops Manager can resume.
+
+*   **Rollback Plan:**
+    *   *Trigger:* Detection of writes to the shared staging DB or sandbox instability.
+    *   *Action:* Immediately kill the load test runner process. The isolation script automatically reverts DNS/Routing rules to null (stopping traffic) rather than failing over to shared DB.
+    *   *Recovery:* If data corruption occurred on the shared DB (unlikely if routing holds), restore from the pre-test nightly backup. The sandbox instance is simply destroyed.
+
+**Deliverables by Thursday:**
+1.  `isolate-checkout-sandbox.sh` (Creation and teardown scripts).
+2.  `routing-config.yaml` (Traffic rules).
+3.  `validation-report.md` (Proof of zero writes to shared DB during dry run).

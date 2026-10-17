@@ -1,0 +1,52 @@
+### Delivery Plan: Legacy Batch Job Migration
+
+**Objective:** Offload nightly reporting jobs from the main server to the managed queue system, ensuring zero data loss and graceful duplicate handling.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Queue Integration - Builder):** Implement the new submission layer in `core-engine`. Logic must push tasks to the queue and handle idempotency for duplicates.
+    *   *Constraint:* Must not modify `shared-config.yaml` yet.
+    *   *Parallel:* Yes.
+*   **Lane B (Idempotency & Safety - QA/Security):** Design the duplicate-handling logic and verify data integrity constraints. Review the irreversibility of the DB migration script.
+    *   *Parallel:* Yes (runs alongside Lane A design).
+*   **Lane C (Config Change - Senior Leads):** Prepare the diff for `shared-config.yaml` to enable queue routing.
+    *   *Serialization:* Must wait for Lane A's code review approval before requesting human sign-off.
+*   **Lane D (Staging Verification - QA):** Execute end-to-end tests in Staging.
+    *   *Serialization:* Depends on Lane A completion and Lane C approval.
+
+#### 2. Gates & Checks
+*   **G1 Spec:** Define "graceful duplicate handling" explicitly. Pin base SHA for all lanes.
+*   **G2 Plan:** Confirm token/cost budget for CI runs (limit re-runs due to $12 cost). Explicitly mark the flaky network check as "ignored if logs show connectivity" in the test plan.
+*   **G3 Design:** Verify the DB migration script is wrapped in a transaction or guarded so it cannot run prematurely.
+*   **G4 Implement:** Lane A commits code. Lane B reviews logic.
+*   **G5 Verify (Staging):**
+    *   Deploy to Staging (mirrors prod data volume).
+    *   Run full suite. **Hard Gate:** The stack must start; unit tests alone are insufficient.
+    *   Adjust timeout thresholds in Staging config if hardware differences cause false failures.
+    *   Ignore flaky network failures only if logs confirm connectivity.
+*   **G6 Review:**
+    *   **Independent Reviewer:** Senior Platform Engineer (not Lane A author).
+    *   **Security Check:** Verify no data loss vectors in the handoff.
+    *   **Config Sign-off:** Two senior leads approve `shared-config.yaml` change.
+*   **G7 Integrate:** Merge code to integration branch. Re-run affected tests on the final merged SHA.
+
+#### 3. Review Strategy
+*   **Code:** Independent reviewer from Platform Team (excludes Builder). Focus on idempotency logic and error handling.
+*   **Security:** Dedicated check on data flow; ensure "at least once" delivery does not corrupt state.
+*   **Config:** Two senior leads must manually approve the locked `shared-config.yaml`.
+
+#### 4. Landing & Human Decisions
+*   **Merge Train:** Code merges only after G6 green. Config change merges immediately after lead approval.
+*   **Human Gate (Critical):** Operations Director must explicitly approve the Production Deploy.
+    *   *Input:* Staging verification receipt + Rollback plan.
+    *   *Decision:* Go/No-Go for next week's traffic window.
+*   **Rollback Plan:**
+    *   Since the DB migration is irreversible, the rollback strategy is **feature flag toggle** or **reverting the submission layer** to inline execution if the queue fails, assuming the queue consumer can be paused without data loss.
+    *   If the migration script has already run, rollback is limited to stopping new queue submissions; historical data remains migrated.
+*   **Post-Deploy (G9):** Monitor first nightly run. Verify no latency spikes on the main server. Confirm job completion logs.
+
+**Risk Mitigation:**
+*   **CI Cost:** Optimize test selection to avoid full 45-minute runs unless necessary.
+*   **Data Loss:** Dual-write or shadow-mode testing in Staging before full cutover.
+*   **Timeouts:** Explicitly tune Staging timeouts to match cheaper hardware constraints to prevent false negatives.
+
+**Next Step:** Await Owner approval on the "graceful duplicate" definition and budget cap before spawning Lane A.

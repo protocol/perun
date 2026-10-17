@@ -1,0 +1,54 @@
+### Delivery Plan: Per-Tenant Timezone Digest
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Cannot remove the legacy timezone library; must wrap new logic around it.
+*   **Locked Resource:** `global_rules.json` is locked during business hours; modifications require a change request or must occur off-hours.
+*   **Cost Gate:** CI is 45 mins/run; unnecessary re-runs are prohibited. Local verification must be exhaustive before pushing.
+*   **Approval:** Manual approval from Lead Architect required for deployment to all three environments.
+*   **Deadline:** Deploy before the 1st of next month.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Spec & Data Contract (Product Analyst + Conductor)**
+    *   **Work:** Define the exact schema for reading tenant timezone preferences. Confirm the default behavior (UTC) for missing preferences. Document the fallback logic if the legacy library fails.
+    *   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+    *   **Parallelism:** Runs first; blocks Lane B.
+
+2.  **Lane B: Core Logic Implementation (Builder)**
+    *   **Work:** Implement the scheduler update in an isolated worktree. Logic: Read tenant profile → Calculate 06:00 local window → Trigger digest. Ensure backward compatibility (UTC default).
+    *   **Constraint:** Do not touch `global_rules.json` yet. Isolate the timezone calculation into a new module to avoid locking conflicts.
+    *   **Parallelism:** Starts after Lane A spec is approved.
+
+3.  **Lane C: Configuration & Migration Prep (Builder)**
+    *   **Work:** Draft the `global_rules.json` modification plan. Prepare the change request documentation for the locked file. Create a dry-run script to validate timezone calculations against a dataset of tenant profiles.
+    *   **Serialization:** Must coordinate with Lane B to ensure module interfaces match. Final commit to `global_rules.json` must happen during off-hours or after change request approval.
+
+4.  **Lane D: Independent Verification (QA)**
+    *   **Work:** Execute functional tests on the exact revision from Lane B. Verify UTC default, specific timezone offsets, and edge cases (DST transitions).
+    *   **Constraint:** Ignore flaky staging network checks if logs confirm success; focus on data correctness.
+    *   **Serialization:** Waits for Lane B's patch.
+
+5.  **Lane E: Security & Compliance Review (Security)**
+    *   **Work:** Review data access patterns for tenant profiles. Ensure no PII leakage in logs. Validate that the deprecated library usage remains sandboxed.
+    *   **Serialization:** Independent of Builder; runs parallel to Lane D.
+
+**Gates & Checks**
+
+*   **G1 Spec:** Analyst signs off on the timezone calculation logic and UTC fallback.
+*   **G4 Implement:** Builder commits code with unit tests. Base SHA is immutable.
+*   **G5 Verify:** QA runs the dry-run script and integration tests on the exact commit SHA. **Gate Condition:** Logs must confirm success even if staging network checks flicker. CI run is triggered only once local verification is 100% green to save cost.
+*   **G6 Review:** Lead Architect reviews the diff, QA receipts, and security verdict. Independent of the Builder.
+*   **G7 Integrate:** Merge to the integration branch. Re-run affected CI gates on the final merge SHA.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Single PR containing Lanes B, C, and D/E receipts.
+*   **Human Decision:** Lead Architect must manually approve the promotion to Staging, UAT, and Production.
+*   **Configuration Lock:** The `global_rules.json` update is applied as a separate, serialized step during off-hours or immediately upon change request approval, strictly after the code is deployed but before the job activates for tenants.
+*   **Rollback:** If digest fails or time calculation is incorrect, revert the code commit immediately. The scheduler defaults back to the previous UTC-only behavior (backward compatible). No database migration is needed as tenant preferences are read-only for this change.
+
+**Timeline**
+*   **Days 1-2:** Lanes A, B, C execution.
+*   **Day 3:** Lanes D, E verification and review.
+*   **Day 4:** G7 Integration and Architect approval.
+*   **Day 5 (Off-hours):** Apply `global_rules.json` change and enable feature.

@@ -1,0 +1,73 @@
+### Delivery Plan: ORM v4.0 Migration
+
+**Objective:** Upgrade core data layer to v4.0 across 24 services, refactor billing/user-profile modules, and validate performance/compatibility for Friday's security review.
+
+#### 1. Lanes & Parallelism
+
+Work is divided into three parallel lanes to maximize throughput while respecting serialization constraints.
+
+*   **Lane A: Core Configuration (Platform Guild)**
+    *   **Task:** Update shared configuration files for ORM v4.0.
+    *   **Constraint:** Must complete before Lane B begins.
+    *   **Owner:** Platform Engineer.
+*   **Lane B: Service Refactoring (Feature Teams)**
+    *   **Task:** Refactor query builders in `billing` and `user-profile` modules; update imports in remaining 22 services.
+    *   **Dependency:** Starts only after Lane A commits the base configuration.
+    *   **Parallelism:** All 24 services can be refactored in parallel by respective owners once Lane A is done.
+*   **Lane C: Validation & Benchmarks (QA/Performance)**
+    *   **Task:** Execute integration tests and performance benchmarks.
+    *   **Dependency:** Runs on every push to feature branches and the release candidate.
+    *   **Special Handling:** The flaky payment gateway network check requires manual verification of logs before any merge decision.
+
+#### 2. Gates & Checks
+
+All checks run on a specific temporary branch `orm-v4-migration` derived from the latest `main` revision (`git rev-parse main`).
+
+*   **Gate 1: Local Lint & Unit Test (Pre-Push)**
+    *   **Who:** Individual developers.
+    *   **Check:** Run local linter and unit tests.
+    *   **Reason:** Prevents $40/50min CI charges for trivial failures.
+*   **Gate 2: CI Integration Suite (On Push)**
+    *   **Who:** CI Cluster.
+    *   **Check:** Full build and integration tests against unchanged test data sets.
+    *   **Constraint:** If the payment gateway test fails, a human must verify logs to distinguish flakiness from regression before proceeding.
+*   **Gate 3: Performance Benchmark (Release Candidate)**
+    *   **Who:** Performance Engineer.
+    *   **Check:** Compare transaction latency against v3.2 baseline.
+    *   **Threshold:** Zero regression allowed. Any increase requires immediate rollback of the specific service commit.
+*   **Gate 4: Schema Migration Dry-Run (Staging Prep)**
+    *   **Who:** Senior Architects (2 required).
+    *   **Check:** Review migration script execution plan on a cloned staging environment.
+    *   **Constraint:** Manual approval required before touching the shared staging instance due to irreversibility.
+
+#### 3. Review Process
+
+*   **Code Review:**
+    *   **Who:** Peer developers from *different* services (cross-team review).
+    *   **Independence:** Reviewers cannot be from the same service team to ensure objective scrutiny of shared config impacts.
+    *   **Focus:** Syntax correctness, adherence to v4.0 patterns, and absence of test data modifications.
+*   **Architecture Review:**
+    *   **Who:** Platform Guild Lead.
+    *   **Focus:** Global configuration consistency and migration script safety.
+*   **Security Review:**
+    *   **Who:** Security Team.
+    *   **Timing:** Thursday (pre-deployment).
+    *   **Input:** Staging deployment with passing benchmarks.
+
+#### 4. Landing Strategy
+
+*   **Merge Window:** Thursday morning (avoiding Wednesday production freeze).
+*   **Merge Method:** Squash merge of `orm-v4-migration` to `main` only after Gate 4 approval.
+*   **Deployment:**
+    1.  Deploy to Staging immediately upon merge.
+    2.  Security Team validates patched dependencies Thursday afternoon.
+    3.  Production deployment scheduled for Friday morning (post-security sign-off).
+*   **Rollback Plan:**
+    *   **Code:** Revert `main` to pre-merge commit.
+    *   **Database:** Since the schema migration is irreversible on shared staging, a full restore from the pre-migration backup is required if data corruption occurs. This restores the state to pre-Friday.
+    *   **Decision Point:** If performance benchmarks show >0% regression or security review fails, the merge is aborted, and the branch is archived for rework.
+
+**Human Decisions Required:**
+1.  Verification of payment gateway test failure logs (any time).
+2.  Dual-architect approval for schema migration script (Thursday).
+3.  Final Go/No-Go for production promotion based on Security Team's Friday review.

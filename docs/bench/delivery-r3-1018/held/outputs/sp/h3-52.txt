@@ -1,0 +1,43 @@
+### Delivery Plan: CoreUtils v4.0 Release
+
+**Lanes & Parallelism**
+*   **Lane A (Code & Docs):** The Data Infrastructure engineer prepares the release branch, drafts the migration guide for the three dependent teams, and composes the release announcement.
+*   **Lane B (Governance):** The Tech Lead and Security Officer review the breaking changes independently. This runs parallel to Lane A's drafting but must complete before the merge gate.
+*   **Lane C (Coordination):** The Release Coordinator syncs with the Platform Guild regarding the announcement timing. This is independent of the code merge but must finish before the registry update.
+
+**Serialization Constraints**
+1.  Governance sign-off (Lane B) must complete before the merge to `stable`.
+2.  The merge to `stable` must complete before the registry update.
+3.  The registry update must complete before the announcement is published.
+4.  Downstream integration tests remain disabled until explicitly re-enabled post-release.
+
+**Gates & Checks**
+*   **Gate 1 (Pre-Merge):** Verification that the release branch contains the new payload schema and the drafted migration guide. The known flaky network latency check is acknowledged and bypassed for this hotfix.
+*   **Gate 2 (Approval):** Explicit sign-off from both the Tech Lead and Security Officer on the specific commit hash proposed for `stable`. No merge occurs without both signatures.
+*   **Gate 3 (CI Validation):** The 45-minute CI pipeline runs on the release candidate. Manager approval is secured beforehand to authorize re-runs if the flaky check triggers falsely. Success is defined as all non-flaky checks passing.
+*   **Gate 4 (Staging Smoke):** Automatic deployment to staging occurs upon merge. A manual sanity check confirms the new schema is active without crashing the ingestion module.
+
+**Review Process**
+*   **Code Review:** Conducted by a senior engineer from a different squad (not Data Infrastructure) to ensure objectivity regarding the breaking changes.
+*   **Security Review:** Conducted by the Security Officer, focusing solely on the new payload structure's implications.
+*   **Documentation Review:** The migration guide is reviewed by a technical lead from one of the three dependent teams to ensure clarity and accuracy before publication.
+*   **Independence:** The code reviewer and security officer must not be the same person who authored the changes. The documentation reviewer must be external to the Data Infrastructure team.
+
+**Landing Strategy**
+1.  **Merge:** Once Gates 1–3 pass, the release branch is merged into `stable`. This triggers automatic staging deployment.
+2.  **Registry Update:** After staging verification (Gate 4), the immutable registry is updated with v4.0. No deletion or overwrite is attempted; if an error occurs, a new patch version (v4.0.1) is planned.
+3.  **Communication:** The Release Coordinator publishes the announcement and migration guide to the Platform Guild channels immediately after the registry update.
+4.  **Integration Tests:** Downstream integration tests remain suppressed. A separate ticket will be created to re-enable them once consumer teams have updated their manifests.
+5.  **Production Promotion:** A manual ticket is filed in the change management system for production promotion. This requires a separate human decision based on staging stability over a 24-hour window.
+
+**Rollback Protocol**
+Since the registry is immutable and v4.0 cannot be deleted, rollback involves:
+1.  Reverting the `stable` branch to the previous commit (v3.x).
+2.  Deprecating v4.0 in the registry with a note directing users to remain on v3.x.
+3.  Halting the production promotion ticket if it is pending.
+4.  Notifying all teams that v4.0 is deprecated and should not be adopted.
+
+**Human Decisions Required**
+*   Manager approval for CI re-runs.
+*   Tech Lead and Security Officer sign-off.
+*   Final go/no-go for production promotion after the 24-hour staging window.

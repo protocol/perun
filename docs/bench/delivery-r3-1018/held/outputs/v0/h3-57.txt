@@ -1,0 +1,56 @@
+### Delivery Plan: Barcode Scan Flow
+
+**Objective:** Implement offline-capable barcode scanning with local validation to replace manual entry, targeting the next monthly deployment window.
+
+#### 1. Lanes & Parallelism
+*Work is isolated in separate Git worktrees. One writer per worktree.*
+
+*   **Lane A (Spec & Architecture) [Serial Start]:**
+    *   **Actor:** Product Analyst + Architect.
+    *   **Work:** Convert mockups into a testable spec defining "offline validity" rules (e.g., cached inventory snapshot age). Define the service account handshake for the read-only DB sync.
+    *   **Output:** `ADR-001-Offline-Strategy.md` and acceptance criteria.
+*   **Lane B (Core Scanner Logic) [Parallel after A]:**
+    *   **Actor:** Builder.
+    *   **Work:** Implement camera capture and decoding library integration. Build the local cache synchronization logic.
+    *   **Constraint:** Must function with zero network dependency during the scan action.
+*   **Lane C (UI Integration) [Parallel after A]:**
+    *   **Actor:** Builder (Different worktree).
+    *   **Work:** Implement the new screen, binding the scanner output to the 'Ship' button state.
+*   **Lane D (Independent QA) [Parallel after B+C merge]:**
+    *   **Actor:** QA Engineer.
+    *   **Work:** Execute functional tests on exact revision. Specifically target the flaky camera permission check on staging to distinguish environmental noise from code defects. Verify offline behavior by physically disconnecting network.
+
+#### 2. Gates & Checks
+*Every gate requires an exact immutable SHA. Missing evidence is UNVERIFIED.*
+
+*   **G0/G1 (Intake/Spec):** Conductor verifies the spec explicitly covers the "offline" constraint and the specific service account permissions. **Idea-Critic** attacks the proposed caching strategy before coding begins.
+*   **G2 (Plan):** Define the token budget for Lane B/C (heavy compute for image processing). Map the flaky test strategy: if the camera permission check fails, the lane must retry once with a clean environment before flagging a code defect.
+*   **G3 (Design):** Review ADR for data security (local cache encryption) and sync conflict resolution.
+*   **G4 (Implement):** Builders commit patches. Unit tests must pass locally before push.
+*   **G5 (Verify):**
+    *   **Revision:** The exact SHA from G4.
+    *   **Action:** Full CI run (45 mins). Due to cost/time, this runs *once* per candidate.
+    *   **Critical Check:** QA must provide a receipt showing the app successfully validated a barcode while the device was in airplane mode.
+    *   **Flake Handling:** If the camera permission check fails, re-run the specific job on a fresh staging instance. Two failures = block.
+*   **G6 (Review):**
+    *   **Security:** Independent review of the service account scope and local data storage.
+    *   **Code:** Deep review by a senior engineer who did not write Lanes B or C.
+*   **G7 (Integrate):** Merge into the monthly release branch. Run the full pipeline one final time on the merge commit.
+
+#### 3. Review Strategy
+*   **Builder ≠ Reviewer.** The engineers implementing the scanner (Lane B) and UI (Lane C) cannot approve their own code.
+*   **Security Review:** Mandatory independent sign-off on the offline cache mechanism and service account usage.
+*   **QA Independence:** QA executes against the built binary, not the source code narrative.
+
+#### 4. Landing & Human Gates
+*   **Merge Strategy:** Changes merge to a `release/candidate` branch, not directly to `main`.
+*   **Human Decision (Jane Smith):**
+    *   **Trigger:** G7 complete, all receipts green, security signed.
+    *   **Action:** Jane Smith approves the deployment to the monthly device update cycle.
+    *   **Timing:** Must occur before the fourth Tuesday cutoff.
+*   **Rollback Plan:**
+    *   **Constraint:** Builds are irreversible once signed.
+    *   **Mitigation:** If the build fails post-deployment, the rollback is a **revert to the previous month's signed build**. No hotfixes are possible.
+    *   **Go/No-Go:** If G5 offline verification or G6 security review has *any* unresolved High/Critical findings, the launch is aborted for the next cycle. No "we'll fix it later" allowed.
+
+**Risk Note:** The 45-minute CI cost dictates a "merge-train" approach. Do not push to the release branch until Lanes B, C, and D are locally verified and pre-reviewed to avoid wasting credits on broken builds.

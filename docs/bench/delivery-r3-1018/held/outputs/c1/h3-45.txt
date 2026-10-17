@@ -1,0 +1,64 @@
+**Delivery Plan: Build Agent OS Image Upgrade**
+
+**Binding Facts & Constraints**
+*   **Scope:** `secure-delivery` repo; `golden-image` definition.
+*   **Approvers:** Jane Smith, Compliance Officer (Image change); Security Lead (Prod deploy).
+*   **Cost/Time:** CI = $45/run, 22 mins. Audit deadline: Next Tuesday.
+*   **Risks:** Irreversible revert after 4h cache purge; flaky network check on Tuesdays; zero downtime required.
+*   **Strategy:** Pilot in isolated lane, parallel validation, serialized integration, human-gated production flip.
+
+**Lanes & Parallelism**
+
+1.  **Lane A: Image Build & Unit Integrity (Builder)**
+    *   **Work:** Update `golden-image` definition with new kernel/patches. Build image in isolated worktree. Run local static analysis and unit tests for signing tool compatibility.
+    *   **Parallel:** Yes.
+    *   **Output:** Candidate image SHA, local build logs.
+
+2.  **Lane B: CA Connectivity & Flakiness Probe (QA)**
+    *   **Work:** Deploy candidate image to a non-production attestation enclave. Execute signing handshake against internal CAs. Run network handshake test 5x to distinguish flake from failure (ignoring single Tuesday failures, investigating repeats).
+    *   **Parallel:** Yes (starts once Lane A produces a candidate).
+    *   **Output:** Connectivity receipt, flake analysis report.
+
+3.  **Lane C: Compliance & Security Review (Security/Compliance)**
+    *   **Work:** Review diff of `golden-image` definition. Verify kernel version meets patch requirements. Validate CA certificate inclusion.
+    *   **Parallel:** Yes (can start on spec).
+    *   **Output:** Signed compliance verdict.
+
+**Serialization Point:** Lanes A, B, and C must all pass before integration.
+
+**Gates & Checks**
+
+*   **G2 (Plan):** Confirm budget cap (max 6 CI runs = $270) and approver availability.
+*   **G4 (Implement):** Lane A commits image definition. Base SHA pinned.
+*   **G5 (Verify):**
+    *   **Exact Revision:** The specific commit SHA from Lane A.
+    *   **Check:** Full CI pipeline on isolated enclave.
+    *   **Condition:** Green status. If "network handshake" fails once on Tuesday, retry automatically. If it fails twice, block and investigate.
+    *   **Validation:** Signing process completes without timeout/integrity failure.
+*   **G6 (Review):**
+    *   **Reviewers:** Jane Smith + Compliance Officer (independent of Builder).
+    *   **Scope:** Diff + G5 receipts.
+    *   **Verdict:** Explicit approval to merge to integration branch.
+*   **G7 (Integrate):** Merge to main/integration branch. Re-run one final CI job on the *merge commit* to ensure no race conditions.
+*   **G8 (Release - Human Gate):**
+    *   **Approver:** Security Lead.
+    *   **Action:** Manual green-light for production deployment.
+    *   **Condition:** Must occur before the 4-hour cache purge window of the old image closes to ensure rollback viability.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Fast-forward merge to integration branch after G6. No merge train needed for single lane, but G7 integration test is mandatory.
+*   **Human Decision:** Security Lead must explicitly authorize the production flip (G8). No auto-deploy.
+*   **Rollback Plan:**
+    *   **Window:** Immediate rollback only possible within 4 hours of deployment (before old binaries purge).
+    *   **Method:** Re-point pipeline to previous known-good image SHA.
+    *   **Constraint:** If >4 hours, rollback requires rebuilding old image (high cost/delay).
+*   **Zero Downtime:** Deploy new image to a subset of enclaves first (canary), verify signing success, then roll out to remaining agents. Do not stop all agents simultaneously.
+
+**Timeline**
+*   **Day 1:** Lanes A, B, C execution.
+*   **Day 2:** G6 Review & G7 Integration.
+*   **Day 3:** G8 Approval & Canary Deploy.
+*   **Day 4:** Full Rollout & Audit Prep.
+
+**Failure Mode:** If CI fails twice due to network issues, escalate to infrastructure team immediately; do not retry blindly. If compliance rejects, halt and revert definition.

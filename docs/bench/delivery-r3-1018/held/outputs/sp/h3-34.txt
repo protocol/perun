@@ -1,0 +1,71 @@
+# Delivery Plan: NexusWrite Autosave & Spell-Check
+
+## Lanes & Parallelism
+
+**Lane A: Backend Autosave (Serialized)**
+*Owner: Backend Engineer*
+This lane must execute first due to the irreversible database migration risk and shared state dependency.
+1.  **Migration:** Draft storage schema update on regional shards.
+2.  **State Logic:** Refactor global state file to isolate autosave buffers from the collaboration engine.
+3.  **API:** Endpoint for draft persistence with offline queueing logic.
+
+**Lane B: Editor Spell-Check (Parallel to A)**
+*Owner: Frontend Engineer*
+Independent of backend storage; can proceed immediately.
+1.  **Engine:** Integrate client-side spell-check library supporting 5+ languages.
+2.  **UI:** Red underline rendering and click-handler for suggestions.
+3.  **Performance:** Ensure rendering loop remains non-blocking.
+
+**Lane C: Integration & Resilience (Serialized after A & B)**
+*Owner: Full-Stack Engineer*
+1.  **Hookup:** Connect Editor to Backend autosave API (30s interval).
+2.  **Recovery:** Implement crash-recovery logic reading from new draft storage.
+3.  **Degradation:** Code network-timeout handlers to switch to local-only mode without freezing.
+
+## Gates & Checks
+
+**Gate 1: Migration Dry-Run (Pre-Merge)**
+*   **Revision:** `feat/autosave-db-schema` (Branch tip).
+*   **Action:** Run migration script against a cloned regional shard snapshot.
+*   **Check:** Verify rollback impossibility is acknowledged; confirm data integrity.
+*   **Approver:** Database Admin (Manual sign-off required).
+
+**Gate 2: State Isolation Unit Test (CI)**
+*   **Revision:** `feat/autosave-state-refactor`.
+*   **Action:** Run targeted unit tests for the global state file.
+*   **Check:** Verify collaboration engine tests pass; ensure no race conditions in co-editing.
+*   **Constraint:** Ignore flaky auth check if local logs show success.
+
+**Gate 3: Full Integration Suite (Pre-Production)**
+*   **Revision:** `feat/nexus-write-enhancements` (Merged A+B+C).
+*   **Action:** Trigger full CI pipeline ($45 cost).
+*   **Check:** Verify 30s trigger accuracy, crash recovery simulation, and spell-check suggestion latency.
+*   **Timing:** Only trigger once per final candidate to minimize cost.
+
+## Review Strategy
+
+**Independent Code Review**
+*   **Reviewer 1 (Backend Logic):** Senior Backend Engineer (not the author of Lane A). Focus: State isolation safety and migration irreversibility.
+*   **Reviewer 2 (Frontend/UX):** Senior Frontend Engineer (not the author of Lane B/C). Focus: UI freezing, spell-check accuracy, and graceful degradation.
+*   **Constraint:** Reviewers must verify that comment threads and version history logic remain untouched via diff analysis.
+
+**Security & Compliance Check**
+*   **Reviewer:** Legal/Compliance Representative.
+*   **Focus:** Confirm data loss mitigation strategies meet legal requirements regarding the recent incidents.
+
+## Landing & Rollback
+
+**Merge Protocol**
+*   **Target Branch:** `stable-prod`.
+*   **Approvals Required:** Dual approval from **Jane Smith** AND the **Shift Lead**. No exceptions.
+*   **Deployment Window:** Off-peak hours to monitor database shard load.
+
+**Rollback Plan**
+*   **Scenario 1 (Frontend/Logic Failure):** Immediate revert of the application code commit. No data loss expected as drafts are additive.
+*   **Scenario 2 (Database Corruption):** Since migrations are irreversible, rollback involves deploying a read-only patch that bypasses the new schema fields while engineering manually restores data from pre-migration backups (if available) or accepts data loss for the specific new fields.
+*   **Decision Point:** If the flaky auth check fails in production logs post-deploy, the Shift Lead must decide within 15 minutes whether to hotfix or revert based on user impact.
+
+**Human Decisions Required**
+1.  Final go-ahead on the irreversible database migration.
+2.  Dual approval for `stable-prod` merge.
+3.  Go/No-Go decision if the auth module exhibits instability in the `stable-prod` environment post-deploy.

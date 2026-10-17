@@ -1,0 +1,63 @@
+**Delivery Plan: Byte-Stable Image Resizer Replacement**
+
+**Binding Facts & Constraints**
+*   **Scope:** Replace resizing library in `acme-media-core`; ensure byte-stable output.
+*   **Risk:** High (shared utilities affect 3 microservices); CI cost/time high (45m); known flaky thumbnail check.
+*   **Approvers:** Lead Engineer + SRE On-call (Deployment).
+*   **Irreversible:** Production deploy without rollback capability.
+*   **Lane Strategy:** Isolate shared utility changes; serialize integration due to shared state; parallelize verification.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Core Swap & Unit Stability (Builder)**
+    *   **Work:** Replace library in shared utilities; implement byte-stability wrappers; update unit tests.
+    *   **Isolation:** Dedicated worktree; clean base to mainline.
+    *   **Dependency:** None.
+    *   **Gate:** G5 (Unit tests green at exact SHA; exclude known flaky thumbnail check via explicit skip marker, logged in flake ledger).
+
+2.  **Lane B: Integration & Downstream Contract (QA)**
+    *   **Work:** Run integration suite against Lane A's artifact in staging (small dataset). Verify no downstream disruption in the 3 dependent microservices.
+    *   **Serialization:** Must wait for Lane A's verified SHA.
+    *   **Gate:** G5 (Integration green; cache key stability verified via hash comparison on sample set).
+
+3.  **Lane C: Performance & Cost Baseline (SRE/Performance)**
+    *   **Work:** Measure processing time and output size vs. baseline; confirm CDN cost projection.
+    *   **Serialization:** Runs parallel to Lane B using Lane A's artifact.
+    *   **Gate:** G5 (Metrics within 5% variance; byte-output confirmed identical).
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirm "byte-for-byte" definition (hash algorithm) and acceptable performance variance. Pin base SHA.
+*   **G2 (Plan):** Budget cap set for CI runs (limit retries on flaky check).
+*   **G3 (Design):** ADR documenting the new library choice and fallback mechanism.
+*   **G4 (Implement):** Lane A commits patch with tests.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from Lane A.
+    *   **Checks:** Unit (Lane A), Integration (Lane B), Perf (Lane C).
+    *   **Flake Handling:** Known thumbnail failure marked `FLAKE_SKIP`; if new failures occur, block.
+    *   **UI/Output:** Headless verification of sample image hashes.
+*   **G6 (Review):**
+    *   **Reviewer:** Senior Engineer (independent of Builder).
+    *   **Scope:** Security (supply chain of new lib), Logic (byte-stability), Flakiness mitigation.
+    *   **Verdict:** Blocker/Critical must be fixed; High requires Lead Engineer acceptance.
+*   **G7 (Integrate):** Merge to integration branch; re-run affected subset of CI (45m full run required here).
+*   **G8 (Release):**
+    *   **Human Gate:** Lead Engineer + SRE On-call approval required.
+    *   **Action:** Deploy to production with feature flag or canary (10% traffic).
+    *   **Rollback:** Automated revert triggered if error rate > 0.1% or cache miss rate spikes > 5%.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Squash merge Lane A after G7 success.
+*   **Deployment:** Staged rollout. Monitor CDN logs and processing latency for 1 hour post-deploy.
+*   **Rollback Plan:**
+    *   **Trigger:** Anomaly in production metrics (cache misses, errors).
+    *   **Action:** Immediate revert to previous SHA (pre-swap); redeploy.
+    *   **Post-Mortem:** G10 retrospective if rollback occurs; add regression test for the specific failure mode.
+
+**Cost & Risk Control**
+*   **CI Cost:** Limit full pipeline runs to G7 and final verification; use staging dataset for Lane B/C.
+*   **Flake Management:** Explicitly track the thumbnail flake; do not treat it as a pass/fail criterion unless it changes behavior.
+*   **Verification:** No deployment without G5 receipts on the exact SHA. Unit tests alone are insufficient; integration proof is mandatory.
+
+**Next Step:** Await owner confirmation on "byte-for-byte" hash algorithm and performance variance tolerance to finalize G1 Spec.

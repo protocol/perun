@@ -1,0 +1,29 @@
+### Delivery Plan: Idempotency Enforcement for Nightly Ingestion
+
+**1. Work Lanes & Parallelism**
+*   **Lane A (Logic Implementation):** A senior backend engineer modifies the ingestion logic in `core-data-monolith` to implement a "skip-if-exists" check based on the unique date-range key. This work is serialized; no other changes should touch the ingestion module during this window.
+*   **Lane B (Test Harness Preparation):** A QA engineer prepares a isolated staging dataset containing known duplicate scenarios. This runs in parallel with Lane A but must complete before integration testing begins.
+*   **Lane C (Documentation & Approval Drafting):** A technical writer drafts the change summary and the formal request for production deployment, awaiting only the final commit hash.
+
+**2. Gates & Checks**
+*   **Gate 1: Local Verification (Revision: Feature Branch Head).** Before pushing, the engineer must run a localized unit test simulating the duplicate scenario. Success criteria: Re-running the ingestion function on the same input yields zero new rows and zero errors.
+*   **Gate 2: Staging Integration (Revision: Merge to `staging` branch).** Trigger the full 55-minute integration suite on the staging environment using the prepared dataset from Lane B.
+    *   *Constraint:* Ignore failures in the "network latency module" unless they correlate with data loss.
+    *   *Success Criteria:* The final row count in the analytics table matches the source file count exactly, even after three consecutive manual re-triggers of the same day's job.
+*   **Gate 3: Configuration Freeze Check.** Verify the job is scheduled to run outside business hours to ensure the shared configuration file remains writable for any last-minute tuning, or confirm read-only status does not block the new logic.
+
+**3. Independent Review**
+*   **Reviewer:** A Staff Engineer from the Data Governance team (distinct from the Platform Reliability group).
+*   **Scope:** Code review of the idempotency key generation logic and the SQL/query condition used for existence checks.
+*   **Constraint:** The reviewer must verify that the logic handles edge cases (e.g., partial failures mid-batch) without creating orphaned records. They must sign off on the test results from Gate 2 before approval routing begins.
+
+**4. Landing & Merge Strategy**
+*   **Human Decision Point:** Once Gate 2 and the Code Review are complete, the VP of Engineering and the Chief Data Officer must provide explicit written approval via the internal ticketing system. No automated merge occurs without this artifact.
+*   **Merge Window:** Deployment is scheduled for the immediate post-business-hour window to avoid configuration file lockouts and to allow maximum time for monitoring before the next billing cycle.
+*   **Rollback Protocol:**
+    *   *Trigger:* If duplicate records appear in production or the job fails catastrophically.
+    *   *Action:* Immediate halt of the nightly job. Initiate a full database restore from the pre-deployment snapshot.
+    *   *Impact:* Expect a 4-hour downtime window for data availability. Communication to Finance and Analytics teams must be pre-drafted and ready to send upon trigger.
+*   **Post-Landing Verification:** Run a read-only audit query on the production analytics table for the processed date range immediately after the first successful production run to confirm row counts match the source exactly.
+
+This plan prioritizes data integrity over speed, acknowledging the high cost of failure (database restore) and the strict governance required for production access.

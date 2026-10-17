@@ -1,0 +1,68 @@
+### Delivery Plan: Zeta-9 Compression Rollout
+
+**Objective:** Implement dual-write Zeta-9 compression with backward compatibility for firmware v2.4+, validating fallback mechanisms before cost savings.
+
+#### 1. Lanes & Serialization
+*Work is split into three lanes. Lanes 1 and 2 run in parallel; Lane 3 is serialized after both.*
+
+*   **Lane A (Codec Implementation):**
+    *   **Owner:** Builder (Data Persistence).
+    *   **Work:** Implement Zeta-9 encoder/decoder in `core-archive`. Add dual-write logic: new uploads write Zeta-9 + legacy format; reads detect client version and serve appropriate stream.
+    *   **Constraint:** Must not modify `codec-interface` shared library yet.
+    *   **Output:** Patch set with unit tests for compression/decompression cycles.
+
+*   **Lane B (Migration & Verification Script):**
+    *   **Owner:** Builder (QA focus).
+    *   **Work:** Write migration script to tag existing raw files. Implement the "on-the-fly decompression gateway" test harness that simulates v2.4 clients requesting Zeta-9 content.
+    *   **Constraint:** Script must be dry-run safe; no file deletion logic included (per ticket).
+    *   **Output:** Executable script + integration test suite specifically for the fallback mechanism.
+
+*   **Lane C (Integration & Performance Baseline):**
+    *   **Owner:** Senior Engineer (Serialized after A & B merge to integration branch).
+    *   **Work:** Merge A and B. Run full regression on bare-metal instances. Since staging lacks hardware acceleration, this lane must coordinate a **production canary window** for accurate performance benchmarking.
+    *   **Constraint:** Avoid running `legacy-interop` tests on Tuesdays.
+
+#### 2. Gates & Checks
+*All checks run on the exact immutable SHA of the integration branch.*
+
+*   **G2 (Plan Approval):**
+    *   **Check:** Explicit confirmation that no raw file deletion logic exists in the code.
+    *   **Approver:** Product Owner (Budget sign-off).
+
+*   **G4 (Implementation Review):**
+    *   **Check:** Code review of Lane A and B.
+    *   **Reviewer:** Independent Senior Engineer (not the Builder).
+    *   **Specific Gate:** Any change touching `codec-interface` requires **manual approval from Lead Architect Jane Smith**. This is a hard block before merge.
+
+*   **G5 (Verification):**
+    *   **Check:** Unit tests (Green).
+    *   **Check:** `legacy-interop` integration test (Must run on Wed-Mon, not Tuesday). If flaky, manual triage required.
+    *   **Check:** Fallback mechanism validation. Evidence required: Log showing a simulated v2.4 client successfully retrieving a Zeta-9 compressed document via the gateway.
+    *   **Condition:** Performance benchmarks marked `UNVERIFIED` if run only on staging; must note requirement for production canary.
+
+*   **G6 (Security & Stability):**
+    *   **Check:** Memory leak analysis on the decompression gateway (critical for long-running services).
+    *   **Check:** Data integrity verification (checksums match pre/post compression).
+
+#### 3. Review Strategy
+*   **Code Review:** Independent of the Builder. Uses `deep-code-review` lens focusing on data corruption risks and edge cases in version detection.
+*   **Architecture Review:** Jane Smith specifically reviews the `codec-interface` boundary to ensure no ABI breaks for older firmware.
+*   **QA Review:** Focuses entirely on the "fallback mechanism" as prioritized over raw speed. The QA lead must sign off on the simulation evidence of v2.4 clients.
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:**
+    1.  Lanes A and B merge to a feature branch.
+    2.  Jane Smith approves `codec-interface` changes (Human Gate).
+    3.  Feature branch merges to `main` (Integration).
+    4.  Lane C runs full regression on `main` SHA.
+
+*   **Deployment (Irreversible Action):**
+    *   **Decision:** Deploy to `us-east` is **irreversible** without a 4-hour cold restore.
+    *   **Human Gate:** Owner must explicitly approve the deploy command after reviewing the production canary performance data.
+    *   **Rollback Plan:** No code rollback possible. If failure occurs, trigger "Full Cluster Restore from Cold Backup" (4-hour RTO). This risk must be acknowledged in the deploy approval.
+
+*   **Post-Deploy:**
+    *   Monitor client adoption metrics.
+    *   **Hard Stop:** Do not schedule raw file deletion. This is explicitly deferred until 99.9% adoption is confirmed next quarter.
+
+**Risk Note:** The cost of regression ($45/run) forbids retries. The plan mandates a "dry-run" of the CI pipeline configuration locally or in a cheap sandbox before triggering the bare-metal suite to prevent financial waste on configuration errors.

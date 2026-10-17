@@ -1,0 +1,65 @@
+# Delivery Plan: Admin Console Read-Only Mode
+
+## Lanes and Parallelism
+
+**Lane A: Configuration & Infrastructure (Ops Team)**
+*   **Action:** Manually toggle the `admin_console_readonly` flag in the secure key-value store.
+*   **Timing:** Initiate exactly 10 minutes before the code deployment window to accommodate the five-minute regional propagation delay.
+*   **Constraint:** This lane is serialized; code deployment cannot begin until the flag status is confirmed propagated.
+
+**Lane B: Application Logic (Engineering)**
+*   **Action:** Implement middleware to intercept HTTP verbs (POST, PUT, DELETE, PATCH) on the Admin Console routes.
+*   **Logic:** If the config flag is active, return HTTP 423 (Locked) with a standard JSON error message. If inactive, pass traffic normally.
+*   **Parallel Work:** While Lane A prepares the store, Engineering updates the health check endpoint logic.
+*   **Health Check Constraint:** The `/health` endpoint must ignore the read-only flag and return HTTP 200 provided the application process is running and the config store is reachable. Do not modify database schemas or audit logging services.
+
+**Lane C: Verification (QA/Compliance)**
+*   **Action:** Validate that write operations return 423 and health checks return 200 under the simulated flag state.
+*   **Constraint:** Explicitly ignore failures in the staging environment's network check if unit tests pass, per known flakiness protocols.
+
+## Gates and Checks
+
+**Gate 1: Pre-Build Verification**
+*   **Revision:** Latest `main` branch hash at T-minus 2 hours.
+*   **Check:** Unit tests must pass 100%. The flaky staging network check is bypassed if unit tests are green.
+*   **Owner:** CI Pipeline.
+
+**Gate 2: Dual Approval (Change Management)**
+*   **Trigger:** Successful CI build (45-minute duration).
+*   **Approvers:** Shift Lead AND Security Officer.
+*   **Constraint:** Deployment is blocked until both approvals are recorded in the change management portal.
+
+**Gate 3: Pre-Migration Health Probe**
+*   **Timing:** Immediately post-deployment, pre-migration start.
+*   **Check:** Automated script hits `/health`. Must return 200.
+*   **Failure Consequence:** If not 200, the automated rollback triggers immediately.
+
+## Review Process
+
+**Independent Code Review**
+*   **Reviewer:** Senior Engineer from the Compliance Team (independent of the Platform team implementing the change).
+*   **Scope:** Verify that no database schema changes or audit logging modifications are present in the diff. Confirm health check logic explicitly excludes the read-only flag from its success criteria.
+*   **Timing:** Before the CI pipeline is triggered to save compute credits.
+
+**Operational Readiness Review**
+*   **Participants:** Shift Lead, Security Officer, Migration Lead.
+*   **Focus:** Confirm the timing synchronization between the config flag toggle (Lane A) and the deployment completion (Lane B).
+*   **Decision Point:** Final "Go/No-Go" based on the propagation confirmation.
+
+## Landing and Rollback
+
+**Merge Strategy**
+*   **Method:** Squash merge to `main` only after Dual Approval.
+*   **Deployment Window:** Starts immediately after the 45-minute CI pipeline completes, ensuring the binary is live before the 4-hour migration window opens.
+
+**Human Decision Points**
+1.  **Approval to Trigger CI:** Requires confirmation that the specific commit contains only the read-only logic and health check updates.
+2.  **Final Go for Migration:** Requires manual confirmation that the system is in read-only mode (423 responses verified) and health is green (200 verified) before the migration script starts.
+
+**Rollback Protocol**
+*   **Automated:** If the `/health` endpoint returns anything other than 200 post-deployment, the orchestrator automatically reverts the deployment to the previous stable revision.
+*   **Manual/Irreversible Constraint:** Once the migration script initiates data transfer, reverting the application code is **irreversible** regarding data consistency. If issues arise after migration starts, the team must proceed with forward-fixes only; no code reversion is permitted during the active data transfer.
+*   **Config Fallback:** If the application behaves incorrectly before migration starts, the Ops Team can toggle the secure store flag back to `false` to restore write access, assuming the new code handles the state transition gracefully.
+
+**Post-Migration**
+*   After the four-hour window, Ops Team toggles the flag to `false`. Engineering verifies write operations resume (HTTP 200/201) without requiring a new deployment.

@@ -1,0 +1,42 @@
+# Delivery Plan: Nightly Synthetic Order Health Check
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic & Service Account (Serialized)**
+1.  **Provisioning:** DevOps creates the dedicated service account and credentials. *Must complete before Lane B starts.*
+2.  **Implementation:** Backend Engineer writes the order creation script, retry logic (3 attempts, exponential backoff), and cleanup routine.
+3.  **Safety Guard:** Engineer implements a hard stop if API calls approach 4,800/5,000 daily limit to prevent partner lockout.
+
+**Lane B: Alerting & Scheduling (Parallel to Lane A Step 2)**
+1.  **Integration:** SRE connects the script's failure state to the on-call paging system.
+2.  **Scheduler:** SRE configures the cron job for 03:00 UTC in the isolated runner environment (not CI).
+
+**Lane C: Compliance & Review (Serialized after Lane A & B)**
+1.  **Manual Compliance:** Security Lead and Jane Smith review code for data handling and sandbox safety.
+2.  **Independent Verification:** A QA Engineer (not the author) runs the script manually in the sandbox at 03:30 UTC on a staging branch to verify end-to-end flow and cleanup.
+
+## Gates & Checks
+
+*   **Gate 1 (Pre-Merge):** Static analysis passes; unit tests for retry logic pass in CI (cost-controlled, <2 mins).
+*   **Gate 2 (Security):** Dual approval from Jane Smith and Security Lead confirming service account isolation and no PII leakage.
+*   **Gate 3 (Sandbox Safety):** Dry-run verification that the cleanup script executes successfully without interfering with simulated partner data.
+*   **Execution Revision:** The job runs strictly on the latest tagged release revision `vX.Y.Z` to ensure stability, not `main`.
+
+## Review Process
+
+*   **Code Review:** Conducted by a Senior Backend Engineer from a different squad to ensure objectivity regarding the retry/cleanup logic.
+*   **Compliance Review:** Mandatory manual sign-off by Security Lead + Jane Smith. No automated bypass.
+*   **Operational Review:** SRE verifies the alert fires correctly in a test channel before enabling production paging.
+
+## Landing Strategy
+
+1.  **Merge Window:** Code merges to `release` only after Gates 1-3 pass.
+2.  **Canary Period:** For the first 3 nights, the job runs in "silent mode" (logs only, no paging, no actual order creation) to validate timing and resource usage.
+3.  **Go-Live:** Full activation occurs on Night 4.
+4.  **Human Decision Point:** If the sandbox API limit is ever breached, the on-call engineer must manually disable the job via the feature flag before investigating.
+5.  **Rollback:** Immediate revert of the `release` branch commit if the cleanup routine fails two consecutive nights, preventing sandbox contamination for partners starting at 06:00 UTC.
+
+## Critical Constraints Enforced
+*   **CI Cost:** Long-running synthetic tests are excluded from the main PR pipeline; only unit tests run there.
+*   **Concurrency:** The job is hardcoded to terminate by 03:45 UTC, ensuring a 15-minute buffer before partner batch jobs begin at 04:00 UTC, avoiding the flaky cleanup collision.
+*   **False Positives:** The 3-retry mechanism must succeed before any page is sent.

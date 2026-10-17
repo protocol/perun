@@ -1,0 +1,79 @@
+### Delivery Plan: Checkout Load Test Isolation
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Schema changes or data writes to the shared instance corrupt staging; only nightly backups allow restore.
+*   **Approval Gate:** Deployments to the production-like environment require dual approval (Database Lead + Operations Manager).
+*   **Cost/Time:** CI pipeline is 45 mins ($12/run); flaky inventory sync check exists.
+*   **Deadline:** Thursday.
+*   **Scope:** Isolate database snapshot, route traffic, validate isolation. No schema changes to shared DB.
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Database Snapshot & Provisioning (Builder)**
+*   **Work:** Script creation to generate a volume-mimicking snapshot from the latest nightly backup into a temporary, isolated database instance. Includes teardown logic.
+*   **Parallelism:** Can run parallel to Lane 2 during design/scripting; must complete before Lane 3 validation.
+*   **Constraint:** Must not touch the live shared instance schema.
+
+**Lane 2: Traffic Routing Configuration (Builder)**
+*   **Work:** Implement configuration switch or service mesh rule to route specific load-test user-agent tags or header signatures exclusively to the new isolated DB instance.
+*   **Parallelism:** Independent of Lane 1 execution, depends on Lane 1's connection string output.
+
+**Lane 3: Independent Verification (QA)**
+*   **Work:** Execute dry-run load test with write operations. Verify zero writes to the shared staging DB and successful writes to the isolated snapshot. Confirm staging team's ongoing verification cycles remain unaffected.
+*   **Dependency:** Requires Lane 1 and Lane 2 completion.
+
+**Lane 4: Security & Data Privacy Review (Security)**
+*   **Work:** Verify the snapshot contains no PII exceeding scope (masking if required) and that the isolated instance has no egress to production networks.
+*   **Dependency:** Can run parallel to Lane 3 once the environment is defined.
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Confirm snapshot source is strictly the nightly backup (no live data). Define "mimics production volume" metric.
+*   **G2 (Plan):** Acyclic graph approved. Token budget set for any AI-assisted scripting.
+*   **G3 (Design):** ADR detailing the routing mechanism and rollback procedure (teardown script).
+*   **G4 (Implement):** Code committed to isolated worktrees. Scripts include explicit `DRY_RUN` flags.
+*   **G5 (Verify):**
+    *   **Exact Revision:** The specific commit SHA containing the isolation scripts.
+    *   **Check:** Run load test against the isolated DB. Assert `COUNT(write_ops) == 0` on the shared staging DB tables during the test window.
+    *   **Flake Handling:** The known flaky inventory sync check is excluded from this specific validation gate; focus is strictly on data isolation.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Senior Engineer (not the Builder).
+    *   **Scope:** Full diff review + QA receipts.
+    *   **Security:** AppSec sign-off on data handling.
+
+---
+
+#### Review Strategy
+
+*   **Builder:** Implements Lanes 1 & 2. Cannot review their own code.
+*   **QA:** Executes Lane 3. Independent of Builder.
+*   **Security:** Executes Lane 4. Independent of Builder and QA.
+*   **Deep Code Review:** Automated static analysis on the isolation scripts and routing config before human review.
+
+---
+
+#### Landing & Human Gates
+
+**Merge Strategy:**
+1.  **Integration:** Lanes merge to a release candidate branch.
+2.  **CI Trigger:** Tag the specific commit to bypass the full 45-minute seed pipeline if possible, running only the unit and isolation integration tests. If full pipeline is mandatory, schedule off-peak.
+3.  **Human Approval (G8):**
+    *   **Required Approvers:** Database Lead AND Operations Manager.
+    *   **Artifact:** Presentation of the G5 Validation Report showing zero impact on staging.
+    *   **Action:** Explicit approval to execute the script in the production-like environment.
+
+**Rollback Plan:**
+*   **Trigger:** Any detected write to the shared staging DB or failure in load test routing.
+*   **Action:** Immediate execution of the teardown script (Lane 1 output) to destroy the isolated instance and revert routing config to default.
+*   **Recovery:** Since no schema changes occur on the shared DB, no restore from backup is needed unless corruption is detected (which the test prevents).
+
+**Delivery Artifacts:**
+1.  Isolation Script (Create/Teardown).
+2.  Routing Configuration Patch.
+3.  Validation Report (Proof of zero shared-DB writes).
+
+**Timeline:** All lanes target completion by Wednesday EOD to allow Thursday delivery and approval.

@@ -1,0 +1,79 @@
+# Delivery Plan: Per-Tenant Throttling for Bulk Data Export
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic (Backend Engineer)**
+*   **Work:** Implement concurrency tracking (max 5 jobs/org) and daily row counting (max 2M rows/org) within the export module.
+*   **Dependency:** None. Starts immediately.
+*   **Output:** Local unit tests proving limits trigger before execution; integration tests using mocked high-volume data.
+
+**Lane B: Observability (SRE/Backend Engineer)**
+*   **Work:** Implement structured logging with specific tags (`throttle_concurrency`, `throttle_daily_limit`) to distinguish throttled requests from failures in the aggregated dashboard.
+*   **Dependency:** None. Can run parallel to Lane A.
+*   **Output:** Log schema definition and verification that tags appear in local log streams.
+
+**Lane C: Infrastructure & Deployment (DevOps + DBA)**
+*   **Work:** Define the database schema changes required for persistent row counting (if not using ephemeral cache) and prepare the migration script. Draft the deployment rollback procedure.
+*   **Dependency:** None.
+*   **Output:** Migration script, rollback script, and resource estimate for the state store.
+
+**Serialization Point:** Lane A and Lane C must converge before the **Integration Gate**. The concurrency logic (A) must match the storage mechanism (C).
+
+## Gates & Checks
+
+**Gate 1: Local Verification (Pre-Push)**
+*   **Trigger:** Lane A and B complete local implementation.
+*   **Action:** Run full local test suite including synthetic high-volume scenarios.
+*   **Criteria:**
+    *   6th concurrent job returns `429 Too Many Requests` with message: "Export limit exceeded: 5 concurrent jobs."
+    *   Request exceeding 2M daily rows returns `429` with message: "Daily export limit exceeded: 2,000,000 rows."
+    *   Logs contain distinct throttle tags.
+*   **Revision:** Latest `main` branch + feature branch head.
+*   **Constraint:** No CI run allowed until this gate passes locally to avoid compute penalties.
+
+**Gate 2: CI Validation**
+*   **Trigger:** Code pushed after Gate 1 success.
+*   **Action:** Trigger 45-minute CI pipeline.
+*   **Criteria:** Full dataset validation passes; no regression in non-throttled tenant performance.
+*   **Revision:** Feature branch head only.
+
+**Gate 3: Staging Stress Test (Manual Override)**
+*   **Trigger:** CI Pass.
+*   **Action:** Since staging data is synthetic, manually inject a script to simulate Apex Logistics' volume against the staging cluster.
+*   **Criteria:** System stabilizes under load; dashboard correctly displays throttled events vs. errors.
+*   **Revision:** Staging deployment of feature branch.
+
+## Review Process
+
+**Primary Reviewer:** Backend Lead
+*   **Focus:** Code correctness, concurrency safety (race conditions in counter increments), and error message clarity.
+*   **Independence:** Must not be the author of Lane A.
+
+**Secondary Reviewer:** Database Administrator
+*   **Focus:** Schema lock impact, migration safety, and rollback viability.
+*   **Independence:** Independent of Lane C author.
+
+**Requirement:** Both approvals are mandatory before merging. If either rejects, the branch reverts to Lane A/C for fixes; no partial merges.
+
+## Landing Strategy
+
+**Merge Condition:**
+1.  Gate 3 successful.
+2.  Dual approval (Backend Lead + DBA) recorded.
+3.  Rollback script verified in a dry-run environment.
+
+**Deployment Window:**
+*   **Time:** Thursday evening (off-peak) to allow Friday buffer for SLA compliance.
+*   **Method:** Canary deployment to 10% of traffic (excluding Apex Logistics initially), then 50%, then 100%.
+
+**Human Decisions Required:**
+1.  **Go/No-Go on Friday Morning:** If metrics show unexpected latency for smaller tenants post-deployment, the DBA must decide to trigger rollback immediately.
+2.  **Apex Logistics Notification:** Account Manager must confirm if Apex has been notified of the new limits prior to 100% rollout to manage expectations.
+
+**Rollback Plan:**
+*   **Trigger:** Increased timeout rates for non-Apex tenants or database lock contention > 5%.
+*   **Action:** Revert deployment using the pre-approved script. Restore database schema if migration was applied.
+*   **Owner:** DevOps on-call, authorized by Backend Lead.
+
+**Success Metric:**
+By Friday EOD, Apex Logistics exports are capped at defined limits, and Beta Corp timeout incidents drop to zero.

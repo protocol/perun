@@ -1,0 +1,63 @@
+### Delivery Plan: GDPR Data Export & Deletion
+
+**Scope & Constraints**
+Two endpoints (Export, Delete) aggregating five storage systems. Critical constraints: atomic deletion (no partials), shared billing schema (no direct migrations), high CI cost/latency, and irreversible data loss risk.
+
+#### 1. Lanes & Parallelism
+
+**Lane A: Specification & Contract (Serial Pre-requisite)**
+*   **Actor:** Product Analyst + Security Lead.
+*   **Work:** Define exact data fields from all five systems. Define the "atomic" deletion contract (e.g., two-phase commit or saga pattern). Explicitly list what is *out of scope* to avoid billing schema coupling.
+*   **Output:** Testable spec with acceptance criteria for "complete archive" and "zero orphaned entries."
+*   **Dependency:** None. Must complete before implementation.
+
+**Lane B: Export Implementation (Parallel)**
+*   **Actor:** Builder 1.
+*   **Work:** Implement read-only aggregation endpoint. Generate archive in specified format.
+*   **Constraint:** Read-only access; no schema changes.
+*   **Dependency:** Lane A (Spec).
+
+**Lane C: Deletion Logic & Safety Mechanisms (Parallel)**
+*   **Actor:** Builder 2 (Senior).
+*   **Work:** Implement deletion orchestration. **Critical:** Build the rollback/compensation logic first. If any of the five systems fail, the transaction must revert or flag for manual intervention without partial deletes.
+*   **Constraint:** No direct schema migration; use application-level consistency checks.
+*   **Dependency:** Lane A (Spec).
+
+**Lane D: Independent Verification Harness (Parallel)**
+*   **Actor:** QA Engineer.
+*   **Work:** Create a synthetic test dataset mimicking the five-system fragmentation. Script the "failure mid-way" scenario to prove atomicity.
+*   **Dependency:** Lane A (Spec).
+
+#### 2. Gates & Checks
+
+*   **G1 (Spec Sign-off):** Security Lead approves the data map and deletion contract. *Gate:* Written approval in ticket.
+*   **G3 (Design Review):** Joint review with Billing Squad lead to confirm no schema impact. *Gate:* Explicit "No Migration Required" sign-off.
+*   **G4 (Implementation):** Code complete on isolated branches.
+    *   *Check:* Static analysis for PII leakage.
+    *   *Check:* Unit tests for aggregation logic.
+*   **G5 (Verification):** Run against the synthetic dataset (Lane D).
+    *   *Exact Revision:* The merge of Lane B + C on a temporary integration branch.
+    *   *Critical Check:* Simulate network failure during step 3 of 5 deletes; verify zero data lost or full rollback executed.
+    *   *CI Strategy:* Run full suite once. If the known flaky network latency check fails, manual retry allowed *once*; subsequent failures block.
+*   **G6 (Security Audit):** Security Lead reviews the deletion logic and export permissions. Independent of Builders.
+    *   *Focus:* Irreversibility confirmation and access controls.
+
+#### 3. Review Strategy
+
+*   **Code Review:** Builder 1 reviews Builder 2 (and vice versa) for logic, but **Security Lead** performs the final authoritative review on deletion safety.
+*   **Data Consistency Review:** QA Engineer validates the test receipts showing successful rollbacks.
+*   **Compliance Review:** Product Analyst verifies the export format matches legal requirements.
+
+#### 4. Landing & Deployment
+
+*   **Integration:** Merge Lanes B and C into `main` only after G6 pass.
+*   **Human Gate (Deployment):**
+    *   **Approver:** Security Lead.
+    *   **Condition:** Green CI on `main`, successful G5 receipt on exact SHA, and confirmed rollback procedure documentation.
+    *   **Action:** Manual trigger to Staging -> Production.
+*   **Rollback Plan:**
+    *   *Export Endpoint:* Simple feature flag toggle off.
+    *   *Delete Endpoint:* Cannot auto-rollback data. The "rollback" is the activation of the compensation script (pre-built in Lane C) to restore from the 7-day backup if partial deletion is detected, followed by immediate service disablement.
+*   **Post-Deploy (G9):** Verify successful export of a test account and confirm deletion atomicity in production logs (using a dedicated test user).
+
+**Timeline Note:** To meet the month-end deadline, Lane A must start immediately. CI runs should be minimized by ensuring local validation passes before pushing to the expensive pipeline.

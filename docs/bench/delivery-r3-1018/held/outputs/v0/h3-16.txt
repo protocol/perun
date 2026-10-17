@@ -1,0 +1,49 @@
+**Delivery Plan: Parallelize Build Pipeline**
+
+**Strategy**
+Since the network volume enforces a single-writer hard limit, we cannot enable parallel writes to the *same* cache. The solution is to **shard the cache scope** by module and **serialize only the lock acquisition**, allowing independent jobs to build simultaneously using local or sharded temporary storage, merging artifacts only at the final stage. This removes the single point of failure where one job stalls the queue.
+
+**Lanes & Parallelism**
+*   **Lane A (Architecture & Sharding Design)** – *Conductor + Senior Engineer (Rotation)*
+    *   **Work:** Define module boundaries for cache sharding. Modify build scripts to write to isolated temporary directories per module instead of the global lock. Implement a final "merge" step that aggregates artifacts without holding the write lock during individual builds.
+    *   **Dependency:** None. Must complete before Lane B.
+    *   **Parallelism:** Serial (blocks B).
+*   **Lane B (Pipeline Orchestration & Failure Handling)** – *Builder*
+    *   **Work:** Reconfigure CI job graph to spawn independent module builders. Implement "fail-fast" per module without stalling the global queue. Add logic to bypass the known flaky networking check (per policy) while logging it separately.
+    *   **Dependency:** Requires Lane A's sharding logic.
+    *   **Parallelism:** Can run parallel with Lane C (Docs/Runbook).
+*   **Lane C (Cost & Rollback Protocol)** – *Security + Ops*
+    *   **Work:** Define the "partial failure" graceful degradation path. Document the manual rollback procedure (45-min DB rollback) explicitly as a human-gated emergency only, since it is irreversible during business hours. Calculate projected cost savings against the 8 PM double-rate window.
+    *   **Dependency:** None.
+    *   **Parallelism:** Parallel with Lane B.
+
+**Gates & Checks**
+*   **G2 (Plan Approval):** Review sharding strategy to ensure no data race conditions on the final merge. **Check:** Dry-run cost projection showing reduction in idle wait time.
+*   **G4 (Implementation):** Code review of build scripts by a Senior Engineer *not* on the current rotation (external to the three owners if possible, or peer-swapped).
+*   **G5 (Verification):**
+    *   **Revision:** Exact SHA of the new pipeline config.
+    *   **Action:** Trigger a full nightly build simulation on Staging infrastructure.
+    *   **Success Criteria:** Three independent modules build simultaneously; one simulated module failure does not stall the remaining two; total time < 2 hours.
+    *   **Constraint:** Must run before 8 PM to validate cost baseline.
+*   **G6 (Security & Stability):**
+    *   **Reviewer:** Security Lead (Independent of Builder).
+    *   **Focus:** Verify that sharded temp storage does not expose sensitive artifacts and that the flaky check bypass is logged, not silently ignored.
+    *   **Timing:** Weekday only (due to Security Lead availability).
+
+**Review Protocol**
+*   **Builder:** Implements Lane B.
+*   **Reviewer:** Senior Engineer (Rotation) reviews Lane B; Conductor reviews Lane A.
+*   **Independence:** The Security Lead must verify G6; they cannot be the same person who wrote the bypass logic in Lane B. The flaky check bypass requires explicit sign-off in the PR description citing the existing policy.
+
+**Landing & Human Decisions**
+*   **Merge Strategy:** Merge to `main` only after G6 approval. Do not use a merge train for this infrastructure change; land as a single atomic commit to avoid partial pipeline states.
+*   **Human Gate 1 (Security):** Security Lead must manually approve the G6 verification receipt before the PR merges. This is a hard stop; no auto-merge.
+*   **Human Gate 2 (Deployment):** Deployment to Staging requires manual sign-off. Given the 45-minute irreversible DB rollback risk, the initial production rollout must occur during a low-traffic window with the full Ops team present.
+*   **Rollback:** If the new pipeline corrupts artifacts, trigger the emergency DB rollback procedure immediately. This is a manual, high-cost operation; therefore, the G5 simulation must be exhaustive.
+
+**Risk Mitigation**
+*   **Flaky Check:** Explicitly logged as "skipped per policy" to prevent future confusion.
+*   **Budget Cap:** The new pipeline must include a hard timeout per module to prevent runaway costs if a shard hangs, ensuring we do not hit the compute cap again.
+*   **Ownership:** Changes to build scripts require acknowledgment from at least one of the three senior owners to ensure rotation continuity.
+
+**Next Step:** Await confirmation of the Senior Engineer's availability to start Lane A.

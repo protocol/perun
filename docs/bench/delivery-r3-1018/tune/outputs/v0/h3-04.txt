@@ -1,0 +1,50 @@
+### Delivery Plan: Webhook Signature v2 Migration
+
+**Strategy:** Zero-downtime dual-write with feature flag, synchronized log parser update, and staged partner validation.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Crypto & Dispatcher):** Implement v2 signing logic in `acme-events`. Add `WEBHOOK_SIG_VERSION` flag (default `v1`). Output: Patched dispatcher, unit tests for both schemes.
+*   **Lane B (Log Parser):** Update audit log parser to normalize v2 hash inputs for indexing. Output: Patched parser, regression tests ensuring index integrity.
+*   **Lane C (Integration Harness):** Build a local mock of the top three partners' validation logic using the updated integration guide. Output: Validation script runnable against staging.
+*   **Serialization Point:** Lane A and B must merge and pass G6 review before Lane C runs in the shared staging environment. Lane C requires the 02:00–05:00 UTC window.
+
+#### 2. Gates & Checks
+*   **G1 (Spec):** Define exact v2 payload structure and flag rollout schedule. Pin base SHA for all lanes.
+*   **G3 (Design):** ADR confirming no changes to the shared crypto library (finance constraint) and detailing the log parser synchronization strategy.
+*   **G4 (Implement):**
+    *   Lane A: Feature flag guards all v2 logic.
+    *   Lane B: Parser handles both v1 and v2 inputs immediately.
+*   **G5 (Verify):**
+    *   **Unit/Local:** Run Lane A and B tests locally. Verify log indexing with mixed v1/v2 data.
+    *   **Staging (02:00–05:00 UTC):** Deploy integrated SHA to staging. Enable flag for test tenants only. Run Lane C harness against real sandbox endpoints for top three partners. Capture "Validation Success" receipts.
+*   **G6 (Review):**
+    *   **Security:** Independent review of v2 implementation and key handling.
+    *   **Architecture:** Review log parser changes and rollback plan.
+    *   **QA:** Verify staging receipts and zero downtime during flag toggle simulation.
+
+#### 3. Review & Independence
+*   **Builder:** Implements Lanes A, B, and C.
+*   **Security Reviewer:** Independent of Builder; focuses on cryptographic correctness and key rotation safety.
+*   **Architect Reviewer:** Independent of Builder; focuses on the shared library constraint and log indexing integrity.
+*   **QA:** Independent verification of staging receipts and pipeline stability.
+
+#### 4. Landing & Human Decisions
+*   **Merge Train:**
+    1.  Merge Lane B (Parser) first to ensure backward compatibility.
+    2.  Merge Lane A (Dispatcher) with flag off.
+    3.  Merge Lane C (Tests) as documentation/validation artifacts.
+*   **Human Gates (Explicit Sign-off Required):**
+    *   **Lead Architect:** Approves the merged integration SHA and confirms log parser safety.
+    *   **Security Officer:** Approves the v2 cryptographic implementation and the specific time window for key revocation readiness.
+    *   **Deployment:** Both must sign off on the production deployment command.
+*   **Rollout:**
+    1.  Deploy to production with flag `v1` (no behavior change).
+    2.  Enable flag for 5% internal traffic; monitor logs.
+    3.  Enable for top three partners; confirm external validation.
+    4.  Global enablement.
+*   **Rollback:**
+    *   **Trigger:** Partner validation failure or log indexing corruption.
+    *   **Action:** Toggle flag back to `v1` immediately (code stays).
+    *   **Irreversible State:** If v2 events were processed incorrectly, execute manual database rollback (pre-approved procedure). Note: This reverts event states; coordinate with support for partner communication.
+
+**Timeline Constraint:** All staging validation must complete within the 02:00–05:00 UTC window prior to the end-of-month deadline.

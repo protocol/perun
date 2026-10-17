@@ -1,0 +1,59 @@
+### Delivery Plan: Per-Tenant Feature Entitlement Checks
+
+**Binding Facts & Constraints**
+*   **Deadline:** Next Tuesday (hard stop for pricing launch).
+*   **Approvers:** Jane Smith + Lead Architect (dual approval required for deploy).
+*   **Critical Risks:** Data leak via direct URL (backend gap); UI confusion (frontend gap); Staging network flake (false negatives); `global-rules.yaml` lock (serialization); Irreversible DB schema (none expected, but guarded).
+*   **Cost Guardrail:** CI is $45/run; minimize re-runs by verifying locally before push.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Backend Gateway Enforcement (Writer: Implementer 1)**
+    *   **Work:** Modify API gateway to intercept requests to restricted endpoints. Integrate call to central billing service. Implement 5-minute cache TTL logic.
+    *   **Constraint:** Must read/write `global-rules.yaml`. Must start outside business hours or acquire lock first.
+    *   **Dependency:** None.
+    *   **Parallelism:** Runs parallel to Lane B, but must merge before Lane C integration.
+
+2.  **Lane B: Frontend UI Hiding (Writer: Implementer 2)**
+    *   **Work:** Update dashboard components to query entitlement status before rendering premium tools/beta features. Ensure direct URL access triggers a redirect/error (defense in depth, though backend is primary).
+    *   **Constraint:** Reads entitlement schema; does not touch `global-rules.yaml`.
+    *   **Dependency:** None.
+    *   **Parallelism:** Runs parallel to Lane A.
+
+3.  **Lane C: Integration & Verification (Writer: QA Lead)**
+    *   **Work:** Merge A and B into a temporary integration branch. Execute end-to-end tests simulating free vs. premium tenants, including direct URL manipulation attempts.
+    *   **Constraint:** Must run on the exact merged SHA of A+B.
+    *   **Serialization:** Must wait for A and B to pass individual unit tests.
+
+**Gates & Checks**
+
+*   **G1 Spec (Now):** Define "restricted endpoints" list and "premium tools" UI components. Pin base SHA.
+*   **G2 Plan:** Confirm 5-min TTL implementation strategy. Assign budgets (max 3 CI runs per lane).
+*   **G4 Implement:**
+    *   Lane A: Unit tests for cache TTL and billing rejection.
+    *   Lane B: Component render tests for unauthorized states.
+    *   *Check:* Local stack up required before push to avoid CI cost on broken builds.
+*   **G5 Verify (Exact Revision):**
+    *   **Backend:** Verify rejection of direct URLs for free tenants. Ignore staging network flake *only* if local logs confirm billing service reached and rejected.
+    *   **Frontend:** Verify UI elements are absent; verify graceful error on forced navigation.
+    *   **Performance:** Ensure no latency spike >200ms due to billing calls.
+*   **G6 Review:**
+    *   **Security Review:** Independent review of Lane A (Gateway) by Security Hat (not Implementer 1). Focus: Can cache be bypassed? Is TTL strict?
+    *   **Code Review:** Peer review of Lane B.
+*   **G7 Integrate:** Merge A then B into integration branch. Run full suite once.
+*   **G8 Release (Human Gate):**
+    *   **Approvals:** Explicit sign-off from Jane Smith AND Lead Architect.
+    *   **Action:** Deploy to production.
+    *   **Rollback:** Immediate revert of merge commit if entitlement checks cause 5xx errors >1%.
+
+**Landing Strategy**
+
+*   **Merge Train:** Lane A merges first (critical security fix). Lane B merges second.
+*   **Human Decision:** Deployment is blocked until both approvers explicitly authorize G8. No auto-deploy.
+*   **Rollback Plan:** Since no DB schema changes are anticipated, rollback is a code revert. If DB state was touched (unexpected), weekend rollback procedure applies.
+*   **Post-Deploy:** Monitor billing service latency and 403 rates for 1 hour.
+
+**Risk Mitigation**
+*   **Flaky Staging Check:** QA must capture local validation logs to override false negatives.
+*   **Config Lock:** Lane A scheduled for off-hours or lock acquisition prioritized to prevent blocking Lane C.
+*   **Cache Lag:** Strict 5-minute TTL enforced via code review; test case includes upgrade scenario (free → premium) to verify access granted within window.

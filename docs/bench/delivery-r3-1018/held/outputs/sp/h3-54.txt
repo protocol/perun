@@ -1,0 +1,36 @@
+### Delivery Plan: Free Tier Sunset & Migration
+
+**1. Lanes & Parallelism**
+*   **Lane A (Communications - Immediate):** Trigger the 30-day notification sequence via the comms engine. This runs independently of code changes. Due to the known flaky check during high-volume bursts, this must be executed in throttled batches of 500 users/hour to ensure delivery verification.
+*   **Lane B (Billing Logic Preparation):** Develop the migration script targeting the 'LedgerCore' module. This includes logic to provision the 'Basic' plan with the introductory discount and update billing profiles.
+*   **Lane C (Analytics Freeze Coordination):** Schedule the mandatory freeze of analytics jobs. This is a serialized gate; no changes to the shared configuration file can occur while analytics are running.
+
+**2. Gates & Checks**
+*   **Gate 1 (Code Freeze & Config Lock):** Before modifying the shared configuration file, confirm the analytics job freeze is active. Verification: Manual confirmation from the Data Operations lead.
+*   **Gate 2 (CI Pipeline Execution):** Run the limited critical path test suite on the specific revision containing the migration script.
+    *   *Constraint:* This takes 4 hours. Must complete successfully before any deployment request.
+    *   *Check:* Verify test output confirms no data purging logic is triggered and billing profile updates are idempotent.
+*   **Gate 3 (Dual Approval):** Submit the verified revision for deployment.
+    *   *Requirement:* Explicit written approval from both the Finance Lead and the Chief Legal Officer.
+    *   *Constraint:* This process cannot be expedited. Deployment cannot proceed until both signatures are secured.
+
+**3. Review Strategy**
+*   **Code Review:** An independent senior engineer (not involved in Lane B) must review the migration script. Focus areas: Verification that the 'Basic' plan discount is applied correctly and absolute confirmation that no `DELETE` or purge operations exist in the transition logic.
+*   **Logic Audit:** The Legal team must review the final migration criteria against the ratified terms to ensure the "hard cutoff" logic matches the contractual obligation.
+*   **Pre-Flight Check:** A dry-run of the notification batch (Lane A) on a control group of 50 accounts to validate the comms engine stability before full throttled execution.
+
+**4. Landing & Merge**
+*   **Deployment Window:** Scheduled strictly after the 4-hour CI window and dual approval are secured, allowing a 6-hour buffer before the hard cutoff.
+*   **Execution:**
+    1.  Confirm analytics freeze.
+    2.  Deploy migration script to production.
+    3.  Execute migration script in monitored batches.
+*   **Human Decision Point:** If the comms engine fails verification during the dry-run or early batches, the Migration Lead must decide whether to pause the entire rollout or proceed with manual notification overrides.
+*   **Rollback Protocol:**
+    *   *Trigger:* Critical failure in billing updates or accidental data loss detection.
+    *   *Action:* Immediate halt of script. Initiate full system backup restoration.
+    *   *Impact:* 6 hours of downtime. This is the only reversal method; individual account reversal is impossible once the script commits.
+*   **Final Deliverable:** Generate the audit log immediately post-migration. This log must list all 12,000 accounts with status "Migrated," "Discount Applied," and "Data Intact." Any account not showing "Success" requires immediate manual triage before the month ends.
+
+**Summary of Critical Path:**
+Analytics Freeze → Config Edit → 4hr CI Test → Dual Approval (Finance + Legal) → Deployment → Throttled Migration → Audit Log Generation. Communications run parallel but must be stabilized before the final migration wave begins.

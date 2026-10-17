@@ -1,0 +1,34 @@
+### Delivery Plan: Robot Status Feed Integration
+
+#### 1. Work Lanes & Parallelization
+*   **Lane A (Data Pipeline):** Implement timestamp validation logic and the "stale-data" filter (2-second threshold). This includes the logic to gray out or remove icons when heartbeats cease.
+*   **Lane B (Dashboard UI):** Update the rendering engine to react to the new "stale" status flags from Lane A.
+*   **Lane C (Load Simulation):** Prepare high-load test scripts to simulate network latency spikes and mass robot silence events.
+
+**Parallel Execution:** Lanes A and B can proceed in parallel once the interface contract (status flag schema) is defined. Lane C runs independently until integration.
+**Serialization:** Lane C must wait for the integration of A and B. The "position-validity" fix (to reduce flakiness) must be applied before the final load simulation to avoid false negatives.
+
+#### 2. Gates & Checks
+*   **Gate 1 (Code Freeze):** All code frozen at revision `feat/robot-feed-candidate`. No changes allowed after this point without Senior Ops Manager approval.
+*   **Check 1 (Unit Tests):** Run locally and in CI. Must complete under 8 minutes to leave buffer for the 12-minute timeout. Focus on timestamp edge cases.
+*   **Check 2 (Integration Test):** Deploy to the staging environment within the 'Logistics-Prime' cluster. Verify the read-only config file lock does not block the new service.
+*   **Check 3 (The "Stale" Verification):** Manual observation by the Shift Lead. Simulate a robot dropping offline; verify icon grays out/vanishes within 2 seconds.
+*   **Check 4 (Load Test):** Execute Lane C scripts against staging. **Constraint:** If "position-validity" fails due to latency, the Shift Lead must manually approve the retry before the run is considered valid.
+*   **Critical Safety Gate:** Verification that the legacy cache entry is *not* deleted during this process. This check requires a diff review confirming no deletion commands exist in the migration script.
+
+#### 3. Review Process
+*   **Peer Review:** A senior engineer not involved in Lanes A or B reviews the code. They must specifically verify the 2-second logic and the handling of the read-only config file.
+*   **Operational Review:** The Shift Lead reviews the test results of the "stale" simulation and the load test stability. Their sign-off is required to waive the flaky test history.
+*   **Independence:** The Peer Reviewer cannot be the author of the timestamp logic. The Shift Lead's approval is independent of the engineering team's "pass" status.
+
+#### 4. Landing Strategy
+*   **Merge Protocol:** Merge to `main` only after Gate 4 passes and the Safety Gate is cleared.
+*   **Human Decision Required:** The Senior Operations Manager must explicitly authorize the production deploy. They will review the Shift Lead's sign-off and the Peer Review summary.
+*   **Deployment:** Deploy to 'Logistics-Prime' during a low-traffic window.
+*   **Rollback Plan:**
+    *   **Trigger:** If live monitoring shows stale data persisting >2 seconds or dispatcher confusion reports.
+    *   **Action:** Immediate revert of the `feat/robot-feed-candidate` merge.
+    *   **Constraint:** Do **not** attempt to delete the legacy cache entry during rollback. The rollback script must strictly revert code changes; cache deletion is irreversible and wipes audit trails.
+    *   **Post-Rollback:** Notify floor managers that the system has reverted to the previous state; manual position verification may be required until the next fix.
+
+This plan prioritizes safety (preventing stale data display) and audit integrity (preserving cache) while managing the constraints of CI timeouts and flaky tests through specific human-in-the-loop gates.

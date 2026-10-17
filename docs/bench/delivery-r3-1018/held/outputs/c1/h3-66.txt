@@ -1,0 +1,70 @@
+### Delivery Plan: SQL Migration Automation
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Data truncation steps cannot be reverted; schema validation is mandatory before execution.
+*   **Approvals:** Staging requires two senior engineers; Production requires VP of Engineering sign-off.
+*   **CI Cost/Flake:** 45-minute integration tests with a known flaky networking check causing false positives.
+*   **Legacy Debt:** Shared global temporary table causes intermittent false positives; must be isolated or cleaned.
+*   **Scope:** 80 sequential SQL files; execution order is critical.
+
+---
+
+#### Lanes & Parallelism
+
+**Lane 1: Format Conversion & Ordering (Builder)**
+*   **Work:** Parse 80 legacy scripts, convert to tooling format, enforce strict sequence based on date prefixes.
+*   **Isolation:** Dedicated worktree; read-only access to legacy scripts.
+*   **Parallelism:** Can run immediately.
+
+**Lane 2: Pre-Flight Validation Logic (Builder + Security)**
+*   **Work:** Implement schema state checks that block execution if the target state mismatches. Explicitly handle the global temporary table cleanup to eliminate false positives.
+*   **Constraint:** Must prove prevention of data loss on truncation steps.
+*   **Parallelism:** Runs parallel to Lane 1; must merge before Lane 3.
+
+**Lane 3: Pipeline Integration & Rollback Dry-Run (QA + Release)**
+*   **Work:** Update CI to invoke the new tool. Configure the "flaky network" check to retry automatically or mark as non-blocking for DB jobs only. Execute a full dry-run of the rollback mechanism on a staging clone.
+*   **Serialization:** Must wait for Lanes 1 & 2 to provide the executable artifact.
+*   **Critical Path:** This lane validates the "zero downtime" requirement.
+
+---
+
+#### Gates & Checks
+
+*   **G2 Plan (Now):** Confirm token budget for conversion lanes. Classify the repo as "Consumer" of the internal tool.
+*   **G4 Implement:**
+    *   **Base SHA:** Pin to current `main` before conversion starts.
+    *   **Output:** Patch per lane with tests included.
+    *   **Check:** Static analysis on generated migration files for syntax validity.
+*   **G5 Verify (Exact Revision):**
+    *   **Environment:** Staging clone with production dataset snapshot.
+    *   **Requirement:** "Local stack up" – the database must start, migrate, and serve queries green at the exact commit SHA.
+    *   **Specific Test:** Force the global temp table condition to verify cleanup logic; trigger the network flake to verify retry logic.
+    *   **Rollback Proof:** Execute a simulated failure post-truncation (on a safe dataset) to prove the system halts before data loss, or successfully reverts non-destructive steps.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Data Engineer (independent of Builder).
+    *   **Security:** AppSec review of the new tool's permissions and the irreversibility safeguards.
+    *   **Rubric:** Any risk of unvalidated truncation is a **Blocker**.
+
+---
+
+#### Landing & Human Decisions
+
+**Merge Strategy**
+*   **Train Land:** Use `scripts/merge_train.py`. Lanes 1 and 2 merge to an integration branch first. Lane 3 rebases on top.
+*   **Final Integration:** One aggregate G7 receipt required after all lanes merge, re-running the 45-minute test suite once on the final SHA.
+
+**Human Gates (Hard Stops)**
+1.  **Staging Deploy:** Requires explicit approval from **two senior engineers** after reviewing G5 receipts (specifically the temp table fix and network flake handling).
+2.  **Production Deploy:** Requires **VP of Engineering** sign-off. The request must present:
+    *   The exact SHA.
+    *   G5 proof of rollback capability.
+    *   Confirmation that the legacy script bundle is deprecated but preserved for emergency manual fallback.
+
+**Rollback Protocol**
+*   **Pre-Switch:** Legacy manual script bundle remains in the repo but is removed from the automated pipeline.
+*   **Failure Mode:** If the new tool fails mid-migration, the pipeline halts. Since truncation is irreversible, the "rollback" is a **restore from pre-migration backup**, not a code revert. The G5 receipt must confirm the backup/restore procedure is documented and tested.
+*   **Post-Deploy:** Monitor for 24 hours. If stable, archive legacy scripts to `/deprecated`.
+
+**Cost Control**
+*   Lane budgets capped before G4.
+*   CI optimization: If the network flake is decorrelated, the 45-minute run should not be re-triggered manually more than twice; otherwise, escalate to fix the flake permanently.

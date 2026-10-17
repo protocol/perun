@@ -1,0 +1,56 @@
+### Delivery Plan: Dark Mode Tokens
+
+**Objective:** Extend `acme-core` design tokens for dark mode, ensuring accessibility, backward compatibility, and support for the legacy Support Widget.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Token Core):** Define semantic color tokens (light/dark pairs) and contrast metadata.
+    *   *Constraint:* Must complete before Lanes B, C, and D.
+    *   *Writer:* Builder (Design System).
+*   **Lane B (Main Portal):** Integrate tokens into the main web app; implement user toggle.
+    *   *Parallel:* Can run alongside C and D once Lane A is merged.
+*   **Lane C (Sales Widget):** Integrate tokens; verify dynamic theme switching.
+    *   *Parallel:* Can run alongside B and D.
+*   **Lane D (Support Widget - Legacy):** Implement static fallback asset generation step for the legacy engine.
+    *   *Serialization:* Requires Lane A complete. Distinct build step from C.
+*   **Lane E (QA & Performance):** Optimize visual regression suite to run under the 30-minute CI timeout.
+    *   *Parallel:* Can start immediately to baseline current flakiness, then verify new modes.
+
+#### 2. Gates & Checks
+*   **G1 Spec:** Define token schema, accessibility contrast ratios (WCAG AA/AAA), and the "static fallback" format for the Support Widget.
+    *   *Review:* Product Analyst + Senior Staff Engineer (for token schema).
+*   **G3 Design (ADR):** Document the backward compatibility strategy (how old widget versions ignore new tokens without breaking).
+    *   *Review:* Architect + Senior Staff Engineer.
+*   **G4 Implement:**
+    *   Lane A: Update shared token config.
+    *   Lane D: Add static generation script.
+    *   *Check:* Type checking and unit tests for token resolution.
+*   **G5 Verify (Exact Revision):**
+    *   **Accessibility:** Automated contrast check on all token pairs.
+    *   **Visual Regression:** Run optimized suite on the specific SHA. If timeout >28 mins, fail immediately (do not wait for hard 30m kill).
+    *   **Legacy Check:** Verify Support Widget build produces the static fallback asset correctly.
+    *   **Integration:** Spin up main app and both widgets; verify no light-mode regressions.
+*   **G6 Review:**
+    *   **Token Config:** Mandatory review by **Senior Staff Engineer** (independent of Builder).
+    *   **Visuals:** QA Lead verifies screenshots against spec.
+    *   **Security/Privacy:** Ensure no PII leaked in theme preferences.
+
+#### 3. Review Strategy
+*   **Token Configuration:** Reviewed *only* by a Senior Staff Engineer. The Builder cannot self-approve or peer-approve this file.
+*   **Widget Integrations:** Reviewed by respective widget maintainers (independent of the Core Builder).
+*   **Visual Regression:** QA verifies the *receipts* (images/logs) at the exact SHA, not just "green CI."
+
+#### 4. Landing & Human Decisions
+*   **Merge Train:**
+    1.  Land Lane A (Tokens) first. Wait for green CI on all three downstream consumers (Portal, Sales, Support) in the integration branch.
+    2.  Land Lanes B, C, D simultaneously or sequentially once A is stable in the registry.
+*   **Human Gates:**
+    *   **Approval to Merge Token Config:** Requires explicit approval from a Senior Staff Engineer.
+    *   **Production Deploy:** Owner approval required to flip the feature flag or publish the new package version.
+*   **Rollback Plan:**
+    *   If tokens break builds: Revert Lane A commit immediately; downstream builds will fail closed (safe).
+    *   If visual bugs appear: Disable dark mode via feature flag in the Portal; revert widget packages to previous version.
+*   **Release:**
+    *   Publish new `acme-core` package version.
+    *   Widgets consume the update on their individual schedules (backward compatible).
+
+**Risk Mitigation:** The 30-minute CI timeout is a known failure point. Lane E must prove the suite runs in <25 minutes before G5 counts as passed. If the optimized suite still times out, manual verification on a local clone is required before merge, documented as a temporary exception.

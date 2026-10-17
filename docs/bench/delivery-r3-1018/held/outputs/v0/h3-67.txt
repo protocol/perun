@@ -1,0 +1,54 @@
+### Delivery Plan: PII Masking for Staging Data Snapshots
+
+**Objective:** Automate deterministic masking of emails, phones, and addresses in the nightly staging refresh before the 15th.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Schema & Config Isolation) [Serialized First]:**
+    *   **Actor:** Builder.
+    *   **Task:** Analyze the shared configuration file. Design a backward-compatible extension or a sidecar config pattern that allows the masking script to read rules without breaking the three downstream reporting services.
+    *   **Constraint:** Must not alter the existing schema consumed by downstream services.
+*   **Lane B (Masking Logic Implementation) [Parallel after Lane A Design]:**
+    *   **Actor:** Builder (different worktree).
+    *   **Task:** Implement the deterministic masking algorithm (salted hash or seeded encryption) for emails, phones, and addresses. Ensure ID consistency (same user ID = same masked value).
+    *   **Constraint:** Logic must complete within 40 minutes to provide a 5-minute buffer against the 45-minute cluster hard limit.
+*   **Lane C (Flake Mitigation & Validation) [Parallel]:**
+    *   **Actor:** QA.
+    *   **Task:** Isolate the "flaky network check." Implement a retry-with-backoff mechanism or a localized mock for the validation phase to prevent false negatives. Define the success criteria for "data masked" vs. "network reachable."
+
+#### 2. Gates & Checks
+*   **G0/G1 (Spec & Plan):**
+    *   **Check:** Verify the proposed config change in Lane A does not break downstream schemas (dry-run analysis). Confirm the deterministic seed strategy.
+    *   **Output:** Approved Design Doc + Pin Base SHA.
+*   **G2 (Budget & Time):**
+    *   **Check:** Explicit token/cost cap for the lane execution.
+    *   **Hard Gate:** Performance benchmark proving the new job completes in <40 minutes on a representative dataset subset. Failure here blocks G4.
+*   **G4 (Implementation):**
+    *   **Check:** Unit tests for masking consistency (ID collision tests) and config backward compatibility.
+    *   **Revision:** Immutable SHA per lane.
+*   **G5 (Verification):**
+    *   **Check:** Run the full pipeline in an isolated staging clone.
+    *   **Criteria:**
+        1.  Job completes <45 mins.
+        2.  No PII found in output (regex scan).
+        3.  Downstream reports render correctly using the unmodified config schema.
+        4.  Flaky network check passes reliably (or is bypassed safely).
+*   **G6 (Security Review):**
+    *   **Reviewer:** Independent Security Engineer (not the Builder).
+    *   **Focus:** Entropy of the masking (irreversibility), seed management, and confirmation that no raw data leaks to logs.
+
+#### 3. Review Strategy
+*   **Code Review:** `deep-code-review` focused on data handling paths.
+*   **Independent QA:** Must verify the "deterministic" requirement by running the job twice on the same input and asserting byte-for-byte identical outputs for masked fields.
+*   **Downstream Impact:** The Platform Reliability Team Lead must sign off on the config compatibility test results before merge.
+
+#### 4. Landing & Human Gates
+*   **Integration:** Merge Lane A, B, and C into a temporary integration branch. Run one final end-to-end test on this exact SHA.
+*   **Human Approval (Marcus Thorne):**
+    *   **Trigger:** Once G6 is green and the integration test passes.
+    *   **Action:** Marcus Thorne must provide explicit approval in the ticketing system. This is a hard gate; no auto-merge.
+*   **Deployment:**
+    *   Deploy to the nightly job scheduler.
+    *   **Rollback Plan:** If the job exceeds 45 minutes or crashes, the scheduler automatically terminates. The rollback procedure is to revert the scheduler config to point to the previous stable script version (manual intervention required to flip the pointer back if the auto-terminate doesn't clear the state).
+*   **Post-Deploy (G9):** Monitor the first three nightly runs. Verify no penalty fees are incurred and no downstream report failures are logged.
+
+**Risk Note:** The shared config file is the highest blast-radius element. Lane A's solution must be proven safe before any masking code is merged.

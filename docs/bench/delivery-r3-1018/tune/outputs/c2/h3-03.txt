@@ -1,0 +1,60 @@
+**Delivery Plan: Atlas Load Balancer TLS 1.3 Upgrade**
+
+**Strategy & Constraints**
+This is a high-risk migration with irreversible deployment consequences (1-hour freeze on revert). We will execute a **Blue-Green swap** during the Tuesday maintenance window. No direct production edits; all changes flow through the `network-ops` repository. The "certificate-validation" flake requires a specific retry strategy, not a bypass.
+
+**Lane Decomposition & Ownership**
+
+1.  **Lane A: Configuration & Synthetic Validation (Builder: Network Engineer)**
+    *   **Work:** Update load balancer config to enable TLS 1.3; update CI pipeline to include TLS 1.3 synthetic traffic.
+    *   **Parallelism:** Can run immediately.
+    *   **Serialization:** Must complete before Lane B final sign-off.
+    *   **Cost Control:** Limit synthetic runs to 2 per candidate SHA to manage the 200-credit cost.
+
+2.  **Lane B: Downstream Certificate Verification (Owner: Product Team Leads)**
+    *   **Work:** Twelve teams validate their certificates against a staging environment mirroring the new TLS 1.3 config.
+    *   **Parallelism:** All 12 teams run in parallel.
+    *   **Serialization:** Must provide "PASS" receipts before G8 (Release).
+    *   **Trigger:** Starts once Lane A provides the staging endpoint details.
+
+3.  **Lane C: Rollback Drill & Runbook (Owner: SRE Lead)**
+    *   **Work:** Execute the blue-green revert in a pre-production sandbox; document the exact commands and timing. Verify the "1-hour freeze" trigger behavior is understood.
+    *   **Parallelism:** Independent of A and B.
+    *   **Requirement:** Must demonstrate a successful revert < 5 minutes.
+
+**Gates & Checks**
+
+*   **G1 (Spec):** Define exact TLS 1.3 cipher suites and fallback behavior. Pin base SHA of `network-ops` repo.
+*   **G3 (Design):** ADR signed by Security Lead confirming cipher suite selection meets audit requirements.
+*   **G4 (Implement):** Lane A commits config. CI runs (45 mins).
+    *   *Flake Handling:* If `certificate-validation` fails, trigger one manual re-run. If it fails twice, halt for Network Architect analysis (do not auto-retry indefinitely).
+*   **G5 (Verify):**
+    *   **Code:** CI green on exact candidate SHA.
+    *   **Functional:** Lane B teams submit signed receipts confirming handshake success on staging.
+    *   **Resilience:** Lane C submits video/log evidence of successful rollback drill.
+*   **G6 (Review):**
+    *   **Security Review:** Independent Security Lead (not the Builder) verifies config diff.
+    *   **Architecture Review:** Senior Network Architect (Jane Smith) reviews the change and the flake analysis.
+    *   **Rule:** Builder cannot approve their own config.
+*   **G7 (Integrate):** Merge to `main` by Jane Smith. This updates the Blue environment.
+*   **G8 (Release - Human Gate):**
+    *   **Approvers:** Security Lead AND Platform Director (Dual Sign-off required).
+    *   **Action:** Traffic switch from Green (old) to Blue (new) during Tuesday window.
+    *   **Condition:** All Lane B receipts present; Lane C drill passed.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Single PR to `main`. No merge train needed for this atomic config change, but strict serialization of approvals.
+*   **Human Decisions:**
+    1.  Jane Smith approves merge (G7).
+    2.  Security Lead + Platform Director authorize the traffic flip (G8).
+*   **Rollback Protocol:**
+    *   **Trigger:** Any spike in handshake failures or transaction blocks post-swap.
+    *   **Action:** Immediate traffic reversion to Green environment (pre-TLS 1.3).
+    *   **Consequence:** Acknowledge the automatic 1-hour deployment freeze. No further changes attempted until the window closes or the freeze lifts.
+    *   **Owner:** SRE Lead executes; Platform Director declares the incident.
+
+**Risk Mitigation**
+*   **Flaky Check:** Explicitly budget for one re-trigger; second failure escalates to Architect.
+*   **Cost:** Cap synthetic runs; rely on downstream team validation (Lane B) for broad coverage rather than exhaustive central synthetic tests.
+*   **Irreversibility:** The 1-hour freeze makes the "Blue-Green" switch critical; if Blue fails, we revert to Green instantly, accepting the freeze rather than attempting a hotfix during the window.

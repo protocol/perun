@@ -1,0 +1,82 @@
+### Delivery Plan: Overnight Kiosk Configuration Update
+
+**Binding Facts & Constraints**
+*   **Window:** 02:00–04:00 Local Time (NA). Hard deadline; failure means offline units until next cycle.
+*   **Scope:** Pricing matrix, loyalty banner, tax rates (3 new jurisdictions). Full fleet (no partial roll-out).
+*   **Approvals:** Dual approval required (Operations Lead + Compliance Officer) before queue activation.
+*   **Verification:** Checksum match against legal team's signed artifact is mandatory.
+*   **Risk:** Rollback script is irreversible post-04:00. Certificate file expires in 10 days (must not be touched).
+*   **Cost:** CI pipeline is 45 mins/expensive; avoid unnecessary triggers.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Artifact Preparation & Validation (Serial Pre-Work)**
+*   **Actor:** Builder (Config Engineer).
+*   **Work:** Assemble the payload (pricing, banner, tax rates). Generate the checksum. Compare locally against the legal team's signed artifact hash. Verify the shared certificate file is untouched in the diff.
+*   **Output:** A single configuration bundle + checksum report.
+*   **Constraint:** Must complete before G4. No CI trigger yet.
+
+**Lane 2: Staging Syntax Validation (Single Trigger)**
+*   **Actor:** QA (Automated).
+*   **Work:** Trigger the CI pipeline **once** against the exact bundle from Lane 1. Validate syntax against all regional schemas.
+*   **Constraint:** Do not run on intermediate drafts. Only run on the final candidate to save compute credits.
+*   **Output:** CI pass receipt (Green) at exact SHA.
+
+**Lane 3: Rollback & Failure Simulation (Parallel to Lane 2)**
+*   **Actor:** QA (Manual/Tabletop).
+*   **Work:** Verify the rollback logic in a sandbox. Confirm that a failed validation unit reverts to the previous stable config automatically. Simulate the 04:00 cutoff behavior to ensure no "zombie" states.
+*   **Output:** Rollback verification receipt.
+
+**Lane 4: Deployment Orchestration (Gated)**
+*   **Actor:** Conductor (Release Engineer).
+*   **Work:** Prepare the queue job for the 02:00 window. Configure the "all-or-nothing" validation flag.
+*   **Constraint:** Waits for Lanes 1, 2, and 3.
+
+---
+
+#### Gates & Checks
+
+*   **G1 (Spec):** Define the exact file paths for tax rates and banners. Pin the base SHA of the config repo.
+*   **G3 (Design):** Confirm the checksum algorithm matches the legal team's standard. Explicitly list the certificate file as "excluded from change."
+*   **G5 (Verify):**
+    *   **Check 1:** Checksum of the bundle == Legal Artifact Hash.
+    *   **Check 2:** CI Pipeline Green (Syntax valid for all regions) at the exact SHA.
+    *   **Check 3:** Rollback simulation successful.
+*   **G6 (Review):**
+    *   **Reviewer 1 (Independent):** Security/Compliance agent verifies the checksum report and confirms no certificate rotation occurred.
+    *   **Reviewer 2 (Independent):** Senior Engineer verifies the CI logs and rollback logic.
+    *   **Condition:** Both must approve. Builder cannot self-approve.
+
+---
+
+#### Landing & Human Decisions
+
+**Integration (G7):**
+Once G6 is passed, the bundle is frozen. No further commits allowed until the next cycle.
+
+**Human Gates (G8 - Mandatory):**
+Before the 02:00 window opens, the Conductor must present the following to the humans:
+*   **Issue:** Activate Overnight Kiosk Deployment Queue.
+*   **Evidence:** Checksum match receipt, CI Green receipt, Rollback verification.
+*   **Decision Required:**
+    1.  **Operations Lead:** Approve queue activation.
+    2.  **Compliance Officer:** Approve queue activation.
+*   *Note:* Without both signatures, the queue remains dormant.
+
+**Execution:**
+*   Queue activates at 02:00 Local Time.
+*   System monitors validation per unit.
+*   Auto-rollback triggers immediately on any unit failure.
+
+**Rollback Strategy:**
+*   **Automatic:** Per-unit revert on validation failure.
+*   **Manual/Catastrophic:** If >5% failure rate detected by 03:30, halt the queue. **Warning:** Cannot revert the *queue state* after 04:00; failed units remain offline.
+
+**Post-Deployment (G9):**
+*   Verify fleet status at 04:15.
+*   Log any offline units for manual intervention during the day.
+
+**Cost Control:**
+*   Exactly one CI run permitted. Re-runs require Conductor justification.

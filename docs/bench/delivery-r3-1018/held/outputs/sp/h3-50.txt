@@ -1,0 +1,42 @@
+### Delivery Plan: Customer Contact Data Normalization
+
+#### 1. Lanes and Parallelism
+*   **Lane A (Data Integrity Team):** Develop the normalization script within the `CoreAccounts` module. This lane owns the logic for phone parsing (stripping non-digits) and address expansion (mapping abbreviations to full suffixes).
+*   **Lane B (Platform Lead):** Review the proposed interface changes against the shared validation library. Since schema changes require approval, this lane runs in parallel with script development but must complete before integration testing.
+*   **Lane C (QA/Validation):** Prepare a sanitized subset of production data (approx. 10k records) representing known edge cases (parentheses, dashes, mixed abbreviations) for safe testing.
+
+**Serialization Constraint:** Lane A cannot merge to staging until Lane B approves the interface compatibility. Lane C cannot execute the full dry-run until Lane A's script is frozen.
+
+#### 2. Gates and Checks
+*   **Gate 1: Logic Freeze (Local/Dev):**
+    *   *Revision:* Feature branch head.
+    *   *Check:* Script must pass unit tests on synthetic data covering all known formats.
+    *   *Constraint:* Do not run against the flaky CI whitespace check yet; bypass locally to avoid false negatives.
+*   **Gate 2: Interface Approval (Pre-Staging):**
+    *   *Revision:* Feature branch head.
+    *   *Check:* Platform Lead signs off that the shared validation library remains unaffected or that changes are backward compatible.
+    *   *Stop Condition:* No deployment proceeds without this explicit written approval.
+*   **Gate 3: Dry-Run Validation (Staging):**
+    *   *Revision:* Approved feature branch deployed to Staging.
+    *   *Check:* Run script against the sanitized subset (Lane C). Verify zero data loss and idempotency (re-running produces identical results).
+    *   *Constraint:* Since staging deployments are irreversible after migration starts, this step uses a disposable staging clone or a pre-migration snapshot. If the script fails, the environment is discarded, not restored.
+*   **Gate 4: Pre-Flight Snapshot (Production):**
+    *   *Revision:* Production `main` branch.
+    *   *Check:* Full database backup taken immediately before execution.
+    *   *Timing:* Must complete at least 5 hours before the nightly export job window opens.
+
+#### 3. Review Process
+*   **Code Review:** Conducted by a senior engineer *not* on the Data Integrity team to ensure objective scrutiny of the parsing logic. They must verify the "ten digits only" and "full suffix" requirements are met without regex over-matching.
+*   **Safety Review:** Conducted by the Platform Lead specifically for the shared library impact.
+*   **Independence:** The Code Reviewer cannot be the script author. The Safety Reviewer cannot be the Code Reviewer.
+
+#### 4. Landing Strategy
+*   **Merge Window:** Merge to `main` only after Gate 3 passes and the nightly export job from the previous day has successfully completed. This provides a full 24-hour buffer before the next critical run.
+*   **Execution:**
+    1.  Deploy to Production.
+    2.  Trigger manual backup verification.
+    3.  Execute normalization script.
+    4.  Run a row-count checksum and sample verification immediately.
+*   **Human Decision Point:** If the row-count checksum differs from the pre-run count, the operator must decide whether to abort and restore from backup or investigate specific record failures. No automated rollback is permitted due to the irreversible nature of the staging-like migration step in prod.
+*   **Rollback Plan:** If data corruption is detected post-execution, initiate immediate restore from the Gate 4 backup. The script will be disabled until a patch is developed.
+*   **Post-Landing:** Monitor the nightly export job logs. If the flaky CI whitespace check triggers in future pipelines, it is to be investigated separately and not treated as a blocker for this data fix unless accompanied by actual data errors.

@@ -1,0 +1,64 @@
+**Delivery Plan: Decouple Billing and Inventory Schemas**
+
+**Strategy:** Zero-downtime migration via a dual-write, event-sync pattern. We will not split the database physically until data consistency is proven in production.
+
+### Lanes & Parallelism
+
+**Lane 1: Configuration & Connection Refactor (Builder A)**
+*   **Work:** Split the shared configuration file to support distinct connection strings (`BILLING_DB_URL`, `INVENTORY_DB_URL`). Update service initialization to read these new variables while pointing both to the *existing* single database instance initially.
+*   **Parallel:** Yes. Independent of schema changes.
+*   **Output:** PR with config changes and updated service bootstrap code.
+
+**Lane 2: Event Bridge Implementation (Builder B)**
+*   **Work:** Implement the event-driven synchronization layer. Create producers for Billing/Inventory write events and consumers that apply changes to the counterpart namespace. Initially, these will be no-ops or log-only until the schema split occurs.
+*   **Parallel:** Yes.
+*   **Output:** PR with event schema definitions and sync logic (disabled behind a feature flag).
+
+**Lane 3: Schema Namespace Migration (Builder C - Serialized)**
+*   **Work:** Create new migration scripts that introduce prefixed tables/views (e.g., `billing.orders`, `inventory.stock`) within the *current* database. Replace direct foreign keys with logical IDs validated by the Event Bridge.
+*   **Serialization:** Must wait for Lane 1 & 2 to be merged and deployed. Cannot run until Lane 1's config is live.
+*   **Output:** Migration script requiring manual approval.
+
+**Lane 4: Independent QA & Security (QA / Sec)**
+*   **Work:** Verify data integrity after simulated dual-writes. Audit the event sync for race conditions and data loss vectors.
+*   **Trigger:** Runs on the exact SHA of the merged integration branch (G7).
+*   **Constraint:** Must bypass the flaky 15% check by running the validation suite 3 times and requiring 2/3 passes, or isolate the flaky test to run separately without blocking the gate.
+
+### Gates & Checks
+
+*   **G1 (Spec):** Define the exact event payload schema and the "cut-over" procedure. Pin base SHA.
+*   **G3 (Design):** Architect review of the event-driven consistency model. Must prove no data loss during partial failure.
+*   **G4 (Implement):** Code complete. Unit tests must cover the sync logic.
+*   **G5 (Verify):**
+    *   Run integration tests on the production mirror. **Cost Control:** Limit to one full run per lane; use unit tests for iteration.
+    *   **Flake Mitigation:** If the known flaky check fails, auto-retry once. If it fails twice, mark as "investigate" but do not block if other critical paths pass (unless data integrity is involved).
+    *   **Timing:** All migration dry-runs must complete before 02:00 UTC to ensure a backup exists prior to any potential irreversible change.
+*   **G6 (Review):**
+    *   **Code:** Peer review (Billing dev reviews Inventory code and vice versa).
+    *   **Security:** Independent AppSec review of the new connection handling and event injection points.
+    *   **Architecture:** Dave Miller (Lead Architect) must review the final migration plan.
+
+### Landing & Human Decisions
+
+**Merge Strategy:**
+1.  Merge Lane 1 (Config) and Lane 2 (Event Bridge) first. Deploy to staging, then production (feature flagged off).
+2.  Once stable, merge Lane 3 (Schema Migration).
+3.  **Human Gate (G8):** Dave Miller must manually approve the execution of the migration script on production. This is a hard stop.
+
+**Execution Window:**
+*   Must occur between 03:05 UTC (post-backup) and 06:00 UTC (pre-business hours).
+*   The migration script will perform a "dual-write" verification phase before switching reads to the new namespaces.
+
+**Rollback Plan:**
+*   **Pre-condition:** Verify 03:00 UTC backup exists before starting.
+*   **Failure Mid-Migration:** The script must be transactional. If any step fails, it aborts and reverts the session to the pre-migration state using the existing data (no restore needed if atomic).
+*   **Post-Cutover Failure:** If data corruption is detected after switching reads:
+    1.  Immediately flip the feature flag back to "monolithic mode" (enabled by Lane 1 config).
+    2.  Services revert to reading the original tables.
+    3.  Restore from the 03:00 UTC backup only if data divergence occurred (last resort due to data loss window).
+
+**Post-Deploy (G9):**
+*   Monitor event lag and error rates for 24 hours.
+*   Verify no foreign key violations in logs.
+
+**Cost Note:** Total CI cost estimated at $600 (3 runs). Any additional runs require explicit budget approval.

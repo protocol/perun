@@ -1,0 +1,44 @@
+**Ruling: Scope is fixed to 'billing-reporting' and 'audit-log' only.** "Real-time-trading" and "user-checkout" are strictly excluded from this change set to mitigate latency risk. Any automation touching them is a failure.
+**Ruling: Rollback is human-gated, not automatic.** Automatic rollback based on CPU alerts risks thrashing during transient spikes. Alerts will trigger a page to the on-call engineer who must execute the rollback script within 15 minutes.
+**Ruling: CI runs once per candidate SHA.** To respect the $12 cost and 45-minute duration, we will validate locally and in a staging fork before triggering the single production pipeline run.
+
+### Delivery Plan
+
+**Lane 1: Configuration & Isolation (Builder)**
+*   **Work:** Edit `global-mesh-policy.yaml` to inject the sidecar only for namespaces `billing-reporting` and `audit-log`. Explicitly add deny-rules for `real-time-trading` and `user-checkout`.
+*   **Constraint:** Edits occur outside business hours to avoid file locks.
+*   **Parallelism:** Runs independently; must complete before Lane 2.
+
+**Lane 2: Safety Verification (QA)**
+*   **Work:** Execute the network policy validator. If the known flaky check fails, retry exactly once. If it fails a second time, halt and flag for manual review (do not auto-retry further).
+*   **Verification:** Confirm via dry-run that no pods in excluded namespaces match the injection selector.
+*   **Dependency:** Requires the exact SHA from Lane 1.
+
+**Lane 3: Observability Setup (Product Analyst)**
+*   **Work:** Define the specific error rate and CPU throttling queries for the Friday report. Set up alerts to page on-call if thresholds are breached post-deploy.
+*   **Dependency:** None, but must be ready before Lane 4.
+
+**Gates & Checks**
+*   **G2 Plan (Now):** Approval of this plan by the requester.
+*   **G4 Implement:** Builder commits to a feature branch. Base SHA recorded.
+*   **G5 Verify:**
+    *   Run CI pipeline **once** on the feature branch SHA.
+    *   QA validates the "deny-rules" logic in a non-production clone.
+    *   **Hard Condition:** Pipeline must pass security scan. Flaky check must pass within 2 attempts.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Architect 1 (Security focus).
+    *   **Reviewer:** Senior Architect 2 (Latency focus).
+    *   **Independence:** Neither reviewer is the Builder. Both must approve the exact SHA.
+
+**Landing Strategy**
+*   **Merge:** After G6 approval, the Conductor prepares the merge to the integration branch.
+*   **Human Gate (G8):** Two senior architects must manually approve the promotion to production (per cluster rules). This is a hard stop; no automation bypasses this.
+*   **Deployment:** Deploy during low-traffic window.
+*   **Rollback:** If CPU throttling alerts fire, the on-call engineer runs the pre-approved rollback script to revert the `global-mesh-policy.yaml` to the previous SHA.
+*   **Reporting:** Friday deliverable is a generated report showing sidecar presence in target namespaces and error rate graphs compared to baseline.
+
+**Risks & Mitigation**
+*   **Irreversible Image Push:** Since the image push is irreversible, we verify the *configuration* injection strictly. If the config is wrong, we revert the config; the unused image remains in the registry but causes no harm.
+*   **Frozen Branch:** The `real-time-trading` branch is untouched. We verify our changes do not attempt to merge into it.
+
+**Next Step:** Requester confirms the "Human-gated rollback" ruling and authorizes the work to begin outside business hours.

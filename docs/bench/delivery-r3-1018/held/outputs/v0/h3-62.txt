@@ -1,0 +1,55 @@
+### Delivery Plan: Fraud Score Integration
+
+**G0/G1: Intake & Spec (Serialized)**
+*   **Owner:** Product Analyst + Conductor.
+*   **Action:** Finalize the "fail-open" risk acceptance. The requirement to allow signups if the risk service is unreachable contradicts the "hard-fail" for high-risk; we must explicitly document that "unreachable = low-risk" is the accepted business logic. Define the exact JSON contract for the risk engine and the timeout threshold (140ms internal buffer to meet 150ms SLA).
+*   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+
+**G2/G3: Plan & Design (Serialized)**
+*   **Owner:** Architect + Security.
+*   **Action:** Design the circuit breaker pattern to protect the 500 req/s limit. Define the "manual-review" data flow accounting for the 30-second read-replica lag (reviewers must be warned of staleness).
+*   **Output:** ADR detailing the fallback logic, rate-limiting strategy, and audit log immutability constraints.
+
+**G4: Implementation (Parallel Lanes)**
+*   **Lane A (Core Logic):** Builder implements the `UserRegistrationPipeline` hook.
+    *   *Constraint:* Must implement the 140ms timeout and "fail-open" fallback.
+    *   *Worktree:* Isolated `feat/fraud-integration-core`.
+*   **Lane B (Dashboard & Queue):** Builder updates the manual-review dashboard.
+    *   *Constraint:* Add UI warning for 30s data lag; ensure provisional users appear immediately in the queue source.
+    *   *Worktree:* Isolated `feat/fraud-dashboard-update`.
+*   **Lane C (Protection):** Builder implements the rate-limit counter/circuit breaker.
+    *   *Constraint:* Prevent IP bans from the shared fraud-service.
+    *   *Worktree:* Isolated `feat/fraud-rate-limiter`.
+
+**G5: Verification (Parallel, Exact Revision)**
+*   **QA Lane:**
+    *   Run unit tests for timeout logic and fallback behavior.
+    *   **Critical:** Simulate risk-service outage to verify "fail-open" does not block legitimate users.
+    *   **Critical:** Verify high-risk scores strictly block creation.
+    *   **UI Check:** Confirm dashboard warning about stale data is visible.
+    *   *Note:* Do not run full 45-min regression yet; use targeted suites to avoid cost penalties.
+*   **Security Lane:**
+    *   Review circuit breaker logic to ensure it cannot be bypassed to flood the external service.
+    *   Verify audit logs capture the "fail-open" decision for later forensic analysis.
+
+**G6: Review (Independent)**
+*   **Reviewer 1 (Backend Lead):** Reviews Lanes A and C. Focus: Latency impact on signup flow and rate-limit safety.
+*   **Reviewer 2 (Head of Trust & Safety):** Reviews Lane B and the "fail-open" logic. Focus: Operational impact on the manual review team and risk exposure.
+*   **Constraint:** Builder never reviews Builder. Security findings on "fail-open" logic are High severity; requires explicit written acceptance from the Head of Trust & Safety to proceed.
+
+**G7: Integration**
+*   **Action:** Merge Lanes A, B, and C into a throwaway integration branch.
+*   **Check:** Run the *full* 45-minute regression suite once on this exact merged SHA to catch cross-lane database seeding issues.
+*   **Receipt:** Green build + QA/Security sign-off.
+
+**G8: Release (Human Gated)**
+*   **Decision:** Dual approval required (Backend Lead + Head of Trust & Safety).
+*   **Action:** Deploy behind a feature flag initially.
+*   **Rollback Plan:** Since audit logs are irreversible, rollback stops *new* signups from using the fraud check (reverting to pure "fail-open") but cannot delete created users. A data restoration procedure is required only if corrupted data was written, which is unlikely given the "fail-open" design.
+
+**Timeline & Risks**
+*   **Deadline:** Live before Monday.
+*   **Risk:** The 45-minute CI pipeline creates a tight feedback loop. Any failure in G7 pushes the deadline.
+*   **Mitigation:** Lanes A, B, and C must pass local targeted tests before triggering CI. If the full regression fails, immediate triage is required; do not re-run blindly.
+
+**Next Step:** Conductor requests G0/G1 spec approval from the owner to confirm the "fail-open" risk acceptance.

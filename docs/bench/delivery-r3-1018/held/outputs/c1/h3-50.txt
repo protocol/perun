@@ -1,0 +1,61 @@
+### Delivery Plan: Normalize Customer Contact Data
+
+**Binding Facts & Constraints**
+*   **Locked Scope:** `CoreAccounts` module; shared validation library (requires Platform Lead approval for schema changes).
+*   **Irreversible Step:** Staging deployment once migration starts (requires full DB restore to undo).
+*   **Cost/Risk:** Nightly export is 4hrs/high-cost; retries discouraged. CI has a known flaky whitespace check.
+*   **Approvers:** Platform Lead (library/schema), Data Integrity Lead (migration execution), Owner (production deploy).
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Specification & Idempotency Design (Serial Start)**
+*   **Actor:** Product Analyst + Builder
+*   **Work:** Define exact regex/logic for phone (strip non-digits) and address (expand suffixes). Design the script to be strictly idempotent (safe to re-run). Define "no data loss" verification (row count checksum, null-checks).
+*   **Output:** Testable spec with acceptance criteria; dry-run logic plan.
+*   **Gate:** G1 Spec approved by Data Integrity Lead.
+
+**Lane 2: Implementation & Unit Testing (Parallel to Lane 3 after G1)**
+*   **Actor:** Builder (isolated worktree)
+*   **Work:** Write the normalization script and a local harness to run it against a dataset snapshot. Implement logging for every transformed row. Exclude the shared validation library unless absolutely necessary; if needed, isolate changes.
+*   **Check:** Unit tests proving idempotency (run twice, same result) and data preservation.
+*   **Gate:** G4 Implement (Green unit tests, no schema changes yet).
+
+**Lane 3: Platform Review & Schema Strategy (Parallel to Lane 2)**
+*   **Actor:** Security + Platform Lead (Human)
+*   **Work:** Review if the script touches the shared validation library. If yes, present the minimal change request. If no, confirm no schema drift.
+*   **Gate:** G3 Design / G6 Review (Platform Lead sign-off on library impact).
+
+**Lane 4: Staging Migration & Verification (Serialized after Lanes 2 & 3)**
+*   **Actor:** QA (independent) + Builder
+*   **Work:** Deploy to Staging. **Critical:** Take a pre-migration snapshot. Run the script. Verify row counts, sample data accuracy, and that the nightly export job succeeds on this data.
+*   **Check:** Ignore the known flaky CI whitespace check (documented exception); verify actual data integrity manually or via robust checksums.
+*   **Gate:** G5 Verify (Export job success receipt on exact Staging SHA).
+
+**Lane 5: Production Runbook & Rollback Prep (Parallel to Lane 4)**
+*   **Actor:** Release + Conductor
+*   **Work:** Prepare the production execution command. Confirm the "full database restore" procedure is tested and ready.
+*   **Gate:** G7 Integrate (Runbook approved).
+
+---
+
+#### Review Strategy
+*   **Code Review:** Independent Senior Engineer (not the Builder) reviews the normalization logic and idempotency safeguards.
+*   **Security/Privacy:** Security hat verifies no PII is logged or exposed during transformation.
+*   **Platform:** Platform Lead reviews any interaction with the shared validation library.
+*   **QA:** Independent verification of the Staging run; QA must confirm the export job completes successfully before signing off.
+
+---
+
+#### Landing & Human Gates
+
+1.  **Merge Plan:** Lane 2 and Lane 3 merge to an integration branch. Lane 4 validates this exact SHA.
+2.  **Human Decisions Required:**
+    *   **Platform Lead:** Approval to touch (or confirm non-touch of) the shared validation library.
+    *   **Data Integrity Lead:** Authorization to execute the migration script on Staging.
+    *   **Owner:** Final approval to deploy to Production and trigger the migration, acknowledging the irreversible nature and confirmed rollback readiness.
+3.  **Rollback:** If the Staging export fails or data corruption is detected, trigger the full database restore from the pre-migration snapshot. Do not attempt to "fix forward" on corrupted data.
+4.  **Execution:** Once Production approval is granted, run the script immediately before the nightly export window. Monitor the export job to completion.
+
+**Failure Mode:** If the script fails mid-run, the transaction must rollback automatically (or be manually reverted) to ensure no partial data exists. The nightly export must be paused if the migration is not 100% clean.

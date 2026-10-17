@@ -1,0 +1,70 @@
+### Delivery Plan: VendorSync Webhook Migration
+
+**Binding Facts & Constraints**
+*   **Irreversibility:** Database schema changes are permanent in production; migration must be backward-compatible or executed via a one-way switch with verified rollback data.
+*   **Approval Gates:** Staging requires Fulfillment + Inventory leads; Production requires SRE on-call.
+*   **CI Cost:** PRs run unit tests only; full regression is nightly. Webhook logic requires explicit integration verification before merge.
+*   **Known Flake:** Network check flakiness must be isolated to prevent false negatives blocking the lane.
+*   **Core Risk:** Out-of-order events must not corrupt stock levels; idempotency and timestamp buffering are critical.
+
+---
+
+### Lanes & Serialization
+
+**Lane 1: Schema & Data Contract (Serialized First)**
+*   **Work:** Design immutable event log table and idempotency keys. Write migration script (forward-only).
+*   **Constraint:** Must land and verify on Staging before Lane 2 touches logic.
+*   **Output:** Migration script, ADR on timestamp windowing strategy.
+
+**Lane 2: Webhook Ingestion & Buffering (Parallel Core)**
+*   **Work:** Implement webhook receiver, signature validation, and the out-of-order buffering/reordering engine.
+*   **Constraint:** Must mock vendor timestamps to prove reordering logic handles "restock before depletion."
+*   **Output:** Ingestion service code, unit tests for edge cases (late arrivals, duplicates).
+
+**Lane 3: Integration & Resilience (Dependent on Lanes 1+2)**
+*   **Work:** Wire ingestion to DB. Implement dead-letter queue for unresolvable events. Isolate the known flaky network check.
+*   **Constraint:** Requires a dedicated staging spin-up to verify end-to-end flow without relying on nightly CI.
+*   **Output:** Integration test suite, flake-triage report.
+
+---
+
+### Gates & Checks
+
+*   **G0/G1 (Spec):** Define exact timestamp window (e.g., 5-minute buffer) and idempotency key format. **Evil Twin** attack: "What if the clock skew exceeds the buffer?"
+*   **G2 (Plan):** Confirm serialization of DB migration. Set per-lane token budgets.
+*   **G3 (Design):** ADR signed off by both Team Leads regarding the irreversible schema change.
+*   **G4 (Implement):** Code committed to isolated worktrees. Unit tests green (excluding known flake, which is marked `flaky:ignored` with a ticket link).
+*   **G5 (Verify - Critical):**
+    *   **Revision:** Exact SHA of the integrated branch.
+    *   **Action:** Manual staging deploy. Replay a recorded sequence of out-of-order vendor events.
+    *   **Pass Condition:** Database state matches expected final inventory; no duplicates; service uptime >99.9% during replay.
+    *   **Note:** Unit tests alone are insufficient. Evidence must show the running service handling the specific "restock before depletion" scenario.
+*   **G6 (Review):**
+    *   **Security:** Independent review of webhook signature validation and payload sanitization.
+    *   **QA:** Independent verification of the buffering logic against the spec.
+    *   **Deep Code Review:** Full diff scan for race conditions.
+
+---
+
+### Landing & Human Decisions
+
+**Merge Strategy**
+1.  **Lane 1 (Schema):** Merge to `staging` branch. **Human Gate:** Approval from Fulfillment + Inventory leads. Verify migration success on staging DB.
+2.  **Lane 2 & 3 (Logic):** Merge to `staging` branch behind a feature flag (disabled). Enable flag only after Lane 1 is confirmed live.
+3.  **Integration:** Run manual integration suite on staging.
+4.  **Production Prep:** Create release manifest with rollback plan (code revert only; data is irreversible, so rollback relies on corrective scripts, not schema revert).
+
+**Human Approvals Required**
+*   **Staging Deploy:** Explicit sign-off from both Team Leads after reviewing G5 evidence.
+*   **Production Deploy:** Explicit sign-off from SRE on-call. Must confirm:
+    *   Irreversible migration has been dry-run on a production snapshot.
+    *   Corrective scripts for data errors are ready.
+    *   Feature flag is ready to kill switch immediately.
+
+**Rollback Plan**
+*   **Code:** Instant revert via feature flag disable, followed by code rollback.
+*   **Data:** Since schema is irreversible, rollback involves running a compensating script to clear the event log and revert inventory to the pre-migration snapshot (taken immediately before migration). This is a manual, high-severity operation.
+
+**Post-Landing**
+*   Monitor error rates and event lag for 24 hours.
+*   G10 Learn: If any out-of-order event causes a discrepancy, add a regression test to the nightly suite immediately.

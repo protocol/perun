@@ -1,0 +1,56 @@
+**Delivery Plan: CVE-2024-9981 Emergency Patch**
+
+**Binding Facts & Constraints**
+*   **Scope:** Base image rebuild + 40 service rolling restarts.
+*   **Approvals:** 2 Senior Platform Engineers (merge), Release Manager (production push).
+*   **Limits:** 3 concurrent builds/hour; 55m build time; irreversible deploy (20m rollback).
+*   **Known Flake:** `network-policy` check in staging (manual verify if isolated failure).
+*   **Deadline:** End of business day.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Image Rebuild (Serial)**
+    *   **Actor:** Builder (Platform Engineer).
+    *   **Work:** Update base image digest in `core-foundations`; open PR.
+    *   **Gate G4/G5:** CI build + scan (55m). If `network-policy` fails alone, trigger manual verification lane; do not block.
+    *   **Gate G6:** Independent Security review + 2 Senior Engineer approvals.
+    *   **Output:** New immutable image SHA.
+
+2.  **Lane B: Registry Propagation (Serial, depends on Lane A)**
+    *   **Actor:** Automation/Builder.
+    *   **Work:** Update configuration registry with new image SHA.
+    *   **Gate G5:** Verify registry reflects new hash; dry-run one service deployment in staging.
+
+3.  **Lane C: Fleet Rollout (Parallel Batches)**
+    *   **Actor:** Release Manager (conductor of rollout).
+    *   **Work:** Trigger rolling restart of 40 microservices.
+    *   **Strategy:** Batch into groups of 3 (matching build concurrency limits if rebuilds needed, otherwise limited by cluster capacity).
+    *   **Gate G5:** Per-batch health check + vulnerability scanner clean status.
+    *   **Constraint:** Must wait for Lane B completion.
+
+**Review & Verification**
+*   **Code/Image Review:** Security team reviews the vulnerability scan report and base image changes (independent of Builder).
+*   **Staging Verification:** QA verifies the `network-policy` manually if the automated check flakes; confirms new image hash in staging registry.
+*   **Production Verification:** Vulnerability scanner must report clean for all instances post-rollout.
+
+**Landing & Human Gates**
+*   **Merge:** Requires explicit approval from two senior platform engineers on the `core-foundations` PR.
+*   **Production Push:** **Human Gate.** Only the Release Manager can authorize the final production push after staging verification.
+*   **Rollback:** If any batch fails health checks or scanner reports positive, immediate rollback to previous snapshot (20m procedure).
+
+**Execution Timeline**
+1.  **Immediate:** Lane A starts (PR open, CI triggers).
+2.  **+55m:** CI completes. Security/Engineers review (parallel to build completion).
+3.  **Post-Approval:** Merge image; Lane B updates registry.
+4.  **Post-Registry:** Release Manager authorizes Lane C (Fleet Rollout).
+5.  **Rollout:** Services restart in batches; scanner validates each batch.
+6.  **Completion:** Confirmation sent when all 40 services report clean scanner status.
+
+**Risk Mitigation**
+*   **Build Cap:** Only one image build required; 3/hour cap is sufficient.
+*   **Flake Handling:** Isolated `network-policy` failure triggers manual check, not full stop.
+*   **Irreversibility:** Rollback script ready; Release Manager holds final gate until staging is 100% verified.
+
+**Status Reporting**
+*   Report lane start, CI completion, approval status, registry update, and per-batch rollout status.
+*   Final confirmation includes scanner report summary for all 40 instances.

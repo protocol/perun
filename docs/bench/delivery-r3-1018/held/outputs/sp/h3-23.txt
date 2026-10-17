@@ -1,0 +1,40 @@
+### Delivery Plan: VendorSync Webhook Migration
+
+#### 1. Work Lanes & Parallelization
+*   **Lane A (Infrastructure & Security):** Configure the public ingress endpoint, TLS termination, and HMAC signature verification logic. This runs in parallel with Lane B.
+*   **Lane B (Core Logic):** Implement the event buffer, timestamp normalization, and out-of-order resolution algorithm. This includes the "late-arrival" grace period logic.
+*   **Lane C (Data & Schema):** Draft the irreversible database migration scripts. These must be reviewed by the downstream reporting team lead before any code integration to ensure compatibility.
+*   **Lane D (Legacy Cleanup):** Prepare the deprecation path for the hourly polling cron job, ensuring it can be toggled off without redeploying the core service.
+
+**Serialization Constraint:** Lane C (Schema) must be finalized and dry-run validated before Lane B (Core Logic) can merge to `staging`, as the code depends on the new schema structure. Lane A and B can merge to a feature branch independently but require a joint integration test before promotion.
+
+#### 2. Gates & Checks
+*   **Gate 1 (Pre-Merge Unit Test):** Runs on every Pull Request against the feature branch.
+    *   *Scope:* Unit tests only (to preserve CI credits).
+    *   *Constraint:* The known flaky network check is explicitly excluded from the "required pass" criteria for this phase; failures there will be noted but not block merging.
+    *   *Revision:* Latest commit on the PR branch.
+*   **Gate 2 (Staging Integration):** Runs automatically upon merge to `staging`.
+    *   *Scope:* Full regression suite (nightly build configuration triggered manually for this milestone).
+    *   *Requirement:* Must pass on the exact `staging` revision including the irreversible schema migration applied to the staging database.
+    *   *Approval:* Requires explicit sign-off from **both** Fulfillment and Inventory team leads.
+*   **Gate 3 (Data Integrity Audit):** Before production promotion, a script must replay a sample of historical polling data through the new webhook buffer logic to verify zero duplication and correct reordering.
+
+#### 3. Review Process
+*   **Code Review:** Conducted by a senior engineer from the Inventory team (neutral party regarding the Fulfillment team's polling legacy). They must verify the timestamp sorting algorithm and idempotency checks.
+*   **Schema Review:** Conducted by the Lead of the downstream reporting team. This is a hard gate; their signature confirms the irreversible change will not break their pipelines.
+*   **Security Review:** Focused on Lane A (Signature verification and endpoint hardening), conducted by the Site Reliability Engineer (SRE).
+
+#### 4. Landing Strategy
+*   **Merge to Production:**
+    1.  Apply irreversible schema migration to Production (during low-traffic window).
+    2.  Deploy code with feature flag `VENDOR_SYNC_WEBHOOK_ENABLED=false`.
+    3.  Enable flag for 5% of traffic (canary). Monitor for latency spikes or buffer overflows.
+    4.  If stable for 1 hour, roll to 100%.
+    5.  Disable legacy polling cron job.
+*   **Human Decisions Required:**
+    *   **SRE On-Call:** Final approval for Production deployment and schema application.
+    *   **Downstream Reporting Lead:** Final approval on the schema migration script.
+    *   **Product Owner:** Decision on the "late-arrival" grace period duration (e.g., 5 mins vs. 1 hour) based on business tolerance for temporary stock inaccuracies.
+*   **Rollback Plan:**
+    *   *Code:* Immediate revert of the deployment artifact.
+    *   *Schema:* **No automated rollback.** Due to the irreversible downstream dependency, a rollback requires a manual data repair script written by the Data team to revert the database state before the legacy polling can be re-enabled. This risk must be acknowledged by the SRE before the "Go" button is pressed.

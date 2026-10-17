@@ -1,0 +1,70 @@
+### Delivery Plan: Deprecate Legacy Auth Token Format v1
+
+**Binding Facts & Constraints**
+*   **Scope:** `/svc/auth` and shared validation library (impacts Billing/Gateway).
+*   **Approvers:** Security Lead, Platform Architect (library changes); VP Engineering (production deploy).
+*   **Irreversible Step:** Production deploy requires DB rollback capability and signed change ticket.
+*   **CI Cost:** $45/run, 22 mins. Minimize redundant runs; batch verification.
+*   **Environment:** Staging lacks HSM (crypto tests flaky); Production is the only true crypto verify.
+*   **External Dependency:** Customer Success (CS) must notify top 5 accounts before hard-fail.
+*   **Forbidden:** Do not modify legacy audit logger.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Spec & Comms (Serial Start)**
+    *   **Owner:** Product Analyst + Conductor.
+    *   **Work:** Define exact error messages for v1 rejection. Draft CS notification list (top 5 accounts) based on recent 401 logs. Define the 2-week grace period start/end timestamps.
+    *   **Gate:** G1 Spec approval by Security Lead.
+    *   **Output:** Approved spec, CS draft ready for owner send.
+
+2.  **Lane B: Dual-Response Implementation (Parallel to A after Spec)**
+    *   **Owner:** Builder (Identity).
+    *   **Work:** Modify shared validation library to detect v1 tokens. Implement "log + allow" mode for grace period. Add clear error message generation (hidden during grace, active after). Ensure no writes to legacy audit logger.
+    *   **Constraint:** Isolated worktree; clean base to mainline.
+    *   **Gate:** G4 Implement (Unit tests green, lint/type pass).
+
+3.  **Lane C: Downstream Impact Verification (Parallel to B)**
+    *   **Owner:** QA (Independent).
+    *   **Work:** Run regression suites for Billing and Gateway services against the new library build in a dedicated worktree. Verify no breaking changes in v2 flows.
+    *   **Gate:** G5 Verify (Exact revision from Lane B). *Note: Skip crypto-heavy tests in Staging; flag for Production canary.*
+
+4.  **Lane D: Security & Architecture Review (Serial after B+C)**
+    *   **Owner:** Security Lead + Platform Architect.
+    *   **Work:** Review code diff, error handling, and logging volume impact. Confirm grace period logic is time-bounded and immutable once set.
+    *   **Gate:** G6 Review (Independent of Builder).
+
+**Gates & Checks**
+
+*   **G0/G1:** Spec defines grace period window and error copy. `idea-critic` checks agent-originated comms drafts before owner review.
+*   **G2:** Plan explicitly budgets CI runs (max 3 full suites: one for B, one for C, one final integration). Token budget named per lane.
+*   **G3:** ADR updated with deprecation timeline and rollback procedure.
+*   **G4:** Builder commits patch with tests. Base SHA pinned.
+*   **G5:** QA receipts: Unit/Integration green at exact SHA. Staging crypto tests marked `UNVERIFIED` (expected flake); deferred to Production canary.
+*   **G6:** Security/Architect sign-off on library change.
+*   **G7:** Integration receipt. Merge to integration branch. One final CI run ($45) on the aggregated SHA.
+
+**Review Strategy**
+*   **Builder** never reviews own code.
+*   **Security Lead** reviews auth logic and logging (no PII leakage in errors).
+*   **Platform Architect** reviews shared library impact on Billing/Gateway.
+*   **QA** verifies functional regression independently.
+
+**Landing & Rollout**
+
+1.  **Phase 1 (Grace Period):**
+    *   **Human Gate:** Owner approves PR merge to `main` (triggers deploy to Staging/Prod).
+    *   **Action:** Deploy with grace period flag ON. CS sends notifications to top 5 accounts.
+    *   **Verification:** Monitor logs for v1 usage (G9). Confirm no 401 spikes for v2.
+
+2.  **Phase 2 (Hard Fail - T+2 Weeks):**
+    *   **Human Gate:** VP Engineering signs change ticket for "Hard Fail" flip.
+    *   **Action:** Update config/flag to enforce rejection.
+    *   **Verification:** G9 Production verify. Confirm v1 tokens receive 401 with new error message. Confirm v2 unaffected.
+
+**Rollback**
+*   **Condition:** Critical failure in v2 auth or unexpected enterprise outage.
+*   **Mechanism:** Full database rollback (irreversible deploy constraint). Revert code via standard emergency revert PR (expedited G6).
+*   **Approval:** VP Engineering + Security Lead.
+
+**Cost Control**
+*   Total CI runs capped at 4 (Dev local, Lane B, Lane C, Final Integration). No re-runs unless code changes. Flaky Staging crypto tests do not trigger retries.

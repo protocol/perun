@@ -1,0 +1,36 @@
+### Delivery Plan: Enterprise SSO Rollout
+
+**Lanes & Parallelism**
+*   **Lane A (Core Logic):** Modify `core-identity` to inject tenant-aware routing. This lane handles the feature flag check, tenant configuration lookup, and the branching logic between Legacy Auth and SSO.
+*   **Lane B (UI/UX):** Update the login portal interface to dynamically render the correct input fields or redirect buttons based on the signal from Lane A.
+*   **Lane C (Infrastructure):** Configure the Staging mock Identity Provider (IdP) to stabilize timeouts and seed specific test data for "Globex Corp" and a control Small Business tenant.
+
+*Lanes A and B can run in parallel once the interface contract (function signature/response payload) is defined. Lane C must start immediately to unblock integration testing.*
+
+**Serialization Constraints**
+1.  **Contract Freeze:** Lane A and B cannot merge until the data contract for tenant resolution is finalized.
+2.  **Integration Gate:** Merging A and B is blocked until Lane C confirms the Staging IdP is stable (no flaky timeouts).
+3.  **Security Sign-off:** Production deployment is blocked until the Security Lead reviews the backward compatibility proof for legacy session cookies.
+
+**Gates & Checks**
+*   **Revision:** All gates apply to the release candidate branch `feat/enterprise-sso-rc` derived from the latest `main`.
+*   **Gate 1: Unit & Contract Test (CI):** Runs on every commit to `feat/enterprise-sso-rc`. Validates that legacy paths remain untouched when the feature flag is off. *Optimization:* Skip full DB seeding for unit tests; use in-memory mocks to reduce the 45-minute CI window to <10 minutes for this specific check.
+*   **Gate 2: Stability Soak (Staging):** Deploy to Staging. Run a 4-hour continuous login loop against the stabilized mock IdP (Lane C). Failure condition: Any timeout attributed to the mock IdP or any legacy login failure.
+*   **Gate 3: Backward Compatibility Audit:** Automated diff check ensuring zero changes to the legacy session cookie serialization logic. Manual verification by Security Lead required here.
+
+**Review Process**
+*   **Code Review:** Performed by a Senior Backend Engineer *not* involved in Lane A. Focus: Tenant isolation logic and feature flag implementation.
+*   **Security Review:** Independent review by the Security Lead. Focus: Session cookie integrity and IdP certificate handling. This reviewer must have no code authorship in this ticket.
+*   **Product Review:** VP of Product verifies the "Globex Corp" user journey in Staging to ensure the enterprise flow matches requirements without affecting the standard flow.
+
+**Landing Strategy**
+1.  **Merge to Main:** Merge `feat/enterprise-sso-rc` into `main` with the feature flag **OFF** by default. This deploys the code to production but exposes it to no one.
+2.  **Pilot Activation:** Once deployed, update the configuration to enable the flag *only* for the "Globex Corp" tenant ID.
+3.  **Human Decision Point:** The VP of Product and Security Lead must provide explicit written approval to expand the flag to additional tenants.
+4.  **Rollback Protocol:**
+    *   *Code Revert:* If critical bugs appear, revert the merge to `main`. Since the flag defaults to OFF, this immediately kills the SSO path.
+    *   *Config Toggle:* If the issue is IdP specific, toggle the feature flag OFF for the affected tenant via configuration without a code deploy.
+    *   *Cookie Safety:* Because legacy cookie formats are untouched, rolling back the code will not invalidate existing user sessions for Small Business users.
+
+**Risk Mitigation**
+The 45-minute CI cost is mitigated by splitting the test suite: fast unit tests run on every commit, while the heavy regression suite runs only on the release candidate prior to the Security Gate. Flaky Staging tests are addressed by Lane C before any code integration is attempted.

@@ -1,0 +1,67 @@
+**Delivery Plan: Customer-Managed Encryption Keys (CMEK) with Rapid Revocation**
+
+**Binding Facts & Constraints**
+*   **Owner:** Jane Smith (Data Security).
+*   **Approvals:** Dual approval (Security + Platform leads) required for production deploy.
+*   **Critical Constraint:** Revocation must render data inaccessible within 5 minutes.
+*   **Risk:** Key ingestion is irreversible without full cluster restore; encryption lib is shared across three services.
+*   **Cost/Time:** CI integrity simulation costs $45/run, takes 50m. Known flaky audit check on Fridays.
+*   **Strategy:** Zero downtime, seamless rotation, no customer intervention.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Spec & Interface Contract (G1–G3)**
+    *   **Work:** Define the key ingestion API, revocation event schema, and the "5-minute" SLA technical definition. Draft ADR for key hierarchy and rotation strategy.
+    *   **Role:** Product Analyst + Architect.
+    *   **Output:** Testable spec with acceptance criteria; pinned base SHA.
+    *   **Gate:** G3 Design Review (Security Lead). *Must complete before any code.*
+
+2.  **Lane B: Key Ingestion & Hierarchy (G4)**
+    *   **Work:** Implement the API for key ingestion and the internal key hierarchy mapping. Includes unit tests for validation and error handling.
+    *   **Role:** Builder 1 (isolated worktree).
+    *   **Dependency:** None (mocks revocation).
+    *   **Gate:** G5 Verify (Unit/Contract tests only).
+
+3.  **Lane C: Revocation Poller & Enforcement (G4)**
+    *   **Work:** Build the background process polling for revocation events. Implement the enforcement logic to deny access post-revocation.
+    *   **Role:** Builder 2 (isolated worktree).
+    *   **Dependency:** Lane A spec.
+    *   **Gate:** G5 Verify (Unit/Integration tests in testbed).
+
+4.  **Lane D: Shared Library Coordination (G4)**
+    *   **Work:** Prepare the encryption library update for the three dependent services. Coordinate the release window.
+    *   **Role:** Release Engineer.
+    *   **Dependency:** Lane A spec.
+    *   **Gate:** G3 Design alignment with other service owners.
+
+**Serialization Rules**
+*   Lanes B, C, and D cannot start until Lane A (Spec/ADR) is approved (G3).
+*   Lanes B and C can run in parallel.
+*   Lane D (Library update) must be synchronized with the final integration of B and C to avoid version skew.
+*   **Friday Constraint:** No merges or CI runs involving the audit logger on Fridays due to flakiness.
+
+**Verification (G5–G6)**
+*   **Exact Revision:** All tests run on the merged SHA of Lanes B+C+D.
+*   **Critical Test:** The $45/50m data integrity simulation runs **once** on the final integrated SHA before human review.
+*   **Revocation Test:** Simulated revocation event must prove data inaccessibility within 5 minutes in a staging environment mirroring production latency.
+*   **Reviewers:**
+    *   **QA:** Independent functional verification (not the builders).
+    *   **Security:** Independent AppSec review of key handling and revocation logic (mandatory).
+    *   **Deep Code Review:** Automated audit on the full diff.
+
+**Integration & Landing (G7–G8)**
+*   **Integration:** One owner merges B, C, and D into the integration branch. Re-run affected gates on the final SHA.
+*   **Human Gates (G8):**
+    *   **Decision 1:** Security Lead + Platform Lead dual approval for production deploy.
+    *   **Decision 2:** Confirmation of the coordinated release window for the shared library.
+*   **Rollback:**
+    *   If revocation fails or data becomes inaccessible prematurely: Immediate rollback to previous SHA.
+    *   If key ingestion corrupts hierarchy: Full cluster restore (pre-tested procedure required).
+*   **Post-Deploy (G9):** Monitor revocation latency and access denial logs for 1 hour. Verify SLO compliance.
+
+**Risk Mitigation**
+*   **Irreversible Ingestion:** Feature flag the ingestion API. Enable only after G9 verification in production.
+*   **Flaky Check:** If the audit logger fails on a non-Friday, investigate immediately. If on Friday, mark as known flake but do not merge until Monday verification.
+*   **Cost Control:** Limit the expensive integrity simulation to the final integrated SHA and one retry if absolutely necessary.
+
+**Next Step:** Await Jane Smith's approval on the Spec (Lane A) before spawning builder lanes.

@@ -1,0 +1,60 @@
+**Delivery Plan: A11y Patches for Core UI Kit**
+
+**Binding Facts & Constraints**
+*   **Scope:** Focus states and `aria-labels` in Button/Input families.
+*   **Risk:** Visual regression (snapshot failures) + Compliance block (Government contract).
+*   **Approvers:** Design Lead (visual) AND Accessibility Officer (compliance). Both required; neither suffices.
+*   **Cost:** High CI credit usage (4 parallel browsers). Minimize redundant runs.
+*   **Env:** Staging is read-only/nightly refresh. Verification must be local.
+*   **Flake:** Snapshot service times out on large PRs; requires manual restart capability.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Spec & Baseline (Serial Start)**
+    *   **Actor:** Product Analyst + Accessibility Officer.
+    *   **Work:** Define exact focus rings and label text per component. Document expected visual shifts.
+    *   **Gate G1:** Spec signed by Accessibility Officer. Pins base SHA.
+
+2.  **Lane B: Implementation (Parallel to C, after A)**
+    *   **Actor:** Builder (isolated worktree).
+    *   **Work:** Apply CSS/ARIA changes. Do *not* update snapshot baselines yet.
+    *   **Gate G4:** Local build green. Unit tests pass.
+
+3.  **Lane C: Local Verification Harness (Parallel to B, after A)**
+    *   **Actor:** QA.
+    *   **Work:** Script local screenshot capture for affected components against the spec. Prepare a side-by-side diff report for the Design Lead.
+    *   **Gate G5 (Local):** QA confirms local screenshots match spec before any CI run.
+
+4.  **Lane D: Snapshot Re-baselining (Serial, after B & C)**
+    *   **Actor:** Builder (same worktree as B).
+    *   **Work:** Update snapshot baselines *only* for components verified in Lane C.
+    *   **Gate G4:** Commit includes code + new baselines.
+
+5.  **Lane E: CI Execution & Triage (Serial, after D)**
+    *   **Actor:** Conductor.
+    *   **Work:** Push single PR. Monitor snapshot job. If timeout occurs, trigger manual restart immediately (do not wait for auto-retry).
+    *   **Gate G5 (CI):** All 4 browser instances green.
+
+**Review & Approval Strategy**
+
+*   **Security/Accessibility Review (G6):** Accessibility Officer reviews the *spec implementation* (code diff) independently of the Builder. Verifies `aria` correctness.
+*   **Visual Review (G6):** Design Lead reviews the *Lane C local diff report* and the CI snapshot diff. Explicit sign-off required confirming visual changes are intentional compliance fixes, not regressions.
+*   **Independence:** Builder never approves their own snapshots. Design Lead and Accessibility Officer act independently; one cannot delegate to the other.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Single PR containing all patches. Do not split by component to avoid multiple expensive CI runs and fragmented snapshot updates.
+*   **Human Gate (G8):** Merge requires explicit "LGTM" from *both* Design Lead and Accessibility Officer in the PR thread.
+*   **Rollback:** If post-merge issues arise in consuming apps, revert the entire PR immediately. Do not attempt hotfixes on the baseline images without repeating the full Lane C verification loop.
+*   **Cost Control:** Only one CI run permitted. If the snapshot job fails due to flake (timeout), restart manually. If it fails due to diff, stop and return to Lane C. No "try again" loops without local verification.
+
+**Execution Order**
+1.  Finalize Spec (Lane A).
+2.  Implement Code (Lane B) & Prepare Local Diff (Lane C) in parallel.
+3.  QA verifies Local Diff (Gate G5 Local).
+4.  Update Baselines (Lane D).
+5.  Push & Run CI (Lane E).
+6.  Dual Approval (G6).
+7.  Merge (G8).
+
+**Failure Mode:** If the snapshot service times out twice consecutively, pause delivery and engage Platform Engineering to stabilize the runner before proceeding. Do not burn credits on a broken runner.

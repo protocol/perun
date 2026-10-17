@@ -1,0 +1,68 @@
+### Delivery Plan: Idempotent Nightly Ingestion
+
+**Objective:** Modify the ingestion pipeline to skip existing records by date range, ensuring re-processing yields identical datasets.
+**Constraint:** No database restores allowed; strict human approval required for production.
+
+#### 1. Lanes & Parallelism
+*Worktrees must be isolated; one writer per tree.*
+
+*   **Lane A (Spec & Contract) – Serial First**
+    *   **Actor:** Product Analyst + Conductor.
+    *   **Work:** Define the idempotency key logic (e.g., `hash(date_range + source_file)`). Explicitly document the "skip" behavior vs. "upsert." Define the exact verification query to prove dataset equality.
+    *   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+    *   **Dependency:** None. Must complete before Lane B starts.
+
+*   **Lane B (Implementation) – Parallel with C**
+    *   **Actor:** Builder (Platform Reliability).
+    *   **Work:** Implement the deduplication check in the ingestion logic. Add unit tests for the "skip" condition. Ensure no writes occur if the idempotency key exists.
+    *   **Output:** Patch commit, unit test suite, local dry-run logs showing skipped records.
+    *   **Dependency:** Lane A spec.
+
+*   **Lane C (Verification Strategy) – Parallel with B**
+    *   **Actor:** QA Engineer.
+    *   **Work:** Prepare the integration test harness using a non-production snapshot. Script the "double-run" verification: run ingestion for Date X, capture checksum, run again, verify checksum match and row count stability.
+    *   **Output:** Verification script ready to run against Lane B's exact SHA.
+    *   **Dependency:** Lane A spec.
+
+*   **Lane D (Security & Risk Review) – Parallel with B/C**
+    *   **Actor:** Security Engineer.
+    *   **Work:** Review logic for race conditions during parallel job execution. Verify that read-only config constraints are respected.
+    *   **Output:** Risk assessment confirming no data corruption vectors.
+
+#### 2. Gates & Checks
+*All checks run on the exact final SHA of the integration branch.*
+
+*   **G4 (Build & Unit):** Run in Lane B's worktree. Must pass before merge request.
+*   **G5 (Integration & Verification):**
+    *   **Trigger:** Merge of Lane B into a temporary integration branch.
+    *   **Action:** Execute Lane C's "double-run" script against a staging dataset.
+    *   **Success Criteria:** Second run reports 0 rows inserted; final dataset checksum matches first run.
+    *   **Note:** Ignore flaky network latency check failures if data integrity logs are green (documented exception).
+*   **G6 (Independent Review):**
+    *   **Reviewer:** Senior Engineer (not the Builder).
+    *   **Scope:** Full diff + G5 receipts + Security sign-off.
+    *   **Rule:** Builder cannot approve their own code.
+
+#### 3. Landing & Human Decisions
+*Deployment is gated; merge is technical.*
+
+*   **Merge Strategy:**
+    1.  Rebase Lane B onto main.
+    2.  Create integration branch.
+    3.  Run G5. If green, open PR.
+    4.  Upon G6 approval, merge to `main` (or release branch).
+*   **Human Approval (G8):**
+    *   **Required For:** Deploying to Production.
+    *   **Approvers:** Chief Data Officer AND VP of Engineering.
+    *   **Mechanism:** Explicit written approval via internal ticketing system referencing the specific merge SHA.
+    *   **Timing:** Must be secured before the next billing cycle closes. Do not deploy without both signatures.
+*   **Rollback Plan:**
+    *   **Constraint:** Revert requires a 4-hour database restore (irreversible).
+    *   **Strategy:** Feature flag the new logic. Deploy disabled. Enable for one specific date range first. If corruption is detected, immediately disable the flag (instant rollback) rather than restoring the database. Full restore is the last resort only.
+
+#### 4. Risk Mitigation
+*   **Flaky Check:** Pre-authorize ignoring the network latency module failure if G5 data receipts are valid.
+*   **Config Lock:** Ensure the pipeline reads the shared config without attempting writes during business hours.
+*   **Cost Control:** Limit integration runs to once per successful patch to save compute credits.
+
+**Next Step:** Conductor to initiate Lane A (Spec) immediately.

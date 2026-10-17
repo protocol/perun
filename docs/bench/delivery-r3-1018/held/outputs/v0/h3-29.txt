@@ -1,0 +1,31 @@
+**Delivery Plan: Refine On-Call Alerting (Payment Gateway)**
+
+**1. Lanes & Serialization**
+*   **Lane A (Spec & Simulation):** Isolate the last seven days of incident logs and the proposed logic (Error >5% for 3m AND Success <98%). Run a local offline simulation to prove the new rule would have remained silent during the false positives while catching actual incidents. *Parallelizable.*
+*   **Lane B (Implementation):** Update `global-thresholds.yaml` in a dedicated worktree. Ensure syntax validity and backward compatibility with the schema. *Parallelizable.*
+*   **Lane C (Review Coordination):** Prepare the merge request body, explicitly citing the simulation results from Lane A and the specific commit SHA. Route for dual approval (SRE Lead + Product Owner). *Serialized after A & B.*
+
+**2. Gates & Checks**
+*   **G1 (Spec Freeze):** Before coding, the simulation criteria (logs + logic) must be defined. No code changes until the "silent during false alarms" proof is theoretically sound.
+*   **G4 (Implementation):** Commit the YAML change. Run local schema validation (linting) only. Do not trigger the full 45-minute CI pipeline yet; the cost is prohibitive for iterative fixes.
+*   **G5 (Verification):** Since staging traffic is synthetic and unreliable for burst patterns, verification relies entirely on the **offline replay** from Lane A against the exact commit SHA. A "green" gate is defined as the simulation passing, not a staging deploy.
+*   **G6 (Review):** Independent review required. The implementer cannot approve. The reviewer must verify that the logic matches the spec and that the simulation evidence is attached.
+*   **G8 (Release):** Human approval mandatory. The merge is blocked until both the SRE Lead and Product Owner approve the PR.
+
+**3. Review Strategy**
+*   **Reviewer:** Senior SRE (not the implementer) + Product Owner.
+*   **Independence:** The reviewer validates the simulation methodology in Lane A, ensuring the log selection isn't cherry-picked. They confirm the YAML diff matches the agreed logic exactly.
+*   **Evidence:** The PR must contain the simulation output showing "0 alerts triggered" for the specific false-positive timestamps from last week.
+
+**4. Landing & Rollback**
+*   **Merge Window:** The PR can be approved anytime, but the merge to the integration branch is strictly scheduled for the next available **Tuesday or Thursday between 10 AM and 2 PM**.
+*   **CI Execution:** The full 45-minute regression suite runs only once, immediately prior to the merge window opening, on the final merged SHA.
+*   **Human Decision:** The actual merge action requires a human operator to confirm the deployment window is open and both approvals are present.
+*   **Rollback:** If the new rule suppresses a *real* incident post-deploy, the rollback plan is an immediate revert of `global-thresholds.yaml` to the previous SHA. This revert bypasses the standard window and requires only the SRE Lead's emergency authorization, given the critical nature of alerting.
+
+**Summary of Constraints:**
+*   No staging validation accepted as proof.
+*   CI runs once to save cost/time.
+*   Merge strictly time-gated.
+*   Dual approval required before merge.
+*   Verification is historical simulation, not live traffic.

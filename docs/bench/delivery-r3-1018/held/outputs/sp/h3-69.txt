@@ -1,0 +1,37 @@
+### Delivery Plan: Orion Live Dashboard Result Caching
+
+**Lanes & Parallelism**
+*   **Lane A (Configuration & Feature Flag):** Define the cache toggle schema and the "stale data" warning threshold (45s). This work is isolated to `global-config.yaml` and the feature flag service.
+    *   *Constraint:* Must be serialized behind Platform team approval for `global-config.yaml` during business hours.
+    *   *Parallel:* Can proceed independently of code changes once the schema is agreed upon.
+*   **Lane B (Cache Logic Implementation):** Implement the aggregation endpoint caching, the 30-second TTL logic, and the admin-triggered invalidation hook.
+    *   *Scope:* Strictly global dataset; explicitly exclude user-specific filters.
+    *   *Memory Tuning:* Calculate safe memory allocation to prevent session store eviction.
+    *   *Parallel:* Runs concurrently with Lane A after the initial interface contract (config keys) is defined.
+*   **Lane C (Observability & Warnings):** Implement the frontend/backend logic to display "stale data" warnings when cache age > 45 seconds.
+    *   *Dependency:* Requires Lane B to expose cache age metadata.
+
+**Gates & Checks**
+*   **Gate 1: Design Review (Pre-Code):** Verify memory calculation models to ensure session store stability. *Reviewer: Senior Infrastructure Engineer (independent of implementer).*
+*   **Gate 2: Configuration Gate:** `global-config.yaml` change merged only after Platform team ticket resolution. *Check: Schema validation only; no full CI suite required.*
+*   **Gate 3: Integration Check (Staging):** Deploy to staging on revision `feat/orion-cache-candidate`.
+    *   *Execution:* Run targeted integration tests for aggregation endpoints.
+    *   *Constraint:* Ignore random network check failures; verify manually if tests fail due to network noise.
+    *   *Cost Control:* Trigger only unit and targeted integration tests to avoid the $40/20min full CI penalty unless core logic changes.
+*   **Gate 4: Invalidation Verification:** Manually trigger admin refresh in staging; verify cache clears immediately and global data updates within 5 seconds (replica lag tolerance).
+
+**Review Strategy**
+*   **Code Review:** Two senior engineers must review the caching logic and memory tuning. One reviewer must be from the Platform team (to validate config integration) and one from the Core Services team (to validate cache invalidation logic).
+*   **Independence:** Reviewers cannot be the authors of Lane B or C.
+*   **Focus Areas:**
+    1.  Confirm user-specific filters are strictly excluded from the cache key.
+    2.  Verify the 30s TTL and 45s warning thresholds are hardcoded or correctly mapped to config.
+    3.  Ensure admin invalidation bypasses the TTL.
+
+**Landing & Rollback**
+*   **Merge Strategy:** Merge Lane A (Config) first. Once confirmed in production (flag off), merge Lane B and C together behind the feature flag.
+*   **Human Decision:** Final production deployment requires explicit approval from two senior engineers. This approval is the "Go/No-Go" for enabling the flag.
+*   **Rollback Plan:**
+    *   *Scenario 1 (Config Error):* Revert `global-config.yaml` via Platform team emergency ticket.
+    *   *Scenario 2 (Logic/Memory Error):* Disable the feature flag immediately (no redeploy). If the system is unstable even with the flag off (e.g., memory leak on init), trigger a full database rollback and redeploy the previous stable revision. This is irreversible without the full DB rollback procedure.
+*   **Deadline:** All gates must be cleared by Monday EOD to ensure stability before Tuesday's Q3 review cycle start.

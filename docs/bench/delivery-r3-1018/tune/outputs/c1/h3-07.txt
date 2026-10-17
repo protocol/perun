@@ -1,0 +1,57 @@
+### Delivery Plan: GDPR Data Export & Deletion
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Deletion is permanent; backup window is 7 days. No testing on prod-like data without strict isolation.
+*   **Shared State:** Database schema shared with Billing; direct migrations prohibited without joint review.
+*   **Pipeline Cost:** 45min/run, high credit cost. Flaky network latency check requires manual retry logic.
+*   **Approvals:** Security Lead approval required for deployment to all three environments.
+*   **Deadline:** End of month.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Specification & Contract (Product Analyst + Security)**
+    *   **Work:** Define exact data scope across the five storage systems. Draft the JSON export schema and the atomic deletion contract.
+    *   **Parallelism:** Runs first, independently.
+    *   **Gate:** G1 Spec sign-off by Legal/Compliance.
+
+2.  **Lane B: Export Implementation (Builder)**
+    *   **Work:** Implement the archive aggregation endpoint. Read-only access to all five stores.
+    *   **Parallelism:** Can run parallel to Lane C *after* Lane A completes.
+    *   **Isolation:** Dedicated worktree.
+
+3.  **Lane C: Deletion Implementation (Builder)**
+    *   **Work:** Implement the wipe endpoint with transactional safety (two-phase commit or saga pattern) to prevent orphaned entries.
+    *   **Serialization:** Must wait for Lane A. Code review must include a Billing Squad representative due to shared schema.
+    *   **Safety:** Logic must default to "fail-closed" (abort if any sub-step fails).
+
+4.  **Lane D: Independent Verification (QA + Security)**
+    *   **Work:** Create a transient, disposable test environment mirroring the 5-store topology. Verify export completeness and deletion atomicity (simulate mid-flight failures).
+    *   **Serialization:** Waits for Lanes B & C to reach G4 (code complete).
+    *   **Constraint:** Does not share the builder's worktree or test scripts.
+
+**Gates & Checks**
+
+*   **G2 Plan:** Explicit token/cost budget set for CI runs. Limit full pipeline runs to 3 per lane (main, pre-merge, post-merge) to manage credit cost.
+*   **G3 Design:** ADR required for the deletion transaction strategy, signed by Billing Squad lead.
+*   **G5 Verify:**
+    *   **Export:** Receipt must show aggregated data from all 5 sources for a test user.
+    *   **Deletion:** Receipt must prove zero orphaned records after a forced interruption simulation.
+    *   **Pipeline:** Flaky network check flagged; if red, manual retry allowed once before blocking.
+*   **G6 Review:**
+    *   **Export:** Reviewed by Identity Squad Senior.
+    *   **Deletion:** Reviewed by Identity Squad Senior **AND** Billing Squad Rep (mandatory for shared schema).
+    *   **Security:** Independent AppSec review of the deletion logic and data handling.
+
+**Landing & Rollback**
+
+*   **Integration (G7):** Merge Export and Deletion into a single integration branch. Run one final full pipeline (45m) on this exact SHA.
+*   **Human Gate (G8):** Security Lead must explicitly approve the deployment manifest. No auto-deploy.
+*   **Deployment:** Deploy to Env1 (Staging) → Verify → Env2 (Pre-Prod) → Verify → Env3 (Prod).
+*   **Rollback:**
+    *   **Export:** Simple service revert.
+    *   **Deletion:** Code revert does not restore data. Rollback plan relies on the 7-day backup snapshot. **Condition:** Deployment to Prod is blocked unless a fresh backup snapshot is confirmed immediately prior to release.
+*   **Post-Deploy (G9):** Verify SLOs and run a sanity check on a canary account.
+
+**Risk Mitigation**
+*   **Cost:** Lane D uses a minimized test suite for iteration; full 45m suite reserved for G5/G7 only.
+*   **Consistency:** Deletion logic includes a "dry-run" mode enabled in non-prod environments to validate reachability without committing deletes.

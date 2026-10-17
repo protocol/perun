@@ -1,0 +1,32 @@
+### Delivery Plan: Auto-publish Status Page
+
+**1. Lanes & Parallelism**
+*   **Lane A (Logic & Verification):** Develop the core integration service within `comms-gateway`. This includes the monitoring feed parser and the critical "Verification Layer" to suppress false positives during maintenance windows. This lane handles the business logic for delay mechanisms and state validation.
+*   **Lane B (Infrastructure & Secrets):** Prepare the production environment configuration. Since SSL certificates rotate every 48 hours and are managed externally, this lane focuses on ensuring the deployment pipeline can dynamically fetch valid certificates without manual intervention.
+*   **Serialization Point:** Lane A must complete its unit testing before merging. Lane B can run in parallel but cannot finalize the production config until Lane A's code defines the exact secret keys required for the portal API.
+
+**2. Gates & Checks**
+*   **Pre-Commit Gate:** All code must pass local static analysis. No push occurs without this.
+*   **CI Pipeline Gate:** Upon push to the `feature/status-integration` branch, the 45-minute CI pipeline triggers.
+    *   *Constraint:* Due to the known flaky check in the notification module, a failure in that specific test suite will trigger an automatic retry (max 2 attempts). If it fails thrice, it blocks merge and alerts the Shift Lead for manual triage.
+    *   *Cost Control:* Pipeline runs are scheduled during off-peak hours where possible to respect the $200/hr cluster cap, unless marked as "Critical Fix."
+*   **Verification Logic Check:** A specific integration test will simulate a "maintenance window" signal followed by a "critical outage" signal. The gate fails if the system publishes the outage before the maintenance window expires or the delay mechanism clears.
+
+**3. Review Process**
+*   **Code Review:** An engineer from a team *other than* Platform Reliability (to ensure independence) must review the Verification Layer logic. They must verify that the "false positive" suppression cannot be bypassed and that the delay mechanism has a hard timeout to prevent indefinite silencing.
+*   **Logic Audit:** The Shift Lead must manually audit the test results confirming the "maintenance window" scenario.
+*   **Security Review:** The Director of Operations reviews the SSL certificate handling and secret management strategy to ensure no credentials are hardcoded.
+
+**4. Landing & Merge Strategy**
+*   **Staging Deployment:** Once CI passes and reviews are approved, the code deploys to the shared staging cluster.
+    *   *Action:* Run a 2-hour shadow mode where the system reads live monitoring data and computes status but *does not* publish to the public portal. Logs are inspected to ensure no false alarms would have been triggered.
+*   **Production Approval (Human Decision):** Deployment to production requires dual approval via the governance board:
+    1.  **Shift Lead:** Confirms shadow mode logs showed zero false positives.
+    2.  **Director of Operations:** Confirms rollback procedures are ready.
+*   **Merge:** Only after both approvals are recorded does the merge to `main` occur, triggering the production deployment.
+
+**5. Rollback Plan**
+*   **Trigger:** If a false positive is published to the live site, or if the system fails to publish a genuine critical outage for >5 minutes.
+*   **Action:** Immediate reversion of the `main` branch to the previous stable tag.
+*   **Constraint:** Because the incident log database schema is immutable for 'resolved' entries, any erroneous incidents published during the failure window cannot be edited. The rollback script must automatically generate a corrective "Retraction" entry linking to the original false ID, marking the previous entry as "System Error" without altering the original record.
+*   **Communication:** The Shift Lead must manually notify affected customers if a false alarm was visible for more than 2 minutes.

@@ -1,0 +1,63 @@
+# Delivery Plan: Deprecate Legacy Auth Token Format v1
+
+## Lanes & Parallelism
+
+**Lane A: Core Implementation (Serialized)**
+1.  **Identity Service (`/svc/auth`):** Implement dual-response logic. Detect v1 tokens, log usage (new structured log, not legacy audit), and return a specific `401` with a `Deprecation-Warning` header pointing to v2 docs.
+2.  **Validation Library:** Update shared lib to expose v1 detection flags without altering core crypto paths. *Constraint:* Must wait for Lane B approval before merging to main.
+
+**Lane B: Governance & Coordination (Parallel to A)**
+1.  **Customer Success (CS):** Identify top 5 affected accounts from recent 401 logs. CS drafts and sends notifications immediately.
+2.  **Approvals:** Security Lead and Platform Architect review the Validation Library changes. This runs parallel to coding but must complete before the Lane A merge.
+
+**Lane C: Infrastructure & Observability (Parallel to A)**
+1.  **Dashboards:** Create alert for "v1 Token Usage Count" to track the grace period decay.
+2.  **Feature Flag:** Implement a config flag `AUTH_V1_HARD_FAIL` (default: false) to toggle the behavior without redeploy.
+
+## Gates & Checks
+
+**Gate 1: Pre-Merge (Revision: Feature Branch Head)**
+*   **Check:** Unit tests for v1 detection and error message clarity.
+*   **Constraint:** Do not run full CI yet. Run only `/svc/auth` and `validation-lib` specific test suites locally or via targeted CI jobs to save cost/time.
+*   **Reviewer:** Peer Engineer (independent of author).
+
+**Gate 2: Security & Architecture (Revision: Pre-Merge Branch)**
+*   **Check:** Validation Library diff review.
+*   **Approvers:** Security Lead AND Platform Architect. Both must sign off.
+*   **Constraint:** No deployment to Staging/Prod without both signatures.
+
+**Gate 3: Staging Verification (Revision: Release Candidate)**
+*   **Check:** Deploy to Staging. Verify v1 tokens trigger logs and warnings.
+*   **Caveat:** Ignore crypto flakiness; focus solely on the response code, header presence, and log output.
+*   **Reviewer:** QA Engineer.
+
+**Gate 4: The Switch (Revision: Production)**
+*   **Check:** CS confirms top 5 accounts notified. VP of Engineering signs change ticket.
+*   **Action:** Enable `AUTH_V1_HARD_FAIL` flag.
+
+## Review Strategy
+
+*   **Code Review:** One senior backend engineer reviews the Identity Service changes. They must not be the author.
+*   **Library Review:** The Security Lead and Platform Architect review *only* the Validation Library changes. They act as independent gates; neither delegates to the other.
+*   **Operational Review:** SRE verifies the new logs appear in the dashboard and the feature flag toggles correctly in Staging.
+
+## Landing & Rollback
+
+**Phase 1: Grace Period (Day 0)**
+*   Merge Lane A and C. Deploy to Production with `AUTH_V1_HARD_FAIL=false`.
+*   System logs v1 usage and returns warnings. CS completes notifications.
+
+**Phase 2: Hard Fail (Day 14)**
+*   **Prerequisite:** VP of Engineering signature on change ticket confirming CS notification completion.
+*   **Action:** Toggle `AUTH_V1_HARD_FAIL=true` via config management (no code deploy).
+*   **Result:** v1 tokens receive immediate `401 Unauthorized` with no fallback.
+
+**Rollback Plan**
+*   **Scenario:** Critical enterprise outage or false positives blocking valid traffic.
+*   **Action:** Immediately toggle `AUTH_V1_HARD_FAIL=false`.
+*   **Code Revert:** If the bug is in the detection logic (not just the hard fail), revert the commit in `/svc/auth` and the Validation Library.
+*   **Constraint:** Production database rollback is reserved for data corruption only; configuration toggle is the primary rollback mechanism for this logic change.
+
+**Human Decisions Required**
+1.  **Security Lead & Platform Architect:** Approval to modify the shared Validation Library.
+2.  **VP of Engineering:** Signature authorizing the transition from Grace Period to Hard Fail.

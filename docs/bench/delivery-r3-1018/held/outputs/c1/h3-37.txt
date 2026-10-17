@@ -1,0 +1,67 @@
+### Delivery Plan: End-to-End Request Tracing
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Production deployment requires VP of Engineering sign-off during business hours; a revert triggers a 24-hour code freeze.
+*   **Locked Scope:** `shared-config` repository requires approval from Jane Smith and the Security Lead; no changes permitted without both.
+*   **Cost/Time Gate:** Integration tests cost $45 and take 18 minutes; limited to six runs daily. Flaky network latency check (15% fail rate) is ignored if logs show no errors.
+*   **External Constraint:** Globex and Initech dependencies are black boxes; correlation must use timestamp heuristics or gateway logs.
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Internal Tracing Implementation (Builder)**
+*   **Scope:** Inject unified trace IDs into all internal service logs and headers.
+*   **Parallelism:** Can run immediately alongside Lane 2.
+*   **Output:** Patch sets for internal services; updated logging middleware.
+
+**Lane 2: External Correlation Strategy (Architect + Security)**
+*   **Scope:** Design timestamp heuristic logic and gateway log parsing to correlate internal spans with Globex/Initech black-box calls.
+*   **Parallelism:** Runs parallel to Lane 1; must complete before Lane 3.
+*   **Output:** ADR defining correlation algorithm; proof-of-concept script for log reconstruction.
+
+**Lane 3: Configuration & Compliance (Conductor + Security)**
+*   **Scope:** Prepare `shared-config` changes (if any) and audit evidence for Q3 compliance.
+*   **Serialization:** Blocked until Lane 2 design is approved by Security Lead. Requires synchronized approval from Jane Smith and Security Lead.
+*   **Output:** PR for `shared-config`; compliance documentation pack.
+
+**Lane 4: Independent Verification (QA)**
+*   **Scope:** Validate trace continuity across internal services and reconstructed external gaps.
+*   **Serialization:** Waits for Lane 1 & 2 integration on Staging.
+*   **Output:** Test receipts confirming end-to-end visibility; explicit ignore-validation for flaky network latency check.
+
+---
+
+#### Gates & Checks
+
+*   **G1 Spec:** Define trace ID format and correlation heuristic. Pin base SHA.
+*   **G3 Design:** Security Lead approves correlation logic (ensures no PII leakage in heuristics).
+*   **G4 Implement:** Builder commits code with tests. **Check:** Unit tests pass locally; no reliance on external vendors for unit coverage.
+*   **G5 Verify (Staging):** Auto-deploy to Staging. Run integration suite (max 6 runs/day).
+    *   **Condition:** Green build required. Flaky network latency failure accepted *only* if logs confirm no actual error.
+    *   **Evidence:** Sample reconstructed journey showing Globex/Initech gap bridged.
+*   **G6 Review:** Independent review by Security (correlation logic) and Senior Engineer (implementation). Builder does not self-review.
+*   **G7 Integrate:** Merge to integration branch. Re-run affected tests on final SHA.
+
+---
+
+#### Review Strategy
+
+*   **Implementation:** Reviewed by Senior Engineer (independent of Builder).
+*   **Security/Compliance:** Reviewed by Security Lead (independent of Architect).
+*   **Configuration:** Dual approval (Jane Smith + Security Lead) for `shared-config`.
+*   **Verification:** QA signs off on Staging behavior; no developer self-attestation.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge Train:** Serialized landing. Lane 1 & 2 merge first to integration branch. Lane 3 (`shared-config`) merges only after dual approval.
+*   **Human Decision (G8):** VP of Engineering must manually sign off for Production deployment during business hours.
+*   **Rollback Plan:**
+    *   If Production fails: Immediate revert triggered.
+    *   **Consequence:** Automatic 24-hour code freeze on `main`.
+    *   **Mitigation:** Ensure Staging verification (G5) is exhaustive to avoid freeze.
+*   **Post-Deploy (G9):** Monitor unresolved ticket volume; target <20% reduction. Verify audit logs capture full reconstructed flows.
+
+**Risk Note:** The 24-hour freeze on revert makes G5 (Staging) verification the critical failure barrier. Do not proceed to G8 without 100% confidence in the timestamp heuristic accuracy on Staging data.

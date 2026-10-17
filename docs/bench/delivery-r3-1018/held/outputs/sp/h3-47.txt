@@ -1,0 +1,40 @@
+### Delivery Plan: Search Endpoint P99 Optimization
+
+**1. Work Lanes & Parallelization**
+*   **Lane A (Analysis & Strategy):** Investigate the data aggregation layer to identify specific queries causing the 1200ms spike. Determine the optimal mix of caching keys and database indexing strategies. *Constraint:* Must confirm strategies do not alter result ordering or ranking logic.
+*   **Lane B (Test Harness Setup):** Create a local verification suite using the latest available production snapshot (refreshed Tuesday). Implement a "byte-for-byte" diff checker to compare new endpoint outputs against current production payloads for all existing test cases.
+*   **Lane C (Implementation):** Develop the caching/indexing changes identified in Lane A. Modify only the aggregation logic; strictly treat the shared ranking library as read-only.
+
+*Parallel Execution:* Lanes A, B, and C can proceed simultaneously once the target revision is selected. Lane C waits only on Lane A's specific query identification.
+
+**2. Gates & Checks**
+*   **Gate 1 (Local Verification):** Before any remote push, the developer must run the full test suite locally on the specific commit hash.
+    *   *Check:* P99 latency < 400ms in local high-load simulation.
+    *   *Check:* Byte-for-byte payload identity confirmed by Lane B's harness.
+    *   *Exception:* Ignore staging network timeout errors if local logs confirm successful data retrieval and processing.
+*   **Gate 2 (Cost Control):** No CI pipeline triggers until Gate 1 passes locally. This prevents unnecessary $45/hour hardware costs on flaky or broken builds.
+*   **Gate 3 (Compliance Audit):** Verify that the ranking output order matches the baseline exactly. Any deviation triggers an immediate halt.
+
+**3. Review Process**
+*   **Primary Reviewer:** Jane Smith (Discovery Team Lead). Focuses on architectural soundness of the caching/indexing strategy and code quality.
+*   **Independent Compliance Reviewer:** The designated Compliance Officer. Focuses *solely* on the audit trail: proving the ranking algorithm was untouched and the result order is identical to production.
+*   **Isolation:** The Compliance Officer must not be the same person as the implementer or Jane Smith. Their approval is binary based on the byte-for-byte diff report.
+
+**4. Landing & Rollback Strategy**
+*   **Merge Protocol:**
+    1.  Developer pushes to the release branch only after Local Gate 1 passes.
+    2.  CI pipeline runs (triggered manually to manage costs).
+    3.  Upon CI success, a deployment request is filed in the internal portal.
+    4.  **Human Decision Point:** The deployment remains pending until *both* Jane Smith and the Compliance Officer approve via the portal. No automated merging is permitted.
+*   **Deployment Window:** Deploy mid-week (Tuesday-Thursday) to align with fresh production data snapshots, allowing for immediate fidelity checks. Avoid Friday deployments.
+*   **Rollback Plan:**
+    *   Since the ranking library is shared and read-only, the risk lies in the aggregation logic.
+    *   If latency spikes or accuracy drifts post-deploy, immediately revert the commit in the Search Service repository.
+    *   If the shared library was accidentally modified (violating protocol), initiate a full system rollback to the pre-deploy state as the only recovery path.
+    *   Monitor specifically for the "flaky network check" false positives in staging; rely on actual latency metrics rather than staging timeout alerts during the surge simulation.
+
+**Summary of Critical Constraints:**
+*   **No** changes to ranking logic or result order.
+*   **No** CI runs without local success (cost saving).
+*   **No** deployment without dual human approval (Compliance + Lead).
+*   **Yes** to ignoring specific staging network timeouts if local logs verify success.

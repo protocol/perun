@@ -1,0 +1,59 @@
+**Delivery Plan: Orders Table PK Migration to UUID**
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Changing the shared library breaks the audit trail for five services if uncoordinated.
+*   **Hard Gates:** Dual human approval required (Lead Architect + Data Governance Officer) before any production merge/deploy.
+*   **Cost/Time:** CI is 45 mins/$120; DB locks >30s trigger failover.
+*   **Environment:** Staging network checks are flaky under load; do not rely on them for final verification.
+
+**Lanes & Serialization**
+Work is split into four lanes. Lanes 1 and 2 run in parallel. Lane 3 waits for Lane 2. Lane 4 waits for Lanes 1 and 3.
+
+*   **Lane 1: Core Service Adaptation (Builder)**
+    *   **Scope:** `CoreCommerce` Orders service. Update ORM models, repositories, and internal logic to accept/generate UUIDs.
+    *   **Parallel:** Yes.
+    *   **Output:** Patch with unit tests mocking UUID generation.
+
+*   **Lane 2: Shared Library & Downstream Coordination (Builder + Architect Review)**
+    *   **Scope:** The shared library used by `daily-reconciliation` and 5 other services. Implement dual-type support (accept Int or UUID, output UUID) to prevent audit breakage.
+    *   **Parallel:** Yes (but requires immediate Architect review before merge).
+    *   **Serialization:** Must be merged and verified before Lane 3 starts.
+
+*   **Lane 3: Blue-Green Migration Script (Data Engineer)**
+    *   **Scope:** Idempotent script to backfill UUIDs alongside existing Ints, swap PKs without locking >30s, and verify row counts across all 3 AZs.
+    *   **Dependency:** Requires Lane 2's library update to be present in the test environment.
+    *   **Output:** Migration script + rollback script.
+
+*   **Lane 4: Legacy Billing & Reporting Adapter (Builder)**
+    *   **Scope:** Update parsing logic in billing adapter and reporting jobs to handle string formats.
+    *   **Dependency:** Requires Lane 2's library interface to be finalized.
+
+**Gates & Verification (Exact Revisions)**
+*   **G2 Plan Approval:** Conductor presents this plan. **Human Gate:** Lead Architect confirms scope; Data Governance Officer confirms audit safety.
+*   **G4 Implementation:** Each lane produces a PR against `main` (pinned SHA).
+    *   *Check:* Static analysis for integer assumptions.
+    *   *Check:* Unit tests only (skip heavy integration here to save cost).
+*   **G5 Verification (Pre-Merge):**
+    *   **Revision:** A throwaway integration branch combining Lanes 1-4 at a specific SHA.
+    *   **Action:** Run full CI ($120) *once* on this integrated SHA.
+    *   **Specific Check:** Run migration script in staging against a sanitized snapshot. Verify zero locks >30s.
+    *   **AZ Check:** Manually verify UUID generation in all 3 AZs (bypass flaky automated network checks; use direct DB queries).
+    *   **Audit Check:** Run `daily-reconciliation` in staging to prove audit trail integrity.
+*   **G6 Review:**
+    *   **Security:** Independent review of UUID randomness and collision risk.
+    *   **QA:** Independent verification of the G5 receipts.
+    *   **Architect:** Specifically reviews Lane 2 (shared library) changes.
+
+**Landing & Rollback**
+*   **Merge Strategy:** Do not merge individually. Once G6 passes on the integration SHA:
+    1.  Create a single "Migration Train" PR containing all lanes.
+    2.  **Human Gate:** Request dual approval (Lead Architect + Data Governance Officer) on this specific PR.
+    3.  Upon approval, merge to `main`.
+*   **Deployment (G8):**
+    *   Execute Blue-Green switch via deployment pipeline.
+    *   **Rollback:** If errors occur post-switch, immediately revert the deployment config to point to the green (old) environment. The database schema change is forward-only; rollback relies on the environment switch, not a DB revert.
+*   **Post-Deploy (G9):** Monitor `daily-reconciliation` for one full cycle. If audit logs show corruption, trigger incident response immediately.
+
+**Cost Control**
+*   Max 3 full CI runs permitted (Integration test, Final pre-merge, Post-merge smoke).
+*   All other validation uses unit tests or manual staging checks.

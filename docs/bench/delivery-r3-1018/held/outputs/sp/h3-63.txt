@@ -1,0 +1,64 @@
+# Delivery Plan: Legacy Batch Job Migration
+
+## Work Lanes & Parallelism
+
+**Lane A: Infrastructure & Configuration (Platform Team)**
+*   **Work:** Draft changes to `shared-config.yaml` to enable the managed queue endpoint. Secure dual senior lead approval for the lock.
+*   **Constraint:** Must complete before Lane B can finalize integration tests.
+*   **Parallelism:** Runs parallel to Lane C.
+
+**Lane B: Core Implementation (Assistant/Dev)**
+*   **Work:** Refactor the job submission layer in `core-engine` to push tasks to the queue instead of inline execution. Implement idempotency logic to handle potential duplicates gracefully.
+*   **Constraint:** Requires Lane A's config draft for local validation. Must not modify the database migration script yet.
+*   **Parallelism:** Starts immediately; merges only after Lane A approves config.
+
+**Lane C: Staging Validation (QA/Ops)**
+*   **Work:** Deploy Lane B's code to the staging environment. Run the full nightly suite to verify timeout resolution.
+*   **Constraint:** Must ignore known flaky network check failures if logs confirm connectivity. Must account for lower hardware timeout thresholds in staging.
+*   **Parallelism:** Begins once Lane B produces a candidate build.
+
+## Gates & Checks
+
+**Gate 1: Code Review (Pre-Staging)**
+*   **Trigger:** Lane B completes refactoring.
+*   **Reviewer:** Senior Engineer independent of the Platform Team (to avoid conflict of interest on config changes).
+*   **Check:** Verify idempotency logic handles duplicates. Confirm no inline execution paths remain for target jobs.
+*   **Revision:** Latest commit on the feature branch prior to staging deploy.
+
+**Gate 2: Configuration Approval (Pre-Merge)**
+*   **Trigger:** Lane A submits `shared-config.yaml` diff.
+*   **Approvers:** Two Senior Leads.
+*   **Check:** Ensure queue endpoints match production requirements.
+*   **Revision:** Specific commit hash associated with the config PR.
+
+**Gate 3: Staging Sign-off (Pre-Production)**
+*   **Trigger:** Lane C completes validation.
+*   **Approver:** Operations Director.
+*   **Check:** Confirm zero data loss in staging logs and acceptable latency. Explicitly note any ignored flaky tests with log evidence.
+*   **Revision:** The exact build deployed to staging.
+
+## Review Strategy
+
+*   **Code Review:** Conducted by a Senior Engineer not involved in the implementation. Focus strictly on the submission layer logic and duplicate handling.
+*   **Config Review:** Conducted by the two required Senior Leads. Independent of the code reviewer.
+*   **Operational Review:** Conducted by the Operations Director based on Lane C's staging report. This is the final go/no-go decision.
+
+## Landing & Rollback
+
+**Merge Strategy:**
+1.  Lane A's config change merges first upon dual approval.
+2.  Lane B's code merges only after Gate 3 (Staging Sign-off).
+3.  Production deploy requires explicit written sign-off from the Operations Director.
+
+**Human Decisions Required:**
+*   Approval of `shared-config.yaml` (Two Senior Leads).
+*   Final Production Deploy authorization (Operations Director).
+*   Decision to proceed if staging shows timeout differences due to hardware (Operations Director).
+
+**Rollback Plan:**
+*   **Code:** Revert Lane B's merge immediately if production latency spikes or data loss is detected. The system will revert to inline execution (legacy mode) automatically upon config revert or code revert.
+*   **Database:** Since the migration script is irreversible, if data corruption occurs post-migration, we cannot rollback the schema. We must patch forward. **Critical:** Do not run the migration script until Lane C confirms success in staging with production-volume data.
+*   **Trigger:** Any report of lost jobs or sustained latency > baseline triggers immediate revert of the application code while maintaining the queue connection for debugging.
+
+**Post-Landing:**
+Monitor the first three nightly runs in production. If duplicates occur, verify idempotency logs. If timeouts persist, investigate staging vs. production hardware threshold discrepancies immediately.

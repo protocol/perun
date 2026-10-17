@@ -1,0 +1,78 @@
+# Delivery Plan: Distributed Job Scheduler Migration
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic & Coordination (Payments Team)**
+*   **Work:** Implement the distributed locking mechanism using the existing heartbeat system. Develop the new scheduler logic that respects these locks.
+*   **Parallel Constraint:** Can run immediately. Must not touch `cluster-settings.yaml` until Lane C validates the schema.
+
+**Lane B: Safety & Observability (Payments Team + SRE)**
+*   **Work:** Implement the feature flag toggle (Old vs. New logic). Add metrics for lock contention, duplicate detection, and failover latency.
+*   **Parallel Constraint:** Runs in parallel with Lane A.
+
+**Lane C: Infrastructure & Configuration (Platform Team Coordination)**
+*   **Work:** Draft changes for `cluster-settings.yaml`. **Serialized Gate:** Must coordinate with the three other teams editing this file to schedule a merge window that avoids breaking their nightly batch jobs.
+*   **Dependency:** Cannot merge until the specific coordination window is confirmed.
+
+**Lane D: Validation Environment (QA Automation)**
+*   **Work:** Since Staging lacks the ledger simulator, build a local integration harness that mocks the third-party ledger to verify billing data integrity under concurrent load.
+*   **Parallel Constraint:** Runs in parallel with Lanes A and B.
+
+## Gates & Checks
+
+**Gate 1: Local Integrity Check (Pre-PR)**
+*   **Revision:** Feature branch head.
+*   **Check:** Run the local ledger mock harness (Lane D). Verify zero duplicate executions under simulated node failure.
+*   **Owner:** Developer.
+
+**Gate 2: The "Cluster-Settings" Handshake**
+*   **Revision:** Release candidate branch.
+*   **Check:** Confirmation email/ticket from the three external teams approving the `cluster-settings.yaml` merge window.
+*   **Owner:** Tech Lead.
+
+**Gate 3: CI Pipeline Filter**
+*   **Revision:** Release candidate branch.
+*   **Check:** Full CI run (45 mins). **Exception:** If the "network latency suite" fails, a human must manually verify it is the known flaky check before rejecting. Do not auto-reject on this specific failure.
+*   **Owner:** CI System + Human Triage.
+
+**Gate 4: Staging Smoke Test**
+*   **Revision:** Deployed to Staging.
+*   **Check:** Enable feature flag for 1% of non-billing traffic. Verify heartbeat integration works. Acknowledge false negatives in integration tests due to missing simulator; rely on Lane D's local harness results instead.
+*   **Owner:** On-Call Lead.
+
+## Review Process
+
+**Independent Code Review**
+*   **Reviewer:** Senior Engineer from a team *other* than Payments (e.g., Infrastructure or Core Platform) to ensure unbiased scrutiny of the distributed logic.
+*   **Focus:** Race condition handling, heartbeat timeout edge cases, and the rollback safety of the feature flag.
+*   **Constraint:** Reviewer must not be the author of the locking logic.
+
+**Architecture Review**
+*   **Reviewer:** Jane Smith.
+*   **Focus:** Verification that the migration path guarantees single execution and that the `cluster-settings.yaml` coordination plan is solid.
+
+## Landing Strategy
+
+**Phase 1: Dark Launch**
+*   Merge code behind the feature flag (default: OFF).
+*   Deploy to Production. No traffic flows to new logic yet.
+*   **Human Decision:** Jane Smith and On-Call Lead approve the merge after Gate 3 and Gate 4 pass.
+
+**Phase 2: Canary Validation**
+*   Enable flag for internal-only billing jobs.
+*   Monitor metrics for 24 hours. Compare execution logs against the old scheduler to ensure parity.
+
+**Phase 3: Gradual Rollout**
+*   Increase traffic to 10%, then 50%, then 100% over 3 days.
+*   **Automated Rollback:** If duplicate execution metrics > 0 or billing data corruption detected, the feature flag automatically reverts to OFF.
+
+**Phase 4: Final Cutover & Cleanup**
+*   Once stable for 5 days, hard-switch the flag to ON in config.
+*   Schedule removal of old scheduler code in the next sprint.
+*   **Irreversible Note:** If any database schema changes were required (none specified, but if added later), they are applied only after Phase 3 success, as they cannot be reverted on live ledger.
+
+**Rollback Plan:**
+If critical failure occurs in Phase 2 or 3:
+1.  Toggle feature flag to OFF (immediate effect, no redeploy).
+2.  Old in-process scheduler resumes.
+3.  Investigate logs; do not attempt re-deploy until the root cause of the distributed lock failure is identified.

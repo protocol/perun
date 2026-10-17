@@ -1,0 +1,60 @@
+### Delivery Plan: Per-Tenant Feature Entitlement
+
+**Objective:** Enforce subscription-tier access at API Gateway and Frontend using central billing service, with ≤5min cache TTL.
+**Deadline:** Before next Tuesday launch.
+**Constraints:** Dual human approval (Jane Smith + Lead Architect) for deploy; CI cost/time sensitive; `global-rules.yaml` locked during business hours.
+
+#### 1. Lanes & Parallelism
+
+*   **Lane A: API Gateway Enforcement (Builder 1)**
+    *   **Work:** Implement middleware to intercept requests, query billing service, validate entitlement, and reject unauthorized access (403). Enforce 5-min cache TTL.
+    *   **Isolation:** Dedicated worktree; clean base.
+    *   **Dependency:** None (can start immediately).
+*   **Lane B: Frontend UI Hiding (Builder 2)**
+    *   **Work:** Integrate entitlement check into frontend state management; conditionally render/hide premium tools and beta features. Prevent direct URL access via client-side routing guards.
+    *   **Isolation:** Dedicated worktree; clean base.
+    *   **Dependency:** None (parallel to Lane A).
+*   **Lane C: Integration & E2E Verification (QA - Independent)**
+    *   **Work:** Verify both layers against exact revision. Test direct URL manipulation, role escalation, and cache expiration timing.
+    *   **Serialization:** Must wait for Lane A and Lane B to pass unit tests and provide a merged integration SHA.
+    *   **Environment:** Staging (monitor for compute throttling; ignore known flaky network check if local logs confirm success).
+
+#### 2. Gates & Checks
+
+*   **G1 Spec (Now):** Define acceptance criteria: "Free user gets 403 on premium API," "UI elements invisible," "Cache invalidates within 5:30." Pin base SHA.
+*   **G2 Plan:** Confirm token budgets for Lane A/B. Classify billing service as provider; gateway/frontend as consumers.
+*   **G3 Design:** ADR for caching strategy (TTL enforcement) and error handling (billing service downtime = fail closed?).
+*   **G4 Implement:**
+    *   Lane A & B commit patches with tests.
+    *   **Constraint:** If `global-rules.yaml` changes are needed, schedule write outside business hours to avoid lock conflicts.
+*   **G5 Verify (Local & CI):**
+    *   **Exact Revision:** Run build, lint, type-check, and unit tests on the specific commit SHA.
+    *   **UI Proof:** Headed-browser evidence showing hidden elements and blocked routes.
+    *   **CI Strategy:** Minimize re-runs. If staging flake occurs, attach local validation logs to bypass false negative.
+*   **G6 Review:**
+    *   **Reviewer:** Security Engineer (independent of Builders A/B).
+    *   **Scope:** Full diff against pinned base. Focus on bypass vectors and cache logic.
+    *   **Verdict:** Blocker/Critical must be fixed; High requires named owner acceptance.
+*   **G7 Integrate:** Merge A and B into integration branch. Re-run affected gates on final SHA. Generate `deep-code-review` diff summary.
+
+#### 3. Landing & Human Gates
+
+*   **Merge Train:**
+    *   Serialize merge into integration branch to prevent `global-rules.yaml` conflicts.
+    *   Final integration SHA must be green on all non-flaky checks.
+*   **Human Approval (G8 Release):**
+    *   **Required Approvers:** Jane Smith AND Lead Architect.
+    *   **Action:** Explicit approval required before deploying to production. Do not auto-deploy.
+    *   **Request Format:** Present single issue with two approaches (e.g., "Deploy now" vs "Canary 10%"), recommending one with ≤12 word justification.
+*   **Rollback Plan:**
+    *   **Pre-condition:** Prove rollback mechanism before G8.
+    *   **Risk:** Database schema changes are irreversible without full weekend rollback. If this change involves schema updates, verify no migration is included, or schedule for weekend window.
+    *   **Trigger:** Immediate rollback if SLO breach or critical access failure detected in G9.
+
+#### 4. Risk & Mitigation
+
+*   **Staging Throttling:** Monitor compute usage during Lane C; scale down test concurrency if throttling detected.
+*   **Cache Lag:** Strictly test 5-minute window; failure here is a Blocker.
+*   **Conflict:** If `global-rules.yaml` is locked, pause merge lane until off-hours; do not force-push.
+
+**Next Step:** Confirm G1 Spec details and pin base SHA to begin Lane A and B.

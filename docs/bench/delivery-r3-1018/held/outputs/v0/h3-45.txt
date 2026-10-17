@@ -1,0 +1,63 @@
+**Delivery Plan: Build Agent OS Image Upgrade**
+
+**Objective:** Upgrade the base OS image for the signing pipeline to resolve compliance violations while maintaining CA compatibility and ensuring zero downtime for the main release branch.
+
+**Constraints & Risks:**
+*   **Cost/Time:** Each test execution costs $45 and takes 22 minutes.
+*   **Approvals:** Changes to `golden-image` require Jane Smith and the Compliance Officer. Production deployment requires the Security Lead.
+*   **Irreversibility:** Reverting is impossible 4 hours post-deployment due to cache purging.
+*   **Flakiness:** Network handshake checks fail randomly on Tuesdays; single failures are ignored, repeated ones investigated.
+*   **Deadline:** External audit next Tuesday.
+
+### Lanes and Serialization
+
+**Lane 1: Specification & Stakeholder Alignment (Serial - Start Immediately)**
+*   **Actor:** Product Analyst / Conductor
+*   **Work:** Define the exact target kernel version and CA bundle requirements. Draft the change proposal for the `golden-image`.
+*   **Gate:** Obtain written approval from Jane Smith and the Compliance Officer on the spec before any code change.
+*   **Output:** Approved spec document with pinned target image SHA.
+
+**Lane 2: Image Build & Local Validation (Parallel to Lane 1 after spec draft)**
+*   **Actor:** Builder
+*   **Work:** Update the `golden-image` definition in a dedicated worktree. Build the new image locally or in a non-attested sandbox to verify basic boot and CA presence.
+*   **Gate:** Local sanity check passes (no costly attestation yet).
+*   **Output:** Candidate image artifact and patch diff.
+
+**Lane 3: Attested Integration Testing (Serial - Dependent on Lane 2)**
+*   **Actor:** QA (Independent)
+*   **Work:** Trigger the CI pipeline on the exact candidate SHA. Run the full signing process simulation.
+*   **Strategy:** Due to the $45/22min cost, limit runs. If a "network handshake" failure occurs on a Tuesday, retry once immediately. If it fails again, investigate. If it passes, proceed.
+*   **Gate:** Successful signing process completion without timeout or integrity failure on the exact revision.
+*   **Output:** Test receipt with exit status and logs.
+
+**Lane 4: Security & Compliance Verification (Parallel to Lane 3)**
+*   **Actor:** Security Specialist (Independent)
+*   **Work:** Review the image layers for vulnerabilities and verify the kernel update addresses the specific compliance flags. Validate the CA chain trust.
+*   **Gate:** Security sign-off on the specific image SHA.
+*   **Output:** Security verdict.
+
+### Review and Verification
+
+*   **Code/Config Review:** Independent review of the `golden-image` diff by a senior platform engineer (not the Builder). Focus on kernel params and CA injection points.
+*   **Verification Standard:** "Green" is defined strictly as the signing process completing successfully in the attested environment (Lane 3) AND security approval (Lane 4).
+*   **Flake Handling:** A single Tuesday network failure is logged but does not block if the retry succeeds. Two consecutive failures block the lane for root cause analysis.
+
+### Landing and Deployment Strategy
+
+**Integration (G7):**
+Once Lane 3 and Lane 4 pass on the exact same SHA:
+1.  Merge the change to the integration branch.
+2.  Generate the final integration receipt.
+
+**Human Gates (G8 - Production):**
+*   **Decision Required:** Manual green-light from the Security Lead.
+*   **Presentation:** Present the Security Lead with the test receipts, the specific SHA, the compliance fix evidence, and the rollback limitation warning (4-hour window).
+*   **Timing:** Schedule deployment immediately after approval to maximize the 4-hour revert window during business hours.
+
+**Rollback Plan:**
+*   **Pre-Deployment:** Ensure the old image is actively cached and documented.
+*   **Post-Deployment:** Monitor the first three signing jobs intensely.
+*   **Failure Mode:** If integrity checks fail or timeouts occur in production, trigger an immediate incident. **Note:** If more than 4 hours have passed since the new image deployment, rollback is impossible; the contingency plan involves spinning up temporary legacy agents (if hardware permits) or expediting a hotfix image, as the specific old binary will be purged.
+
+**Audit Readiness:**
+Compile the approval chain (Jane Smith, Compliance Officer, Security Lead), the test receipts, and the security verdict into a single audit artifact before next Tuesday.

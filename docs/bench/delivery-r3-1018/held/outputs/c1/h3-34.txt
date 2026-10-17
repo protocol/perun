@@ -1,0 +1,52 @@
+**Delivery Plan: NexusWrite Autosave & Spell-Check**
+
+**Binding Facts & Constraints**
+*   **Critical Risk:** Irreversible database migrations on regional shards; shared global state with collaboration engine (collision risk).
+*   **Approval Gate:** `stable-prod` requires dual approval (Jane Smith + Shift Lead).
+*   **Cost/Time:** CI is $45/run, 50 mins. Avoid full suites for minor changes.
+*   **Known Flake:** Auth module check (ignore if local logs show success).
+*   **Scope Lock:** Do not alter comment threads or version history logic.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Specification & Contract (Conductor + Product Analyst)**
+    *   **Work:** Define exact autosave intervals, crash-recovery states, and supported languages. Explicitly document "no-change" boundaries for comment threads/version history.
+    *   **Output:** Testable spec with acceptance criteria.
+    *   **Gate:** G1 Spec (Owner sign-off on scope).
+
+2.  **Lane B: State & Migration Design (Architect + Security)**
+    *   **Work:** Design draft storage schema and migration strategy. Define locking mechanism for the shared global state file to prevent collaboration breaks.
+    *   **Serialization:** **Must complete before Lane C starts.** Migration is irreversible; design must be frozen.
+    *   **Gate:** G3 Design (ADR approved).
+
+3.  **Lane C: Core Implementation (Builder)**
+    *   **Work:** Implement autosave logic (30s trigger, non-blocking), crash recovery, and spell-check UI (red underline, suggestions). Isolate work in a dedicated worktree.
+    *   **Constraint:** Read-only access to comment/version modules.
+    *   **Gate:** G4 Implement (Unit tests included, patch ready).
+
+4.  **Lane D: Independent Verification (QA)**
+    *   **Work:** Functional testing on exact revision. Verify crash recovery, network degradation behavior, and multi-language support.
+    *   **Serialization:** Runs after Lane C commits.
+    *   **Gate:** G5 Verify (Green build, lint, type, integration tests at exact SHA). *Note: Auth flake ignored only if local logs confirm success.*
+
+5.  **Lane E: Security & Privacy Review (Security)**
+    *   **Work:** Review draft storage encryption, PII handling in spell-check suggestions, and supply chain risks for language dictionaries.
+    *   **Gate:** G6 Review (Independent verdict).
+
+**Review Strategy**
+*   **Builder (Lane C)** never reviews their own code.
+*   **QA (Lane D)** verifies functional correctness independent of implementation.
+*   **Security (Lane E)** audits data handling independent of QA/Builder.
+*   **Deep Code Review:** Full scope on G1 spec, G3 design, and G4 diff. Pinned base SHA required for all.
+
+**Integration & Landing**
+*   **G7 Integrate:** Merge approved lanes into integration branch. Run affected CI gates only (avoid full $45 suite if possible via path filtering). Re-verify collaboration engine stability.
+*   **Human Gate (G8 Release):** **Dual Approval Required.** Jane Smith and Shift Lead must explicitly approve the merge to `stable-prod`. No auto-deploy.
+*   **Rollback Plan:** Pre-defined script to revert database migration (if possible via down-migration plan defined in Lane B) and code revert. Rollback proven in staging before G8.
+
+**Cost & Risk Controls**
+*   **Budget:** Per-lane token/cost cap set at G2. No unlimited spend.
+*   **Flake Handling:** Auth check failure bypassed only with attached local success logs in the PR body.
+*   **Collision Prevention:** Serialized execution of State Design (Lane B) before Implementation (Lane C) to protect the shared global state file.
+
+**Next Step:** Owner to confirm appetite (time-box) and approve the serialized dependency of Lane B before Lane C.

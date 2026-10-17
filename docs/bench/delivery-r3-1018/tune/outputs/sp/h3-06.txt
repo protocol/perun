@@ -1,0 +1,61 @@
+# Delivery Plan: Legacy Support Portal Merge
+
+## Lanes & Parallelism
+
+**Lane A: Data Ingestion & Deduplication (Platform Team)**
+*   **Work:** Build the real-time listener for 'HelpDesk Alpha' emails. Implement logic to hash incoming message IDs and attachment metadata to prevent duplicate thread creation in 'SupportCentral'.
+*   **Constraint:** Must not lock shared billing database tables. Use read-replicas or change-data-capture streams.
+*   **Parallel Status:** Can run concurrently with Lane B.
+
+**Lane B: Bi-Directional Sync & Notification (Platform Team)**
+*   **Work:** Develop the webhook handler in 'SupportCentral' that pushes agent updates back to 'HelpDesk Alpha' senders. Ensure open cases remain editable immediately upon transfer.
+*   **Constraint:** Must handle the known flaky notification check without failing the whole pipeline (implement retry logic specifically for this module).
+*   **Parallel Status:** Can run concurrently with Lane A.
+
+**Lane C: Infrastructure & Staging Simulation (DevOps)**
+*   **Work:** Since staging lacks the legacy email gateway, build a mock service that simulates inbound Alpha traffic and attachment payloads. Configure CI to ignore the specific flaky notification check to prevent budget alerts from false positives.
+*   **Dependency:** Must be ready before Lane A and B integration testing.
+
+**Serialization Point:** Lanes A and B must merge for **Integration Testing** only after Lane C's mock service is deployed to the test environment.
+
+## Gates & Checks
+
+1.  **Code Freeze Gate:** All code must be merged to a release candidate branch `rc/merge-legacy`. No direct commits to `main`.
+2.  **CI Execution:** Runs on `rc/merge-legacy`.
+    *   **Check:** Unit tests for deduplication logic (Lane A).
+    *   **Check:** Mocked end-to-end sync test using Lane C's service.
+    *   **Override:** Explicit configuration to treat the known notification module failure as "non-blocking" if logs confirm it is the specific 15% flake.
+3.  **Security Gate:** Automated scan for SQL injection (critical due to shared billing schema) and PII exposure in attachment handling.
+4.  **Dry-Run Gate:** Execute the migration script against a production database snapshot (sanitized) to verify zero table locks and <5ms latency impact on billing queries.
+
+## Review Process
+
+*   **Primary Reviewer:** Senior Platform Engineer (not the author of Lane A or B). Focus: Deduplication algorithm correctness and race condition handling.
+*   **Secondary Reviewer:** DevOps Lead. Focus: CI configuration changes and mock service fidelity.
+*   **Independent Audit:** Security Lead. Focus: Data integrity during the handover and attachment access controls.
+*   **Rule:** No author may approve their own lane. The Security Lead's review is independent of the Platform Team's internal reviews.
+
+## Landing Strategy
+
+**1. Shadow Mode Deployment**
+*   Deploy to production behind a feature flag.
+*   Ingest Alpha traffic into Central but **do not** send notifications back to Alpha yet.
+*   Monitor for 2 hours. Verify no duplicate threads and zero billing DB lock warnings.
+
+**2. Human Decision Point**
+*   **Trigger:** Shadow mode metrics review.
+*   **Approvers:** Security Lead AND VP of Operations.
+*   **Decision:** Authorize full bi-directional sync toggle. If duplicates > 0.1% or DB latency spikes, rollback immediately.
+
+**3. Full Cutover**
+*   Enable bi-directional sync.
+*   Mark 'HelpDesk Alpha' as "Read-Only" for agents (customers can still email).
+*   Monitor for 24 hours.
+
+**Rollback Plan**
+*   **Trigger:** Data corruption, lost attachments, or billing service latency > 200ms.
+*   **Action:** Flip feature flag to disable ingestion. Re-route DNS for customer emails back to original Alpha handlers.
+*   **Data Recovery:** Since no data was deleted in Alpha, only synced, no data recovery is needed; simply stop the sync process.
+*   **Post-Mortem:** Mandatory review of the deduplication hash collision logs before re-attempting.
+
+**Final Sign-off:** VP of Operations confirms all open cases are editable in Central before closing the ticket.

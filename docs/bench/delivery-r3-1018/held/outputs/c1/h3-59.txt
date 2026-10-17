@@ -1,0 +1,70 @@
+### Delivery Plan: Dynamic Permission Cache Invalidation
+
+**Binding Facts & Constraints**
+*   **Approvers:** Jane Smith + Security Lead (Required for deploy/merge).
+*   **CI Cost:** 45m/full run on expensive shared cluster; incremental testing mandatory.
+*   **Shared Dependency:** Permission logic is in a shared library used by 3 other tools; interface changes are forbidden.
+*   **QA Limitation:** Staging data scrambles role flags; E2E verification requires a dedicated manual script.
+*   **Risk:** Race conditions during concurrent updates; performance degradation during peak traffic.
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Core Logic & Invalidation Strategy (Builder)**
+*   **Work:** Implement cache invalidation trigger within the existing shared library interface. Design a "versioned cache key" or "event-based invalidation" mechanism that avoids global logouts. Ensure thread-safety for concurrent updates.
+*   **Parallelism:** Can run parallel to Lane 2, but must finish before Lane 3.
+*   **Constraint:** Must not change the public API of the shared library.
+
+**Lane 2: High-Privilege Enforcement (Builder)**
+*   **Work:** Inject fresh lookups for high-privilege actions as requested. Isolate this logic to ensure it bypasses the cache only when strictly necessary to maintain performance.
+*   **Parallelism:** Independent of Lane 1's internal cache mechanics, but integrates at the call site.
+
+**Lane 3: Integration & Consumer Smoke Tests (Builder)**
+*   **Work:** Verify the three other internal tools still build against the modified shared library. Run unit tests only (no full CI yet).
+*   **Serialization:** Must wait for Lane 1 & 2 to produce a candidate SHA.
+
+**Lane 4: Manual Verification Script (QA)**
+*   **Work:** Create the dedicated manual test script required to verify role updates on scrambled staging data. This script will simulate an admin role change and assert immediate effect on a target user session without logout.
+*   **Serialization:** Depends on Lane 1's implementation details to know what to assert.
+
+---
+
+#### Gates & Checks
+
+*   **G2 Plan (Now):** Acyclic graph approved. Budget set: Max 2 full CI runs (pre-merge, post-merge).
+*   **G4 Implement:**
+    *   **Base SHA:** Pinned to current `main` head.
+    *   **Check:** Local unit tests + build for all 4 affected repos (main app + 3 tools).
+    *   **Output:** Patch set with no API breaks.
+*   **G5 Verify:**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run incremental CI (unit/integration only, skipping full E2E suite to save cost).
+    *   **Manual Step:** QA executes the custom script (Lane 4) on Staging. Evidence: Screenshots/logs of role update propagating without logout.
+    *   **Performance Check:** Load test simulation on the caching layer to ensure no regression during peak traffic.
+*   **G6 Review:**
+    *   **Reviewer:** Security Lead (independent of Builder). Focus: Race conditions, privilege escalation risks, cache poisoning.
+    *   **Reviewer:** Senior Identity Squad Member (independent of Builder). Focus: Shared library compatibility.
+*   **G7 Integrate:**
+    *   **Action:** Merge to integration branch. Trigger *one* full CI run (45m) on the exact merged SHA.
+    *   **Condition:** Green CI + Green Manual Script + Approved Reviews.
+
+---
+
+#### Review Strategy
+
+*   **Security Review:** Mandatory by Security Lead. They must verify the invalidation logic cannot be bypassed and handles concurrent writes safely.
+*   **Compatibility Review:** Independent review of the shared library changes to guarantee zero breakage for the 3 external tools.
+*   **QA Sign-off:** Based solely on the manual script execution, as automated E2E is impossible in staging.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Squash merge to `main` after G7 success.
+*   **Human Decision:** Explicit approval required from **Jane Smith** AND **Security Lead** before the merge button is clicked. No auto-merge.
+*   **Deploy:** Staged rollout (canary) to 5% of traffic first. Monitor error rates and cache hit/miss ratios.
+*   **Rollback:** If high-privilege actions fail or latency spikes >10%, immediate revert of the merge commit. No feature flag flip required as this is a core logic change; code revert is the only path.
+*   **Post-Deploy:** Monitor support ticket volume regarding permissions for 48 hours.
+
+**Cost Control:** Only two full CI runs permitted (final integration and post-merge verification). All other checks must be incremental or local.

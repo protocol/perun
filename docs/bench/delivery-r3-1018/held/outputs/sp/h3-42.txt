@@ -1,0 +1,61 @@
+# Delivery Plan: Decouple Billing and Inventory Schemas
+
+## Lanes and Parallelism
+
+**Lane A: Configuration & Infrastructure (Parallel Start)**
+*   **Owner:** DevOps Engineer
+*   **Work:** Refactor the shared configuration file to support distinct `BILLING_DB_URL` and `INVENTORY_DB_URL`. Update CI/CD pipelines to inject these variables separately.
+*   **Constraint:** Must be merged and verified before any schema migration code is deployed.
+
+**Lane B: Event Synchronization Layer (Parallel Start)**
+*   **Owner:** Backend Architect + One Developer from each team
+*   **Work:** Implement the event bus (e.g., Kafka/RabbitMQ) to replace foreign keys. Create producers for data changes and consumers to update local caches.
+*   **Dependency:** None. Can run parallel to Lane A.
+
+**Lane C: Schema Split & Migration Script (Serialized after A & B)**
+*   **Owner:** Senior DBA (Single Point of Execution)
+*   **Work:** Create the new namespace DDL. Write the idempotent migration script that copies data from the monolith to the new namespaces while the old system runs.
+*   **Dependency:** Requires Lane A (config) and Lane B (sync logic) to be ready for integration testing.
+
+## Gates and Checks
+
+**Gate 1: Code Freeze & Backup Verification**
+*   **Trigger:** Lane C script ready.
+*   **Check:** Verify the 03:00 UTC backup completed successfully. **Hard Stop:** If backup is missing or corrupt, abort. No schema changes permitted after 03:00 UTC until the next day's backup.
+*   **Revision:** Latest `main` branch commit post-Lane A/B merge.
+
+**Gate 2: The "Flaky" Filter**
+*   **Trigger:** CI Pipeline execution.
+*   **Check:** Run the 45-minute integration suite against the production mirror.
+*   **Protocol:** If the known flaky validation check fails, automatically trigger one re-run. If it fails twice, halt and require manual inspection by the QA Lead. Do not proceed on a single pass if the flaky check is involved without verification.
+*   **Cost Control:** Limit mirror runs to twice per PR to manage the $200 cost.
+
+**Gate 3: Manual Approval**
+*   **Approver:** Dave Miller (Lead Architect).
+*   **Requirement:** Must see successful Gate 2 results and the signed-off Rollback Plan.
+
+## Review Process
+
+*   **Code Review:** Peer review between Billing and Inventory leads. Each lead must approve the other's changes to ensure no hidden coupling remains.
+*   **Migration Logic Review:** Independent review by the Senior DBA (if not the author) or an external Database Consultant. Focus strictly on data integrity and idempotency.
+*   **Rollback Review:** Reviewed by the On-Call Incident Manager to ensure operational feasibility.
+
+## Landing Strategy
+
+**Execution Window:** Saturday 02:00 UTC – 06:00 UTC (Post-backup, pre-business hours).
+
+1.  **Pre-Flight:** Confirm 03:00 UTC backup exists. Enable "Maintenance Mode" (read-only) for 5 minutes to catch straggling writes.
+2.  **Migration:** Execute Lane C script.
+3.  **Cutover:** Switch application traffic to new connection strings (Lane A config).
+4.  **Verification:** Run smoke tests on both services. Verify event sync lag is <1 second.
+5.  **Completion:** Remove old foreign key constraints only after 24 hours of stable operation.
+
+**Rollback Plan:**
+If the migration script fails or data mismatch is detected:
+1.  **Immediate Halt:** Stop the migration script.
+2.  **Revert Config:** Roll back Lane A config change to point back to the monolith.
+3.  **Restore State:** Since the migration runs within a transaction or on a copy, simply discard the new namespaces. The monolith remains the source of truth.
+4.  **Data Recovery:** If the monolith was altered, restore from the 03:00 UTC backup. **Note:** This results in data loss for any transactions occurring between 03:00 UTC and the failure time. This is the accepted risk window.
+
+**Human Decision Required:**
+The "Go/No-Go" decision at 02:45 UTC rests with the Incident Commander, based on the backup verification and Gate 2 results. If the backup is questionable, the deployment is automatically cancelled.

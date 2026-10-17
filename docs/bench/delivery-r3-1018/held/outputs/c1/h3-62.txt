@@ -1,0 +1,56 @@
+**Delivery Plan: Fraud Score Integration**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Writing to the audit log; reversion requires full data restoration.
+*   **Approvals:** Production deploy requires dual approval (Backend Lead + Head of Trust & Safety).
+*   **Cost/Time:** CI is 45 mins; failed builds incur penalties. Risk engine rate limit: 500 RPS.
+*   **Deadline:** Live before next Monday.
+*   **Critical Risk:** Fallback defaults to "allow" on outage (high risk of fraud influx); Read-replica lag (30s) affects manual review visibility.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Core Logic & Timeout Enforcement (Builder)**
+    *   **Work:** Modify `UserRegistrationPipeline` in `CoreAuth`. Implement synchronous call to risk engine with strict 150ms timeout.
+    *   **Logic:** High-risk → Hard fail. Medium-risk → Provisional create + queue insertion. Unreachable → Allow (per spec, though flagged for security review).
+    *   **Parallelism:** Can run parallel to Lane B, but must finish before Lane C.
+    *   **Serialization:** Must complete before integration testing.
+
+2.  **Lane B: Manual Review Dashboard Adaptation (Builder)**
+    *   **Work:** Update dashboard to handle "Provisional" status and visualize the 30s read-replica lag warning.
+    *   **Parallelism:** Independent of Lane A code, but shares the data contract.
+
+3.  **Lane C: Independent Verification & Load Test (QA)**
+    *   **Work:** Verify exact 150ms timeout behavior and rate-limit handling (ensure <500 RPS).
+    *   **Constraint:** Must run against a staged environment, not production, to avoid IP bans.
+    *   **Serialization:** Blocks merge until green.
+
+**Gates & Checks**
+
+*   **G1 Spec (Now):** Confirm "Allow on outage" fallback is explicitly accepted by Trust & Safety given the holiday risk. Define "Medium-risk" score thresholds.
+*   **G3 Design:** ADR required for the timeout strategy and fallback justification. Data contract for provisional users must be signed off.
+*   **G4 Implement:** Code committed to isolated worktrees. Unit tests included for timeout and exception paths.
+*   **G5 Verify (Exact Revision):**
+    *   **Functional:** Green build on the specific commit SHA.
+    *   **Performance:** Load test proving latency <150ms at expected volume and RPS <500.
+    *   **UI:** Evidence of provisional user appearing in dashboard with lag warning.
+*   **G6 Review:**
+    *   **Security:** Independent review of the "Allow on outage" fallback. If rejected, plan halts.
+    *   **Code:** Senior Backend Engineer (not the Builder) reviews `CoreAuth` changes.
+*   **G7 Integrate:** Merge to release branch. Re-run subset of CI (smoke tests) on the merge commit to save cost/time.
+
+**Landing & Rollback**
+
+*   **Human Decisions:**
+    1.  **Scope Approval:** Trust & Safety must sign off on the "Allow on outage" fallback before G4 starts.
+    2.  **Deploy Approval:** Dual approval (Backend Lead + Head of Trust & Safety) required for G8.
+*   **Merge Strategy:** Single PR from integration branch. No merge train needed for single feature, but pre-merge CI must pass.
+*   **Rollback Plan:**
+    *   **Trigger:** Critical fraud spike or service instability.
+    *   **Action:** Feature flag flip to bypass check (if implemented) or immediate revert.
+    *   **Constraint:** Reverting after audit log writes requires data restoration procedure; coordinate with DBA on call.
+*   **Post-Deploy (G9):** Monitor fraud acceptance rate and risk engine latency. Verify manual queue population.
+
+**Risk Mitigation**
+*   **CI Cost:** Run full regression only on final candidate; use lint/type/unit checks for intermediate commits.
+*   **Rate Limits:** QA load tests must simulate traffic without exceeding 500 RPS against the shared endpoint.
+*   **Deadline:** If G6 Security rejects the fallback, the timeline slips; no workaround without changing the requirement.

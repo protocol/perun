@@ -1,0 +1,67 @@
+**Delivery Plan: Multi-Currency Ledger Support**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Database migration script; failure requires 4-hour restore.
+*   **Approval Gate:** Chief Compliance Officer (CCO) manual sign-off required for Vault deployment.
+*   **Collision Risk:** `global-config` locked during EU business hours; serialize edits.
+*   **Cost/Time:** CI is 45 mins/run; minimize retries.
+*   **Scope Boundary:** Historical rows are immutable; no migration of existing data.
+*   **Environment:** Staging network flakiness on external fetches (must mock).
+
+**Lanes & Serialization**
+
+1.  **Lane A: Schema & Migration (Serialized First)**
+    *   **Work:** Create `currency_rates` table; alter `transactions` to include `currency_code`. Write irreversible migration script with pre-flight validation.
+    *   **Constraint:** Must run alone. No other lanes active during migration test.
+    *   **Owner:** Builder (Database specialization).
+
+2.  **Lane B: Core Logic & API (Parallel Safe)**
+    *   **Work:** Implement transaction creation with currency code; build dynamic report aggregation using historical rates; update API response to return `{native_amount, base_value}`.
+    *   **Constraint:** Must mock external rate fetches to avoid staging flakiness.
+    *   **Owner:** Builder (Backend).
+
+3.  **Lane C: Compliance & Audit Verification (Independent)**
+    *   **Work:** Verify immutability of historical records; validate audit trail for rate lookups; confirm legal compliance of new schema.
+    *   **Constraint:** Runs only after Lane A & B are code-complete.
+    *   **Owner:** QA + Security (Joint).
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirm "no historical migration" constraint is encoded in acceptance tests. Define exact API JSON contract.
+*   **G2 (Plan):** Set per-lane token budgets. Schedule Lane A to avoid EU lockout window for `global-config` updates.
+*   **G3 (Design):** ADR detailing rate snapshotting logic to ensure report reproducibility.
+*   **G4 (Implement):**
+    *   Lane A: Migration script dry-run on local clone (no DB connection).
+    *   Lane B: Unit tests with mocked rates; type checks.
+    *   *Check:* Lint and static analysis on exact commit SHA before CI trigger.
+*   **G5 (Verify):**
+    *   **Critical:** Run CI once per lane on pinned SHA.
+    *   Lane A: Test migration rollback procedure in isolated env (verify 4hr restore logic isn't needed if rollback works).
+    *   Lane B: Integration tests with mocked rates; verify API dual-output.
+    *   *Flake Mitigation:* If staging network fails, retry only the mock-based suite, not the full pipe.
+*   **G6 (Review):**
+    *   **Security:** Independent review of SQL injection risks in dynamic rate queries.
+    *   **QA:** Verify historical data remains untouched in test snapshot.
+    *   **Reviewer:** Senior Engineer (not the Builder).
+*   **G7 (Integrate):** Merge to integration branch. Run *one* final full CI pass (45 mins) on the combined SHA.
+*   **G8 (Release):** **Human Gate.** CCO reviews audit evidence and signs off.
+*   **G9 (Production):** Deploy to Vault. Verify first live transaction reports correctly.
+
+**Review Strategy**
+*   Builder A does not review Builder B.
+*   Security reviews Lane A (data integrity) and Lane B (API exposure) independently.
+*   QA verifies the "immutable history" constraint explicitly.
+
+**Landing & Rollback**
+*   **Merge:** Single PR to `main` after G7 green.
+*   **Human Decision:** CCO approval (G8) is mandatory before merge-to-deploy trigger.
+*   **Deployment:** Manual trigger to Vault environment post-approval.
+*   **Rollback:**
+    *   *Pre-migration:* Revert code commit.
+    *   *Post-migration:* Code revert + **Full DB Restore from nightly backup** (4hr downtime).
+    *   *Mitigation:* Lane A must include a "soft-fail" check that aborts migration if pre-conditions aren't met, preventing the need for a full restore.
+
+**Risk Controls**
+*   **EU Lockout:** All `global-config` edits scheduled outside EU business hours.
+*   **CI Cost:** No re-runs allowed without a identified fix; local verification mandatory before push.
+*   **Data Safety:** Zero writes to historical rows; verified by row-count checksums in G5.

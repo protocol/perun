@@ -1,0 +1,66 @@
+### Delivery Plan: CVE-2024-9981 Emergency Patch
+
+**Objective:** Rebuild base image, propagate hash, rolling restart 40 services, verify clean scan by EOD.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Image Build & Scan):** *Builder* updates `core-foundations` base image definition. Triggers CI pipeline.
+    *   *Constraint:* Max 3 concurrent builds/hour. Since this is a single critical image, run one high-priority build.
+    *   *Serialization:* Must complete before Lane B.
+*   **Lane B (Config Propagation):** *Builder* updates configuration registry with new image hash once Lane A succeeds.
+    *   *Serialization:* Depends on Lane A output (new hash).
+*   **Lane C (Service Restart Coordinator):** *Conductor* prepares rolling restart script for 40 microservices.
+    *   *Parallelism:* Can prepare while Lane A runs; execution waits for Lane B.
+*   **Lane D (Independent Verification):** *QA/Security* monitors the vulnerability scanner and staging health.
+    *   *Parallelism:* Runs concurrently with Lane A (monitoring) and post-deploy (validation).
+
+#### 2. Gates & Checks
+*   **G0/G1 (Intake/Spec):** Confirmed. Scope: Base image rebuild + 40 service restarts. Constraint: EOD deadline, 3-build limit, irreversible deploy.
+*   **G2 (Plan):** Approved. Serialized dependency: Build → Config → Restart.
+*   **G3 (Design):** N/A (Emergency patch of existing pattern).
+*   **G4 (Implement):**
+    *   *Base Image:* Commit to `core-foundations`. Requires **two senior platform engineer approvals** before merge.
+    *   *CI Pipeline:* 55-minute build/scan.
+    *   *Flake Handling:* If `network-policy` check fails in staging with no other errors, proceed to manual verification (do not block).
+*   **G5 (Verify):**
+    *   *Staging:* Confirm new hash deployed. Run vulnerability scan. Manual verification of network policy if flaky fail occurs.
+    *   *Production Prep:* Verify config registry propagation.
+*   **G6 (Review):**
+    *   *Code/Config:* Independent review by two senior platform engineers (mandatory for `core-foundations`).
+    *   *Security:* Independent sign-off on scan results (Clean status required).
+*   **G7 (Integrate):** Merge to main. Record exact SHA of new image.
+*   **G8 (Release):** **Human Gate.** Release Manager must authorize final production push. Irreversible action.
+*   **G9 (Production Verify):**
+    *   Rolling restart of 40 services.
+    *   Confirm vulnerability scanner reports clean for all instances.
+    *   Confirm service health (no regressions).
+
+#### 3. Review Strategy
+*   **Base Image Code:** Two senior platform engineers (independent of Builder).
+*   **Security Posture:** Security team independent verification of scan results (independent of Builder and CI automation).
+*   **Network Policy:** Manual verification by QA if automated check flakes.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:**
+    1.  Builder opens PR in `core-foundations`.
+    2.  Two senior engineers approve (G6).
+    3.  Merge triggers 55-min CI (G4/G5).
+    4.  On success, update config registry (Lane B).
+    5.  Request Release Manager authorization (G8).
+    6.  Upon approval, execute rolling restart (Lane C).
+*   **Human Decisions Required:**
+    *   Two senior platform engineer approvals (Code).
+    *   Release Manager authorization (Production Deploy).
+    *   Manual network policy verification (if flaky fail).
+*   **Rollback Plan:**
+    *   Trigger: Production health regression or scanner failure post-deploy.
+    *   Action: Full rollback to previous snapshot.
+    *   Cost: 20 minutes downtime/reversion time.
+    *   Procedure: Revert config registry to previous hash; force restart services to previous image.
+
+#### 5. Risk & Mitigation
+*   **Build Queue:** Only one build needed; within 3/hour limit.
+*   **Flaky Check:** Explicit bypass for `network-policy` with manual verification to prevent false negative blocking.
+*   **Irreversibility:** Rollback snapshot ready; 20-minute RTO confirmed.
+*   **Timeline:** 55m build + approval time + rollout. Tight for EOD; prioritize approvals immediately.
+
+**Status:** Ready for G4 implementation upon confirmation of senior engineer availability for immediate review.

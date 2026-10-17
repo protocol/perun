@@ -1,0 +1,65 @@
+### Delivery Plan: Robot Status Feed Integration
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Deleting the legacy cache entry wipes audit trails; requires explicit owner confirmation before execution.
+*   **Serialization Point:** The read-only config file shared with Billing locks during updates; config changes must be serialized against Billing updates.
+*   **Gate Constraint:** `position-validity` check is flaky under latency; requires Shift Lead manual retry approval (not auto-retry).
+*   **Approver:** Senior Operations Manager for production deploy.
+*   **Cost/Time:** CI times out at 12m; tests must be efficient to avoid credit waste.
+
+#### Lanes & Parallelism
+
+**Lane 1: Data Ingestion & Timestamp Validation (Builder)**
+*   **Work:** Implement the robot status feed parser. Enforce strict timestamp validation: if `now - last_reported > 2s`, mark status as stale.
+*   **Output:** Patch to ingestion service + unit tests for timestamp edge cases.
+*   **Parallelism:** Can run parallel to Lane 2.
+
+**Lane 2: Dashboard Rendering Logic (Builder)**
+*   **Work:** Update dispatch map logic to hide or gray out icons flagged as stale by Lane 1. Ensure no lingering coordinates.
+*   **Output:** Patch to frontend service + visual regression tests (static assets).
+*   **Parallelism:** Runs parallel to Lane 1.
+
+**Lane 3: High-Load Verification (QA)**
+*   **Work:** Simulate high load and network latency spikes. Verify the 2-second stale threshold triggers correctly.
+*   **Constraint:** Must run on the **exact integrated SHA** from Lane 1 + Lane 2.
+*   **Serialization:** Waits for Lanes 1 & 2 to merge to integration branch.
+*   **Specific Check:** Monitor `position-validity` check; if it flakes due to latency, halt and request Shift Lead approval for manual retry (do not auto-retry).
+
+**Lane 4: Cache Migration Script (Builder)**
+*   **Work:** Draft the script to delete the legacy cache entry.
+*   **Constraint:** **Do not execute.** This is a "dry-run" preparation only.
+*   **Serialization:** Independent of code lanes, but execution is gated.
+
+#### Gates & Checks
+
+*   **G1 Spec:** Confirm acceptance criteria: "Icon vanishes/grays within 2s of silence." Pin base SHA.
+*   **G4 Implement:**
+    *   Lanes 1 & 2 commit to isolated worktrees.
+    *   Tests included in commit.
+    *   Config file updates (if any) scheduled during a Billing idle window.
+*   **G5 Verify (Local/CI):**
+    *   Run efficient unit/integration tests (target <10m to avoid timeout).
+    *   **Critical:** Verify the stack actually starts; a green test suite on a crashed app is `UNVERIFIED`.
+*   **G6 Review:**
+    *   **Reviewer:** Independent Senior Engineer (not the Builder).
+    *   **Focus:** Timestamp logic correctness and UI state handling.
+    *   **Security:** Verify no PII leakage in new feed.
+*   **G7 Integrate:**
+    *   Merge Lanes 1 & 2 to integration branch.
+    *   Re-run affected tests on the **final merged SHA**.
+    *   Execute Lane 3 (High-Load) against this SHA.
+    *   **Flake Handling:** If `position-validity` fails, pause for Shift Lead approval before retrying.
+
+#### Landing & Human Decisions
+
+*   **Merge Strategy:** Merge train to `main` (or release branch) only after G7 green.
+*   **Human Gate 1 (Shift Lead):** Required only if `position-validity` check fails during G5/G7 due to latency.
+*   **Human Gate 2 (Senior Operations Manager):**
+    *   **Action:** Authorize production deploy.
+    *   **Action:** Explicitly approve the **deletion of the legacy cache entry** (Lane 4). This is irreversible; the manager must confirm the audit trail wipe is acceptable for the current shift.
+*   **Rollback:**
+    *   If stale data appears in production: Immediate rollback to previous SHA.
+    *   If cache deletion causes issues: No technical rollback possible for data; restore from backup (if available) or wait for next shift audit cycle.
+
+**Summary of Flow:**
+Build (L1, L2) → Integrate → Verify High Load (L3) → Shift Lead Approval (if flake) → Ops Manager Deploy Approval → Deploy → Execute Cache Cleanup (L4).

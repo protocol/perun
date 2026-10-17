@@ -1,0 +1,70 @@
+# Delivery Plan: Gated Settings Redesign
+
+## Lanes & Parallelism
+
+**Lane A: Frontend Implementation (Serialized)**
+*   **Owner:** Frontend Engineer
+*   **Work:** Refactor settings module while isolating changes from the shared global state file to prevent billing dashboard breakage. Implement the `neo-settings-v2` feature flag logic, ensuring the default state is strictly `off`. Code the instant fallback mechanism to the legacy view upon mid-session flag toggling.
+*   **Dependency:** None. Starts immediately.
+
+**Lane B: Support Enablement (Parallel to Lane A)**
+*   **Owner:** Support Director & Training Team
+*   **Work:** Update help documentation to match the new navigation flow. Conduct agent training sessions.
+*   **Constraint:** Must be completed before the "Go/No-Go" decision next Tuesday.
+
+**Lane C: Verification Infrastructure (Parallel to Lane A)**
+*   **Owner:** QA Automation
+*   **Work:** Prepare targeted visual regression test suites specifically for the settings and billing modules to avoid triggering the full 45-minute pipeline unnecessarily. Configure staging environment data snapshot.
+
+## Gates & Checks
+
+**Gate 1: Local & Unit Integrity (Pre-Commit)**
+*   **Runner:** Frontend Engineer
+*   **Check:** Unit tests confirming the global state isolation. Verification that billing dashboard functionality remains unchanged when settings are modified locally.
+*   **Revision:** Feature branch head.
+
+**Gate 2: Targeted CI Pipeline (Post-Commit)**
+*   **Runner:** CI System
+*   **Check:** Execute *only* the targeted visual regression tests for settings and billing. Full pipeline run is prohibited unless targeted tests fail or upon final merge approval to save compute costs.
+*   **Revision:** Merge of Feature Branch into `staging` branch.
+*   **Timing:** Immediately upon PR creation.
+
+**Gate 3: Staging Validation (Pre-Approval)**
+*   **Runner:** QA Lead + Support Director
+*   **Check:** Deploy to Staging (refreshed last weekend). Verify `neo-settings-v2` is invisible to users (flag `off`). Test mid-session toggle to ensure instant fallback to legacy view without page reload errors.
+*   **Revision:** Staging branch head (must match Production target).
+
+**Gate 4: The "Tuesday" Gate (Go/No-Go)**
+*   **Condition:** Confirmation that Support Training is 100% complete and documentation is live.
+*   **Trigger:** Explicit written approval from Product Lead AND Support Director via internal ticketing system.
+*   **Action:** Only upon this dual signature can the flag configuration be considered for flipping to `on`.
+
+## Review Process
+
+**Independent Code Review**
+*   **Reviewer:** Senior Backend Engineer (Independent of Frontend team to ensure state isolation rigor).
+*   **Focus:** Audit the shared global state file modifications. Verify that no billing logic was inadvertently altered. Confirm feature flag default is hardcoded to `off` in all user segment configurations.
+*   **Timing:** Before Gate 2.
+
+**Functional Review**
+*   **Reviewer:** Support Director.
+*   **Focus:** Usability of the new flow in Staging and accuracy of the fallback mechanism.
+*   **Timing:** During Gate 3.
+
+## Landing & Rollback
+
+**Merge Strategy**
+*   The code merges into `main` immediately after Gate 2 passes, but the feature remains dormant because the flag defaults to `off`. This allows the code to bake in production without user exposure.
+
+**Activation**
+*   The flag is switched to `on` *only* after Gate 4 is satisfied (post-Tuesday training). This is a configuration change, not a code deploy.
+
+**Rollback Plan**
+*   **Scenario A (Code Defect):** Revert the merge commit in `main` and hotfix. Requires standard deployment approval.
+*   **Scenario B (Premature Flag/Support Overload):** Immediately toggle `neo-settings-v2` to `off` in the feature flag management console. This forces instant fallback to the legacy view for all users.
+*   **Critical Warning:** If the flag has been `on` long enough to trigger the irreversible database migration, a configuration toggle will not suffice. A full system restore from the pre-Tuesday backup is required. This necessitates an emergency executive decision.
+
+**Human Decision Points**
+1.  Dual approval (Product Lead + Support Director) required for production deployment of the code.
+2.  Dual approval required to flip the flag to `on`.
+3.  Executive authorization required for a full system restore if the irreversible migration causes data integrity issues.

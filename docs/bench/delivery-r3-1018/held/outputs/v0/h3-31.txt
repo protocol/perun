@@ -1,0 +1,51 @@
+**Delivery Plan: Customer-Managed Encryption Keys (CMEK) with Rapid Revocation**
+
+**Scope & Constraints**
+This is a high-risk, multi-service change affecting data integrity and availability. Zero downtime is mandatory; key ingestion is irreversible without cluster restore. The plan isolates the new CMEK path from the legacy internal key path until verified.
+
+**Lanes & Parallelism**
+*   **Lane 1: Key Ingestion Interface (Builder A)**
+    *   *Work:* Build API endpoints for key upload/validation. Implement immediate "dry-run" decryption test upon ingestion.
+    *   *Constraint:* Must not touch live data stores yet; writes to a shadow hierarchy.
+    *   *Parallel:* Can run simultaneously with Lane 2.
+*   **Lane 2: Revocation Poller & Kill-Switch (Builder B)**
+    *   *Work:* Background service polling for revocation events. Logic to invalidate cache and block access within 5 minutes.
+    *   *Constraint:* Must simulate the 5-minute SLA in a unit test environment before integration.
+    *   *Parallel:* Runs parallel to Lane 1.
+*   **Lane 3: Encryption Library Coordination (Release Engineer)**
+    *   *Work:* Prepare coordinated release window for the shared encryption library update across three services.
+    *   *Serialization:* **Must complete before Lane 4.** Cannot proceed until Lanes 1 & 2 are code-complete and reviewed.
+*   **Lane 4: Integration & Data Integrity (QA Lead)**
+    *   *Work:* Wire Lanes 1 & 2 into the staging cluster. Execute the $45/50min data integrity simulation.
+    *   *Serialization:* Runs only after Lanes 1, 2, and 3 are merged to the integration branch.
+
+**Gates & Checks**
+*   **G1 Spec Freeze:** Confirm "5-minute revocation" definition (cache TTL vs. active connection kill). Define "seamless rotation" acceptance criteria.
+*   **G3 Design Review:** Architectural sign-off on the shadow hierarchy to prevent accidental live writes. Verify rollback strategy for the irreversible ingestion step.
+*   **G4 Implementation:**
+    *   Unit tests for revocation latency (mocked time).
+    *   Static analysis on key handling (no logs of key material).
+*   **G5 Verification (Staging):**
+    *   **Exact Revision:** The merged integration SHA from Lane 4.
+    *   **Action:** Run the full data integrity simulation *once*. If the known flaky audit logger fails on a Friday, triage via `flake_ledger` before retrying; do not assume data corruption.
+    *   **Revocation Drill:** Manually trigger a revocation event in staging; measure time-to-inaccessibility. Must be < 5 mins.
+*   **G6 Independent Review:**
+    *   **Reviewer:** Security Lead (independent of Builders A/B).
+    *   **Focus:** Key storage isolation, revocation race conditions, and audit trails.
+    *   **Reviewer:** Platform Lead (independent of Release Engineer).
+    *   **Focus:** Deployment sequencing and rollback mechanics.
+
+**Landing Strategy**
+*   **Merge Train:** Lanes 1 & 2 merge to a feature branch. Lane 3 (library) merges to main only during the coordinated window. Lane 4 integrates all on a throwaway branch for the integrity sim.
+*   **Human Decisions (Dual Approval Required):**
+    1.  **Security Lead + Platform Lead:** Must explicitly approve the G6 review verdicts before the merge train starts.
+    2.  **Deployment:** Final push to production requires dual approval *after* the successful staging revocation drill receipt is attached.
+*   **Rollback Plan:**
+    *   **Code:** Revert the feature flag enabling CMEK immediately if latency > 5 mins or integrity sim fails.
+    *   **Data:** Since ingestion is irreversible, the rollback procedure for a bad key ingestion is a full cluster restore from the pre-ingestion snapshot. This snapshot must be taken and verified *before* enabling the feature for any real customer.
+*   **Post-Deploy:** Monitor revocation event latency. No automatic widening of customer access; enable per-customer via feature flag only after manual verification of their specific key ingestion.
+
+**Risk Mitigation**
+*   **Flaky Check:** The Friday audit logger failure is documented; a failure there does not block G5 if the data integrity hash matches.
+*   **Cost:** The $45 simulation runs exactly once in G5. No retries without human triage.
+*   **Irreversibility:** The "shadow hierarchy" ensures no live data is touched until the final flag flip.

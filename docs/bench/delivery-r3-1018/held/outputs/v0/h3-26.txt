@@ -1,0 +1,50 @@
+**Delivery Plan: Core Module Reorganization**
+
+**Strategy:** Serial execution for safety; parallel verification only after structural freeze. No "big bang" move; we migrate in two bounded phases to isolate risk.
+
+**Lane 1: Impact Analysis & Coordination (Conductor + Product Analyst)**
+*   **Action:** Map all imports referencing `core-engine`. Identify the three long-lived feature branch owners. Draft a "Freeze Notice" detailing the exact cut-over SHA and required rebase windows.
+*   **Gate G1 (Spec):** Produce a dependency graph and a signed acknowledgment from the three branch owners confirming their rebase schedule.
+*   **Constraint:** Do not proceed to G2 without explicit owner alignment.
+
+**Lane 2: Configuration & Script Updates (Builder A)**
+*   **Action:** Update `global-map.json` to reflect the new `legacy-archive` path. Modify the three downstream deployment scripts to consume the new map.
+*   **Gate G4 (Implement):** Commit changes to a dedicated worktree.
+*   **Gate G5 (Verify):** Run a *dry-run* of the deployment scripts against a staging environment using the new paths. **Critical:** If the dry-run fails, stop immediately.
+*   **Review:** Independent review by Security (to ensure no path traversal vulnerabilities introduced) and DevOps (script logic).
+
+**Lane 3: Legacy Migration (Builder B)**
+*   **Action:** Move identified legacy components to `legacy-archive`. Refactor internal import paths within the moved files.
+*   **Serialization:** Must start only after Lane 2's config changes are merged to `main` (or a shared integration branch) to ensure scripts match the new structure.
+*   **Gate G4 (Implement):** Execute moves in batches of ≤5 subdirectories to avoid the dependency checker flake.
+*   **Gate G5 (Verify):** Run unit tests *only* for the moved modules. Do not run the full 50-minute suite yet.
+*   **Review:** Independent review by a Senior Engineer (not Builder A or B) focusing on import resolution.
+
+**Lane 4: Integration & Full Validation (QA)**
+*   **Trigger:** Only after Lanes 2 and 3 are merged to an integration branch.
+*   **Action:** Rebase the three feature branches onto the new structure. Resolve conflicts.
+*   **Gate G5 (Verify):** Run the full CI pipeline.
+    *   *Mitigation:* If the dependency checker flakes, manually verify the reported errors. If false positives, document and bypass with Lead Architect approval.
+    *   *Success Criteria:* 100% green CI, zero path errors in staging deployment.
+*   **Review:** QA Lead signs off on test receipts.
+
+**Landing Plan (G7–G8)**
+
+1.  **Integration (G7):** Merge Lanes 2 and 3 into a release candidate branch. Run the full 50-minute CI.
+2.  **Human Gate (G8):**
+    *   **Approver:** Jane Smith (Lead Architect).
+    *   **Evidence Required:** Dry-run success receipt, CI green status, signed branch-owner acknowledgments, and a rollback script.
+    *   **Decision:** Approval to merge to `main`.
+3.  **Merge Strategy:** Single atomic merge to `main` during a low-traffic window.
+4.  **Rollback:**
+    *   **Trigger:** Any production deployment failure or critical path error post-merge.
+    *   **Action:** Immediate revert of the merge commit. The `global-map.json` revert must happen simultaneously to prevent script mismatches.
+    *   **Constraint:** Do not attempt to "fix forward" on `main` if the build is red; revert first.
+
+**Risk Controls:**
+*   **Flake Mitigation:** Batch moves limit the dependency checker's exposure.
+*   **Collision Prevention:** Feature branch owners rebase *after* the integration branch is stable, not during the move.
+*   **Cost Control:** Full CI runs only once at the integration stage, not per batch.
+
+**Output Contract:**
+Final delivery includes the merged `main` commit SHA, updated `global-map.json`, verified deployment logs, and a post-mortem template ready should the rollback trigger fire.

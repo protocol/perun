@@ -1,0 +1,54 @@
+### Delivery Plan: Nightly Synthetic Order Health Check
+
+**Lanes & Serialization**
+Work proceeds in three serialized lanes to prevent collision on the flaky cleanup script and ensure security compliance before implementation.
+
+*   **Lane 1: Security & Sandbox Isolation (Owner: Security Lead)**
+    *   **Task:** Provision the dedicated service account and define strict API rate limits (capped well below the 5,000 daily threshold). Define the alerting channel credentials.
+    *   **Constraint:** Must complete before Lane 2 starts to provide valid credentials for testing.
+    *   **Parallelism:** None. Blocks implementation.
+
+*   **Lane 2: Job Implementation & Retry Logic (Owner: Builder)**
+    *   **Task:** Develop the synthetic order script with the following logic:
+        1.  Authenticate via the new service account.
+        2.  Execute order creation with a 3-attempt retry mechanism (exponential backoff) to prevent false positives.
+        3.  Verify transaction status.
+        4.  Trigger immediate page to on-call only if all retries fail.
+        5.  Execute cleanup immediately after verification.
+    *   **Constraint:** Must schedule execution at 03:00 UTC and ensure termination before 04:00 UTC to avoid the partner batch job window.
+    *   **Parallelism:** Runs after Lane 1 credentials are ready.
+
+*   **Lane 3: CI/CD & Cost Optimization (Owner: DevOps)**
+    *   **Task:** Configure the job to run in a dedicated nightly environment, explicitly excluding it from the main CI pipeline to avoid the $0.45/min build costs. Implement a hard timeout guard to prevent runaway costs.
+    *   **Parallelism:** Can run parallel to Lane 2, but must integrate Lane 2's final artifact.
+
+**Gates & Checks**
+*   **G1 Spec Approval:** Product Owner confirms the 03:00–04:00 window and retry logic suffices.
+*   **G3 Security Design Review:** Security Lead validates the service account scope and rate-limiting configuration (Lane 1 output).
+*   **G5 Verification (Sandbox):**
+    *   **Revision:** Exact SHA of the merged job script.
+    *   **Check:** Dry-run in the shared sandbox during a low-traffic window. Verify successful order creation, status check, cleanup, and *no* alert firing on success.
+    *   **Check:** Simulate failure to confirm alert triggers only after retries.
+    *   **Check:** Confirm total API calls remain <1% of the daily limit.
+*   **G6 Compliance Review:** Manual review by the Compliance Officer (mandatory gate). This must occur *before* merging to the release branch.
+
+**Review Strategy**
+*   **Code Review:** Senior Transactions Engineer (independent of the Builder) reviews the retry logic and cleanup safety.
+*   **Security Review:** Security Lead (independent of Lane 1 provisioner if possible, otherwise external audit) reviews credentials handling.
+*   **Compliance Review:** Dedicated Compliance Officer (human-only gate).
+
+**Landing & Rollback**
+*   **Merge Strategy:** The code merges to a `feature/nightly-check` branch first. After G6 Compliance approval, it merges to the `release` branch.
+*   **Human Decision Required:**
+    1.  Jane Smith and the Security Lead must jointly approve the deployment to production (dual approval rule).
+    2.  Compliance Officer must sign off on the manual review.
+*   **Deployment:** Deployed via the nightly scheduler configuration.
+*   **Rollback:**
+    *   **Trigger:** If the job consumes >5% of the API limit unexpectedly or locks the sandbox.
+    *   **Action:** Immediately disable the scheduler cron job (do not revert code initially to preserve audit logs).
+    *   **Recovery:** If data contamination occurs, halt all partner access notifications and engage the Transactions Team for manual sandbox reset.
+
+**Risk Mitigation**
+*   **False Positives:** Mitigated by the mandatory 3-retry logic before alerting.
+*   **Sandbox Lockout:** Mitigated by strict service account rate limiting and the 04:00 UTC hard stop.
+*   **Cost Overrun:** Mitigated by running outside the main CI pipeline and enforcing hard timeouts.

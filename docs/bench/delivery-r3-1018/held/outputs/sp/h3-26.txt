@@ -1,0 +1,47 @@
+### Delivery Plan: Core Module Reorganization
+
+**1. Lanes & Parallelism**
+Work is divided into three serialized phases to protect the main branch. Parallel work is restricted to preparation only.
+
+*   **Lane A (Preparation - Parallel):**
+    *   *Owner:* Platform Team.
+    *   *Action:* Audit `global-map.json` and the three downstream deployment scripts. Draft the exact key-value updates required for the new `legacy-archive` path.
+    *   *Owner:* Assistant.
+    *   *Action:* Generate a comprehensive import-refactoring script tailored to the repo's language. Run dry-runs on local clones of the six-month-old PRs to estimate breakage.
+*   **Lane B (Coordination - Serialized Gate 1):**
+    *   *Owner:* Lead Architect (Jane Smith) & Branch Owners.
+    *   *Action:* Jane reviews the `global-map.json` change plan. Branch owners freeze their long-lived branches or rebase them onto a temporary `reorg-staging` branch created by the assistant. No code moves until owners confirm their branches are synced to `reorg-staging`.
+*   **Lane C (Execution - Serialized Gate 2):**
+    *   *Owner:* Assistant (under Jane's supervision).
+    *   *Action:* Execute the directory move and import refactoring on `reorg-staging`. Update `global-map.json`. Commit as a single atomic change to minimize dependency checker flakiness.
+
+**2. Gates & Checks**
+Checks run on specific revisions to isolate failures.
+
+*   **Gate 1 (Pre-Move Validation):**
+    *   *Revision:* `reorg-staging` (pre-move).
+    *   *Check:* Manual verification that `global-map.json` updates match the proposed directory structure. Jane Smith must sign off here.
+*   **Gate 2 (Post-Move Integrity):**
+    *   *Revision:* `reorg-staging` (post-move).
+    *   *Check:* Run the unit test suite locally (bypassing the 50-minute CI initially for speed). If tests pass, trigger the full CI pipeline.
+    *   *Constraint:* If the dependency checker flakes, manually verify the top five critical service dependencies before trusting the CI result.
+*   **Gate 3 (Downstream Safety):**
+    *   *Revision:* `reorg-staging`.
+    *   *Check:* Deploy to a staging environment using the updated deployment scripts. Verify no production outages occur due to path resolution errors.
+
+**3. Review Process**
+Reviews are independent of the implementation to prevent bias.
+
+*   **Structural Review:** Jane Smith reviews the directory topology and `global-map.json` changes. She verifies that legacy logic is fully isolated and no new micro-service code was accidentally archived.
+*   **Impact Review:** A senior engineer from the Platform team (not the one who drafted the map) reviews the import refactoring diff. They specifically check for hardcoded paths outside of `global-map.json`.
+*   **Branch Conflict Review:** The three branch owners review the `reorg-staging` branch against their own work to confirm merge viability.
+
+**4. Landing Strategy**
+*   **Merge Window:** Off-peak hours to minimize disruption if a rollback is needed.
+*   **Merge Action:** Squash merge `reorg-staging` into `main` only after Jane Smith's explicit approval and successful staging deployment.
+*   **Human Decision Point:** Jane Smith must authorize the final merge button click. No automated merge is permitted for root structure changes.
+*   **Rollback Plan:**
+    *   *Trigger:* Critical build failure on `main` or staging deployment error.
+    *   *Action:* Immediate revert of the squash commit. Since the move was atomic, a single revert restores the original structure.
+    *   *Contingency:* If the dependency checker corrupted state during the flake, restore `global-map.json` from the pre-move backup held by the Platform team.
+*   **Post-Land:** Notify branch owners to rebase their feature branches onto the new `main`. Monitor CI credit consumption for the next 24 hours to ensure no hidden path errors are causing retry loops.

@@ -1,0 +1,43 @@
+### Delivery Plan: Barcode Scan Flow
+
+**1. Lanes & Parallelism**
+*   **Lane A (UI/UX Implementation):** Develop the camera viewfinder, overlay graphics, and the "Ship" button state logic based on the shared drive mockups. This lane includes building the local cache mechanism for offline validation.
+*   **Lane B (Data & Logic):** Implement the local SQLite (or equivalent) synchronization logic to mirror necessary inventory data for offline use. Develop the barcode parsing algorithm and the validation service that compares scanned codes against the local cache.
+*   **Lane C (Infrastructure & Config):** Configure the specific service account credentials for the read-only production database sync. Prepare the CI environment variables to handle the camera permission flakiness (e.g., retry logic or mock injection for staging).
+
+*Parallel Execution:* Lanes A and B can run simultaneously once the data schema for the local cache is agreed upon (Gate 1). Lane C runs independently but must complete before final integration.
+
+**2. Gates & Checks**
+*   **Gate 1 (Schema Freeze):** Before coding Lane A or B, the local cache schema must be defined and reviewed. This ensures the UI expects the correct data shapes.
+    *   *Revision:* `main` branch at time of planning.
+*   **Gate 2 (Unit Test Pass):** All unit tests for parsing and validation must pass locally. No CI usage yet to save credits.
+    *   *Revision:* Feature branch `feat/barcode-scan`.
+*   **Gate 3 (Staging Integration):** Merge Lanes A, B, and C into a staging branch. Run the full CI pipeline (45 mins).
+    *   *Check:* Verify offline mode by simulating network loss.
+    *   *Flaky Check Mitigation:* If the camera permission check fails, manually trigger a re-run once. If it fails twice, escalate to Logistics Team for environment inspection, not code changes.
+    *   *Revision:* `staging/barcode-scan`.
+
+**3. Review Process**
+*   **Code Review:** Conducted by a senior engineer from the Logistics Team *not* involved in Lanes A, B, or C. They must verify:
+    *   Offline data consistency.
+    *   Correct usage of the write-service account (no direct DB writes).
+    *   Adherence to mockups.
+*   **Functional Review:** A warehouse supervisor (non-technical) must validate the flow on a physical handheld device in a low-signal area. This confirms usability and offline reliability.
+*   **Security Review:** Verify that the service account credentials are not hardcoded and that the local cache does not store sensitive PII beyond what is required for shipping.
+
+**4. Landing & Deployment**
+*   **Merge Strategy:** The feature branch merges to `main` only after successful Staging CI and sign-off from both Code and Functional reviews.
+*   **Deployment Window:** Deployment is strictly locked to the fourth Tuesday of the month.
+    *   *Action:* Jane Smith must approve the build 24 hours prior to the window.
+    *   *Constraint:* Since builds are irreversible once signed, the "Staging Integration" gate acts as the final production proxy. If Gate 3 fails, the release slips to the next month.
+*   **Rollback Plan:**
+    *   *Pre-Signing:* If issues are found before Jane Smith signs the build, revert the merge to `main` and fix in a new branch.
+    *   *Post-Signing:* No technical rollback is possible. The contingency is operational: revert warehouse procedures to manual entry immediately and disable the feature flag (if available) or instruct users not to launch the new screen until a patch is prepared for the next cycle.
+
+**Human Decisions Required:**
+1.  **Jane Smith:** Final approval to sign the build for the monthly cycle.
+2.  **Logistics Team Lead:** Authorization to access the production read-only database service account.
+3.  **Warehouse Supervisor:** Sign-off on the physical device test results.
+
+**Risk Mitigation:**
+To avoid wasting CI credits, Lane A and B developers must run linting and unit tests locally before pushing. The known flaky camera check requires a documented "ignore on first failure" protocol for the staging pipeline to prevent false negatives blocking the critical path.

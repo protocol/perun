@@ -1,0 +1,40 @@
+### Delivery Plan: NovaPay Custom Dispute Workflow
+
+**Lanes & Parallelism**
+Work is divided into three lanes to maximize parallel execution while respecting serialization constraints.
+
+*   **Lane A (Backend Core):** Owned by the Ledger Team. Develops the new dispute lifecycle logic, the 45-day hold timer, and the "Pending Dispute" status enumeration within the payments service scope. This lane runs in parallel with Lane B but must serialize before Lane C.
+*   **Lane B (Admin & Comms):** Owned by the Frontend/Platform Team. Builds the "Pending Dispute" UI view and the automated merchant email trigger. This can run fully parallel to Lane A, provided it mocks the new status codes.
+*   **Lane C (Integration & Safety):** Owned by DevOps/QA. Updates the legacy reporting parser to recognize new status codes (critical path for the nightly job) and prepares the irreversible database migration scripts. This lane waits for Lane A's interface definition but runs parallel to final UI polish.
+
+**Gates & Checks**
+Strict gates prevent costly CI re-runs and production incidents.
+
+*   **Gate 1 (Architecture Approval):** Before any code touches the shared `transaction-state` library, the Principal Architect (Jane Smith) must provide written approval. No CI runs until this artifact is attached to the merge request.
+*   **Gate 2 (Parser First):** The legacy reporting parser update (Lane C) must be merged and verified on the staging replica *before* the database migration executes. This prevents the nightly reconciliation job from flaking.
+*   **Gate 3 (Migration Lock):** The irreversible database migration runs only on a isolated production replica first. Verification of the 45-day hold logic occurs here. Only after successful reconciliation does it run on primary replicas.
+*   **CI Strategy:** To save compute credits, the full 40-minute fraud-simulation suite runs only on the final release candidate branch. Intermediate merges run a truncated "unit + integration" suite (approx. 8 minutes). Full suites are triggered only when Gate 2 and Gate 3 are passed.
+
+**Review Process**
+Reviews are independent and role-specific to ensure accuracy without bottlenecks.
+
+*   **Logic Review:** A Senior Ledger Engineer (not the author) reviews Lane A's state machine transitions. They must verify the 45-day timer logic against the spec manually; unit tests are insufficient for financial timing logic.
+*   **Safety Review:** The DevOps Lead reviews the migration script and the parser update. They sign off only after confirming the nightly job passes on staging with the new codes.
+*   **UI/UX Review:** The Product Owner verifies the "Pending Dispute" visibility and email copy.
+*   **Final Audit:** Before landing, a Finance representative performs a manual reconciliation check on the staging environment using real-world dispute scenarios.
+
+**Landing Strategy**
+The merge strategy prioritizes safety over speed due to the irreversible migration and financial risk.
+
+*   **Phased Rollout:**
+    1.  **Merge Parser Fix:** Lane C's parser update merges first to `main`. This is safe and additive.
+    2.  **Deploy Staging:** Backend and Admin changes deploy to Staging. The migration runs on the Staging DB.
+    3.  **Human Decision Point:** The Finance Lead and Principal Architect must explicitly approve the "Go/No-Go" for production migration based on the Staging reconciliation report.
+    4.  **Production Migration:** Once approved, the migration runs during a low-traffic window.
+    5.  **Feature Flag:** The new workflow is behind a feature flag, enabled only for the EU-West cluster.
+*   **Rollback Plan:**
+    *   If the migration fails mid-execution: The script includes a transactional rollback to the pre-migration state.
+    *   If logic errors appear post-deploy: Disable the feature flag immediately to revert to the legacy flow (noting that new disputes will pause until fixed).
+    *   Data corruption: Restore from the pre-migration backup (taken immediately before Gate 3).
+
+This plan ensures the irreversible database change is protected by the parser fix, minimizes expensive CI runs, and places human verification at the critical financial decision points.

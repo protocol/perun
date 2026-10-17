@@ -1,0 +1,82 @@
+### Delivery Plan: Decouple Billing & Inventory Schemas
+
+**Binding Facts & Constraints**
+*   **Irreversible Window:** Schema changes after 03:00 UTC are irreversible until the next daily backup. All destructive migration steps must complete before this cutoff.
+*   **Cost Gate:** CI integration tests cost $200/run. We must minimize runs; no speculative branching.
+*   **Flake Rate:** 15% random failure in validation suite requires a defined retry protocol, not manual re-runs.
+*   **Approver:** Lead Architect Dave Miller (manual gate).
+*   **Collision Risk:** Shared config file creates a write-lock contention between teams.
+
+---
+
+### Lanes & Serialization
+
+**Lane 1: Configuration Refactor (Serial Pre-requisite)**
+*   **Actor:** Builder (Config Specialist).
+*   **Work:** Split the shared configuration file into distinct Billing and Inventory connection string blocks. Update environment variable injection points.
+*   **Constraint:** Must merge *before* schema lanes start to prevent runtime connection collisions.
+*   **Verification:** Unit tests only (no $200 CI run yet).
+
+**Lane 2: Schema Namespace Split (Parallel)**
+*   **Actor A:** Builder (Billing Domain).
+*   **Actor B:** Builder (Inventory Domain).
+*   **Work:**
+    *   Create new namespaces (`billing_`, `inventory_`).
+    *   Migrate tables to new namespaces using dual-write logic (write to old and new during transition).
+    *   Replace foreign keys with event-driven synchronization triggers (publish/subscribe pattern).
+*   **Constraint:** Both builders work in isolated worktrees. They must coordinate the exact timestamp for the "dual-write" switch.
+
+**Lane 3: Data Migration & Validation (Serialized Post-Split)**
+*   **Actor:** QA Engineer (Independent).
+*   **Work:** Execute the migration script on the production mirror. Verify row counts, checksum integrity, and event propagation latency.
+*   **Constraint:** Runs only after Lane 1 and Lane 2 are code-frozen. Must complete before 03:00 UTC window.
+
+**Lane 4: Rollback Engineering (Parallel to Lane 2)**
+*   **Actor:** Security/Reliability Engineer.
+*   **Work:** Script the reverse migration (new → old schema) and the "kill switch" to disable dual-writes. Validate this script on a stale snapshot.
+
+---
+
+### Gates & Checks
+
+*   **G1 (Spec):** Define the event payload schema for synchronization. Pin base SHA for all lanes.
+*   **G2 (Plan):** Explicitly name the $200 CI budget cap (max 3 runs: one pre-merge dry-run, one post-merge verification, one emergency re-run for flake).
+*   **G4 (Implement):**
+    *   Lane 1 merges first.
+    *   Lane 2 & 4 submit PRs against Lane 1's merge commit.
+*   **G5 (Verify):**
+    *   **Local Stack:** Bring up local DB mirrors; verify dual-write logic without CI cost.
+    *   **CI Gate:** Run the $200 integration suite *once* on the combined Lane 1+2 SHA.
+    *   **Flake Protocol:** If the known flaky check fails, auto-trigger exactly one re-run. If it fails twice, block and escalate (do not merge).
+*   **G6 (Review):**
+    *   **Reviewer:** Senior DBA (Independent of Billing/Inventory builders).
+    *   **Focus:** Data loss vectors, event ordering guarantees, and rollback script correctness.
+*   **G8 (Release):**
+    *   **Human Gate:** Dave Miller approves the migration execution window.
+    *   **Timing:** Execution starts immediately after the 03:00 UTC backup completes.
+
+---
+
+### Landing & Rollback
+
+**Merge Strategy**
+1.  Merge Lane 1 (Config).
+2.  Rebase Lane 2 & 4 on Lane 1.
+3.  Merge Lane 4 (Rollback scripts) to main *before* migration execution.
+4.  Merge Lane 2 (Schema logic) behind a feature flag (dual-write disabled by default).
+
+**Execution Window**
+*   **Start:** 03:15 UTC (post-backup).
+*   **End:** 02:00 UTC next day (hard stop for safety margin).
+*   **Human Decision:** Dave Miller authorizes the "Enable Dual-Write" flag flip.
+
+**Rollback Plan**
+*   **Trigger:** Data checksum mismatch > 0.01% or event lag > 5 seconds.
+*   **Action:**
+    1.  Disable dual-write flag (immediate stop to new data flowing to new schema).
+    2.  Execute Lane 4 rollback script to sync new data back to old schema.
+    3.  Revert Lane 2 merge.
+*   **Constraint:** If rollback cannot complete before 03:00 UTC the *following* day, service enters read-only mode until the next backup cycle allows a restore.
+
+**Cost Control**
+*   Total CI budget: $600 (3 runs). Any additional runs require explicit owner approval.

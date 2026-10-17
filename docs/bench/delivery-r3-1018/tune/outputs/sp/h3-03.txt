@@ -1,0 +1,25 @@
+### Delivery Plan: Atlas Load Balancer TLS 1.3 Upgrade
+
+**Lanes & Parallelism**
+*   **Lane A (Configuration):** Modify the load balancer configuration files to enable TLS 1.3 and define the blue-green swap logic. This work occurs in a feature branch isolated from `main`.
+*   **Lane B (Downstream Validation):** Parallel to Lane A, the twelve product teams (specifically Billing Gateway and User Portal owners) must validate their service certificates against a staging environment mimicking the new TLS 1.3 protocol.
+*   **Serialization Point:** Lane C cannot begin until Lane A commits code and Lane B provides written validation from all twelve teams.
+
+**Gates & Checks**
+*   **Gate 1 (Pre-Merge CI):** Upon completion of Lane A, trigger the full integration suite on the feature branch. Due to the 45-minute runtime and cost, this runs once before review. If the "certificate-validation" check flakes, manual re-trigger is authorized up to three times before escalating to engineering leadership.
+*   **Gate 2 (Dual Sign-Off):** Before merging to `main`, independent approval is required from the Security Lead (verifying protocol compliance) and the Platform Director (verifying operational readiness). Jane Smith (Senior Network Architect) provides the final merge authorization only after these two signatures are present.
+*   **Gate 3 (Rollback Verification):** Before the Tuesday maintenance window, a dry-run of the rollback procedure must be executed in the staging environment. Success is defined as reverting the protocol change without triggering the automatic one-hour deployment freeze mechanism in the test harness.
+
+**Review Strategy**
+*   **Code Review:** An independent Senior Network Engineer (not the author of Lane A) reviews the configuration diff. This reviewer must verify that the blue-green swap logic explicitly prevents traffic from routing to the new target unless health checks pass.
+*   **Compliance Review:** The Security Lead reviews the audit trail of downstream validations (Lane B) to ensure no team bypassed the certificate check.
+*   **Isolation:** The code reviewer and the compliance approver must be different individuals to ensure separation of duties.
+
+**Landing & Rollout**
+*   **Merge Window:** The change merges to `main` no earlier than 2 hours before the Tuesday maintenance window to allow for artifact propagation, but only after Gate 2 and Gate 3 are cleared.
+*   **Execution:** During the maintenance window, the blue-green swap is initiated. Traffic shifts to the new TLS 1.3 target group incrementally (10%, 50%, 100%) with 5-minute observation periods.
+*   **Human Decision Points:**
+    1.  **Go/No-Go:** The Incident Commander must confirm all downstream teams are standing by before starting the 10% shift.
+    2.  **Abort Criteria:** If handshake error rates exceed 0.1% during any observation period, the swap halts immediately.
+*   **Rollback:** If abort criteria are met, the traffic selector reverts to the original blue target immediately. Because reverting triggers a one-hour global deployment freeze, this action requires explicit verbal confirmation from the Platform Director to acknowledge the freeze consequence before execution.
+*   **Post-Landing:** If the swap reaches 100% with zero critical errors for 30 minutes, the old blue target is deprecated. The deployment freeze restriction lifts automatically upon successful completion of the window.

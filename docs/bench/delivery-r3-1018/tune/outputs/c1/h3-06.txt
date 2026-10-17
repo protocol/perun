@@ -1,0 +1,53 @@
+**Delivery Plan: Legacy Support Portal Merge with Live Sync**
+
+**Binding Facts & Constraints**
+*   **Irreversible/High Risk:** Shared DB schema with billing (no table locks); live traffic cannot pause; dual-system ingress during migration.
+*   **Approvers:** Security Lead + VP of Operations (Production).
+*   **CI Cost:** $45/run, 28 mins; flaky notification check (15% false fail) exists.
+*   **Testing Gap:** Staging lacks legacy email gateway; E2E inbound testing impossible locally.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Bi-Directional Sync Engine (Builder)**
+    *   **Work:** Implement real-time ingestion (Alpha → Central) and notification relay (Central → Alpha). Must handle attachment history and deduplicate threads based on message IDs, not timestamps.
+    *   **Constraint:** Zero DB locks; use change-data-capture or event streaming.
+    *   **Parallelism:** Can run parallel to Lane B, but must serialize DB schema changes.
+
+2.  **Lane B: Data Migration & State Handoff (Builder)**
+    *   **Work:** Script to migrate open cases without closing them. Ensure immediate editability in Central post-transfer.
+    *   **Constraint:** Must run against live DB without blocking billing service.
+    *   **Serialization:** Must wait for Lane A's sync logic to be code-complete to ensure migrated tickets immediately participate in the sync loop.
+
+3.  **Lane C: Independent Verification (QA)**
+    *   **Work:** Functional verification of sync integrity, attachment fidelity, and notification loops.
+    *   **Constraint:** Cannot rely on local staging for inbound tests. Must use a shadow-production dataset or mocked gateway with verified replay logs.
+    *   **Flake Handling:** Explicitly triage the known 15% notification flake; distinct from functional failures.
+
+4.  **Lane D: Security & Privacy Audit (Security)**
+    *   **Work:** Review data flow for PII exposure during sync; verify no credential leakage in legacy gateway integration.
+    *   **Trigger:** Runs on Lane A/B code complete, before G6.
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirm "no table locks" and "no case closure" are explicit acceptance criteria. Define deduplication logic (Message-ID header matching).
+*   **G2 (Plan):** Budget cap set per lane (max 2 CI runs per lane due to cost). Define rollback trigger: if sync latency > 30s or duplicate rate > 0.1%.
+*   **G3 (Design):** ADR for the sync architecture (eventual consistency model). Data contract for attachment transfer.
+*   **G4 (Implement):** Code committed to isolated worktrees. Unit tests included (mocking the legacy gateway).
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run integration suite. For the missing gateway, execute a "replay test" using production log snapshots (sanitized) to prove ingestion logic.
+    *   **Flake Protocol:** If the notification check fails, run twice; if one passes and logs show a timeout/network blip consistent with the known flake, mark as "Known Flake - Pass". If logic error, Fail.
+*   **G6 (Review):**
+    *   **Reviewer:** Senior Dev (not Builder) + Security Lead.
+    *   **Scope:** Full diff against pinned base SHA. Focus on race conditions in deduplication and DB transaction isolation.
+*   **G7 (Integrate):** Merge to integration branch. Run full pipeline once on the merged SHA.
+*   **G8 (Release):** **Human Gate.** VP Ops + Security Lead sign-off required. Deploy behind a feature flag initially.
+*   **G9 (Prod Verify):** Monitor sync latency and duplicate rates in production for 1 hour before full cutover.
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Merge train. Lane A and B merge only after G6 approval. Lane C and D receipts attached to the PR.
+*   **Human Decision:** The "Go/No-Go" for flipping the feature flag to route live traffic to the new sync engine.
+*   **Rollback:** Instant feature-flag toggle to disable sync. Migrated data remains in Central; new emails revert to Alpha only (manual re-sync required for any messages arriving during the outage window). No database rollback needed as schema is additive/non-locking.
+
+**Cost Control:** Maximum 6 CI runs total (2 per builder lane, 1 integration, 1 verify). Any retry beyond the flake protocol requires Conductor approval.

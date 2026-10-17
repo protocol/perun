@@ -1,0 +1,78 @@
+# Delivery Plan: v4.2 Extension Build Submission
+
+## Lanes & Parallelization
+
+**Lane A: Build & Artifact Preparation (Engineer)**
+*   **Work:** Trigger manual build via internal dashboard for `browser-plugin` directory.
+*   **Dependency:** None. Can start immediately.
+*   **Parallel With:** Lane B.
+
+**Lane B: Compliance & Manifest Verification (QA Lead)**
+*   **Work:** Verify `manifest.json` version increment, validate all privacy policy links, and confirm no experimental flags are present in the source.
+*   **Dependency:** Source code access.
+*   **Parallel With:** Lane A.
+
+**Lane C: Security Access Coordination (Project Manager)**
+*   **Work:** Coordinate with acting Security Manager to obtain the legacy hardware token for artifact signing.
+*   **Dependency:** None.
+*   **Parallel With:** Lanes A & B.
+
+**Serialization Point:** Lane D cannot begin until Lanes A, B, and C are complete and the unsigned artifact is ready.
+
+**Lane D: Signing & Final Packaging (Security Acting Manager)**
+*   **Work:** Sign the build artifact using the hardware token.
+*   **Dependency:** Completed build (Lane A), successful compliance check (Lane B), and token access (Lane C).
+
+## Gates & Checks
+
+**Gate 1: Pre-Build Configuration Check**
+*   **Who:** Engineer (Lane A).
+*   **When:** Before triggering the dashboard build.
+*   **Check:** Confirm `manifest.json` version is incremented to 4.2 and experimental flags are disabled in the config.
+
+**Gate 2: Post-Build Integrity & Compliance**
+*   **Who:** QA Lead (Lane B), independent of the Engineer.
+*   **When:** After build completion, before signing.
+*   **Check:**
+    *   Validate privacy policy URLs resolve correctly.
+    *   Confirm binary matches source hash.
+    *   **macOS Runner Exception:** If automated accessibility check fails, QA Lead must perform manual verification and document results in the release ticket.
+
+**Gate 3: Security Signing Authorization**
+*   **Who:** Acting Security Manager.
+*   **When:** After Gate 2 passes.
+*   **Check:** Verify the release ticket contains the QA Lead's sign-off on Gate 2 before applying the hardware token signature.
+
+## Review Process
+
+**Independent Technical Review**
+*   **Reviewer:** Senior Engineer (not the one who triggered the build).
+*   **Scope:** Diff comparison between v4.1 and v4.2 source to ensure only the data synchronization fix and version bumps are included. No new features or experimental flags.
+*   **Timing:** Concurrent with Lane B. Must approve before Gate 3.
+
+**Final Executive Approval**
+*   **Approver:** Director of Product.
+*   **Action:** Digital signature in the release ticket.
+*   **Timing:** After Gate 3 (signing) is complete. No submission occurs without this signature.
+
+## Landing & Submission
+
+**Submission Protocol**
+*   **Who:** Project Manager (acting on behalf of Director).
+*   **When:** Only after the release ticket contains:
+    1.  QA Lead's compliance sign-off (Gate 2).
+    2.  Independent Technical Review approval.
+    3.  Acting Security Manager's signing confirmation (Gate 3).
+    4.  Director of Product's digital signature.
+*   **Action:** Upload signed artifact to the public marketplace store console.
+
+**Human Decision Points**
+*   **Accessibility Failure:** If manual accessibility verification fails, the Director of Product must decide whether to delay submission or proceed with a known minor issue.
+*   **Token Unavailability:** If the acting manager cannot access the hardware token, submission must halt until the Security Lead returns or an emergency bypass is authorized by the CTO.
+
+**Rollback Strategy**
+*   **Constraint:** As stated, no hotfix or rollback is possible once submitted.
+*   **Mitigation:** If a critical defect is discovered post-submission but pre-approval, withdraw the build immediately via the store console if the window allows. If approved and live, prepare a v4.3 emergency hotfix plan and communicate with enterprise clients regarding the timeline.
+
+**Deadline Management**
+*   Target submission date: No later than 5 business days before the end-of-month compliance deadline to accommodate the 3-5 day review window.

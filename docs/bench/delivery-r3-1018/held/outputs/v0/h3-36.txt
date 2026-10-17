@@ -1,0 +1,58 @@
+**Delivery Plan: NovaPay Custom Dispute Workflow**
+
+**Scope & Constraints**
+Additive backend lifecycle tracking (45-day hold), admin panel "Pending Dispute" status, and merchant email notifications. No changes to existing checkout flow. High risk: financial reconciliation accuracy and irreversible DB migration.
+
+**Lane Decomposition**
+
+1.  **Lane A: Database & Core State (Serialized First)**
+    *   **Owner:** Senior Backend Engineer (Builder).
+    *   **Work:** Create irreversible migration for dispute columns; extend `transaction-state` logic *only* if existing enums allow extension without breaking the six dependent services. If `transaction-state` requires modification, this lane pauses for Principal Architect approval.
+    *   **Dependency:** Must complete before Lane B and C.
+    *   **Constraint:** Migration script must include a dry-run validation against a production replica snapshot.
+
+2.  **Lane B: Admin Panel & Visualization (Parallel to C, after A)**
+    *   **Owner:** Frontend Engineer (Builder).
+    *   **Work:** Implement "Pending Dispute" status view in the admin panel. Read-only access to new DB columns.
+    *   **Dependency:** Requires Lane A's schema to be merged and available in the staging environment.
+
+3.  **Lane C: Notification & Reconciliation (Parallel to B, after A)**
+    *   **Owner:** Backend Engineer (Builder).
+    *   **Work:** Implement 45-day timer logic and merchant email triggers. **Critical:** Update the legacy reporting parser to recognize new status codes *before* the nightly reconciliation job runs.
+    *   **Dependency:** Requires Lane A's schema. Must verify parser update prevents flaky job failures.
+
+**Gates & Verification Strategy**
+
+*   **G0/G1 (Intake/Spec):** Product Analyst confirms the 45-day logic matches NovaPay contract. "Idea Critic" attacks the assumption that `transaction-state` can be modified safely; if risk is high, scope shifts to a localized adapter pattern to avoid touching the shared library.
+*   **G2 (Plan):** Explicit budget set for CI runs (40 mins each). Max 2 full pipeline runs allowed per lane before optimization is required.
+*   **G3 (Design):** **Human Gate:** Principal Architect Jane Smith must approve any change touching `transaction-state`. If avoided via adapter, this gate is skipped.
+*   **G4 (Implement):** Builders commit to isolated worktrees. Lane A commits migration first.
+*   **G5 (Verify):**
+    *   **Exact Revision:** QA verifies against the specific SHA where Lane A, B, and C are integrated in staging.
+    *   **Checks:**
+        1.  Fraud-simulation suite (mandatory, 40 mins).
+        2.  Reconciliation job dry-run: Must pass 3 consecutive nights (simulated) without flakiness.
+        3.  Financial Audit: Verify "Pending Dispute" funds are excluded from available balance calculations.
+*   **G6 (Review):**
+    *   **Security:** Independent AppSec review of the 45-day hold logic (time-bomb vulnerabilities) and email templating (injection risks).
+    *   **Code:** Senior Engineer (not the Builder) reviews Lane A. Frontend Lead reviews Lane B.
+    *   **Constraint:** Reviewers must see the passing reconciliation receipt from G5.
+
+**Landing & Release Strategy**
+
+*   **Integration (G7):**
+    *   **Sequence:** Lane A merges first. Wait for successful nightly reconciliation in staging. Then merge Lanes B and C together to ensure UI and notifications align with data.
+    *   **Collision Control:** Serialize merges via a merge train script to prevent CI race conditions.
+*   **Human Gates (G8):**
+    *   **Approval Required:** Finance Lead must sign off on the reconciliation dry-run results.
+    *   **Approval Required:** Jane Smith (if `transaction-state` was touched).
+    *   **Action:** Deploy to EU-West cluster only.
+*   **Rollback Plan:**
+    *   **DB:** Since migration is irreversible, rollback involves code-level feature flagging to ignore new columns and revert UI/emails, not schema reversal.
+    *   **Trigger:** Any discrepancy in available balance > $0.00 or reconciliation job failure post-deploy.
+*   **Post-Deploy (G9):** Monitor first real dispute cycle. Verify merchant emails send exactly at the 45-day mark.
+
+**Risk Mitigation**
+*   **CI Cost:** Run unit tests locally before pushing. Only trigger full fraud-simulation suite on final integration SHA.
+*   **Shared Library:** Default to an adapter pattern to bypass `transaction-state` modification; treat modification as a blocked state until written approval is physically present.
+*   **Flaky Jobs:** The legacy parser update is a hard prerequisite; the reconciliation job must not run against new codes until the parser is updated in the same commit group.

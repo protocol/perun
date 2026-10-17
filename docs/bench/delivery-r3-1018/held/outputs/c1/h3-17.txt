@@ -1,0 +1,56 @@
+### Delivery Plan: Public Feed API Cursor Migration
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Load balancer caches error responses for 5 minutes; silent failures block rollback verification.
+*   **Cost Gate:** CI capped at 3 runs/day ($45/run); local verification is mandatory before push.
+*   **Approvals:** Production deploy requires explicit written approval from Security Lead and Mobile Platform Owner.
+*   **Technical Constraint:** Auth library frozen; DB replica lag (400ms) causes cursor timeouts.
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Translation Logic & Schema Preservation (Builder)**
+*   **Scope:** Implement offset-to-cursor translation layer in the public feed endpoint. Ensure response schema remains identical for legacy clients.
+*   **Constraint:** Do not modify the frozen authentication library.
+*   **Parallelism:** Can run parallel to Lane 2, but must finish before Lane 3 integration.
+
+**Lane 2: Rate Limit & Header Logic (Builder)**
+*   **Scope:** Implement logic to ensure rate limit counters remain accurate during translation. Add deprecation headers *only* to new cursor requests (suppress for offset-derived requests).
+*   **Parallelism:** Independent of Lane 1 logic, provided the request context is shared.
+
+**Lane 3: Resilience & Timeout Handling (Builder)**
+*   **Scope:** Address the 400ms replica lag. Implement retry logic or timeout buffers specifically for cursor token validation to prevent translation failures.
+*   **Dependency:** Requires Lane 1's translation interface to be defined.
+
+**Lane 4: Local Verification Suite (QA)**
+*   **Scope:** Build a local harness to simulate mobile clients v4.2 (offset) and newer (cursor). Verify no data duplication, correct header placement, and accurate rate limit counting.
+*   **Constraint:** Must prove "green" locally before any CI usage.
+
+#### Gates & Checks
+
+*   **G2 Plan (Now):** Acyclic graph approved. Budget set: 1 CI run for final integration, 1 for regression, 1 reserve.
+*   **G4 Implement:** Code committed to isolated worktrees. Unit tests included for translation math and header logic.
+*   **G5 Verify (Local Mandatory):**
+    *   **Revision:** Exact SHA of the merged feature branch.
+    *   **Action:** Run Lane 4 harness locally.
+    *   **Success Criteria:** Zero data duplication in offset simulation; deprecation headers absent on legacy traffic; rate limits increment correctly.
+    *   **Timeout Check:** Simulate >400ms DB lag; verify graceful handling (no 5xx errors to avoid LB cache poisoning).
+*   **G6 Review:**
+    *   **Reviewer:** Independent Senior Backend Engineer (not the Builder).
+    *   **Focus:** Logic correctness of offset math, security of cursor tokens, and adherence to the "no auth lib change" constraint.
+*   **G7 Integrate:** Merge to integration branch. Run **one** CI regression suite to confirm no pipeline breakage.
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Single PR containing all lanes. Do not merge partial logic.
+*   **Human Decision (G8):**
+    *   **Required Approvers:** Security Lead + Mobile Platform Owner.
+    *   **Submission:** Present local verification receipts (Lane 4 results) and CI green status. Explicitly state the 6-month sunset plan for the translation layer.
+*   **Deployment:**
+    *   Deploy behind a feature flag if available; otherwise, direct deploy post-approval.
+    *   **Monitoring:** Watch for 5xx spikes immediately post-deploy.
+*   **Rollback Plan:**
+    *   **Trigger:** Any increase in 5xx errors or data duplication reports.
+    *   **Action:** Immediate revert of the PR.
+    *   **Verification Caution:** Due to the 5-minute LB error cache, a "fixed" state may not be visible immediately after rollback. Wait 6 minutes before declaring the rollback successful based on live traffic.
+
+**Risk Mitigation:** The "silent failure" risk is mitigated by the strict local simulation of DB lag in G5. If local tests cannot simulate the lag, the lane is blocked until a testbed is available; do not rely on CI to find this.

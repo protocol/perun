@@ -1,0 +1,62 @@
+### Delivery Plan: Webhook Signature v2 Migration
+
+**Scope & Constraints:** Update `acme-events` dispatcher and log parser to v2 scheme with a feature flag. Do not touch the shared crypto library (finance lock). Zero downtime required. Rollback is manual DB revert (irreversible for processed states); prevention is the primary strategy.
+
+#### Lanes & Ownership
+*Parallel execution where possible; serialization enforced on shared state.*
+
+1.  **Lane A: Core Implementation (Builder)**
+    *   **Work:** Implement v2 hash generation in the dispatcher and update the log parser to match the new input format. Introduce the feature flag for toggling schemes.
+    *   **Constraint:** Isolated worktree; no changes to `billing` module or shared crypto lib.
+    *   **Parallelism:** Runs parallel to Lane B.
+
+2.  **Lane B: Integration Test Harness (QA)**
+    *   **Work:** Script the validation against the top three integrators using the external sandbox.
+    *   **Constraint:** Must execute strictly within the 02:00–05:00 UTC window.
+    *   **Dependency:** Waits for Lane A's artifact (build) but prepares scripts now.
+
+3.  **Lane C: Security & Compliance Review (Security)**
+    *   **Work:** Verify the v2 implementation against the integration guide and audit logging integrity.
+    *   **Dependency:** Starts after Lane A completes unit tests.
+
+**Serialization Point:** Lane B (Sandbox) and Lane C (Security) must both sign off before G7 Integration. The database migration/log parser update must be atomic with the code deploy to prevent indexing corruption.
+
+#### Gates & Checks
+*Every check runs on an exact, immutable SHA.*
+
+*   **G1 (Spec):** Define the exact v2 payload structure and feature flag name. Pin base SHA.
+*   **G2 (Plan):** Confirm budget for CI runs (45m each) and sandbox window slots. **Budget Cap:** Max 3 full CI runs per candidate.
+*   **G4 (Implement):** Builder submits PR with unit tests proving log parser compatibility.
+    *   *Check:* Unit tests green on feature branch.
+*   **G5 (Verify):**
+    *   *Local:* Stack up, run unit tests, verify log output format matches v2 spec.
+    *   *Staging:* Deploy to staging behind flag. Run Lane B scripts during 02:00–05:00 UTC. **Requirement:** All three integrators return HTTP 200 with valid v2 receipts.
+*   **G6 (Review):**
+    *   *Security:* Independent review of crypto implementation and flag logic.
+    *   *Architecture:* Review log parser changes to ensure no audit gap.
+    *   *Condition:* No Blockers/Criticals. High severity requires Lead Architect acceptance.
+*   **G7 (Integrate):** Merge to release branch. Re-run affected CI slices on the merge SHA.
+
+#### Review Strategy
+*   **Builder** never reviews their own code.
+*   **Security Officer** performs independent AppSec review (G6).
+*   **Lead Architect** reviews the log parser coupling and rollback plan (G6).
+*   **QA** owns the sandbox validation receipt (G5).
+
+#### Landing & Human Gates
+*   **Merge Train:** Single PR to the release branch. No partial merges.
+*   **Human Approvals (G8):**
+    1.  **Lead Architect:** Sign-off on log parser integrity and rollback readiness.
+    2.  **Security Officer:** Sign-off on v2 compliance and sandbox validation receipts.
+    *   *Action:* Both must explicitly approve the production deployment ticket. No auto-deploy.
+*   **Deployment:**
+    1.  Deploy with flag `OFF` (legacy v1).
+    2.  Enable flag for 5% internal traffic; monitor logs.
+    3.  Enable for top 3 partners; verify live.
+    4.  Global enable.
+*   **Rollback:**
+    *   *Trigger:* Any integrator validation failure or audit log corruption.
+    *   *Action:* Toggle flag `OFF` immediately. If data corruption occurred, execute manual DB rollback (irreversible for events processed during the window).
+    *   *Decider:* Security Officer or Lead Architect.
+
+**Risk Mitigation:** The 45-minute CI pipeline means we cannot afford "try and see." The sandbox test (Lane B) is the critical gate before human approval. If the 02:00–05:00 window is missed, the launch slips; we do not skip validation.

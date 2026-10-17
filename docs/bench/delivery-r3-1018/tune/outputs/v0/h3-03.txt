@@ -1,0 +1,58 @@
+**Delivery Plan: Atlas Load Balancer TLS 1.3 Upgrade**
+
+**Objective:** Enable TLS 1.3 on the Atlas shared load balancer with zero downtime via blue-green swap, validated by downstream teams, ready for the Tuesday maintenance window.
+
+### 1. Lanes & Serialization
+
+*   **Lane A: Configuration & Blueprint (Serial, First)**
+    *   **Actor:** Senior Network Architect (Jane Smith).
+    *   **Work:** Draft the specific load balancer configuration diff enabling TLS 1.3 while retaining TLS 1.2 for the blue-green transition. Define the exact swap procedure and rollback commands.
+    *   **Output:** A merge request (MR) containing the config change and a `rollback.sh` script.
+    *   **Dependency:** None. Must complete before Lane B starts.
+
+*   **Lane B: Downstream Certificate Validation (Parallel, Multiple)**
+    *   **Actors:** Representatives from the 12 product teams (including Billing Gateway and User Portal).
+    *   **Work:** Test their services against a staging environment mimicking the new TLS 1.3 termination. Verify certificates and handshake stability.
+    *   **Constraint:** Must use the *exact* configuration spec from Lane A.
+    *   **Output:** Signed validation receipts from all 12 teams.
+    *   **Parallelism:** All 12 teams work simultaneously. If the `certificate-validation` check flakes due to latency, teams must manually re-trigger locally; do not block the lane for automated flakiness.
+
+*   **Lane C: Rollback Drill (Serial, After Lane A)**
+    *   **Actor:** Platform Operations (independent of Jane Smith).
+    *   **Work:** Execute the `rollback.sh` script in a isolated testbed to prove the 1-hour freeze can be bypassed or that the revert is instant.
+    *   **Output:** A video log or terminal receipt proving successful reversion within the allowed window.
+
+### 2. Gates & Checks
+
+*   **G1 Spec Gate:** Jane Smith submits the MR. **Check:** Does the diff explicitly support a blue-green state (both protocols active)? If not, reject.
+*   **G4 Implementation Gate:** CI Pipeline runs on the MR.
+    *   **Exact Revision:** The head SHA of Jane's MR.
+    *   **Action:** Run the 45-minute integration suite.
+    *   **Flake Handling:** If `certificate-validation` fails, inspect logs. If it indicates latency/timeouts rather than protocol mismatch, manually re-trigger once. Two consecutive failures require a network trace attachment.
+*   **G6 Review Gate:**
+    *   **Reviewer 1 (Security):** Independent Security Lead. Verifies TLS 1.3 cipher suites and audit compliance.
+    *   **Reviewer 2 (Platform):** Platform Director. Verifies the blue-green swap logic and rollback script.
+    *   **Constraint:** Neither reviewer can be Jane Smith. Both must approve.
+*   **G7 Integration Gate:** Once G6 is passed, the MR is merged to `main` by Jane Smith (only person authorized).
+    *   **Check:** Verify the merge commit SHA matches the reviewed SHA.
+
+### 3. Landing & Human Decisions
+
+*   **Pre-Maintenance (Monday):**
+    *   **Human Decision:** Platform Director confirms all 12 validation receipts (Lane B) and the Rollback Drill receipt (Lane C) are attached to the ticket.
+    *   **Action:** Merge to `main` (G7). This updates the config repo but does not yet flip production traffic.
+
+*   **Maintenance Window (Tuesday):**
+    *   **Human Decision (Go/No-Go):** Security Lead + Platform Director jointly authorize the swap.
+    *   **Execution:** Ops team executes the blue-green swap script.
+    *   **Verification:** Monitor global handshake error rates. Zero tolerance for spike >0.1%.
+
+*   **Rollback Protocol:**
+    *   **Trigger:** Any handshake failure blocking customer transactions or validation error rate >0.1% within 15 minutes of swap.
+    *   **Action:** Immediate execution of `rollback.sh`.
+    *   **Consequence:** Triggers the 1-hour deployment freeze. No further attempts until the freeze lifts and a post-mortem (G10) identifies the root cause.
+
+**Risk Mitigation:**
+*   **Flaky CI:** Manual log inspection mandated before re-triggering to avoid masking real protocol errors.
+*   **Irreversibility:** The 1-hour freeze makes the "Test Rollback" (Lane C) the most critical non-code step. If Lane C fails, the Tuesday window is cancelled.
+*   **Coordination:** The 12 downstream teams are the critical path for validation; their sign-off is a hard gate before the Tuesday Go/No-Go decision.

@@ -1,0 +1,65 @@
+**Delivery Plan: Dark Mode Tokens & Embedded Widgets**
+
+**Binding Facts & Constraints**
+*   **Scope:** Core system tokens + Main Portal + Sales Widget + Support Widget.
+*   **Critical Risk:** Shared token config changes break all three apps instantly; requires Senior Staff Engineer approval.
+*   **CI Constraint:** Widget pipelines have a strict 30-minute timeout; visual regression suites often fail here.
+*   **Legacy Constraint:** Support Widget needs static fallback assets (no dynamic switching).
+*   **Requirement:** Backward compatibility until all consumers upgrade; WCAG contrast compliance.
+*   **Appetite:** Ready for next quarterly review.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Token Definition & Accessibility (Core)**
+    *   **Work:** Define dark mode palette in `acme-core`; generate light/dark maps; verify WCAG contrast ratios programmatically.
+    *   **Parallelism:** Can run independently but must complete before Lane B.
+    *   **Output:** Updated token config file + contrast report.
+
+2.  **Lane B: Main Portal Integration**
+    *   **Work:** Consume new tokens; implement theme switcher; verify dynamic switching.
+    *   **Dependency:** Requires Lane A completion.
+    *   **Parallelism:** Can run parallel to Lane C/D once Lane A is merged.
+
+3.  **Lane C: Sales Widget Integration**
+    *   **Work:** Consume tokens; implement dynamic theme support; optimize visual regression suite to fit 30-min CI window.
+    *   **Dependency:** Requires Lane A completion.
+    *   **Parallelism:** Independent of Lane D.
+
+4.  **Lane D: Support Widget Legacy Adapter**
+    *   **Work:** Consume tokens; implement static fallback asset generation step; verify legacy rendering compatibility.
+    *   **Dependency:** Requires Lane A completion.
+    *   **Parallelism:** Independent of Lane C.
+
+**Gates & Checks**
+
+*   **G1 Spec:** Define acceptance criteria for contrast ratios and backward compatibility. Pin base SHA for `acme-core`.
+*   **G2 Plan:** Explicitly budget CI time for widget lanes (max 25 mins to allow buffer).
+*   **G3 Design:** ADR detailing the static fallback mechanism for Support Widget and the versioning strategy for backward compatibility.
+*   **G4 Implement:**
+    *   Lane A: Tests for contrast ratios included with token changes.
+    *   Lanes B/C/D: Unit tests for theme switching/fallback logic.
+*   **G5 Verify (Exact Revision):**
+    *   **Core:** Contrast report green at exact SHA.
+    *   **Widgets:** Visual regression suite must pass within 25 minutes at exact SHA. If timeout occurs, lane fails (no manual retry allowed in gate).
+    *   **Support Widget:** Verify static fallback asset renders correctly on legacy engine.
+*   **G6 Review:**
+    *   **Token Config:** Mandatory review by Senior Staff Engineer (independent of Builder).
+    *   **Widget Changes:** Review by respective widget owners + QA (independent of Builder).
+*   **G7 Integrate:** Merge Lane A first. Once published to private registry, merge Lanes B, C, D in any order. One integration receipt per repo.
+
+**Landing & Human Decisions**
+
+*   **Merge Strategy:** Train merge. Lane A lands first. Widgets wait for Lane A's published version.
+*   **Human Approvals Required:**
+    *   **Push/Merge Token Config:** Senior Staff Engineer approval mandatory.
+    *   **CI Timeout Waiver:** None allowed; if suite exceeds 30 mins, the code must be optimized, not the gate waived.
+    *   **Release to Production:** Owner approval for each repo (Main, Sales, Support) as they ship on different schedules.
+*   **Rollback:**
+    *   **Core:** Revert token config commit immediately if any consumer build breaks.
+    *   **Widgets:** Feature flag toggle off or revert widget commit.
+    *   **Proof:** Rollback procedure verified in G8 for each repo before release.
+
+**Risk Mitigation**
+*   **CI Flakiness:** Visual regression suites in Lanes C/D must be optimized (subset selection or parallelization) to guarantee <25 min runtime. No "retry to pass" allowed.
+*   **Legacy Breakage:** Lane D must prove static fallback works on actual legacy engine (emulated or physical) before G5 pass.
+*   **Coordination:** Conductor monitors Lane A completion to unblock B/C/D. No duplicate work on token definition.

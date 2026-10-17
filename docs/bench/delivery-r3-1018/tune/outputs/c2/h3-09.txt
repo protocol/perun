@@ -1,0 +1,78 @@
+### Delivery Plan: Orders Table PK Migration to UUID
+
+**Critical Constraints & Non-Goals**
+*   **Do not touch** the `daily-reconciliation` job or shared library until a coordinated cutover window is confirmed; breaking this irreversibly halts audit trails for five services.
+*   **Do not** hold schema locks >30s on the shared cluster.
+*   **Do not** rely on staging high-load simulations for final verification due to flaky network checks; verify in production read-only mode or isolated AZs.
+*   **Appetite:** 2 weeks for implementation, 4-hour maintenance window for cutover (blue-green switch).
+
+---
+
+### Lanes & Ownership
+
+**Lane 1: Schema & Data Migration (Owner: Senior DB Engineer)**
+*   **Work:** Create new `orders_v2` table with UUID PK. Write backfill script to copy data from `orders` to `orders_v2` in batches <10k rows to avoid lock timeouts.
+*   **Parallelism:** Can run parallel to Lane 2, but must complete before Lane 3.
+*   **Serialization:** Must finish before Lane 4 (Cutover).
+
+**Lane 2: Application Logic Update (Owner: Backend Lead)**
+*   **Work:** Update Orders service to write to both `orders` (int) and `orders_v2` (UUID) during transition (dual-write). Update read path to prefer UUID if present. Refactor legacy billing adapter to accept string IDs.
+*   **Parallelism:** Runs parallel to Lane 1.
+*   **Dependency:** Requires Lane 1 schema to exist in dev/staging.
+
+**Lane 3: Downstream Coordination (Owner: Platform Architect)**
+*   **Work:** Coordinate with owners of the 5 services using the shared library. Prepare a single atomic release plan for the `daily-reconciliation` job update.
+*   **Serialization:** Must be approved before Lane 4 starts. This is the highest risk item.
+
+**Lane 4: Cutover & Validation (Owner: Release Engineer)**
+*   **Work:** Execute blue-green switch. Point traffic to `orders_v2`. Disable writes to old table. Monitor AZ generation.
+*   **Trigger:** Starts only after Lanes 1-3 are verified and human approval is granted.
+
+---
+
+### Gates & Checks
+
+*   **G1 Spec:** Define UUID generation algorithm (v4 vs v7) and confirm batch size limits for backfill. Pin base SHA: `main@abc123`.
+*   **G2 Plan:** Explicitly map the `daily-reconciliation` cutover sequence. Set lane budget: $500 for CI runs (limit to 4 full runs).
+*   **G3 Design:** ADR for dual-write strategy and rollback mechanism (switch back to int PK table).
+*   **G4 Implement:**
+    *   Unit tests for UUID generation in all 3 AZs.
+    *   Migration script dry-run on a 1TB snapshot (read-only).
+*   **G5 Verify:**
+    *   **Exact Revision:** Deploy to staging.
+    *   **Check:** Run backfill on staging subset. Verify billing adapter parses string IDs.
+    *   **Constraint:** Skip "high-load" staging simulation; rely on unit load tests + targeted AZ integration tests to avoid flaky false negatives.
+    *   **CI Cost:** Run full 45m pipeline only on the final candidate SHA. Use incremental builds for intermediate checks.
+*   **G6 Review:**
+    *   **Security:** Independent review of UUID entropy and collision risk.
+    *   **QA:** Verify data integrity counts (row counts, checksums) between old and new tables.
+    *   **Reviewer:** Must be independent of the Backend Lead (Lane 2).
+*   **G7 Integrate:** Merge to release branch. Re-run affected integration tests on the merged SHA.
+
+---
+
+### Landing & Human Gates
+
+**Merge Strategy:**
+*   Code merges to `release/candidate` via PR.
+*   **Human Approval Required:** Lead Architect AND Data Governance Officer must approve the PR *and* the specific cutover runbook before G8.
+
+**Deployment (G8):**
+*   **Step 1:** Deploy updated shared library (reconciliation job) during low-traffic window.
+*   **Step 2:** Enable dual-write mode in Orders service.
+*   **Step 3:** Run backfill.
+*   **Step 4:** Switch read traffic to UUID table.
+*   **Step 5:** Disable int-PK writes.
+
+**Rollback Plan:**
+*   **Trigger:** Data mismatch >0.01% or billing adapter failure.
+*   **Action:** Revert read traffic to integer table immediately. The dual-write ensures no data loss during the window.
+*   **Decider:** On-call Platform Lead.
+
+**Post-Deploy (G9):**
+*   Verify UUID generation in all 3 AZs via live logs (not synthetic tests).
+*   Confirm `daily-reconciliation` job completes successfully with new format.
+
+**Cost Control:**
+*   Max 4 full CI runs ($480 total). Any additional runs require Conductor approval.
+*   Lane 3 coordination meetings capped at 2 hours.

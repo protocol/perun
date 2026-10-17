@@ -1,0 +1,61 @@
+### Delivery Plan: ORM v4.0 Migration
+
+**Objective:** Upgrade core data layer from v3.2 to v4.0 across 24 services, refactor billing/user-profile modules, ensure zero regression in latency/test data, and meet Friday staging deadline.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Config & Dependency):** Update shared configuration files and dependency locks for all 24 services.
+    *   *Constraint:* Must complete before Lane B starts to ensure consistent base.
+    *   *Owner:* Builder 1.
+*   **Lane B (Refactor - Billing):** Refactor query builders in the billing module to v4.0 syntax.
+    *   *Parallel:* Can run alongside Lane C.
+    *   *Owner:* Builder 2.
+*   **Lane C (Refactor - User Profile):** Refactor query builders in the user-profile module to v4.0 syntax.
+    *   *Parallel:* Can run alongside Lane B.
+    *   *Owner:* Builder 3.
+*   **Lane D (Performance Baseline):** Capture current transaction latency benchmarks on the exact pre-migration SHA.
+    *   *Parallel:* Can run immediately.
+    *   *Owner:* QA Engineer.
+*   **Lane E (Flake Analysis):** Isolate and document the payment gateway network flake to prevent false negative build failures.
+    *   *Parallel:* Can run immediately.
+    *   *Owner:* QA Engineer (distinct from Lane D).
+
+**Serialization:** Lane A must merge and verify before Lanes B and C begin implementation to avoid syntax mismatch errors. Lanes B and C run in parallel. Lane D must complete before final verification (Gate 5).
+
+#### 2. Gates & Checks
+*   **Gate 0 (Intake):** Confirm scope excludes test data modification. Validate Friday staging deadline feasibility against Wednesday freeze.
+*   **Gate 1 (Spec):** Define acceptance criteria: "All integration tests pass unmodified," "Latency ≤ baseline," "Staging deployed by Friday EOD." Pin base SHA.
+*   **Gate 2 (Plan):** Verify acyclic dependency graph. Assign token budgets for CI runs ($40/build cost requires strict pre-commit linting to avoid chargebacks).
+*   **Gate 3 (Design):** Document irreversible migration script handling. Explicitly state manual approval requirement for two senior architects.
+*   **Gate 4 (Implement):**
+    *   Run local linting (mandatory to avoid $40 CI failure).
+    *   Commit refactor per service.
+    *   **Check:** Pre-commit hooks block commits if local lint fails.
+*   **Gate 5 (Verify):**
+    *   **Revision:** Exact merged SHA of Lanes A+B+C.
+    *   **Action:** Run full integration suite on CI. Manually verify payment gateway failures against Lane E analysis.
+    *   **Performance:** Compare Lane D baseline vs. new metrics. Fail if latency increases.
+    *   **Condition:** Stack must be up; unit tests alone are insufficient.
+*   **Gate 6 (Review):**
+    *   **Reviewer:** Senior Architect 1 (independent of Builders).
+    *   **Focus:** Syntax correctness, irreversibility risk, security implications of v4.0.
+    *   **Reviewer:** QA Lead (independent of implementation).
+    *   **Focus:** Test pass rates, performance delta, flake verification.
+
+#### 3. Review Strategy
+*   **Independence:** Builders (Lanes A, B, C) cannot review each other's code.
+*   **Security:** Security team review is mandatory before staging deployment (per ticket requirement).
+*   **Deep Code Review:** Apply full diff review on the integrated SHA, focusing on query builder changes.
+
+#### 4. Landing & Human Gates
+*   **Integration:** Merge Lanes A, B, C into a temporary integration branch. Run one final full build ($40 cost) on this exact SHA.
+*   **Human Approval Required:**
+    1.  **Database Migration:** Two senior architects must manually approve the irreversible schema script execution on staging.
+    2.  **Staging Deployment:** Owner approval required to promote to staging before Friday deadline.
+    3.  **Flake Verification:** Human sign-off on payment gateway test results if CI flags them.
+*   **Merge Window:** Target Thursday to avoid Wednesday regulatory freeze.
+*   **Rollback Plan:**
+    *   Code: Revert integration branch merge.
+    *   Data: **No automated rollback** for schema (irreversible). Mitigation: Deploy v3.2 compatibility shim or restore from pre-Friday backup (verify backup existence at Gate 0).
+*   **Post-Deploy:** Security team validates patched dependencies on staging. Monitor latency SLOs continuously until Friday EOD.
+
+**Risk Mitigation:** If CI fails due to lint, the builder is charged back; strict local validation is enforced. If performance regresses, the lane halts immediately for optimization before proceeding to staging.

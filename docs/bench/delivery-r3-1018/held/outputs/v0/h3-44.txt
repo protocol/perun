@@ -1,0 +1,59 @@
+### Delivery Plan: Approval Workflow & Retention
+
+**Scope:** Implement manager approval for expenses >500 units; enforce 7-year retention for rejected items with full audit trail; update dashboard visibility. No changes to existing approved records or the `transactions` table.
+
+#### 1. Lanes & Parallelism
+*Work is isolated in separate worktrees. One writer per tree.*
+
+*   **Lane A (Spec & Contract):** Define the "Rejected" state machine, API contracts for the new approval step, and the exact data fields required for the 7-year retention tombstone.
+    *   *Parallel:* Yes.
+    *   *Output:* Technical Spec + Migration Plan (read-only schema analysis).
+*   **Lane B (Core Logic):** Implement the approval workflow logic in the Monolith billing module. Add the >500 unit trigger and the "Manager Approval" state transition.
+    *   *Parallel:* Yes (after Spec freeze).
+    *   *Constraint:* Must not touch `transactions` table; uses new status flags/tables only.
+*   **Lane C (Retention & Audit):** Implement the soft-delete override. Ensure user account deletion triggers a "legal hold" on rejected expense artifacts (receipts + logs) for 7 years.
+    *   *Parallel:* Yes (after Spec freeze).
+    *   *Dependency:* Requires Database Administrator (DBA) review of the storage strategy.
+*   **Lane D (Dashboard & UX):** Update the dashboard query to explicitly surface "Rejected" items with a clear visual marker for auditors.
+    *   *Parallel:* Yes.
+*   **Lane E (Integration & Migration):** Draft the migration script for the new status columns/tables.
+    *   *Serialized:* Must wait for Lane B & C code freeze. Execution is strictly gated to the Tuesday maintenance window by the DBA.
+
+#### 2. Gates & Checks
+*Every check runs on the exact immutable SHA of the lane's head.*
+
+*   **G1 (Spec Review):** Lead Architect validates the state machine and retention logic against compliance requirements.
+*   **G4 (Build & Unit):** Run lint, type-check, and unit tests.
+    *   *Note:* Ignore flaky notification module failures if logs confirm successful dispatch.
+*   **G5 (Functional Verification):**
+    *   Spin up local stack.
+    *   Verify: Expense >500 blocks at "Pending Manager"; Expense ≤500 flows normally.
+    *   Verify: Rejected item persists after simulated user deletion.
+    *   Verify: Dashboard shows rejected items without custom SQL.
+*   **G6 (Independent Review):**
+    *   *Code:* Senior Engineer (not from Ledger Squad) reviews Lanes B, C, D.
+    *   *Security/Compliance:* Compliance Officer reviews Lane C (retention logic) and Lane E (migration safety).
+    *   *Database:* DBA reviews Lane E migration script (read-only review before Tuesday).
+*   **G7 (Integration):** Merge all lanes into a staging branch. Run the full 45-minute CI pipeline once on the combined SHA.
+
+#### 3. Review Strategy
+*   **Builder:** Implements logic (Lanes B, C, D, E).
+*   **Reviewer 1 (Architecture):** Lead Architect. Independent of implementation. Focus: State machine correctness, non-interference with `transactions` table.
+*   **Reviewer 2 (Compliance):** Compliance Officer. Independent of builder. Focus: 7-year retention guarantee, audit trail integrity.
+*   **Reviewer 3 (Database):** DBA. Independent of builder. Focus: Migration script safety, payroll system coexistence.
+
+#### 4. Landing & Human Decisions
+*   **Merge Train:** Lanes merge individually to an integration branch only after G6 pass.
+*   **Human Gates (Required):**
+    1.  **Lead Architect:** Must approve the final integration SHA before merging to `main`.
+    2.  **Compliance Officer:** Must explicitly sign off on the retention implementation before deployment.
+    3.  **DBA:** Must execute the migration script during the Tuesday maintenance window. Code merge does not equal migration execution.
+*   **Deployment:**
+    *   Deploy code to staging immediately after merge.
+    *   Deploy to production only after DBA confirms migration success (post-Tuesday window).
+*   **Rollback:**
+    *   If logic fails: Revert code merge; data remains compatible as no schema change is active until DBA runs script.
+    *   If migration fails: DBA halts; no rollback needed as script is transactional or pre-checked.
+    *   If retention fails: Immediate hotfix to Lane C; legal hold manually verified by Compliance.
+
+**Timeline Constraint:** All coding and reviews must conclude 48 hours before the next Tuesday maintenance window to allow for the 45-minute CI run and final human sign-offs.

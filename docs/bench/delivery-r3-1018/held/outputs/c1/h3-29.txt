@@ -1,0 +1,63 @@
+### Delivery Plan: Refine On-Call Alerting Logic
+
+**Binding Facts & Constraints**
+*   **Locked Files:** `global-thresholds.yaml` (shared across regional clusters).
+*   **Approvers:** Site Reliability Lead (SRL) and Product Owner (PO) required before merge.
+*   **CI Cost:** 45 minutes full regression; iterative testing discouraged.
+*   **Validation Gap:** Staging synthetic traffic cannot replicate burst patterns; validation must rely on historical log replay.
+*   **Deployment Window:** Tuesdays/Thursdays, 10 AM – 2 PM only.
+*   **Irreversible Risk:** False negatives (missing real outages) if thresholds are too tight; continued fatigue if too loose.
+
+---
+
+### Lanes & Serialization
+
+**Lane 1: Historical Data Extraction & Replay Harness (Serial - First)**
+*   **Actor:** Builder
+*   **Work:** Extract last 7 days of incident logs. Build a local replay script to simulate the *new* logic against this historical data.
+*   **Output:** A report proving the new rule would have remained silent during the 7-day false positive window while catching known real incidents.
+*   **Dependency:** None. Must complete before Lane 2 to define the exact threshold values.
+
+**Lane 2: Alert Logic Implementation (Parallel to Lane 1 setup, waits on Lane 1 data)**
+*   **Actor:** Builder (Different worktree than Lane 1 if parallel, otherwise sequential)
+*   **Work:** Update `global-thresholds.yaml` with the compound condition: `error_rate > 5% (3min)` AND `checkout_success < 98%`.
+*   **Output:** Patch file and updated YAML.
+*   **Constraint:** No commit until Lane 1 confirms the specific values prevent the reported noise.
+
+**Lane 3: Independent Verification (QA/SRE)**
+*   **Actor:** QA (Independent of Builder)
+*   **Work:** Review the replay report from Lane 1. Verify the logic covers the "transient blip" scenarios mentioned. Run a dry-run of the CI pipeline locally (if possible) or on a throwaway branch to check syntax only (skipping full 45m regression if syntax is trivial, pending approval).
+*   **Output:** Verification receipt confirming the change meets the "silent during false alarms" criteria.
+
+---
+
+### Gates & Checks
+
+*   **G1 Spec (Now):** Define the exact compound logic and the success metric (zero pages during the 7-day false positive window).
+*   **G3 Design (Post-Lane 1):** Review the replay data. If the new logic misses a *real* past incident, the design fails. Adjust thresholds if necessary.
+*   **G4 Implement:** Commit change to a dedicated feature branch. Base SHA pinned.
+*   **G5 Verify:** **Critical Gate.** Since staging is unreliable, verification is the **historical replay receipt**. The gate passes only if the replay shows 0 false positives for the last 7 days and 100% capture of known real incidents.
+*   **G6 Review:** Independent review by **Site Reliability Lead** (logic safety) and **Product Owner** (business impact of potentially delayed alerts). Both must approve.
+*   **G7 Integrate:** Merge to main. Re-run full 45-minute CI suite *once* on the exact merge SHA.
+
+---
+
+### Landing & Human Decisions
+
+**Merge Strategy:**
+*   Create a Draft PR immediately after G4.
+*   Attach the Lane 1 replay report to the PR description.
+*   Request reviews from SRL and PO explicitly citing the "staging unreliability" and reliance on historical replay.
+
+**Human Decisions Required:**
+1.  **Approval to Merge:** SRL and PO must explicitly approve the trade-off (suppressing noise vs. potential delay in detection) based on the replay data.
+2.  **Deployment Execution:** A human must trigger the deployment strictly within the **Tue/Thu 10 AM – 2 PM window**. Automated deployment is forbidden outside this window.
+
+**Rollback Plan:**
+*   **Trigger:** If a real incident occurs post-deploy and the alert fails to fire within 5 minutes of the threshold breach.
+*   **Action:** Immediate revert of `global-thresholds.yaml` to the previous SHA.
+*   **Preparation:** The revert commit should be prepared locally and ready to push; no new CI run should block a safety rollback (emergency bypass pre-authorized by SRL).
+
+**Schedule:**
+*   **Target Merge:** Monday (to allow review) or Tuesday morning.
+*   **Target Deploy:** Tuesday or Thursday between 10 AM and 2 PM.

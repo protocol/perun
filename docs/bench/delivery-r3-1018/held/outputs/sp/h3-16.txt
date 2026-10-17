@@ -1,0 +1,39 @@
+# Delivery Plan: Parallelize Build Pipeline
+
+## Lanes & Parallelism
+**Lane A (Infrastructure - Ops):** Provision three independent cache volumes on the network-attached storage. This is a prerequisite; no code changes can bypass the single-writer hardware limit without distinct targets.
+**Lane B (Pipeline Logic - Platform Squad):** Refactor the CI orchestration script. Instead of one global lock, implement a sharding strategy where Module A, B, and C write to Cache Vol 1, 2, and 3 respectively. This lane runs parallel to Lane A once the volume count is confirmed.
+**Lane C (Failure Handling - Platform Squad):** Implement "graceful degradation" logic. If a module build fails, the pipeline must release that specific volume lock immediately and flag only that module as failed, allowing other independent modules to complete and cache their artifacts.
+
+**Serialization Point:** Lane B cannot merge until Lane A confirms volume provisioning. Lane C depends on the sharding logic from Lane B being syntactically correct.
+
+## Gates & Checks
+**Gate 1 (Pre-Merge):** Run the refactored pipeline against `staging-branch` at 7:45 PM. This ensures the bulk of the build occurs before the 8:00 PM double-cost window triggers.
+**Check 1:** Verify that three concurrent jobs successfully acquire locks on three distinct volumes simultaneously. Failure here indicates a configuration error in Lane A or B.
+**Check 2 (Flaky Test Isolation):** The known networking flake must be configured to "non-blocking warning" for this specific pipeline run. It will not fail the build but will log an alert for manual review.
+**Gate 2 (Security):** Before any deployment to Staging, the build artifact manifest must be frozen and presented to the Security Lead. This gate only opens weekdays between 9:00 AM and 5:00 PM.
+
+## Review Strategy
+**Primary Reviewer:** One senior engineer from the build-script rotation (not the author of the pipeline changes). They must verify the sharding logic and the lock-release mechanism on failure.
+**Independent Reviewer:** The Ops Team Lead. They do not review code but must sign off on the infrastructure change request (Lane A) and confirm the network volume topology matches the script's expectations.
+**Constraint:** The Code Reviewer and Ops Lead cannot be the same person. The author of the changes cannot merge their own request.
+
+## Landing & Rollback
+**Merge Window:** Tuesday or Wednesday morning. This allows a full business day to monitor the new parallel flow before the weekend and ensures the Security Lead is available for the Staging promotion.
+**Deployment:**
+1. Merge to `main`.
+2. Trigger nightly build on `main` (monitored).
+3. Upon success, promote to Staging (requires Security Lead sign-off).
+4. If Staging passes, enable for all nightly runs.
+
+**Human Decisions Required:**
+1. **Ops Lead:** Approval to create new network volumes (cost implication).
+2. **Security Lead:** Manual sign-off for Staging deployment (weekday only).
+3. **Platform Lead:** Authorization to ignore the networking flake during the transition period.
+
+**Rollback Protocol:**
+*   **Pre-Staging:** If the build fails or hangs on `main` before Staging promotion, revert the merge immediately. No data loss occurs as no artifacts were promoted.
+*   **Post-Staging:** If issues arise after Staging deployment, **do not attempt a live rollback**. The database rollback is irreversible during business hours (45 mins downtime). Instead, freeze the pipeline, route all new builds to the legacy single-cache path (if preserved as a fallback branch), and schedule the database rollback for an off-hours maintenance window.
+*   **Contingency:** If the new volumes cause network saturation, Ops must throttle write speeds manually; there is no automated circuit breaker for storage bandwidth.
+
+This plan isolates the hardware bottleneck, respects the cost windows, and prevents a single module failure from stalling the entire release cycle.

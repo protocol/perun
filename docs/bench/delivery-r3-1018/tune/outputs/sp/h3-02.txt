@@ -1,0 +1,32 @@
+### Delivery Plan: Incremental Backup Implementation
+
+**1. Lanes & Parallelism**
+*   **Lane A (Core Logic - Serialized):** Develop the incremental backup script in `ledger-core/backup/incremental.py`. This must strictly read from the primary replica to avoid locking. It must calculate checksums and append them to the compliance ledger file. This lane cannot start until the interface for the compliance logger is confirmed.
+*   **Lane B (Orchestration - Parallel to A):** Create the new cron definition in `ops/cron.d/backup-incremental` to trigger every four hours. This runs in parallel with Lane A but cannot be merged until Lane A is code-complete.
+*   **Lane C (Validation Harness - Parallel to A):** Build a local simulation script that mocks the database dump and verifies checksum generation without touching the immutable production audit log. This avoids polluting the real audit trail during development.
+
+**Serialization Constraint:** Lane A and Lane B must merge together in a single commit set; deploying the cron (Lane B) without the script (Lane A) will cause immediate job failures and alert noise.
+
+**2. Gates & Checks**
+*   **Gate 1: Local Simulation (Pre-Commit):** Run Lane C's simulation against the new script. Verify checksum format matches the compliance ledger schema. *Revision:* Feature branch head.
+*   **Gate 2: Static Analysis (CI Trigger):** Submit to CI only once per day (to mitigate the $45 cost and 55m runtime). Ensure the CI configuration explicitly skips the "network latency suite" if the run falls on a Tuesday to prevent false negatives. *Revision:* Pre-merge branch.
+*   **Gate 3: Credential Safety Check:** Automated scan to ensure no modifications were made to the Security team's Friday midnight cron job. Any diff touching that file is an automatic rejection.
+*   **Gate 4: Revert Verification:** Confirm via diff that `ops/cron.d/backup-full` and associated full-dump scripts remain untouched.
+
+**3. Review Process**
+*   **Primary Reviewer:** Senior Data Engineer (independent of the author). They verify the incremental logic handles edge cases (e.g., interrupted backups) and that checksums are formatted correctly for the auditors.
+*   **Compliance Reviewer:** External Compliance Officer. They do not review code but must sign off on the *design document* showing that retention policies remain unchanged and the old full-dump workflow is preserved.
+*   **Independence:** The Primary Reviewer cannot be the same person who wrote the simulation harness (Lane C) to ensure the test strategy is also validated.
+
+**4. Landing Strategy**
+*   **Merge Window:** Thursday morning, post-midnight (after Friday's credential rotation risk window has passed for the week, and before the next Friday rotation). This avoids the Friday midnight credential rotation cron job entirely during the deploy.
+*   **Approval Mechanism:** The merge requires dual approval in the change management portal: one from the CTO and one from the external Compliance Officer. No merge occurs without both tokens.
+*   **Rollback Plan:**
+    *   **Trigger:** If the incremental job fails twice consecutively or if auditors request an immediate demonstration of the original workflow.
+    *   **Action:** Revert the single merge commit containing Lane A and Lane B. Since the old full-dump scripts were never modified, the system instantly reverts to the nightly full-only schedule.
+    *   **Data Safety:** Because the audit log is immutable, any failed test entries generated during the incident remain but are tagged with a "FAILED_VALIDATION" status in the application logs (not the immutable store) to distinguish them from valid production entries.
+
+**Human Decisions Required:**
+1.  Compliance Officer sign-off on the design (pre-merge).
+2.  CTO and Compliance Officer dual approval in the portal (merge time).
+3.  Decision to proceed if the Tuesday flaky check fails despite suppression (requires manual override).

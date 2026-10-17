@@ -1,0 +1,48 @@
+**Delivery Plan: Offline Kill Switch**
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Modifying the shared fallback data schema breaks the billing aggregator.
+*   **Approval Gate:** Only Senior Lead David Chen can approve production deployment after manual security review.
+*   **Cost/Time:** CI is 45 minutes and expensive; local testing is mandatory before any push.
+*   **Environment:** Staging health checks are flaky and cannot be used for validation.
+*   **Deadline:** Production deployment by Friday.
+
+**Lanes & Serialization**
+Work proceeds in three sequential lanes to ensure safety before parallelizing verification.
+
+*   **Lane 1: Specification & Interface Design (Conductor + Product Analyst)**
+    *   **Work:** Define the exact failure conditions (timeout thresholds, error codes) that trigger the switch without consulting the model service. Document the read-only contract for the fallback cache to guarantee zero schema changes.
+    *   **Output:** A technical spec naming the specific error states and the "read-only" file access pattern.
+    *   **Gate:** G1 Spec approval. Must explicitly state how the billing aggregator is protected.
+
+*   **Lane 2: Implementation (Builder)**
+    *   **Work:** Implement the circuit breaker logic in `core-engines`. The code must check local network/model reachability independently. It must read the existing cache file strictly as a binary/blob or via the existing safe parser.
+    *   **Constraint:** No changes to the cache file structure. No dependencies on the model service for the decision logic.
+    *   **Output:** A commit on an isolated worktree with unit tests mocking network failures and latency spikes.
+    *   **Gate:** G4 Implement. Local build and unit tests must pass green before any push.
+
+*   **Lane 3: Independent Verification (QA + Security)**
+    *   **Work:**
+        *   **QA:** Run functional tests locally simulating model downtime and high latency. Verify the system swaps to static suggestions instantly with no user-visible errors. Do *not* rely on staging health checks; use local mock servers.
+        *   **Security:** Review the code for supply chain risks and ensure the kill switch cannot be triggered remotely by an attacker (e.g., via spoofed errors).
+    *   **Output:** Verification receipts confirming seamless failover and security clearance.
+    *   **Gate:** G5/G6 Verify & Review. Must run against the exact SHA from Lane 2.
+
+**Review Strategy**
+*   **Independence:** The Builder (Lane 2) cannot review their own code.
+*   **Reviewers:**
+    *   **Technical Review:** A senior engineer from the Aurora Team (not the Builder) to validate the circuit breaker logic and latency handling.
+    *   **Security Review:** An independent security engineer to verify the isolation of the switch and the read-only cache guarantee.
+*   **Scope:** Review covers the exact commit SHA produced in Lane 2.
+
+**Landing & Deployment**
+*   **Integration:** Once Lanes 2 and 3 are green, merge to the integration branch. Re-run the critical subset of CI pipelines (if possible) or rely on the comprehensive local test receipts given the 45-minute CI cost and flaky staging.
+*   **Human Decision (G8):** Request explicit approval from **David Chen**.
+    *   *Ask:* "Deploy Offline Kill Switch (SHA: `<exact_hash>`) to prevent churn during peak traffic. Security reviewed, local verification passed. Rollback plan: Revert commit."
+*   **Rollback:** If latency spikes or errors occur post-deploy, immediately revert the merge commit. The fallback data remains untouched, ensuring billing stability.
+*   **Timeline:** Complete implementation and local verification by Thursday EOD to allow David Chen time for security review and Friday deployment.
+
+**Risk Mitigation**
+*   **Billing Breakage:** Strictly enforced by the "read-only" contract in the spec and code review.
+*   **False Positives:** Logic must require consecutive failures or specific error types to avoid triggering on the known flaky network checks.
+*   **CI Cost:** Mitigated by mandatory local testing; only one clean push intended.

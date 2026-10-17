@@ -1,0 +1,66 @@
+# Delivery Plan: Per-Tenant Feature Entitlement Checks
+
+## Lanes & Parallelism
+
+**Lane A: Backend Enforcement (API Gateway)**
+*   **Owner:** Backend Engineer
+*   **Work:** Integrate central billing service call into the API gateway middleware. Implement logic to reject requests with `403 Forbidden` if the tenant lacks the specific entitlement. Enforce the 5-minute cache TTL on entitlement decisions.
+*   **Constraint:** Must read `global-rules.yaml` outside business hours if modifications are required.
+
+**Lane B: Frontend Obfuscation (Dashboard)**
+*   **Owner:** Frontend Engineer
+*   **Work:** Consume tenant entitlement status from the user context. Conditionally render UI elements, hiding premium tools for free/unauthorized accounts. Ensure direct URL navigation to restricted routes triggers a client-side redirect or "Access Denied" view.
+*   **Dependency:** Requires the API response schema defining entitlement status (defined in Lane A's design phase).
+
+**Parallel Execution:** Lanes A and B proceed simultaneously after the initial interface contract (JSON schema for entitlements) is agreed upon. Lane A is critical path for security; Lane B is critical for user experience.
+
+## Gates & Checks
+
+**Gate 1: Design Contract Freeze (T-4 Days)**
+*   **Check:** Agreement on the JSON payload structure for entitlements and the specific HTTP status codes for rejection.
+*   **Revision:** `main` branch head.
+
+**Gate 2: Local Validation (Pre-Commit)**
+*   **Check:** Unit tests passing locally for both lanes.
+*   **Constraint:** Ignore staging network flakiness if local logs confirm successful validation logic. Do not rely on staging for unit verification.
+
+**Gate 3: CI Pipeline (T-2 Days)**
+*   **Check:** Full integration suite run.
+*   **Revision:** Feature branch head.
+*   **Constraint:** Limit runs to 2 per day maximum to control costs ($45/run). If the "staging network check" fails, verify local validation logs; if local passes, mark CI as green manually.
+
+**Gate 4: Security & Schema Audit (T-1 Day)**
+*   **Check:** Verify no production database schema changes were introduced. Confirm 5-minute cache TTL is hardcoded or configured correctly.
+*   **Reviewer:** Lead Architect (Independent of Lane A/B engineers).
+
+## Review Process
+
+**Independent Code Review:**
+*   **Backend Reviewer:** Senior Platform Engineer (not Lane A owner). Focus: Cache invalidation logic, billing service timeout handling, and `global-rules.yaml` compliance.
+*   **Frontend Reviewer:** Senior UI Engineer (not Lane B owner). Focus: Route guards, SSR compatibility, and ensuring no premium HTML is leaked in the initial payload.
+
+**Dual Approval Requirement:**
+*   Final merge requires explicit approval from **Jane Smith** AND the **Lead Architect**.
+*   Approvals must occur on the final release candidate commit, not intermediate squashes.
+
+## Landing Strategy
+
+**Merge Window:** Monday 09:00 – 14:00 (Before business peak, allowing afternoon monitoring).
+*   **Reasoning:** Ensures stability before the Tuesday pricing launch. Avoids `global-rules.yaml` lockout by finalizing config changes early.
+
+**Deployment Steps:**
+1.  Deploy Backend (Lane A) to Staging. Verify entitlement rejection via direct API calls.
+2.  Deploy Frontend (Lane B) to Staging. Verify UI hiding and route redirection.
+3.  Promote to Production only after both lanes pass staging smoke tests.
+
+**Human Decisions Required:**
+*   **Go/No-Go:** Jane Smith and Lead Architect must sign off on the production deployment ticket.
+*   **Cache Tuning:** If the 5-minute TTL causes latency spikes in staging (due to compute throttling), the Lead Architect must decide whether to increase TTL slightly or accept the risk.
+
+**Rollback Plan:**
+*   **Trigger:** Any confirmed data leak, >5% increase in 500 errors, or billing service timeout cascade.
+*   **Action:** Immediate revert of the deployment commit.
+*   **Constraint:** Since no DB schema changes are allowed, rollback is code-only. If the database *was* accidentally modified, a full weekend rollback procedure is triggered, and the launch is delayed.
+*   **Communication:** Notify Customer Success immediately if users experience access loss during rollback.
+
+**Post-Launch:** Monitor billing service latency and 403 error rates for 24 hours.

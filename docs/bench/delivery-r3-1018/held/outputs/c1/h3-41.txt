@@ -1,0 +1,70 @@
+### Delivery Plan: Safe Payment Gateway Retry & Circuit Breaker
+
+**Binding Facts & Constraints**
+*   **Risk:** Non-idempotent payment requests require absolute certainty before retry to prevent double-billing.
+*   **Dependency:** `transaction_validator` interface is shared; changes break the refund processor. Modifications must be internal or additive only.
+*   **Approvals:** Production deployment requires dual approval (Jane Smith + On-call Lead) via 'GateKeeper'.
+*   **CI Cost/Time:** $120/run, 45 mins. Minimize triggers; verify locally before pushing.
+*   **Flake:** `latency_check` is unstable during peak hours; manual re-trigger expected.
+*   **Immutability:** 'Gold' environment artifacts are immutable; rollback requires a hotfix, not a revert.
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Safety Specification & Fraud Alignment (Serialized First)**
+*   **Owner:** Product Analyst + Security Hat.
+*   **Work:** Define the exact criteria for "definitely did not reach the processor" (e.g., specific TCP timeouts vs. HTTP 5xx). Draft the idempotency key strategy or pre-check logic.
+*   **Gate:** Written validation from the Fraud Team confirming the safety of the retry conditions. No code starts until this is signed off.
+
+**Lane 2: Core Implementation (Parallel to Lane 3 after G1)**
+*   **Owner:** Builder.
+*   **Work:** Implement retry logic with exponential backoff and circuit breaker in the checkout service. Ensure `transaction_validator` interface remains untouched (internal logic only). Add idempotency checks based on Lane 1's spec.
+*   **Constraint:** Must include unit tests mocking all failure modes (timeout, partial success, ambiguous response).
+
+**Lane 3: Integration & Regression Guard (Parallel to Lane 2)**
+*   **Owner:** QA.
+*   **Work:** Update integration tests to simulate transient glitches. Explicitly test the "no double-bill" scenario. Isolate `latency_check` to run only off-peak or mark as flaky in the suite to prevent CI waste.
+*   **Constraint:** Verify against the exact SHA from Lane 2.
+
+---
+
+#### Gates & Checks
+
+*   **G0/G1 (Spec):** Fraud team sign-off on retry conditions. Spec locks the base SHA.
+*   **G2 (Plan):** Confirm `transaction_validator` binary compatibility. Set per-lane budget (max 2 CI runs per lane).
+*   **G4 (Implement):** Code complete with unit tests. Local verification of logic paths.
+*   **G5 (Verify):**
+    *   Run full integration suite in sandbox **once** on the merged candidate SHA.
+    *   Execute specific "double-bill" simulation test.
+    *   If `latency_check` fails during peak, flag for manual re-trigger; do not fail the lane immediately if other tests pass.
+*   **G6 (Review):**
+    *   **Security Review:** Independent review of the retry logic and idempotency checks (not by the Builder).
+    *   **Code Review:** Deep dive on circuit breaker state management.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected tests on the final merge SHA.
+
+---
+
+#### Review Strategy
+
+*   **Builder:** Implements Lane 2. Cannot review their own code.
+*   **Security/AppSec:** Independent review of the safety mechanism (Lane 1 spec adherence). Mandatory for payment logic.
+*   **QA:** Verifies functional correctness and regression safety (Lane 3).
+*   **Fraud Team:** Validates the logical safety of the approach (G1), not the code syntax.
+
+---
+
+#### Landing & Rollback
+
+*   **Merge Strategy:** Single PR to the integration branch. No merge train needed for a single feature, but ensure the branch is green before merging.
+*   **Human Gate (G8):**
+    *   Trigger deployment via 'GateKeeper' portal.
+    *   **Required Approvals:** Jane Smith AND On-call Lead.
+    *   **Evidence:** Attach G5 test receipts and Fraud Team sign-off to the deployment ticket.
+*   **Rollback Plan:**
+    *   Since 'Gold' artifacts are immutable, a standard git revert is insufficient.
+    *   **Procedure:** Prepare a hotfix branch *before* deployment that disables the retry feature via feature flag or reverts the logic cleanly.
+    *   **Trigger:** If any double-billing alert fires or error rate spikes >1% post-deploy, immediately deploy the hotfix artifact.
+*   **Post-Deploy (G9):** Monitor transaction logs for duplicate charge attempts for 24 hours. Verify SLOs on checkout latency.
+
+**Cost Control:** Maximum 3 CI runs targeted (1 per lane + 1 integration). Local testing mandated to avoid expensive flake-retries.

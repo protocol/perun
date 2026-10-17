@@ -1,0 +1,72 @@
+### Delivery Plan: Zero-Downtime Secret Migration
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Production deployment gate.
+*   **Approvers:** Jane Smith + Security Lead (for `global-config`); Owner (for prod deploy/revocation).
+*   **Windows:** Tuesday maintenance window only for rotation/revocation.
+*   **Cost/Collision:** CI is $120/45m; serialize `global-config` changes; ignore staging network flake.
+*   **Goal:** Move secrets to vault, verify bootability in all zones, revoke old secrets.
+
+#### Lanes & Serialization
+
+**Lane 1: Vault Integration & Staging Validation (Builder)**
+*   **Work:** Implement vault client code; update non-prod configs to fetch from vault.
+*   **Parallelism:** Can run concurrently with Lane 2 (Dev) but must finish before Lane 3 (Prod Prep).
+*   **Constraint:** Must ignore specific staging network flake during verification.
+
+**Lane 2: Dev Environment Migration (Builder)**
+*   **Work:** Migrate dev secrets; verify full boot cycle.
+*   **Parallelism:** Runs parallel to Lane 1.
+
+**Lane 3: Production Prep & Dry-Run (Builder)**
+*   **Work:** Prepare prod config changes (pointing to vault) without triggering rotation.
+*   **Dependency:** Waits for Lane 1 & 2 success receipts.
+*   **Serialization:** Requires `global-config` lock; cannot overlap with other config edits.
+
+**Lane 4: Independent Verification (QA)**
+*   **Work:** Verify bootability in Dev, Staging, and Prod (dry-run) using the exact revision from Lanes 1–3.
+*   **Trigger:** Runs after Lane 3 completes locally.
+*   **Specifics:** Explicitly validate staging ignores the known network flake; confirm no hardcoded secrets remain in runtime memory.
+
+**Lane 5: Security Audit & Revocation Plan (Security)**
+*   **Work:** Review vault access policies; draft revocation script for old secrets.
+*   **Dependency:** Independent of Builder; runs parallel to Lane 1 & 2.
+*   **Gate:** Must approve revocation plan before Tuesday window.
+
+#### Gates & Checks
+
+*   **G1 Spec:** Define exact vault paths and mapping to legacy keys. Pin base SHA.
+*   **G2 Plan:** Confirm Tuesday window availability; lock `global-config` workflow to prevent concurrent edits.
+*   **G3 Design:** ADR detailing fallback mechanism if vault is unreachable (must fail closed but gracefully).
+*   **G4 Implement:** Code committed with tests. `global-config` changes isolated in a single commit for easy review.
+*   **G5 Verify:**
+    *   **Dev/Staging:** Green build at exact SHA. Staging network flake marked as "expected/ignored" in test output.
+    *   **Prod:** Dry-run deployment successful; application boots and fetches secrets from vault in a pre-prod sandbox.
+*   **G6 Review:**
+    *   **Code:** Independent reviewer (not Builder).
+    *   **Config:** **Jane Smith + Security Lead** sign-off on `global-config` diff.
+    *   **Security:** Security Lead approves revocation plan.
+
+#### Landing & Human Decisions
+
+**Merge Strategy**
+1.  Merge Lanes 1 & 2 (Dev/Staging) to integration branch. Trigger CI (Cost: $120).
+2.  Once green, merge Lane 3 (Prod Prep). Trigger CI (Cost: $120).
+3.  **Hold** at G7 (Integration) until Tuesday maintenance window.
+
+**Human Gates (Owner Approval Required)**
+*   **Deploy to Production:** Only after G6 sign-offs and Tuesday window start.
+*   **Execute Revocation:** Only after Owner confirms "Vault integration confirmed working in all zones" via Lane 4 receipts.
+
+**Rollback Plan**
+*   **Pre-Revocation:** If Prod boot fails, revert the `global-config` commit immediately. Old secrets are still valid.
+*   **Post-Revocation:** If secrets fail post-rotation, emergency re-issue of old credentials is **not** possible; must rely on vault emergency bypass or hotfix. This risk mandates the "verify before revoke" rule strictly.
+
+**Execution Flow**
+1.  **Tue Window Start:** Deploy integrated SHA to Prod.
+2.  **Verify:** Lane 4 confirms Prod boot + secret fetch.
+3.  **Approve:** Owner authorizes revocation.
+4.  **Revoke:** Security executes Lane 5 script to invalidate legacy secrets.
+5.  **Close:** Ticket closed; audit log updated.
+
+**Cost Control:** Total CI runs capped at 2 (Staging/Dry-run + Prod). No speculative retries.

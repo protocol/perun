@@ -1,0 +1,64 @@
+**Delivery Plan: v4.2 Extension Store Submission**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Store submission (no hotfix/rollback once sent).
+*   **Approvals:** Acting Security Manager (hardware token), Director of Product (final submission).
+*   **Known Risk:** Intermittent macOS accessibility check failure (requires manual verification).
+*   **Cost Constraint:** CI exceeds free tier after 30 mins; builds triggered manually via dashboard.
+*   **Scope:** Production features only; no experimental flags.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Build & Integrity Verification (Builder)**
+    *   **Work:** Increment manifest version, strip experimental flags, validate privacy links, trigger manual dashboard build.
+    *   **Parallelism:** Can run concurrently with Lane B prep, but must finish before Lane C.
+    *   **Gate:** Local verification of manifest and links before build trigger.
+
+2.  **Lane B: Security & Signing Prep (Acting Security Manager)**
+    *   **Work:** Retrieve legacy hardware token, prepare signing environment.
+    *   **Serialization:** Must complete before Lane C (Signing).
+    *   **Gate:** Physical access confirmation.
+
+3.  **Lane C: Artifact Signing & QA (QA + Security)**
+    *   **Work:** Sign build artifact using hardware token. Run functional tests. Execute manual accessibility verification (bypassing flaky macOS auto-check).
+    *   **Serialization:** Depends on Lane A (artifact) and Lane B (token).
+    *   **Gate:** Green functional tests + Manual A11y pass + Valid signature.
+
+4.  **Lane D: Release Package Assembly (Conductor)**
+    *   **Work:** Compile evidence (test receipts, manual A11y report, signature log), draft release ticket for Director.
+    *   **Serialization:** Depends on Lane C success.
+
+**Gates & Checks**
+
+*   **G2 Plan (Now):** Confirm manifest version increment strategy and flag stripping list.
+*   **G4 Implement:** Builder triggers dashboard build. *Exact Revision:* Final commit SHA on `main` (or release branch) containing only v4.2 changes.
+*   **G5 Verify:**
+    *   **Functional:** Full suite green.
+    *   **A11y:** Manual verification on macOS required if auto-check fails.
+    *   **Privacy:** Link validator pass.
+    *   **Security:** Artifact signature valid against hardware token.
+*   **G6 Review:** Independent QA verifies G5 receipts. Security verifies signing process. Neither can be the Builder.
+*   **G8 Release (Human Gate):** Director of Product reviews release ticket and provides digital signature. **Hard Stop:** No submission without this signature.
+
+**Landing & Rollback Strategy**
+
+*   **Merge:** Not applicable (submission is external). The "merge" is the handoff to the store.
+*   **Human Decision:** Director of Product must explicitly approve the final submission package.
+*   **Rollback:** Impossible post-submission. If rejected by store, a new v4.3 build must be prepared. If a critical bug is found post-submission but pre-approval, withdraw immediately if the store allows, otherwise prepare v4.3 hotfix.
+*   **Evidence Roll-up:** The release ticket must contain: Build SHA, Manifest Version, Privacy Link Check Log, Manual A11y Report, Signature Log, and Director's Signature.
+
+**Execution Order**
+1.  Builder prepares code (Lane A).
+2.  Security prepares token (Lane B).
+3.  Build triggered (Lane A).
+4.  Artifact signed and tested (Lane C).
+5.  Conductor assembles package (Lane D).
+6.  Director approves (G8).
+7.  Submission executed.
+
+**Risk Mitigation**
+*   **CI Timeout:** Monitor dashboard build manually; ensure completion before 30-min mark or restart if necessary (though manual trigger implies human oversight).
+*   **A11y Flake:** Pre-allocate time for manual macOS testing; do not proceed on auto-pass if history suggests flakiness.
+*   **Token Access:** Confirm Acting Manager availability before starting Lane A to avoid idle time.
+
+This plan ensures independent verification of the critical data sync fix and strict adherence to the irreversible submission constraint.

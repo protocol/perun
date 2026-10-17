@@ -1,0 +1,62 @@
+### Delivery Plan: SQL Migration Automation
+
+**Objective:** Replace 80 manual SQL scripts with automated tooling, ensuring zero downtime, identical execution order, and verified rollback capability.
+
+#### 1. Lanes & Parallelism
+*Work is isolated in dedicated worktrees; one writer per tree.*
+
+*   **Lane A (Conversion & Ordering) [Builder]:**
+    *   Parse all 80 legacy scripts to extract the strict execution sequence based on date prefixes.
+    *   Convert scripts to the new tool's format, preserving logic exactly.
+    *   **Serialization Point:** Must complete before Lane B can validate state transitions.
+*   **Lane B (Validation & Rollback Proof) [QA + Security]:**
+    *   Stand up a staging clone with the production dataset snapshot.
+    *   Execute the converted migration set.
+    *   **Critical Task:** Verify the "point of no return" (data truncation). Prove the rollback mechanism restores data *before* this step executes.
+    *   Fix the shared global temporary table leak to ensure clean test runs.
+*   **Lane C (Pipeline Integration) [Builder]:**
+    *   Modify the CI pipeline to invoke the new tool instead of the script bundle.
+    *   Implement a "dry-run" mode in the pipeline that validates schema state without applying changes.
+    *   **Optimization:** Isolate the flaky networking check to prevent false positives on DB jobs.
+
+#### 2. Gates & Checks
+*All checks run on an exact, immutable SHA. No gate passes without evidence.*
+
+*   **G2 (Plan Approval):** Owner confirms the extracted execution order matches the legacy sequence. **Budget Cap:** Set token/cost limits for the heavy integration tests (currently 45 mins).
+*   **G4 (Implementation):**
+    *   Lane A commits conversion artifacts.
+    *   Lane C commits pipeline changes.
+    *   *Check:* Static analysis on new tool config.
+*   **G5 (Verification - Staging):**
+    *   **Trigger:** Exact SHA from G4.
+    *   **Action:** Run full migration against staging clone.
+    *   **Requirement:** Green build, lint, and integration tests. The flaky network check must be bypassed or fixed here; if it fails, the gate is red.
+    *   **Rollback Proof:** Execute a migration, trigger a simulated failure pre-truncation, run rollback, and verify data integrity. **Evidence:** Logs showing data state pre/post rollback.
+*   **G6 (Independent Review):**
+    *   **Reviewer:** Senior Data Engineer (independent of Builder/QA).
+    *   **Scope:** Full diff of converted SQL + Pipeline logic.
+    *   **Security:** Verify no destructive commands exist outside the controlled tool wrapper.
+*   **G7 (Integration):** Merge to integration branch. Re-run affected tests on the merge SHA.
+
+#### 3. Review Strategy
+*   **Code Review:** Conducted by a Senior Data Engineer who did not write the conversion (Lane A) or the pipeline (Lane C).
+*   **Security Review:** Focused on the "irreversible truncation" step. Confirm the tool prevents execution if pre-conditions (schema state) are not met.
+*   **QA Sign-off:** Explicit confirmation that the temporary table leak is resolved and the 45-minute test suite is stable.
+
+#### 4. Landing & Human Gates
+*   **Staging Deployment:**
+    *   **Action:** Merge to staging branch.
+    *   **Human Gate:** Requires approval from **two senior engineers**.
+    *   **Verification:** Monitor staging for 24 hours. Confirm no drift.
+*   **Production Deployment:**
+    *   **Action:** Merge to main/release branch.
+    *   **Human Gate:** Requires explicit sign-off from the **VP of Engineering**.
+    *   **Condition:** Only proceeds if Staging verification receipt is attached and Rollback Proof (G5) is verified.
+*   **Rollback Plan:**
+    *   If production fails *before* truncation: Automated rollback via the new tool.
+    *   If production fails *after* truncation: **Manual intervention required** (restore from backup). The plan assumes this state is unreachable due to G5 validation.
+
+**Risk Mitigation:**
+*   **Flaky Tests:** The networking check is quarantined; DB jobs will not re-trigger automatically unless the specific DB test fails.
+*   **Cost:** The 45-minute test run is capped; if it exceeds the time budget, the lane escalates rather than retrying silently.
+*   **Downtime:** The transition is a "switch-over." The old script bundle remains in the repo (deprecated) until the new tool proves stable in production for one full cycle.

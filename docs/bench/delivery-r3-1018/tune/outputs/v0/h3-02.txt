@@ -1,0 +1,58 @@
+### Delivery Plan: Incremental Backup Strategy (Mercury Ledger)
+
+**Objective:** Implement 4-hour incremental backups with checksum logging while preserving existing nightly full dumps and retention policies.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Design & Spec):** Define the incremental algorithm (e.g., WAL archiving or timestamp-based diff), checksum schema, and integration points.
+    *   *Constraint:* Must explicitly confirm no changes to retention logic or Friday credential rotation.
+    *   *Parallel:* Can run immediately.
+*   **Lane B (Implementation):** Develop the backup script and logging module in an isolated worktree.
+    *   *Dependency:* Waits for Lane A spec approval.
+    *   *Constraint:* Do not modify/delete existing full dump scripts.
+*   **Lane C (Verification Environment):** Provision a sanitized staging database snapshot (no production PII) to test the 4-hour cycle and checksum writes.
+    *   *Parallel:* Can start with Lane A.
+    *   *Constraint:* Must verify against immutable audit log rules to prevent pollution.
+*   **Lane D (Dry-Run Simulation):** Execute the new script against the staging DB for 24 hours to validate latency impact and checksum integrity.
+    *   *Dependency:* Waits for Lane B code freeze and Lane C env readiness.
+
+**Serialization Note:** Lanes A and C run in parallel. Lane B waits on A. Lane D waits on B and C. No parallel writes to the backup configuration files.
+
+#### 2. Gates & Checks
+*   **G1 (Spec Review):** Verify design meets audit constraints (no retention changes, no credential cron edits).
+    *   *Reviewer:* Compliance Officer (Independent of Builder).
+    *   *Revision:* Spec document SHA.
+*   **G4 (Code Freeze):** Unit tests for checksum generation and log formatting.
+    *   *Check:* Static analysis + Unit tests. Skip network latency suite if running on a Tuesday to avoid false positives.
+    *   *Revision:* Lane B final commit SHA.
+*   **G5 (Functional Verification):** 24-hour dry run in staging.
+    *   *Check:* Verify latency < threshold during simulated business hours; confirm checksums appear in compliance ledger; confirm nightly full dump still triggers successfully.
+    *   *Revision:* Exact SHA deployed to staging.
+*   **G6 (Security & Compliance Audit):** Review of code and dry-run logs.
+    *   *Reviewer:* Security Team + External Compliance Officer (Independent of Builder and QA).
+    *   *Focus:* Credential handling, immutable log integrity, rollback capability.
+
+#### 3. Review Strategy
+*   **Builder:** Implements Lane B. Cannot approve their own code.
+*   **QA:** Executes Lane D. Reports pass/fail based on G5 criteria.
+*   **Security/Compliance:** Performs G6. Must sign off on the "no retention change" and "credential safety" claims.
+*   **Independence:** QA and Security reviewers must not be the implementer. The Compliance Officer's approval is mandatory before any production merge.
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:**
+    1.  Merge Lane B to `staging` branch after G5/G6 approval.
+    2.  Create Release Candidate PR to `main`.
+*   **Human Gates (Required):**
+    *   **Dual Approval:** CTO and External Compliance Officer must approve the PR via the change management portal before merging to `main`.
+    *   **Deployment Trigger:** Manual trigger only. No auto-deploy.
+*   **Rollback Plan:**
+    *   If latency spikes or checksums fail: Revert the merge immediately.
+    *   The existing nightly full dump scripts remain untouched and active, ensuring immediate reversion to the original workflow as requested.
+    *   No database schema changes are made, so no data migration rollback is needed.
+*   **Post-Deploy (G9):** Monitor first three 4-hour cycles. Verify checksums in production ledger.
+
+**Risk Mitigation:**
+*   **Tuesday Flakiness:** Schedule final CI runs avoiding Tuesday maintenance windows.
+*   **Credential Rotation:** Hard fail if script execution overlaps Friday midnight; rely on existing cron without modification.
+*   **Audit Pollution:** All testing strictly on sanitized staging data.
+
+This plan ensures urgent delivery while maintaining strict compliance boundaries and immediate revertibility.

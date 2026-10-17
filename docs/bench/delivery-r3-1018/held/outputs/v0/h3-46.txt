@@ -1,0 +1,57 @@
+### Delivery Plan: SMS Verification for Region Gamma
+
+**Objective:** Integrate the new local gateway provider for Region Gamma, handle specific latency/timeout scenarios, localize error messages, and enable SMS OTP without triggering irreversible sender ID registration errors or unnecessary CI costs.
+
+#### 1. Lanes & Parallelism
+
+*   **Lane A: Specification & Risk Analysis (Conductor + Product Analyst)**
+    *   **Task:** Define exact latency thresholds based on the new contract. Draft localized error messages for "delayed code" vs. "failed delivery." Identify the specific "point of no return" in the code that triggers sender ID registration to ensure it is guarded.
+    *   **Dependency:** None. Must complete before implementation.
+    *   **Output:** Technical spec with acceptance criteria and a "Safety Guard" design for the registration trigger.
+
+*   **Lane B: Gateway Integration & Logic (Builder)**
+    *   **Task:** Implement the new provider client. Add logic to handle specific timeout errors (distinguish from generic failures). Implement the localized error messaging. **Crucial:** Wrap the sender ID registration call in a feature flag or explicit guard to prevent accidental execution during testing.
+    *   **Worktree:** Isolated `feature/gamma-sms-gateway`.
+    *   **Dependency:** Lane A (Spec).
+
+*   **Lane C: Mock Simulation Update (QA Engineer)**
+    *   **Task:** Since staging uses a mocked gateway that doesn't simulate timeouts, update the mock service in the test suite to replicate the specific latency and timeout behaviors of the new provider.
+    *   **Worktree:** Isolated `test/gamma-timeout-mocks`.
+    *   **Dependency:** Lane A (Spec). Can run parallel to Lane B.
+
+*   **Lane D: Compliance & Localization Review (Compliance Officer + Linguist)**
+    *   **Task:** Review the localized error messages for regulatory accuracy and cultural appropriateness. Verify the "Safety Guard" logic against compliance requirements.
+    *   **Dependency:** Lane A (Draft messages), Lane B (Guard logic).
+
+#### 2. Gates & Checks
+
+*   **G1 (Spec Freeze):** Conductor and Trust Team Lead approve the latency thresholds and the "Safety Guard" design.
+*   **G2 (Code Complete):** Lane B and C merge their changes into a temporary integration branch `int/gamma-sms`.
+    *   **Check:** Static analysis on `sender-rules.json` access patterns to ensure no race conditions during business hours.
+*   **G3 (Verification - Cost Optimized):**
+    *   **Action:** Run unit tests and the *updated* mock integration tests (Lane C) on the `int/gamma-sms` SHA.
+    *   **Constraint:** Do **NOT** trigger the full 45-minute telecom sandbox integration yet. Verify timeout handling solely via the enhanced mocks first.
+    *   **Pass Criteria:** All unit tests green; mock tests confirm correct error message display and retry logic on simulated timeouts.
+*   **G4 (Compliance Sign-off):** Compliance Officer reviews the error messages and the guard logic preventing unauthorized registration attempts. **Human Gate.**
+*   **G5 (Final Integration Test):**
+    *   **Action:** Trigger the full 45-minute CI pipeline against the telecom sandbox **once** on the final approved SHA.
+    *   **Condition:** Only after G3 and G4 pass.
+    *   **Pass Criteria:** Successful end-to-end flow in sandbox; no unintended registration attempts logged.
+
+#### 3. Review Strategy
+
+*   **Code Review:** Performed by a Senior Engineer from the Trust Team (independent of the Builder). Focus on the timeout handling logic and the registration guard.
+*   **Security/Compliance Review:** Performed by the Compliance Officer (independent of Product/Builder). Focus on regulatory adherence and error message accuracy.
+*   **QA Verification:** Performed by the QA Engineer who wrote the mocks, verifying the Builder's implementation against those mocks.
+
+#### 4. Landing & Rollback
+
+*   **Merge Strategy:**
+    1.  Merge `int/gamma-sms` to `main` only after G5 passes.
+    2.  **Human Gate:** Deployment to EU-West cluster requires manual sign-off from the Compliance Officer in the deployment tool.
+*   **Rollback Plan:**
+    *   **Code Rollback:** Standard revert of the commit if logical errors occur.
+    *   **Registration Rollback:** **Impossible.** If the sender ID was accidentally registered, a ticket must be filed with the telecom provider. The "Safety Guard" in Lane B is the primary mitigation.
+    *   **Feature Flag:** If issues arise post-deploy but pre-registration, disable the feature flag to route traffic back to the old flow (if applicable) or block Gamma sign-ups gracefully with the new localized error message.
+
+**Immediate Next Step:** Execute Lane A to finalize the "Safety Guard" design and error message copy before any code is written.

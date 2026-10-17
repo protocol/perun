@@ -1,0 +1,61 @@
+# Delivery Plan: Field Device Signing Key Rotation v2
+
+## Lanes & Parallelism
+
+**Lane A: Cryptography & Configuration (Security Lead)**
+*   **Work:** Generate the new v2 signing key pair. Manually sync the new public key to the Hardware Security Module (HSM) using the established manual procedure.
+*   **Constraint:** This lane is strictly serialized before Lane B. The HSM update is irreversible; physical reset capability must be verified before execution.
+
+**Lane B: Logic Implementation (Engineering)**
+*   **Work:** Modify `auth-service` token validation logic to support dual-key acceptance.
+    *   Implement a configuration flag `DUAL_KEY_MODE`.
+    *   Update validation routine to check Legacy Key first; if invalid, check New Key.
+    *   Implement the 48-hour expiry logic based on a hardcoded UTC timestamp or config value.
+    *   Ensure session validation checks do not re-validate the signature for existing active sessions (cache hit bypass).
+*   **Parallelism:** Can begin once the New Key public component is available from Lane A (does not require HSM write).
+
+**Lane C: Environment Staging (Operations)**
+*   **Work:** Provision a "Performance-Mirrored" staging instance. Since standard staging has latency spikes due to cheap hardware, Ops must temporarily allocate production-equivalent compute resources to accurately validate cryptographic throughput under load.
+
+## Gates & Checks
+
+**Gate 1: Code Freeze & Static Analysis (Revision: `feat/key-rotation-v2-candidate`)**
+*   **Trigger:** Engineering commits dual-key logic.
+*   **Check:** Static analysis only. No cryptographic simulation suites run here to save CI credits. Verify logic paths for the 48-hour window and fallback mechanism.
+
+**Gate 2: Targeted Performance Validation (Revision: `feat/key-rotation-v2-candidate` on Performance-Mirrored Staging)**
+*   **Trigger:** Deployment to Lane C's temporary environment.
+*   **Check:** Run a *limited* regression suite focusing strictly on:
+    1.  Validation latency with dual-key lookups.
+    2.  Successful rejection of the legacy key after the simulated 48-hour mark.
+    3.  Verification that active session tokens (issued pre-deployment) remain valid without re-handshaking.
+*   **Pass Criteria:** Latency matches production baseline; zero connectivity drops for simulated "old firmware" devices.
+
+**Gate 3: Security & Ops Approval (Revision: `release-candidate-v2`)**
+*   **Trigger:** Successful Gate 2.
+*   **Check:** Explicit written approval required from both Security Lead and Operations Manager.
+*   **Artifact:** Signed deployment ticket referencing the specific commit hash.
+
+## Review Strategy
+
+*   **Code Review:** Performed by a Senior Engineer **not** involved in Lane B implementation. Focus on the fallback logic and the hard-cutoff timer implementation.
+*   **Security Review:** Performed by the Security Lead. Focus on key handling, ensuring the private key never touches the application server logs or memory dumps.
+*   **Independence:** The Code Reviewer cannot be the Operations Manager (who approves deployment). The Security Lead validates the HSM procedure independently of the code logic.
+
+## Landing & Rollback
+
+**Deployment Window:** Prior to weekend maintenance closure.
+
+**Sequence:**
+1.  **HSM Update:** Security Lead manually installs New Key to HSM (Lane A complete).
+2.  **Software Deploy:** Deploy `release-candidate-v2` to Production with `DUAL_KEY_MODE=true` and the 48-hour expiry set to T+48 hours from deployment time.
+3.  **Verification:** Monitor device ingestion pipeline for authentication error rates. A spike indicates validation failure; immediate rollback required.
+
+**Rollback Plan:**
+*   **Trigger:** Authentication error rate exceeds 0.1% or latency spikes >200ms.
+*   **Action:** Revert `auth-service` to previous version immediately.
+*   **Critical Note:** Rolling back the *software* does not undo the HSM key installation. If the new key in the HSM causes issues with the old software, the system must remain on the old software version while the HSM retains the new key (the old software will simply ignore the new key).
+*   **Human Decision:** If the HSM sync bricks the update capability, a physical reset team must be dispatched. This decision rests solely with the Operations Manager.
+
+**Post-Event:**
+*   After 48 hours, the system automatically rejects the legacy key. No code change is required for the cutoff, but a monitoring alert must be set for the exact cutoff time to verify the switch occurred.

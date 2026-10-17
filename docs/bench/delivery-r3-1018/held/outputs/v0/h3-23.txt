@@ -1,0 +1,46 @@
+### Delivery Plan: VendorSync Webhook Migration
+
+**Objective:** Replace hourly polling with real-time webhooks, implementing timestamp-based reordering to handle out-of-sequence events without data corruption.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Protocol & Buffer Design):** Define the webhook signature validation, the buffering data structure (in-memory or Redis), and the reordering algorithm logic. *Owner: Senior Backend Engineer.*
+*   **Lane B (Schema & Migration):** Draft the irreversible database migration script. Since changes are permanent, this requires a dry-run simulation against a production snapshot to verify no downstream reporting breaks. *Owner: Database Administrator.*
+*   **Lane C (Ingestion Service Implementation):** Implement the webhook receiver, integrate the buffer from Lane A, and write the logic to apply ordered events to the database. *Owner: Backend Engineer.*
+*   **Lane D (Test Harness & Simulation):** Build a simulation tool to generate out-of-sequence, delayed, and duplicate webhook events to verify the reordering logic. *Owner: QA Engineer.*
+
+**Serialization Constraints:**
+*   Lane B (Schema) must be finalized and dry-run verified before Lane C merges any code that writes to the new schema.
+*   Lane D's simulation tool must be ready before Lane C begins integration testing to ensure immediate feedback on ordering logic.
+*   Lanes A and C can proceed in parallel once the interface contract is defined.
+
+#### 2. Gates & Checks
+*   **G1 (Spec Freeze):** Document the exact reordering window (e.g., "hold events for 5 seconds") and failure mode (what happens if an event arrives outside the window?).
+*   **G2 (Plan Review):** Verify the migration script is irreversible-safe via the dry-run receipt. Confirm the buffering strategy handles peak load without memory exhaustion.
+*   **G4 (Implementation):**
+    *   Unit tests run on every PR commit.
+    *   **Critical Check:** The known flaky network check must be explicitly quarantined or mocked in this PR to prevent false negatives; do not ignore it, isolate it.
+    *   Lane C must include the simulation harness from Lane D as an integration test suite.
+*   **G5 (Staging Verification):**
+    *   Deploy to Staging requires **both** Fulfillment and Inventory team lead approvals.
+    *   Run the full regression suite here (not just unit tests) to catch side effects, despite CI costs.
+    *   Inject chaotic event sequences (late arrivals, duplicates) in Staging and verify database state consistency.
+*   **G6 (Security & Data Integrity):** Independent review of the webhook signature validation (prevent spoofing) and the buffering logic (prevent race conditions).
+
+#### 3. Review Strategy
+*   **Code Review:** The Backend Engineer implementing Lane C cannot review their own code. A Senior Engineer from a different domain (e.g., Payments) must review the concurrency and buffering logic to ensure no bias toward "happy path" scenarios.
+*   **Schema Review:** The DBA's migration script must be reviewed by the Site Reliability Engineer (SRE) to confirm rollback impossibility is understood and mitigated via the dry-run proof.
+*   **QA Review:** QA verifies the simulation results, not just the code. They must sign off on the "late-arrival" test cases specifically.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:**
+    1.  Merge Schema (Lane B) first, behind a feature flag or unused until the code lands.
+    2.  Merge Ingestion Service (Lane C) with the webhook endpoint disabled by default.
+    3.  Enable webhook reception in Staging only after dual-lead approval.
+*   **Human Decisions Required:**
+    *   **Staging Deploy:** Explicit approval from Fulfillment Lead AND Inventory Lead.
+    *   **Production Deploy:** Explicit sign-off from the on-call SRE, contingent on successful Staging chaos testing.
+    *   **Go-Live Switch:** A human must toggle the feature flag from "Polling" to "Webhook" after verifying real-time data accuracy in Staging.
+*   **Rollback Plan:**
+    *   **Code/Config:** Instant revert by toggling the feature flag back to "Polling." The old polling service remains running as a fallback.
+    *   **Data:** Since the schema migration is irreversible, a code rollback does not undo DB changes. If data corruption occurs, a manual data repair script (prepared in Lane B) must be executed. There is no automatic database rollback.
+    *   **Failure Condition:** If out-of-sequence handling fails in Production, immediately revert to Polling mode and discard the buffer contents to prevent stale data overwrites.

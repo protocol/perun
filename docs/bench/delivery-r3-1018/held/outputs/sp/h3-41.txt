@@ -1,0 +1,47 @@
+### Delivery Plan: Safe Payment Gateway Retry Logic
+
+**1. Work Lanes & Parallelism**
+
+*   **Lane A (Logic Implementation):** Develop the retry mechanism with idempotency checks.
+    *   *Constraint:* Must not modify the `transaction_validator` interface to protect the refund processor. Encapsulate new logic within the checkout service or a sidecar pattern.
+    *   *Dependency:* None. Can start immediately.
+*   **Lane B (Safety Validation):** Coordinate with the Fraud Team.
+    *   *Action:* Present the proposed idempotency key strategy and circuit breaker thresholds.
+    *   *Dependency:* None. Runs parallel to Lane A.
+    *   *Serialization Point:* Code cannot merge until Lane B provides written sign-off on the safety approach.
+
+**2. Gates & Checks**
+
+*   **Pre-Build Gate:** Manual verification that the `transaction_validator` interface remains untouched. Automated static analysis must confirm zero changes to this module's public signature.
+*   **CI Execution:** Trigger the full integration suite on the specific feature branch commit.
+    *   *Mitigation:* If the `latency_check` fails during peak hours, a manual re-trigger is authorized once per build. Do not re-run the entire suite for this single flaky test.
+    *   *Cost Control:* Verify the build target is the sandbox environment before execution to avoid unnecessary $120 charges on production-like runs.
+*   **Sandbox Verification:** Deploy the passing artifact to the sandbox. Execute a "chaos test" simulating network glitches to verify the circuit breaker trips correctly and no double-billing occurs in the logs.
+
+**3. Review Process**
+
+*   **Code Review:** Conducted by a senior engineer from a squad *other than* Payments Squad to ensure fresh eyes on the retry logic.
+    *   *Focus:* Verify idempotency keys are generated before network egress and that the circuit breaker state is shared correctly across instances.
+*   **Safety Review:** Independent validation by the Fraud Team Lead (from Lane B). This is a distinct approval from the code review, focusing solely on financial risk.
+*   **Operational Review:** On-call lead verifies that new metrics (retry count, circuit state) are exposed to dashboards and alerts are configured.
+
+**4. Landing Strategy**
+
+*   **Merge Criteria:** Requires three explicit approvals:
+    1.  Peer Code Review.
+    2.  Fraud Team Safety Sign-off.
+    3.  Successful Sandbox Chaos Test results.
+*   **Deployment:**
+    *   Submit deployment request via 'GateKeeper' portal.
+    *   **Approvers:** Jane Smith AND the current On-Call Lead (dual approval mandatory).
+    *   **Target:** Promote the immutable artifact directly to 'Gold'.
+*   **Rollback & Contingency:**
+    *   *Constraint:* Artifacts in 'Gold' are immutable; no technical rollback exists.
+    *   *Failure Mode:* If double-billing or unexpected errors occur in production, the circuit breaker must be manually forced to "Open" via feature flag/configuration immediately to stop all gateway calls.
+    *   *Recovery:* A full hotfix release (new artifact) is required to revert code changes. Prepare the hotfix branch structure in advance but do not build it unless needed.
+
+**5. Human Decisions Required**
+
+*   **Fraud Team:** Go/No-Go on the idempotency strategy.
+*   **Jane Smith & On-Call Lead:** Final authorization to promote to 'Gold'.
+*   **Incident Commander:** Decision to force-open the circuit breaker if production anomalies are detected post-launch.

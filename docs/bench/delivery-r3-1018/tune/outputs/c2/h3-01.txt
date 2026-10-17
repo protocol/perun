@@ -1,0 +1,69 @@
+**Delivery Plan: Dark Mode Tokens & Embedded Widgets**
+
+**Scope & Constraints**
+*   **In Scope:** Core token definitions, main portal integration, Sales/Support widget integration, static fallback generation for Support.
+*   **Out of Scope:** Dynamic theme switching logic for the legacy Support Widget (static fallback only), changes to light mode behavior.
+*   **Risk:** Shared token config error breaks all three apps; CI timeouts on visual regression; legacy engine incompatibility.
+*   **Deadline:** Next quarterly review.
+
+**Lane Decomposition**
+
+1.  **Lane A: Core Token Definition (Builder: Senior Staff Engineer)**
+    *   **Work:** Extend token config with dark palette; enforce contrast ratios via automated linting.
+    *   **Constraint:** Must be serialized first. No other lane starts until this config is reviewed and approved.
+    *   **Output:** New token version, lint receipts.
+
+2.  **Lane B: Main Portal Integration (Builder: Frontend Dev)**
+    *   **Work:** Consume new tokens; implement toggle logic; verify light/dark switching.
+    *   **Dependency:** Starts after Lane A config is merged to integration branch.
+    *   **Output:** PR with visual regression receipts (local run to avoid CI timeout).
+
+3.  **Lane C: Sales Widget Integration (Builder: Frontend Dev)**
+    *   **Work:** Consume tokens; verify embedded theme matching.
+    *   **Dependency:** Starts after Lane A config is merged.
+    *   **Output:** PR with functional test receipts.
+
+4.  **Lane D: Support Widget Legacy Fallback (Builder: Legacy Specialist)**
+    *   **Work:** Implement build-step script to generate static dark assets; integrate into legacy pipeline.
+    *   **Dependency:** Starts after Lane A config is merged.
+    *   **Output:** PR with build artifact verification (static files generated correctly).
+
+**Gates & Checks**
+
+*   **G0/G1 (Spec):** Confirm contrast ratios match accessibility standards; define "backward compatible" versioning strategy.
+*   **G2 (Plan):** Serialize Lane A before B/C/D. Budget: 30m CI limit per widget lane (fail fast if exceeded).
+*   **G3 (Design):** ADR for static fallback generation mechanism for Support Widget.
+*   **G4 (Implement):**
+    *   Lane A: Unit tests for token values.
+    *   Lanes B/C/D: Tests run locally or in isolated CI jobs to prevent 30m timeout failures.
+*   **G5 (Verify):**
+    *   **Exact Revision:** Verify against the specific SHA of the merged token config + lane PR.
+    *   **Main Portal:** Headed-browser evidence of toggle action.
+    *   **Widgets:** Visual snapshot comparison against design mocks.
+    *   **Support:** Verify static asset existence and content hash.
+*   **G6 (Review):**
+    *   **Token Config:** Reviewed by a *different* Senior Staff Engineer (independent of Builder).
+    *   **Integrations:** Reviewed by QA (independent of Builders).
+    *   **Security/Accessibility:** Automated contrast check + manual audit by UX.
+
+**Landing Strategy**
+
+*   **Merge Train:**
+    1.  Land Lane A (Tokens) to `main`. **Human Gate:** Senior Staff Engineer approval required.
+    2.  Publish new package version to private registry.
+    3.  Land Lanes B, C, D in parallel to their respective repos/branches.
+    4.  Integration Gate: Run a combined smoke test on the exact final SHA of all merged components.
+*   **Human Decisions Required:**
+    *   Approval of token config change (Senior Staff Engineer).
+    *   Approval of package publish to registry.
+    *   Final go/no-go for quarterly review demo.
+*   **Rollback Plan:**
+    *   **Code/Config:** Revert token config PR; republish previous package version.
+    *   **Widgets:** Revert integration PRs; redeploy previous widget versions.
+    *   **Trigger:** Any P0 accessibility failure or build break in consumer apps post-merge.
+
+**Verification Receipts**
+*   Contrast ratio report (automated).
+*   Visual regression snapshots (local/isolated).
+*   Static asset generation log (Support Widget).
+*   Zero CI timeout failures on final merge.

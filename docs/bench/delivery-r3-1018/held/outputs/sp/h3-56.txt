@@ -1,0 +1,60 @@
+# Delivery Plan: CVE-2024-9981 Emergency Patch
+
+## Lanes & Parallelism
+
+**Lane A: Image Reconstruction (Serialized)**
+1.  **Preparation:** Update base image definition in `core-foundations` repo.
+2.  **Approval Gate:** Secure mandatory approvals from two senior platform engineers. *Blocker: Cannot proceed without both.*
+3.  **Build Queue:** Trigger CI pipeline. Due to the 3-build/hour cap and 55-minute runtime, this lane is strictly serialized. No other heavy builds should run concurrently.
+4.  **Verification:** Wait for static analysis completion.
+
+**Lane B: Deployment Coordination (Parallel to Lane A Build)**
+1.  **Registry Prep:** Prepare configuration registry schema for the new image hash.
+2.  **Rollout Scripting:** Stage the rolling restart scripts for the 40 microservices.
+3.  **Staging Validation:** Once Lane A produces a candidate hash, deploy to staging immediately to bypass the production queue.
+
+## Gates & Checks
+
+**Gate 1: Code Merge (Revision: `core-foundations` feature branch)**
+*   **Check:** Two senior platform engineer approvals.
+*   **Action:** Merge to `main` only after dual approval.
+
+**Gate 2: Build Integrity (Revision: `main` head)**
+*   **Check:** CI pipeline success (55-min mark).
+*   **Flaky Check Handling:** If `network-policy` fails in staging but static analysis passes, trigger manual verification immediately. Do not block the release pipeline awaiting an automated retry.
+
+**Gate 3: Production Authorization**
+*   **Check:** Release Manager explicit sign-off.
+*   **Input:** Staging validation report + Manual network policy verification (if applicable).
+*   **Action:** Authorize production push.
+
+## Review Strategy
+
+**Independent Security Review**
+*   **Who:** Security Team Lead (distinct from the platform engineers who approved the code change).
+*   **When:** Post-build, pre-production.
+*   **Scope:** Verify the new image hash eliminates CVE-2024-9981 in the scan report. Confirm no new critical vulnerabilities were introduced.
+*   **Deliverable:** Signed "Clean Status" attestation required for Gate 3.
+
+## Landing & Rollback
+
+**Merge Strategy**
+*   The fix merges to `core-foundations/main`.
+*   The image hash is automatically propagated to the configuration registry upon successful build.
+*   Microservices pick up the new hash via the rolling restart orchestration.
+
+**Human Decisions Required**
+1.  **Dual Approval:** Two senior engineers must approve the `core-foundations` PR.
+2.  **Manual Network Verification:** If the flaky check triggers, an engineer must manually validate connectivity and declare it safe.
+3.  **Production Push:** Only the Release Manager can execute the final production deployment command.
+
+**Rollback Protocol**
+*   **Trigger:** If >5% of services fail health checks post-restart or if a new critical vulnerability is detected.
+*   **Action:** Revert configuration registry to the previous snapshot hash.
+*   **Cost:** 20 minutes downtime for the fleet to revert.
+*   **Irreversibility Note:** Once the new image is deployed, it cannot be "un-built." Reversion relies entirely on the snapshot mechanism.
+
+**Completion Criteria**
+*   All 40 microservices reporting healthy on the new image.
+*   Vulnerability scanner reports "Clean" for the entire production fleet.
+*   Confirmation message sent to stakeholder indicating EOD deadline met.

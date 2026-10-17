@@ -1,0 +1,79 @@
+### Delivery Plan: Idempotent Nightly Ingestion
+
+**Binding Facts & Constraints**
+*   **Irreversible Risk:** Reverting requires a 4-hour database restore; zero tolerance for data corruption.
+*   **Approvals:** Production deploy requires explicit written approval from CDO and VP of Engineering.
+*   **Pipeline:** 55-minute integration suite; known flaky network latency check (do not block on this specific failure if data integrity holds).
+*   **Constraint:** Shared config is read-only during business hours; changes must be staged outside this window or via immutable config injection.
+*   **Deadline:** Before next billing cycle closes.
+
+---
+
+#### Lanes & Serialization
+
+**Lane 1: Specification & Contract (Serial, First)**
+*   **Actor:** Product Analyst + Conductor.
+*   **Work:** Define "idempotency" strictly: re-processing day $D$ yields bit-identical dataset to single run. Define the unique key (e.g., `source_file_id` + `row_hash` + `date`).
+*   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+*   **Gate:** G1 Spec (Owner sign-off on definition).
+
+**Lane 2: Implementation (Parallel to Lane 3 setup, Serial to Lane 1)**
+*   **Actor:** Builder (Platform Reliability).
+*   **Worktree:** Isolated worktree, clean base.
+*   **Work:** Modify ingestion logic to check existence before append. Implement "skip if exists" logic. Ensure config changes are injected immutably, not editing read-only files live.
+*   **Output:** Patch with unit tests proving duplicate detection.
+*   **Gate:** G4 Implement (Tests green locally).
+
+**Lane 3: Independent Verification Setup (Parallel to Lane 2)**
+*   **Actor:** QA.
+*   **Work:** Prepare a synthetic dataset with known duplicates. Script a "double-run" simulation: Run Day $D$, capture checksum, Run Day $D$ again, verify checksum match and row count stability.
+*   **Output:** Verification script ready for exact revision.
+*   **Gate:** G3 Design (Script reviewed).
+
+**Lane 4: Security & Risk Review (Parallel to Lane 2)**
+*   **Actor:** Security.
+*   **Work:** Review logic for race conditions during concurrent replays. Verify no new write-paths expose data to injection.
+*   **Output:** Security verdict.
+
+---
+
+#### Gates & Checks
+
+*   **G5 Verify (Exact Revision):**
+    *   Run the full 55-minute integration suite on the exact commit SHA from Lane 2.
+    *   **Flake Handling:** If the "network latency" check fails, inspect logs. If data integrity metrics pass, mark as non-blocking flake per repo docs.
+    *   **UI/Data Evidence:** QA runs the "double-run" simulation. Result must be `PASS` with identical checksums.
+    *   **Condition:** Stack must be up; unit tests alone are insufficient.
+
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (independent of Builder).
+    *   **Scope:** Full diff + QA receipts + Security verdict.
+    *   **Rule:** Builder never reviews own code.
+
+*   **G7 Integrate:**
+    *   Merge to integration branch. Re-run affected subset of integration tests on the merge SHA.
+
+---
+
+#### Landing & Human Gates
+
+**Merge Strategy:**
+*   Merge to main only after G7 success.
+*   **Human Decision 1 (Merge):** Requires explicit confirmation that G6 passed and flake analysis is documented.
+
+**Deployment (G8 Release):**
+*   **Action:** Deploy to Production.
+*   **Human Decision 2 (Approve):** **Mandatory.** Requires written approval from CDO and VP of Engineering via internal ticketing. No automated deploy.
+*   **Rollback Plan:** If data corruption is detected post-deploy, trigger 4-hour DB restore from snapshot. This is the only recovery path.
+
+**Post-Deploy (G9):**
+*   Run one nightly cycle in production (shadow mode if possible, or monitored live). Verify no duplicates in the analytics table.
+
+**Summary of Serialization:**
+1.  Spec (Lane 1) must finish before Code (Lane 2) starts.
+2.  Code (Lane 2) and QA Prep (Lane 3) run in parallel.
+3.  Verify (G5) waits for Code and QA Prep.
+4.  Deploy (G8) waits for all reviews and explicit human signatures.
+
+**Cost Control:**
+*   Limit integration runs to once per valid candidate to save compute credits. Do not re-run for non-data failures.

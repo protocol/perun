@@ -1,0 +1,38 @@
+### Delivery Plan: Per-Tenant Timezone Digest
+
+**Objective:** Shift daily digest execution from fixed 06:00 UTC to 06:00 local time per tenant, defaulting to UTC for unset preferences. Deploy before next billing cycle.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Spec & Logic Design):** Define the timezone resolution algorithm (Tenant Profile → Fallback UTC). Map the "execution window" calculation logic. *Serialized:* Must complete before Lane B starts to prevent rework.
+*   **Lane B (Implementation):** Modify the scheduler job in the reporting service. Integrate the deprecated legacy timezone library (do not remove). Implement the fallback logic. *Isolation:* Dedicated worktree; no changes to `global_rules.json` (locked).
+*   **Lane C (Test Harness):** Build a localized test suite mocking tenant profiles. Explicitly filter out known flaky staging network checks; assert success via log confirmation instead. *Parallel:* Can run alongside Lane B once the interface is defined.
+*   **Lane D (Cost & Risk Analysis):** Analyze CI compute impact. Since CI is 45 mins and charged per minute, define a "dry-run" mode to validate logic without full data seeding. *Parallel:* Runs immediately.
+
+#### 2. Gates & Checks
+*   **G1 (Spec Freeze):** Review Lane A's algorithm. Verify backward compatibility strategy for null preferences.
+*   **G3 (Design Review):** Confirm usage of the deprecated library is isolated and safe. Validate that `global_rules.json` remains untouched.
+*   **G4 (Implementation Complete):** Code committed to a feature branch. Static analysis passes.
+*   **G5 (Verification):**
+    *   **Unit Tests:** Run Lane C's suite. Success criteria: Logs confirm correct timezone offset application; network flakiness ignored if logs show logical success.
+    *   **Staging Run:** Execute one full cycle in staging. **Exact Revision:** The specific SHA from G4. Monitor for false negatives; manual log verification required if CI flags network errors.
+    *   **Cost Check:** Ensure the run did not exceed the projected CI minute budget.
+*   **G6 (Independent Review):**
+    *   **Reviewer:** Senior Engineer (not the Implementer).
+    *   **Scope:** Logic correctness, fallback safety, and adherence to the "no `global_rules.json` change" constraint.
+    *   **Security:** Verify no PII leakage in new logging.
+
+#### 3. Landing & Human Decisions
+*   **Merge Strategy:** Squash merge to the integration branch only after G6 approval.
+*   **Human Gate (Critical):** **Lead Architect** must manually approve the deployment to the three isolated environments. This cannot be automated.
+*   **Deployment Window:** Schedule immediately post-approval to allow buffer before the billing cycle starts.
+*   **Rollback Plan:**
+    *   **Trigger:** If digest fails to generate for >5% of tenants or logs show incorrect UTC conversion.
+    *   **Action:** Revert the merge and redeploy the previous stable SHA (fixed 06:00 UTC).
+    *   **Preparation:** Pre-draft the revert PR and have the previous artifact ready.
+
+#### 4. Execution Constraints
+*   **No `global_rules.json` edits:** All config changes must be tenant-profile scoped.
+*   **CI Cost Control:** Do not re-run the 45-minute pipeline for minor lint fixes; batch changes. Use the "dry-run" mode defined in Lane D for iterative logic checks.
+*   **Flaky Tests:** Do not treat staging network errors as build failures if application logs confirm the job executed successfully.
+
+**Next Step:** Await confirmation of the Lead Architect's availability for the manual approval gate to ensure alignment with the billing cycle deadline.

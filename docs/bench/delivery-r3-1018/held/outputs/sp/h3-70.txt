@@ -1,0 +1,62 @@
+# Delivery Plan: Error Budget Burn Auto-Pause
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic & Enforcement (SRE Lead + Backend Engineer)**
+*   **Work:** Implement the "Budget Check" module within the Gatekeeper service. This module reads the shared error budget configuration, calculates burn rate, and returns a hard `BLOCK` status if the weekly limit is reached.
+*   **Parallelism:** Runs concurrently with Lane B.
+*   **Dependency:** Must complete before Lane C integration.
+
+**Lane B: Audit & Override Interface (Security Engineer + Frontend Engineer)**
+*   **Work:** Build the secure override API endpoint and UI modal. Enforces mandatory justification text fields and captures user identity/timestamp. Writes to the append-only audit log.
+*   **Parallelism:** Runs concurrently with Lane A.
+*   **Constraint:** All write operations must be mocked against a local sandbox logger first; no writes to the production audit log until final merge.
+
+**Lane C: Pipeline Integration (DevOps Engineer)**
+*   **Work:** Modify the six product team CI pipelines to query the Gatekeeper *before* artifact promotion. If `BLOCK` is returned (and no valid override token is present), the pipeline terminates immediately without retry.
+*   **Serialization:** Must wait for Lane A (Logic) to be merged to Sandbox. Cannot start until the Gatekeeper API contract is frozen.
+
+**Lane D: Configuration & Compliance (SRE Manager)**
+*   **Work:** Prepare the specific change to the shared error budget configuration file to enable the new logic flag.
+*   **Serialization:** This is the critical path bottleneck. The 48-hour security review clock starts only when this specific file change is submitted. This lane runs parallel to coding but the *merge* is serialized to the very end.
+
+## Gates & Checks
+
+**Gate 1: Sandbox Validation (Revision: `feature/eb-pause-sandbox`)**
+*   **Trigger:** Lane A and B code complete.
+*   **Check:** Deploy to Sandbox. Simulate 100% budget burn. Verify pipelines stop. Execute override flow.
+*   **Critical Constraint:** Verify audit logs are written correctly in Sandbox. **Absolutely no** test entries in Production audit log.
+*   **Pass Criteria:** Pipelines halt within 30 seconds of budget breach; Override succeeds only with justification; Audit log contains exact user/timestamp/note.
+
+**Gate 2: Cost & Retry Protection (Revision: `feature/eb-pause-sandbox`)**
+*   **Trigger:** Gate 1 Pass.
+*   **Check:** Simulate a blocked deployment on the Core Ledger pipeline.
+*   **Pass Criteria:** The pipeline fails immediately on the first check. No redundant retries occur (protecting the $120/55min cost).
+
+**Gate 3: Security Review Submission (Revision: `release/candidate-v1`)**
+*   **Trigger:** Gate 2 Pass.
+*   **Action:** Submit the change to the shared configuration file.
+*   **Wait:** 48-hour manual security review period. No code changes allowed during this window without resetting the clock.
+
+## Review Strategy
+
+*   **Code Review:** Independent cross-team review.
+    *   Lane A code reviewed by a Senior Backend Engineer *not* on the SRE team.
+    *   Lane B code reviewed by a Security Architect (focus on identity spoofing and log integrity).
+    *   Lane C changes reviewed by a Lead DevOps from a *different* product team to ensure no team-specific bias.
+*   **Logic Audit:** A designated Compliance Officer reviews the "Override" data schema to ensure it meets audit standards before Gate 1.
+*   **Final Sign-off:** Requires digital signatures from two distinct Senior Engineers (existing policy) + SRE Director approval for the configuration change.
+
+## Landing & Rollback
+
+**Merge Strategy:**
+1.  Merge Lanes A, B, and C to `main` behind a feature flag (disabled).
+2.  Upon successful 48-hour Security Review (Gate 3), merge the configuration change (Lane D) which flips the flag to `enabled`.
+3.  **Human Decision Point:** The SRE Director must manually authorize the final config merge after verifying the security review certificate.
+
+**Rollback Plan:**
+*   **Scenario:** False positive blocking critical hotfix.
+*   **Action:** Revert the shared configuration file change (Lane D). This instantly disables the enforcement logic across all teams without requiring a code redeploy.
+*   **Scenario:** Audit log corruption.
+*   **Action:** Disable the audit writer module via feature flag; fallback to "Alert Only" mode (manual enforcement) until fixed.
+*   **Constraint:** Because the audit log is append-only, any erroneous entries generated before rollback cannot be deleted; they must be marked as "INVALID" via a subsequent correction entry.

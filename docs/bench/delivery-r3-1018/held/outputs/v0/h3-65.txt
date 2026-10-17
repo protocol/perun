@@ -1,0 +1,46 @@
+### Delivery Plan: Overnight Kiosk Configuration Update
+
+**Strategy:** Single atomic deployment window with pre-validated payload. No parallel lanes for execution; all preparation is serialized to ensure payload integrity before the 02:00–04:00 window.
+
+#### 1. Lanes & Serialization
+*   **Lane A: Payload Assembly & Validation (Builder)**
+    *   **Task:** Assemble the config payload including the new pricing matrix, loyalty banner, and tax rates for the three new jurisdictions.
+    *   **Constraint:** Must not modify or rotate the shared certificate file.
+    *   **Output:** A single signed artifact with a verified checksum matching legal team records.
+    *   **Serialization:** Must complete and pass G5 verification before Lane B begins.
+*   **Lane B: Deployment Orchestration (Conductor/Release)**
+    *   **Task:** Prepare the queue job for the 02:00–04:00 window. Configure automatic reversion logic for any unit failing validation.
+    *   **Constraint:** Do not activate the queue until dual approval is secured.
+    *   **Serialization:** Depends on Lane A's verified artifact.
+
+#### 2. Gates & Checks
+*   **G0/G1 (Intake/Spec):** Confirm scope includes only NA fleet, specific tax jurisdictions, and excludes certificate rotation. Define "failure" as any unit not reverting automatically by 04:00.
+*   **G3 (Design):** Verify the rollback mechanism is hardcoded to trigger immediately upon validation failure, ensuring no unit remains in a broken state past the cutoff.
+*   **G4 (Implement):** Builder commits the config changes to a dedicated branch. **No CI pipeline trigger yet** to save compute credits.
+*   **G5 (Verify - Local/Static):**
+    *   **Check 1:** Manual syntax validation against regional schemas using a local lightweight validator (bypassing the 45-min CI for initial checks).
+    *   **Check 2:** Cryptographic verification: Compare the artifact checksum against the legal team's signed record.
+    *   **Check 3:** Confirm certificate file timestamp remains unchanged.
+    *   **Condition:** Only if G5 passes locally do we trigger the full CI pipeline once.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Senior Engineer (not the Builder).
+    *   **Scope:** Review the diff, the checksum proof, and the rollback logic configuration.
+    *   **CI Result:** Must be green on the exact commit SHA from G4.
+*   **G8 (Release - Human Gate):**
+    *   **Approvers:** Operations Lead AND Compliance Officer.
+    *   **Action:** Dual approval required to activate the queued job.
+    *   **Timing:** Approval must be secured before 02:00 local time.
+
+#### 3. Landing & Rollback
+*   **Merge Strategy:** The config branch is merged to `main` only after G6 pass. The deployment script reads from `main` but remains dormant until the queue activation signal.
+*   **Execution Window:** Job triggers at 02:00. Units pull config, validate checksum/signature, and apply.
+*   **Automatic Reversion:** If a unit fails validation at any point before 04:00, it instantly reverts to the previous stable config hash.
+*   **Human Decision:** The "Go/No-Go" decision rests solely with the Operations Lead and Compliance Officer at G8. If either withholds approval by 01:45, the deployment is aborted for the night.
+*   **Rollback Limitation:** If a unit fails *after* 04:00 (e.g., late connection), the automatic reversion script is inactive. These units will remain offline until the next night cycle. This risk is accepted only if G5/G6 verification is 100% conclusive.
+
+#### 4. Risk Mitigation
+*   **Compute Cost:** CI pipeline runs exactly once on the final candidate SHA.
+*   **Certificate Safety:** Explicit check in G5 ensures the cert file is untouched.
+*   **Partial Roll-out:** The "all or nothing" requirement is met by the per-unit auto-revert logic; a "partial" success is technically impossible as failed units self-heal to the old state.
+
+**Status:** Awaiting Builder to assemble payload for G5 local verification.

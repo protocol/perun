@@ -1,0 +1,27 @@
+### Delivery Plan: On-Call Alerting Refinement
+
+**1. Lanes and Parallelism**
+*   **Lane A (Logic Implementation):** The Engineer updates `global-thresholds.yaml` to enforce the new compound rule: `(error_rate > 5% for ≥ 3m) AND (checkout_success < 98%)`. This work is isolated to the configuration file and requires no code changes.
+*   **Lane B (Historical Validation):** Simultaneously, a Data Analyst extracts last week's incident logs. They will replay the timestamps of the seven days of false positives against the *proposed* logic offline. Since the CI pipeline is too slow (45 mins) and staging traffic is synthetic/unreliable, this offline log replay is the primary validation gate.
+*   **Serialization Point:** Lane A and Lane B run in parallel. They converge only at the **Pre-Merge Review Gate**. The merge cannot proceed until Lane B confirms the new logic would have remained silent during the specific false positive windows identified in the logs.
+
+**2. Gates and Checks**
+*   **Revision Control:** All work branches from the current `main` HEAD. The candidate change exists only in a feature branch until both approvals are secured.
+*   **Validation Gate:** The Data Analyst must produce a signed report confirming zero triggers on the historical false-positive dataset using the new threshold logic. If any historical false positive would have triggered, the logic is rejected, and Lane A restarts.
+*   **CI Execution:** Due to the 45-minute regression cost, the full CI suite runs exactly once: immediately prior to the final merge request, after the Validation Gate is passed. No iterative CI runs are permitted.
+
+**3. Independent Review**
+*   **Reviewers:** Two distinct approvers are required, acting independently:
+    1.  **Site Reliability Lead:** Verifies the technical correctness of the YAML syntax, the logic implementation, and ensures no unintended side effects on other monitors sharing `global-thresholds.yaml`.
+    2.  **Product Owner:** Verifies that the new thresholds (5% error, 98% success) align with business tolerance levels and customer impact definitions.
+*   **Independence:** Neither reviewer may approve until the Validation Gate report (Lane B) is attached to the merge request. They must not consult each other before signing off; their approvals are recorded sequentially in the ticket.
+
+**4. Landing and Merge Strategy**
+*   **Deployment Window:** The merge is scheduled strictly for the next available Tuesday or Thursday between 10:00 AM and 2:00 PM. Merging outside this window is prohibited to protect the billing batch process.
+*   **Merge Action:** Upon receiving both approvals and a passing CI run, the Change Manager performs the merge to `main`. The deployment pipeline triggers automatically upon merge.
+*   **Human Decision Points:**
+    *   **Go/No-Go:** The Product Owner holds the final "Go" decision based on the Validation Report. If the report shows ambiguity, the deployment is postponed.
+    *   **Emergency Rollback:** If a genuine outage occurs post-deployment that matches the *old* alert pattern but was suppressed by the new rule, the Site Reliability Lead is authorized to immediately revert the commit without waiting for a second approval. A post-mortem will follow to adjust thresholds rather than disabling alerting entirely.
+
+**5. Post-Landing Verification**
+*   Immediately following deployment, the on-call team monitors the specific alert stream for the first 4 hours. No action is taken unless a confirmed user-impacting incident occurs that fails to page. Success is defined as zero pages generated during transient blips over the subsequent 48 hours.

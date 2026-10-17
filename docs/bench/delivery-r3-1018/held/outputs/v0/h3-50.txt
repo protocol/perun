@@ -1,0 +1,62 @@
+**Delivery Plan: Normalize Customer Contact Data**
+
+**Scope & Constraints**
+Target: `CoreAccounts` module. Goal: Standardize phones (10 digits) and addresses (full suffixes) before nightly export.
+Constraints: Irreversible staging deploys post-migration; shared validation library locked (Platform Lead approval required); CI whitespace flake known.
+Safety: Zero data loss; idempotent re-runs only.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Specification & Safety Design (Conductor + Product Analyst)**
+    *   **Work:** Define exact regex rules for phone stripping and address expansion. Draft rollback procedure (restore from backup) since staging deploys are irreversible.
+    *   **Output:** Testable spec with "Done-when" criteria and a written rollback runbook.
+    *   **Parallelism:** Runs first; blocks all others.
+
+2.  **Lane B: Transformation Script Implementation (Builder)**
+    *   **Work:** Write the normalization script in a dedicated worktree. Must include a "dry-run" mode that reports counts without writing, and an idempotent execution mode.
+    *   **Constraint:** Do *not* modify the shared validation library. Isolate logic within `CoreAccounts`.
+    *   **Parallelism:** Starts after Lane A spec is approved.
+
+3.  **Lane C: Independent Verification Data Set (QA)**
+    *   **Work:** Generate a synthetic dataset covering edge cases (parentheses, dashes, mixed suffixes) and known bad records.
+    *   **Parallelism:** Runs parallel to Lane B, based on Lane A spec.
+
+4.  **Lane D: Platform Coordination (Conductor)**
+    *   **Work:** Secure written approval from Platform Lead regarding the shared validation library boundary.
+    *   **Serialization:** Must complete before Lane E (Review) can finalize.
+
+**Gates & Checks**
+
+*   **G1 Spec Gate:** Owner approves the regex rules and rollback plan. No code written until this is signed.
+*   **G4 Implementation Gate:** Builder submits script + unit tests. Base SHA pinned.
+    *   *Check:* Unit tests pass locally. Dry-run mode verified on sample data.
+*   **G5 Verification Gate (Staging):**
+    *   *Pre-condition:* Full database backup taken.
+    *   *Action:* Deploy to staging. Run script in dry-run (verify counts). Run script for real.
+    *   *Check:* QA runs synthetic dataset (Lane C) against transformed data. Verify 100% format compliance.
+    *   *CI Handling:* If the known whitespace flake triggers, mark as "flaky-ignore" with evidence of data integrity; do not retry blindly.
+    *   *Hard Condition:* If any record count mismatches pre/post run, trigger immediate rollback (database restore).
+*   **G6 Review Gate:**
+    *   *Reviewer:* Senior Engineer (Independent of Builder).
+    *   *Scope:* Code review of script logic + Safety review of rollback steps.
+    *   *Dependency:* Confirms Platform Lead approval (Lane D) is attached.
+
+**Landing Strategy**
+
+*   **Merge Train:**
+    1.  Merge Lane B (Script) to integration branch only after G6 pass.
+    2.  **Human Decision Required:** Owner explicitly approves the "Go" for the staging migration run. This is a hard gate; no auto-merge to production deploy triggers.
+*   **Execution Window:**
+    *   Schedule staging run during low-traffic window.
+    *   Execute script. Verify receipts.
+    *   If staging passes, schedule production run immediately prior to the nightly export job.
+*   **Rollback:**
+    *   If production script fails or data corruption is detected: Execute manual database restore from pre-migration backup.
+    *   Post-mortem required before re-attempt.
+
+**Risk Mitigation**
+*   **Data Loss:** Mitigated by mandatory pre-run backup and dry-run count verification.
+*   **Blocking Marketing:** Prioritized for immediate staging validation; production run timed exactly before the next export cycle.
+*   **Shared Lib Conflict:** Mitigated by strict scope isolation and explicit Platform Lead sign-off before merge.
+
+**Next Step:** Await Owner approval on G1 Spec (regex rules + rollback plan) to begin implementation.

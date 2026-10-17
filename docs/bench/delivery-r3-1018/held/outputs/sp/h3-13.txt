@@ -1,0 +1,67 @@
+# Delivery Plan: Stabilize E2E Suite Against Sandbox Quota Limits
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic & Adapter Refactor (Billing/Onboarding Engineers)**
+*   **Work:** Implement quota-detection logic within `sandbox-adapter`. Add circuit-breaking to switch to cached responses when limits are approached or hit. Ensure non-destructive scenarios utilize cache immediately upon detection.
+*   **Parallelism:** Can proceed immediately alongside Lane B.
+*   **Dependency:** None.
+
+**Lane B: Test Orchestration & Caching Strategy (QA Automation)**
+*   **Work:** Refactor test runner to ingest adapter status. Define "non-destructive" vs. "critical payment flow" tags. Implement logic to skip live calls for tagged tests when in cache mode. Create/verify cache fixtures for non-destructive scenarios.
+*   **Parallelism:** Runs parallel to Lane A.
+*   **Dependency:** Requires interface definition from Lane A (status codes/methods for quota state).
+
+**Lane C: Network Flakiness Mitigation (Platform Engineering)**
+*   **Work:** Adjust retry policy in the network layer to prevent exponential backoff from consuming quota during false-positive latency spikes. Decouple retry logic from quota consumption.
+*   **Parallelism:** Runs parallel to Lanes A and B.
+*   **Dependency:** None.
+
+## Gates & Checks
+
+**Gate 1: Interface Contract Review**
+*   **When:** After Lane A drafts the adapter interface.
+*   **Check:** Verify Lane B's orchestration logic aligns with the new adapter status signals.
+*   **Revision:** Feature branch head before integration.
+
+**Gate 2: Local Simulation Run**
+*   **When:** After local integration of Lanes A, B, and C.
+*   **Check:** Simulate quota exhaustion. Verify suite switches to cache mode without aborting. Confirm runtime remains under 45 minutes.
+*   **Revision:** Pre-PR feature branch.
+
+**Gate 3: Staging Validation (Security Sign-off Required)**
+*   **When:** PR merged to staging branch.
+*   **Check:** Full E2E run against staging cluster. Verify critical payment flows still hit live environment when quota allows. Confirm no overage charges incurred.
+*   **Revision:** Staging branch head.
+*   **Approver:** Security Lead.
+
+## Review Process
+
+**Code Review (Independent)**
+*   **Reviewer 1 (Backend Lead):** Reviews Lane A (`sandbox-adapter`) and Lane C (network retry). Focus: Circuit-breaker safety, no race conditions, correct quota counting.
+*   **Reviewer 2 (QA Lead):** Reviews Lane B (orchestration). Focus: Correct classification of destructive vs. non-destructive tests, cache validity.
+*   **Constraint:** Reviewers must not be authors of the code they inspect. Cross-squad review preferred (e.g., Onboarding reviews Billing code).
+
+**Logic Walkthrough**
+*   **Participants:** All three lane owners.
+*   **Focus:** Trace the failure mode: Quota hit → Detection → Cache Switch → Test Completion. Ensure no edge case leaves the suite hanging.
+
+## Landing Strategy
+
+**Merge Window**
+*   **Target:** Tuesday production window.
+*   **Prerequisite:** Successful Staging Validation (Gate 3) with explicit Security Lead sign-off recorded in the ticket.
+
+**Rollout**
+*   **Method:** Feature flag controlled (if available) or direct merge to main.
+*   **Monitoring:** Watch CI runtime metrics and sandbox billing alerts immediately post-deploy.
+
+**Rollback Plan**
+*   **Trigger:** If runtime exceeds 45 minutes or critical payment flows fail in production.
+*   **Action:** Revert the merge immediately.
+*   **Human Decision:** Product Owner must decide whether to halt production deployments or run manual testing until a fix is ready, given the Tuesday lock.
+
+**Human Decisions Required**
+1.  **Security Lead:** Explicit sign-off for staging deployment.
+2.  **Product Owner:** Approval on the definition of "critical payment flows" that must remain live vs. those eligible for caching.
+3.  **Release Manager:** Confirmation of Tuesday window availability for the final push.

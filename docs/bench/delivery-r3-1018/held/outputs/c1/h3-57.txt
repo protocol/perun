@@ -1,0 +1,49 @@
+**Delivery Plan: Barcode Scan Flow**
+
+**Binding Facts & Constraints**
+*   **Approver:** Jane Smith (Deployments strictly every 4th Tuesday).
+*   **Irreversibility:** Builds are signed monthly; no hotfixes possible until next cycle. Pre-deployment verification is the only safety net.
+*   **Environment:** Offline-first requirement (loading dock); Production DB is read-only (requires specific write service account).
+*   **Risks:** Flaky camera permission check on staging; 45-min CI cost (retries expensive); Hard deadline (next high-volume season).
+*   **Appetite:** Fixed window until next month's high-volume season.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Spec & Offline Contract (Product Analyst + Architect)**
+    *   **Work:** Translate mockups into a testable spec defining exact offline behaviors (cache strategy, sync logic on reconnect) and the "Ship" button activation logic. Define the read-only DB query vs. write service account handshake.
+    *   **Gate G1 (Spec):** Owner sign-off on offline acceptance criteria.
+    *   **Dependency:** None. Must complete before Lane B starts.
+
+2.  **Lane B: Core Implementation (Builder)**
+    *   **Work:** Isolated worktree. Implement camera capture, local validation logic, and UI state management. Integrate read-only DB lookup and queueing for the write service account.
+    *   **Gate G4 (Implement):** Unit tests included. Code frozen at immutable SHA.
+    *   **Dependency:** Requires Lane A's spec.
+
+3.  **Lane C: Independent Verification (QA)**
+    *   **Work:** Execute functional, regression, and accessibility tests on the *exact* SHA from Lane B. Specifically verify offline mode (simulate network loss) and the "Ship" button state machine.
+    *   **Gate G5 (Verify):** **Local stack up.** Must prove the app starts, camera engages, and validation succeeds/fails correctly without network.
+    *   **Flake Mitigation:** If the known flaky camera permission check fails, run manual verification on a physical device or isolated testbed to confirm pass/fail before marking red. Do not retry CI blindly.
+    *   **Dependency:** Requires Lane B's SHA.
+
+4.  **Lane D: Security & Supply Chain (Security)**
+    *   **Work:** Review service account scope (least privilege for writes), data privacy in local cache, and supply chain integrity of camera libraries.
+    *   **Gate G6 (Review):** Independent of Builder. Verifies no hardcoded secrets and proper offline data encryption.
+    *   **Dependency:** Runs parallel to Lane C, requires Lane B's SHA.
+
+**Review & Integration**
+*   **Reviewers:** QA (Lane C) and Security (Lane D) are independent of the Builder (Lane B). No self-reviews.
+*   **Integration (G7):** Once Lanes C and D pass, merge into the integration branch. Run one final aggregate gate on the merged SHA to ensure no collision artifacts.
+*   **Evidence Roll-up:** Conductor packages the spec, test receipts (including offline proof), security verdict, and the final SHA for Jane Smith.
+
+**Landing & Human Gates**
+*   **Merge Train:** Serialized landing. Do not merge until the 4th Tuesday window approaches and all gates are green.
+*   **Human Decision (G8):** Jane Smith must explicitly approve the release manifest. This is a hard gate; no auto-deploy.
+*   **Rollback:** Impossible post-signing. If G5/G6 find critical issues, the lane stops, and the feature slips to the *following* month's cycle. There is no "fix forward."
+*   **Production Verify (G9):** Post-deploy, monitor shipping error rates and sync success logs during the first peak hour.
+
+**Cost Control**
+*   **CI Budget:** One full run per lane. Flaky failures trigger manual verification, not automatic CI retries, to preserve compute credits.
+*   **Model/Token Cap:** Lane B implementation names a per-lane token budget before starting; no unlimited generation.
+
+**Failure Mode**
+*   If offline validation cannot be proven on a real device or accurate simulator by G5, the feature is blocked. Do not ship a flow that fails silently on the loading dock.

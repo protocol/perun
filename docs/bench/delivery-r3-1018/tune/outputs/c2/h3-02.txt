@@ -1,0 +1,57 @@
+**Delivery Plan: Incremental Backup Strategy for Mercury Ledger**
+
+**Scope & Constraints**
+*   **Goal:** Implement 4-hour incremental backups with checksum logging; retain existing nightly full dumps unchanged.
+*   **Hard Constraints:** No change to retention policy; no deletion of old scripts; no modification of Security team's Friday credential rotation cron; immutable audit logs (no test pollution).
+*   **Risk:** High (Compliance audit, production latency, immutable state).
+
+**Lane Decomposition**
+
+1.  **Lane A: Specification & Safety Design (Owner: Product Analyst + Security)**
+    *   **Work:** Define incremental algorithm (e.g., WAL archiving or timestamp-based) ensuring zero interference with nightly full dumps. Define checksum schema for compliance ledger.
+    *   **Serialization:** Must complete before Lane B.
+    *   **Output:** Technical Spec + Rollback Plan.
+    *   **Gate:** G3 Design Review (Security + Data Integrity Lead).
+
+2.  **Lane B: Implementation (Owner: Builder)**
+    *   **Work:** Develop backup script in isolated worktree. Implement checksum logging to a *staging* audit path (to avoid polluting immutable prod logs during dev). Ensure coexistence with existing cron jobs.
+    *   **Parallelism:** Can run alongside Lane C (Test Harness) after Spec freeze.
+    *   **Constraint:** Explicitly exclude changes to Friday credential cron.
+    *   **Output:** Patch set, new cron definition (4-hour), updated runbook.
+
+3.  **Lane C: Verification Harness (Owner: QA)**
+    *   **Work:** Build a local simulation of the database and immutable log store. Verify checksum integrity and recovery time objectives (RTO).
+    *   **Special Handling:** Skip network latency suite on Tuesdays (known flake); mock network conditions instead.
+    *   **Output:** Test receipts proving RTO improvement and log integrity.
+
+**Gates & Checks**
+
+*   **G1 Spec:** Pin base SHA `ledger-core@main`. Explicitly list "Non-Goals" (retention change, cron modification).
+*   **G4 Implement:** Builder commits to feature branch. Unit tests must pass locally before push.
+*   **G5 Verify:**
+    *   **Exact Revision:** The specific commit SHA from Lane B.
+    *   **Checks:** Run CI once (cost optimization). Manually verify checksums in staging.
+    *   **Condition:** Green build excluding Tuesday network flake (if applicable).
+*   **G6 Review:**
+    *   **Reviewers:** Senior Data Engineer (independent of Builder) + Security Rep.
+    *   **Focus:** Verify no overlap with nightly dump resources; confirm rollback capability.
+*   **G7 Integrate:** Merge to `release-candidate`. Re-run critical path CI on merge commit.
+
+**Landing & Human Gates**
+
+*   **Merge Strategy:** Merge to `release-candidate` branch first. Do not auto-deploy.
+*   **Human Approval (G8):**
+    *   **Required Approvers:** CTO + External Compliance Officer.
+    *   **Action:** Approval via change management portal to promote `release-candidate` to production.
+    *   **Evidence:** Present RTO metrics, checksum samples, and "No Change" proof for retention/nightly jobs.
+*   **Rollback Plan:**
+    *   **Trigger:** Latency spike or checksum mismatch.
+    *   **Action:** Disable 4-hour cron via config flag (code-level toggle, not cron deletion). Revert to nightly-only workflow immediately using preserved scripts.
+    *   **Decider:** On-call Data Integrity Lead.
+
+**Timeline & Cost Control**
+*   **CI Usage:** Limit to 2 runs max (Candidate SHA + Final Merge SHA) to control costs ($90 total).
+*   **Sequence:** Spec (Day 1) → Build/Test (Day 2-3) → Review (Day 4) → Approval/Deploy (Day 5).
+
+**Failure Mode**
+If the immutable log write fails during testing, halt immediately. Do not retry against production. Switch to mock verifier. If the new process increases latency >5%, trigger rollback without waiting for full audit.

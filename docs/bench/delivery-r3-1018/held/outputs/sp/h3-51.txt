@@ -1,0 +1,34 @@
+### Delivery Plan: Property-Based Validation for Legacy Pricing Engine
+
+**1. Work Lanes & Parallelism**
+*   **Lane A (Analysis & Invariant Definition):** Engineer A analyzes `mock-ledger` logs to extract historical output patterns. They will draft the formal invariants (e.g., `discount ≤ base_price`, `tax(monotonic)`). This lane runs **first** and is strictly serialized; no test code is written until invariants are signed off.
+*   **Lane B (Test Harness Construction):** Engineer B builds the property-based test scaffolding using the internal dialect. They will implement the data generators based on the `mock-ledger` schema and integrate the flaky currency conversion bypass logic. This runs **in parallel** with Lane A once the schema is known.
+*   **Lane C (Integration & Optimization):** Once Lane A defines invariants and Lane B finishes the harness, Engineer C combines them. They will batch tests to minimize CI runs, grouping by invariant type to ensure the 45-minute suite stays under the cost threshold.
+
+**2. Gates & Checks**
+*   **Gate 1 (Invariant Sign-off):** Before coding, Lane A's proposed invariants must be reviewed by the Compliance Lead. This ensures "monotonic tax" and other rules match legal requirements, not just observed bugs.
+    *   *Revision:* Branch `feat/pbv-invariants` at HEAD.
+*   **Gate 2 (Harness Dry-Run):** Lane B must prove the harness runs against `mock-ledger` without triggering the flaky currency check false-positive.
+    *   *Revision:* Branch `feat/pbv-harness` at HEAD.
+*   **Gate 3 (Safety Net Verification):** The combined test suite must pass against the current legacy code (establishing the baseline) and fail when artificial violations (e.g., negative prices) are injected.
+    *   *Revision:* Merge of A+B on `feat/pbv-complete`. Run on `staging-fin` clone.
+
+**3. Review Process**
+*   **Invariant Review:** Conducted by the **Compliance Lead** (independent of engineering). They verify that the codified rules match regulatory standards, ensuring we aren't formalizing existing bugs as features.
+*   **Code Review:** Conducted by a **Senior Platform Engineer** from a team *other than* Revenue Operations. They focus on the test harness stability, the flaky check bypass implementation, and CI optimization logic. They must not be the authors of the invariants or the harness.
+*   **Behavioral Audit:** Jane Smith performs a final spot-check comparing three random historical transactions against the new test output to confirm fidelity.
+
+**4. Landing Strategy**
+*   **Merge Protocol:** The feature merges to `main` only after:
+    1.  Compliance Lead approval on invariants.
+    2.  Independent code review sign-off.
+    3.  Successful run on `staging-fin` using the `mock-ledger` dataset.
+*   **Human Decisions Required:**
+    *   **Dual Approval:** Deployment to `staging-fin` requires explicit approval from **Jane Smith** AND the **Compliance Lead**. No automated merge to staging.
+    *   **Flake Handling:** If the currency conversion service fails during the final validation, a human must triage whether it is a known flake or a real regression before proceeding.
+*   **Rollback Plan:**
+    *   Since this adds tests without refactoring logic, a "rollback" is simply reverting the test files.
+    *   If the new tests cause CI timeouts (>45 mins) or excessive costs, the merge is reverted immediately.
+    *   If tests reveal critical historical deviations, the team halts the cloud migration prep. The tests remain merged as documentation of the defect, but the migration ticket is blocked until Engineering Leadership decides whether to fix the legacy logic or update the invariants.
+
+**Timeline Constraint:** All work must synchronize with the `mock-ledger` reset cycle (every 4 hours). Test runs should be scheduled immediately post-reset to ensure data consistency.

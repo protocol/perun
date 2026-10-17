@@ -1,0 +1,57 @@
+### Delivery Plan: Edge Agent Image Reduction
+
+**Objective:** Reduce `northstar-daemon` agent image to <150MB without breaking the shared logging sidecar checksum.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Analysis & Baseline):** Field Ops Engineer.
+    *   Action: Run `docker history` and `dive` on the current image to identify bloat (locales, debug tools).
+    *   Constraint: Must establish the exact current size and list removable packages before any code change.
+*   **Lane B (Safe Reduction Strategy):** Container Security Specialist.
+    *   Action: Design a multi-stage build or layer-stripping approach that *only* affects the agent layer, explicitly preserving the base layer bytes required for the sidecar checksum.
+    *   Constraint: **Critical.** No changes to the base image layers shared with the logging sidecar.
+*   **Lane C (Simulation Update):** SRE Team.
+    *   Action: Enhance `staging-edge` to inject artificial packet loss matching Northern Ridge telemetry.
+    *   Parallel: Can run concurrently with Lanes A and B.
+
+#### 2. Gates & Checks
+*   **Gate 1: Design Review (Pre-Code).**
+    *   *Who:* Security Officer + Site Reliability Lead.
+    *   *What:* Review Lane B's proposed Dockerfile changes.
+    *   *Check:* Explicit verification that no shared base layers are modified. If the plan touches the shared base, **STOP**.
+*   **Gate 2: Local Build Verification.**
+    *   *Revision:* Feature branch `feat/reduce-footprint`.
+    *   *Check:* Build succeeds; image size <150MB; Sidecar checksum validation passes locally using the production-sidecar binary.
+*   **Gate 3: CI Pipeline.**
+    *   *Trigger:* Push to `feat/reduce-footprint`.
+    *   *Check:* Build time <30 mins (Budget guard). Unit tests pass.
+    *   *Artifact:* Generated image tag must be scanned for vulnerabilities.
+*   **Gate 4: Staging Deployment.**
+    *   *Environment:* Enhanced `staging-edge` (with packet loss).
+    *   *Check:* Deployment completes within the maintenance window simulation. Agent connects and reports heartbeats over the simulated low-bandwidth link.
+
+#### 3. Review Process
+*   **Code Review:**
+    *   *Reviewer:* Senior Field Ops Engineer (Independent of the author).
+    *   *Focus:* Verification that removed packages are truly non-essential for remote debugging (e.g., ensuring `tcpdump` or critical certs aren't stripped if needed for field diagnosis).
+*   **Security Review:**
+    *   *Reviewer:* Security Officer.
+    *   *Focus:* Confirming no new vulnerabilities introduced by base image swaps or library removals.
+*   **Operational Review:**
+    *   *Reviewer:* Site Reliability Lead.
+    *   *Focus:* Validation of the rollback script and the "checksum preservation" guarantee.
+
+#### 4. Landing & Rollback Strategy
+*   **Approval Requirement:** Dual approval (Site Reliability Lead + Security Officer) is mandatory before merging to `main`.
+*   **Merge Strategy:**
+    1.  Merge to `main` triggers the production pipeline.
+    2.  Pipeline produces the new image and runs the **Sidecar Checksum Verification Job**.
+    3.  If the job fails (checksum mismatch), the pipeline aborts automatically. No deployment occurs.
+*   **Deployment:**
+    *   Canary deployment to 2 Northern Ridge nodes first.
+    *   Monitor for 1 hour. If successful, roll out to remaining nodes.
+*   **Rollback Plan:**
+    *   *Trigger:* Failed heartbeat or checksum error post-deploy.
+    *   *Action:* Immediate re-deployment of the previous known-good image tag.
+    *   *Contingency:* If the shared base layer was accidentally modified and deployed (irreversible via standard pipeline), execute the manual rollback script provided by Field Ops to restore the sidecar compatibility layer on affected nodes. This requires physical or out-of-band access if the agent is completely offline.
+
+**Risk Note:** The shared base layer constraint is the single point of failure. All checks prioritize verifying this checksum over achieving the 150MB target. If the target cannot be met without touching the base layer, the plan must pivot to delta-updates rather than full image replacement.

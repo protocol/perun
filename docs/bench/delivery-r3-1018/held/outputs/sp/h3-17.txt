@@ -1,0 +1,94 @@
+# Delivery Plan: Public Feed API Cursor Migration with Offset Fallback
+
+## Lanes & Parallelism
+
+**Lane A: Core Translation Logic (Serialized)**
+*Owner: Backend Engineer*
+1.  Implement offset-to-cursor translation layer in the public feed endpoint.
+2.  Ensure response schema remains unchanged for legacy clients.
+3.  Add deprecation warning headers *only* to new cursor-based requests.
+4.  Integrate rate limiting counter preservation during translation.
+
+**Lane B: Local Verification Suite (Parallel to Lane A start, converges before Gate 1)**
+*Owner: QA Engineer / Backend Engineer*
+1.  Develop local test scripts simulating mobile clients v4.2- (offset) and v4.3+ (cursor).
+2.  Create load tests specifically targeting rate limit counter accuracy during translation.
+3.  Build timeout simulation tests for the 400ms replica lag scenario.
+
+**Lane C: Documentation & Monitoring (Parallel to Lane A)**
+*Owner: DevOps Engineer*
+1.  Update API documentation noting the six-month fallback window.
+2.  Configure monitoring alerts for translation layer failures and rate limit anomalies.
+3.  Prepare rollback runbook addressing the 5-minute load balancer cache issue.
+
+## Gates & Checks
+
+**Gate 1: Local Verification (Mandatory Before Any Push)**
+*Trigger:* Lane A claims completion + Lane B test suite ready.
+*Check:* Run full local verification suite against the specific feature branch revision.
+*Criteria:* 
+- Zero data duplication in offset-simulated requests.
+- Rate limit counters match baseline within 1% tolerance.
+- No timeout errors under simulated 400ms lag.
+- Deprecation headers absent from offset-based responses.
+*Cost Avoidance:* Prevents wasting one of three daily CI slots ($45/run).
+
+**Gate 2: CI Pipeline (After Gate 1 Pass)**
+*Trigger:* Successful Gate 1 verification documented.
+*Check:* Execute full regression suite in CI on the verified revision.
+*Criteria:* All existing tests pass; new translation tests pass.
+*Constraint:* Maximum 3 runs daily; schedule strategically.
+
+**Gate 3: Security & Platform Review (Before Production Deploy)**
+*Trigger:* CI Pipeline success.
+*Check:* Independent review by Security Lead and Mobile Platform Owner.
+*Criteria:* Written approval from both parties required.
+*Focus:* Rate limiting integrity, fallback mechanism security, six-month sunset plan.
+
+## Review Process
+
+**Code Review:** 
+- Reviewer: Senior Backend Engineer (not the implementer).
+- Scope: Translation logic, rate limit handling, header logic.
+- Independence: Reviewer must not have contributed to Lane A implementation.
+
+**Architecture Review:**
+- Reviewer: System Architect.
+- Scope: Impact on database replica lag, caching behavior, fallback sunset strategy.
+
+**Security Review:**
+- Reviewer: Security Lead (as part of Gate 3).
+- Scope: Authentication library compatibility, potential attack vectors in translation layer.
+
+## Landing Strategy
+
+**Merge Process:**
+1.  After Gate 3 approvals, merge to staging branch.
+2.  Deploy to staging environment; verify no load balancer caching issues.
+3.  Monitor staging for 24 hours with synthetic traffic mimicking legacy clients.
+
+**Production Deployment:**
+- Requires explicit written approval from Security Lead AND Mobile Platform Owner (Gate 3).
+- Deploy during low-traffic window (2 AM - 4 AM EST).
+- Enable translation layer for 5% of traffic initially, gradually increase to 100% over 4 hours.
+
+**Rollback Plan:**
+- *Trigger:* Data duplication detected, rate limit failures, or timeout spikes exceeding 1%.
+- *Challenge:* Load balancer caches error responses for 5 minutes.
+- *Procedure:* 
+  1. Immediately revert the deployment.
+  2. Purge load balancer cache (if possible) or wait 5+ minutes.
+  3. Verify rollback success using fresh requests (not cached ones).
+  4. Document failure mode for post-mortem.
+
+**Human Decisions Required:**
+1.  Security Lead approval (production deploy).
+2.  Mobile Platform Owner approval (production deploy).
+3.  Rollback execution (if metrics trigger thresholds).
+4.  Six-month sunset date confirmation (documented before merge).
+
+**Success Metrics:**
+- Zero data duplication reports from mobile analytics.
+- Rate limit rejection rates remain within historical norms.
+- No increase in timeout errors beyond baseline.
+- Deprecation header presence matches expected cursor-based request volume.

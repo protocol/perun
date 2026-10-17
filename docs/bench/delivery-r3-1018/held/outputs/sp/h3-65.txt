@@ -1,0 +1,44 @@
+# Delivery Plan: Overnight Kiosk Configuration Update
+
+## Lanes and Parallelism
+**Lane A (Preparation & Validation):** The Configuration Engineer prepares the payload containing the new pricing matrix, loyalty banner config, and tax rates for the three new jurisdictions. This lane runs independently of Lane B but must complete before the "Pre-Flight Gate."
+**Lane B (Compliance & Security):** The Compliance Officer and Operations Lead review the legal team's signed artifact checksum and the dual-approval authorization. This lane runs in parallel with Lane A.
+**Lane C (Monitoring Setup):** The Operations team prepares the real-time validation dashboard to monitor the 02:00–04:00 window. This runs in parallel with A and B.
+
+*Serialization Point:* Lanes A and B must both complete and pass the Pre-Flight Gate before Lane D (Deployment) begins. Lane C must be active before Lane D starts.
+
+## Gates and Checks
+**Gate 1: Pre-Flight Validation (Deadline: 01:30 Local Time)**
+*   **Revision:** The specific commit hash containing the prepared config payload.
+*   **Check 1 (Automated):** Verify the payload checksum matches the signed artifact provided by the legal team.
+*   **Check 2 (Manual):** Dual approval signature from the Operations Lead and Compliance Officer recorded in the deployment log.
+*   **Check 3 (Constraint):** Confirm the shared certificate file is *not* included in the rotation list for this deployment.
+*   **Action:** If any check fails, abort immediately. Do not trigger the CI pipeline unless syntax changes were made outside the standard template; rely on local schema validation to preserve compute credits.
+
+**Gate 2: Deployment Window (02:00 – 04:00 Local Time)**
+*   **Trigger:** Automated queue activation precisely at 02:00.
+*   **Check:** Real-time monitoring of kiosk handshake and config acceptance.
+*   **Failure Condition:** Any unit failing validation must automatically revert to the previous stable config before 04:00.
+*   **Hard Stop:** No manual interventions or queue modifications after 03:45 to allow automatic reverts to complete.
+
+## Review Strategy
+**Independent Reviewer:** A Senior Site Reliability Engineer (SRE) not involved in preparing the payload (Lane A) or granting compliance approval (Lane B).
+**Review Scope:**
+1.  Verify the checksum matching process was logged correctly.
+2.  Confirm the dual-approval signatures are present and valid.
+3.  Validate that the rollback logic is armed and tested in the staging environment prior to the window.
+4.  Ensure the certificate exclusion constraint is explicitly documented in the deployment ticket.
+**Timing:** Review occurs immediately after Gate 1 passes, before the 02:00 window opens.
+
+## Landing and Merge Strategy
+**Merge Mechanism:** This is a configuration deployment, not a code merge. The "landing" occurs when the queue successfully distributes the config to the fleet during the 02:00–04:00 window.
+**Human Decision Points:**
+1.  **Go/No-Go at 01:45:** The Operations Lead makes the final call to proceed based on the Independent Reviewer's sign-off.
+2.  **Emergency Abort:** If >5% of units fail validation by 03:00, the Operations Lead must decide whether to halt the queue entirely or allow individual reverts.
+
+**Rollback Protocol:**
+*   **Automatic:** Individual units failing validation revert instantly to the previous stable config.
+*   **Irreversibility Warning:** Once the 04:00 cutoff passes, the rollback script becomes irreversible. Units that fail validation after this point will remain offline until the next night cycle. No manual rollback attempts are permitted after 04:00.
+*   **Post-Mortem:** If any unit remains offline after the window, a fault ticket is generated automatically for the morning shift. No further deployment attempts are made until the root cause is identified.
+
+**Success Criteria:** 100% of the fleet either accepts the new config or successfully reverts to the stable config by 04:00, with zero units left in an indeterminate state.

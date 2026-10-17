@@ -1,0 +1,45 @@
+### Delivery Plan: Master to Main Transition
+
+**Lanes & Parallelism**
+Work is divided into three serialized lanes to protect the irreversible registry change and the read-only global hooks.
+
+*   **Lane A (Documentation & Redirects):** Independent. Update the documentation portal to redirect historical `master` references to `main`. This can run immediately in parallel with Lane B.
+*   **Lane B (Pipeline & Logic):** Independent. Modify build pipeline definitions and the chatbot integration code to accept `main` as the trigger. These changes must target a feature branch and pass unit tests but cannot be merged to `master` yet.
+*   **Lane C (Registry & Hooks):** Serialized Gate. This lane handles the central configuration registry and the `global-hooks` file. It waits for Lanes A and B to be "Ready to Merge."
+
+**Gates & Checks**
+All checks run on the specific commit hash of the feature branch before any merge attempt.
+
+1.  **Pre-Staging Gate:** Before touching staging, a dry-run simulation of the pipeline logic (Lane B) must succeed. The known flaky network check in the smoke-test suite requires a pre-approved manual retry token from the Shift Lead, valid only for this transition window.
+2.  **Staging Verification Gate:**
+    *   Deploy Lane A and Lane B changes to Staging.
+    *   Execute the full regression suite (45 mins).
+    *   **Critical Check:** Verify zero orphaned jobs in the queue.
+    *   **Critical Check:** Confirm chatbot announcements fire correctly for `main`.
+    *   *Constraint:* If the flaky network check fails, the Shift Lead must approve the retry immediately; no automatic retries.
+3.  **Production Readiness Gate:** Once Staging passes, the Security Officer and Platform Architect must review the final diff of the `global-hooks` file and the registry change script. Dual sign-off is mandatory before proceeding.
+
+**Review Strategy**
+*   **Code Review (Lanes A & B):** Peer review by a Senior Engineer not involved in writing the changes. Focus on regex patterns ensuring `master` is not hardcoded in logic.
+*   **Infrastructure Review (Lane C):** Independent review by the Platform Architect. Specifically audits the `global-hooks` modification to ensure downstream services (12 count) remain compatible.
+*   **Process Review:** The Shift Lead reviews the rollback procedure and the manual retry protocol for the flaky test.
+
+**Landing & Rollback**
+The landing is a two-phase commit to ensure reversibility before the point of no return.
+
+1.  **Phase 1 (Staging):** Merge Lanes A and B into the staging branch. Deploy. Verify full cycle. If failed, revert merge.
+2.  **Phase 2 (Production Switch):**
+    *   **Human Decision:** The Security Officer and Platform Architect provide the second signature.
+    *   **Execution:** Apply the `global-hooks` update and execute the central registry rename script.
+    *   **Immediate Validation:** Trigger a smoke test. If the flaky network check fails, execute the Shift Lead's manual retry.
+    *   **Success Criteria:** Deployment succeeds, chatbot announces "merge to main," and job queue is empty of `master` references.
+
+**Rollback Protocol**
+*   **Pre-Registry Change:** Standard git revert of Lanes A, B, and C.
+*   **Post-Registry Change:** The registry rename is irreversible without a full database restore. If the system fails after the switch:
+    1.  Halt all incoming deployment traffic.
+    2.  Initiate full database restore from the pre-switch backup (estimated recovery time: 2 hours).
+    3.  Revert code changes to expect `master` again.
+    4.  Notify stakeholders of the incident and delay.
+
+No work proceeds to the Production Switch until the Staging Verification Gate is explicitly cleared and dual sign-off is recorded.

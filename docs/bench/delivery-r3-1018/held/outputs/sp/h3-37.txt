@@ -1,0 +1,46 @@
+### Delivery Plan: End-to-End Request Tracing
+
+#### 1. Lanes and Parallelism
+Work is divided into three parallel lanes to maximize velocity within the six-run daily build limit.
+
+*   **Lane A (Core Instrumentation):** Develop the trace ID injection middleware for internal services. This includes generating unique IDs at the ingress gateway and propagating them via headers to all internal microservices.
+*   **Lane B (Black Box Correlation):** Develop the correlation engine for Globex and Initech dependencies. Since code modification is impossible, this lane focuses on parsing gateway access logs to match outbound request timestamps and payload fingerprints with inbound trace IDs.
+*   **Lane C (Observability & Dashboarding):** Update the logging schema to include the unified `trace_id` field and configure the dashboard to visualize reconstructed journeys, highlighting gaps where external vendor data is inferred rather than explicit.
+
+**Serialization Point:** Lanes A and B must complete integration testing before Lane C can validate the end-to-end visualization. Lane B depends on the header standards defined in Lane A to ensure fingerprinting logic aligns with outbound traffic.
+
+#### 2. Gates and Checks
+All checks run on the specific commit hash resulting from the merge of the feature branch into `staging`.
+
+*   **Gate 1: Unit & Integration Suite (Acme Cloud Build):**
+    *   **Trigger:** On every push to the feature branch.
+    *   **Constraint:** Limited to 6 runs/day. Runs must be batched; do not trigger on every minor commit. Use a local pre-commit hook to verify syntax before pushing.
+    *   **Flaky Check Handling:** The network latency module check is explicitly configured to ignore failures if associated logs contain no actual error strings. CI must parse logs; if clean, treat the test as passed.
+*   **Gate 2: Staging Deployment Verification:**
+    *   **Trigger:** Automatic upon successful Gate 1.
+    *   **Check:** Verify trace IDs appear in Staging logs for internal flows. Validate that Globex/Initech calls generate correlation entries in the debug dashboard.
+*   **Gate 3: Security & Config Review:**
+    *   **Target:** Any changes touching the `shared-config` repository.
+    *   **Requirement:** Explicit approval from **Jane Smith** AND the **Security Lead**. No merge to main occurs without both signatures.
+
+#### 3. Review Process
+Reviews are strictly independent to prevent bias.
+
+*   **Code Review:** Performed by a Senior Engineer not involved in Lanes A, B, or C. They verify the timestamp heuristic logic and ensure no PII is accidentally logged during fingerprinting.
+*   **Architecture Review:** The Security Lead reviews the data flow diagram specifically for the black-box correlation method to ensure no compliance violations occur during the Q3 audit preparation.
+*   **Operational Review:** Customer Support Lead validates the new dashboard in Staging, confirming it resolves the "unresolved ticket" root cause by successfully reconstructing a sample broken journey.
+
+#### 4. Landing Strategy
+*   **Merge to Main:** Requires the successful Staging verification and the dual signatures for `shared-config`.
+*   **Production Deployment:**
+    *   **Timing:** Must occur during business hours.
+    *   **Approver:** Manual sign-off required from the **VP of Engineering**.
+    *   **Procedure:** Deploy to Production. Monitor the first 500 requests.
+*   **Rollback Protocol:**
+    *   **Trigger:** If trace injection causes latency spikes >100ms or if correlation logic generates false positives exceeding 5%.
+    *   **Action:** Immediate revert of the main branch.
+    *   **Consequence:** Acknowledge the automatic **24-hour code freeze** on main. No further merges allowed until the freeze lifts. Post-mortem required before unfreezing.
+
+#### 5. Risk Mitigation
+*   **Build Budget:** With only 6 daily runs, developers must run tests locally where possible. Wasted runs delay the urgent Q3 audit readiness.
+*   **Heuristic Accuracy:** If timestamp heuristics prove too noisy in Staging, fallback to a "best effort" flag in the UI rather than blocking launch, documenting the limitation for the audit.

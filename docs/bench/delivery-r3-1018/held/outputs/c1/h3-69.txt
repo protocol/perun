@@ -1,0 +1,60 @@
+**Delivery Plan: Orion Live Dashboard Result Caching**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Production deployment requires two senior engineer approvals; rollback necessitates a full database restore.
+*   **Locked Resource:** `global-config.yaml` is locked by Platform during business hours; edits require a ticket.
+*   **Cost/Time:** CI costs $40/run (20 mins); avoid full suites for config-only changes.
+*   **Risk:** Cache memory shares space with session store; oversizing evicts active sessions.
+*   **Deadline:** Must land before next Tuesday (Q3 review).
+*   **Environment:** Staging has a known flaky network check (ignore false negatives).
+
+**Lanes & Serialization**
+
+1.  **Lane A: Cache Implementation (Builder)**
+    *   **Work:** Implement aggregation endpoint caching with 30s TTL. Logic must exclude user-specific filters and include "stale data" warnings for cache >45s old.
+    *   **Parallelism:** Can run immediately in an isolated worktree.
+    *   **Constraint:** Must not touch `global-config.yaml` yet; use a local override for testing.
+
+2.  **Lane B: Memory & Load Testing (QA)**
+    *   **Work:** Verify cache size tuning to prevent session eviction. Simulate peak load to confirm timeout resolution.
+    *   **Dependency:** Waits for Lane A's initial build.
+    *   **Serialization:** Must complete before G6 Review.
+
+3.  **Lane C: Config & Feature Flag (Platform Liaison)**
+    *   **Work:** Draft the toggle switch schema and prepare the ticket for `global-config.yaml` edit.
+    *   **Serialization:** Must wait for business hours to submit the Platform ticket. This is the critical path blocker for G8.
+
+**Gates & Checks**
+
+*   **G1 Spec:** Pin base SHA. Define acceptance: Load time < timeout, stale warning >45s, zero session evictions.
+*   **G3 Design:** Explicitly document the memory sharing risk and the eviction prevention algorithm.
+*   **G4 Implement:** Builder commits code + unit tests. No config file changes yet.
+*   **G5 Verify:**
+    *   Run on exact revision from G4.
+    *   **Staging:** Execute load tests; explicitly filter out known flaky network failures.
+    *   **Local Stack:** Verify "stale data" warning logic and admin-triggered invalidation.
+    *   **Condition:** Gate fails if session eviction is observed or warnings do not appear.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (Independent of Builder).
+    *   **Scope:** Code diff + QA receipts. Security check on cache invalidation logic.
+*   **G7 Integrate:** Merge to integration branch. Re-run affected tests only (avoid full $40 suite if possible via path filtering).
+
+**Human Gates & Approvals**
+
+*   **Config Change:** Human must submit/ticket the `global-config.yaml` change during business hours.
+*   **Deployment (G8):** Requires explicit approval from **two** senior engineers.
+    *   *Ask Format:* "Deploy Cache Feature. A: Deploy now (recommended) — Meets Q3 deadline, verified load stability. B: Delay — Wait for post-Q3 traffic dip."
+
+**Landing & Rollback**
+
+*   **Merge Strategy:** Merge Lane A (Code) once G6 passes. Hold G8 (Deploy) until Lane C (Config) is approved and applied.
+*   **Rollback Plan:** If timeouts persist or sessions drop post-deploy:
+    1.  Toggle feature flag off (immediate).
+    2.  If instability continues, execute full database rollback (irreversible step reversal).
+*   **Post-Deploy (G9):** Monitor session store memory usage and dashboard load times for 1 hour.
+
+**Timeline**
+*   **Day 1:** Lanes A & B start. Lane C prepares ticket.
+*   **Day 2 (Business Hours):** Lane C submits config ticket. Lane A/B finalize verification.
+*   **Day 2 (Post-Approval):** G6 Review.
+*   **Day 3:** G8 Approval & Deployment.

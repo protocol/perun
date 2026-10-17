@@ -1,0 +1,52 @@
+### Delivery Plan: Per-Tenant Throttling
+
+**Objective:** Stabilize the `data-pipeline` cluster by implementing per-tenant concurrency (5 jobs) and daily row limits (2M rows) for the export module, ensuring clear error responses without affecting global throughput.
+
+#### 1. Lanes & Serialization
+Work is split into three lanes. Lanes 1 and 2 run in parallel; Lane 3 is serialized after both complete.
+
+*   **Lane A: Logic Implementation (Builder)**
+    *   **Work:** Implement concurrency control (semaphore/lock) and daily row counters in the export service. Add specific log tags for throttled requests to distinguish them from failures. Ensure error messages are explicit.
+    *   **Constraint:** Must run in an isolated worktree. No schema changes yet.
+    *   **Parallelism:** Runs parallel to Lane B.
+
+*   **Lane B: Observability & Validation (QA/Data)**
+    *   **Work:** Create a local stress-test script using synthetic data scaled to simulate Apex's volume (since staging lacks volume stress). Define the specific log tag schema for monitoring.
+    *   **Constraint:** Must verify the "clear error message" requirement locally before any CI run.
+    *   **Parallelism:** Runs parallel to Lane A.
+
+*   **Lane C: Integration & Migration (Database Admin + Builder)**
+    *   **Work:** Draft the irreversible schema lock migration script. Combine Lane A's code with Lane B's tests.
+    *   **Serialization:** Starts only after Lanes A and B pass local verification. This lane handles the high-risk deployment artifacts.
+
+#### 2. Gates & Checks
+All checks run on the **exact final SHA** of the integration branch. No check passes on a stale revision.
+
+*   **G1 Spec Freeze:** Confirm the 5-job/2M-row limits and error message text with the requester.
+*   **G4 Local Build (Mandatory):**
+    *   **Where:** Local developer environment (not CI).
+    *   **What:** Run Lane B's stress script against Lane A's implementation.
+    *   **Condition:** Must prove throttling triggers correctly and logs the specific tag. CI is skipped until this is green to avoid cloud penalties.
+*   **G5 CI Pipeline:**
+    *   **Trigger:** Only after local G4 success.
+    *   **Scope:** Full dataset validation (45-min run).
+    *   **Condition:** Green status required. Any failure incurs a penalty, so pre-validation is strict.
+*   **G6 Independent Review:**
+    *   **Reviewer 1 (Backend Lead):** Reviews Lane A logic and error handling. Must be independent of the Builder.
+    *   **Reviewer 2 (DBA):** Reviews Lane C migration script for irreversibility risks.
+    *   **Condition:** Both must approve. Security check confirms no global cap leakage.
+
+#### 3. Landing & Human Decisions
+*   **Merge Strategy:** Squash merge to the integration branch only after G6 approval.
+*   **Human Gates (Required):**
+    1.  **Deployment Approval:** Both Backend Lead and DBA must explicitly approve the production deployment due to irreversible schema locks.
+    2.  **Feature Flip:** If behind a flag, the toggle to enable throttling for Apex Logistics requires manual confirmation.
+*   **Rollback Plan:**
+    *   **Code:** Revert the commit immediately if error rates spike unrelated to throttling.
+    *   **Schema:** Since locks are irreversible without a full restore, the rollback procedure is a **full database restore from the pre-deployment snapshot**. This snapshot must be verified *before* the deployment window opens.
+*   **Post-Deploy Verification:**
+    *   Monitor the new specific log tags in the dashboard.
+    *   Confirm Apex Logistics jobs are capped at 5 concurrent.
+    *   Verify Beta Corp and other small tenants see no latency increase.
+
+**Timeline Constraint:** All local testing (G4) must conclude by Thursday EOD to allow the 45-minute CI run and dual-approval process before the Friday SLA deadline.

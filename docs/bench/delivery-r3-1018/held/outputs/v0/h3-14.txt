@@ -1,0 +1,99 @@
+**Delivery Plan: Zero-Downtime Secret Migration**
+
+**Objective:** Migrate hardcoded credentials to the managed vault across Dev, Staging, and Prod without downtime, ensuring old secrets are revoked only after successful validation.
+
+**Constraints & Triggers:**
+- **Cost:** CI runs are $120/45min; minimize triggers via local verification and batched lanes.
+- **Approvals:** `global-config` changes require Jane Smith + Security Lead sign-off.
+- **Timing:** Rotation must occur during Tuesday maintenance windows.
+- **Known Flake:** Ignore staging network check failures during validation.
+- **Irreversibility:** Prod deployment gate is final; rollback must be pre-proven.
+
+---
+
+### **Lanes & Parallelism**
+
+**Lane 1: Vault Integration & Config Refactor (Builder)**
+- **Scope:** Implement vault client logic, update service startup to fetch secrets dynamically, and modify `global-config` to reference vault paths instead of raw values.
+- **Worktree:** Isolated branch `feat/vault-migration`.
+- **Parallelism:** Can run concurrently with Lane 2 (Test Prep) but must complete before Lane 3 (Rotation).
+
+**Lane 2: Validation Harness & Staging Filter (QA)**
+- **Scope:** Create a test suite verifying bootability with vault-secrets. Explicitly filter out the known flaky staging network error to prevent false negatives.
+- **Worktree:** Shared read-only checkout of Lane 1's base SHA.
+- **Parallelism:** Runs in parallel with Lane 1 development; merges only after Lane 1's code is ready.
+
+**Lane 3: Sequential Environment Rollout (Release)**
+- **Scope:** Execute the cutover sequence: Dev → Staging → Prod.
+- **Serialization:** **Strictly serialized.** Dev must be green before Staging starts; Staging green before Prod starts.
+- **Timing:** Triggered only during the Tuesday maintenance window.
+
+---
+
+### **Gates & Checks**
+
+**G0/G1: Spec & Approval (Pre-Work)**
+- **Input:** This ticket.
+- **Action:** Draft migration spec identifying every secret location.
+- **Gate:** Obtain explicit written approval from Jane Smith and Security Lead for the `global-config` modification strategy. *No code moves without this.*
+
+**G2/G3: Design & Budget**
+- **Input:** Approved spec.
+- **Action:** Define the rollback plan (revert commit + immediate secret re-injection). Set a hard budget: max 2 CI runs per environment (Dev/Staging/Prod) = $720 total cap.
+- **Gate:** Conductor verifies rollback steps are documented and reversible.
+
+**G4: Implementation (Builder)**
+- **Input:** Approved design.
+- **Action:** Lane 1 commits code. Tests included with commit.
+- **Check:** Local build and lint only. **No CI trigger yet.**
+
+**G5: Verification (QA)**
+- **Input:** Exact SHA from G4.
+- **Action:**
+    1.  **Local Stack Up:** Bring up Dev environment locally using the new vault logic. Verify boot.
+    2.  **CI Trigger (Dev Only):** Run one CI pass for Dev. If green, proceed.
+    3.  **Staging Dry-Run:** Deploy to Staging. Validate bootability, explicitly ignoring the known network flake.
+- **Gate:** QA signs off on Dev/Staging bootability. *Prod CI is not run yet.*
+
+**G6: Independent Review**
+- **Input:** Exact SHA + G5 receipts.
+- **Reviewer:** Security Lead (independent of Builder).
+- **Scope:** Verify no secrets remain in code/config; confirm vault access policies are least-privilege.
+- **Gate:** Security Lead approval required.
+
+**G7: Integration & Human Gate**
+- **Input:** Approved reviews.
+- **Action:** Merge to integration branch.
+- **Human Decision:** Requester confirms Tuesday window start.
+
+**G8: Production Cutover (Tuesday Window)**
+- **Input:** Green Staging receipt.
+- **Action:**
+    1.  Deploy to Prod.
+    2.  Verify Prod bootability.
+    3.  **Revoke Old Secrets:** Only after Prod is confirmed healthy.
+- **Gate:** Irreversible gate passed.
+
+**G9: Post-Deploy Verification**
+- **Action:** Monitor logs for secret fetch failures. Confirm no fallback to old credentials.
+
+**G10: Retrospective**
+- **Action:** Document any friction in the rotation process.
+
+---
+
+### **Landing & Rollback**
+
+- **Merge Strategy:** Single PR containing all refactors. Merged only after G6 approval and G8 window confirmation.
+- **Human Decisions Required:**
+    1.  Sign-off on `global-config` change (Jane + Security).
+    2.  "Go" command for Tuesday Prod deployment.
+    3.  Confirmation to revoke old secrets.
+- **Rollback Plan:**
+    - If Prod fails boot: Immediately revert the merge commit.
+    - Since old secrets are not revoked until *after* success, the reverted code will still function with existing credentials.
+    - No data loss or downtime expected upon revert.
+
+**Status Reporting:**
+- Update requester after each environment (Dev/Staging/Prod) passes G5.
+- Final report includes confirmation of old secret revocation.

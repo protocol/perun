@@ -1,0 +1,63 @@
+### Delivery Plan: Gated Settings Redesign
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Database migration triggered by flag enablement requires full system restore to revert.
+*   **Collision Risk:** Settings module shares global state with Billing; changes must be verified together.
+*   **Cost Constraint:** CI visual regression takes 45 mins; minimize re-runs.
+*   **Human Gates:** Production deploy and flag flip require written approval from Product Lead AND Support Director.
+*   **Timing:** Flag flip blocked until Support training completes next Tuesday.
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Implementation & Unit Verification (Builder)**
+*   **Work:** Implement new preferences UI, navigation flow, and the `neo-settings-v2` flag logic. Ensure default is `off`. Implement instant fallback to legacy view on toggle.
+*   **Parallelism:** Can run independently but must target the same base SHA as Lane 2.
+*   **Output:** Patch set, unit tests, component stories.
+
+**Lane 2: Integrated State Verification (QA)**
+*   **Work:** Spin up local stack with Settings + Billing. Verify global state integrity. Execute visual regression suite *once* on the integrated candidate. Verify fallback mechanism under load.
+*   **Serialization:** Must wait for Lane 1's initial commit to establish the exact revision for testing.
+*   **Output:** Visual regression receipt (green), state-integrity log, fallback verification proof.
+
+**Lane 3: Documentation & Support Enablement (Docs/Support)**
+*   **Work:** Draft help documentation updates. Coordinate training schedule confirmation.
+*   **Serialization:** None, but "Flag Flip" gate is blocked by its completion certificate.
+
+#### Gates & Checks
+
+*   **G1 (Spec):** Pin base SHA. Define acceptance: "Flag off = legacy UI," "Flag on = new UI," "Toggle off mid-session = instant legacy restore."
+*   **G4 (Implement):** Builder commits to isolated worktree. Unit tests green.
+*   **G5 (Verify):**
+    *   **Exact Revision:** The merged commit of Lane 1 + Lane 2's test harness.
+    *   **Check:** Run visual regression *only* on this SHA. Verify Billing dashboard remains unaffected.
+    *   **Condition:** If visual reg fails, fix locally; do not re-push and re-trigger CI unless the diff changes significantly.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Senior Frontend Engineer (not the Builder).
+    *   **Scope:** Code quality, flag implementation safety, fallback logic.
+    *   **Security:** Verify no PII leakage in new logs; confirm migration script is idempotent *until* enabled.
+
+#### Landing & Release Strategy
+
+**Phase 1: Merge (Hidden)**
+*   **Action:** Merge verified lanes to `main` (or integration branch).
+*   **Condition:** Flag `neo-settings-v2` defaults to `off` in config. Migration script is present but inert.
+*   **Human Decision:** Product Lead approves merge based on G6 review. Support Director acknowledges readiness of training materials (not yet approved for flip).
+
+**Phase 2: The Hold**
+*   **Status:** Code is live in production but invisible.
+*   **Verification:** Smoke test on production (with flag off) to ensure no regression in legacy path.
+
+**Phase 3: The Flip (G8 Release)**
+*   **Trigger:** Confirmation of Support training completion (next Tuesday).
+*   **Human Gate:** **Explicit written approval** required from *both* Product Lead and Support Director via ticketing system. No automated deployment.
+*   **Action:** Enable flag globally.
+*   **Rollback Plan:**
+    *   *Pre-migration:* Toggle flag `off`.
+    *   *Post-migration:* **No code rollback possible.** Requires full system restore from pre-Tuesday backup. This risk must be explicitly acknowledged in the approval ticket.
+
+**Cost Control:**
+*   Visual regression runs exactly once on the final candidate SHA before merge. No re-runs unless the integrated diff changes.
+
+**Failure Mode:**
+*   If Billing breaks during Lane 2: Halt merge. Fix state management. Re-run visual reg.
+*   If training is delayed: Maintain flag `off`. Do not partial-enable for segments unless Support confirms partial readiness.

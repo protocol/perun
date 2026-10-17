@@ -1,0 +1,58 @@
+**Delivery Plan: Orders Table PK Migration to UUID**
+
+**Strategy:** Blue-Green Migration with Dual-Write. Zero downtime is achieved by running integer and UUID columns in parallel, backfilling silently, then switching reads/writes.
+
+**Lanes & Serialization**
+
+1.  **Lane A (Schema & Dual-Write) [Builder]**
+    *   **Work:** Add `order_uuid` column (nullable). Deploy code to write both `id` and `order_uuid` on insert/update. Backfill `order_uuid` for historical rows in small batches (throttled to avoid 30s lock limits).
+    *   **Constraint:** Must complete before Lane B.
+    *   **Parallelism:** Can run alongside Lane C (Prep).
+
+2.  **Lane B (Consumer Adaptation) [Builder]**
+    *   **Work:** Update Legacy Billing Adapter and Reporting Jobs to read `order_uuid`. Refactor the shared `daily-reconciliation` library to handle string IDs without breaking the audit trail for the five dependent services.
+    *   **Constraint:** Depends on Lane A's schema availability. Must be verified before Lane D.
+
+3.  **Lane C (Infrastructure & AZ Verification) [QA/Infra]**
+    *   **Work:** Provision blue-green database slots. Script UUID generation verification across all three availability zones.
+    *   **Constraint:** Independent of code, but must be ready before Lane D.
+    *   **Note:** Ignore flaky staging network checks; verify via direct DB probes.
+
+4.  **Lane D (Cutover Logic) [Builder]**
+    *   **Work:** Implement feature flag to switch primary write path to `order_uuid` and make it NOT NULL. Update read paths to prefer `order_uuid`.
+    *   **Constraint:** Requires Lane A (backfill complete) and Lane B (consumers ready).
+
+**Gates & Checks**
+
+*   **G2 Plan Approval:** Explicit budget cap for CI runs ($120 × 3 max allowed for this ticket). Define exact rollback trigger (error rate > 0.1%).
+*   **G4 Implementation Review:**
+    *   **Reviewer:** Senior Platform Engineer (Independent of Builder).
+    *   **Focus:** Backfill batching logic (must not lock >30s) and `daily-reconciliation` string parsing safety.
+*   **G5 Verification (Exact Revision):**
+    *   **Environment:** Staging (ignoring flaky network checks, using direct DB assertions).
+    *   **Checks:** Run integration suite against 2TB snapshot clone. Verify UUID uniqueness across 3 AZs. Confirm `daily-reconciliation` produces identical audit hashes with string IDs.
+    *   **Cost Control:** Limit full 2TB run to final candidate only; use sampled subsets for iterative lanes.
+*   **G6 Security & Data Governance:**
+    *   **Reviewer:** Data Governance Officer (Independent).
+    *   **Focus:** Audit trail integrity, PII implications of new ID format, rollback data safety.
+
+**Landing & Human Gates**
+
+*   **Merge Strategy:**
+    1.  Merge Lane A (Dual-write) → Deploy → Monitor backfill.
+    2.  Merge Lane B & C → Deploy → Verify consumers.
+    3.  Merge Lane D (Cutover) → **Human Gate Required**.
+*   **Human Decisions (Dual Approval Mandatory):**
+    *   **Lead Architect:** Approves cutover plan and rollback script.
+    *   **Data Governance Officer:** Approves audit trail migration logic and final go/no-go.
+*   **Rollback Plan:**
+    *   If errors spike post-cutover: Flip feature flag to revert reads/writes to integer `id`.
+    *   Data state: No data loss as dual-write kept both columns synced.
+    *   Post-mortem: Analyze failure, fix, and re-schedule.
+
+**Risk Mitigation**
+*   **CI Cost:** Only run full 45min pipeline on the integrated cutover branch. Use unit tests and smaller dataset integration tests for intermediate lanes.
+*   **Lock Limits:** Backfill script must process <1000 rows/transaction with explicit sleeps.
+*   **Shared Library:** Coordinate `daily-reconciliation` deployment with the five dependent service owners to ensure simultaneous rollout or backward compatibility.
+
+**Final State:** `order_uuid` is the primary key, `id` remains as a legacy indexed column for transitional read-only access if needed, then deprecated in a future ticket.

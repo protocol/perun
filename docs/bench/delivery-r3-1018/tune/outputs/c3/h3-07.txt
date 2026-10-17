@@ -1,0 +1,78 @@
+### Delivery Plan: GDPR Data Export & Deletion
+
+**Ruling: Scope & Consistency**
+*   **Choice:** Implement a two-phase commit pattern (Prepare → Execute) for deletion to guarantee atomicity across the five stores. Export is read-only; deletion is write-critical.
+*   **Why:** Prevents orphaned entries if a mid-process failure occurs.
+*   **Cost if wrong:** Regulatory fines and data inconsistency requiring manual forensic repair.
+
+**Ruling: Testing Strategy**
+*   **Choice:** Use synthetic data generation in a staging environment mirroring the 5-store topology; no production-like data testing.
+*   **Why:** Backup retention (7 days) makes testing on real data too risky for irreversible deletion.
+*   **Cost if wrong:** Accidental data loss during validation.
+
+---
+
+#### Lanes & Parallelism
+
+**Lane 1: Data Aggregation & Export (Builder)**
+*   **Work:** Implement the export endpoint. Connectors for all 5 storage systems. Aggregate into a single JSON/CSV archive.
+*   **Parallelism:** Runs parallel to Lane 2.
+*   **Constraint:** Read-only access; safe to retry.
+
+**Lane 2: Atomic Deletion Engine (Builder)**
+*   **Work:** Implement the deletion endpoint with a transactional coordinator.
+    *   Phase 1: Flag records as "pending deletion" in all 5 stores.
+    *   Phase 2: Verify all flags set; if yes, hard delete. If no, rollback flags.
+*   **Parallelism:** Runs parallel to Lane 1.
+*   **Constraint:** Must not touch billing schema directly; uses shared interface.
+
+**Lane 3: Independent Verification (QA + Security)**
+*   **Work:**
+    *   **QA:** Verify export completeness (row counts match) and deletion atomicity (simulate failure mid-stream, assert rollback).
+    *   **Security:** Review data flow for PII leakage, verify authz (user can only delete own data), and audit logging.
+*   **Dependency:** Starts after Lane 1 & 2 code freeze (G4).
+
+**Serialized Steps**
+*   **Database Interface Review:** Before Lane 2 merges, the Identity Squad and Billing Team must jointly review the shared schema usage (G3).
+*   **Integration Test:** Due to the 45-minute CI cost, run full pipeline only once per candidate SHA (G5/G6). Do not run on every commit.
+
+---
+
+#### Gates & Checks
+
+*   **G1 Spec:** Define exact data fields per store and the archive format. Pin base SHA.
+*   **G3 Design:** ADR for the two-phase deletion logic. **Human Gate:** Joint review with Billing Team for schema safety.
+*   **G4 Implement:** Code complete in isolated worktrees. Unit tests included.
+*   **G5 Verify:**
+    *   Run against staging with synthetic data.
+    *   **Check:** CI Pipeline (45m). If the "network latency" check fails, manual retry allowed once; if it fails again, escalate as flake, do not block.
+    *   **Evidence:** Logs showing successful rollback on simulated failure.
+*   **G6 Review:**
+    *   **Code:** Independent review (not by Builder).
+    *   **Security:** Security Lead verifies audit trails and access controls.
+    *   **Deep Code Review:** Full scope on diff.
+*   **G7 Integrate:** Merge to integration branch. Re-run affected CI subset.
+
+---
+
+#### Landing & Human Decisions
+
+**Merge Strategy**
+*   Merge Lane 1 and Lane 2 into the integration branch only after G6 approval.
+*   **Human Gate (Security Lead):** Manual approval required to deploy to any of the three environments.
+
+**Deployment**
+*   **Order:** Deploy to Env 1 (Staging) → Verify → Env 2 (Pre-prod) → Verify → Env 3 (Prod).
+*   **Rollback:** If deletion fails in Prod, revert the service version immediately. Data recovery relies on the 7-day backup window; if the window is missed, manual reconstruction is required (high risk).
+
+**Critical Human Approvals**
+1.  **Schema Usage:** Billing Team lead must approve the shared schema access pattern (G3).
+2.  **Production Deploy:** Security Lead must explicitly approve the push to Prod (G8).
+3.  **Flake Handling:** If the network latency check blocks the pipeline twice, a human must decide to bypass or fix the test infrastructure.
+
+**Cost Control**
+*   CI runs limited to one per candidate SHA. No speculative runs.
+*   Lane budgets capped; unlimited spend is blocked.
+
+**Timeline**
+*   Target: Complete G7 by 3 days before month-end to allow buffer for G8 approval and deployment.

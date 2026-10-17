@@ -1,0 +1,55 @@
+### Delivery Plan: Branch Rename (master → main)
+
+**Strategy:** Serialized execution with strict verification gates. No parallel writes to shared configuration. Staging verification is mandatory before production.
+
+#### 1. Lanes & Serialization
+*   **Lane A (Analysis & Mapping):** *Builder* scans all CI definitions, deployment hooks, the chatbot integration, and documentation portals. Outputs a comprehensive map of every hardcoded "master" reference and the specific file/line locations.
+    *   *Constraint:* Read-only access. No changes yet.
+*   **Lane B (Staging Configuration):** *Builder* prepares the central configuration registry changes for the staging environment only. Includes the redirect logic for historical documentation.
+    *   *Dependency:* Must wait for Lane A's map verification.
+*   **Lane C (Pipeline & Bot Updates):** *Builder* updates build pipeline definitions and chatbot merge event listeners to support "main".
+    *   *Dependency:* Must wait for Lane A. Can run parallel to Lane B *preparation*, but not deployment.
+*   **Lane D (Global-Hooks Patch):** *Specialist* prepares the patch for the read-only `global-hooks` file.
+    *   *Constraint:* Highest risk. Requires dry-run validation in an isolated sandbox before touching the mounted file.
+
+**Serialization Rule:** Lane D and the actual application of Lane B/C changes to Staging must be serialized. Do not update the registry and the hooks simultaneously.
+
+#### 2. Gates & Checks
+*   **G1 Spec:** Define the exact redirect rules for docs and the rollback procedure (database restore point identified).
+*   **G2 Plan:** Submit the map from Lane A. Explicitly list the 12 downstream services affected by `global-hooks`.
+*   **G3 Design:** Architecture review of the irreversible registry change. Confirm the "point of no return" backup is taken.
+*   **G4 Implement:** Apply changes to Staging first.
+    *   *Check:* Run full regression suite on Staging. **Mitigation:** The known flaky network check requires manual Shift Lead approval if it fails; automate the retry request but pause the gate for human confirmation.
+*   **G5 Verify (Staging):**
+    *   Trigger a full deployment cycle on Staging.
+    *   Verify chatbot announcements fire correctly.
+    *   Confirm no orphaned jobs in the queue (wait for queue drain).
+    *   Validate doc redirects.
+*   **G6 Review:** Independent Security Officer and Platform Architect review the Staging success receipts.
+*   **G7 Integrate:** Merge changes to the new default branch (`main`) in the repo.
+*   **G8 Release (Production):**
+    *   **Human Gate:** Dual sign-off required (Security Officer + Platform Architect).
+    *   Execute registry rename on Production.
+    *   Apply `global-hooks` patch.
+    *   Update pipelines.
+
+#### 3. Review
+*   **Code/Config Review:** Performed by a senior engineer *not* involved in Lane B/C/D implementation.
+*   **Security/Compliance:** Independent review by the Security Officer (mandatory for G8).
+*   **Platform Integrity:** Independent review by the Platform Architect (mandatory for G8).
+*   **Constraint:** The Builder who writes the `global-hooks` patch cannot approve it.
+
+#### 4. Landing & Rollback
+*   **Merge Strategy:**
+    1.  Land all preparatory code (docs, bot logic) to a feature branch.
+    2.  Once Staging G5 is green, merge to `main`.
+    3.  Rename default branch in repository settings *after* code is merged.
+*   **Human Decisions:**
+    *   Approval to proceed to Production (G8).
+    *   Manual retry approval for the flaky network check in Staging.
+*   **Rollback:**
+    *   If Production fails immediately post-rename: Execute full database restore to the pre-rename snapshot.
+    *   Revert repository default branch setting to `master` (if provider allows) or restore from backup.
+    *   Notify all 12 downstream service owners immediately.
+
+**Cost Control:** Limit full regression runs to Staging and final Production verification. Use targeted linting for intermediate checks to save compute minutes.

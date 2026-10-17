@@ -1,0 +1,53 @@
+**Ruling: Scope** — We will add a parallel incremental backup lane without modifying the existing nightly full dump scripts or retention logic. This satisfies the audit requirement for frequency while maintaining the "revert immediately" constraint.
+**Ruling: Schedule** — The new job will run every 4 hours, offset from the nightly full dump to prevent I/O contention.
+**Ruling: Verification** — Checksums will be written to a *staging* audit log path first, then promoted only after local verification, preventing irreversible pollution of the immutable production log with test garbage.
+**Cost if wrong:** Violating immutability pollutes the legal record; altering the cron breaks Friday auth rotation; high CI costs burn budget before value is proven.
+
+### Lanes & Parallelism
+
+**Lane 1: Strategy & Interface (Conductor + Security)**
+*   **Work:** Define the incremental algorithm (e.g., WAL archiving or timestamp-based diffs) and the checksum schema. Confirm the "staging log" path with Security to ensure compliance without polluting the immutable store.
+*   **Dependency:** None.
+*   **Parallel:** Yes.
+
+**Lane 2: Implementation (Builder)**
+*   **Work:** Create `scripts/backup-incremental.sh`. It must: (1) Execute the delta backup, (2) Generate SHA-256 checksums, (3) Write to the staging log, (4) Verify integrity locally. **Constraint:** Must not touch `scripts/backup-full.sh` or the Security team's cron.
+*   **Dependency:** Lane 1 complete.
+*   **Parallel:** No (needs interface definition).
+
+**Lane 3: Verification Harness (QA)**
+*   **Work:** Build a local simulation that mocks the database state, runs the incremental script, verifies the checksum logic, and ensures the immutable log is *not* touched during dry-runs. Explicitly test the "Tuesday network flake" scenario to ensure the script fails safely rather than logging partial data.
+*   **Dependency:** Lane 2 code complete.
+*   **Parallel:** No.
+
+### Gates & Checks
+
+*   **G1 Spec (Now):** Freezes the "no change to full dump/retention" and "immutable log safety" constraints.
+*   **G4 Implement (Lane 2):** Builder commits to a dedicated worktree. Unit tests for checksum generation must pass locally.
+*   **G5 Verify (Lane 3):**
+    *   **Revision:** Exact SHA from Lane 2.
+    *   **Check:** Run the backup in an isolated container. Assert that the *production* immutable log path has zero new entries. Assert staging log contains valid checksums.
+    *   **Flake Handling:** If the network check fails, assert the script exits non-zero without logging.
+*   **G6 Review:**
+    *   **Security Review:** Independent review of the credential handling (ensuring no conflict with Friday rotation) and the log path logic.
+    *   **Compliance Review:** Verify the checksum format meets auditor standards.
+*   **G7 Integrate:** Merge to `main` only after G6 sign-off. CI runs once on the final merge SHA.
+
+### Review & Independence
+
+*   **Builder** implements the script.
+*   **Security Hat** (distinct from Builder) reviews credential usage and log immutability safeguards.
+*   **QA Hat** (distinct from Builder) validates the "no pollution" constraint and the Tuesday flake resilience.
+*   **Compliance Officer** (Human) reviews the checksum schema before G8.
+
+### Landing & Human Gates
+
+1.  **Merge:** Automated merge to `main` upon green G6/G7.
+2.  **Deployment (G8 - Human Gate):**
+    *   **Approvers:** CTO + External Compliance Officer (via portal).
+    *   **Action:** Deploy the new cron entry (every 4 hours) to production. The old nightly cron remains untouched.
+3.  **Rollback:**
+    *   If latency spikes or checksums fail: Disable the new 4-hour cron immediately. The system reverts to the nightly full dump automatically. No code rollback needed as scripts coexist.
+4.  **Post-Deploy (G9):** Monitor the first 3 cycles. Verify checksums appear in the *official* ledger (after promotion from staging).
+
+**Immediate Next Step:** I will draft the G1 Spec detailing the checksum schema and staging log path for your confirmation before any code is written.

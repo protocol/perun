@@ -1,0 +1,51 @@
+### Delivery Plan: Enterprise SSO with Legacy Coexistence
+
+**Objective:** Enable SSO for Enterprise tenants via feature flag while preserving legacy auth for Small Business users, ensuring zero downtime and backward compatibility.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Core Logic - Builder):** Implement tenant-aware auth router in `core-identity`. Logic: If `tenant.type == Enterprise` AND `flag:sso_enabled` is true, redirect to IdP; else, use legacy flow. Must preserve existing session cookie format exactly.
+    *   *Parallel:* Yes.
+*   **Lane B (UI/UX - Builder):** Update login page to dynamically render SSO button or legacy form based on tenant config. Ensure mobile API responses remain compatible.
+    *   *Parallel:* Yes (independent worktree from Lane A).
+*   **Lane C (Config & Data - Builder):** Create database migration for `tenant.sso_config` (nullable, backward compatible). Define feature flag schema for `Globex Corp` pilot.
+    *   *Parallel:* Yes, but must merge before Lane A/B integration tests.
+*   **Lane D (Independent QA):** Verify legacy flow unchanged for Small Business tenants. Test SSO flow for Enterprise mock. Specifically target the "flaky mock IdP timeout" to distinguish real failures from environment noise.
+    *   *Serial:* Runs after Lane A/B/C code freeze.
+*   **Lane E (Security Review):** Audit auth router logic, session handling, and IdP integration. Verify no PII leakage in logs.
+    *   *Serial:* Runs on exact revision from Lane D's green build.
+
+#### 2. Gates & Checks
+*   **G1 (Spec):** Define acceptance: "Legacy users login unchanged," "Enterprise users see SSO only when flagged," "Cookie format byte-for-byte identical." Pin base SHA.
+*   **G2 (Plan):** Budget capped for CI runs (optimize DB seeding if possible). Lane D must isolate mock IdP flakiness.
+*   **G3 (Design):** ADR confirming cookie immutability and rollback strategy (flag flip-off).
+*   **G4 (Implement):** Lanes A, B, C commit to isolated worktrees. Unit tests included.
+*   **G5 (Verify):**
+    *   Run full regression on **exact merged SHA** of A+B+C.
+    *   **Critical:** Lane D must prove legacy login success rate matches baseline (no regression).
+    *   **Critical:** SSO flow verified against mock IdP; timeouts logged but not treated as test failures if known flake (documented exception).
+    *   **UI Check:** Headed browser test on login route for both tenant types.
+*   **G6 (Review):**
+    *   **Code:** Independent review (not Builder) of `core-identity` changes.
+    *   **Security:** Lane E verdict required. Any High/Critical finding blocks G7.
+    *   **QA:** Lane D sign-off on "Zero Legacy Impact."
+
+#### 3. Review Strategy
+*   **Builder (Lanes A/B/C):** Cannot review their own code.
+*   **QA (Lane D):** Independent of Builders. Focuses on functional regression and flake triage.
+*   **Security (Lane E):** Independent of Builders and QA. Focuses on auth integrity and data safety.
+*   **Integration Owner:** Combines A+B+C, runs final smoke test on staging SHA before G7.
+
+#### 4. Landing & Human Gates
+*   **Merge Strategy:**
+    1.  Lanes A, B, C merge to integration branch only after G5/G6 green.
+    2.  One final integration commit (G7) created.
+    3.  **Human Gate 1:** Security Lead + VP Product must provide **written approval** (commit message or signed artifact) explicitly authorizing the merge to `main` and the deployment to Staging for Globex Corp.
+    4.  Merge to `main` triggers deploy to Staging (behind flag).
+*   **Rollback:**
+    *   **Immediate:** Flip `flag:sso_enabled` to false. No code revert needed for logic; cookie format remains untouched.
+    *   **Code Revert:** If cookie format was accidentally altered (detected in G5), immediate revert of integration commit required; user reset unavoidable (must be communicated).
+*   **Production Release (G8):**
+    *   **Human Gate 2:** After successful Globex Corp pilot verification (G9), VP Product must approve widening the flag to all Enterprise tenants.
+    *   Deploy to Production only after explicit approval.
+
+**Risk Mitigation:** CI cost managed by running full suite only on integration SHA; Lanes A/B/C run targeted unit/integration tests locally or on PR. Mock IdP flakiness documented; failures attributed to env only if reproducible outside auth logic.

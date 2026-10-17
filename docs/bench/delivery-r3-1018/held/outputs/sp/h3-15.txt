@@ -1,0 +1,65 @@
+# Delivery Plan: Offline Kill Switch for Recommendation Engine
+
+## Lanes & Parallelism
+
+**Lane A: Core Logic Implementation (Aurora Team)**
+*   **Work:** Implement the circuit breaker pattern within the recommendation service. Logic must check local cache health and model service latency/error rates *before* attempting a model call. If thresholds are exceeded, serve static JSON from the existing local cache directory.
+*   **Constraint:** Must not modify the fallback data file schema. Read-only access only.
+*   **Parallelism:** Can run immediately alongside Lane B.
+
+**Lane B: Local Simulation Harness (QA/DevOps)**
+*   **Work:** Build a lightweight local mock service that simulates model timeouts and 5xx errors. This bypasses the flaky staging network check. Create a script to inject latency into the local dev environment to verify the switch triggers correctly without needing full CI.
+*   **Parallelism:** Runs parallel to Lane A. Essential for validating Lane A's code before the expensive CI run.
+
+**Lane C: Security & Compliance Prep (David Chen)**
+*   **Work:** Pre-review the architectural design doc to ensure the kill switch cannot be triggered remotely by unauthorized actors and does not expose internal error stacks to users.
+*   **Serialization:** Must complete before final deployment approval, but can start during Lane A's coding phase.
+
+## Gates & Checks
+
+**Gate 1: Local Verification (Pre-Commit)**
+*   **Revision:** Feature branch head (local only).
+*   **Check:** Run the Lane B simulation harness.
+*   **Criteria:**
+    1.  Model mock returns 500/timeout → System serves cached data within <50ms.
+    2.  No user-visible error messages in logs/UI.
+    3.  Billing aggregator successfully reads the unchanged fallback file.
+*   **Action:** Code cannot be pushed until this passes locally.
+
+**Gate 2: CI Pipeline (Post-Push)**
+*   **Revision:** Merge to `staging` branch.
+*   **Check:** Full 45-minute CI pipeline.
+*   **Criteria:** All data validation steps pass. Build artifact generated.
+*   **Cost Control:** Only one attempt allowed per day due to compute costs; Gate 1 must be signed off by two engineers before triggering.
+
+**Gate 3: Independent Code Review**
+*   **Reviewer:** Senior Engineer from a different team (e.g., Platform Team), *not* Aurora Team.
+*   **Focus:** Verify independence from the model service (no circular dependencies) and confirm fallback logic handles edge cases (empty cache, corrupted file).
+*   **Timing:** After CI passes, before David Chen's review.
+
+## Review Process
+
+1.  **Technical Review:** Performed by the Independent Senior Engineer. They verify the code against the "independence" requirement and ensure the fallback schema is untouched.
+2.  **Security Review:** Performed by David Chen. He validates that the kill switch mechanism itself is secure and cannot be exploited to force a denial of service.
+3.  **Operational Review:** QA confirms via the Lane B harness that the transition is seamless (no UI flicker, no error toasts).
+
+## Landing Strategy
+
+**Deployment Window:** Thursday evening (off-peak) to allow Friday monitoring.
+
+**Merge Process:**
+1.  Merge approved feature branch to `main`.
+2.  David Chen manually approves the production deploy ticket after verifying Security and Technical reviews are complete.
+3.  Deploy to 5% of traffic first (Canary). Monitor latency and error rates for 30 minutes.
+4.  If metrics stable, roll out to 100%.
+
+**Human Decisions Required:**
+*   **David Chen:** Final production deploy authorization.
+*   **Product Owner:** Definition of "latency threshold" that triggers the switch (e.g., >2s response time). This must be hardcoded based on their input before Lane A finishes.
+
+**Rollback Plan:**
+*   **Trigger:** If error rates spike >1% or billing aggregator fails post-deploy.
+*   **Action:** Immediate revert of the `main` branch to the previous commit. Since the fallback file schema was not touched, no database migration rollback is needed. The system reverts to the previous model-only behavior (accepting the risk of latency) to restore stability while the issue is investigated.
+*   **Owner:** On-call Lead (automated via pipeline if metrics breach hard limits).
+
+**Success Metric:** Zero user-visible errors during simulated model outages; latency remains under 200ms when served from cache.

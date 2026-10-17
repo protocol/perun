@@ -1,0 +1,55 @@
+**Ruling: Real-time dual-write with idempotency keys** — We will ingest Alpha emails into Central using a unique message-ID hash to prevent duplicates, rather than attempting a complex bi-directional sync. This avoids locking the shared billing database and handles the "no pause" constraint. **Cost if wrong:** Data corruption or lost attachments requiring manual forensic recovery.
+
+**Human Gates:**
+1.  **Security Lead & VP Ops:** Must approve the production deploy manifest (G8) and the final cutover script.
+2.  **Platform Team Lead:** Must accept the risk of the known flaky notification check before merging.
+
+### Delivery Plan
+
+**Lane 1: Ingestion Adapter (Builder A)**
+*   **Work:** Build a listener for Alpha's incoming mail stream. It must normalize attachments and map them to Central's thread ID using the `Message-ID` header as an idempotency key.
+*   **Constraint:** Read-only access to Alpha DB; write access to Central. No table locks.
+*   **Parallel:** Yes.
+
+**Lane 2: Reflection Service (Builder B)**
+*   **Work:** Create a webhook trigger in Central. When an agent replies, this service formats and sends the notification back to the original sender via the Alpha gateway interface.
+*   **Constraint:** Must handle cases where the Alpha ticket ID is missing (fallback to email thread matching).
+*   **Parallel:** Yes (independent code path from Lane 1).
+
+**Lane 3: Migration Script & Data Integrity (Builder C)**
+*   **Work:** Write a one-time historical migration script to move open cases from Alpha to Central. It must preserve editability immediately upon transfer.
+*   **Constraint:** Must run without locking shared billing tables (use row-level locking or batched streaming).
+*   **Serialization:** Must run *after* Lane 1 is verified in staging to ensure new incoming mail doesn't conflict with historical data movement.
+
+**Lane 4: Independent QA (QA Engineer)**
+*   **Work:** Verify duplicate prevention and attachment integrity.
+*   **Constraint:** Since staging lacks the legacy gateway, QA must use recorded production traffic replays or a mocked gateway service that simulates the Alpha protocol. Unit tests alone are insufficient for the UI/Email flow.
+*   **Gate:** G5 Verify. Must produce a receipt showing a round-trip email (Alpha → Central → Alpha Notification) with attachments intact.
+
+**Lane 5: Security Review (Security Lead)**
+*   **Work:** Audit the new ingestion endpoint for injection risks and verify that the reflection service cannot be abused to spam external users.
+*   **Gate:** G6 Review. Independent of Builders A, B, and C.
+
+### Gates & Checks
+
+*   **G1 Spec:** Pin base SHA. Explicitly document the idempotency strategy and the "no table lock" migration approach.
+*   **G4 Implement:** Each builder commits to a separate worktree. Tests included with code.
+*   **G5 Verify:**
+    *   Run CI on the exact merge candidate SHA.
+    *   **Flake Handling:** The known 15% flaky notification check will be marked as "non-blocking" for this merge only, provided Lane 4's manual replay evidence passes.
+    *   **Cost Control:** Run the expensive CI pipeline only once per candidate SHA. Do not re-run on minor comment fixes; use local linting instead.
+*   **G6 Review:** Security Lead and Platform Lead review the diff. Builder A cannot review Builder B's code if they share logic, but peer review is allowed for non-critical paths. Security must be independent.
+*   **G7 Integrate:** Merge into the integration branch. Re-run the full CI suite on the final integrated SHA to catch cross-lane conflicts.
+
+### Landing Strategy
+
+1.  **Preparation:** Deploy Lanes 1 and 2 to a staging environment with the mocked gateway. Run the historical migration (Lane 3) against a production snapshot to verify speed and lock behavior.
+2.  **Cutover (Human Gated):**
+    *   Enable Lane 1 (Ingestion) in production.
+    *   Run Lane 3 (Migration) for historical data.
+    *   Enable Lane 2 (Reflection).
+3.  **Verification (G9):** Monitor the first 50 live transactions. Confirm no duplicates and successful sender notifications.
+4.  **Rollback:** If duplicates appear or attachments fail, immediately disable Lane 1 and revert the deployment. The legacy system remains the source of truth until re-enabled.
+5.  **Completion:** Once G9 passes for 24 hours, the ticket is closed. The legacy portal is then marked read-only.
+
+**Note:** No work begins until the "no table lock" migration strategy is explicitly approved by the Database Administrator (implicit in Platform Team sign-off).

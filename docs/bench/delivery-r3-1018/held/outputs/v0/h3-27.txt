@@ -1,0 +1,57 @@
+### Delivery Plan: Loyalty Tier Backfill
+
+**Objective:** Populate `loyalty_tier` for 200M rows without locking or performance degradation.
+**Constraints:** No table locks, batched execution, DBA approval >1M rows, CI budget <45m.
+
+#### 1. Lanes & Serialization
+
+*   **Lane A: Strategy & Scripting (Builder)**
+    *   **Work:** Draft the backfill script using cursor-based pagination (no `OFFSET`), explicit `LIMIT` (e.g., 5,000 rows), and `pg_sleep` or application-side delay. Logic must calculate 3-year spend and map to tiers. Include a dry-run mode that logs calculated values without writing.
+    *   **Parallelism:** Can run concurrently with Lane B.
+    *   **Output:** `scripts/backfill_loyalty_tier.py`, dry-run report.
+
+*   **Lane B: Verification Harness (QA)**
+    *   **Work:** Create a sampling script to compare backfilled values against analytics dashboard estimates for random batches. Define the "match" tolerance threshold.
+    *   **Parallelism:** Runs after Lane A produces the script (to understand logic), but before execution.
+    *   **Output:** `tests/verify_loyalty_backfill.py`, acceptance criteria doc.
+
+*   **Lane C: Execution & Monitoring (Operator)**
+    *   **Work:** Execute the script in the production window. Monitor replication lag on analytics nodes and checkout latency. Handle the DBA approval workflow for the aggregate volume.
+    *   **Serialization:** **Must wait** for Lane A (script ready) and Lane B (verification logic ready). Must pause between batches if replication lag exceeds threshold.
+    *   **Output:** Execution logs, replication lag metrics, final row count.
+
+#### 2. Gates & Checks
+
+*   **G1 Spec (Conductor):** Define batch size, delay duration, and exact spend-to-tier mapping. Confirm "no downtime" means <5% latency increase.
+*   **G3 Design (Security/DBA):** Review script for lock acquisition (`ACCESS SHARE` only) and transaction scope. **Human Gate:** Jane Smith must approve the write operation via the governance portal before Lane C starts.
+*   **G4 Implement (Builder):** Commit script with dry-run capability. Unit test the tier calculation logic locally.
+*   **G5 Verify (QA):**
+    *   **Dry Run:** Execute script in dry-run mode on a production read-replica. Compare 1,000 sampled rows against analytics dashboard.
+    *   **Load Test:** Run a single batch on a non-critical shard (if available) or during lowest traffic to measure overhead.
+    *   **Condition:** Replication lag must remain stable; checkout P99 latency must not spike.
+*   **G6 Review (Independent):**
+    *   **Reviewer:** Senior Engineer (not the Builder).
+    *   **Focus:** Batch logic, error handling (resume from checkpoint), and safety guards (max rows per transaction).
+    *   **Flake Handling:** If the schema migration null-check flares, manually retry the check only; do not bypass.
+
+#### 3. Landing & Rollback
+
+*   **Integration:** The script lives in `scripts/`; no schema change is needed (column exists).
+*   **Human Decision:**
+    *   Jane Smith's approval in the governance portal (mandatory before >1M rows).
+    *   Go/No-Go decision after the first 10 batches based on live metrics.
+*   **Execution Strategy:**
+    *   Run during off-peak hours if possible, though designed for business hours.
+    *   Process in chunks of 5,000 rows with a 200ms delay.
+    *   Checkpoint progress in a separate tracking table to allow safe resumption.
+*   **Rollback:**
+    *   **Immediate Stop:** Kill the script process.
+    *   **Data Reversal:** Since deleting the column is prohibited, rollback means setting `loyalty_tier` back to `NULL` for affected rows if data corruption is detected. A secondary cleanup script will be prepared for this specific reversal.
+    *   **Condition:** If replication lag spikes >10s or checkout errors rise >1%, halt immediately.
+
+#### 4. Completion Criteria
+
+*   200M rows updated with non-null values.
+*   Sampling verification shows <0.1% deviation from analytics estimates.
+*   Zero downtime incidents reported during execution.
+*   CI validation job completes under 45 minutes (split validation into smaller jobs if necessary to avoid budget caps).

@@ -1,0 +1,62 @@
+**Delivery Plan: Wiki Migration & Link Remediation**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Legacy wiki DB deletion in 10 days.
+*   **Gate:** Navigation manifest requires two-person approval.
+*   **Cost/Time:** CI is 22 mins; avoid redundant runs. Staging lags production by 4 hours (manual cache purge).
+*   **Risk:** Sitemap generator flakes >500 files; deep links must not break for on-call.
+*   **Deadline:** Quarterly audit next Tuesday.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Content Extraction & Mapping (Builder)**
+    *   **Work:** Dump read-only wiki DB; generate a canonical URL mapping file (`old_url` → `new_path`). Validate 100% coverage of the 40+ external systems.
+    *   **Parallelism:** Can run immediately, independent of repo state.
+    *   **Output:** `mapping.csv` and raw markdown files.
+
+2.  **Lane B: Repository Scaffolding & Redirect Logic (Builder)**
+    *   **Work:** Implement server-side redirect rules (or static redirect pages) based on Lane A's map. Update navigation manifest stub.
+    *   **Serialization:** Must wait for Lane A's `mapping.csv` to be finalized.
+    *   **Constraint:** Do not touch the navigation manifest final state yet to avoid triggering the 2-person approval gate prematurely.
+
+3.  **Lane C: Independent Verification (QA)**
+    *   **Work:** Script to crawl the 40+ known external link sources against the *staging* environment. Verify search index updates post-build.
+    *   **Serialization:** Waits for Lane B's integration in Staging.
+    *   **Specific Check:** Force-trigger sitemap generation; if >500 files, verify retry logic or manual intervention path.
+
+**Gates & Checks**
+
+*   **G1 Spec (Now):** Freeze the URL mapping. Any URL not in the map is out of scope.
+*   **G2 Plan:** Confirm CI trigger strategy. Batch commits to ensure only one full CI run per logical phase to save credits.
+*   **G4 Implement:**
+    *   Commit content (Lane A) and redirect logic (Lane B) to a feature branch.
+    *   **Check:** Run local link checker before push.
+*   **G5 Verify (Staging):**
+    *   Merge to staging branch.
+    *   **Wait:** 4-hour lag + manual cache purge by Infra.
+    *   **Action:** QA runs link integrity scan on Staging URL.
+    *   **Flake Handling:** If sitemap fails, document the manual retry command; do not re-run CI automatically.
+*   **G6 Review:**
+    *   **Security/Content:** Independent review of redirect rules (no open redirects).
+    *   **Navigation Manifest:** Trigger the **two-person approval** gate explicitly here.
+*   **G7 Integrate:** Merge to production branch.
+
+**Landing & Human Decisions**
+
+*   **Human Approval 1 (Infra):** Request immediate cache purge for Staging once G5 ready (to compress the 4-hour lag).
+*   **Human Approval 2 (Approvers):** Two designated approvers must sign off on the Navigation Manifest change (G6).
+*   **Human Approval 3 (Release):** Owner authorizes production merge after Staging verification receipts are attached.
+*   **Rollback:** Revert the production merge commit. Since the wiki DB is read-only, the old site remains live until the DB deletion date, providing a natural fallback window.
+
+**Execution Rhythm**
+1.  Generate Map (Lane A).
+2.  Build Redirects (Lane B).
+3.  Push to Staging → Wait for Cache Purge → Verify Links (Lane C).
+4.  Secure 2nd Approver for Manifest.
+5.  Merge to Production.
+6.  Verify Production Search Index.
+
+**Risk Mitigation**
+*   **CI Cost:** Squash all content commits into one before the first CI trigger. Only re-run if G5 fails.
+*   **Sitemap Flake:** Prepare the manual retry script in advance; do not rely on auto-retry.
+*   **Audit Deadline:** If Staging verification fails, cut scope to critical on-call paths only, deferring non-essential pages to a follow-up ticket.

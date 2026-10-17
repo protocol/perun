@@ -1,0 +1,39 @@
+### Delivery Plan: CSP Reporting Enablement
+
+#### 1. Work Lanes & Parallelization
+*   **Lane A (Configuration Engineering):** Draft the `Content-Security-Policy-Report-Only` header. Define the `report-uri` pointing to the centralized dashboard. Ensure the policy explicitly allows all current sources (`default-src *`) to guarantee zero blocking while capturing violations.
+*   **Lane B (Endpoint Verification):** Verify the centralized monitoring dashboard's ingestion endpoint capacity. Confirm it can accept high-volume POST requests without latency spikes. No code changes here; purely capacity validation.
+*   **Lane C (Observability & Analysis):** Prepare the log aggregation query to filter CSP violation reports by source domain. Draft the script to summarize unique third-party domains observed over a 48-hour window.
+
+*Parallel Execution:* Lanes A, B, and C run simultaneously. Lane A is dependent only on the repo structure; Lane B on network access; Lane C on log tool access.
+
+#### 2. Gates & Checks
+*   **Gate 1: Config Freeze Check:** Before modifying the shared configuration file, verify the current time is outside business hours to avoid lock contention. If within hours, pause Lane A until the window closes.
+*   **Gate 2: Staging Validation:** Deploy the candidate configuration to the **Staging** cluster.
+    *   *Trigger:* Manual approval from Lead Architect.
+    *   *Check:* Wait for the 15-minute cold start. Verify the header is present in HTTP responses.
+    *   *Constraint:* Do **not** run the full CI suite with external browser rendering to save costs. Rely on a lightweight smoke test checking header presence only. Ignore any analytics module errors during this check due to the known low-memory flakiness.
+*   **Gate 3: Data Flow Verification:** Confirm violation reports from Staging are arriving at the dashboard. If no data flows after synthetic testing, halt progression.
+
+#### 3. Review Process
+*   **Independent Reviewer:** The Security Officer (distinct from the Lead Architect who approved staging).
+*   **Review Scope:**
+    1.  Confirm the policy mode is strictly `Report-Only` (no `Content-Security-Policy` header present).
+    2.  Verify the `report-uri` matches the verified endpoint from Lane B.
+    3.  Ensure no restrictive directives (e.g., `script-src 'self'`) are accidentally included.
+*   **Timing:** Review occurs on the specific Git revision tagged `csp-reporting-staging-verified` after Gate 2 passes but before Production deployment.
+
+#### 4. Landing Strategy
+*   **Deployment Window:** Non-business hours (to bypass config lock) and low-traffic period (to monitor initial volume).
+*   **Activation:** Merge the approved revision to `main`. Trigger the production deployment pipeline.
+*   **Data Collection Period:** Once deployed, run the collection script (Lane C) for exactly 48 hours.
+*   **Human Decision Points:**
+    1.  **Go/No-Go for Production:** Requires explicit sign-off from both Lead Architect and Security Officer after Staging validation.
+    2.  **Enforcement Transition:** The decision to switch from `Report-Only` to enforcing mode based on the 48-hour summary is a separate future ticket, not part of this delivery.
+*   **Rollback Protocol:**
+    *   *Trigger:* If page load latency increases by >5% or checkout errors spike.
+    *   *Action:* Immediately revert the Git commit and redeploy.
+    *   *Contingency:* If the config is locked or redeployment fails, execute the manual database rollback. Note: This takes up to 2 hours; communicate this ETA to stakeholders immediately upon trigger.
+
+#### 5. Final Deliverable
+A merged configuration enabling report-only logging and a generated summary report listing unique third-party script domains detected during the 48-hour production window.

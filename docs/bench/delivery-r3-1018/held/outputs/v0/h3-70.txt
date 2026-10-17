@@ -1,0 +1,49 @@
+### Delivery Plan: Error Budget Burn Auto-Pause
+
+**Objective:** Enforce an absolute deployment halt when the weekly error budget is consumed, with a secure, audited override path.
+
+#### 1. Lanes & Serialization
+Work is split into three lanes. Lanes 1 and 2 run in parallel; Lane 3 is strictly serialized after them.
+
+*   **Lane A (Logic & Enforcement):** Implement the budget consumption check and the hard "pause" signal within the Gatekeeper service. This lane owns the logic that blocks promotion to the 'Gold' environment.
+    *   *Constraint:* Must not modify the SRE-owned shared config file to avoid the 48-hour security review. Logic resides entirely within Gatekeeper.
+*   **Lane B (Override & Audit):** Build the override interface requiring identity, timestamp, and mandatory justification. Implement the writer for the append-only audit log.
+    *   *Constraint:* All testing against the audit log must happen in the sandbox environment first. No test entries in production.
+*   **Lane C (Integration & Policy):** Update the deployment policy documentation and the specific digital signature workflow to recognize the new "Auto-Pause" state versus an "Override Active" state.
+    *   *Dependency:* Starts only after Lanes A and B are verified. It integrates the new signals into the existing two-signature approval flow.
+
+#### 2. Gates & Checks
+Every gate runs on an exact, immutable SHA. No gate passes without evidence.
+
+*   **G1 Spec Freeze:** Define the exact mathematical formula for "budget consumed" and the JSON schema for the audit log entry. Pin base SHA.
+*   **G3 Design Review:** Verify Lane A does not touch the SRE config file. Verify Lane B's audit schema matches compliance requirements.
+*   **G4 Implementation:**
+    *   Lane A: Unit tests for budget calculation edge cases (e.g., exactly 0.00 remaining).
+    *   Lane B: Sandbox integration tests proving audit logs are written correctly and are immutable.
+*   **G5 Verification (Critical):**
+    *   **Simulation:** Run a full end-to-end simulation in the sandbox where the budget is artificially set to "exhausted."
+    *   **Proof:** Demonstrate a deployment attempt is blocked by Gatekeeper.
+    *   **Override Test:** Execute the override path with a test identity and justification; verify the log entry exists and the deployment proceeds.
+    *   **Cost Guard:** Ensure no redundant CI runs occur during the block. The 55-minute ledger build must not trigger if Gatekeeper says "paused."
+*   **G6 Independent Review:**
+    *   **Security Review:** Independent audit of the override mechanism (authZ checks) and log integrity.
+    *   **SRE Review:** Confirm the SRE config file remains untouched.
+
+#### 3. Review Strategy
+*   **Builder:** Implements Lanes A and B.
+*   **Reviewer 1 (Security):** Reviews Lane B (override/auth) and the audit log schema. Must be independent of the Builder.
+*   **Reviewer 2 (SRE Lead):** Reviews Lane A to confirm no forbidden config changes and validates the budget logic.
+*   **Compliance Officer:** Reviews the audit log output format and the "mandatory justification" enforcement.
+
+#### 4. Landing & Human Gates
+*   **Merge Train:** Lanes A and B merge to an integration branch only after G6 passes. Lane C merges subsequently.
+*   **Human Decision (G8 Release):**
+    *   **Authorization:** A senior leader must explicitly approve the activation of the auto-pause feature.
+    *   **Rollback Plan:** The feature must be behind a feature flag. If the pause triggers falsely, the rollback is immediate: flip the flag to "disabled" via the existing emergency change process.
+    *   **Deployment:** Deploy to Gatekeeper service. Do not deploy during a high-traffic window.
+*   **Post-Deploy (G9):**
+    *   Verify Gatekeeper is running the new SHA.
+    *   Confirm the audit log system is receiving heartbeats (not test entries).
+    *   **Validation:** Do not wait for a real budget burn. Perform a controlled "fire drill" in a staging replica if possible, or verify the logic via code inspection of the running binary if replication is impossible.
+
+**Risk Mitigation:** The primary risk is a false positive blocking critical fixes. The override path is the mitigation; its reliability is paramount. The 48-hour review delay is avoided by isolating logic from the shared config.

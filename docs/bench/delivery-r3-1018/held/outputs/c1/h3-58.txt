@@ -1,0 +1,56 @@
+### Delivery Plan: Auto-Rollback for Slow-Warmup Service
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Database migrations cannot be rolled back; logic must revert *only* application code.
+*   **Human Gate:** Production deploys require Site Reliability Lead (Dave Miller) approval. Auto-rollback bypasses this *only* for the revert action, not the initial deploy.
+*   **Cost Constraint:** CI runners cost 40 credits/min; no inefficient retry loops allowed.
+*   **Flake Risk:** Network latency suite is flaky; must not trigger rollback.
+*   **Environment:** Staging lacks traffic to reproduce the cache warm-up bug; local testing is unreliable.
+
+#### Lanes (Work Decomposition)
+
+1.  **Lane A: Warmth Verification Logic (Builder)**
+    *   **Work:** Implement a dedicated health-check script targeting the specific warm-up endpoint. It must poll once per minute for 10 minutes max, explicitly ignoring the flaky network latency metric.
+    *   **Parallelism:** Can run parallel to Lane B.
+    *   **Serialization:** Must complete before Lane C integration.
+
+2.  **Lane B: Rollback Orchestrator (Builder)**
+    *   **Work:** Create the rollback trigger mechanism. It must detect a "Not Ready" state after the 10-minute window and execute a code-only revert to the previous stable SHA. It must strictly exclude database migration scripts from the revert process.
+    *   **Parallelism:** Can run parallel to Lane A.
+    *   **Serialization:** Must be integrated with Lane A's output before G5.
+
+3.  **Lane C: Pipeline Integration & Cost Guard (Builder)**
+    *   **Work:** Wire Lanes A and B into the monolithic CI pipeline. Implement a hard stop to prevent retry loops that exceed the 10-minute window or waste credits. Ensure the "Ready" state gates the "Stable" mark.
+    *   **Dependency:** Requires completed code from A and B.
+
+4.  **Lane D: Independent Verification (QA)**
+    *   **Work:** Since Staging cannot reproduce the cache bug, QA will verify the *logic paths* via unit tests and a controlled simulation of the warm-up endpoint returning failure. They must prove the rollback triggers *only* on warm-up failure and *not* on network latency flakiness.
+    *   **Independence:** Independent of the Builder; reviews exact SHA from Lane C.
+
+#### Gates & Checks
+
+*   **G2 (Plan):** Confirm the 10-minute timeout and "code-only" revert logic are explicitly defined in the spec. Verify the flaky metric is excluded.
+*   **G4 (Implement):** Code committed to isolated worktrees. Unit tests included for the warm-up parser and rollback trigger.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from Lane C.
+    *   **Check:** Run unit tests simulating "Slow Warmup" (expect rollback) and "Flaky Network" (expect success).
+    *   **Constraint:** No long-running integration loops in CI to save credits. Verification is logic-based, not time-based waiting in CI.
+*   **G6 (Review):**
+    *   **Reviewer:** Independent Senior Engineer (not the Builder).
+    *   **Focus:** Verify the database migration exclusion logic is foolproof. Confirm the flaky metric filter is robust.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected unit tests on the merge SHA.
+
+#### Landing & Human Decisions
+
+*   **Human Approval (G8):** The *initial* deployment of this new logic to Production requires explicit approval from **Dave Miller**.
+*   **Auto-Execution:** Once deployed, the *rollback action* itself is automatic and bypasses human approval if the 10-minute warm-up fails.
+*   **Merge Strategy:** Single PR containing all lanes. No merge train needed for this scope.
+*   **Rollback Plan:** If the new auto-rollback logic itself causes issues, manual revert of the pipeline configuration to the previous commit.
+
+#### Risks & Mitigation
+*   **Risk:** False positive rollback due to transient endpoint blip.
+    *   **Mitigation:** Script requires consecutive failures or a sustained "not ready" state over the 10-minute window, not a single 500 error.
+*   **Risk:** CI Cost overrun.
+    *   **Mitigation:** Tests simulate time passage; no real 10-minute waits in CI.
+
+**Next Step:** Await approval to proceed to G2 Spec finalization.

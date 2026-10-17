@@ -1,0 +1,67 @@
+**Delivery Plan: Monorepo ORM v4.0 Migration**
+
+**Binding Facts & Constraints**
+*   **Scope:** 24 services; shared config + billing/user-profile refactors.
+*   **Hard Gates:** Two senior architect approvals for DB migration (irreversible); Security review on staging by Friday; Production freeze Wednesdays.
+*   **Cost/Risk:** CI is $40/50min (lint failures charged back); known flaky payment gateway check; zero latency regression allowed.
+*   **Appetite:** Tight deadline (Security review Friday).
+
+**Lanes & Serialization**
+Work is split into four lanes. Lanes 1–3 run in parallel; Lane 4 is strictly serialized after them.
+
+1.  **Lane A: Shared Configuration & Dependency Lock**
+    *   **Work:** Update root `package.json`/`go.mod` and shared config files to ORM v4.0.
+    *   **Writer:** Builder A.
+    *   **Output:** Commit `SHA-A` with locked versions.
+    *   **Gate:** Lint must pass locally before push to avoid CI chargeback.
+
+2.  **Lane B: Billing Module Refactor**
+    *   **Work:** Refactor query builders in billing to v4.0 syntax.
+    *   **Writer:** Builder B (isolated worktree based on `SHA-A`).
+    *   **Output:** Commit `SHA-B`.
+
+3.  **Lane C: User-Profile Module Refactor**
+    *   **Work:** Refactor query builders in user-profile to v4.0 syntax.
+    *   **Writer:** Builder C (isolated worktree based on `SHA-A`).
+    *   **Output:** Commit `SHA-C`.
+
+4.  **Lane D: Integration & Verification (Serialized)**
+    *   **Work:** Merge `SHA-A`, `SHA-B`, `SHA-C` into a temporary integration branch. Run full integration suite and performance benchmarks.
+    *   **Writer:** QA Lead (only writer for this lane).
+    *   **Constraint:** Must execute against the exact merged SHA (`SHA-Int`).
+    *   **Special Handling:** The flaky payment gateway check requires manual evidence attachment; automation alone is insufficient.
+
+**Gates & Checks**
+
+*   **G1 (Spec Freeze):** Confirm test data sets are immutable. Any test failure implying data change is a blocker.
+*   **G4 (Implementation):** Each builder runs local lint and unit tests. **Hard Stop:** No push if local lint fails.
+*   **G5 (Verification):**
+    *   **Functional:** Full integration suite on `SHA-Int`. Flaky payment check marked `MANUAL_VERIFY` with attached logs.
+    *   **Performance:** Benchmark transaction latency on `SHA-Int` vs. baseline. Any increase >0% triggers immediate rollback of this lane.
+*   **G6 (Review):**
+    *   **Code:** Independent review by Platform Guild members (not the Builders).
+    *   **Security:** Preliminary scan on `SHA-Int`.
+*   **G7 (Integration):** Merge to `staging` branch.
+*   **G8 (Release Approval):** **Human Gate.** Two senior architects must approve the irreversible DB migration script execution on staging.
+
+**Review Strategy**
+*   **Independence:** Builder A, B, and C cannot review each other's code. Reviewers must be from the Platform Guild roster, excluding the three builders.
+*   **Focus:** Reviewers check specifically for v4.0 syntax correctness and absence of hidden data assumptions.
+
+**Landing & Rollback**
+
+*   **Merge Train:**
+    1.  Land Lanes A, B, C to a feature branch.
+    2.  Once G5/G6 pass on `SHA-Int`, merge to `staging`.
+    3.  **Timing:** Must complete by Thursday EOD to meet Friday Security review. Avoid Wednesday (freeze).
+*   **Human Decisions Required:**
+    1.  Approval of the DB migration script execution (2 Architects).
+    2.  Acceptance of the flaky payment gateway manual verification evidence.
+    3.  Final "Go" for Security team handoff.
+*   **Rollback Plan:**
+    *   **Code:** Revert `staging` to previous SHA immediately if latency regression or integration failure occurs.
+    *   **Database:** Since the migration script is irreversible, a failed migration requires a full restore from the pre-migration backup. This backup must be verified *before* the migration starts.
+
+**Cost Control**
+*   Local linting is mandatory to prevent $40 CI waste.
+*   If the flaky check fails twice, the lane escalates to manual triage rather than re-running CI.

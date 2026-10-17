@@ -1,0 +1,70 @@
+### Delivery Plan: Admin Console Read-Only Mode
+
+**Binding Facts & Constraints**
+*   **Locked Scope:** Database schema and audit logging service are strictly read-only; no changes allowed.
+*   **Critical Window:** Migration starts next Tuesday; read-only mode must last exactly four hours.
+*   **Trigger:** Manual toggle of a config flag in a replicated key-value store (5-minute propagation delay).
+*   **Health Constraint:** System must report "healthy" despite blocking writes; any other code triggers irreversible automated rollback.
+*   **Approval Gate:** Dual approval required (Shift Lead + Security Officer) via change management portal.
+*   **CI Cost:** 45-minute pipeline; minimize builds. Ignore known flaky staging network check if unit tests pass.
+
+---
+
+#### Lanes (Work Decomposition)
+
+**Lane 1: Logic Implementation (Builder)**
+*   **Work:** Implement the read-only guard in the Admin Console API layer. Intercept save/delete/update actions; return a specific `200 OK` with a status message indicating "Read-Only Mode Active" to satisfy health checks, while preventing data mutation.
+*   **Constraint:** Must not touch DB schema or audit logs.
+*   **Parallelism:** Can run immediately.
+
+**Lane 2: Health Verification & Propagation Simulation (QA)**
+*   **Work:** Create a test harness that simulates the 5-minute config propagation delay. Verify that during the delay, the system does not crash or return 5xx errors. Confirm health endpoint returns success code while write actions are blocked.
+*   **Serialization:** Depends on Lane 1's initial logic draft but runs in a separate worktree.
+
+**Lane 3: Runbook & Rollback Prep (Conductor/Release)**
+*   **Work:** Draft the exact manual steps for the Shift Lead and Security Officer. Define the "Go/No-Go" criteria based on the 5-minute propagation window. Document the irreversible nature of the migration start relative to the deployment.
+*   **Serialization:** Independent, but must be finalized before G6 Review.
+
+---
+
+#### Gates & Checks
+
+*   **G2 Plan (Now):** Confirm lanes above. Set token budget for Lane 1 (implementation) and Lane 2 (simulation).
+*   **G4 Implement:** Builder commits to a dedicated worktree. Base SHA pinned to current `main`.
+*   **G5 Verify (Exact Revision):**
+    *   Run unit tests (mandatory).
+    *   Run integration test simulating the config toggle.
+    *   **Condition:** Health endpoint must return `200 OK`. Write attempts must fail gracefully without 5xx errors.
+    *   **Flake Handling:** If the staging network check fails, verify unit tests passed; if so, mark network check as known flake and proceed.
+*   **G6 Review (Independent):**
+    *   **Reviewer:** Security Officer (independent of Builder).
+    *   **Scope:** Verify no schema/audit changes. Confirm health logic prevents rollback trigger.
+    *   **Base:** Exact SHA from G5.
+*   **G7 Integrate:** Merge to release branch only after G6 sign-off. One integration build (45 mins).
+
+---
+
+#### Review Strategy
+
+*   **Builder:** Implements logic. Cannot approve own work.
+*   **Security Officer:** Reviews code for safety (no schema touches) and health check compliance.
+*   **Shift Lead:** Reviews operational runbook and timing synchronization.
+*   **Independence:** Security Officer reviews the code; Shift Lead reviews the process. Neither is the Builder.
+
+---
+
+#### Landing & Human Gates
+
+1.  **Pre-Deployment:** Builder pushes to release branch. CI runs (45 mins).
+2.  **Human Gate 1 (Approval):** Shift Lead AND Security Officer must approve in the change management portal. No merge without both.
+3.  **Deployment:** Deploy to production.
+4.  **Human Gate 2 (Trigger):** Operations team manually toggles the config flag.
+    *   *Wait 5 minutes* for propagation.
+    *   Verify health dashboard remains green.
+    *   Verify write actions are blocked.
+5.  **Migration Window:** 4-hour window begins.
+6.  **Rollback Plan:**
+    *   **Constraint:** Reverting deployment is irreversible once migration scripts start.
+    *   **Contingency:** If health check fails *before* migration start, revert immediately. If migration has started, the read-only state must be maintained until completion; no rollback possible during data move.
+
+**Risk Mitigation:** The 5-minute propagation delay is the highest risk. The system must remain stable during this window. The health check logic is the single point of failure for automated rollback; it must be robust.

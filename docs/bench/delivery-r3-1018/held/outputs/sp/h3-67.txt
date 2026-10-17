@@ -1,0 +1,60 @@
+# Delivery Plan: PII Masking for Staging Data Snapshots
+
+## Lanes & Parallelism
+
+**Lane A: Masking Logic & Determinism (Platform Reliability)**
+*   **Work:** Develop the masking script ensuring deterministic output (same User ID → same fake value) for emails, phones, and addresses.
+*   **Constraint:** Must not alter the shared configuration file schema. The script must read existing configs without modification or write to a localized override to avoid breaking the three downstream reporting services.
+*   **Parallelism:** Can run immediately.
+
+**Lane B: Infrastructure & Timeout Mitigation (Platform Reliability)**
+*   **Work:** Optimize the nightly job execution path to stay under the 45-minute hard limit. Implement a local retry mechanism for the known flaky network check to prevent false negative terminations.
+*   **Parallelism:** Can run parallel to Lane A.
+
+**Lane C: Governance & Approval Automation (Security Lead)**
+*   **Work:** Coordinate with Marcus Thorne to pre-authorize the new masked snapshot profile or automate the approval token injection, removing the manual ticketing bottleneck for nightly runs.
+*   **Dependency:** Requires the final script hash from Lane A to whitelist the binary.
+
+## Gates & Checks
+
+**Gate 1: Schema Compatibility Check (Pre-Merge)**
+*   **Revision:** Latest `main` branch.
+*   **Action:** Run a dry-run of the masking script against a production sample in an isolated sandbox.
+*   **Check:** Verify the shared configuration file remains byte-for-byte identical (or strictly additive) to ensure downstream reports do not break.
+*   **Owner:** Senior Engineer (not the author of Lane A).
+
+**Gate 2: Performance & Determinism Audit (Staging Cluster)**
+*   **Revision:** Release Candidate (RC1).
+*   **Action:** Execute full dataset refresh.
+*   **Check 1:** Total runtime must be < 40 minutes (buffer for variance).
+*   **Check 2:** Verify determinism by hashing output for duplicate User IDs; hashes must match.
+*   **Check 3:** Confirm flaky network retry logic absorbs faults without job termination.
+*   **Owner:** QA Automation Lead.
+
+**Gate 3: Security Compliance Sign-off**
+*   **Revision:** RC1 (post-performance audit).
+*   **Action:** Marcus Thorne validates that no raw PII exists in the staging output.
+*   **Check:** Random sampling of masked fields against production source.
+*   **Owner:** Marcus Thorne (Security Lead).
+
+## Review Process
+
+*   **Code Review:** Independent review by a member of the Downstream Reporting team (to verify config safety) AND a Platform Reliability peer (to verify timeout logic). Neither reviewer may be the implementer.
+*   **Logic Review:** A separate "Red Team" engineer attempts to reverse-engineer the deterministic masking to ensure it cannot be trivially undone.
+*   **Final Gate:** The Security Lead performs the final compliance check; this is a human decision gate, not automated.
+
+## Landing Strategy
+
+**Merge Window:**
+*   Target merge: 48 hours before the next scheduled nightly run to allow for a "dry-run" observation period.
+*   Deadline: Must be live by the 10th to satisfy the 15th audit requirement.
+
+**Rollback Plan:**
+*   **Trigger:** If runtime exceeds 44 minutes, if downstream reports fail validation, or if deterministic masking fails verification.
+*   **Action:** Immediate revert of the `Nebula-Flow` repository to the previous commit.
+*   **Contingency:** Re-enable manual approval workflow and pause automated snapshots until a hotfix is ready. Manual snapshots with redacted data may be used as a temporary stopgap if the audit is imminent.
+
+**Human Decisions Required:**
+1.  **Marcus Thorne:** Final sign-off on the masking algorithm's irreversibility.
+2.  **Downstream Service Owners:** Confirmation that the config file handling did not break their reports during the staging trial.
+3.  **Release Manager:** Authorization to deploy to the cost-limited cluster given the proximity to the 45-minute penalty threshold.

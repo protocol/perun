@@ -1,0 +1,59 @@
+### Delivery Plan: Rotate Field Device Signing Key v2
+
+**Objective:** Implement a 48-hour dual-key validation window, transition to the new key, and ensure zero connectivity loss for field devices.
+
+#### 1. Lanes & Parallelism
+*Work is isolated in separate worktrees. One writer per worktree.*
+
+*   **Lane A: Cryptographic Implementation (Builder)**
+    *   **Task:** Modify `auth-service` token validation logic to accept both Legacy and New keys. Implement the 48-hour time-boxed rejection logic for the Legacy key.
+    *   **Constraint:** Must not alter the HSM sync mechanism; logic must read from the shared config file without triggering an auto-push.
+    *   **Parallelism:** Can run parallel to Lane B.
+
+*   **Lane B: Staging Performance & Session Verification (QA)**
+    *   **Task:** Deploy Lane A's build to Staging. Verify active sessions survive the key switch.
+    *   **Constraint:** Account for Staging hardware latency spikes; distinguish between crypto-simulation slowness and logic errors.
+    *   **Dependency:** Waits for Lane A's initial build.
+
+*   **Lane C: Runbook & Rollback Prep (Ops/Security)**
+    *   **Task:** Draft the manual HSM sync procedure and the "brick recovery" physical reset protocol. Prepare the rollback script (revert config to Legacy-only).
+    *   **Parallelism:** Can run parallel to Lane A.
+
+#### 2. Gates & Checks
+*Every check runs on an exact, immutable SHA.*
+
+*   **G0/G1 (Spec & Plan):** Confirm the 48-hour window start time and the exact cutoff timestamp logic. Define "seamless" as <1% error rate during transition.
+*   **G2 (Budget):** Cap CI credits. Run full crypto-simulation suites *only* on the Release Candidate SHA, not on every commit. Use unit tests for intermediate commits.
+*   **G3 (Design Review):** **Security Lead** must approve the dual-key logic and the hard-cutoff mechanism before implementation begins.
+*   **G4 (Implementation):** Builder commits code. Tests included for time-boundary conditions (T=0, T=47h59m, T=48h01m).
+*   **G5 (Verification):**
+    *   **Functional:** QA verifies valid tokens signed by both keys are accepted pre-cutoff.
+    *   **Session Integrity:** Verify existing active sessions (established under Legacy key) remain valid after the new key is introduced.
+    *   **Performance:** Validate latency in Staging; apply a multiplier heuristic to estimate Production performance given hardware differences.
+*   **G6 (Independent Review):**
+    *   **Code:** Senior Engineer (not the Builder) reviews the diff.
+    *   **Security:** Security Lead reviews the key handling and cutoff logic.
+    *   **Ops:** Operations Manager reviews the manual HSM sync steps.
+
+#### 3. Landing & Human Decisions
+*Merge train serialized to prevent config drift.*
+
+*   **Integration (G7):** Merge Lanes A, B, and C into a release branch. Generate one final Release Candidate SHA.
+*   **Human Gate (G8 - Mandatory):**
+    *   **Approvals Required:** Written approval from **Security Lead** AND **Operations Manager**.
+    *   **Decision Point:** Explicit confirmation of the 48-hour window start time.
+    *   **Action:** Operations Manager manually syncs the new key config to the HSM. *No automated push.*
+*   **Deployment:** Deploy the approved SHA to Production.
+*   **Production Verify (G9):** Monitor error rates and connection drops for the first 1 hour. Verify the system accepts both keys.
+*   **Automatic Cutoff:** The system automatically rejects the Legacy key after 48 hours.
+*   **Rollback:** If critical failure occurs before the 48-hour mark:
+    1.  Revert the HSM config to Legacy-only (Manual).
+    2.  Redeploy the previous stable version of `auth-service`.
+    3.  Initiate physical reset protocol only if HSM state is corrupted.
+
+#### 4. Risk Mitigation
+*   **Staging Latency:** Do not fail the gate solely on Staging latency spikes; correlate with CPU usage to isolate crypto-simulation overhead.
+*   **CI Costs:** Restrict heavy regression suites to the final Release Candidate SHA only.
+*   **HSM Brick Risk:** The manual sync step is the single point of failure. The Runbook (Lane C) must include a "dry-run" validation of the config file format before the actual sync.
+
+**Status:** Ready for G0 Spec refinement upon owner confirmation of the maintenance window start time.

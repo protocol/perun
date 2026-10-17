@@ -1,0 +1,52 @@
+**Delivery Plan: Core Module Reorganization**
+
+**Binding Facts & Constraints**
+*   **Locked Approver:** Jane Smith (Lead Architect) must approve root structure changes.
+*   **Critical Dependency:** `global-map.json` updates are mandatory before any deploy; failure causes production outage.
+*   **Collision Risk:** Three long-lived feature branches depend on current structure; 40+ open PRs exist.
+*   **CI Constraint:** 50-minute pipeline; flaky dependency checker on >5 moved dirs; financial penalty for failed builds.
+*   **Scope:** Move legacy to `legacy-archive`, refactor imports, preserve build/tests.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Impact Analysis & Branch Coordination (Serial, Pre-Work)**
+    *   **Actor:** Product Analyst + Conductor.
+    *   **Work:** Identify exact files in the three dependent feature branches. Draft migration guide for branch owners.
+    *   **Gate:** Confirmation from all three branch owners on the migration plan (G2). No code moves until owners acknowledge.
+
+2.  **Lane B: Configuration & Mapping (Serial, First Code Change)**
+    *   **Actor:** Builder 1 (Config Specialist).
+    *   **Work:** Update `global-map.json` to reflect new `legacy-archive` paths. Update the three downstream deployment scripts referencing this file.
+    *   **Gate:** Dry-run of deployment scripts against a staging environment using the new map (G5). **Hard Block:** No directory moves until this lane is verified green.
+
+3.  **Lane C: Directory Refactoring (Parallelizable by Sub-domain, then Serialized)**
+    *   **Actor:** Builder 2, 3, 4 (Implementation).
+    *   **Work:** Move files to `legacy-archive`. Refactor import paths in `core-engine`.
+    *   **Constraint:** Batch moves in groups of ≤5 subdirectories to avoid the flaky dependency checker.
+    *   **Gate:** Unit tests and local build pass for each batch (G5).
+
+4.  **Lane D: Integration & Verification (Serial, Final)**
+    *   **Actor:** QA (Independent).
+    *   **Work:** Full CI run on the integrated SHA. Verify `global-map.json` consistency. Validate no regressions in the three feature branches (via merge simulation).
+    *   **Gate:** 100% Green CI, including the 50-minute full validation (G5/G6).
+
+**Review Strategy**
+*   **Code Review:** Builder 1's config changes reviewed by Security (supply chain/deploy script impact). Builder 2-4's refactors reviewed by a Senior Engineer *not* involved in the move (Independent of Builder).
+*   **Architecture Review:** Jane Smith reviews the final directory tree and `global-map.json` diff before merge approval (G6).
+*   **QA Verification:** QA executes the full pipeline on the exact final SHA, not just individual lane SHAs.
+
+**Landing & Merge Strategy**
+*   **Merge Train:** Due to 40+ open PRs, this change lands as a single atomic PR on a dedicated integration branch.
+*   **Human Decision:** Jane Smith approves the merge to `main` only after Lane D is green.
+*   **Branch Sync:** Once merged, Conductor notifies the three feature branch owners to rebase immediately using the provided migration guide.
+*   **Rollback Plan:**
+    *   **Trigger:** Any production alert related to `global-map.json` or import errors post-merge.
+    *   **Action:** Immediate revert of the single atomic PR. Since `global-map.json` was updated first, the revert restores both paths and maps simultaneously.
+    *   **Verification:** Automated smoke test confirms service health within 5 minutes of revert.
+
+**Risk Mitigation**
+*   **Flake Avoidance:** Lane C explicitly batches moves to stay under the "5 subdirectory" flake threshold.
+*   **Cost Control:** Local verification of imports before pushing to avoid 50-minute CI failures.
+*   **Collision Prevention:** Feature branch owners are engaged *before* code moves; no work starts without their acknowledgment.
+
+**Approval Required:** Jane Smith to approve the `global-map.json` schema change and the final directory structure.

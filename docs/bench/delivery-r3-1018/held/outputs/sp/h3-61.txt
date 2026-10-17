@@ -1,0 +1,33 @@
+### Delivery Plan: Wiki Migration & Link Remediation
+
+**1. Lanes & Parallelization**
+*   **Lane A (Content & Map):** Extract content from the read-only legacy database and generate the URL mapping table (Old URL → New File Path). This is purely data preparation and runs independently.
+*   **Lane B (Infrastructure):** Prepare the repository structure and navigation manifest schema. No content is added yet.
+*   **Lane C (Validation Script):** Develop a local-only script to verify the URL mapping table against the 40+ external system links. This runs locally to avoid CI costs.
+
+*Parallel Execution:* Lanes A, B, and C run simultaneously.
+*Serialization Point:* Lane D (Integration) cannot start until A, B, and C are complete and verified.
+
+**2. Gates & Checks**
+*   **Gate 1 (Pre-Commit):** Before any push, the "Validation Script" (Lane C) must run locally against the full mapping table generated in Lane A. It must confirm 100% of the 40+ hard-linked URLs resolve to valid new paths.
+*   **Gate 2 (CI Trigger):** Push occurs only once on a dedicated feature branch. This triggers the single required CI build (22 mins).
+    *   *Check:* CI must pass link integrity and static site build.
+    *   *Constraint:* If the sitemap generator flakes (known issue >500 files), the CI log is reviewed manually to confirm it was a transient flake, not a structural error, before retrying.
+*   **Gate 3 (Staging Sync):** After CI passes, wait exactly four hours for the staging environment to sync (manual cache purge dependency).
+    *   *Check:* Verify deep links on staging match the mapping table.
+
+**3. Review Process**
+*   **Independent Reviewer 1 (Content Owner):** Reviews the URL mapping table (Lane A output) against the legacy wiki structure. Focus: Accuracy of content placement.
+*   **Independent Reviewer 2 (Nav Maintainer):** Reviews the navigation manifest changes. Focus: Compliance with the two-person approval rule.
+*   **Constraint:** Reviewers must not be the same individuals who wrote the extraction script or the mapping table. Both approvals are required before the merge request is finalized.
+
+**4. Landing Strategy**
+*   **Merge Window:** Merge to main immediately after Staging verification (Gate 3) and dual approval.
+*   **Search Index:** The merge triggers the automatic search index update. A immediate spot-check by the support team lead is required to confirm index freshness.
+*   **Human Decision Point:** If the sitemap generator fails twice in CI, a human must decide to manually split the build batch or force a retry, as this blocks the audit deadline.
+*   **Rollback Plan:**
+    *   *Trigger:* If >5% of deep links fail on production or search index fails to update within 1 hour of merge.
+    *   *Action:* Revert the merge commit immediately. Since the legacy DB is read-only but still active for 10 days, the old wiki remains accessible via original URLs until the revert is deployed.
+    *   *Communication:* Alert on-call rotation that the migration is paused; original URLs remain valid.
+
+**Timeline Constraint:** All gates must clear by Monday EOD to meet the Tuesday quarterly audit. The 4-hour staging lag dictates that the final push must occur no later than Monday afternoon.

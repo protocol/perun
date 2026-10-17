@@ -1,0 +1,52 @@
+**Ruling: Dual-Write Strategy** — We will implement a dual-write mode where the dispatcher generates both v1 and v2 signatures (or v2 with a v1-compatible log hash) during the transition.
+*Why:* The ticket mandates zero downtime and cites irreversible log indexing breaks if the hash input changes abruptly. A hard switch risks breaking audit trails before the parser is updated.
+*Cost if wrong:* Permanent corruption of audit logs for the transition period, failing compliance certification despite signature validity.
+
+**Ruling: Staged Verification Window** — Integration testing with partners is strictly confined to the 02:00–05:00 UTC window.
+*Why:* The external sandbox is unavailable otherwise; attempting load tests outside this window violates the "no load testing conflicts" constraint.
+*Cost if wrong:* False negatives in validation due to sandbox contention, delaying the critical month-end deadline.
+
+### Delivery Plan
+
+**Lane 1: Crypto & Logging Core (Builder A)**
+*Work:* Implement v2 signature generation in the event dispatcher. Crucially, decouple the log hash input from the signature payload to preserve legacy log indexing, or update the log parser simultaneously within this same lane.
+*Constraint:* Must not modify the shared crypto library used by Billing (requires Finance approval). Implement v2 logic locally within `acme-events`.
+*Parallel:* Yes.
+
+**Lane 2: Feature Flag & Configuration (Builder B)**
+*Work:* Implement the feature flag to toggle between v1 and v2 schemes. Ensure the default is v1 until explicit promotion.
+*Parallel:* Yes, but must merge after Lane 1's interface is defined.
+
+**Lane 3: Partner Integration Verification (QA Lead)**
+*Work:* Execute validation scripts against the top three integrators in the staging sandbox.
+*Serialization:* Must wait for Lanes 1 & 2 to be deployed to staging. Execution restricted to 02:00–05:00 UTC.
+*Gate:* Requires signed receipts from all three partners confirming successful v2 validation.
+
+**Gates & Checks**
+*   **G2 Plan:** Finalize the dual-write hash strategy to ensure log integrity.
+*   **G4 Implement:** Code complete with unit tests for signature generation and log parsing.
+*   **G5 Verify:**
+    *   *Local:* Unit tests passing on the exact commit SHA.
+    *   *Staging:* Deploy to staging. Run regression suite (45m).
+    *   *External:* Partner validation during the 02:00–05:00 UTC window.
+*   **G6 Review:**
+    *   *Security Review:* Independent Security Officer reviews the v2 implementation and key handling.
+    *   *Architecture Review:* Lead Architect reviews the log decoupling strategy and feature flag design.
+    *   *Constraint:* Builder A cannot review their own crypto logic; Builder B cannot review the flag logic they wrote.
+
+**Landing Strategy**
+1.  **Merge Train:** Lanes 1 and 2 merge to the integration branch only after G5 local/staging checks pass.
+2.  **Human Gates (Required before G8):**
+    *   Explicit sign-off from Lead Architect (design/log safety).
+    *   Explicit sign-off from Security Officer (crypto compliance).
+    *   Confirmation of successful partner validation receipts (from Lane 3).
+3.  **Deployment:**
+    *   Deploy to Production with feature flag **OFF** (v1 active).
+    *   Enable flag for internal traffic only.
+    *   Enable flag for 5% of partners.
+    *   Global enablement only after 24h monitoring.
+4.  **Rollback:**
+    *   *Immediate:* Toggle feature flag to v1 (requires no code revert).
+    *   *Data:* If log corruption is detected, the manual database rollback is irreversible for processed states. Therefore, the "dual-write" or "log-safe" implementation in Lane 1 is the primary rollback safeguard. Code revert is a last resort due to data state risks.
+
+**Timeline:** Implementation starts immediately to allow buffer for the 02:00–05:00 UTC testing windows before the month-end deadline.

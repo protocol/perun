@@ -1,0 +1,55 @@
+**Ruling: Blue-Green Migration with Dual-Write Phase** — Chosen to satisfy zero-downtime and 30s lock constraints. Cost if wrong: Data corruption or extended checkout outage during cutover.
+
+**Ruling: Shared Library Coordination First** — The `daily-reconciliation` job and its shared library must be updated and deployed *before* the Orders table schema changes. Cost if wrong: Irreversible audit trail breakage across five services.
+
+### Delivery Plan
+
+**Lane 1: Shared Library & Downstream Consumers (Serialized First)**
+*   **Who:** Builder (Platform Team) + QA (Audit Focus).
+*   **Work:** Update the shared library to accept string IDs while maintaining backward compatibility for integer inputs. Patch `daily-reconciliation` and the legacy billing adapter to handle string outputs.
+*   **Parallelism:** None. This must merge and deploy before Lane 2 starts.
+*   **Gates:**
+    *   **G4 (Implement):** Unit tests proving the library parses both formats.
+    *   **G5 (Verify):** Run reconciliation job in staging against a snapshot with mixed ID types. Ignore flaky network checks; verify via log assertions.
+    *   **G6 (Review):** Independent review by Data Governance Officer (mandatory for audit logic).
+    *   **G8 (Release):** Human approval required from Lead Architect + Data Governance Officer.
+
+**Lane 2: Database Migration Script (Preparation)**
+*   **Who:** Builder (DB Specialist).
+*   **Work:** Write idempotent migration scripts: (1) Add `uuid_id` column, (2) Backfill existing rows, (3) Create unique index, (4) Switch default generation. No table locks >30s allowed.
+*   **Parallelism:** Can run parallel to Lane 1 coding, but cannot deploy until Lane 1 is live.
+*   **Gates:**
+    *   **G3 (Design):** ADR confirming lock-time analysis <30s on 2TB snapshot.
+    *   **G5 (Verify):** Dry-run on a cloned production snapshot measuring lock duration.
+
+**Lane 3: Orders Service Dual-Write & Cutover**
+*   **Who:** Builder (Core Commerce).
+*   **Work:** Implement dual-write (write to both `int_id` and `uuid_id`), then read-switch logic. Add UUID generation validation for all three availability zones.
+*   **Parallelism:** Starts after Lane 1 deploys and Lane 2 script is verified.
+*   **Gates:**
+    *   **G5 (Verify):** Integration test in staging verifying UUID generation across all 3 AZs. Flaky network checks marked as "non-blocking" if logs confirm DB write success.
+    *   **G6 (Review):** Independent Security review on UUID entropy and collision resistance.
+
+### Execution & Landing Strategy
+
+**Sequence:**
+1.  **Deploy Lane 1:** Update shared library and downstream jobs. Verify audit trail integrity.
+2.  **Execute Lane 2 (Schema):** Run backfill script during lowest traffic. Monitor lock times.
+3.  **Deploy Lane 3 (App):** Enable dual-write. Monitor for 24 hours.
+4.  **Cutover:** Switch reads to `uuid_id`. Deprecate `int_id` writes.
+
+**CI & Cost Control:**
+*   **Pipeline:** Run full 45-minute CI only on the final integration SHA (G7). Use unit/fast-integration suites for intermediate lane commits to save $120/run.
+*   **Exact Revision:** All QA/Security gates must run against the specific SHA intended for production, not a moving branch head.
+
+**Human Gates (Hard Stops):**
+1.  **Lane 1 Deploy:** Requires dual approval (Lead Architect + Data Governance Officer) due to shared library risk.
+2.  **Schema Lock Execution:** Requires Lead Architect sign-off on the lock-time analysis.
+3.  **Final Cutover:** Requires dual approval to flip the read-switch and enable traffic.
+
+**Rollback Plan:**
+*   **Pre-Cutover:** Revert application deploy; database remains backward compatible (dual-write).
+*   **Post-Cutover:** Immediate flip of feature flag back to `int_id` reads. If data corruption occurred, restore from pre-migration snapshot (last resort).
+
+**Verification Receipt:**
+*   G9 Production Verify: Monitor checkout success rates and audit job completion for 48 hours post-cutover. Any spike in errors triggers immediate rollback.

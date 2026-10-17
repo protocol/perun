@@ -1,0 +1,57 @@
+**Delivery Plan: Atlas Load Balancer TLS 1.3 Upgrade**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Reverting triggers a 1-hour global deployment freeze; errors during business hours are catastrophic.
+*   **Approvers:** Merge requires Senior Network Architect (Jane Smith). Production flip requires dual sign-off (Security Lead + Platform Director).
+*   **Cost/Time:** CI is 45 mins/$200 per run; `certificate-validation` is flaky.
+*   **Window:** Tuesday maintenance window; blue-green swap mandatory.
+
+**Lanes & Serialization**
+Work splits into three serialized phases with parallel internal verification.
+
+1.  **Lane A: Configuration & Static Validation (Builder)**
+    *   **Work:** Update load balancer config to enable TLS 1.3; update CI definitions to pin the new protocol version.
+    *   **Parallel Check:** Run local syntax linters and static certificate format checks (zero cost, no CI).
+    *   **Output:** Patch ready for PR.
+
+2.  **Lane B: Independent Certificate Verification (QA + Downstream Teams)**
+    *   **Trigger:** Starts only after Lane A's config is frozen in a draft PR.
+    *   **Work:** Twelve product teams validate their specific certificates against the new protocol in an isolated staging environment mirroring the config.
+    *   **Flake Mitigation:** If `certificate-validation` fails, trigger manual re-run immediately; do not wait for auto-retry.
+    *   **Output:** Signed receipt from all 12 teams confirming handshake success.
+
+3.  **Lane C: Rollback Drill & Blue-Green Scripting (Security + Release)**
+    *   **Work:** Draft the exact swap script and the rollback command. Execute the rollback drill in a non-production sandbox to prove the 1-hour freeze is avoided via successful reversion.
+    *   **Output:** Tested rollback receipt; ready-to-run swap script.
+
+**Gates & Checks**
+*   **G2 Plan (Now):** This plan locks the scope. No scope creep.
+*   **G4 Implement:** Lane A opens PR against `main`. Base SHA pinned.
+*   **G5 Verify (Staging):**
+    *   **Condition:** CI green *and* Lane B receipts collected.
+    *   **Exact Revision:** The specific commit SHA from Lane A.
+    *   **Flake Rule:** CI must pass twice consecutively if `certificate-validation` is involved to rule out latency flakes.
+*   **G6 Review:**
+    *   **Reviewer:** Security Lead (independent of Builder).
+    *   **Scope:** Full diff + Lane B receipts + Lane C rollback proof.
+    *   **Verdict:** Blocker if any downstream team reports failure.
+*   **G7 Integrate:**
+    *   **Action:** Merge to `main`.
+    *   **Approver:** Jane Smith (Senior Network Architect).
+    *   **Timing:** Before Tuesday window to allow build propagation.
+
+**Landing & Production Rollout**
+*   **Pre-Flight (Tuesday Window):** Confirm all downstream teams are standing by.
+*   **Human Gate (G8 Release):**
+    *   **Decision:** Dual sign-off (Security Lead + Platform Director) required *before* executing the swap script.
+    *   **Input:** G6 review verdict + Lane C rollback proof.
+*   **Execution:** Run blue-green swap script. Monitor handshake metrics live.
+*   **Rollback:** If error rate > 0% or handshake failures detected, execute tested rollback immediately. This action is pre-authorized by the G8 sign-off contingent on failure.
+*   **Post-Deploy (G9):** Verify billing gateway and user portal transactions.
+
+**Risk Mitigation**
+*   **CI Cost:** Minimize runs by ensuring local static checks pass before pushing.
+*   **Flakiness:** Manual intervention protocol active for certificate checks.
+*   **Freeze Risk:** Rollback drill (Lane C) proves we can revert without triggering the irreversible freeze state (by succeeding before the freeze timer matters).
+
+**No work starts until Lane B and C confirm readiness to parallelize with Lane A's finalization.**

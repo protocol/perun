@@ -1,0 +1,65 @@
+**Delivery Plan: Legacy Support Portal Merge with Live Sync**
+
+**Objective:** Migrate 'HelpDesk Alpha' to 'SupportCentral' with real-time bi-directional sync, zero downtime, no data loss, and no duplicate threads.
+
+### 1. Lanes & Parallelism
+*Worktrees must be isolated. One writer per worktree.*
+
+*   **Lane A: Data Mapping & Deduplication Logic (Builder)**
+    *   **Task:** Design the thread-matching algorithm (Subject+Sender+Timestamp window) to prevent duplicates. Implement the ingestion service that pulls from Alpha API and upserts into Central.
+    *   **Constraint:** Must handle attachments without re-downloading if checksums match.
+    *   **Parallel:** Yes.
+
+*   **Lane B: Bi-Directional Sync & Notification Relay (Builder)**
+    *   **Task:** Implement the webhook listener in Central. On ticket update, trigger the legacy email gateway mock to notify Alpha senders.
+    *   **Constraint:** Must not block the agent UI if the legacy gateway is slow.
+    *   **Parallel:** Yes (depends on Lane A's data model).
+
+*   **Lane C: Migration Script & Cutover Strategy (Builder)**
+    *   **Task:** Write the one-time migration script for historical data. Must run in streaming mode (no table locks).
+    *   **Constraint:** Shared DB schema with billing; strictly read-only or append-only during business hours.
+    *   **Serialized:** Must wait for Lane A's data model to be finalized.
+
+*   **Lane D: Independent Verification & Security (QA + Security)**
+    *   **Task:** Verify deduplication logic, attachment integrity, and PII handling in the sync layer.
+    *   **Constraint:** Staging lacks the legacy gateway; must use recorded traffic replays or a localized mock.
+    *   **Serialized:** Runs only after Lanes A, B, and C produce a candidate SHA.
+
+### 2. Gates & Checks
+*Every check runs on an exact, immutable SHA.*
+
+*   **G0/G1 (Spec):** Confirm thread-matching rules and "no lock" migration strategy with the VP of Operations.
+*   **G2 (Plan):** Define token/cost budgets for Lane D (verification) given the $45/run CI cost. Limit retries to 2 before manual triage of the known flaky notification check.
+*   **G3 (Design):** ADR for the streaming migration approach to satisfy the billing service constraint.
+*   **G4 (Implement):** Code complete in isolated worktrees. Unit tests included.
+*   **G5 (Verify):**
+    *   **Local:** Run migration script against a read-only production snapshot (sanitized).
+    *   **CI:** Run full suite. **Explicitly mark the known flaky notification check as "allowed-failure"** but require manual log inspection for that specific job to ensure it's the known flake and not a regression.
+    *   **Integration:** Replay captured Alpha traffic into Staging Central to verify thread creation and attachment linking.
+*   **G6 (Review):**
+    *   **Code Review:** Senior Dev (not the builder) reviews Lanes A, B, C.
+    *   **Security Review:** Security Lead verifies no PII leakage in the sync layer and validates the mock gateway usage.
+    *   **QA Sign-off:** QA Lead confirms deduplication success rate on replay data.
+
+### 3. Review Strategy
+*   **Builder:** Implements Lanes A, B, C.
+*   **Reviewer 1 (Peer):** Reviews migration logic (Lane C) for DB safety.
+*   **Reviewer 2 (Security):** Independent Security Lead reviews the sync interface (Lane B) and data mapping (Lane A).
+*   **Reviewer 3 (QA):** Independent QA verifies the "no duplicate threads" claim using replay data.
+*   **Rule:** No builder reviews their own code. Security and QA are distinct from the implementation team.
+
+### 4. Landing & Human Gates
+*   **Integration:** Merge Lanes A, B, C into a temporary integration branch. Run one final CI pass on this combined SHA.
+*   **Human Approval (G8):**
+    *   **Required:** Explicit sign-off from **Security Lead** AND **VP of Operations**.
+    *   **Evidence:** Provide the CI green status (acknowledging the flaky check was inspected), the replay test results showing 0 duplicates, and the rollback plan.
+*   **Deployment:**
+    *   Deploy behind a feature flag (`legacy-sync-enabled`).
+    *   Enable for 5% of traffic first.
+    *   Monitor for 1 hour. If error rate > 0.1%, auto-rollback.
+*   **Rollback:**
+    *   If failure occurs: Disable feature flag immediately.
+    *   No database rollback needed (migration is append-only/streaming); any partially migrated tickets remain editable in Central and can be ignored until the next fix.
+    *   Notify stakeholders via the pre-drafted comms template.
+
+**Risk Mitigation:** The known flaky check will not block the merge if logs confirm it is the historic false positive. The lack of a live legacy gateway in staging is mitigated by using recorded traffic replays for verification.

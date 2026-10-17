@@ -1,0 +1,65 @@
+# Delivery Plan: Approval Workflow & Retention
+
+## Lanes & Parallelism
+
+**Lane A: Database & Schema (Serialized)**
+*   **Owner:** Database Administrator (DBA)
+*   **Work:** Draft migration scripts to add `approval_status`, `rejected_by`, and `retention_lock` columns to the expense reports table. **Strict Constraint:** Do not touch the `transactions` table.
+*   **Dependency:** Must wait for Lead Architect's code review of the script logic to ensure payroll compatibility.
+*   **Execution:** Runs only during the Tuesday maintenance window.
+
+**Lane B: Core Logic & API (Parallel to Lane A drafting)**
+*   **Owner:** Ledger Squad Engineer
+*   **Work:** Implement the "Manager Approval" state machine in the Monolith service. Logic must intercept submissions >500 units. Implement the 7-year retention lock logic that overrides user deletion requests for rejected items.
+*   **Dependency:** Requires the schema definitions from Lane A (can mock locally initially).
+
+**Lane C: Dashboard & Audit UI (Parallel to Lane B)**
+*   **Owner:** Frontend Engineer
+*   **Work:** Add "Rejected" filter and visual indicators to the auditor dashboard. Ensure rejected items are queryable without custom SQL.
+*   **Dependency:** Requires API endpoints from Lane B to expose rejection metadata.
+
+## Gates & Checks
+
+**Gate 1: Architecture & Compliance Review (Pre-Code Merge)**
+*   **Reviewers:** Lead Architect AND Compliance Officer.
+*   **Target:** Code revision `feat/approval-workflow-draft` (before CI trigger).
+*   **Checklist:**
+    *   Verify no changes to `transactions` table.
+    *   Confirm retention logic legally satisfies the 7-year requirement even upon account deletion.
+    *   Validate that existing approved records are untouched by the new logic.
+
+**Gate 2: CI Pipeline (Post-Merge to Staging)**
+*   **Trigger:** Merge to `staging` branch.
+*   **Constraint:** Run once per consolidated feature set to save credits.
+*   **Flake Handling:** If the notification module check fails, inspect logs. If logs show successful dispatch, ignore the failure. If logs are empty or show errors, fail the build.
+*   **Duration:** Expect 45 minutes.
+
+**Gate 3: Data Migration Dry-Run**
+*   **Owner:** DBA
+*   **Target:** Staging database clone.
+*   **Check:** Execute migration script. Verify nightly payroll reconciliation jobs still pass against the modified schema.
+
+## Review Strategy
+
+*   **Code Review:** Independent peer review by a senior engineer *outside* the Ledger Squad to ensure objectivity, followed by the mandatory Lead Architect sign-off.
+*   **Compliance Review:** The Compliance Officer must explicitly sign off on the retention logic and audit trail visibility. This is a non-negotiable business gate.
+*   **Audit Simulation:** Before final approval, an internal auditor must verify they can locate rejected items in the dashboard within 2 minutes without writing SQL.
+
+## Landing & Rollback
+
+**Merge Strategy:**
+1.  **Tuesday Window:** DBA applies migration to Production.
+2.  **Feature Flag:** Deploy Monolith changes with the new workflow behind a feature flag (`enable_manager_approval`). Initially set to `false`.
+3.  **Verification:** Run smoke tests in Production against the flag-off state.
+4.  **Activation:** Enable flag for 5% of users, monitor for 24 hours, then roll out to 100%.
+
+**Human Decisions Required:**
+*   **Compliance Officer:** Final sign-off on the 7-year retention implementation.
+*   **Lead Architect:** Approval of the database migration script.
+*   **Release Manager:** Authorization to enable the feature flag globally.
+
+**Rollback Plan:**
+*   **Code:** Revert the Monolith deployment to the previous tag. Since the feature is flag-gated, simply toggling `enable_manager_approval` to `false` acts as an immediate logical rollback without redeployment.
+*   **Data:** The migration is additive (new columns, no deletions). No data rollback is required unless the payroll reconciliation fails. If reconciliation breaks, the DBA must restore the pre-Tuesday backup immediately.
+
+**Timeline Constraint:** All gates must clear 48 hours before the fiscal quarter start to allow for contingency.

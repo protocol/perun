@@ -1,0 +1,63 @@
+**Delivery Plan: PII Masking for Staging Data Snapshots**
+
+**Binding Facts & Constraints**
+*   **Deadline:** Live before the 15th (Compliance Audit).
+*   **Compute Limit:** Job must complete under 45 minutes on the shared cluster; exceeding this triggers termination and penalties.
+*   **Dependency:** Masking script modifies a shared configuration file; schema changes break three downstream reporting services.
+*   **Approver:** Security Lead (Marcus Thorne) must approve via ticketing system before execution.
+*   **Known Risk:** Flaky network check causes false negatives in validation; requires manual retry logic.
+*   **Requirement:** Deterministic masking (same User ID → same fake value) for emails, phones, and addresses.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Schema & Contract Definition (Serial Start)**
+    *   **Work:** Define the masking schema that preserves data types for downstream reports while replacing PII. Document the deterministic hashing strategy (salted hash per field type).
+    *   **Constraint:** Must be finalized before Lane B starts to prevent breaking downstream services.
+    *   **Owner:** Product Analyst + Security.
+
+2.  **Lane B: Masking Logic Implementation (Parallelizable after Lane A)**
+    *   **Work:** Implement the deterministic masking functions. Integrate into the nightly refresh job. Ensure performance stays within the 45-minute window (profile on sample data).
+    *   **Owner:** Builder.
+    *   **Check:** Unit tests for determinism and type preservation.
+
+3.  **Lane C: Downstream Compatibility Patch (Parallel to Lane B)**
+    *   **Work:** Update the three downstream reporting services to handle the new masked data format if any interpretation logic changes (even if schema is preserved, validation logic might need adjustment).
+    *   **Owner:** Builder (different worktree than Lane B).
+    *   **Constraint:** Must be tested against Lane B's output before integration.
+
+4.  **Lane D: Flaky Check Mitigation (Parallel to Lane B)**
+    *   **Work:** Implement retry logic with exponential backoff for the known flaky network check. Add specific logging to distinguish network flakes from actual data errors.
+    *   **Owner:** Builder.
+
+**Gates & Verification**
+
+*   **G0/G1 (Intake/Spec):** Confirm scope with Marcus Thorne. Pin base SHA.
+*   **G2 (Plan):** Verify cost budget for the compute cluster. Ensure no lane exceeds the 45-minute limit in simulation.
+*   **G3 (Design):** Review schema changes against downstream service owners. **Hard Gate:** No schema change breaks existing reports.
+*   **G4 (Implement):** Code complete in isolated worktrees.
+*   **G5 (Verify):**
+    *   Run full pipeline on a staging clone.
+    *   **Critical:** Verify job completes < 40 minutes (buffer for variance).
+    *   **Critical:** Verify determinism (same input → same output across runs).
+    *   **Critical:** Verify downstream reports render correctly with masked data.
+    *   **Critical:** Validate retry logic triggers correctly on simulated network failure.
+*   **G6 (Review):**
+    *   **Security Review:** Independent review by Security team (not the Builder) focusing on irreversibility of masking.
+    *   **Code Review:** `deep-code-review` on exact revision.
+*   **G7 (Integrate):** Merge lanes. Run integration test on the combined SHA.
+
+**Human Gates & Landing**
+
+*   **Human Approval (Pre-Deploy):** Request explicit approval from Marcus Thorne via the ticketing system. Attach G5/G6 receipts.
+*   **Merge Strategy:**
+    1.  Merge Lane A (Schema) first. Monitor downstream services for immediate breakage.
+    2.  Merge Lanes B, C, D together as a single atomic change to ensure consistency.
+    3.  **Rollback Plan:** If the job exceeds 45 minutes or downstream reports fail, revert the combined commit immediately. The previous state (raw data) is the fallback, acknowledging the compliance risk until fixed.
+*   **Deployment:** Trigger the nightly job manually for the first run post-merge. Monitor the 45-minute timer closely.
+
+**Risk Mitigation**
+*   **Compute Penalty:** If profiling shows the job approaching 40 minutes, optimize the masking algorithm or increase parallelization within the job before G4.
+*   **Flaky Check:** The retry logic in Lane D must be robust; if it fails to distinguish flakes, the job may hang or fail incorrectly.
+*   **Downstream Breakage:** Coordinate the merge window with downstream service owners to ensure immediate patching if unforeseen issues arise.
+
+**Next Step:** Await confirmation of the base SHA and approval to proceed with Lane A.

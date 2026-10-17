@@ -1,0 +1,58 @@
+**Delivery Plan: Property-Based Validation for Legacy Pricing Engine**
+
+**Binding Facts & Constraints**
+*   **Scope:** `nexus-billing` monorepo, legacy pricing module. No refactoring allowed; tests must match observed historical behavior.
+*   **Approvers:** Staging (`staging-fin`) deploys require dual approval (Jane Smith + Compliance Lead).
+*   **CI Cost/Time:** $12/run, 45 mins. Batches must be optimized; no full suite on every commit.
+*   **Data:** Production DB is read-only. Use `mock-ledger` (resets every 4h).
+*   **Known Risk:** Currency conversion flake under load.
+*   **Irreversible Step:** None (tests only), but breaking existing behavior is a critical failure.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Behavioral Archeology (Serial, Human-in-the-Loop)**
+    *   **Actor:** Product Analyst + Builder.
+    *   **Work:** Run legacy engine against `mock-ledger` snapshots. Record input/output pairs for edge cases. Define invariants (e.g., `discount <= base`, `tax monotonicity`).
+    *   **Output:** `spec/legacy-invariants.md` and `data/golden-samples.csv`.
+    *   **Gate:** G1 Spec. Owner confirms these invariants match business intent before test writing begins.
+
+2.  **Lane B: Test Harness Construction (Parallel to A after G1)**
+    *   **Actor:** Builder (isolated worktree).
+    *   **Work:** Implement property-based test suite (e.g., Hypothesis/QuickCheck) using the invariants from Lane A. Integrate `mock-ledger` reset logic to handle the 4h TTL.
+    *   **Constraint:** Tests must run in <10 mins locally to avoid CI cost waste.
+    *   **Output:** `tests/property_based_legacy.py`.
+
+3.  **Lane C: CI Pipeline Optimization (Parallel to B)**
+    *   **Actor:** DevOps Engineer.
+    *   **Work:** Configure CI to run *only* the new property tests on PRs, skipping the full 45-min suite unless `tests/` core changes. Add retry logic specifically for the currency conversion flake (max 2 retries).
+    *   **Output:** Updated `.github/workflows/billing-ci.yml`.
+
+**Gates & Checks**
+
+*   **G2 Plan:** Verify acyclic graph. Confirm Lane A completes before Lane B finalizes assertions.
+*   **G4 Implement:**
+    *   **Check:** Local build + lint.
+    *   **Revision:** Immutable base SHA pinned in PR.
+    *   **Budget:** Cap CI runs at $50 (approx 4 full runs + incremental) before merge.
+*   **G5 Verify (Critical):**
+    *   **Environment:** `staging-fin` with refreshed `mock-ledger`.
+    *   **Action:** Run full property suite.
+    *   **Pass Condition:** 100% pass on invariants; zero regression on golden samples.
+    *   **Flake Handling:** If currency check fails, verify it is the known flake pattern before marking red.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (Independent of Builder).
+    *   **Lens:** Ensure tests assert *behavior*, not implementation details. Verify no hidden refactoring occurred.
+    *   **Security:** Confirm `mock-ledger` usage prevents PII leakage.
+
+**Landing & Human Gates**
+
+*   **Merge Strategy:** Squash merge to `main` after G6 approval.
+*   **Human Decision (G8):** Deploy to `staging-fin` requires explicit approval from **Jane Smith** and the **Compliance Lead**. The PR will pause automatically awaiting these two specific approvals.
+*   **Rollback:** If tests pass in staging but break downstream integration, revert the merge commit immediately. The property tests themselves are safe; only the harness deployment is reversible.
+*   **Post-Merge:** Monitor CI cost for the first 24h to ensure optimization held.
+
+**Risk Mitigation**
+*   **Data Staleness:** Lane B must include a pre-check hook to fail fast if `mock-ledger` is older than 4h.
+*   **Scope Creep:** Strict prohibition on refactoring. Any deviation found in Lane A is logged as a separate ticket, not fixed here.
+
+**Next Step:** Await owner confirmation on `spec/legacy-invariants.md` (Lane A output) to proceed to G2.

@@ -1,0 +1,63 @@
+### Delivery Plan: Checkout Load Test Isolation
+
+**Objective:** Create an isolated database snapshot and traffic routing mechanism to enable high-volume checkout load testing without corrupting shared staging data.
+
+#### 1. Work Lanes & Parallelism
+
+*   **Lane A: Database Snapshot & Seeding (Serial Pre-requisite)**
+    *   **Actor:** Database Specialist (Builder).
+    *   **Work:** Script to create a point-in-time snapshot of the production-like DB, anonymize sensitive fields if required, and seed specific high-volume transaction patterns. Must run against the nightly backup source or a dedicated read-replica to avoid locking the live staging DB.
+    *   **Constraint:** Cannot run while staging writers are active. Must complete before Lane B starts.
+*   **Lane B: Traffic Routing & Isolation Logic (Parallel to Lane A prep, Serial for integration)**
+    *   **Actor:** Backend Engineer (Builder).
+    *   **Work:** Implement feature flag or header-based routing logic to direct load test traffic exclusively to the new isolated DB instance. Ensure fallback mechanisms are disabled for the test runner to prevent leakage.
+    *   **Constraint:** Code must be merged but feature-flagged off until Lane A is ready.
+*   **Lane C: Validation & Safety Gates (Independent)**
+    *   **Actor:** QA Engineer + Security Reviewer.
+    *   **Work:** Verify routing rules, confirm zero writes to the shared staging DB during a dry run, and validate data integrity of the snapshot.
+    *   **Constraint:** Runs only after Lanes A and B are integrated in a test environment.
+
+#### 2. Gates & Checks
+
+*   **G1 Spec:** Define exact snapshot timestamp, seeding volume, and routing header criteria. Pin base SHA before starting.
+*   **G3 Design:** Review architecture for data leakage risks. Explicitly document the "fail-closed" behavior if routing fails.
+*   **G4 Implement:**
+    *   Lane A commits isolation script.
+    *   Lane B commits routing logic.
+    *   **Check:** Unit tests for routing logic; mock tests for DB connection strings.
+*   **G5 Verify (Critical):**
+    *   **Exact Revision:** The merged integration SHA of Lanes A+B.
+    *   **Action:** Dry run with low volume.
+    *   **Pass Criteria:** Monitoring shows 0 writes to the shared staging DB instance. Load test traffic hits only the isolated snapshot.
+    *   **Flake Handling:** The known flaky inventory sync check must be manually verified or skipped with a documented exemption ticket; it cannot block this safety gate.
+*   **G6 Review:**
+    *   **Reviewer:** Senior Engineer (independent of Builder).
+    *   **Focus:** Security review of data access patterns; QA sign-off on isolation proof.
+    *   **Cost Control:** Tag the specific commit for load testing to bypass the full 45-minute CI pipeline for subsequent test runs, running only the targeted isolation verification suite.
+
+#### 3. Landing & Human Decisions
+
+*   **Integration (G7):** Merge to a dedicated `load-test/isolation` branch first. Do not merge to `main` or `staging` yet.
+*   **Human Approval (G8):**
+    *   **Required Approvers:** Database Lead AND Operations Manager.
+    *   **Decision:** Approve the execution of the script against the live environment and the flipping of the routing flag.
+    *   **Evidence:** Present the G5 validation report showing zero staging impact during dry run.
+*   **Execution:**
+    1.  Deploy the routing logic (feature flagged off).
+    2.  Run the snapshot script (Human approved).
+    3.  Enable routing for the test runner ID.
+    4.  Execute load test.
+    5.  Disable routing immediately post-test.
+*   **Rollback Plan:**
+    *   If data leakage is detected: Immediately kill the test runner process and revert the routing flag.
+    *   If the shared DB is corrupted: Trigger restore from the most recent nightly backup (acknowledging downtime).
+    *   **Pre-condition:** Verify the nightly backup integrity before starting the test.
+
+#### 4. Deliverables by Thursday
+
+1.  **Isolation Script:** Executable command to generate the safe snapshot.
+2.  **Routing Configuration:** Code change with feature flag.
+3.  **Validation Report:** Proof of zero staging writes during dry run, signed by QA.
+4.  **Runbook:** Step-by-step instructions for the Database Lead and Ops Manager to execute and rollback.
+
+**Risk Note:** The irreversible nature of schema changes on the shared instance means the snapshot script must be read-only regarding the source. Any deviation requires a full stop.

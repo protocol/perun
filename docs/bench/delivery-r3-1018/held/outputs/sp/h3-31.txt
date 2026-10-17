@@ -1,0 +1,40 @@
+### Delivery Plan: Customer-Managed Encryption Keys (CMEK)
+
+#### 1. Lanes and Parallelism
+Work is split into three lanes to maximize parallelism while respecting serialization constraints.
+
+*   **Lane A (Interface & Ingestion):** Develop the API endpoints for key ingestion and validation. This includes schema definition, authentication checks, and the initial handshake with the customer's Key Management System (KMS).
+*   **Lane B (Revocation Poller):** Build the background service that polls for revocation events. This includes the logic to mark data as inaccessible and the caching layer to ensure the 5-minute SLA is met.
+*   **Lane C (Infrastructure & Coordination):** Prepare the deployment manifests, update the shared encryption library wrapper (if needed), and draft the rollback playbooks. This lane also handles the "dry-run" simulation scripts.
+
+**Serialization Constraints:**
+*   Lane A and Lane B can proceed in parallel.
+*   Lane C must wait for the interface contracts (from A) and polling intervals (from B) to be finalized before finalizing deployment configs.
+*   Integration testing (Lane A + B) cannot begin until both lanes have produced stable builds.
+
+#### 2. Gates and Checks
+All checks run on a dedicated Git worktree branch `feat/cmek-implementation`, derived from the current `main` revision `a1b2c3d`.
+
+*   **Gate 1: Static Analysis & Unit Tests (Pre-Merge):** Runs on every push to the feature branch. Excludes the legacy audit logger module on Fridays to avoid flaky failures.
+*   **Gate 2: Data Integrity Simulation (Pre-Deployment):** Triggered manually by the Data Security lead. This $45, 50-minute job runs against the merged code of Lanes A and B. It simulates key ingestion, rotation, and rapid revocation to verify the 5-minute window. **Strict Rule:** No more than two executions per day to manage costs.
+*   **Gate 3: Irreversibility Check:** Before any key ingestion logic touches the live hierarchy, a automated check verifies the "dry-run" flag is active. This prevents accidental irreversible operations during testing.
+
+#### 3. Review Process
+Reviews are independent and sequential to ensure security and quality.
+
+*   **Code Review:** Conducted by a senior engineer from the Platform team (not the Data Security squad) to ensure architectural consistency. This review focuses on the API design (Lane A) and polling efficiency (Lane B).
+*   **Security Review:** Conducted by Jane Smith (Data Security Lead) and an external Security auditor. This review specifically validates the revocation logic, key storage encryption, and the 5-minute SLA guarantee.
+*   **Final Approval:** Requires dual sign-off from the Security Lead and the Platform Lead before merging to `main`.
+
+#### 4. Landing and Rollback
+*   **Merge Strategy:** The feature branch merges to `main` only after passing Gate 2 and receiving dual approval. The merge triggers a coordinated release window due to the shared encryption library dependency.
+*   **Deployment:** Deployed to a canary cluster first. No customer traffic is routed to the CMEK endpoints until a synthetic revocation test passes in production (using a test key).
+*   **Human Decision Points:**
+    *   Approval to run the expensive Data Integrity Simulation.
+    *   Authorization to open the release window for the shared library update.
+    *   Final go/no-go for routing live traffic to the new endpoints.
+*   **Rollback Plan:**
+    *   **Pre-Ingestion:** If issues arise before any customer keys are ingested, a standard git revert of the feature branch suffices.
+    *   **Post-Ingestion:** Since key ingestion is irreversible without a full cluster restore, the rollback strategy involves immediately disabling the CMEK endpoints via feature flags and reverting to internal key management for all *new* requests. Existing CMEK-encrypted data remains accessible only if the customer keys are still valid; if a revocation occurred during the fault, data remains inaccessible as designed. A full cluster restore is the only path to undo ingestion, reserved for catastrophic failures only.
+
+This plan ensures rapid delivery while strictly adhering to security constraints and minimizing costly retries.

@@ -1,0 +1,36 @@
+### Delivery Plan: Webhook Signature v2 Migration
+
+**Lanes & Parallelism**
+Work proceeds in three parallel lanes until the Integration Gate:
+1.  **Core Implementation:** Modify the event dispatcher in `acme-events` to support the v2 algorithm behind a feature flag. Simultaneously, update the log parser to handle the new hash input format, ensuring audit indexing remains intact. These two changes are tightly coupled and must be committed together in a single atomic unit per developer.
+2.  **Sandbox Orchestration:** Prepare the external sandbox environment scripts. Since access is restricted (02:00–05:00 UTC), automate the deployment pipeline to trigger instantly when the window opens.
+3.  **Partner Coordination:** Notify the top three integrators of the pending v2 availability in staging and schedule their validation slots within the allowed UTC window.
+
+**Serialization Constraints**
+The Core Implementation must finish before the Sandbox Orchestration begins. The log parser update cannot be tested in isolation; it requires the dispatcher changes to generate the new format. Therefore, Lane 1 blocks Lane 2. Lane 3 (Partner Coordination) can run parallel to Lane 1 but cannot execute validation until Lane 2 succeeds.
+
+**Gates & Checks**
+*   **Gate A (Local Verification):** Before pushing, run unit tests for the crypto logic and the log parser. This checks that the new hash format does not break local indexing.
+*   **Gate B (CI Pipeline):** Push to the `feature/webhook-v2` branch. The 45-minute regression suite must pass completely. No merge is permitted if this suite fails or times out.
+*   **Gate C (Staging Validation):** Deploy to staging *only* during the 02:00–05:00 UTC window with the feature flag enabled. The three designated partners must successfully validate signatures against the new payload structure. Success is defined by written confirmation from all three partners.
+*   **Gate D (Security & Architecture Review):** An independent senior engineer (not the author) reviews the diff, specifically checking the feature flag implementation and the log parser coupling. This review happens after Gate C success but before production approval.
+
+**Review Process**
+*   **Code Review:** Conducted by a Senior Backend Engineer independent of the `acme-events` team to ensure objectivity regarding the shared crypto library constraints.
+*   **Security Review:** The Security Officer reviews the v2 implementation details and the feature flag rollback mechanism.
+*   **Integration Review:** The Lead Architect verifies that the log parser changes do not introduce technical debt or indexing gaps.
+
+**Landing Strategy**
+1.  **Preparation:** Once Gates A–D are cleared, prepare the production deployment manifest with the feature flag set to `false` (off) by default.
+2.  **Approval:** Obtain explicit written sign-off from both the Lead Architect and the Security Officer. No deployment occurs without both signatures.
+3.  **Deployment:** Deploy to production with the flag off. Verify zero downtime and stable audit logging.
+4.  **Activation:** Enable the v2 flag for 5% of traffic. Monitor error rates and partner validation logs for 1 hour. If stable, increase to 50%, then 100%.
+5.  **Finalization:** Once 100% traffic is stable and partners confirm receipt, remove the legacy v1 code path in a follow-up ticket.
+
+**Rollback & Human Decisions**
+*   **Rollback Trigger:** If partners report validation failures or audit logs stop indexing after activation.
+*   **Rollback Action:** Immediately toggle the feature flag to `false`. If the issue persists due to data corruption, execute the manual database rollback. **Warning:** This database rollback is irreversible for processed event states; it will permanently delete event history generated during the failed window.
+*   **Human Decision Points:**
+    1.  Authorization to deploy to staging during the restricted UTC window.
+    2.  Final production sign-off (requires two specific roles).
+    3.  Authorization to proceed with the irreversible database rollback if automated flag toggling fails to resolve the incident.

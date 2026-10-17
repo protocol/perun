@@ -1,0 +1,46 @@
+**Delivery Plan: Parallelize Build Pipeline**
+
+**Binding Facts & Constraints**
+*   **Hard Limit:** Network-attached volume allows only one writer. Software cannot override this; architecture must change.
+*   **Cost Risk:** Compute costs double after 8 PM; idle waiting caused budget caps.
+*   **Human Gate:** Staging deployment requires Security Lead sign-off (weekdays only).
+*   **Irreversibility:** Production rollback requires a 45-minute database revert; impossible during business hours.
+*   **Known Flake:** Networking layer check fails randomly but is ignored by policy; must not block parallel lanes.
+
+**Lanes & Serialization**
+
+1.  **Lane A: Cache Architecture Design (Conductor + Architect)**
+    *   **Work:** Design a sharded cache strategy where independent modules write to distinct sub-directories or logical volumes, eliminating the single global lock. Define the "partial failure" protocol where one module's failure does not stall others.
+    *   **Dependency:** None.
+    *   **Output:** ADR (Architecture Decision Record) detailing the new directory structure and failure isolation logic.
+
+2.  **Lane B: Pipeline Refactoring (Builder)**
+    *   **Work:** Implement the sharded cache logic in CI scripts. Modify the job graph to allow parallel execution of independent modules. Implement explicit timeout handling to prevent 30-minute stalls.
+    *   **Dependency:** Lane A (ADR approval).
+    *   **Serialization:** Must wait for Lane A. Cannot run in parallel with design.
+
+3.  **Lane C: Failure Simulation & Resilience (QA)**
+    *   **Work:** Create a test harness that simulates a module failure mid-write. Verify that other lanes complete successfully and the global lock is not held hostage. Verify the "ignored" network flake does not cause false positives in the new parallel flow.
+    *   **Dependency:** Lane B (initial implementation).
+    *   **Serialization:** Runs after Lane B produces a testable script.
+
+**Gates & Checks**
+
+*   **G2 (Plan):** Review Lane A's ADR. **Gate:** Confirm the sharded approach bypasses the single-writer hardware limit. Confirm cost projection shows <8 PM completion.
+*   **G4 (Implement):** Lane B commits to a feature branch. **Check:** Lint and static analysis on new scripts.
+*   **G5 (Verify):** Run Lane C's simulation on the **exact revision** of Lane B. **Requirement:** Evidence of parallel completion and graceful failure handling. The "network flake" must be explicitly logged but not fail the build.
+*   **G6 (Review):** Independent review by a senior engineer *not* on the current rotation (external to the three owners if possible, or a different squad member). Security Lead reviews the change for any new exposure in the sharded structure.
+*   **G8 (Release):** Human decision required. Security Lead sign-off for Staging. **Constraint:** Must be scheduled for a weekday.
+
+**Landing & Rollback Strategy**
+
+*   **Merge Strategy:** Merge Lane B to the integration branch only after G6 approval. Do not merge directly to main.
+*   **Deployment:** Deploy to Staging immediately upon merge (pending Security Lead sign-off). Monitor for one full nightly cycle.
+*   **Production Gate:** Do not auto-deploy to Production. Due to the 45-minute irreversible database rollback, Production promotion requires a explicit "Go/No-Go" from the Platform Squad lead during business hours.
+*   **Rollback:** If the new pipeline causes data corruption or build integrity issues, trigger the full database rollback *only* outside business hours. If the issue is purely performance (still slow), revert the CI scripts immediately (code revert is fast; data rollback is the constraint).
+
+**Risk Mitigation**
+*   **Budget Cap:** The pipeline profile (`scripts/pipeline_profile.py`) must be run in a dry-run mode first to estimate parallel runtime. If the estimate exceeds the pre-8 PM window, the plan halts for further optimization.
+*   **Flaky Check:** The known network flake is configured as "non-blocking" in the new parallel config to prevent it from stalling the now-faster pipeline.
+
+**Next Step:** Await approval of Lane A's design approach before spawning the Builder lane.

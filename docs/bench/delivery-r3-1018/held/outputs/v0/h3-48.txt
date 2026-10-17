@@ -1,0 +1,47 @@
+### Delivery Plan: Admin Console Read-Only Mode
+
+**Objective:** Enable read-only mode in the Admin Console for a 4-hour migration window by toggling a secure config flag, ensuring health checks pass and blocking write operations without schema or audit log changes.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Implementation - Builder):** Isolate a dedicated worktree. Implement the read-only guard logic in the application layer to intercept save/delete/update actions based on the config flag. Ensure the health endpoint explicitly returns success (200 OK) when this flag is active, bypassing any write-capability checks.
+    *   *Constraint:* Do not modify database schemas or audit logging services.
+    *   *Parallelism:* Can run immediately.
+*   **Lane B (Verification - QA):** Independent worktree. Verify functional behavior: attempt write actions (must fail gracefully with user-friendly messaging) and read actions (must succeed). Crucially, verify the health endpoint returns success while the flag is active.
+    *   *Serialization:* Must wait for Lane A's commit SHA.
+    *   *Note:* Ignore the known flaky network check in staging if unit tests pass; do not treat it as a gate failure.
+*   **Lane C (Security Review - Security):** Independent review of the guard logic to ensure no bypass exists and that the "read-only" state cannot be escalated to write access without the specific config toggle.
+    *   *Parallelism:* Can run alongside Lane B once Lane A is complete.
+
+#### 2. Gates & Checks
+*   **G1 Spec:** Define the exact config flag name and the expected application behavior. Pin the base SHA before implementation starts.
+*   **G4 Implement:** Lane A produces a patch. Tests must accompany the change.
+*   **G5 Verify:** Run against the **exact revision** from Lane A.
+    *   *Check 1:* Unit tests pass (ignoring the known flaky network check).
+    *   *Check 2:* Health endpoint returns 200 OK with the flag enabled.
+    *   *Check 3:* Write operations are blocked; Read operations succeed.
+    *   *Environment:* Verify in a staging environment that mimics the 5-minute config propagation delay.
+*   **G6 Review:**
+    *   **QA Verdict:** Confirms functional correctness and health check stability.
+    *   **Security Verdict:** Confirms no privilege escalation or write bypass.
+    *   *Requirement:* Both must be independent of the Builder.
+
+#### 3. Landing & Human Decisions
+*   **Integration (G7):** Merge the verified lane into the integration branch. Trigger one final CI run (45 mins) on the merged SHA to ensure no regression.
+*   **Human Approval (G8):**
+    *   **Required Approvers:** Shift Lead AND Security Officer via the change management portal.
+    *   **Decision Point:** Approve deployment timing relative to the migration start.
+    *   **Action:** Once approved, the Operations Team will manually toggle the configuration flag in the secure store.
+*   **Deployment & Rollback:**
+    *   Deploy the new build.
+    *   **Rollback Trigger:** If the health endpoint returns anything other than a success code post-deployment, the automated rollback fires immediately.
+    *   **Critical Warning:** Reverting the deployment is irreversible once the migration script starts. The toggle must be reversed manually by Ops if issues arise *after* migration begins, but the code deployment itself cannot be undone safely during the window.
+
+#### 4. Execution Timeline
+1.  **Builder** implements and commits (Lane A).
+2.  **QA** and **Security** verify/review in parallel (Lanes B & C) on the commit SHA.
+3.  **Conductor** integrates and triggers final CI.
+4.  **Shift Lead & Security Officer** approve the release in the portal.
+5.  **Ops Team** deploys, then toggles the config flag 5 minutes prior to migration start to account for propagation.
+6.  **Monitoring:** Watch health dashboard. Any non-success code triggers auto-rollback.
+
+**Risk Mitigation:** The 5-minute config propagation delay is the critical path; the toggle must happen before the migration window opens. The flaky network check is explicitly excluded from gate failure criteria to prevent false positives blocking the release.

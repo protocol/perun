@@ -1,0 +1,63 @@
+### Delivery Plan: Distributed Job Scheduler Migration
+
+**Objective:** Replace in-process scheduler with distributed coordination to eliminate duplicate billing executions.
+**Constraints:** Critical path for peak season; irreversible DB changes; $12/CI cost; flaky network checks; shared config contention.
+
+#### 1. Lanes & Parallelism
+
+*   **Lane A: Specification & Contract (Conductor + Product Analyst)**
+    *   **Work:** Define the "single execution" guarantee, failure modes, and heartbeat integration contract. Draft the feature flag strategy (`scheduler.mode: legacy | distributed`).
+    *   **Parallelism:** Runs first; blocks all other lanes until G1 approval.
+    *   **Output:** Testable spec with acceptance criteria pinned to a base SHA.
+
+*   **Lane B: Core Implementation (Builder)**
+    *   **Work:** Implement the distributed lock/lease mechanism and the new scheduler logic behind the feature flag.
+    *   **Parallelism:** Starts after Lane A spec. Isolated worktree.
+    *   **Constraint:** Must not touch `cluster-settings.yaml` yet.
+
+*   **Lane C: Database Migration Script (Builder - DB Specialist)**
+    *   **Work:** Write the irreversible schema migration script and the rollback script (logical revert, not physical drop).
+    *   **Parallelism:** Parallel to Lane B, but serialized before G5 Verify.
+    *   **Constraint:** Requires dry-run validation against a staging snapshot.
+
+*   **Lane D: Independent Verification (QA)**
+    *   **Work:** Build a local harness to simulate node failures and network partitions (compensating for missing ledger simulator in staging).
+    *   **Parallelism:** Starts after Lane B produces a candidate build.
+    *   **Constraint:** Must verify "no duplicate execution" under chaos conditions.
+
+*   **Lane E: Coordination & Config (Conductor)**
+    *   **Work:** Negotiate the `cluster-settings.yaml` change with the three other teams.
+    *   **Serialization:** Must complete before G7 Integrate.
+
+#### 2. Gates & Checks
+
+*   **G0/G1 (Intake/Spec):** Owner approves the feature flag strategy and appetite (time-boxed for peak season).
+*   **G2 (Plan):** Explicit budget set per lane (token/cost cap). Graph confirms no circular dependencies.
+*   **G3 (Design):** ADR published for the consensus algorithm and failure recovery.
+*   **G4 (Implement):** Code committed with unit tests. Feature flag defaults to `legacy`.
+*   **G5 (Verify):**
+    *   **Revision:** Exact SHA from G4.
+    *   **Action:** Run Lane D's chaos harness. Run DB migration dry-run.
+    *   **Gate:** Green only if zero duplicates observed in simulation. Skip flaky network latency suite (documented false positive); substitute with Lane D's targeted latency test.
+*   **G6 (Review):**
+    *   **Reviewer:** Senior Engineer independent of the Builder (not the Payments Team lead if they authored the spec).
+    *   **Scope:** Full diff + Security review of the distributed lock (race condition audit).
+*   **G7 (Integrate):** Merge to integration branch. Re-run CI once (optimized to avoid flake).
+*   **G8 (Release):** **Human Gate.** Dual approval required (Jane Smith + On-Call Lead). Deploy with flag `OFF`.
+*   **G9 (Production Verify):** Enable flag for 5% traffic. Monitor billing logs for duplicates.
+*   **G10 (Learn):** Post-mortem if any duplicate occurs; otherwise, retrospective on migration smoothness.
+
+#### 3. Landing Strategy
+
+*   **Merge Train:** Single PR containing Lanes B, C, and E.
+*   **Human Decisions:**
+    1.  Approval of the irreversible DB migration script (G6).
+    2.  Coordination sign-off from the three other teams for `cluster-settings.yaml` (pre-G7).
+    3.  Dual approval for Production Deployment (G8).
+    4.  Final toggle to `distributed` mode (G9).
+*   **Rollback Plan:**
+    *   **Immediate:** Toggle feature flag back to `legacy`. No code revert needed.
+    *   **Data:** If corruption detected, execute logical rollback script (Lane C) to reverse ledger entries.
+    *   **Code:** Revert PR only if flag toggle fails to stop duplicates.
+
+**Risk Mitigation:** The flaky network check is explicitly excluded from the merge block; verification relies on the custom chaos harness (Lane D) which is deterministic. CI runs are minimized by ensuring local green before push.

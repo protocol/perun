@@ -1,0 +1,64 @@
+**Delivery Plan: CSP Reporting Inventory**
+
+**Binding Facts & Constraints**
+*   **Appetite:** 48-hour data collection window + implementation time.
+*   **Irreversible Step:** Production deploy requires manual DB rollback (2h) if failed; strict "reporting-only" mode required to protect checkout.
+*   **Approvers:** Lead Architect and Security Officer (both required for production push).
+*   **Serialization:** Shared config file locked during business hours; writes must occur off-hours or via serialized gate.
+*   **Cost Guardrail:** Avoid full CI suites for config tweaks; isolate analytics flake.
+
+**Lanes & Parallelism**
+
+1.  **Lane A: Policy Configuration (Builder)**
+    *   **Work:** Draft CSP `report-only` header config. Ensure endpoint scaling for high volume (async logging, non-blocking).
+    *   **Constraint:** Must target the shared config file. Write operation serialized to off-hours or `serial_gate.py` if during business hours.
+    *   **Parallelism:** Can run parallel to Lane B, but merges after Lane B verification.
+
+2.  **Lane B: Monitoring Endpoint Verification (QA)**
+    *   **Work:** Verify the centralized dashboard ingestion can handle projected peak volume without latency impact on page load. Simulate high-volume violation bursts in staging.
+    *   **Constraint:** Staging has 15-min cold start; factor into test runtime.
+    *   **Parallelism:** Runs parallel to Lane A implementation.
+
+3.  **Lane C: Data Analysis Script (Builder/Data)**
+    *   **Work:** Create script to parse 48h violation logs, categorize by vendor (marketing/analytics), and flag hidden dependencies.
+    *   **Constraint:** Must filter out known analytics module flake (low-memory false positives).
+
+**Gates & Checks**
+
+*   **G0/G1 (Intake/Spec):** Confirm "report-only" mode explicitly excludes `enforce`. Define "high volume" threshold based on peak traffic metrics.
+*   **G2 (Plan):** Budget set for CI runs (minimal suite). Token cap set for data processing.
+*   **G3 (Design):** ADR confirming async logging architecture to prevent checkout latency.
+*   **G4 (Implement):**
+    *   Lane A: Config commit on isolated worktree.
+    *   Lane C: Script commit.
+    *   **Check:** Lint and type-check only (skip full browser farm suite per cost guardrails).
+*   **G5 (Verify):**
+    *   **Exact Revision:** The specific SHA of Lane A's config.
+    *   **Action:** Deploy to **Staging only**. Run load test against dashboard endpoint.
+    *   **Success Criteria:** Page load time delta < 50ms under load; zero blocked resources in logs; dashboard ingests 10k events/min without drop.
+    *   **Flake Handling:** Explicitly ignore analytics module low-memory errors in test assertions.
+*   **G6 (Review):**
+    *   **Security Officer:** Reviews CSP syntax, ensures no accidental enforcement directives, validates data privacy of violation reports.
+    *   **Lead Architect:** Reviews scaling architecture and rollback plan.
+    *   **Independence:** Neither reviewer is the Builder.
+*   **G7 (Integrate):** Merge to integration branch. Re-run minimal smoke test on final SHA.
+
+**Landing & Human Gates**
+
+*   **Merge Strategy:** Single PR containing Lane A and C. Lane B results attached as evidence.
+*   **Human Decision (G8):**
+    *   **Trigger:** Merge to production branch.
+    *   **Approvers:** Lead Architect AND Security Officer.
+    *   **Timing:** Deploy must occur **outside business hours** to avoid shared config lock contention and minimize blast radius during the 48h collection window.
+*   **Rollback Plan:**
+    *   If dashboard latency spikes or checkout errors correlate with deploy: Immediate manual DB rollback (2h window).
+    *   Communication: Pre-drafted incident alert to Digital Experience team.
+*   **Completion (G9/G10):**
+    *   After 48 hours, run Lane C script against production logs.
+    *   Deliver summary report of third-party scripts.
+    *   Retrospective: Did we capture all vendors? Any false positives?
+
+**Risk Mitigation**
+*   **Checkout Safety:** Hard-coded `report-only` directive; no `Content-Security-Policy` (enforce) header present.
+*   **Config Collision:** Write lane scheduled for off-hours execution.
+*   **Data Noise:** Analysis script includes filter for known flaky analytics signatures.

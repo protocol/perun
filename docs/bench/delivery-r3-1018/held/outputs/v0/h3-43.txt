@@ -1,0 +1,59 @@
+### Delivery Plan: Event-Driven Catalog Cache Warm-up
+
+**Objective:** Replace nightly cron with real-time event-driven cache invalidation triggered by admin updates. Eliminate stale data complaints and reduce 4 AM DB load.
+
+#### 1. Lanes & Parallelism
+*   **Lane A (Event Schema & Contract):** Define the immutable event payload for "Product Updated." Must include SKU, version, and timestamp.
+    *   *Constraint:* Must be finalized before Lane B starts to prevent poisoning the dead-letter queue.
+    *   *Owner:* Architect (Security/Data).
+*   **Lane B (Producer Implementation):** Modify the admin portal backend to publish events to the bus upon item update.
+    *   *Dependency:* Waits for Lane A's schema approval.
+    *   *Owner:* Builder (Backend).
+*   **Lane C (Consumer & Cache Logic):** Build the listener service that consumes events and refreshes the specific SKU cache. Includes burst-handling logic (backpressure/retry).
+    *   *Dependency:* Waits for Lane A's schema approval. Can run in parallel with Lane B.
+    *   *Owner:* Builder (Backend/Infra).
+*   **Lane D (Integration & Load Test):** Create a parallel CI job simulating burst traffic and verifying end-to-end latency.
+    *   *Dependency:* Requires Lanes B and C merged to a staging branch.
+    *   *Owner:* QA.
+
+#### 2. Gates & Checks
+*   **G1 (Spec):** Freeze the event schema. Verify immutability constraints.
+    *   *Check:* Schema validation script against the bus registry.
+*   **G2 (Plan):** Acyclic graph confirming Schema → Producer/Consumer → Integration.
+    *   *Check:* Token budget set for Lane D (load tests are expensive).
+*   **G4 (Implement):**
+    *   *Lane A:* Commit schema definition.
+    *   *Lane B/C:* Unit tests for event serialization and cache refresh logic.
+    *   *Check:* Lint and type-check on exact commit SHA.
+*   **G5 (Verify):**
+    *   *Functional:* Deploy to `staging-east`. Trigger admin update; verify mobile app sees change < 2s.
+    *   *Load:* Run burst simulation. Verify zero dropped events.
+    *   *Flake Mitigation:* If DB migration check fails, manual log verification required before retry (do not auto-retry).
+    *   *Check:* Green build on exact SHA in `staging-east`.
+*   **G6 (Review):**
+    *   *Security:* Verify no PII leakage in event payload.
+    *   *Independence:* Reviewer must not be the Builder from Lanes B or C.
+    *   *Check:* `deep-code-review` with severity rubric.
+
+#### 3. Review Strategy
+*   **Schema (Lane A):** Reviewed by Lead Architect + Security. Independent of implementation.
+*   **Code (Lanes B & C):** Cross-reviewed between Pricing and Search team seniors (neither can be the author).
+*   **Load Results (Lane D):** Reviewed by QA Lead. Must see evidence of handled burst without drops.
+
+#### 4. Landing & Human Decisions
+*   **Merge Strategy:**
+    1.  Merge Lane A (Schema) to `main`.
+    2.  Merge Lanes B & C to a feature branch.
+    3.  Trigger parallel integration job (Lane D) on this branch.
+    4.  Upon green CI + 2-hour soak in `staging-east`: Create PR to `main`.
+*   **Human Gates (Required):**
+    *   **Approval 1:** Pricing Team Lead.
+    *   **Approval 2:** Search Team Lead.
+    *   **Action:** Both must explicitly approve the PR after verifying the 2-hour soak logs and the manual verification of any flaky DB migration steps.
+*   **Rollback Plan:**
+    *   *Trigger:* Increased error rates in mobile app or dead-letter queue growth.
+    *   *Action:* Revert PR immediately.
+    *   *Fallback:* Re-enable the nightly cron job (code preserved, feature flag switched) to ensure cache warmth while issues are resolved.
+    *   *Data Recovery:* If schema mismatch poisoned the queue, execute manual DB purge script (pre-approved by Security) before restarting consumers.
+
+**Risk Note:** The immutable schema means Lane A cannot be iterated in production. If the payload is wrong, a new schema version and consumer update are required, not a patch. Precision at G1 is critical.

@@ -1,0 +1,60 @@
+### Delivery Plan: Region Gamma SMS Verification
+
+#### 1. Lanes and Parallelism
+Work is split into three lanes to maximize parallel execution while respecting serialization constraints.
+
+*   **Lane A (Configuration & Compliance):** Owned by the Trust Team Lead.
+    *   Task: Register the new Sender ID with the Region Gamma telecom authority.
+    *   Constraint: This is irreversible. Must be completed and verified before any production deployment involving real traffic.
+    *   Parallelism: Can run immediately alongside Lane B.
+*   **Lane B (Integration Logic):** Owned by Backend Engineering.
+    *   Task: Implement the gateway provider interface, latency handling (timeouts/retries), and localized error messages.
+    *   Constraint: Must use the mocked staging gateway for development but include specific logic for the known production timeout errors not present in staging.
+    *   Parallelism: Runs parallel to Lane A.
+*   **Lane C (Validation & Sandbox):** Owned by QA/Trust Team.
+    *   Task: Prepare the telecom sandbox environment and verify `sender-rules.json` lock logic.
+    *   Constraint: Cannot modify `sender-rules.json` during Region Gamma business hours. All config changes must be staged outside this window.
+
+#### 2. Gates and Checks
+Strict gating prevents costly CI failures and irreversible production errors.
+
+*   **Gate 1: Pre-Commit Static Analysis (Local)**
+    *   **When:** Before pushing any code.
+    *   **Check:** Verify latency handling logic and localized string keys against the spec. Ensure no hard-coded phone number formats.
+    *   **Revision:** Feature branch head.
+*   **Gate 2: Configuration Freeze Check**
+    *   **When:** Before merging to the release candidate branch.
+    *   **Check:** Confirm `sender-rules.json` modifications are scheduled outside Region Gamma business hours.
+    *   **Owner:** Trust Team Lead.
+*   **Gate 3: The Costly Build (CI Pipeline)**
+    *   **When:** Only after Lane A confirms Sender ID registration success AND Gate 2 passes.
+    *   **Check:** Full integration tests against the telecom sandbox.
+    *   **Revision:** Release Candidate branch (merged code from Lane B + Config from Lane A).
+    *   **Constraint:** Triggered manually to avoid the $200 cost on failed builds. Only one attempt allowed per business day.
+*   **Gate 4: Compliance Sign-off**
+    *   **When:** After CI passes.
+    *   **Check:** Manual verification by the Compliance Officer that the flow matches regulatory requirements.
+    *   **Environment:** Staging (with mocked gateway + injected timeout simulation scripts).
+
+#### 3. Review Process
+Reviews are independent to ensure no single point of failure in judgment.
+
+*   **Code Review:** Performed by a Senior Engineer *not* on the Trust Team. Focus: Latency logic, error handling, and localization accuracy.
+*   **Compliance Review:** Performed by the Compliance Officer. Focus: Regulatory adherence and Sender ID usage.
+*   **Operational Review:** Performed by Customer Support Lead. Focus: Clarity of localized error messages and expected delay notifications.
+
+#### 4. Landing and Rollback Strategy
+*   **Merge Strategy:**
+    1.  Merge Lane B code to `release-candidate`.
+    2.  Apply Lane A config (Sender ID) only after registration confirmation.
+    3.  Trigger CI (Gate 3).
+    4.  Upon success, Compliance Officer signs off.
+    5.  Deploy to EU-West cluster during low-traffic window.
+*   **Human Decisions Required:**
+    *   Authorization to trigger the $200 CI run.
+    *   Final "Go/No-Go" from Compliance Officer.
+    *   Timing of the `sender-rules.json` update (must be outside business hours).
+*   **Rollback Plan:**
+    *   **Code:** Standard revert of the deployment artifact.
+    *   **Sender ID:** **Cannot be rolled back.** If the integration fails post-deployment, the system must fail open to a "Maintenance Mode" page explaining the delay, rather than attempting to revert the telecom registration. A ticket must be filed with the provider to deregister, which may take days.
+    *   **Mitigation:** Feature flag the new gateway. If critical errors spike, toggle the flag to disable SMS for Region Gamma immediately while keeping the Sender ID registered but idle.

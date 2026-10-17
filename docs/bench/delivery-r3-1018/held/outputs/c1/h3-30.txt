@@ -1,0 +1,62 @@
+### Delivery Plan: Distributed Job Scheduler Migration
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Database schema changes on the live ledger.
+*   **Collision Risk:** `cluster-settings.yaml` is shared by three teams; uncoordinated edits break nightly batches.
+*   **Approval Gate:** Production deployment requires dual approval (Jane Smith + On-call Lead).
+*   **CI Cost:** $12/run, 45 mins. Flaky network latency check exists.
+*   **Environment Gap:** Staging lacks the ledger simulator (false negatives in integration).
+
+---
+
+### Lanes & Serialization
+
+**Lane 1: Specification & Contract (Serial, First)**
+*   **Owner:** Product Analyst + Architect.
+*   **Work:** Define the distributed locking protocol, heartbeat integration contract, and the exact database schema migration script. Define the "Done-when" criteria for single-execution guarantee.
+*   **Output:** ADR with interface contracts, schema diff, and rollback procedure.
+*   **Gate:** G3 Design Review. Must explicitly address the staging simulator gap (how to verify without it).
+
+**Lane 2: Implementation (Parallel to Lane 3 start, after Lane 1 spec)**
+*   **Owner:** Builder.
+*   **Work:** Implement the distributed scheduler behind the feature flag. Include the migration script (idempotent check included).
+*   **Constraint:** Do not touch `cluster-settings.yaml` yet. Use a new config key or env var for the toggle.
+*   **Gate:** G4 Implement. Unit tests must pass. Code must include the feature flag toggle logic.
+
+**Lane 3: Independent Verification Setup (Parallel to Lane 2)**
+*   **Owner:** QA.
+*   **Work:** Build a local or containerized simulation of the ledger to bypass the staging gap. Prepare the test harness to run against the exact SHA from Lane 2.
+*   **Gate:** G5 Verify. Must demonstrate single-execution under simulated node failure using the local simulator.
+
+**Lane 4: Coordination & Integration (Serial, Last)**
+*   **Owner:** Conductor + Release Engineer.
+*   **Work:** Coordinate the edit of `cluster-settings.yaml`. Verify no other team's nightly job is running. Apply the config change.
+*   **Gate:** G7 Integrate. Requires confirmation that other teams' jobs are safe.
+
+---
+
+### Gates & Checks
+
+*   **G1/G3 (Spec/Design):** Pin base SHA. Review must confirm the migration script is reversible or has a verified rollback path before touching the live ledger.
+*   **G5 (Verify):** Run on the **exact commit SHA** from Lane 2.
+    *   *Check:* Functional test using the local ledger simulator (bypassing staging gap).
+    *   *Check:* Chaos test (kill node during job execution) to prove graceful handover.
+    *   *Flake Handling:* If the network latency suite fails, triage via `flake_ledger`. Do not merge on this flake; mark as known issue if unrelated to scheduler logic.
+*   **G6 (Review):** Independent Security review on the locking mechanism and privacy of heartbeat data. Independent QA sign-off on the simulation results. Builder does not review their own code.
+*   **G8 (Release):** **Human Gate.** Dual approval (Jane Smith + On-call) required before enabling the feature flag in production.
+
+---
+
+### Landing Strategy
+
+1.  **Merge Train:** Lane 2 (Code) merges first to the integration branch. Lane 4 (Config) follows only after Lane 2 is green and reviewed.
+2.  **Deployment:**
+    *   Deploy code with feature flag **OFF** by default.
+    *   **Human Decision:** Jane Smith and On-call Lead approve the *toggle* to ON in production.
+    *   Monitor billing module for duplicate executions.
+3.  **Rollback:**
+    *   If duplicates occur: Toggle feature flag OFF immediately (no code rollback needed initially).
+    *   If data corruption detected: Execute the pre-verified database rollback script.
+    *   Revert `cluster-settings.yaml` if coordination failed.
+
+**Cost Control:** Limit CI runs to one per lane per significant change. No "try until green" on the flaky network check without analysis.

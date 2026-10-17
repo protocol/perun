@@ -1,0 +1,56 @@
+**Delivery Plan: Enable SMS Verification for Region Gamma**
+
+**Binding Facts & Constraints**
+*   **Irreversible Step:** Sender ID registration with the telecom provider cannot be rolled back; requires a ticket if failed.
+*   **Human Gate:** Compliance Officer must sign off before EU-West deployment.
+*   **Serialization:** `sender-rules.json` is locked during Region Gamma business hours; writes must occur outside this window.
+*   **Cost/Time:** Full integration tests cost $200 and take 45 mins; must not trigger unnecessarily.
+*   **Environment Gap:** Staging mocks do not simulate production timeout errors.
+
+**Lanes & Parallelism**
+
+1.  **Lane A: Gateway Integration (Builder)**
+    *   **Work:** Implement the new local gateway provider client and handle specific latency/timeout logic.
+    *   **Constraint:** Must not touch `sender-rules.json` yet.
+    *   **Parallelism:** Can run immediately, independent of Lane B.
+
+2.  **Lane B: Localization & Error Handling (Builder)**
+    *   **Work:** Implement localized error messages for delays/failures in Region Gamma.
+    *   **Parallelism:** Can run parallel to Lane A.
+
+3.  **Lane C: Regulatory Sync & Config (Compliance Lead)**
+    *   **Work:** Prepare the Sender ID registration payload and draft the telecom provider ticket. Schedule the `sender-rules.json` update for outside Gamma business hours.
+    *   **Serialization:** Must complete before Lane D (Integration).
+
+4.  **Lane D: Verification & Evidence (QA)**
+    *   **Work:** Since staging mocks are insufficient, this lane must construct a "Production-Like" test harness or secure a one-off sandbox slot to verify timeout handling *before* the full CI run.
+    *   **Serialization:** Waits for Lanes A & B code freeze. Must run *before* the expensive full CI pipeline to avoid wasted $200 builds.
+
+**Gates & Checks**
+
+*   **G1 (Spec):** Define exact timeout thresholds and localized string keys. Pin base SHA.
+*   **G2 (Plan):** Confirm `sender-rules.json` write window is scheduled outside Gamma business hours. Set per-lane budget (max 1 full CI run).
+*   **G4 (Implement):** Code complete in isolated worktrees. Unit tests green locally.
+*   **G5 (Verify - Critical):**
+    *   Run lightweight timeout simulation (Lane D) on the exact revision.
+    *   **Condition:** If simulation fails, do not trigger the 45-min CI pipeline.
+    *   **Condition:** If simulation passes, trigger full integration tests *once* against the telecom sandbox.
+*   **G6 (Review):**
+    *   **Security/Compliance Review:** Independent review of the gateway integration and data handling by the Trust Team (not the Builder).
+    *   **Code Review:** Peer review of Lanes A/B.
+*   **G7 (Integrate):** Merge to integration branch only after G5/G6 pass.
+
+**Landing & Rollback**
+
+*   **Human Decision (G8):** Compliance Officer reviews the integration receipt and Sender ID registration proof. Explicit approval required for EU-West deployment.
+*   **Deployment:** Manual trigger to EU-West cluster post-approval.
+*   **Rollback Strategy:**
+    *   **Code:** Standard revert of the service deployment.
+    *   **Sender ID:** **No technical rollback possible.** If the Sender ID registration fails or causes issues, the fallback is to disable SMS for Region Gamma via feature flag and file the required ticket with the telecom provider immediately.
+*   **Post-Deploy (G9):** Monitor support tickets and latency metrics for 1 hour. If latency exceeds thresholds or errors spike, flip the feature flag to disable SMS for Gamma.
+
+**Immediate Next Steps**
+1.  Confirm the exact "off-hours" window for `sender-rules.json`.
+2.  Builder starts Lanes A/B on a fresh branch.
+3.  Compliance Lead initiates Sender ID paperwork (Lane C).
+4.  QA prepares the timeout simulation script (Lane D).

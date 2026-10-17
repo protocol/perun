@@ -1,0 +1,36 @@
+### Delivery Plan: Byte-Stable Image Resizer Replacement
+
+#### 1. Lanes and Parallelism
+Work is divided into three lanes to maximize parallel execution while respecting dependencies.
+
+*   **Lane A (Core Implementation):** Isolate the resizing interface in shared utilities. Implement the new byte-stable library behind this interface. This lane is **serialized** initially to define the contract, then parallelizes once the interface is frozen.
+*   **Lane B (Downstream Adaptation):** Update the three dependent microservices to consume the new interface. This cannot start until Lane A defines the interface but can proceed in parallel with Lane A's internal implementation once the signature is stable.
+*   **Lane C (Validation & Observability):** Prepare the staging dataset, configure CDN cache-key monitoring, and draft the rollback script. This runs **fully in parallel** with A and B from day one.
+
+#### 2. Gates and Checks
+Strict gating ensures stability before progressing to expensive CI runs.
+
+*   **Gate 1: Interface Freeze (Local):** Before any CI, Lane A must produce a local build where the new library passes a deterministic output test (same input = same hash). *Revision:* Feature branch head. *Checker:* Lead Engineer (manual review of hash test).
+*   **Gate 2: Unit Test Suite (CI):** Trigger CI only after Gate 1. The known flaky thumbnail check is marked as "non-blocking" for this specific run to prevent false negatives, provided the failure mode matches historical logs. *Revision:* Feature branch head. *Checker:* CI Pipeline.
+*   **Gate 3: Integration & Downstream (Staging):** Deploy to Staging. Run integration tests against the smaller dataset. Verify no downstream service errors in logs. *Revision:* Staging promotion of Gate 2 passing commit. *Checker:* SRE On-Call + Automated Log Analysis.
+*   **Gate 4: Cache Stability Verification (Staging):** Process a fixed batch of 1,000 images twice. Confirm CDN cache hit rates improve and cache keys remain identical between runs. *Revision:* Same as Gate 3. *Checker:* Lane C Lead.
+
+#### 3. Review Process
+Reviews are independent to prevent confirmation bias.
+
+*   **Code Review:** The Lead Engineer reviews Lane A's core swap. A senior developer from one of the *dependent* microservice teams reviews Lane B's adaptations to ensure no subtle contract violations.
+*   **Operational Review:** The SRE On-Call reviews the deployment runbook and rollback script independently of the code authors. They must sign off on the "Anomaly Definition" (what metrics trigger a rollback) before Gate 3.
+
+#### 4. Landing Strategy
+The merge and deployment strategy prioritizes rapid recovery.
+
+*   **Merge Protocol:** Merge to `main` only after Gates 1–4 pass. The merge commit is the sole artifact promoted to Production.
+*   **Deployment:** Canary deployment to 5% of production traffic. Monitor CDN re-processing rates and error logs for 30 minutes.
+*   **Human Decision Points:**
+    *   **Go/No-Go for Production:** Requires explicit approval from both the Lead Engineer and SRE On-Call after reviewing Gate 4 results.
+    *   **Flaky Test Triage:** If the thumbnail check fails in a new pattern (not historical), a human must decide whether to block or override.
+*   **Rollback Plan:** If CDN re-processing spikes or error rates exceed 0.1% during the canary:
+    1.  Immediately revert the `main` branch to the pre-deployment commit.
+    2.  Trigger the automated rollback pipeline (estimated 15 minutes).
+    3.  Do not attempt to "fix forward" in production.
+*   **Post-Landing:** Once 100% traffic is stable for 24 hours, remove the old library code in a follow-up ticket to minimize risk during the critical swap.

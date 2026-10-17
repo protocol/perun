@@ -1,0 +1,58 @@
+**Delivery Plan: GDPR Data Export & Deletion**
+
+**Scope & Constraints**
+*   **In Scope:** Two new endpoints (Export, Delete) on the User Profile Service; aggregation logic for 5 storage systems; atomic deletion guarantees.
+*   **Out of Scope:** Direct schema migrations on the shared Billing database (prohibited); changes to backup retention policies; production data testing.
+*   **Critical Risks:** Irreversible deletion; fragmented data consistency; 45min CI cost; flaky network check; end-of-month deadline.
+
+**Lane Decomposition & Ownership**
+*   **Lane A: Spec & Contract (Product Analyst + Security)**
+    *   *Owner:* Product Analyst (PA).
+    *   *Work:* Define exact data fields per storage system; define "complete archive" format (JSON/ZIP); define deletion success criteria (all-or-nothing).
+    *   *Parallel:* Yes. Must complete before Lane B/C.
+    *   *Output:* Testable spec with acceptance criteria; Security threat model for deletion endpoint.
+*   **Lane B: Export Implementation (Builder)**
+    *   *Owner:* Builder 1.
+    *   *Work:* Implement read-only aggregation across 5 systems; stream to archive format.
+    *   *Parallel:* Yes (after Spec).
+    *   *Constraint:* Read-only; no state mutation.
+*   **Lane C: Deletion Implementation (Builder)**
+    *   *Owner:* Builder 2 (Distinct from Builder 1).
+    *   *Work:* Implement transactional deletion wrapper. Must use a "prepare-commit-rollback" pattern to ensure atomicity across systems. If any system fails, all changes roll back.
+    *   *Parallel:* Yes (after Spec).
+    *   *Constraint:* High risk; requires dry-run mode.
+*   **Lane D: Independent Verification (QA + Security)**
+    *   *Owner:* QA Lead + Security Engineer.
+    *   *Work:* Verify data completeness (Export) and total removal (Delete) in a staging environment mirroring the 5 systems. Verify rollback logic by simulating mid-stream failures.
+    *   *Dependency:* Runs only on the exact SHA produced by Lanes B+C integration.
+
+**Gates & Checks**
+*   **G1 (Spec):** PA + Security Lead sign-off on data scope and atomicity strategy. *Base: Main.*
+*   **G3 (Design):** Architecture Decision Record (ADR) for the transactional wrapper. Joint review with Billing Squad lead (due to shared schema proximity, even if no migration).
+*   **G4 (Implement):** Code committed with unit tests. Builder 1 and 2 work in isolated worktrees.
+*   **G5 (Verify):**
+    *   *Revision:* Exact merge commit of B+C.
+    *   *Action:* Full stack up in Staging. Run export against seeded data. Run delete with forced failure injection to prove rollback.
+    *   *CI Strategy:* Run full 45min pipeline **once** per candidate SHA. If the flaky network check fails, manual retry allowed only once; second failure blocks until root cause identified (not auto-retried).
+*   **G6 (Review):**
+    *   *Reviewers:* Senior Engineer (non-builder) + Security Lead.
+    *   *Focus:* Data consistency, atomicity guarantees, PII handling in logs.
+*   **G7 (Integrate):** Merge to integration branch. Re-run affected CI gates on final SHA.
+
+**Landing & Human Gates**
+*   **Merge Strategy:** Train land. Lanes B and C merge to a feature branch, verified, then merged to `main` via PR.
+*   **Human Approval Required:**
+    1.  **Security Lead:** Must explicitly approve the G6 security verdict before merge.
+    2.  **Identity Squad Owner:** Must approve the G8 Deployment to Production.
+    3.  **Billing Squad Lead:** Must acknowledge the design review (G3) regarding shared schema safety.
+*   **Deployment:** Manual trigger to Prod after G8 approval. Feature flag enabled for internal testing first, then 1% canary, then 100%.
+
+**Rollback Plan**
+*   **Trigger:** Any data inconsistency report, failed deletion atomicity, or SLO breach post-deploy.
+*   **Action:**
+    1.  **Code:** Immediate feature flag toggle to disable new endpoints (zero-downtime).
+    2.  **Data:** No automated data rollback possible due to irreversible deletes. Reliance on 7-day backup snapshots for manual restoration by DBA team.
+    3.  **Decision:** Security Lead + Product Owner authorize snapshot restore if corruption detected.
+
+**Timeline Discipline**
+*   Backward plan from month-end. Buffer 3 days for CI flakiness and Security review. If G5 verification fails twice, escalate to refactor the transactional wrapper (do not retry same approach).

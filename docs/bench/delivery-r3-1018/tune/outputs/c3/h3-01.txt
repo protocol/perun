@@ -1,0 +1,67 @@
+### Delivery Plan: Dark Mode Tokens & Embedded Widget Support
+
+**Ruling: Scope & Compatibility**
+*   **Choice:** Implement CSS custom properties (tokens) for dynamic switching in the Portal and Sales Widget; generate static fallback CSS assets for the Support Widget's legacy engine.
+*   **Why:** Dynamic switching fails on the Support Widget's legacy engine; static generation ensures compatibility without forcing an engine upgrade.
+*   **Cost if wrong:** Supporting legacy via dynamic JS would break the Support Widget entirely, causing a P0 outage for support agents.
+
+**Ruling: CI Strategy**
+*   **Choice:** Split visual regression suites into "Core Tokens" and "Widget Integration" lanes; run Core first, only triggering Widget suites if Core passes.
+*   **Why:** Prevents 30-minute timeout false failures in widgets from blocking core token validation; isolates flakiness.
+*   **Cost if wrong:** Monolithic CI runs will continue to time out, delaying all releases and requiring manual retries.
+
+---
+
+#### Lanes & Parallelism
+
+1.  **Lane A: Core Token Definition (Serial Start)**
+    *   **Owner:** Builder (Design System Specialist).
+    *   **Work:** Define dark mode tokens in `acme-core`; update contrast ratio logic; add unit tests for token values.
+    *   **Dependency:** None. Must complete before Lanes B and C.
+
+2.  **Lane B: Portal & Sales Widget Integration (Parallel)**
+    *   **Owner:** Builder (Frontend).
+    *   **Work:** Implement theme toggle logic; consume new tokens in Portal and Sales Widget; add accessibility (a11y) tests for contrast.
+    *   **Dependency:** Lane A (requires published canary of new tokens).
+
+3.  **Lane C: Support Widget Static Fallback (Parallel)**
+    *   **Owner:** Builder (Legacy Systems).
+    *   **Work:** Create build script to generate static dark CSS from tokens; integrate into legacy build pipeline; verify rendering in legacy engine sandbox.
+    *   **Dependency:** Lane A (requires token source).
+
+4.  **Lane D: Independent QA & Accessibility (Parallel to B/C, after A)**
+    *   **Owner:** QA Specialist (Independent).
+    *   **Work:** Verify contrast ratios on exact revision; test theme switching flow; validate static fallback rendering.
+    *   **Constraint:** Cannot be the same person as Lane B or C builders.
+
+#### Gates & Checks
+
+*   **G1 Spec:** Freeze token names and contrast requirements. Pin base SHA of `acme-core`.
+*   **G3 Design:** ADR confirming static fallback strategy for Support Widget.
+*   **G4 Implement:**
+    *   Lane A: Unit tests green.
+    *   Lanes B/C: Local build green, no console errors.
+*   **G5 Verify (Exact Revision):**
+    *   **Core:** Token unit tests + contrast audit (automated).
+    *   **Widgets:** Visual regression suite (split job). If timeout occurs, fail closed; do not retry automatically without log analysis.
+    *   **Support:** Verify generated static asset loads correctly in legacy sandbox.
+*   **G6 Review:**
+    *   **Token Config:** Requires approval from **Senior Staff Engineer** (mandatory human gate).
+    *   **Integration:** Peer review by engineer not involved in Lanes B/C.
+    *   **Security/A11y:** Independent verification of contrast ratios and no XSS in theme injection.
+
+#### Landing & Rollback
+
+*   **Merge Strategy:**
+    1.  Land Lane A (`acme-core`) behind a feature flag or as a minor version bump to maintain backward compatibility.
+    2.  Once Lane A is published to the private registry, land Lanes B and C targeting the new version.
+    3.  Final integration SHA must pass the split CI pipeline.
+*   **Human Decisions Required:**
+    *   **Senior Staff Engineer:** Approval of the shared token configuration file change (prevents breaking all three apps).
+    *   **Product Owner:** Sign-off on the visual fidelity of the dark mode before wide rollout.
+    *   **Release Manager:** Authorization to publish the new `acme-core` package version.
+*   **Rollback Plan:**
+    *   If tokens break builds: Revert `acme-core` commit immediately; consumers will fail to resolve new version, retaining old light-mode-only build.
+    *   If widgets render incorrectly: Disable dark mode feature flag in Portal/Sales; revert static asset generation script in Support Widget.
+
+**Timeline:** Target completion 2 weeks prior to quarterly review to allow buffer for CI flakiness resolution.
