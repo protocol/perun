@@ -1,0 +1,20 @@
+**Recommendation: Do not roll out platform-wide yet.**
+
+The test shows a promising lift in sign-ups (9% to 12%), but the decision is currently **UNVERIFIED** because critical downstream metrics are missing. You have measured acquisition but ignored retention and cost efficiency. Rolling out now risks scaling a feature that attracts low-quality users or destroys unit economics.
+
+**Main Failure Modes:**
+1.  **Hidden Unit Economics:** You assumed revenue scales linearly with sign-ups, but you spent $120,000 on credits. If the 150 incremental users do not generate enough lifetime value (LTV) to cover their portion of those credits plus ongoing infrastructure costs, the "win" is actually a financial loss.
+2.  **Retention Leak:** Without the 90-day churn rate, you cannot know if the "zero-config" promise leads to frustration later. If variant users churn faster than control users, you are filling a leaky bucket with expensive traffic.
+3.  **Support Scalability:** If "zero-config" shifts complexity from setup to runtime errors, support ticket volume could spike, eroding the margin gained from higher conversion.
+
+**Stop/Pivot Trigger:**
+ Halt or revert the rollout if the **90-day retention rate** for the variant cohort is **lower than the control cohort**, or if the **Cost Per Acquired Customer (including the prorated $120k credit spend)** exceeds the **LTV of a free-tier user** converted to paid. Specifically, if the incremental revenue from the 150 extra users does not exceed the $120,000 cost within the first year, the feature is not viable.
+
+**Hidden Assumptions & Arithmetic Issues:**
+*   **Linear Revenue Fallacy:** Assuming sign-ups translate linearly to revenue ignores that free-tier users often have near-zero marginal revenue. The $120,000 spend implies a cost of **$800 per incremental sign-up** ($120k / 150 users). Unless these users convert to paid plans extremely quickly, this CAC is likely unsustainable.
+*   **Peeking Risk:** While the test ran for a full month, ensure the sample size (5,000) was pre-committed based on a Minimum Detectable Effect calculation. If the team watched daily results and stopped because it looked "good," the p-value is invalid.
+*   **Vanity vs. Value:** Sign-ups are a vanity metric if they do not lead to the core action (building/retaining). The North Star should be active usage, not just registration.
+
+**This Week's Step:**
+1.  Query the database for the **Day-30 and Day-60 retention rates** of the variant vs. control cohorts immediately; do not wait for Day-90 to see the trend direction.
+2.  Calculate the **break-even conversion rate** required to amortize the $120,000 credit spend over 12 months given your current average revenue per user (ARPU). If the required rate is unrealistic, pivot the incentive structure before any further rollout.

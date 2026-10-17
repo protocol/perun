@@ -99,6 +99,16 @@ motion (self-serve activation is the funnel), the experiment surface is the onbo
 path — same rigor applies; "it converted better this week" without a controlled test is a trend,
 not a causal claim.
 
+### 6. Asked for a call? Recompute, then decide
+Recompute the stated lift, rates and any significance claim from the stated counts, and lead
+with a figure that does not reconcile (the corrected number, or `UNVERIFIED` where the counts
+are missing). Name the confounders already in the stated facts (a concurrent campaign, novelty,
+seasonality, mix shift, a lagging guardrail). Give ONE call: ship, extend to the pre-committed N,
+or stop. Derive the stop tripwire from the stated numbers (the break-even rate at which the gain
+cancels, a guardrail floor), with number, date and action, at a level the plan as stated does not
+already trip. An arbitrary round threshold is not a tripwire. The user's own baseline stays the
+only benchmark.
+
 ## Stage-awareness
 Keys to the stage model in `deep-code-review` (the `STAGE` field and *Project
 stage*). Early, less instrumentation is correct; the cost of a metrics stack on a
@@ -162,4 +172,6 @@ product-analytics vs ops-observability identifier seam is described in
 - A retention read ends with named events/cohorts to pull this week and the result that
   would change the decision, not a request for more data
   (`ends-with-a-this-week-step-not-a-data-request`).
+- A "give a call" experiment ask recomputes the stated lift, names the confounders, and gives one call
+  with a tripwire derived from the stated numbers (`experiment-call-recomputes-then-decides`).
 - `evals/evals.json` plants these cases.

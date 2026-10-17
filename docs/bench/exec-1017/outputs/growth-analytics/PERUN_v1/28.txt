@@ -1,0 +1,16 @@
+**Recommendation: Do not roll out Variant A yet; extend the test to a pre-committed sample size.**
+
+The observed 3.0% absolute lift (25.0% vs 22.1%) is mathematically correct based on your counts, but the decision is `UNVERIFIED` because the test design lacks a pre-committed stopping rule. Without a fixed sample size calculated for a specific Minimum Detectable Effect (MDE) or a valid sequential testing bound, checking significance after 28 days constitutes "peeking," which inflates the false-positive rate. A 3-point lift on 6,100 total users may be statistical noise rather than a causal win. Furthermore, while the immediate unit economics appear positive ($45 revenue vs $30 acquisition cost), the unknown impact on 90-day LTV and support overhead creates a risk that the variant attracts lower-quality users who churn faster or require expensive hand-holding, eroding the margin.
+
+**Primary Failure Modes:**
+1.  **Quality/Churn Shift:** Variant A accelerates completion but attracts users who do not find long-term value, causing 90-day retention to drop below the 5% monthly churn baseline, destroying LTV despite higher activation.
+2.  **Hidden Support Costs:** The "Smart" builder generates complex edge cases, increasing support ticket volume by >15% and negating the $3.00 per-user gross profit gain.
+3.  **Traffic Mix Confounder:** The 28-day window may have coincided with a change in ad channel mix rather than the product change, falsely attributing a traffic quality shift to the variant.
+
+**Stop/Change Tripwires (Monitor for 30 days post-full rollout):**
+*   **Stop immediately** if 30-day retained revenue per user is <1% higher than the Variant B baseline (indicating the lift is purely vanity activation).
+*   **Revert immediately** if support tickets per completed document rise >15% above the current baseline.
+*   **Pause expansion** if the 60-day churn rate exceeds 7% month-over-month (a 2% absolute increase over the 5% baseline).
+
+*Note: Calculate the required sample size for a 95% confidence level with 80% power before restarting the read; do not make a final go/no-go decision on the current 28-day snapshot.*
+*Route PII and user identifiers for this cohort analysis to `privacy-compliance.md` protocols; ensure IDs remain pseudonymous.*

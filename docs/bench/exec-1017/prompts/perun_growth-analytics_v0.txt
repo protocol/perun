@@ -1,0 +1,165 @@
+---
+name: growth-analytics
+description: >-
+  Use when deciding what to measure once building or shipping: North Star
+  metric, AARRR funnel (retention first), event taxonomy, A/B reads. Works on
+  the user's own analytics; never fabricates benchmarks. Not product-
+  discovery. Opt-in overlay: --with-growth.
+license: MIT
+metadata:
+  author: deep-code-review contributors
+  version: "1.1.2"
+---
+
+# Growth analytics
+
+Decide what to measure, and read it honestly, once the product is being built
+or shipped. The failure this kills is a dashboard full of numbers that rise
+while the business does not: vanity metrics, instrument-everything noise, and
+invented "good" thresholds. Measure the user's own data against the user's own
+baseline; never assert a benchmark the model cannot source.
+
+Persisted artifacts stay normal English. Chat may be terse. Lookup table:
+`INDEX.md`; read it instead of opening references blindly.
+
+---
+
+## The boundary (what this is, and is not)
+
+- **vs `product-discovery`:** discovery decides *whether* to build and reads
+  the **product-market-fit threshold** (a verdict). This runs the *standing*
+  measurement system afterward — the North Star, the funnel, the event
+  taxonomy, what to instrument as the product grows.
+- **vs `deep-code-review`'s `observability.md` (domain M):** that is **system
+  health** — logs, traces, error rates, SLOs. This is **product behaviour** —
+  what users do. They meet at one seam (below); do not restate ops observability
+  here.
+- **Not** a source of market benchmarks, and not the user's analytics tool. It
+  designs *what to measure and how to read it*; the figures live in the user's
+  analytics.
+
+## Prime directive — the user's own data, never invented
+
+- **No fabricated benchmarks.** Never assert "good retention is X%", "average
+  conversion is Y%", or a competitor's numbers. Compare the user's metric to the
+  **user's own prior baseline and trend**, not to a number the model made up.
+- **No invented metrics.** A metric with no instrumentation behind it is
+  `UNVERIFIED`; say so and name what to instrument, do not estimate the value.
+- **Route real figures to the user's analytics.** "How are we doing?" is
+  answered from the user's data; without it, return the *question to run*, not a
+  number.
+
+## The method
+
+### 1. One North Star (customer value, not vanity)
+Pick a single metric that rises only when a user gets **real value** and that
+the business depends on (e.g. weekly active users completing the core action;
+value delivered, not pageviews or raw signups). Vanity metrics (cumulative
+signups, pageviews, downloads) go up regardless and mislead — reject them.
+Pair the North Star with a small set of input metrics that move it.
+
+### 2. Read AARRR bottom-up (retention first)
+Acquisition → Activation → **Retention** → Revenue → Referral, but *read and
+fix from the bottom*: retention leaks make acquisition spend wasted. Diagnose in
+order — is the core action retained? then activated? then acquired? Pouring
+acquisition into a leaky retention bucket is the classic waste.
+
+### 3. Event taxonomy that answers a named question
+Instrument **only what answers a question you can name** ("do users return to
+the core action in week 2?"). Every event has a documented name, the question it
+answers, and its properties. Not instrument-everything — unused events are cost
+and noise. **The identifier seam:** product cohorts need a **stable per-user
+identifier** (to follow a user across sessions) — this *inverts* the ops rule in
+`observability.md`, which avoids high-cardinality per-user labels; state the seam,
+do not restate observability. Keep that id **pseudonymous**; route PII, consent,
+and retention limits to `deep-code-review`'s `privacy-compliance.md` (domain Q).
+
+### 4. Instrument for the stage (do not over-measure early)
+- `prototype` → almost nothing; talk to users (that is `product-discovery`).
+- `mvp` → activation + retention of the **core action**, and the one question
+  that tells you it is working.
+- `growth` → the full funnel, the North Star + inputs, retention cohorts,
+  experiment read-out.
+- `mature` → guardrail metrics, an experimentation platform, and metric
+  governance (retire dead events; one definition per metric).
+
+### 5. Experiment rigor — pre-commit the design, no peeking
+An A/B result is only real if the test was designed before it was read. The failure class:
+watch the dashboard and **stop the moment p < 0.05** ("peeking") — repeated looks inflate the
+false-positive rate far above the nominal 5%, so the "win" is noise. Require one of: a
+**pre-committed sample size / duration** (compute the minimum detectable effect and N up front,
+then read **once** at the end), or a **sequential-testing** design whose stopping rule matches the
+looks you actually take — an **always-valid / anytime-valid** bound (mSPRT, confidence sequences)
+for genuinely continuous monitoring, or a **group-sequential / alpha-spending** bound for a
+**pre-specified schedule** of interim looks — never a fixed-horizon test peeked at daily. Pre-declare the **primary** metric and a **guardrail**, so a win on a secondary
+metric can't be cherry-picked and a "win" that regresses the guardrail is caught. Where variance is
+high and a pre-period exists, **CUPED**-style variance reduction buys power without more users. A
+result read on day 2 of a 14-day test is `UNVERIFIED`, not a win. For a **product-led-growth**
+motion (self-serve activation is the funnel), the experiment surface is the onboarding/activation
+path — same rigor applies; "it converted better this week" without a controlled test is a trend,
+not a causal claim.
+
+## Stage-awareness
+Keys to the stage model in `deep-code-review` (the `STAGE` field and *Project
+stage*). Early, less instrumentation is correct; the cost of a metrics stack on a
+`prototype` is the over-engineering to stop. `growth` is where the scoreboard
+earns its keep.
+
+## Definition of done
+- One customer-value North Star named (vanity metrics rejected), with input
+  metrics that move it.
+- The funnel is read bottom-up (retention before acquisition).
+- Every proposed event names the question it answers; nothing instrumented "just
+  in case".
+- No benchmark, threshold, or metric value is asserted that the user's data did
+  not supply; unknowns are `UNVERIFIED` and routed to the user's analytics.
+- An experiment read-out names its **pre-committed design** (a fixed N/duration or a valid
+  sequential rule) plus a **primary and a guardrail** metric; a peeked mid-test result is never
+  reported as a win.
+- The answer ends with a **this-week step**: two or three concrete actions naming the exact
+  event, cohort, query or test design, and the result that would change the decision. "Share
+  your data and I will help" is not a step; an unsupplied number stays `UNVERIFIED`.
+- The identifier seam and PII routing are stated, not restated from
+  `observability.md` / `privacy-compliance.md`.
+
+## Anti-rationalization (excuse → rebuttal)
+
+| Excuse | Rebuttal |
+|---|---|
+| "What's a good retention rate?" | Not a number the model can source. Compare to the user's own baseline and trend; route to their analytics. |
+| "Track everything so we have it later." | Unused events are cost and noise. Instrument only what answers a named question. |
+| "Signups are up — we're growing." | Signups are vanity; they rise regardless. Read retention of the core action first. |
+| "Estimate our conversion so the deck is done." | An un-instrumented metric is UNVERIFIED. Name what to instrument; do not invent the value. |
+| "Use the raw user id for cohorts." | Cohorts need a *stable* id, but keep it pseudonymous; route PII/consent to `privacy-compliance.md`. |
+| "It hit significance on day 2 — ship it." | Peeking inflates the false-positive rate; read a fixed-horizon test **once** at the pre-committed end, or use a valid sequential rule. Day 2 of a 14-day test is `UNVERIFIED`, not a win. |
+
+## Standards (by name; verify a figure/URL before citing one)
+AARRR / "Pirate Metrics" (McClure); the North Star Metric framework;
+vanity-vs-actionable metrics; retention cohort analysis; "one metric that
+matters"; activation / aha-moment analysis; experiment rigor — peeking, fixed-horizon vs
+sequential testing, always-valid p-values, CUPED variance reduction; product-led growth
+(self-serve activation). Named leads only — fetch and log a
+source before citing a specific figure or threshold (repo convention). The
+product-analytics vs ops-observability identifier seam is described in
+`observability.md` (domain M); privacy of user identifiers in
+`privacy-compliance.md` (domain Q).
+
+## Verification
+- "What's a good retention rate?" is answered from the user's baseline, never a
+  fabricated benchmark (`no-fabricated-benchmarks`).
+- A North Star request rejects vanity metrics for a customer-value metric
+  (`north-star-not-vanity`).
+- "What should I track?" instruments only what answers a named question
+  (`instrument-answers-a-named-question`).
+- "How are we doing?" routes to the user's analytics / returns `UNVERIFIED`
+  without data, never an invented number (`routes-real-figures-to-analytics`).
+- A day-2 read of a 14-day A/B test is peeking → `UNVERIFIED`, not a win; a
+  pre-committed design + primary/guardrail is required
+  (`experiment-peeking-is-not-a-win-precommit-or-sequential`).
+- Rising signups with flat weekly-active users is read as a retention/activation
+  leak; the funnel is diagnosed bottom-up (retention before acquisition), not by
+  scaling ad spend (`diagnose-retention-before-pouring-in-acquisition`).
+- A retention read ends with named events/cohorts to pull this week and the result that
+  would change the decision, not a request for more data
+  (`ends-with-a-this-week-step-not-a-data-request`).
+- `evals/evals.json` plants these cases.

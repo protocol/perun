@@ -1,0 +1,13 @@
+**Recommendation:** Do not authorize a global rollout yet. The test result is **UNVERIFIED** because the analysis implies "peeking" or lacks a pre-committed design. You reported a win based on a 21-day window without stating if that duration or the sample size (12k/11.5k) was fixed *before* the test started to detect a specific effect size. If the team checked significance daily and stopped at day 21 because $p < 0.05$, the false-positive rate is inflated far above 5%, making the 28% uplift likely noise. Additionally, you have no data on the "Referral" leg of the funnel; a feature that annoys free users might spike short-term conversion while killing organic growth.
+
+**Main Failure Modes:**
+1.  **Statistical False Positive:** The 28% uplift vanishes upon re-testing with a proper fixed-horizon or sequential design, resulting in a $10k development loss plus ongoing maintenance costs for a feature that does not convert.
+2.  **Retention/Churn Leak:** "Spend Alerts" may trigger anxiety, causing free users to delete accounts rather than upgrade. Your assumption that churn stays at 5% is unverified; if churn rises to 7%, the lifetime value (LTV) of the acquired users collapses.
+3.  **Referral Collapse:** If the alerts are perceived as nagging, current free users (your primary referral source) may stop inviting others, starving future acquisition regardless of immediate conversion gains.
+
+**Stop/Change Course Triggers:**
+*   **Uplift Threshold:** If a properly powered, pre-committed re-test shows a relative uplift **below 10%**, halt the rollout. At <10%, the net revenue after accounting for the $10k sunk cost and ongoing server/logic expenses likely fails to justify the engineering maintenance burden.
+*   **Net Revenue Guardrail:** Stop immediately if the **net revenue in the first 60 days** (New Paid Users × $9 - Amortized Dev Cost) trends negative. Specifically, if the variant group's total new revenue does not exceed the control group's by at least **$15,000** (covering the $10k build + 50% buffer for risk) within two months, kill the feature.
+*   **Churn Guardrail:** If free-tier churn in the variant group exceeds **6%** (a 20% relative increase over the historic 5% baseline) during the first month of a wider beta, pause immediately to investigate user sentiment.
+
+**This Week's Step:** Design a new test with a pre-committed sample size calculated to detect a 10% minimum detectable effect (MDE) with 80% power, define "Referral Sign-ups" as a primary guardrail metric, and run it to completion without intermediate significance checks.
