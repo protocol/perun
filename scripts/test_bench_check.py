@@ -32,6 +32,11 @@ try:
     (old / "outputs" / "t1.txt").write_text("x")
     new = bench(root, "new", W(30, "c"), W(30, "d"))
     assert errs(root, new) == [], errs(root, new)
+    # b. accepted aliases: event "prereg_frozen" with key "sha"
+    lj = (new / "ledger.jsonl").read_text()
+    (new / "ledger.jsonl").write_text(lj.replace('"event": "preregistered", "sha256"', '"event": "prereg_frozen", "sha"'))
+    assert errs(root, new) == [], errs(root, new)
+    (new / "ledger.jsonl").write_text(lj)
 
     # a. tune/held id collision
     (new / "scenarios_held.json").write_text(json.dumps([{"id": "t1", "prompt": W(30, "d")}]))

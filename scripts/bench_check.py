@@ -16,7 +16,8 @@ Fails (exit 1, one line per problem) when a bench dir:
      lines is the plain file hash), that line precedes the first non-preregistered line,
      and its timestamp is not later than that line's. Each line after k (appended later)
      must have its file hash appear as a value in a later ledger event, else it is
-     uncovered and fails. The canonical key is "sha256"; "preregistered_sha256",
+     uncovered and fails. The canonical event is "preregistered" and the canonical key
+     "sha256"; event "prereg_frozen" and keys "sha", "preregistered_sha256",
      "frozen_list_sha256" and "sha256_of_SHA256-frozen.txt" are accepted. Timestamps are
      "ts" or "iso" (epoch number or ISO-8601); an unparseable one fails, a missing one
      leaves line order as the only check;
@@ -44,7 +45,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 N = 10
-KEYS = ("sha256", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt")
+KEYS = ("sha256", "sha", "preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt")
+PREREG = ("preregistered", "prereg_frozen")
 REPO = Path(__file__).resolve().parent.parent
 
 
@@ -127,13 +129,13 @@ def ledger_errs(d):
         ev.append(e)
 
     def hit(e):  # k = number of frozen lines the event's hash covers; 0 = no match
-        if e.get("event") != "preregistered":
+        if e.get("event") not in PREREG:
             return 0
         return next((k for k, h in enumerate(hs, 1) for key in KEYS
                      if isinstance(e.get(key), str) and len(e[key]) >= 12 and h.startswith(e[key].lower())), 0)
     ks = {n: hit(e) for n, e in enumerate(ev)}
     pre = [n for n, k in ks.items() if k]
-    gen = next((n for n, e in enumerate(ev) if e.get("event") != "preregistered"), len(ev))
+    gen = next((n for n, e in enumerate(ev) if e.get("event") not in PREREG), len(ev))
     if not pre:
         return [f"{d}: ledger.jsonl has no preregistered event matching a line-prefix hash of SHA256-frozen.txt"]
     p, g = ev[pre[0]], ev[gen:gen + 1]
