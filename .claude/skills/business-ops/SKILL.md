@@ -1,9 +1,10 @@
 ---
 name: business-ops
 description: >-
-  Use for money and compliance questions on taking a product to market. Lane
-  A: pricing, unit economics, LTV/CAC, runway, TAM sizing, applied to YOUR numbers. Lane
-  R: legal, tax, securities, fundraising - names the regime, routes to a
+  Use for money and compliance questions on taking a product to market: pricing,
+  unit economics, LTV/CAC, runway, TAM sizing, and legal, tax, accounting or
+  fundraising questions. Leads with the call on your numbers and labelled
+  assumptions; routes only the binding or jurisdiction-specific part to a
   professional. Educational, not advice. Opt-in: --with-business.
 license: MIT
 metadata:
@@ -13,87 +14,69 @@ metadata:
 
 # Business ops
 
-Two lanes, one hard rule between them. The money-and-compliance questions a
-solo/small builder hits split cleanly: arithmetic you can **apply** to the
-user's own numbers, and regulation-dependent questions you must **route** to a
-licensed professional. Putting a Lane-R question in Lane A — answering a
-securities, tax, or employment-law question as if it were math — is the failure
-this skill exists to prevent.
+Money and compliance questions from a small builder get a decision memo, not a referral.
+Answer the question asked, on the user's numbers. Legal, tax and accounting questions get the
+general rule and the usual practice with labelled assumptions and computed figures, not a referral;
+only a jurisdiction-specific or high-stakes item gets a short routing note.
+Every part of an answer sits in one of three tiers, and the tier sets
+how firmly it is stated. Putting a tier-3 question in tier 1 (answering a securities, tax or
+employment-law determination as if it were math) is the failure this skill exists to prevent.
 
-**Standing disclaimer (state it once, up front, every engagement):** this is
-educational information, not legal, tax, accounting, financial, or investment
-advice.
+**Standing disclaimer (one short closing sentence, once per engagement; never a banner or opener):**
+this is educational information, not legal, tax, accounting, financial, or investment advice.
 
 Persisted artifacts stay normal English. Chat may be terse. Lookup table:
 `INDEX.md`; read it instead of opening references blindly.
 
 ---
 
-## The asymmetric boundary (decide the lane first)
+## The memo (every answer, in this order)
 
-Before answering any money/compliance question, classify it:
+1. **The call.** One or two sentences: the recommendation or verdict on the user's numbers
+   ("take B unless churn passes 4%", "reject as structured", "five-year straight line, zero
+   salvage"). If the user gave options, choose one. If no call is possible, name the one fact
+   that blocks it.
+2. **The numbers.** Formula, the user's figures, then a labelled assumption for each missing
+   input (low, base, high, marked ASSUMED) and the result under each. A formula with blank
+   variables is not an answer. When the user gave nothing to bracket an input (a bare "fill in
+   our CAC"), return the formula and how to obtain the figure instead.
+3. **What flips it, and the trigger.** The one input that changes the call, with its value,
+   and a stop or pivot trigger computed from the user's figures with a date. Name decision
+   thresholds as rules of thumb the user can replace, never as facts about their market, and end
+   with a step doable this week, phrased "if X, consider Y".
+4. **Routing note, only when needed.** One or two lines, and only for a jurisdiction-specific or
+   high-stakes item (a filing, a securities offering, a worker-classification call, a regulated
+   domain): the exact question to bring to the licensed professional and what is time-sensitive.
+   Skip it when the general rule settles the question.
 
-- **Does the correct answer depend on a law, regulation, or a legal/financial
-  determination** (what is owed, what is permitted, what must be disclosed, how
-  something must be classified)? → **Lane R: route.**
-- **Or is it arithmetic on the user's own numbers**, where the user owns the
-  inputs and the decision? → **Lane A: apply, showing the work.**
+Do not print "tier" or "Lane" labels or open with a refusal: the triage is yours, not the
+reader's.
 
-When unsure, treat it as Lane R. Lane A is reversible structuring; Lane R is
-where a confident wrong answer causes real legal or financial harm.
+## The three tiers (decide per part before writing; when unsure, answer at tier 2 and mark the unverified part)
 
-## Lane A — arithmetic (apply, never direct)
+- **Tier 1, compute.** Pricing structure (value-based, cost-plus, competitor-anchored), unit
+  economics (LTV, CAC, LTV:CAC, payback, margin, burn, runway, break-even) and ownership or
+  dilution arithmetic on terms the user supplies. Name the pricing method (Van Westendorp
+  survey the user runs; usage-, outcome-, per-seat or good-better-best packaging) and apply it
+  to the user's willingness to pay. Choosing between options the user put on the table is the
+  job; setting a price or spend out of nothing is not.
+- **Tier 2, explain and recommend.** How a tax, accounting, legal, regulatory or fundraising
+  rule usually works, what companies in the user's position usually do and why, and which facts
+  tip it. Name the regime, state the usual treatment as such, and when the user asks "how
+  much", give an illustrative figure on their own numbers, labelled illustrative.
+- **Tier 3, route.** The binding determination: the filing, the amount actually owed, whether
+  a regime binds this company, what an instrument legally permits, how to structure a
+  securities offering. Securities (selling equity or SAFEs **is a securities offering**), tax,
+  employment classification and privacy compliance (GDPR/CCPA and the like) live here. Hand
+  each to the right licensed professional with the exact question to bring, and never state the
+  verdict ("you are covered"). Interpreting conversion mechanics (cap, discount, pro-rata, MFN)
+  or setting terms is tier 3.
 
-Pricing structure (value-based vs cost-plus vs competitor-anchored, on the
-user's inputs) and unit economics: LTV, CAC, LTV:CAC, payback period, gross and
-contribution margin, burn, runway, break-even.
-
-- **Show the formula and every assumption.** `runway = cash ÷ net monthly burn`,
-  then the numbers the user gave and the ones you assumed. The reader can audit
-  and change any input.
-- **Apply, don't direct.** Present the math and a sensitivity range ("at CAC X
-  and churn Y, payback is Z months"); the pricing/spend **decision is the
-  user's**. Never "you should charge $49."
+## What you never do
 - **Never fabricate the inputs.** CAC, churn, conversion, margin, and any
-  competitor price are the user's real numbers or flagged unknowns with how to
-  obtain them — never invented, and thin data is labelled thin.
-- **Name the pricing *method*; apply it to the user's willingness-to-pay — never set the price.**
-  Beyond the value/cost-plus/competitor structure above, the method space is the user's to pick and
-  populate: a **Van Westendorp** price-sensitivity survey (the user runs it; you structure the four
-  questions and read back the acceptable-price band), and the packaging model — **usage-based,
-  outcome-based, per-seat, or good-better-best tiers** (tie it to the user's value metric;
-  usage- and outcome-based increasingly fit AI products whose cost scales with use). Lay out the
-  options and their trade-offs on the user's own data; the model choice and the number stay the
-  user's (apply-don't-direct, above). Never fabricate a survey result or a "market" price.
-
-- **End Lane A with a decision aid, not bare math.** Real figures stay the user's slots; the
-  structure around them does not. Give (1) a one-line read of the result ("payback is N months, so ...");
-  (2) the formula with the user's slots filled in and the one input that flips the answer
-  (`break-even price = cost per seat ÷ (1 − target margin)`); (3) decision thresholds named as
-  rules of thumb the user accepts or replaces, never as facts about their market (e.g. "if
-  LTV:CAC < 3 or payback > 12 months, fix before spending more"); (4) a next step doable this week,
-  phrased "if X, consider Y", such as testing a price on new signups only or instrumenting CAC.
-  For Lane R, add what the user can do before the professional call: the facts and documents to
-  bring and which item is time-sensitive. An answer that only says "it depends / ask a professional"
-  fails the reader.
-
-## Lane R — regulation-dependent (route, never conclude)
-
-Legal (entity choice, contracts, IP, terms), tax (what is owed, where, when),
-**securities** (raising money by selling equity or SAFEs **is a securities
-offering**), employment classification (contractor vs employee), and privacy
-compliance (GDPR/CCPA and the like).
-
-- **Name the regime, then route.** Identify which body of law/regulation the
-  question falls under and hand it to a licensed professional (lawyer, CPA,
-  tax adviser). Do **not** state the conclusion, the amount owed, the filing, or
-  the "this is legal" verdict.
-- **Fundraising is the boundary crossing.** The moment the question is "how do I
-  raise a round / issue SAFEs / sell equity," it is a securities matter → counsel.
-  Lane A may do **ownership / dilution arithmetic on terms the user supplies**; it
-  does **not** interpret an instrument's conversion mechanics (cap, discount,
-  pro-rata, MFN), set or assess terms, or opine on what is permitted — those are
-  Lane R.
+  competitor price are the user's real numbers, labelled assumptions bracketed by the user's
+  own figures, or flagged unknowns with how to obtain them; never invented as the user's
+  data, and thin data is labelled thin.
 - **Never fabricate** a statute, rate, deadline, threshold, or a jurisdiction's
   rule. An `UNVERIFIED` + "confirm with a professional" beats a plausible wrong
   figure.
@@ -109,20 +92,19 @@ routes the binding question to counsel; it never concludes that a regime applies
 
 ## Stage-awareness
 Keys to the stage model in `deep-code-review`. Early: a simple pricing hypothesis
-and a unit-economics skeleton (Lane A) are enough; heavy legal/tax/fundraising
+and a unit-economics skeleton (tier 1) are enough; heavy legal/tax/fundraising
 structure is premature — note it and defer. As the product raises money, hires,
-or handles regulated data, the Lane-R triggers fire → route then, not before.
+or handles regulated data, the tier-3 triggers fire → route then, not before.
 For privacy-by-design specifics, see `deep-code-review`'s `privacy-compliance.md`
 (domain Q); this skill routes the *obligation* question, that reference covers the
 *engineering*.
 
 ## Definition of done
-- The lane was decided first; Lane-R questions were routed, never concluded.
-- Lane-A answers show the formula and every assumption; no input was fabricated;
-  the decision was left to the user (no directive).
+- The memo order held: the call first, then numbers, flip input and trigger, then what to confirm and with whom.
+- Tier-1 answers show the formula and every assumption; no input was presented as the user's data.
 - Fundraising / securities, tax, employment classification, and legal questions
   went to a licensed professional with the regime named.
-- The educational-information-not-advice disclaimer is present.
+- The educational-information-not-advice disclaimer is present, as the closing line.
 - No invented figure, statute, rate, or deadline.
 
 ## Anti-rationalization (excuse → rebuttal)
@@ -130,9 +112,9 @@ For privacy-by-design specifics, see `deep-code-review`'s `privacy-compliance.md
 | Excuse | Rebuttal |
 |---|---|
 | "Just tell me what to charge." | Apply the math and show the sensitivity; the price is your decision, not a directive. |
-| "Roughly, how much tax will I owe?" | Tax owed is regulation-dependent. Name the regime and route to a CPA; do not estimate the figure. |
-| "Walk me through issuing SAFEs to raise a round." | Selling SAFEs is a securities offering → counsel. Dilution arithmetic on terms you supply is Lane A; interpreting the instrument or setting terms is not. |
-| "Are my contractors correctly classified?" | Worker classification is a legal determination → employment counsel; never conclude it here. |
+| "Roughly, how much tax will I owe?" | Tier 2: the mechanism plus an illustrative figure on your numbers (labelled, UNVERIFIED); the filing amount is tier 3, the CPA's. |
+| "Walk me through issuing SAFEs to raise a round." | Selling SAFEs is a securities offering → counsel. Dilution arithmetic on terms you supply is tier 1; interpreting the instrument or setting terms is not. |
+| "Are my contractors correctly classified?" | Explain the usual test and the facts that tip it (tier 2); the determination is tier 3, employment counsel. |
 | "Estimate our CAC so the model is complete." | An un-instrumented input is UNVERIFIED. Give the formula + how to obtain it; never invent the number. |
 
 ## Standards (by name; verify a figure/URL before citing one)
@@ -149,11 +131,13 @@ otherwise).
 ## Verification
 - A pricing / unit-economics ask applies the user's own numbers with the formula
   and assumptions shown, as math not a directive (`shows-formula-not-directive`).
-- A legal/tax question names the regime and routes to a professional, without
-  concluding (`routes-regulation-questions`).
+- A legal/tax question leads with the call and the usual rule, names the regime, and routes
+  only the binding determination to a professional without concluding (`routes-regulation-questions`).
+- A tax question with figures opens with the recommendation, computes on the user's numbers,
+  and closes with one disclaimer sentence (`leads-with-the-call-on-a-tax-question-with-figures`).
 - A fundraising / SAFE / equity question is flagged as a securities matter and
   routed to counsel (`fundraising-is-a-securities-matter`).
-- A mixed legal + arithmetic ask is split into Lane R (route) and Lane A (apply)
+- A mixed legal + arithmetic ask is split into tier 3 (route) and tier 1 (apply)
   (`business-ops-asymmetric-boundary-lane`).
 - A financial input with no data is not invented; the formula + how-to-obtain is
   returned (`no-fabricated-financials`).
