@@ -1,0 +1,25 @@
+**Database index migration: cuts p99 from 1.2s to 45ms; Lena, please pick rollback strategy A or B.**
+
+**Why:** The `orders` table (14.2M rows) queries for customer history are slow (avg 340ms, p99 1.2s). A new composite index on `(customer_id, created_at, status)` reduces this to avg 12ms, p99 45ms on staging. Write overhead is negligible (3ms → 5ms).
+
+**Change:**
+*   Adds `migration-2024-06-08-add-idx.sql` with online schema change wrapper (est. 7-8 min build on prod, table remains readable).
+*   Updates `order-repository.ts` (3 queries) to use index hints.
+*   Adds `benchmark/bench-index-perf.ts` for validation.
+
+**Risk and rollback:**
+Dropping the index takes ~30 seconds. However, the updated code in `order-repository.ts` contains hard-coded index hints. If the migration rolls back but the code stays, queries will fail or perform full table scans.
+
+**Decision needed:**
+*   **Option A:** Deploy code and migration together. Faster, but if the migration fails post-deploy, the running code references a missing index.
+*   **Option B:** Deploy code first with conditional logic (checks if index exists before applying hints), then run migration. Safer rollback profile, adds ~20 lines of complexity.
+
+**Verified:**
+✅ Staging build time: 4m 23s (8.1M rows).
+✅ Staging benchmark: p99 latency 1.2s → 45ms.
+⏳ Prod build time: estimated 7-8 minutes.
+
+**Lena, please reply with A or B by EOD so we can schedule the prod window.**
+
+---
+*Note: Estimated prod build time is derived from staging row count growth (8.1M → 14.2M). No specific date was provided for the deadline, so "EOD" is used as a placeholder for your immediate decision.*

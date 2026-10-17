@@ -1,0 +1,13 @@
+Replaces the in-memory CSV exporter with a streaming writer to cut peak memory usage from 1.2GB to 45MB on 500k row exports. Export time remains stable (12.3s vs 12.8s).
+
+**Changes**
+- Deleted `csv_exporter.py` and added `streaming_csv_writer.py`.
+- Updated `export_controller.py` to use the new stream.
+- Added `backpressure` lib to `requirements.txt`.
+- Added 14 new tests in `test_streaming_writer.py`; updated existing tests. All tests pass.
+
+**Testing**
+Verified locally with datasets up to 2M rows.
+
+**Question for reviewers**
+We haven't tested the 15M row case used by Northwind (~8GB). I couldn't replicate this in CI. Should we block merging until we get access to a sanitized version of their data, or is it safe to merge now and validate in staging?

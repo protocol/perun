@@ -1,0 +1,22 @@
+This PR adds retry logic with exponential backoff to the webhook sender to improve delivery reliability during transient failures.
+
+**Changes**
+- Implemented retries (up to 3 attempts) with backoff intervals of 1s, 2s, and 4s.
+- Added jitter to the backoff calculation to prevent synchronized retry storms.
+- Refactored the sender module across 3 files (+180 lines, -40 lines).
+
+**Testing**
+- Verified behavior against a local mock server returning 500 errors. All three retries triggered correctly, and the system marked the delivery as failed after the final attempt.
+- Added 8 new unit tests covering the backoff logic; all tests pass.
+
+**Open Question: Thundering Herd**
+While jitter helps desynchronize individual retries, this implementation does not yet include a rate limiter or circuit breaker. If the endpoint is down while we have a large queue (e.g., 1,000 webhooks), retries will still cluster roughly together.
+
+I need your input on how to proceed:
+1. Merge this as-is to handle standard transient errors now, and address the thundering herd scenario in a follow-up PR.
+2. Block this merge until we implement rate limiting or a circuit breaker.
+
+Let me know which approach you prefer for the v1 release.
+
+---
+*Note: Ready for your review and approval before staging deployment.*

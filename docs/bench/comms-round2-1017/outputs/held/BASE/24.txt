@@ -1,0 +1,31 @@
+**Switching reports API to cursor pagination cuts p95 latency from 8.1s to 0.4s at 50k records; Dev, please approve the security approach for tampered cursors and confirm backwards compatibility strategy.**
+
+**Why:** Offset pagination causes severe latency (8.1s) and memory spikes (340MB) at scale. Cursor pagination resolves this.
+
+**Change:**
+- Replaced offset logic with base64-encoded cursors (sort key + ID) in `src/api/reports.ts`.
+- Added dedicated pagination middleware (`src/api/middleware/pagination.ts`).
+- Updated DB queries to support cursor seeking (`src/db/queries/reports.ts`).
+- Expanded test coverage (+89 tests); all passing.
+
+**Performance:**
+- **Latency (50k records):** 8.1s → 0.4s.
+- **Memory (50k records):** 340MB → 28MB.
+- **Latency (10k records):** 2.4s → 0.3s.
+
+**Risk and rollback:**
+- **Security:** Untested case where a user tampers with the cursor value (invalid base64 or injected characters). Current behavior likely returns a 500 error; need confirmation if explicit validation is required before release.
+- **Compatibility:** Undecided on supporting legacy offset parameters. Can cut over immediately or maintain a shim.
+- **Rollback:** Revert commit; API returns to offset behavior instantly.
+
+**Verified:**
+✅ 89 tests passed, 0 failed.
+⏳ Security validation for malformed cursors (Dev input needed).
+⏳ Backwards compatibility decision (Product/Dev input needed).
+
+**Dev**, please specify:
+1. Is explicit cursor validation required, or is a 500 response acceptable?
+2. Should we maintain backwards compatibility for offset params?
+
+---
+*Note: Performance numbers and test counts reflect provided data exactly. No external verification performed.*

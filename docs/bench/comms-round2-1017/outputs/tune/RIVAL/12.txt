@@ -1,0 +1,13 @@
+This PR shifts rate limiting from per-IP to per-account to address the brute-force vulnerability you flagged. The previous threshold (10 attempts per 5 minutes per IP) was trivial to bypass using rotating IPs.
+
+**Changes:**
+- **Logic:** Accounts are now locked for 30 minutes after 5 failed attempts within a 15-minute window.
+- **Files:** Updated `auth_middleware.py`, `rate_limiter.py`, and `login_handler.py`.
+- **Visibility:** Added `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers to help clients track their status.
+- **Tests:** Added 12 new cases covering direct login, SSO, and multi-device scenarios. All tests pass.
+
+**Open Question for Review:**
+I need your advice on `X-Forwarded-For` handling when traffic arrives via our CDN proxy. I've mocked the header in local tests, but I haven't verified behavior against the actual CDN configuration. Specifically, I'm unsure if the header is guaranteed to be present in all cases or if there are scenarios where it might be missing or spoofed. Since you own the security posture here, please let me know if this requires a specific configuration check before we merge.
+
+---
+*Note: Highlighted the untested CDN proxy scenario as the primary approval blocker.*

@@ -1,0 +1,23 @@
+Replace bulk CSV export with a streaming writer to cut peak memory from 1.2GB to 45MB for 500k rows, with export time unchanged (~12s). **Mei and backend team, please approve for merge.**
+
+**Why:** The current implementation loads the entire dataset into memory, causing OOM risks on large exports.
+
+**Change:**
+- Deleted `csv_exporter.py` and added `streaming_csv_writer.py` using backpressure to handle rows incrementally.
+- Updated `export_controller.py` to use the new stream; reduced code by 7 lines.
+- Added 203 lines of tests for the writer and updated existing tests; all 14 new and existing tests pass.
+- Added `backpressure` lib to `requirements.txt`.
+
+**Verified:**
+- ✅ Peak memory dropped from 1.2GB to 45MB on 500k rows.
+- ✅ Export time stable (12.3s vs 12.8s).
+- ✅ Tested successfully with datasets up to 2M rows.
+- ⏳ 15M row case (Northwind customer, ~8GB) not tested in CI due to data access constraints.
+
+**Risk and rollback:** Low risk; logic is isolated to the export path. Rollback by reverting this PR to restore `csv_exporter.py`.
+
+**Decision needed:** Merge now and validate the 15M row case in staging, or block until we secure sanitized Northwind data for CI? The author suggests merging is okay but defers to your call.
+
+---
+*Note: The "backpressure" library name is generic; ensure the exact package name in `requirements.txt` is correct before merging.*
+*Word count: ~190 words.*

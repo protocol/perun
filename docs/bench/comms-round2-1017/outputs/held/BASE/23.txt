@@ -1,0 +1,31 @@
+Server-side image compression cuts average photo uploads from 4.2MB to 1.1MB and screenshots from 12.8MB to 2.3MB, adding ~120ms latency. **Tomás, please review the animated image handling strategy and storage decision before signing off.**
+
+**Why:** Reduce bandwidth costs and improve load times for end-users without visible quality loss at 85% setting.
+
+**Change:**
+- Implemented compression pipeline in `imageProcessor.ts` (89 lines added).
+- Updated upload route to apply compression before storage.
+- Added configuration for quality thresholds and format handling.
+- Unit tests added (54 passed, 0 failed).
+
+**Performance:**
+- Photos: 4.2MB → 1.1MB avg.
+- Screenshots: 12.8MB → 2.3MB avg.
+- Latency impact: +120ms avg, +340ms p99.
+
+**Risks & Open Decisions:**
+- **Animated Images:** Current logic passes GIFs/animated WebP unchanged. Unverified if this causes downstream rendering issues. Decision needed: skip explicitly or implement separate handling?
+- **Storage Strategy:** Compressed version only vs. storing originals. Trade-off: storage cost vs. ability to revert/re-process later. No recommendation given; requires infra input.
+
+**Verified:**
+- ✅ Unit tests pass (54/54).
+- ⏳ Visual quality check informal (85% setting); no formal user testing.
+- ⏳ Animated image behavior unverified in production-like env.
+
+**Rollback:** Revert commit to restore original upload flow; no DB migrations involved.
+
+Tomás, please confirm the approach for animated images and storage retention policy.
+
+---
+*Note: Drafted strictly from provided facts; no external verification performed.*
+*Word count: ~210 words.*

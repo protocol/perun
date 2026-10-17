@@ -1,0 +1,23 @@
+Refactored currency conversion: split rounding logic, raised coverage to 94% line / 88% branch, all 203 tests pass. **Amita, please approve.**
+
+**Why:** The monolithic converter hid rounding errors and kept branch coverage at 64%. Extracting `rounding.ts` isolates the logic for precise testing.
+
+**Change:**
+- Moved rounding rules to `src/currency/rounding.ts` (+56 lines) with dedicated tests (+78 lines).
+- Simplified `converter.ts` (-16 net lines) and `rates.ts` (-22 net lines).
+- Increased total lines to +500/-393; test count +134/-89.
+- Coverage jumped from 72% to 94% line, 64% to 88% branch.
+
+**Risk and rollback:** Low risk; logic is extracted, not rewritten. Rollback by reverting the five files.
+
+**Verified:** ✅ 203 tests passed, 0 failed. ⏳ Backwards compatibility check pending (14 callers).
+
+**Open decisions before merge:**
+1. **Round-trip precision:** Converting JPY→USD→JPY currently loses value due to intermediate rounding. We need to decide if preserving the original amount is required or if this loss is acceptable behavior.
+2. **API Surface:** Confirm if we must maintain the old API for the 14 existing callers or if we can update them all to the new interface in this PR.
+
+Amita, please approve the approach and advise on the two open decisions above.
+
+---
+*Note: The "ask" includes the specific questions you flagged as unresolved, as the lint rules forbid inventing answers for unknowns.*
+*No dates were added because none were provided in your notes.*

@@ -1,0 +1,16 @@
+**Audit-log write path: p99 latency 110ms → 35ms; Marcus, please decide: merge behind feature flag or block on integration tests?**
+
+**Why:** Individual DB writes caused high latency (110ms p99) and connection saturation (200 avg).
+
+**Change:**
+- Buffer audit events in memory; flush in batches of 50.
+- Reduced p99 latency to 35ms under 500 rps load.
+- Reduced average DB connections from 200 to 45.
+- Added 12 unit tests for buffer flush logic (all passing in CI).
+- Modified 4 files (+220 lines, -85 lines).
+
+**Risk and rollback:** Failure recovery mid-batch is untested; events may drop if DB write fails. Rollback: revert commit to restore individual writes.
+
+**Verified:** ✅ Unit tests pass in CI. ⏳ Integration tests for failure recovery (owner unassigned).
+
+Marcus, please approve one path: merge behind a feature flag now, or block until integration tests confirm no event loss.

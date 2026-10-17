@@ -1,0 +1,21 @@
+## Cache Invalidation: Versioned Keys
+
+This PR replaces TTL-based cache eviction with versioned keys in the search service. The change ensures search results refresh within 500ms of an invalidation event, down from up to 5 seconds.
+
+**Changes**
+- Refactored `invalidateCache()` in `search-cache-manager.ts` to increment a version prefix rather than waiting for expiration.
+- Updated `search-handler.ts` to read and write using the current version.
+- Added configuration for the cache version prefix (defaults to `v1`).
+- Added 20 new tests covering version bumps, concurrent reads during invalidation, and cache miss recovery. All 867 tests (new and existing) pass.
+
+**Performance**
+Staging metrics show a cache hit rate increase from 91.8% to 94.2%. P99 search latency remains stable at 120ms.
+
+**Known Limitation**
+A potential race condition exists if two invalidation events fire at the exact same millisecond across different instances, which could desynchronize the version counter. This scenario is unlikely in practice. We do not currently have a concurrency test harness to validate this specific edge case, so it remains untested.
+
+**Decision Needed**
+Can we merge this improvement given the untested race condition, or should we block until a concurrency harness is available?
+
+---
+*Note: Ready for Marcus to weigh the risk of the untested race condition against the latency gains.*

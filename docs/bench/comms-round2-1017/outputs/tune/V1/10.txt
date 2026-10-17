@@ -1,0 +1,24 @@
+**Add composite index to `orders`; Lena to choose rollback strategy (A: coupled deploy, B: conditional code) before prod run.**
+
+**Why:** Current queries on 14.2M rows average 340ms (p99 1.2s). Staging benchmark with new index shows 12ms avg (p99 45ms). Write overhead increases from 3ms to 5ms.
+
+**Change:**
+- `migration-2024-06-08-add-idx.sql`: Adds `orders(customer_id, created_at, status)` via online schema change (est. 7–8 min on prod, table readable).
+- `order-repository.ts`: Updates 3 queries with index hints.
+- `benchmark/bench-index-perf.ts`: Adds performance verification script.
+
+**Risk and rollback:**
+Dropping the index takes ~30s, but existing code hints would cause full table scans if the index is missing.
+- **Option A:** Deploy code and migration together. Faster, but risky if migration fails mid-deploy.
+- **Option B:** Deploy code with conditional hints first, then run migration. Safer, adds ~20 lines of logic.
+
+**Verified:**
+✅ Staging build time: 4m 23s (8.1M rows).
+✅ Query performance: 340ms → 12ms avg.
+⏳ Prod build time: estimated 7–8 minutes.
+
+**Lena, please decide Option A or B by [Date] so we can schedule the prod run.**
+
+---
+*Note: Estimated prod time based on staging growth rates; exact window depends on current load.*
+*Option B requires a follow-up PR if chosen.*

@@ -1,0 +1,24 @@
+## Add SSO login option to admin console
+
+This PR introduces SSO login support for the admin console, allowing users to authenticate via an external Identity Provider (IdP). The implementation includes new SSO handling, callback logic, updated session middleware, and configuration options, along with comprehensive test coverage.
+
+**Changes**
+- Added `src/auth/sso.ts` and `src/auth/callback.ts` to handle SSO initiation and callback processing.
+- Updated `src/api/admin/login.ts` and `src/middleware/session.ts` to integrate SSO sessions with existing auth flows.
+- Added `src/config/sso.ts` for environment-specific SSO settings.
+- Included unit and integration tests covering the new auth paths.
+
+**Test Results**
+- Unit tests: 142 passed, 0 failed.
+- Integration tests: 23 passed, 0 failed.
+- Manual QA: Verified login, logout, and token refresh flows against our test IdP.
+- Session timeout remains consistent at 8 hours, matching regular login behavior.
+
+**Open Questions for Security Review**
+1. **Session Timeout Mismatch:** If the IdP session expires (e.g., 4 hours) before our local session (8 hours), the local session remains active until its own timeout. I've added a code comment but no test for this edge case. Should we enforce timeout synchronization or allow independent expiration?
+2. **Enforcement Strategy:** Should SSO be mandatory for all admin users or configurable per account? This is currently left optional.
+
+**Stats**
++510 lines, -38 lines.
+
+@Rashid Please review the session handling logic and advise on the open questions above before we proceed.

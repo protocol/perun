@@ -1,0 +1,25 @@
+**Cache invalidation now uses versioned keys; search refreshes in 500ms (was 5s). Marcus, please decide if we can merge without the concurrency test.**
+
+**Why:** TTL-based eviction caused up to 5-second delays for search results to reflect updates.
+
+**Change:**
+- Replaced `invalidateCache()` with versioned key logic (`search-cache-manager.ts`).
+- Added cache version prefix config (`cache-config.ts`, default `v1`).
+- Updated read/write paths to use versions; removed TTL logic (`search-handler.ts`).
+- Added 20 tests covering version bumps, concurrent reads, and cache miss recovery.
+
+**Verified:**
+- ✅ 20 new tests passing; 847 existing tests passing.
+- ✅ Staging manual test: results refresh within 500ms.
+- ✅ Cache hit rate: 94.2% (was 91.8%).
+- ✅ p99 latency: 120ms (no regression).
+
+**Risk and rollback:**
+- **Known gap:** Potential race condition if two invalidation events fire at the exact same millisecond across instances, possibly desyncing the version counter. No test exists yet; requires a dedicated concurrency harness not currently set up. Likelihood assessed as low.
+- **Blast radius:** Search service cache only.
+- **Rollback:** Revert commit; service resumes TTL-based logic immediately.
+
+**Decision needed:**
+The code delivers the performance target and passes all current tests. The untested race condition is theoretically possible but unlikely.
+
+Marcus, please approve merging as-is given the low risk, or request we block until the concurrency harness is built and the specific test is added.

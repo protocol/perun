@@ -1,0 +1,29 @@
+**Streaming CSV writer reduces peak memory from 1.2GB to 45MB for 500k rows with no meaningful time regression; Mei, please approve.**
+
+**Why:** The previous exporter loaded entire datasets into memory, causing OOM risks on large exports.
+
+**Change:**
+- Replaced `csv_exporter.py` with `streaming_csv_writer.py` to write rows incrementally.
+- Updated `export_controller.py` to use the new stream interface.
+- Added `backpressure` library to `requirements.txt` to handle producer/consumer speed mismatches.
+- Added 14 new tests covering stream behavior and backpressure logic.
+
+**Results:**
+- Peak memory: 1.2GB → 45MB (96% reduction) on 500k rows.
+- Export time: 12.3s → 12.8s (statistically neutral).
+- Verified on datasets up to 2M rows; all existing and new tests pass.
+
+**Risk and rollback:**
+- Blast radius: Limited to CSV export jobs; no schema changes.
+- Rollback: Revert commit and restore `csv_exporter.py` from history.
+- Unknown: Behavior on 8GB+ datasets (e.g., Northwind's 15M rows) cannot be replicated in CI.
+
+**Verified:** ✅ Unit tests and 2M row integration test. ⏳ 15M row production test (pending staging deployment).
+
+**Recommendation:** Merge now to unblock memory fixes; the 96% reduction solves the immediate crash risk for most users. Test the Northwind case in staging immediately after merge, as CI cannot replicate their data volume. If staging fails, we can hotfix or revert before customer impact.
+
+Mei, please approve by EOD today so we can deploy to staging for the Northwind validation.
+
+---
+*Note: The "lean" toward merging is derived from the 96% memory gain outweighing the unverified edge case, as no explicit author preference was stated.*
+*Replace "EOD today" with a specific date if your team requires it.*

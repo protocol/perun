@@ -1,0 +1,22 @@
+**Streaming CSV writer reduces peak memory from 1.2GB to 45MB for 500k rows; export time unchanged (~12.5s).**
+
+**Why:** The previous exporter loaded entire datasets into memory, causing OOM risks at scale.
+
+**Change:**
+- Replaced `csv_exporter.py` with `streaming_csv_writer.py` (189 lines) to write rows incrementally.
+- Updated `export_controller.py` to use the new stream; removed 31 lines of buffering logic.
+- Added `backpressure` lib to `requirements.txt` to handle producer/consumer speed mismatches.
+- Added 14 new tests covering stream integrity and backpressure behavior.
+
+**Risk and rollback:** Low risk; logic is isolated to the export path. Rollback: revert commit and restore `csv_exporter.py`.
+
+**Verified:**
+- ✅ Unit tests pass (existing + 14 new).
+- ✅ Tested locally and CI with datasets up to 2M rows.
+- ⏳ 15M row case (Northwind customer scenario) not verified; requires staging test with production-scale data.
+
+**Mei**, please approve for merge to main. We can validate the 15M row case in staging post-merge since CI cannot replicate the 8GB dataset.
+
+---
+*Note: The author explicitly flagged the 15M row gap; do not claim it is verified.*
+*Word count: ~190 words.*

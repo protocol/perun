@@ -1,0 +1,22 @@
+**Add composite index to `orders` table; p99 latency 1.2s → 45ms on staging. Lena, please decide rollback strategy (A or B) before production run.**
+
+**Why:** Current queries on the 14.2M-row `orders` table average 340ms (p99 1.2s). The new index targets `customer_id`, `created_at`, and `status`.
+
+**Change:**
+- `migration-2024-06-08-add-idx.sql`: Adds composite index via online schema change wrapper (178 lines added).
+- `order-repository.ts`: Updates 3 queries with index hints.
+- `benchmark/bench-index-perf.ts`: Adds performance verification script.
+
+**Performance (Staging, 8.1M rows):**
+- Read: Avg 340ms → 12ms; p99 1.2s → 45ms.
+- Write: INSERT overhead 3ms → 5ms (acceptable).
+- Build time: 4m 23s (estimated 7–8m on production).
+
+**Risk and Rollback:**
+Dropping the index takes ~30s, but existing code contains hard-coded index hints that will cause full table scans if the index is missing.
+- **Option A:** Deploy code and migration together. (Faster, higher risk if migration fails mid-deploy).
+- **Option B:** Deploy code with conditional logic first, then run migration. (Safer, adds ~20 lines of complexity).
+
+**Verified:** ✅ Benchmark script run on staging (see `benchmark/bench-index-perf.ts`). ⏳ Production build time estimated.
+
+**Lena, please approve Option A or B by EOD today so we can schedule the window.**

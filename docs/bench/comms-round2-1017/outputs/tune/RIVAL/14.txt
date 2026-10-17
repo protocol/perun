@@ -1,0 +1,20 @@
+## Remove deprecated v1 API endpoints
+
+This PR deletes the deprecated v1 API (`api/v1/` and related tests) and configures remaining v1 routes to return `410 Gone` with a link to the new migration guide.
+
+**Context**
+The v1 API entered a 12-month deprecation window on March 15, 2024. Traffic has dropped from a peak of 45,000 to ~1,200 requests per day. Currently, 23 API keys still access v1: 14 are internal, and 9 are external (3 Acme Corp, 2 Northwind, 4 unknown).
+
+**Changes**
+- Deleted `api/v1/router.py` and the `api/v1/controllers/` directory.
+- Deleted legacy tests in `tests/v1/`.
+- Updated `api/v2/router.py` to return `410 Gone` for any remaining v1 calls, directing users to `migration_guide.md`.
+- Cleaned up `config/routes.py`.
+- Added `migration_guide.md` with upgrade instructions.
+
+**Decision needed: Deployment date**
+The formal deprecation window ends March 15, 2025. However, given the low remaining volume (1,200 req/day) and the fact that most remaining callers are internal, we could deploy this sooner to reduce maintenance overhead.
+
+The 9 external keys present the only risk. Since we know exactly who they are (Acme, Northwind, and 4 unknowns), we can reach out directly before flipping the switch.
+
+@Jane Please confirm the target sunset date. Do we wait until the March 15 deadline, or should we schedule an earlier cutover once we've notified the remaining external callers?

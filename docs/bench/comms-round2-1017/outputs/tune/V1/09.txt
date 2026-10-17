@@ -1,0 +1,22 @@
+**Search cache invalidation now uses versioned keys; latency dropped from 5s to <500ms on staging.**
+
+**Why:** TTL-based eviction caused stale results for up to 5 seconds. Versioned keys force immediate refresh on update.
+
+**Change:**
+- Rewrote `invalidateCache()` to bump a version prefix instead of waiting for expiry.
+- Updated `search-handler` to read/write with the new version; removed legacy TTL logic.
+- Added 20 passing tests (12 integration, 8 unit) covering version bumps and concurrent reads.
+- Net +145 lines across 7 files.
+
+**Verified:**
+- ✅ Staging manual test: results refresh within 500ms (was 5s).
+- ✅ Cache hit rate: 94.2% (up from 91.8%).
+- ✅ p99 latency: 120ms (no regression).
+- ✅ All 867 tests passing (847 existing + 20 new).
+
+**Risk and rollback:**
+- **Known gap:** Untested race condition if two invalidation events fire at the exact same millisecond across instances; could desync the version counter. Likelihood is low; no concurrency harness exists yet.
+- **Blast radius:** Search results may briefly stale if race occurs; no data loss.
+- **Rollback:** Revert commit to restore TTL logic; cache warms naturally within old TTL window.
+
+**Marcus, please approve merging without the race condition test, or request a delay to build the concurrency harness.**

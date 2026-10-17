@@ -1,0 +1,20 @@
+**Audit-log write path: batched writes**
+
+This PR modifies the audit-log service to buffer events in memory and write them in batches of 50, replacing the previous one-by-one database writes.
+
+**Changes**
+- Modified 4 files (+220 lines, -85 lines).
+- Added 12 unit tests for the buffer flush logic; all passing in CI.
+
+**Performance impact (500 rps load)**
+- Write path latency: 110ms p99 → 35ms p99.
+- Average DB connections: 200 → 45.
+
+**Known gap**
+Failure recovery during a mid-batch database write is not yet tested. It is currently unclear whether the buffer retries correctly or drops events if a write fails. Integration tests for this scenario are pending.
+
+**Decision needed**
+Please advise whether to merge this behind a feature flag now or block until the integration tests for failure recovery are complete.
+
+---
+*Note: Latency and connection metrics reflect a 500 rps load test.*

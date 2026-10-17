@@ -1,0 +1,19 @@
+**Replace in-memory CSV export with streaming writer: peak memory 1.2GB → 45MB, export time stable (12.3s → 12.8s).**
+
+**Why:** The previous implementation loaded entire datasets into memory, causing OOM risks on large exports. Streaming writes rows directly to disk.
+
+**Change:**
+- Deleted `csv_exporter.py` (342 lines); added `streaming_csv_writer.py` (189 lines).
+- Updated `export_controller.py` to use the new stream interface.
+- Added `backpressure` library to `requirements.txt`.
+- Added 14 new tests covering streaming behavior and backpressure.
+
+**Risk and rollback:** Blast radius is limited to the export feature. Rollback: revert commit and restore `csv_exporter.py`. The 15M row case (Northwind customer, ~8GB) was not tested in CI due to data access constraints; validation is pending in staging.
+
+**Verified:** ✅ All existing tests pass. ✅ New tests pass. ✅ Verified with datasets up to 2M rows. ⏳ 15M row scenario (Northwind) pending staging test.
+
+**Mei and backend team**, please approve. If strict pre-merge validation on the 15M row case is required, access to sanitized Northwind data is needed; otherwise, proceed to staging validation.
+
+---
+*Note: The draft explicitly flags the untested 15M row scenario as a staging risk rather than a merge blocker, per your uncertainty.*
+*Word count: ~190 words.*

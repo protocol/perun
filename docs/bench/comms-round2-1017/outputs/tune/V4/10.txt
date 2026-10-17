@@ -1,0 +1,22 @@
+**Add composite index on orders(customer_id, created_at, status); Lena must pick rollback strategy A or B before prod.**
+
+**Why:** Current queries on the 14.2M-row `orders` table average 340ms (p99 1.2s). The new index reduces this to 12ms avg (p99 45ms) with negligible write overhead (3ms → 5ms).
+
+**Change:**
+- Adds online schema migration wrapper (est. 7–8 min build time on prod; table remains readable).
+- Updates 3 repository queries to use index hints.
+- Includes benchmark script validating staging results (4m 23s build on 8.1M rows).
+
+**Risk and rollback:**
+Dropping the index takes ~30s, but the deployed code contains hard-coded index hints. If the index is missing, queries will perform full table scans.
+- **Option A:** Deploy code and migration together. Faster, but risks full table scans if migration fails mid-flight.
+- **Option B:** Deploy code with conditional logic (adds ~20 lines) to check index existence before using hints, then run migration. Safer, slightly more complex.
+
+**Verified:**
+✅ Staging build time and query performance metrics confirmed via `bench-index-perf.ts`.
+⏳ Prod build time estimated at 7–8 minutes based on staging growth rates.
+
+**Lena, please decide on Option A or B by EOD today so we can schedule the prod window.**
+
+---
+*Note: Estimated prod build time derived from staging row count ratio (14.2M/8.1M). No specific deadline was provided in the source text; "EOD today" is a placeholder for you to confirm.*

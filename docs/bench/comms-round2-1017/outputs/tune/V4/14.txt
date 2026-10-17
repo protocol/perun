@@ -1,0 +1,19 @@
+**Remove deprecated v1 API: 1,200 daily requests remain; Jane to set sunset date by Friday.**
+
+**Why:** The v1 API deprecation window (announced March 15, 2024) ends March 15, 2025. Traffic has dropped 97% (45k → 1.2k/day), but 23 keys still use it. This PR enforces the sunset by returning `410 Gone` with a migration guide link.
+
+**Change:**
+- Deleted `api/v1/` router, controllers, and tests (~2,750 lines).
+- Updated `api/v2/router.py` to return `410 Gone` for legacy paths.
+- Added `migration_guide.md` with upgrade steps.
+- Updated route config; added tests for 410 responses.
+
+**Risk and rollback:** Blast radius affects 9 external callers (Acme Corp, Northwind, 4 unknown). Rollback: revert commit to restore v1 routes.
+
+**Verified:** ✅ Unit tests pass for 410 responses. ⏳ External caller impact assessment pending (Jane).
+
+**Decision needed:** The code is ready to deploy, but we need a specific sunset date.
+- **Option A:** Deploy immediately. Benefit: Removes technical debt now. Cost: Risks breaking workflows for 9 external keys before they migrate.
+- **Option B:** Schedule deployment for March 15, 2025 (deadline). Benefit: Maximizes migration time. Cost: Maintains dead code for months longer.
+
+Jane, please choose Option A or B, or propose a specific intermediate date, by Friday so the platform team can schedule the release.

@@ -1,0 +1,20 @@
+**Webhook sender: retry with exponential backoff (3 attempts, 1–4s); Anika, please decide whether to merge now or block on rate limiting.**
+
+**Why:** Transient 500 errors currently cause immediate delivery failure. This change adds resilience without altering successful-path behavior.
+
+**Change:**
+- Added retry logic with exponential backoff (1s, 2s, 4s) and jitter across 3 files (+180, -40 lines).
+- Maximum of 3 retries before marking delivery as failed.
+- Verified against a local mock server returning 500s: all 3 retries fire correctly; delivery fails after the third attempt.
+- Added 8 green unit tests covering the backoff logic.
+
+**Risk and rollback:** Blast radius is limited to webhook delivery timing; failed deliveries still fail after ~7 seconds total. Rollback is a standard revert of this commit.
+
+**Verified:** ✅ Retry logic and failure marking verified via local mock server tests. ⏳ Thundering herd behavior under high load (1000+ concurrent webhooks) is untested; no rate limiter or circuit breaker is implemented yet.
+
+**Decision needed:** Anika, please choose one:
+1. Merge as-is for v1 and add rate limiting/circuit breaker in a follow-up PR.
+2. Block this PR until rate limiting is implemented to prevent potential thundering herd issues.
+
+---
+*Note: The "thundering herd" scenario remains untested as specified; no recommendation is made on which path to choose.*

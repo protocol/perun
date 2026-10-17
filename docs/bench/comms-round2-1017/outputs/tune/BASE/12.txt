@@ -1,0 +1,18 @@
+**Per-account rate limiting (5 attempts/15 min) replaces per-IP limits to block rotating IP brute force attacks; Ravi, please approve.**
+
+**Why:** Previous per-IP limits (10 attempts/5 min) were trivial to bypass using rotating IPs, as identified in your bug report.
+
+**Change:**
+*   **Logic:** Moved rate limiting from per-IP to per-account; triggers 30-minute lockout after 5 failed attempts.
+*   **Headers:** Added `X-RateLimit-Remaining` and `X-RateLimit-Reset` to responses.
+*   **Scope:** Updates `auth_middleware.py`, `rate_limiter.py`, and `login_handler.py`.
+
+**Risk and rollback:** Blast radius is limited to login flows; rollback restores previous per-IP logic immediately.
+
+**Verified:** ✅ Direct login, SSO login, and multi-device login scenarios pass (12 new test cases added).
+⏳ CDN proxy handling: `X-Forwarded-For` header presence and spoofing protection under actual CDN config is unverified (currently mocked).
+
+**Ravi**, please approve or advise on the CDN header verification before shipping.
+
+---
+*Note: The PR description flags the unverified CDN header handling as requested. No owner or date was provided for the approval ask, so none were inserted.*

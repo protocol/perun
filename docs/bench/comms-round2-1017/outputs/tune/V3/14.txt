@@ -1,0 +1,24 @@
+**Deprecate API v1: all endpoints return 410 Gone; 23 keys (1,200 req/day) remain.**
+
+**Why:** The 12-month deprecation window announced March 15, 2024, ends March 15, 2025. Traffic has dropped 97% (45k → 1.2k daily), but 9 external keys still rely on v1.
+
+**Change:**
+- Deleted `api/v1/` router, controllers, and tests (~2,750 lines).
+- Updated `api/v2/router.py` to return `410 Gone` with a link to `migration_guide.md` for legacy paths.
+- Pruned `config/routes.py` (-42 lines).
+- Added `migration_guide.md` with migration steps.
+- Added tests verifying `410` responses.
+
+**Risk and rollback:** 1,200 daily requests will fail immediately. Rollback requires restoring the deleted `api/v1/` directory from git history.
+
+**Verified:** ✅ New tests pass for `410` responses. ⏳ External caller impact unverified; 4 keys unknown.
+
+**Decision needed:** The deprecation window closes March 15, 2025, but we can deploy sooner.
+- **Option A:** Deploy now. Cost: Immediate breakage for 9 external callers (3 Acme, 2 Northwind, 4 unknown); forces immediate migration or outage.
+- **Option B:** Wait until March 15, 2025. Cost: Prolonged maintenance of redirect logic; risk of forgotten sunset.
+
+Jane, please pick a deployment date (now or March 15) by Friday so we can schedule the release.
+
+---
+*Note: The 14 internal keys can be listed if needed before deployment.*
+*Derived impact numbers based on provided traffic stats; no date recommended beyond source options.*

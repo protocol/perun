@@ -1,0 +1,26 @@
+## Server-side image compression on upload
+
+This PR adds server-side compression for uploaded images to reduce storage and bandwidth usage.
+
+**Changes**
+- Added `imageProcessor.ts` to handle compression logic
+- Updated `upload.ts` to apply compression before saving
+- Added `compression.ts` for configurable quality settings (default 85%)
+- Included unit tests covering the new processor
+
+**Impact**
+- Photo uploads: 4.2MB → 1.1MB average
+- Screenshot uploads: 12.8MB → 2.3MB average
+- Latency: +120ms average, +340ms at p99
+- All 54 unit tests pass
+
+**Open questions for review**
+1. **Animated images**: The current implementation passes animated GIFs and WebP files through unchanged. Should we explicitly skip these, or is there a preferred library for handling them? I haven't verified if passing them through causes issues downstream.
+2. **Original storage**: We currently discard the original file after compression. Do we need to store the original anywhere for reversibility, or is the compressed version sufficient given the storage cost savings?
+
+Visually, the 85% quality setting looks fine, though we haven't done formal user testing yet.
+
+@Tomás could you take a look at the compression logic and let me know your thoughts on the animated image handling and storage strategy?
+
+---
+*Note: Mentioned two open decisions needing your sign-off before merge.*

@@ -1,0 +1,24 @@
+**Config Store Migration: Feature Flags**
+
+Migrates 24 feature flags from the legacy local config file to the new distributed config store.
+
+**Changes**
+- 6 files changed (+310, -90)
+- Flag read latency: 12ms p99 → 2ms p99
+- Service startup time: 8s → 3s (no longer parsing large config file)
+- All 24 flags verified loading on boot (tested locally and in dev)
+
+**Rollback Behavior**
+Currently, if the config store is unavailable at startup, the service will crash because there is no fallback to the old config file. I haven't implemented a local cache or fallback mechanism yet.
+
+**Decision Needed**
+Should we:
+1. Keep the old config file as a cached fallback in case the store is unreachable?
+2. Rely entirely on the config store's HA setup and allow the service to crash if it's down?
+
+I don't have visibility into the availability SLA for the new store, so I'd like your guidance on which approach aligns with our reliability requirements.
+
+Once you confirm the rollback strategy, I'll implement it and merge.
+
+---
+*Let me know if you need the test logs or want to walk through the failure modes.*

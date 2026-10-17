@@ -1,0 +1,31 @@
+Server-side image compression reduces average upload size by 74% (photos 4.2MB→1.1MB) with +120ms latency; **Tomás, please sign off on the approach for animated images and original file storage.**
+
+**Why:** Large uploads degrade user experience and increase infrastructure costs. Current averages are 4.2MB for photos and 12.8MB for screenshots.
+
+**Change:**
+- Implemented server-side compression at 85% quality in `imageProcessor.ts`.
+- Updated upload routes and added configuration for compression settings.
+- Added unit tests (54 passed, 0 failed).
+- **Results:** Photos now average 1.1MB; screenshots 2.3MB.
+- **Performance:** Adds ~120ms average latency (p99: 340ms).
+- **Visuals:** 85% quality appears fine visually; formal user testing not yet conducted.
+
+**Risk and rollback:**
+- **Animated images:** Current code passes them through unchanged, but behavior is unverified. Risk of breakage exists if the processor mishandles frames.
+- **Storage strategy:** Originals are currently discarded. We lack a decision on storing originals for reversibility versus saving storage costs.
+- **Rollback:** Revert commits to `src/services/imageProcessor.ts`, `src/routes/upload.ts`, and `src/config/compression.ts` to restore direct upload flow.
+
+**Verified:**
+✅ Unit tests (54/54 passed).
+⏳ Animated image handling (unverified; current logic bypasses compression).
+⏳ Storage policy decision (originals vs. compressed only).
+
+**Open Decisions:**
+1. **Animated Images:** Should we explicitly skip compression for GIFs/animated WebP or implement specific handling?
+2. **Original Storage:** Do we store the pre-compression original? (Trade-off: storage cost vs. ability to re-compress later).
+
+Tomás, please confirm the plan for animated images and whether we should block merging until the storage strategy is defined.
+
+---
+*Note: The 85% quality setting is based on visual inspection only; no formal A/B testing data is available yet.*
+*Latency numbers are averages from local perf tests; p99 observed at 340ms.*

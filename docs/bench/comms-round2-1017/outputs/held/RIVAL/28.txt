@@ -1,0 +1,29 @@
+**Title:** Reduce application log retention from 90 to 30 days
+
+**Summary**
+This PR reduces application log retention from 90 days to 30 days. Audit logs remain unchanged at 7 years per compliance policy. The original 90-day setting was a default configuration, not a documented requirement.
+
+**Impact & Cost**
+- **Current state:** 2.4TB stored, growing ~18GB/day (~$3,600/month).
+- **Projected state:** ~800GB steady state.
+- **Savings:** Approximately $1,200/month.
+
+**Changes**
+- `infra/terraform/logging.tf`: Updated retention policy.
+- `src/config/retention.ts`: Updated configuration values.
+- `docs/runbooks/log-queries.md`: Added guidance for querying the new retention window.
+- **Stats:** +44 lines, -11 lines.
+
+**Testing**
+Infrastructure changes validated in staging. No application logic changes required.
+
+**Open Questions for Compliance (Oksana)**
+Before merging, we need confirmation on two points:
+1. Is a 30-day retention window sufficient for current compliance requirements?
+2. Are there any active investigations that require access to logs older than 30 days?
+
+**Implementation Note**
+We have not yet decided whether to delete existing logs older than 30 days immediately or allow them to age out naturally. This decision will depend on the compliance feedback above.
+
+---
+*Note: Please verify the specific retention policy clause regarding application logs. Once approved, I will finalize the cleanup strategy.*

@@ -1,0 +1,19 @@
+**Audit-log write path: p99 latency 110ms → 35ms; Marcus, please decide on merge strategy.**
+
+**Why:** Individual database writes caused high latency (110ms p99) and excessive connection usage (200 avg).
+
+**Change:**
+- Buffer audit events in memory; flush in batches of 50.
+- Reduced p99 latency to 35ms under 500 rps load.
+- Reduced average DB connections from 200 to 45.
+- Added 12 passing unit tests for buffer flush logic.
+- Modified 4 files (+220 lines, -85 lines).
+
+**Risk and rollback:** Unknown failure recovery behavior. If a DB write fails mid-batch, it is unverified whether the buffer retries or drops events. Integration tests for this case are pending. Rollback: revert commit to restore individual writes.
+
+**Verified:** ✅ Unit tests pass in CI. ⏳ Failure recovery integration tests (owner unassigned).
+
+**Marcus, please decide:** Merge behind a feature flag now, or block until integration tests verify failure recovery?
+
+---
+*Note: The latency and connection numbers are taken directly from your load test summary. The "owner unassigned" marker flags the missing integration test owner per the communication rules.*

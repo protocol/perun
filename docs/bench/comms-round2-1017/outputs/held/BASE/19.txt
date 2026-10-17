@@ -1,0 +1,21 @@
+**Webhook sender: adds 3‑retry exponential backoff (1s, 2s, 4s + jitter); Anika, please decide whether to merge now or block on rate limiting.**
+
+**Why:** Transient 500s currently cause immediate delivery failure.
+
+**Change:**
+- Added retry logic with exponential backoff and jitter to the webhook sender (3 files, +180/−40 lines).
+- Retries up to 3 times before marking delivery as failed.
+- Verified against a local mock server returning 500s: all 3 retries fire correctly.
+- Added 8 green unit tests covering the backoff logic.
+
+**Risk and rollback:** Thundering herd risk remains unmitigated; if 1,000 webhooks fail simultaneously, retries may cluster despite jitter. No rate limiter or circuit breaker is included in this change. Rollback: revert commit to restore immediate-fail behavior.
+
+**Verified:** ✅ Local mock server tests (3 retries fire, failure marked after 3rd try). ✅ 8 unit tests green. ⏳ Thundering herd scenario (untested; no rate limiter built).
+
+**Decision needed:** Anika, please choose:
+1. Merge as-is for v1 and add rate limiting later.
+2. Block this PR until rate limiting/circuit breaker is implemented.
+
+---
+*Note: Diff stats and test results reflect provided data only.*
+*No recommendation added per your instruction regarding the herd problem.*

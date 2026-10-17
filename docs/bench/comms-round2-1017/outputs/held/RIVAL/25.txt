@@ -1,0 +1,25 @@
+**Summary**  
+Replaces the nightly `user-stats` cron job with a queue-based consumer to eliminate timeout spikes and reduce resource usage. The new consumer processes events in real time rather than waiting for a 2:00 AM UTC window.
+
+**Changes**  
+- Removed `src/jobs/userStats.ts` and added `src/consumers/userStatsConsumer.ts`.  
+- Updated queue configuration and admin triggers to support the new flow.  
+- Terraform updates remove the scheduler resource and define the new queue infrastructure.  
+
+**Performance Improvements (Staging)**  
+- **Throughput:** Processed 1.2M events in 18 minutes (previously 47 minutes).  
+- **Memory:** Peak usage dropped from 1.2GB to 256MB.  
+- **Stability:** Zero timeout alerts over 72 hours of testing; batch size set to 500 with ~3.2s processing time per batch.  
+
+**Testing**  
+All 67 tests passed. Net line change: +225 / -257.  
+
+**Questions for Reviewer**  
+1. **Alert Routing:** Should alerts move from `#ops-alerts` to `#platform-alerts` given the shift to a queue consumer?  
+2. **Thresholds:** What queue depth threshold do you recommend for triggering alerts? Current options are >1,000 or >5,000.  
+
+Ready for ops approval once routing and thresholds are confirmed.
+
+---
+*Note: Please confirm alert channel and depth threshold before merging.*  
+*Staging metrics attached in comments.*

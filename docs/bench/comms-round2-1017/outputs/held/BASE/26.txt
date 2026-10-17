@@ -1,0 +1,22 @@
+**Add SSO login to admin console; 165 tests pass; Rashid, please decide on timeout sync and rollout scope.**
+
+**Why:** Admins currently lack centralized identity management. This change introduces SSO while preserving existing session behavior (8-hour timeout).
+
+**Change:**
+- **Auth flow:** New SSO handler and callback logic (`sso.ts`, `callback.ts`) integrated with admin login.
+- **Session management:** Updated middleware to handle SSO tokens alongside standard sessions.
+- **Coverage:** 142 unit tests and 23 integration tests passed; manual QA verified login, logout, and token refresh against test IdP.
+- **Scope:** +510/-38 lines across auth, API, middleware, and config.
+
+**Risk and rollback:**
+- **Unknown behavior:** If IdP timeout (e.g., 4h) differs from local session timeout (8h), stale local access may persist after IdP expiration. Code comment added; no test yet.
+- **Rollback:** Revert commit; no database migrations or config changes required.
+
+**Verified:**
+✅ Login/logout/refresh flows with test IdP.
+⏳ Timeout sync strategy (Rashid to decide).
+⏳ Rollout scope: force SSO vs. optional per-account (Rashid to decide).
+
+**Rashid, please approve the approach and decide:**
+1. **Timeout sync:** Align local session to IdP timeout or allow independent expiration?
+2. **Rollout:** Force SSO for all admins or enable per-account?

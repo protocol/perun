@@ -1,0 +1,21 @@
+**Remove deprecated v1 API now; 9 external callers remain, all endpoints return 410 with migration link.**
+
+This PR deletes the v1 router, controllers, and tests (≈2,756 lines) and configures v2 to return `410 Gone` for all legacy paths, pointing users to `migration_guide.md`. The deprecation window announced March 15, 2024, ends March 15, 2025. Current v1 traffic is 1,200 requests/day (down from 45,000), originating from 23 API keys: 14 internal and 9 external (Acme Corp: 3, Northwind: 2, Unknown: 4).
+
+**Why:** Maintaining dead code increases surface area and confusion while the migration path is documented and active.
+
+**Change:**
+- Deleted `api/v1/` directory and `tests/v1/`.
+- Updated `api/v2/router.py` to handle legacy paths with `410`.
+- Cleaned `config/routes.py`.
+- Added `migration_guide.md`.
+
+**Risk:** 9 external keys will break immediately if deployed before they migrate. Internal keys can be updated instantly.
+
+**Verified:** ✅ Unit tests for `410` responses added. ⏳ External caller impact validation pending.
+
+**Decision needed:** Jane, please confirm the deployment date. Options:
+1.  **Deploy now:** Forces immediate migration for the 9 external callers; eliminates technical debt immediately.
+2.  **Wait until March 15, 2025:** Honors the full window but retains dead code longer.
+
+Given the 90% traffic drop and documented guide, early removal is recommended, but your call on the external risk.

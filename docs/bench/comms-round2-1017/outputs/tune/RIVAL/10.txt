@@ -1,0 +1,27 @@
+## Database index migration for orders table
+
+This PR adds a composite index on `orders(customer_id, created_at, status)` to improve query performance for customer order lookups. The migration uses an online schema change wrapper to keep the table readable during the build.
+
+**Changes**
+- `migration-2024-06-08-add-idx.sql`: Adds the composite index (178 lines including the online change wrapper).
+- `order-repository.ts`: Updates three queries to use index hints.
+- `benchmark/bench-index-perf.ts`: Adds a script to measure query performance.
+
+**Impact and performance**
+The orders table currently holds 14.2 million rows and grows by ~50k/day. On staging (8.1M rows), the index build took 4 minutes 23 seconds; we estimate 7–8 minutes in production.
+
+Benchmark results for `SELECT * FROM orders WHERE customer_id = ? AND created_at > ? AND status != 'cancelled'`:
+- Without index: avg 340ms, p99 1.2s
+- With index: avg 12ms, p99 45ms
+- Write overhead: INSERT latency increased from 3ms to 5ms
+
+**Rollback strategy decision needed**
+Dropping the index takes ~30 seconds, but the code changes in `order-repository.ts` include index hints that will cause full table scans if the index is missing. We need to decide between two deployment approaches:
+
+1. **Deploy code and migration together**: Simpler, but if the migration fails or needs rollback, the application will perform poorly until the index is rebuilt.
+2. **Deploy code first with conditional logic**: Add ~20 lines to make index hints conditional on the index's existence, then run the migration. This is safer but adds complexity.
+
+Lena, please advise on which approach you prefer for the rollback strategy. Option B reduces risk during deployment but requires extra development effort upfront.
+
+---
+*Ready for your review on the rollback approach before we schedule the prod run.*

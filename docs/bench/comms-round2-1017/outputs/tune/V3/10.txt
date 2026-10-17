@@ -1,0 +1,21 @@
+**Add composite index to `orders`: p99 latency 1.2s → 45ms; Lena, please choose rollback strategy A or B.**
+
+**Why:** The `orders` table (14.2M rows) requires faster filtering by `customer_id`, `created_at`, and `status`. Current queries average 340ms; the new index reduces this to 12ms on staging. Write overhead increases INSERT time from 3ms to 5ms, which is acceptable.
+
+**Change:**
+- Adds `orders(customer_id, created_at, status)` via online schema change (estimated 7–8 min on prod, table remains readable).
+- Updates 3 queries in `order-repository.ts` to use index hints.
+- Includes benchmark script (`bench-index-perf.ts`) verifying staging results (4m 23s build time on 8.1M rows).
+
+**Risk and rollback:**
+Dropping the index takes ~30 seconds, but the deployed code hints will cause full table scans if the index is missing.
+- **Option A:** Deploy code and migration together. Faster, but risk of scans if migration fails mid-deploy.
+- **Option B:** Deploy code with conditional logic (adds ~20 lines) to check for index existence first, then run migration. Safer, slightly more complex.
+
+**Verified:** ✅ Staging build time and latency metrics. ⏳ Prod build duration (estimated 7–8 min).
+
+**Lena, please decide between Option A or B before we schedule the prod run.**
+
+---
+*Note: Estimated prod build time is derived from staging scaling; exact time depends on current prod load.*
+*No specific deadline was provided in the source text, so none is included in the ask.*

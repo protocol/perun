@@ -1,0 +1,24 @@
+**Add SSO login to admin console; 165 tests passed; Rashid, please approve.**
+
+**Why:** Admin users need centralized identity management via SSO to replace manual credential handling.
+
+**Change:**
+- Added SSO initiation and callback handlers (`sso.ts`, `callback.ts`).
+- Updated admin login API and session middleware to support SSO tokens.
+- Configured SSO settings with an 8-hour session timeout, matching existing login behavior.
+- Added 171 unit and integration tests covering login, logout, and token refresh.
+
+**Verified:**
+- ✅ 142 unit tests passed, 23 integration tests passed.
+- ✅ Manual QA confirmed login, logout, and token refresh flows with test IdP.
+- ⏳ Edge case: IdP timeout (e.g., 4h) vs. local session timeout (8h) mismatch is untested; behavior currently undefined.
+
+**Risk and rollback:**
+- Blast radius: Admin login path only; regular user auth unaffected.
+- Rollback: Revert commit to restore previous login logic; no database migrations.
+
+**Open decisions for Security:**
+1. **Session timeout mismatch:** Should we enforce sync between IdP and local session timeouts, or allow independent expiration? (Code comment added, no test yet).
+2. **Adoption strategy:** Force SSO for all admin accounts immediately, or enable optional per-account activation?
+
+**Rashid, please approve the implementation and advise on the two open decisions above.**
