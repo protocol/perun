@@ -1,0 +1,20 @@
+Do not attempt to upstream this specific patch in its current form, and do not engage the maintainers with the goal of hiding your internal dependencies. The constraints you described create an irreconcilable conflict between the technical reality of your code and the ethical requirements of open-source contribution.
+
+Your performance improvement is technically coupled to proprietary authentication mechanisms that the upstream project has explicitly rejected. Because the patch cannot function without these private modules, it is not a generalizable solution; it is a project-specific adaptation. Attempting to refactor the code to "stand alone" while concealing the true nature of its dependencies would require either removing the functionality entirely (rendering the patch useless) or obfuscating the logic (which violates the trust essential to open-source collaboration).
+
+The strategy of approaching maintainers without revealing the existence of your private modules is fundamentally flawed. Open-source maintainers rely on full context to evaluate whether a change fits the project's architecture and philosophy. If you submit a patch that appears to solve a performance issue but silently depends on hidden, rejected abstractions, you are effectively asking them to merge code they cannot fully understand or verify. This risks introducing technical debt, architectural drift, or subtle bugs that only manifest in your specific environment. Furthermore, if the maintainers later discover the hidden dependencies, it will damage your team's reputation and trust within the community.
+
+The correct path forward is to treat this as a local optimization rather than an upstream contribution. Since the performance gain is inextricably linked to your proprietary authentication stack, the value of this patch is specific to your fork. You should maintain this improvement internally as part of your private branch.
+
+If you believe the underlying performance bottleneck exists in the main project and could be solved in a general way, consider this alternative approach:
+1.  **Isolate the Root Cause:** Analyze *why* your authentication modules necessitate the performance patch. Is there a generic locking contention issue, a memory allocation pattern, or a scheduling inefficiency that any heavy-load scenario would trigger?
+2.  **Reproduce Generically:** Create a benchmark or test case within the main project's existing framework that demonstrates the performance issue *without* using your proprietary authentication code. The test must rely only on standard, public features of the message broker.
+3.  **Propose a General Solution:** If you can reproduce the issue generically, develop a fix that addresses the root cause for all users, not just your specific authentication flow. This new patch must have zero dependencies on your private modules.
+4.  **Engage Transparently:** Approach the maintainers with the generic benchmark and the general solution. You can mention that the issue was discovered while running high-load scenarios in your environment, but the contribution itself must stand entirely on public, verifiable grounds.
+
+If you cannot reproduce the performance issue without your proprietary modules, then the problem is likely specific to your unique architecture, and there is no generalizable lesson to contribute upstream. In this case, keeping the patch private is not only acceptable but the responsible choice.
+
+Contributing to open source requires that the code be understandable, maintainable, and beneficial to the entire community without requiring hidden context. Your current patch fails these criteria. Preserve your proprietary logic by keeping it private, and only contribute improvements that can stand independently on their own merits.
+
+Note: Never attempt to "scrub" code of its true dependencies to make it appear generic; this creates fragile software and erodes community trust.
+Note: If a performance fix only works because of a private fork's specific architecture, it belongs in that fork, not upstream.

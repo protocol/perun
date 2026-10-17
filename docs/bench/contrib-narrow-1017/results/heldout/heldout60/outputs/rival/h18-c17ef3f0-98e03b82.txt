@@ -1,0 +1,14 @@
+Do not withdraw your pull request. Withdrawing signals that the work is abandoned and forces a maintainer to reopen it or you to create a new one, which fragments the conversation history. Instead, pivot your PR from a "ready-to-merge" state to a "collaborative debugging" state by explicitly documenting the Windows limitation and inviting targeted help.
+
+Update your PR description immediately with a new section titled **Windows Build Investigation**. Clearly state: "The CI build fails on Windows due to a path length error (specific error code/message here). I cannot reproduce this locally as I do not have access to a Windows environment. I am requesting assistance from a maintainer or community member with a Windows machine to verify the proposed fix."
+
+Provide a **Minimal Reproduction Hypothesis** in the comments. Analyze the CI logs to identify the exact file path causing the overflow. Write a comment explaining: "Based on the logs, the failure occurs at `[insert specific path from logs]`. The current dependency update likely introduces a deeper directory structure that exceeds the default 260-character `MAX_PATH` limit on Windows runners. My proposed solution is to [insert your guess, e.g., enable long path support in the runner config / shorten the checkout directory / add a specific flag], but I cannot validate this."
+
+If you have a specific code change or configuration tweak in mind based on the logs, push it as a new commit with a clear message like `ci: attempt long-path workaround for Windows runners`. Even if untested, this gives someone with a Windows machine a concrete diff to review and run, rather than just a theoretical discussion. Explicitly tag the commit as "UNTESTED ON WINDOWS" in the message.
+
+Finally, directly address the maintainers in a comment using their handle (if appropriate for the project culture) or simply ask: "Can a maintainer with Windows access trigger a test run with `[your proposed fix]`? Alternatively, if you prefer, I can draft the change for you to apply and test on a local Windows machine." This shows you respect the "all tests must pass" rule while acknowledging your environmental constraints. It shifts the burden from you guessing blindly to the community collaborating on a known infrastructure quirk, which is a common and acceptable pattern in open source.
+
+Keep the PR open; closing it now creates more friction than leaving it open with a clear "help wanted" signal for this specific platform issue.
+
+Note: Ensure your error log snippet in the comment includes the full path string if visible, as length counting is critical here.
+Do not push further blind guesses without explaining the logic derived from the logs in the PR comments first.

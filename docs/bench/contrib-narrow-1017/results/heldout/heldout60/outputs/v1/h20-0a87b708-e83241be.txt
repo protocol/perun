@@ -1,0 +1,50 @@
+You cannot legally contribute this code yet without explicit written authorization from your client or employer. Since the code was developed as part of a paid client project and resides in their private repository, the client likely owns the intellectual property (IP), not you. The ChartFlow requirement that contributors "own the code" means you must hold the rights to license it under ChartFlow's license (likely MIT or Apache). Without a signed release or written permission from the client transferring or licensing this specific module to you, submitting it constitutes IP theft and exposes you and your employer to legal liability.
+
+**Action Plan**
+
+1.  **Secure IP Clearance (Mandatory Stop)**
+    *   **Action:** Do not touch the code yet. Draft a formal request to your client's legal or project management team.
+    *   **Script:** "We developed a generic legend-updating module during the dashboard project that solves a common visualization problem. We wish to upstream this generic logic to the ChartFlow open-source project to reduce our future maintenance burden. We will strip all Horizon Analytics and client-specific identifiers. Do we have your written permission to contribute this specific module under an open-source license, and can you confirm Horizon Analytics holds the rights to grant this?"
+    *   **Outcome:** Wait for a signed email or document. If they say no or do not reply, stop. The contribution cannot happen.
+
+2.  **Generalize and Strip Identifiers**
+    *   Once authorized, create a new local branch. Re-implement the logic using **synthetic data** only.
+    *   **Remove:** All references to "Horizon Analytics," client names, internal hostnames, private ticket numbers (e.g., "HA-1024"), and specific business logic (e.g., "financial streaming").
+    *   **Replace:** Use generic terms like `client-app`, `data-stream`, and `legend-config`.
+    *   **Refactor:** Ensure the code solves the abstract problem ("dynamic legend updates during high-frequency streaming") rather than the specific client use case. If a function exists solely because of a client quirk, remove it; upstream code must be generally useful.
+
+3.  **Draft the Proposal (Issue or Discussion)**
+    *   Before sending a Pull Request, open an Issue or Discussion on the ChartFlow repository to gauge interest and confirm the API design.
+    *   **Title:** `Feature Proposal: Dynamic Legend Updates for High-Frequency Streaming`
+    *   **Body Template:**
+        ```markdown
+        ## Problem
+        Current ChartFlow legends lag or flicker when data updates faster than 30fps. Existing APIs require full re-renders.
+
+        ## Proposed Solution
+        A new `LegendStreamHandler` class that diffs only changed series metadata and updates DOM elements incrementally.
+
+        ## API Sketch
+        ```javascript
+        const handler = new LegendStreamHandler(chart, { throttleMs: 16 });
+        handler.updateSeriesMetadata(newData); // Non-blocking
+        ```
+
+        ## Benefits
+        - Eliminates lag during real-time updates.
+        - Reduces CPU usage by ~40% in streaming scenarios (based on synthetic benchmarks).
+        - Backward compatible; opt-in via new handler.
+
+        ## Implementation Status
+        A prototype exists and handles edge cases (rapid connect/disconnect). I am seeking feedback on this API shape before finalizing the PR.
+        ```
+    *   **Note:** Do not mention the client, the dashboard's purpose, or that this was built for a specific contract. Frame it entirely as a technical gap you identified.
+
+4.  **Final Submission**
+    *   If maintainers approve the design, submit the PR using the generalized code.
+    *   Ensure your Git commit author is your personal email, not a corporate one, if possible, to reinforce personal ownership of the contribution (per the clearance agreement).
+    *   Include a `Signed-off-by` line in your commit message to certify you have the right to submit it.
+
+**Residual Risk:** Even with stripped names, unique algorithmic approaches or specific error-handling patterns could theoretically be traced back to your client's system if they are highly distinctive. Ensure the logic is standard enough to be unattributable.
+
+**Fallback:** If the client denies permission, you cannot contribute. You may only use the code internally for that client.

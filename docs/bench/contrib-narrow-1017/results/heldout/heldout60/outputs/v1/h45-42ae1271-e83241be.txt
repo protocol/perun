@@ -1,0 +1,38 @@
+### Revised Pull Request Description
+
+**Title:** Fix attachment upload failure when filenames contain special characters
+
+**Problem**
+Attachments fail to upload when the filename includes specific special characters (e.g., `+`, `%`, `&`). The server returns a generic `400 Bad Request` error. This appears to be caused by improper URL encoding or header parsing of the filename parameter before it reaches the storage backend.
+
+**Reproduction Steps**
+1. Initialize a standard instance of BugTracker Pro.
+2. Attempt to upload an attachment named `test+file&data.txt` (or similar characters depending on the specific failure case).
+3. Observe the immediate failure with a generic error message.
+*Note: This was reproduced using synthetic filenames on a local development stack; no production logs or customer data were used.*
+
+**Proposed Change**
+This PR updates the filename sanitization and encoding logic in the upload handler to ensure all non-alphanumeric characters are correctly percent-encoded before being processed or passed to downstream services. It also adds a unit test covering these specific character cases.
+
+**Testing**
+- Added unit tests verifying successful uploads for filenames containing `+`, `%`, `&`, and spaces.
+- Verified that existing functionality for standard filenames remains unchanged.
+- [Paste local test output here showing "fails before, passes after"]
+
+**Risk**
+Low. The change is scoped strictly to the input encoding layer. There is a minimal risk of double-encoding if upstream components already encode, but the added tests cover this scenario.
+
+---
+
+### Critical Guidance on Your Questions
+
+**1. Should you mention the enterprise firewall?**
+**No.** Do not mention your enterprise firewall, network topology, or header manipulation by intermediate proxies. If the bug only manifests because of your specific firewall's behavior, it is likely **not an upstream bug** but a configuration issue specific to your environment. Upstream maintainers will reject a code change for a problem that cannot be reproduced on a standard stack. Only include this context if you can reproduce the failure on a clean, local installation without your corporate infrastructure; if you cannot, keep the fix local to your fork.
+
+**2. Is any original context necessary?**
+**No.** Maintainability and urgency are determined by the technical severity (data loss, crash, security) and the reproducibility of the bug, not by corporate deadlines or client names. Mentioning "Q3 roadmap" or "Umbrella Corp" adds zero technical value and violates the project's contribution guidelines. The severity is conveyed entirely by the fact that a core feature (attachments) is broken for valid inputs.
+
+**Immediate Next Steps:**
+1.  **Run the Privacy Gate:** Before submitting, run a mechanical check on your draft files (patch, commit message, and this new description) to ensure no remnants of "Initech," "Bill," "Umbrella," or internal hostnames remain.
+2.  **Verify Reproducibility:** Confirm you can trigger this bug on a fresh, local clone of the project using made-up filenames. If you cannot, do not open the PR; instead, investigate your local environment configuration.
+3.  **Human Review:** Have a colleague review the sanitized description to ensure no "structural tells" (unique phrasing or timing references) inadvertently reveal your organization.

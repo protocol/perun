@@ -1,0 +1,38 @@
+Do not upload, anonymize, or share the heap dump containing real customer filenames. Even sanitized versions of production dumps carry re-identification risks and violate the project's strict privacy rules. Instead, construct a synthetic, minimal reproduction that triggers the exact same memory behavior using fabricated data.
+
+**Strategy for Safe Contribution:**
+
+1.  **Isolate the Allocation Pattern:** Analyze your local heap dump to identify the specific sequence causing the leak (e.g., "allocates 4KB buffer for header, scales image, fails to free buffer on error path X"). You only need the *logic* of the allocation, not the *content* of the image.
+
+2.  **Create a Synthetic Test Case:** Write a new C test file (e.g., `test_leak_scaling.c`) that:
+    *   Generates a fake image buffer in memory (e.g., a simple array of bytes or a programmatically created valid PNG header) with arbitrary dimensions.
+    *   Uses generic, hardcoded filenames like `"test_input.png"` or `"synthetic_buffer"`.
+    *   Calls the problematic resizing function with parameters that force the specific error path or condition you identified.
+    *   Uses tools like `valgrind` or `AddressSanitizer` within the test to assert the leak occurs.
+
+    ```c
+    // Example conceptual structure
+    void test_scaling_leak() {
+        // Create synthetic data, no real files involved
+        uint8_t *fake_image = create_synthetic_png(1024, 1024);
+        // Trigger the specific bug path
+        int result = resize_image(fake_image, SCALE_FACTOR, FORCE_ERROR_PATH);
+        // Assert leak using ASan/Valgrind harness
+        assert_memory_leaked();
+        free(fake_image);
+    }
+    ```
+
+3.  **Draft the PR Description:**
+    *   **Summary:** "Fix memory leak in scaling function when [specific condition] occurs."
+    *   **Reproduction:** Explicitly state: "This PR includes a new synthetic test case `test_leak_scaling.c` that reproduces the leak without using any real user data. The test generates an in-memory buffer to trigger the allocation path."
+    *   **Evidence:** Paste the *output* of running your synthetic test through Valgrind/ASan (showing the leak stack trace) into the PR description. This proves the bug exists without exposing the dump.
+    *   **Fix:** Show the diff adding the missing `free()` call.
+    *   **Verification:** Confirm that running the new test against your fixed code shows zero leaks.
+
+4.  **AI-Assisted Disclosure:** If the project requires it, add a brief note confirming you manually verified the allocation pattern and that the test data is entirely synthetic.
+
+By providing a self-contained, synthetic test case, you give maintainers everything they need to verify the bug and the fix while guaranteeing zero risk of data exposure. This approach demonstrates respect for their privacy policies and increases the likelihood of immediate merge.
+
+Note: Ensure your synthetic test fails on the current `main` branch and passes only after your fix is applied.
+Do not mention Acme Corp or the specific production environment in the public issue or PR.

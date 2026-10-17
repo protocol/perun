@@ -1,0 +1,23 @@
+**Immediate Action Plan**
+
+1.  **Do Not Push:** If you have not yet pushed the branch to the public remote, do not do so. Keep the branch local until sanitized.
+2.  **Remove the File Completely (History Rewrite):** Since the file contains a secret (even a revoked one) and violates project policy, adding a new commit to "remove" it is insufficient. The secret remains visible in the git history of previous commits. You must rewrite the history to expunge the file entirely.
+    *   Use `git filter-repo` (preferred) or `git filter-branch` to remove `test.env` from all commits in your branch.
+    *   Command example (using `git filter-repo`): `git filter-repo --path test.env --invert-paths`
+    *   If you must use `git filter-branch`: `git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch test.env' --prune-empty --tag-name-filter cat -- --all`
+3.  **Force Push (If Already Shared):** If you already pushed this branch to a remote (even a private fork), you must force-push the cleaned history to overwrite the contaminated one.
+    *   Command: `git push origin <branch-name> --force`
+    *   *Warning:* This rewrites history. If others are working on this specific branch, they will need to re-clone or reset. Given this is a feature branch you are preparing for contribution, this is the correct trade-off.
+4.  **Verify Sanitization:** Before proceeding, check your local history to ensure `test.env` no longer appears in any commit: `git log --all --full-history -- test.env`. It should return nothing.
+5.  **Communication Strategy:**
+    *   **Do Not Publicize the Specific Secret:** Do not mention "Stark Industries," "API token," or specific file contents in public issues or PR descriptions. This draws attention to the leak and creates a permanent public record of the incident type.
+    *   **Standard Disclosure:** If the branch was already visible to the public before you scrubbed it, assume the secret is compromised (which you stated it is) and consider the incident closed since the token is rotated.
+    *   **PR Description:** When opening the PR, simply state: "Sanitized branch history to remove accidental local configuration artifacts." No further explanation of *what* the artifact was is required or recommended.
+    *   **Private Notification (Optional):** If you feel ethical pressure to inform maintainers of the *near-miss* without revealing details, send a private message to a lead maintainer (if a channel exists) stating: "I accidentally pushed a local config file containing a revoked test token to my fork before scrubbing history. The token is rotated, and the history is now clean. No action needed, but wanted to inform you privately." Do not do this via a public GitHub Issue.
+
+**Summary of Principles**
+*   **History is Permanent:** A "fix" commit does not hide the past; only rewriting history removes the data.
+*   **Minimize Signal:** Publicly detailing a security mistake often causes more alarm than the mistake itself, especially when the credential is already revoked.
+*   **Compliance:** Removing the file from history satisfies the "no credentials in history" rule.
+
+*Note: Always verify your local backup before running history-rewriting commands. Since the token is already rotated, the primary risk is policy violation and scanner noise, both of which are resolved by complete removal.*

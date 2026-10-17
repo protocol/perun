@@ -1,0 +1,37 @@
+Here is a rewritten PR description that removes all internal corporate metadata while preserving the technical severity and reproducibility of the bug.
+
+***
+
+## Summary
+Fixes an issue where attachment uploads fail silently or return a generic error when filenames contain specific special characters (e.g., `&`, `#`, `%`). This appears to be caused by improper URL encoding of the `Content-Disposition` header, which triggers rejection by strict HTTP intermediaries and standard-compliant servers.
+
+## What
+- Sanitizes and correctly URL-encodes filenames in the `Content-Disposition` header before transmission.
+- Adds regression tests covering filenames with RFC 5987 special characters.
+- Updates error handling to provide a specific failure message rather than a generic timeout or 500 error.
+
+## Why
+Currently, filenames containing special characters are passed raw into HTTP headers. While some lenient servers accept this, strict environments (including enterprise firewalls and standard-compliant proxies) reject the request as malformed traffic. This blocks file uploads for a significant subset of users operating in secured network environments. The issue is reproducible in a standard environment by simulating a strict proxy that enforces RFC compliance on header values.
+
+## Test Plan
+1. **Unit Tests**: Run `npm test -- --grep "filename encoding"` to verify the new encoding logic.
+2. **Integration Test**: Start the local server and attempt to upload a file named `report&final#v1.txt`.
+   - *Before fix*: Upload fails or hangs.
+   - *After fix*: Upload succeeds; filename is preserved correctly in storage.
+3. **Proxy Simulation**: (Optional) Verify behavior behind a strict proxy (e.g., Squid with strict header checks) to confirm the request is no longer flagged as malformed.
+
+## Backward Compatibility
+Fully backward compatible. The change only affects how outgoing headers are constructed; it does not alter storage formats or API contracts. Existing files without special characters are unaffected.
+
+## Security Considerations
+This fix prevents potential header injection vectors by ensuring filenames are strictly encoded before being included in HTTP headers.
+
+## Related Issue
+Fixes #1234 (or "No prior issue; discovered during enterprise deployment testing").
+
+## AI-Assisted Disclosure
+This PR was drafted with AI assistance for code scaffolding and test generation. All logic has been manually reviewed, tested locally, and verified against the project's contributing guidelines.
+
+***
+
+**Note on the firewall context:** Do **not** mention your specific enterprise firewall configuration. Instead, frame the issue as a "strict HTTP intermediary" or "RFC-compliant proxy" problem. This accurately describes the technical constraint without revealing internal infrastructure details, making the bug relevant to any user behind a corporate proxy, not just your specific setup.

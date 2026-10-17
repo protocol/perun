@@ -1,0 +1,29 @@
+### Immediate Mitigation Steps
+
+**1. Do not delete the fork yet.** Deleting the fork removes your ability to push a corrected history to the same remote URL, which is the fastest way to overwrite the leak.
+
+**2. Scrub the history locally.**
+You must remove the sensitive commits from your local branch history before pushing. Since the leak is in recent commits, use `git rebase -i` (interactive rebase) to edit the specific commits and remove the print statements, or `git reset --hard` to a point before the leak if the entire branch is compromised.
+*   If the sensitive code is in the most recent commit: `git reset --soft HEAD~1`, remove the lines, `git add .`, `git commit -m "fix: remove debug logs"`.
+*   If the sensitive code is deeper in history: `git rebase -i <commit-before-leak>`, mark the leaking commits as `edit`, remove the lines, `git add .`, `git commit --amend`, then `git rebase --continue`.
+
+**3. Force-push with lease.**
+Once your local history is clean, push the corrected history to your public fork using:
+```bash
+git push origin <branch-name> --force-with-lease
+```
+This overwrites the remote branch history. The sensitive commits will become "dangling" objects. While technically recoverable by someone who cloned the repo *exactly* before this push for a short window, this effectively removes the data from the default view and prevents further exposure.
+
+**4. Rotate credentials (Critical).**
+If there is *any* chance the hostnames combined with other public info could allow an attacker to target those servers, assume the topology is compromised. You cannot "un-leak" information once seen. Inform your security team immediately so they can assess if network rules need adjustment. The code fix is secondary to the operational risk.
+
+**5. Communicate with maintainers.**
+Do not draw attention to the specific hostnames in the public PR thread. Open a new issue or send a direct message (if possible) to a maintainer with the following template:
+
+> "I inadvertently pushed a commit containing internal infrastructure hostnames in my draft PR #<N>. I have just force-pushed a cleaned history to the branch to remove this sensitive data. Could you please confirm if your local clones or any automated bots might have cached the previous version? I apologize for the oversight and have taken steps to ensure no further sensitive data is exposed."
+
+Most maintainers will appreciate the honesty and the swift fix. They generally do not cache PR diffs permanently unless they specifically checked out the branch during the brief window.
+
+**Note:** GitHub Actions logs or third-party bots (like CodeRabbit) that triggered *before* your force-push may have captured the diff. Check your repository's "Actions" tab for any completed runs on the leaked commit and delete those log artifacts manually if possible.
+
+**Note:** In the future, add a pre-commit hook to scan for patterns like `\.internal$` or `staging-` to prevent this class of error from reaching the remote.

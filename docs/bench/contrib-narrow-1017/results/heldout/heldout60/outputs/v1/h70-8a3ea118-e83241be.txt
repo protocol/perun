@@ -1,0 +1,40 @@
+### Immediate Mitigation Steps
+
+1.  **Do Not Force-Push Yet:** Force-pushing rewrites history but does not delete the original commits from the remote server immediately; they often remain accessible via reflogs or cached clones for a period. If the data is highly sensitive, the safest immediate action is to **delete the public fork entirely** from the hosting platform (e.g., GitHub/GitLab). This removes the remote reference instantly.
+2.  **Clean Locally:** On your local machine, create a new branch from the clean base. Cherry-pick only the necessary logic changes, ensuring all debugging prints, internal hostnames (e.g., replace `staging-db-acme-01.internal` with `localhost` or `node-1`), and paths are stripped. Verify no sensitive strings exist using a text search (`grep -r "acme" .`).
+3.  **Recreate and Push:** Create a fresh fork of the upstream project. Push your cleaned branch to this new fork.
+4.  **Rotate Secrets:** Treat the leaked hostnames as compromised. While hostnames alone may not grant access, they reveal topology. Inform your internal security team immediately so they can assess if naming conventions need changing or if monitoring should be increased for those specific nodes. **Do not wait for the open-source community to act.**
+
+### Communication with Maintainers
+
+If you had already opened a Pull Request (PR) before deleting the fork, the PR will automatically close or show an error. You do not need to explicitly announce the leak in a public comment, which might draw attention to the specific data.
+
+Instead, if you must communicate:
+*   **Wait for the new PR:** Open a new PR with the cleaned code.
+*   **Private Disclosure (Optional):** If you feel ethical pressure to explain the deletion of the previous fork, use the project's private security contact (if available) or send a direct, brief message to the lead maintainer. State: *"I accidentally pushed a branch containing internal infrastructure names in debug logs. I have deleted the fork and rotated internal credentials as a precaution. A cleaned PR follows shortly. No user data was exposed."*
+*   **Public Silence:** If no PR was opened or if the project lacks private channels, simply opening the new clean PR is often sufficient. The "noise" of a deleted fork is common and rarely investigated deeply unless malicious activity is suspected.
+
+### Addressing Your Specific Concerns
+
+*   **Force-push vs. Delete:** Deleting the fork is superior for immediate containment. Force-pushing leaves a window where automated scrapers or curious users could have captured the old commit hash.
+*   **Notifications:** If a PR was open, notifications might have been sent. However, most email notifications strip code diffs or only show summary lines. The risk is low but non-zero. Rotating the "secret" (the knowledge of your internal naming scheme) is the only true fix; you cannot un-send an email.
+*   **Drawing Attention:** Deleting a fork and recreating it is a standard developer mistake. It draws significantly less attention than a public thread discussing "leaked hostnames."
+
+### Draft Commit Message for the Cleaned PR
+
+```text
+fix: resolve race condition in high-concurrency request handling
+
+Identified a locking issue occurring under high load. Added proper mutex
+handling to the request lifecycle.
+
+Testing:
+- Verified fix with synthetic load tests on localhost.
+- No regression in standard request flows.
+
+Note: Previous attempt included debug artifacts; this branch contains
+only the functional fix.
+```
+
+**Note:** Always run a local scrub script (e.g., `grep` for your company name) before pushing any future branches.
+**Note:** Consider adding a pre-commit hook to your local repository to automatically block commits containing internal domain patterns.

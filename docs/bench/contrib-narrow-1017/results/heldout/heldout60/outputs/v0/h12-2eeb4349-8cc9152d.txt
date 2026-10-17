@@ -1,0 +1,34 @@
+**Pull Request Description Draft**
+
+**Title:** Fix flaky tests caused by race condition in async test teardown
+
+**Summary**
+This PR resolves a recurring flakiness affecting approximately 5% of the test suite, specifically in tests involving asynchronous resource cleanup. The failures manifest as intermittent timeouts or stale state errors during the teardown phase, causing pipeline stalls.
+
+**Root Cause Analysis**
+Through detailed analysis of the test execution lifecycle, I identified a race condition between the test runner's completion signal and the asynchronous disposal of shared mock resources. Specifically:
+1. The test runner initiates the "done" callback immediately after the last assertion passes.
+2. Simultaneously, a pending promise in the mock server's shutdown sequence attempts to access a resource that the runner has already begun to garbage collect.
+3. In high-load CI environments, the timing window where the shutdown sequence outpaces the runner's cleanup lock widens, leading to non-deterministic failures.
+
+This is a classic Heisenbug where the act of logging or debugging often masks the timing discrepancy, making it appear to pass locally under normal conditions but fail consistently under CI load.
+
+**The Fix**
+The solution implements an explicit synchronization barrier before the test runner declares completion. Instead of relying on implicit promise resolution order, we now:
+1. Introduce a `teardown-complete` semaphore that blocks the final "done" signal.
+2. Refactor the mock server shutdown to explicitly release this semaphore only after all pending network sockets are fully closed and memory is dereferenced.
+3. Add a safeguard timeout to prevent deadlocks if the shutdown sequence hangs indefinitely.
+
+This ensures that resource disposal is fully serialized before the next test context initializes, eliminating the race window regardless of system load or execution speed.
+
+**Verification**
+- **Local Stress Test:** Ran the affected test suite 500 times consecutively using `--repeat` flag; 0 failures observed (previously ~25 failures expected statistically).
+- **CI Simulation:** Executed the suite in a containerized environment mimicking CI resource constraints; stability maintained over 100 runs.
+- **Regression Check:** Verified that existing tests relying on the previous teardown behavior still pass, as the new synchronization is backward compatible with standard async patterns.
+
+**Impact**
+This change stabilizes the deployment pipeline by removing the primary source of non-deterministic failures. It does not alter public API behavior or test semantics, only the internal reliability of the test harness.
+
+---
+
+*Note: This draft strictly describes the technical race condition and fix based on observable behavior, omitting any reference to internal forks, specific colleagues, or private repositories. Ensure you have actually run the stress tests mentioned in the "Verification" section before submitting, replacing the placeholder results with your real data.*

@@ -1,0 +1,62 @@
+### Step 1: Prepare Your Local Branch
+Ensure you are on the correct branch and have the latest upstream changes to avoid conflicts later.
+```bash
+git fetch origin
+git checkout <your-branch-name>
+```
+
+### Step 2: Start an Interactive Rebase
+You need to squash your last three commits into one. Run the following command, replacing `3` with the number of commits you need to combine if it differs:
+```bash
+git rebase -i HEAD~3
+```
+This opens your default text editor with a list of your last three commits, looking something like this:
+```text
+pick abc1234 Fix inventory calculation logic
+pick def5678 Add unit tests for edge cases
+pick ghi9012 TKT-9988: Update comments and formatting
+```
+
+### Step 3: Edit the Commit List
+Modify the file to squash the commits and remove the sensitive ticket number immediately:
+
+1.  Change `pick` to `squash` (or `s`) for the second and third lines. This tells Git to merge them into the first commit.
+2.  **Crucial:** While you are here, edit the commit message text directly in this list if your editor allows, or prepare to edit it in the next step. Ensure "TKT-9988" is removed from the message text.
+
+Your file should look like this:
+```text
+pick abc1234 Fix inventory calculation logic
+squash def5678 Add unit tests for edge cases
+squash ghi9012 Update comments and formatting
+```
+*Note: I have removed the ticket number from the third line's description above. Do not save the file with "TKT-9988" present.*
+
+Save and close the file.
+
+### Step 4: Finalize the Commit Message
+Git will now open a new editor window containing the combined commit messages of all three commits.
+1.  Review the combined text.
+2.  **Delete any line containing "TKT-9988" or "Acme Logistics".**
+3.  Write a single, clean message following the project's conventions (e.g., `fix(inventory): correct off-by-one error in stock count`).
+4.  Save and close the file.
+
+If you make a mistake here, you can abort safely using `git rebase --abort` before pushing.
+
+### Step 5: Verify Your History
+Before pushing, confirm the sensitive data is gone and the code changes remain intact.
+```bash
+git log -1
+```
+Check that the message is clean and does not contain the ticket number. You can also run `git diff origin/main` to ensure your actual code changes (the C logic) are still present and correct.
+
+### Step 6: Force-Push Safely
+Since you are rewriting history, you must force-push. Use `--force-with-lease` instead of `--force`. This command checks if anyone else (or a bot) has pushed to your branch since you last fetched. If they have, it aborts to prevent you from overwriting their work.
+```bash
+git push origin <your-branch-name> --force-with-lease
+```
+
+If the push succeeds, your Pull Request will automatically update to reflect the single squashed commit with the sanitized message. The sensitive ticket number will no longer exist in the public commit history.
+
+---
+*Always verify the final commit message with `git log` before pushing to ensure no private data remains.*
+*If the push fails with a "stale reference" error, run `git fetch origin` and repeat Step 6.*

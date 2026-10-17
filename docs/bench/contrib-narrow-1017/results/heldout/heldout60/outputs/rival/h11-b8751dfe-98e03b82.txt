@@ -1,0 +1,31 @@
+**Strategy: Submit Against `main` with Explicit Context**
+
+Do **not** rebase on top of the unreviewed branches, and do **not** wait. Rebasing on unmerged, unreviewed work assumes their code is correct and will be accepted, which is a dangerous assumption given their four-month stagnation. If those PRs are eventually closed or changed significantly, your dependency on them will create unnecessary churn and conflict resolution work for you.
+
+Instead, branch your fix directly from the current upstream `main`. Your goal is to make your PR as easy as possible to merge independently of the others. Since you are fixing a specific rounding error in a massive codebase, your diff should be tiny (likely 1–5 lines). A minimal diff is much easier for a maintainer to manually merge even if conflicts exist, compared to a large feature branch.
+
+**Pull Request Description Phrasing**
+
+In your PR description, you must proactively address the "elephant in the room" (the three stale PRs) to show you have done your homework and are not creating noise. Use the following structure in your "Summary" or "Context" section:
+
+> **Context & Conflict Awareness**
+> This PR fixes a critical one-cent rounding error in the inventory calculation module. I am aware of three existing open PRs (#123, #124, #125) that also modify this file but have been inactive for four months.
+>
+> To avoid blocking this urgent bug fix on stalled contributions, this PR is branched directly from `main` with a minimal scope (only the rounding logic). If any of the existing PRs are merged first, I am prepared to immediately rebase this fix onto their result or assist in resolving any resulting conflicts. The fix is isolated enough that it should be safely cherry-pickable if preferred.
+
+This approach signals three things:
+1.  **Respect:** You know the project history and aren't ignoring others' work.
+2.  **Urgency:** You distinguish your bug fix from their likely feature work.
+3.  **Flexibility:** You explicitly offer to handle the merge labor, removing the burden from the maintainer.
+
+**Execution Steps**
+
+1.  **Fetch and Branch:** `git fetch origin` then `git switch -c fix/inventory-rounding origin/main`.
+2.  **Verify Isolation:** Ensure your local change touches *only* the specific lines required for the rounding fix. Do not format surrounding code or refactor "while you are there."
+3.  **Submit:** Push your branch and open the PR against `main`.
+4.  **Monitor:** If one of the stale PRs suddenly gets merged, immediately rebase your branch on top of the new `main`, resolve the conflict (which should be trivial given your small scope), and force-push with `--force-with-lease`.
+
+By decoupling your fix from the stale backlog, you give the maintainer the option to merge your critical fix *today* without needing to untangle the four-month-old deadlock first.
+
+*Note: If the maintainers explicitly reply asking you to wait or rebase on a specific stale branch, only then should you change course; until then, optimize for independent mergeability.*
+*Ensure your local test evidence (the "one-cent" verification) is pasted directly into the PR description as requested by standard quality gates.*

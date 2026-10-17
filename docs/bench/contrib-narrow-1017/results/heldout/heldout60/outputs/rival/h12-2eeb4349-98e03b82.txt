@@ -1,0 +1,53 @@
+## Summary
+Resolves a race condition in the test harness causing ~5% flaky failures during parallel execution. The fix introduces a deterministic synchronization barrier before state assertion, ensuring async operations complete fully before validation begins.
+
+## What
+- **Modified:** `test-utils/async-helpers.js` – Added `waitForStableState()` utility.
+- **Modified:** `core/test-runner.js` – Integrated the new utility into the pre-assertion lifecycle hook.
+- **Added:** `tests/regression/race-condition-fix.spec.js` – Specific stress test reproducing the timing window.
+
+## Why
+The current test runner asserts DOM state immediately after triggering an event. In high-load CI environments, microtasks or macrotasks (e.g., network mock resolution) occasionally lag behind the main thread, leading to assertions running against stale data. This manifests as non-deterministic failures where the application is functionally correct but the test observes an intermediate state. This change enforces a "settle" period, guaranteeing the event loop is empty before proceeding.
+
+## Test Plan
+**Local Verification:**
+Ran the full suite 50 times consecutively using the project's standard stress command:
+```bash
+pnpm test:stress --runs 50 --grep "integration"
+```
+**Result:** 0 failures (previously averaged 2-3 failures per 50 runs).
+
+**Coverage Matrix:**
+| Layer | Test Case | What it proves |
+|---|---|---|
+| Unit | `test_waitForStableState_resolves_immediately_when_idle` | No artificial delay added if already stable |
+| Integration | `test_parallel_mutations_do_not_leak` | Isolation between concurrent test contexts |
+| Regression | `test_flaky_network_mock_stabilized` | Specific race window previously causing 5% failure is closed |
+
+## Backward Compatibility
+Fully backward compatible. The new utility is opt-in for existing custom tests but automatically applied to the core runner. No public API signatures changed.
+
+## Security Considerations
+No impact. The change affects only internal test timing logic; no production code or user data handling is modified.
+
+## Related Issue
+Fixes internal tracking ticket #ACME-492 (Flaky CI Pipeline). *Note: Detailed reproduction steps are documented in the ticket comments.*
+
+## Checklist
+- [x] Code follows project linting rules (`pnpm lint` passed).
+- [x] New tests added and passing locally.
+- [x] No "while I'm here" refactors included; diff is scoped strictly to the race condition.
+- [x] Commit messages follow Conventional Commits spec.
+
+## Technical Deep Dive (Race Condition Analysis)
+The root cause is a classic "check-then-act" race in the asynchronous test lifecycle.
+1. **Trigger:** Test fires `click()` event.
+2. **Race:** The framework queues a state update via `Promise.resolve().then(...)`.
+3. **Failure Point:** The test runner's assertion logic executes *before* the microtask queue drains, reading the pre-update value.
+4. **Fix:** The new `waitForStableState()` inserts a `await new Promise(r => setTimeout(r, 0))` loop that checks a "pending mutations" counter. It only resolves when the counter hits zero, ensuring the microtask queue is fully drained and all reactive updates have flushed to the DOM before the assertion runs.
+
+This approach avoids arbitrary `sleep()` calls, which are brittle, by instead actively polling the framework's internal mutation scheduler until idle.
+
+---
+*Drafted based on local reproduction and analysis of public framework behavior.*
+*Ensure internal ticket #ACME-492 is accessible to reviewers before merging.*

@@ -1,0 +1,40 @@
+Here is a sanitized version of your stack trace template and a strategy for providing the necessary context without exposing sensitive data.
+
+### Sanitized Stack Trace Template
+
+Replace your raw output with this structure. Maintain the exact line numbers, method names, and exception types, as these are critical for debugging. Replace specific paths with generic placeholders that preserve the *structural* relationship (e.g., "config directory" vs. "source code") without revealing your infrastructure.
+
+```text
+java.lang.OutOfMemoryError: Java heap space
+    at com.cloudnet.network.connection.PacketHandler.processLargePacket(PacketHandler.java:142)
+    at com.cloudnet.network.connection.ConnectionChannel.read(ConnectionChannel.java:89)
+    at com.cloudnet.internal.thread.PoolWorker.execute(PoolWorker.java:33)
+    ... [stack trace truncated for brevity] ...
+
+Environment Context:
+- Deployment Type: Staging Environment (Linux-based)
+- Directory Structure: [Application Root]/lib/network/... (Standard installation layout)
+- User Context: Non-root service account
+- Trigger: Inbound packet size > 15MB
+```
+
+**Key Sanitization Rules Applied:**
+1.  **Hostnames:** Removed `Staging-East-1` and replaced with generic `Staging Environment`. The OS type (Linux/Windows) is usually sufficient; the specific region/zone is rarely relevant to a code crash unless it involves region-specific endpoints (which should be described in text, not the trace).
+2.  **Usernames:** Removed `Ravi`. Replaced with `Non-root service account` or `Service User`. The username itself almost never affects logic errors unless the code explicitly checks for specific user strings (unlikely in a network library).
+3.  **Absolute Paths:** Stripped the full path (e.g., `/home/ravi/projects/cloudnet-staging/build/...`). Replaced with the relative package structure or a generic description of the directory type. The compiler embeds the source file name and line number (e.g., `PacketHandler.java:142`), which is the only path data the maintainer needs to locate the bug in *their* source tree.
+
+### Additional Context to Provide Separately
+
+If the maintainers require more specific environmental details to reproduce the crash, provide them in the issue description text, not the code block:
+
+*   **Directory Layout Description:** Instead of showing the path, write: "The application is installed in a nested directory structure where configuration files reside two levels above the binary executable."
+*   **Permissions Model:** If you suspect a permission issue, state: "The process runs under a dedicated service user with read/write access only to the `/data` and `/logs` subdirectories."
+*   **Private Attachment (If allowed):** If the project has a mechanism for private attachments (or if you are asked to email logs), offer to send the *full, unsanitized* log file directly to a maintainer via a secure channel, rather than posting it publicly.
+
+### Recommended Issue Description Snippet
+
+Include this note in your issue to clarify your sanitization approach:
+
+> "Note: The stack trace below has been sanitized to remove internal hostnames, usernames, and absolute file paths per project security guidelines. The line numbers and class hierarchy remain intact. If the specific directory depth or permission model is required to reproduce this, I can provide a detailed textual description or share the full logs via a private channel."
+
+This approach respects the project's security warnings while ensuring the technical signal (the crash location and state) remains high-fidelity.

@@ -1,0 +1,33 @@
+Do not upstream all twenty patches. Your description confirms that several changes rely on legacy systems Massive Dynamic uses but the open-source project has abandoned, and others contain workarounds specific to your internal environment. Upstreaming these would violate the "generality gate": contributions must address defect classes or method gaps reproducible beyond your specific project, not project-specific quirks or deprecated paths. Attempting to force-fit internal assumptions into a public framework is precisely the kind of "slop" maintainers reject, and it risks leaking your infrastructure strategy even if code is scrubbed.
+
+**Immediate Strategy:**
+
+1.  **Triage into Three Buckets:**
+    *   **Bucket A (Universal Fixes):** Bugs or performance tweaks that solve a problem any user of WebFrame would face, independent of your legacy stack. These are the only candidates for upstreaming.
+    *   **Bucket B (Local Imprints):** Workarounds for Massive Dynamic's legacy systems, internal API dependencies, or environment-specific assumptions. These must stay in your private fork. Document them in your local `AGENTS.md` or maintenance guide, but do not propose them upstream.
+    *   **Bucket C (Proprietary Logic):** Any patch touching business logic, data flows specific to your product, or timing that reveals your roadmap. These are strictly private.
+
+2.  **Validation Before Drafting:**
+    For each item in Bucket A, ask: "If I removed all mentions of Massive Dynamic and our legacy stack, would this still make sense to a stranger?" If the answer is no, move it to Bucket B. Do not proceed with any contribution that requires explaining your internal architecture to justify the change.
+
+3.  **Rollout Schedule:**
+    *   **Week 1:** Submit **one** high-confidence, small bug fix from Bucket A. This tests the waters, respects maintainer bandwidth, and establishes your credibility.
+    *   **Week 2-3:** Observe feedback. If the first PR is well-received, submit a second, unrelated fix. Do not bundle changes; keep them atomic.
+    *   **Month 2+:** Only after establishing a rhythm should you introduce slightly larger performance tweaks, ensuring each has its own isolated rationale and test case.
+
+4.  **Privacy & Risk Mitigation:**
+    Before drafting any PR, run a mental "residual risk" check: Does the patch imply your system architecture, load patterns, or migration timeline? Even if variable names are changed, a pattern like "optimized for 10k concurrent legacy connections" leaks strategy. If such context is required to explain *why* the patch exists, it belongs in Bucket B, not upstream.
+
+5.  **Human Gate:**
+    You (the human) are the privacy authority. No automated scrubber can catch a paraphrased leak like "we need this because our nightly retrain job blocks the main thread." You must personally certify that the rationale contains no confidential facts before any PR is opened.
+
+**Criteria for First Contributions:**
+*   Must be universally applicable (no legacy dependencies).
+*   Must include a reproducible test case that passes without your internal infrastructure.
+*   Must be small enough to review in under 15 minutes.
+*   Must not require revealing *why* Massive Dynamic encountered the bug (unless the reason is public knowledge).
+
+Stop the plan to upstream everything. Focus only on the universal signal; keep the noise private.
+
+*Note: Attempting to upstream legacy workarounds often signals to maintainers that your team is out of sync with the project's direction, potentially harming future collaboration.*
+*Note: If a patch cannot be explained without referencing your internal environment, it is by definition not generalizable.*

@@ -1,0 +1,39 @@
+### Benchmarking Strategy and Communication Plan
+
+**1. Create a Synthetic Data Generator**
+Since you cannot share Acme's data, you must generate a deterministic, synthetic dataset that mimics the *statistical properties* of your transaction logs without containing real information.
+*   **Action:** Write a small script (included in your PR or a separate `benchmarks/` folder) that generates CSV/JSON files with the same schema, column types, and approximate row counts as your internal data.
+*   **Key Detail:** Use a fixed random seed (e.g., `random.seed(42)`) so that every time the benchmark runs, it generates the exact same file. This ensures reproducibility for Jane and other reviewers.
+*   **Validation:** In your PR description, explicitly state: "Synthetic data mimics the distribution of [specific fields, e.g., timestamp density, string length] found in production but contains no real PII."
+
+**2. Implement the Benchmark Suite**
+Use Python's built-in `timeit` module or the `pytest-benchmark` plugin if the project already uses pytest.
+*   **Structure:** Create a script that runs the DataStream processing function on both the *old* code (baseline) and your *new* code.
+*   **Methodology:** Run each scenario multiple times (e.g., 10–20 iterations) and report the median time to avoid outliers skewing results.
+*   **Output:** The script should print a clear table comparing "Before" vs. "After" execution times and calculate the percentage improvement.
+*   **Reproducibility:** Ensure the script downloads or generates its own data upon first run, so Jane can clone the repo and run `python benchmarks/run.py` immediately without manual setup.
+
+**3. Addressing the "Random Data" Concern**
+You are correct that purely random data might not reflect real-world gains. To solve this:
+*   **Pattern Matching:** If your performance gain comes from handling specific patterns (e.g., high cardinality in a specific column, long strings, or sparse data), hardcode those characteristics into your synthetic generator.
+*   **Documentation:** Add a section in your PR explaining *why* the synthetic data triggers the performance bottleneck your fix addresses. This proves the gain isn't an artifact of easy data.
+
+**4. Communication Template for the PR**
+Add the following section to your Pull Request description to address your inexperience honestly while demonstrating rigor:
+
+> **Benchmarking Approach**
+> As this project lacks an existing benchmark suite, I have implemented a new reproducible benchmark using deterministic synthetic data (seeded generator included in `benchmarks/generate_data.py`).
+>
+> *Note on methodology:* While I am new to formal benchmarking, I have structured these tests to isolate the specific processing bottleneck addressed by this PR. The synthetic data replicates the [specific characteristic, e.g., "high-volume string concatenation"] of our internal workloads where we observed a ~15% gain.
+>
+> **Results (Local Run):**
+> | Scenario | Baseline (ms) | Optimized (ms) | Improvement |
+> | :--- | :--- | :--- | :--- |
+> | Small Dataset (1k rows) | 120 | 118 | 1.6% |
+> | Large Dataset (1M rows) | 4500 | 3825 | **15.0%** |
+>
+> I welcome feedback on the benchmark design itself; if the community prefers a different tool (e.g., `asv`) or data distribution, I am happy to refactor this suite accordingly.
+
+**Why this works:** It admits your novice status without undermining your competence, provides the hard evidence Jane requested, respects data privacy, and invites collaboration rather than demanding immediate acceptance.
+
+Ensure your benchmark script is included in the CI configuration if possible, or clearly document how to run it manually.

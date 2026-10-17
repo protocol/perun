@@ -1,0 +1,15 @@
+You cannot submit a valid pull request to QueueFlow under the current conditions. The maintainers' requirement for a reproducible test case within the standard suite is a hard gate; without it, your PR will be closed regardless of the fix's correctness. Since your current reproduction relies entirely on proprietary harnesses and unreleased product configurations, you currently possess no evidence that satisfies their contract.
+
+To resolve this without exposing StreamLine's secrets, you must decouple the *mechanism* of the race condition from your *specific traffic patterns*. Race conditions in Go mutexes are rarely dependent on complex network topologies; they usually rely on specific timing interleavings (e.g., Thread A locks, Thread B waits, Thread A unlocks, Thread C grabs before B wakes).
+
+Construct your test case using the following strategy:
+
+1.  **Isolate the Trigger:** Identify the exact sequence of function calls in your internal harness that triggers the drop. Strip away all network logic, payload serialization, and StreamLine-specific metadata.
+2.  **Synthetic Concurrency:** Replace your 5,000-connection load with a standard Go `stress` test using `sync.WaitGroup` and a fixed number of goroutines (often as few as 10–50 are sufficient to trigger a mutex race if the timing window is hit repeatedly). Use `testing.T.FailNow()` or atomic counters to detect the dropped message deterministically.
+3.  **Sanitize Inputs:** Ensure the test data consists of generic strings or integers. If the race depends on message size, use random byte slices of fixed length rather than real StreamLine payloads.
+4.  **Verify Independence:** Run this new test against the *unpatched* QueueFlow main branch. If it does not fail consistently there, your synthetic test is insufficient, and you must refine the timing logic—not add more proprietary context.
+
+If you cannot create a failing test using only the public QueueFlow API and standard Go concurrency primitives, then the bug is likely coupled to your private architecture's specific usage pattern. In that scenario, the fix is not a general library bug but an integration issue, and upstreaming it would be inappropriate. Do not submit the code fix without the passing/failing test pair; doing so violates the contribution guidelines and signals low-quality maintenance to the project owners.
+
+Note: Do not mention StreamLine, Globex, or your internal metrics in the PR description or code comments.
+Note: If the race requires hardware-specific timing impossible to replicate in CI, document the theoretical interleaving in a GitHub Issue first rather than forcing a flaky test.

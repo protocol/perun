@@ -1,0 +1,43 @@
+### Sanitized Stack Trace Template
+
+Replace your internal paths, hostnames, and usernames with generic placeholders that preserve the structural relationship required for debugging. Maintain the file hierarchy relative to the application root but strip absolute system details.
+
+**Original Pattern (Do Not Use):**
+`File "/home/ravi/projects/acme-cloudnet/src/handler.py", line 42, in process_packet`
+`Host: staging-east-1.corp.internal`
+
+**Sanitized Pattern (Use This):**
+```text
+Traceback (most recent call last):
+  File "/app/src/handler.py", line 42, in process_packet
+    # [Logic where large packet buffer overflows]
+  File "/app/src/connection.py", line 89, in handle_stream
+    # [Call stack leading to crash]
+Exception: BufferOverflowError: Packet size 65536 exceeds limit 32768
+Environment Context:
+- Host: <linux-container>
+- User: <service-account>
+- Path Structure: /app/src/[module]/[file].py
+```
+
+**Key Transformations Applied:**
+1.  **Paths:** Changed `/home/ravi/projects/acme-cloudnet/` to `/app/`. This preserves the relative module structure (`src/handler.py`) which is critical for the maintainer to locate the code, while removing the user (`ravi`) and company project name (`acme-cloudnet`).
+2.  **Hostname:** Replaced `staging-east-1.corp.internal` with `<linux-container>` or `generic-host`. The specific region and internal domain are irrelevant to the code logic; only the OS type matters if system calls are involved.
+3.  **Usernames:** Replaced `ravi` with `<service-account>`. Unless the bug is specifically a permission error tied to a unique user ID (unlikely for a packet crash), the username is noise.
+
+### Additional Context to Provide
+
+Since you cannot share the exact directory structure or binary environment, you must explicitly describe the environmental constraints in the issue body so maintainers can synthesize a reproduction case:
+
+1.  **Installation Method:** State how the library is installed (e.g., "Installed via pip into a virtualenv," "Running from source in a Docker container," or "Embedded in a larger C++ application"). This explains why the path looks like `/app/src`.
+2.  **Packet Construction:** Provide a minimal, synthetic code snippet that generates the "large packet" causing the crash. Do not use real traffic logs. Create a dummy byte array of the specific size that triggered the error (e.g., `data = b"X" * 70000`).
+3.  **Configuration:** List any non-default configuration flags related to buffer sizes or connection limits that were active during the crash.
+
+### Addressing Your Uncertainty
+
+You are concerned that redacting paths makes the trace useless. **It does not**, provided you preserve the *relative* path from the package root. Maintainers need to know which file in *their* library failed (e.g., `cloudnet/handler.py`), not where *you* stored it on your disk. If the crash depends on a specific non-standard directory layout you engineered locally, that is a local configuration issue, not an upstream bug, and should be described in text rather than shown via absolute paths.
+
+If the maintainers cannot reproduce the issue with the sanitized trace and synthetic data, they will ask for a minimal reproduction repository. At that stage, you can create a fresh, empty project containing only the code necessary to trigger the crash, ensuring no private metadata exists in the history.
+
+**Note:** Before posting, run a text search on your draft for your company name, "Staging," and "Ravi" to ensure no instances were missed in comments or variable names.
+**Note:** If the stack trace includes memory addresses (e.g., `0x7f8b2c`), leave them as-is; they are not sensitive, though they may vary between runs.

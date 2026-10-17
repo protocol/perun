@@ -1,0 +1,18 @@
+**Immediate Action Plan**
+
+1.  **Do Not Force-Push Yet:** Force-pushing rewrites history but does not delete the original commits from the remote server immediately. They often remain accessible via the old commit hashes or reflogs for a period, meaning the data is not truly purged.
+2.  **Delete the Fork Entirely:** Go to your GitHub/GitLab interface and **delete the entire fork repository**. This is the only way to immediately revoke public access to the specific commit objects containing the hostnames. Waiting for garbage collection on a force-push is risky; deletion is instant.
+3.  **Recreate and Push Clean Code:**
+    *   Create a new local branch from the clean upstream main.
+    *   Apply your race condition fix again, ensuring **all** debugging statements and internal hostnames are removed.
+    *   Create a *new* fork of the upstream repository.
+    *   Push your clean branch to this new fork.
+    *   Open a new Pull Request from this new branch.
+4.  **Communicate with Maintainers:**
+    *   **Do not** paste the leaked hostnames in any communication.
+    *   Send a brief, professional message to the maintainers (via the existing PR comments before closing it, or direct email if you have it) stating: *"I inadvertently pushed a commit containing confidential internal infrastructure identifiers to my public fork. I have deleted the fork entirely to purge the data. I am opening a new PR with a sanitized history. Please disregard and close the previous PR. No action is required on your end regarding the leak as the source has been removed."*
+    *   Close the original PR immediately after sending the note.
+
+**Regarding Notifications:** If maintainers received email notifications containing the diff, those emails exist in their inboxes. You cannot retract them. However, by deleting the fork immediately, you prevent them (or anyone else) from clicking through to see the full file context or browsing the commit history. The risk is minimized to the specific snippet in the notification, which is far better than leaving the full history public.
+
+**Note:** Never commit debugging prints with real hostnames; use placeholders like `staging-db-01` in code and inject real values via environment variables or configuration files outside the repository.

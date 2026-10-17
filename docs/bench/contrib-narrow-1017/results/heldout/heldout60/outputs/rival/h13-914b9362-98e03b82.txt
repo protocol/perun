@@ -1,0 +1,30 @@
+Do not open the Pull Request yet. Submitting code immediately after a "won't fix" closure will almost certainly be viewed as disrespectful and result in your PR being closed without review, potentially damaging your team's reputation with the project.
+
+Instead, follow this three-step approach to reframe the conversation:
+
+**1. Re-open the dialogue on the closed issue (or create a new Feature Request)**
+Do not argue that their design is wrong. Acknowledge their decision explicitly to show you respect their authority. Then, pivot the argument from "correctness" to "ecosystem health."
+
+*Draft Comment:*
+> "Hi @maintainer, I respect the decision to close this as 'won't fix' regarding the default behavior. I agree the new design is an improvement for most users. However, this change introduces a breaking constraint for existing production pipelines (like ours at GlobalTech) that cannot be refactored immediately.
+>
+> Rather than reverting the change, I'd like to propose a **non-intrusive extension**: adding an optional configuration flag to opt-in to the legacy behavior. This keeps the new default intact for everyone else while preventing immediate breakage for downstream users during their migration window. Would you be open to reviewing a PR that implements this as an optional, deprecated-flagged feature?"
+
+**2. Frame the PR as a "Migration Bridge," not a "Fix"**
+If they respond positively (or even neutrally), then prepare your PR. Your narrative must shift from "fixing a bug" to "providing an escape hatch."
+
+*   **Scope:** Ensure the PR *only* adds the flag and the conditional logic. Do not include any other refactors or cleanups.
+*   **Documentation:** Explicitly mark the flag as `deprecated` in the docs and code comments, with a note saying: "Scheduled for removal in version X.Y. Use this only for temporary migration." This signals to the maintainer that you are not trying to maintain two code paths forever.
+*   **Tests:** Add tests specifically showing that the *default* behavior remains the new logic, and only the flagged path triggers the old logic. This proves you aren't breaking their design.
+
+**3. The PR Description Strategy**
+When you eventually open the PR (linked to the new discussion), use this structure in your description:
+
+*   **Summary:** "Adds an optional `LEGACY_MODE` flag to support gradual migration for existing users affected by [Previous Issue #]. Does not change default behavior."
+*   **Motivation:** "Allows teams with hard dependencies on the old logic to upgrade the library version without immediate pipeline failure."
+*   **Sunset Plan:** "Propose marking this flag for removal in the next major release (vX.0) to avoid long-term maintenance burden."
+*   **Respectful Closing:** "This is proposed as a temporary bridge for the community. Happy to adjust the implementation or timeline based on maintainer preference."
+
+**Key Principle:** You are not asking them to change their mind about the *design*; you are asking for *time* to adapt to it. By offering a sunset clause and keeping the default unchanged, you transform the request from a conflict into a helpful utility for the project's adopters.
+
+If they still say no after this specific proposal, you must accept the decision and plan your internal fork or rewrite, as further pressure will be counterproductive.

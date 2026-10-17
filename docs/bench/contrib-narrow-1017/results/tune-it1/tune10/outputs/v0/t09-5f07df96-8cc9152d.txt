@@ -1,0 +1,14 @@
+Do not submit the manifest with your current changes. Because you copied the structure directly from your internal cluster configuration, the namespace naming conventions and label selectors are likely **semantic leaks** that reveal your deployment topology and infrastructure standards, even if they contain no obvious secrets like passwords or IP addresses. Pattern-based scanners will not catch these, so a human must manually generalize them before any contribution is safe.
+
+To sanitize the manifest for the community:
+
+1.  **Namespaces:** Replace your specific namespace (e.g., `helios-prod-db`) with a generic, illustrative name like `database-example` or `my-operator-ns`. Ensure any cross-namespace references in the manifest are updated to match this generic name.
+2.  **Label Selectors:** Remove labels that encode your internal topology (e.g., `region: us-west-2-prod`, `team: helios-core`). Replace them with functional labels relevant only to the operator's logic, such as `app: postgres-cluster` or `component: primary`. The goal is to show *how* the operator selects pods, not *where* your specific pods live.
+3.  **Resource Limits:** Keep the corrected resource values (CPU/Memory) if they represent a general best practice for preventing crashes under load. However, ensure the comments explaining them do not reference "Helios Dynamics production load" or specific internal benchmarks. Frame the justification generically, e.g., "Increased limits to prevent OOMKills during high concurrency."
+4.  **Annotations:** Scrub any annotations that might reference internal ticketing systems, monitoring endpoints, or proprietary tooling versions.
+
+**Action Plan:**
+Create a new version of the manifest where every field is evaluated against this rule: "Does this value teach the user how to use the operator, or does it teach them about Helios Dynamics' infrastructure?" If it is the latter, replace it with a standard placeholder. Once generalized, verify that the example still functions logically as a standalone demonstration. Only then should you draft the pull request, explicitly noting in your description that the examples have been fully anonymized to protect source infrastructure details.
+
+Note: Never rely on automated tools alone to catch these structural leaks; manual review against the "generalizable principle" test is required.
+Note: If you cannot separate the fix from your internal topology, consider describing the fix in text only within an issue rather than contributing the file.

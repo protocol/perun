@@ -1,0 +1,28 @@
+Do not anonymize the heap dump; do not submit it. Even sanitized dumps containing real filenames, timestamps, or structural metadata risk leaking confidential information through pattern reconstruction. The only safe strategy is to construct a **synthetic, minimal reproduction** that triggers the exact same memory behavior without using any data from your production environment.
+
+**Strategy for Safe Contribution:**
+
+1.  **Abstract the Allocation Pattern:** Identify the specific conditions causing the leak (e.g., "scaling an image where width > height by factor X triggers a buffer reallocation that is never freed"). You do not need real filenames to trigger this; you need the *mathematical properties* of the input.
+
+2.  **Generate Synthetic Inputs:** Write a small, local script to generate dummy image files that match the triggering dimensions and format. Name them generically (e.g., `test_leak_case_1.png`). Verify that your synthetic input reproduces the leak locally using a tool like Valgrind or AddressSanitizer.
+
+3.  **Draft the Test Case:** Create a unit test for the library that:
+    *   Generates or loads the synthetic image.
+    *   Calls the problematic resizing function.
+    *   Asserts that memory is properly freed (or fails if the leak exists).
+    *   Uses no external dependencies or real data paths.
+
+4.  **Prepare the Fix:** Implement the code change that frees the buffer. Ensure your new unit test fails on the original code and passes on your fixed code.
+
+5.  **Construct the Pull Request:**
+    *   **Title:** "Fix memory leak in [function name] when scaling [specific condition]"
+    *   **Description:** Explain the root cause (e.g., "The buffer allocated at line X is not freed in the error path when condition Y occurs").
+    *   **Evidence:** Include the output of your synthetic test showing the leak before the fix and the clean run after. **Do not mention Acme Corp, production servers, or real filenames.**
+    *   **Provenance Block:** Add a note stating: "Reproduction uses synthetically generated inputs; no real user data was used or exposed."
+
+6.  **Final Safety Check:** Before submitting, review your diff and PR text to ensure no file paths, variable names, or comments accidentally reference your internal environment. If the library has a privacy gate script, run it locally on your draft.
+
+Submit only the synthetic test, the fix, and the abstract explanation. The maintainers can verify the leak using your synthetic case without ever seeing your real data.
+
+*Note: Never attempt to "scrub" real logs or dumps for public submission; the risk of residual leakage is too high. Always replace with synthetic data.*
+*Note: If the leak depends on specific file content rather than dimensions, generate a dummy file with random bytes matching the required size.*

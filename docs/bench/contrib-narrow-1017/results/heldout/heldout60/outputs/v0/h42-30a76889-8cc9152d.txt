@@ -1,0 +1,14 @@
+You cannot and should not attempt to construct a "safe" test scenario from your proprietary data. The correct path is to **abandon the internal harness entirely** and synthesize a **minimal, artificial reproduction** that exists solely to trigger the bug, unrelated to your product's architecture.
+
+The maintainers' requirement is for a *reproducible test case*, not a *realistic load profile*. Your internal stress harness, network topology, and traffic patterns are irrelevant to the bug itself; they are merely the environment where you found it. To contribute safely:
+
+1.  **Isolate the Mechanism:** Identify the exact sequence of operations (e.g., Thread A locks Mutex X, Thread B attempts to lock Mutex Y while holding Mutex Z) that causes the race. Strip away everything else: your message formats, your connection limits, your specific payload sizes.
+2.  **Synthesize Artificial Data:** Write a new test function in the standard Go test suite (`queueflow_test.go`) that spawns exactly the number of goroutines needed to trigger the race (perhaps far fewer than 5,000) using dummy data (e.g., simple integers or strings like "msg_1"). The test should fail consistently on the current main branch and pass with your fix.
+3.  **Verify Independence:** Ensure this new test contains zero references to "StreamLine," "Globex," specific IP addresses, port ranges unique to your setup, or traffic volumes that reveal your capacity planning. If the test can run on a laptop without your internal network, it is likely safe.
+4.  **Submit the Fix:** Your pull request should contain only the code fix and this new, synthetic test. Do not include your internal harness, sanitized or otherwise.
+
+If you cannot reproduce the race without your specific 5,000+ connection load or proprietary network configuration, then the bug is likely not a simple mutex issue but an emergent property of your specific scale. In that case, you cannot upstream a fix with a standard test case because you do not yet have a minimal reproduction. You must continue to debug locally until you can shrink the failure condition down to a handful of lines of code that any developer can run.
+
+Do not send your internal data, even "sanitized." Pattern matching cannot catch the leakage of strategic information (e.g., "we expect exactly 5,200 concurrent users"), and paraphrased facts about your unreleased product remain confidential. The only safe contribution is one built from scratch using generic, public-domain concepts that prove the logic error, not the performance characteristics of your product.
+
+**Note:** If the maintainers reject the artificial test as "not realistic," direct them to the fact that it deterministically fails on `main` and passes with the patch; realism is not a requirement for a unit test, reproducibility is. If you cannot create such a test, hold the fix internally until you can isolate the root cause further.

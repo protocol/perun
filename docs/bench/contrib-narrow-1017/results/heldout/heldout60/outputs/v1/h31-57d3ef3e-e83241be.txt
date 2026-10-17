@@ -1,0 +1,32 @@
+You cannot submit this fix to the upstream CineStream project in its current state because you lack a legally shareable, reproducible test case, which is a strict requirement for memory-related fixes. Submitting a patch without a valid test or with a test containing proprietary data violates both the project guidelines and your employer's non-disclosure agreement.
+
+To proceed, you must follow these steps:
+
+1.  **Stop and Verify Legal Constraints**: Confirm with your employer's legal or IP team that you are permitted to contribute a fix derived from internal work. Do not proceed without explicit approval to generalize and share the logic.
+2.  **Generalize the Test Case**: You must create a synthetic test file that triggers the same memory leak without using the Apex Films clip.
+    *   Analyze *why* the specific clip triggers the leak (e.g., a specific sequence of frame types, a particular header value, or a timing edge case).
+    *   Write a small C program or script within the CineStream test suite that generates a minimal, artificial bitstream mimicking only the structural properties needed to trigger the bug (e.g., "a sequence of 1000 I-frames followed by a malformed P-frame").
+    *   Ensure this synthetic data contains no actual video content, timestamps, or proprietary headers from the movie.
+3.  **Validate the Fix Locally**: Run your new synthetic test against the unpatched code to confirm it crashes or leaks memory after the equivalent logical duration (you may need to accelerate the test logic rather than waiting four hours). Then run it against your patched code to confirm the leak is resolved.
+4.  **Draft the Contribution**:
+    *   **Commit Message**: "Fix memory leak in allocation logic during extended decoding sequences. Adds synthetic test case reproducing leak via malformed frame sequence."
+    *   **PR Body**:
+        *   **Problem**: Decoder leaks memory and crashes after processing specific long-running frame sequences.
+        *   **Solution**: Corrected allocation cleanup in `[file.c]` when handling `[specific condition]`.
+        *   **Testing**: Added `test_synthetic_leak.c` which generates a minimal bitstream to reproduce the issue. The test fails on the base branch and passes with this patch. No proprietary media was used.
+        *   **Risk**: Low; changes are isolated to the allocation handler.
+
+**Direct Answer to Your Uncertainty**: You do not need to describe the frame structure of the actual movie clip. Instead, you must identify the *abstract condition* (e.g., "buffer overflow when frame count modulo X equals 0") and generate a tiny, dummy file that satisfies only that mathematical or logical condition. This reveals no proprietary encoding details.
+
+**Fallback**: If you cannot construct a synthetic file that triggers the bug, you cannot upstream this fix. You must keep the patch internal to your employer's private fork of CineStream.
+
+**Provenance and Risk Block (For Internal Review Only)**
+SOURCE: Internal employer work (Apex Films/CineStream fork)
+GENERALIZED-AWAY: Specific movie content, proprietary frame structures, exact 4-hour timing dependency (replaced by logical trigger).
+RESIDUAL RISK I COULD NOT RULE OUT: The synthetic test might not perfectly mimic the real-world race condition if the trigger depends on hardware-specific timing not captured in the logic.
+MOSAIC CHECK: None; this is an isolated memory management fix.
+MECHANICAL SCRUB: Pending local run of privacy gate on synthetic test generator.
+DRAFTED BY: Assistant (No tools/files accessed)
+
+Note: Do not attempt to obfuscate the original movie clip; it must be completely removed.
+Ensure your synthetic test is included in the project's standard CI test suite.

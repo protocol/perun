@@ -1,0 +1,25 @@
+You should not submit the pull request yet. Submitting code immediately after a "won't fix" closure without further dialogue is often perceived as disregarding the maintainer's architectural judgment, which can damage community trust. The correct approach is to reopen the conversation on the closed issue (or start a new discussion if the project prefers) to validate the *need* for a configuration flag before presenting the *solution* (your code).
+
+**Step-by-Step Approach:**
+
+1.  **Re-engage on the Issue Tracker:** Comment on the closed issue or open a new "Discussion" titled "Proposal: Optional legacy timeout behavior for edge cases."
+2.  **Frame the Problem, Not the Blame:** Acknowledge the maintainer's design decision as correct for the general case. Explain that your specific environment (large-scale batch processing) hits an edge case where the new design causes hard failures (Error 504) that cannot be mitigated by application-side changes alone.
+3.  **Propose the Compromise:** Ask explicitly if they would be open to a *non-default* configuration flag that restores the old logic only for users who opt-in. Emphasize that this adds zero maintenance burden to the default path and isolates the legacy code.
+4.  **Wait for Consent:** Only if a maintainer responds positively (e.g., "That sounds reasonable, feel free to PR it") should you submit your code.
+
+**Draft Comment for the Issue/Discussion:**
+
+> "Hi [Maintainer Name], I respect the decision to close this as 'won't fix' regarding the default behavior; I understand the new timeout logic is an improvement for most users.
+>
+> However, I wanted to propose a compromise for edge cases like ours. Our production pipeline relies on specific timing characteristics that the new design inadvertently breaks, resulting in consistent 504 errors. Refactoring our entire downstream system is not currently feasible.
+>
+> Would the project be open to accepting a contribution that reintroduces the previous logic behind a strictly optional configuration flag (e.g., `USE_LEGACY_TIMEOUT=true`)? This would allow us to opt-in to the legacy behavior without affecting the default experience for other users. We are happy to maintain this flag and ensure it doesn't interfere with the new design. If this approach aligns with the project's goals, I have a draft implementation ready to share."
+
+**Direct Answer to Your Uncertainty:**
+Submitting the PR now risks being seen as confrontational because it bypasses the social contract of open source: architecture decisions belong to the maintainers. By asking for permission to add an *optional* feature first, you frame your work as a helpful extension for a niche use case rather than a rejection of their core decision.
+
+**Fallback Plan:**
+If the maintainers refuse even the optional flag, do not fork publicly with angry comments. Instead, maintain a private patch within your organization's internal repository. Use a tooling script to re-apply this patch automatically during your build process, keeping your dependency on the upstream library clean while solving your immediate business need.
+
+Note: Ensure your internal patch is stripped of all company-specific identifiers (hostnames, internal paths) before even discussing it publicly.
+Never attempt to bypass the maintainer's decision by submitting code without explicit approval in this context.

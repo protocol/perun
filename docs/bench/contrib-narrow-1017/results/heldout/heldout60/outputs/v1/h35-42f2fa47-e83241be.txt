@@ -1,0 +1,31 @@
+**Do not share the real logs, even via a "secure" private channel, unless the maintainers explicitly provide a verified, encrypted intake mechanism for sensitive data and you have obtained written legal clearance from your employer.** The safest and standard open-source approach is to **generate synthetic logs** that reproduce the crash pattern without containing any real user data.
+
+Here is the concrete workflow to proceed:
+
+1.  **Stop and Clear Internal Checks:** Before drafting anything, confirm you have employer approval to contribute this fix (IP clearance) and verify if the SwiftLink project has a specific security email or private vulnerability reporting form. If they do, use that *only* for the initial contact to ask if they can accept sanitized real logs under an NDA; if they say no or don't reply, proceed to synthetic data.
+2.  **Generalize the Crash:** Isolate the thread synchronization logic error. Create a minimal, standalone Swift script or unit test that triggers the exact same race condition or deadlock on an older device simulator. Use invented values (e.g., `DeviceID: "SYNTH-001"`, `Location: "0.0, 0.0"`) instead of real beta tester data.
+3.  **Strip Identifiers:** Ensure your patch, the new test case, and any log snippets in the PR description contain zero references to "StreamLine," real device UUIDs, timestamps that correlate to real events, or location coordinates. Replace `/Users/jdoe/StreamLineApp` with `/app/src`.
+4.  **Run a Privacy Gate (Mental Check):** Review your drafted files. If you can still infer a specific user, time, or place from the context, rewrite it. Remember, maintainers trust a reproducible synthetic test more than a redacted log they cannot verify.
+5.  **Draft the PR:**
+    *   **Title:** Fix critical thread synchronization crash on legacy iOS devices
+    *   **Problem:** Race condition in [Module Name] causes 1% crash rate on iOS [Version] due to unsafe access to [Resource].
+    *   **Change:** Updated locking mechanism from [Old Method] to [New Method] to ensure thread safety.
+    *   **Test:** Added `ThreadSafetyTests.swift` with a synthetic workload that reliably reproduces the crash on the simulator before the fix and passes after. Logs included are generated from this synthetic run.
+    *   **Risk:** Low; changes are scoped to the locking primitive.
+6.  **Hand Off:** Present the draft to your legal/manager for final sign-off using the internal risk block (not posted publicly), then open the PR yourself.
+
+**Direct Answer:** Generate synthetic logs. Real logs with PII are a liability, and maintainers generally prefer a clean, reproducible synthetic test case over redacted production data which may still harbor hidden identifiers.
+
+**Fallback:** If maintainers insist on real logs to verify, ask them to set up a temporary, access-controlled environment where you can stream the crash live or share a screen, rather than transferring data files.
+
+```
+SOURCE (internal only): SwiftLink crash investigation for StreamLine beta
+GENERALIZED-AWAY: Real device UUIDs, user location data, specific timestamps, app name "StreamLine"
+RESIDUAL RISK I COULD NOT RULE OUT: The specific timing pattern of the synthetic log might inadvertently mirror a unique real-world event sequence if the crash is highly deterministic based on external factors.
+MOSAIC CHECK: None; this is a standalone concurrency fix.
+MECHANICAL SCRUB: Pending local run of privacy banlist check.
+DRAFTED BY: Assistant v1.2.1
+```
+
+*Note: Never commit the original logs to your branch, even temporarily, as they will remain in the git history forever.*
+*Ensure your synthetic test fails on the base branch and passes on your fix to prove validity.*

@@ -1,0 +1,41 @@
+**Recommended Communication to Maintainers**
+
+Do not withdraw the pull request. Withdrawing removes visibility and discourages community assistance. Instead, update the PR description and add a comment to transparently communicate the limitation while inviting collaboration.
+
+**1. Update the Pull Request Description**
+Add a clearly marked section titled "Known Issue: Windows Build Failure" containing:
+*   **The Specific Error:** Paste the exact path length error message and the full stack trace from the CI logs.
+*   **Environment Details:** Specify the Windows version used by the CI runner (e.g., `windows-latest`, specific Visual Studio version) if available in the logs.
+*   **Reproduction Status:** Explicitly state: "This issue is reproducible only on the CI Windows environment. It does not occur on Linux CI runners or local development environments (macOS/Windows)."
+*   **Hypothesis:** Briefly mention your suspicion regarding path length limits (e.g., `MAX_PATH` 260-character limit) and any dependency nesting depth that might be causing it.
+
+**2. Post a Collaborative Comment**
+Add a new comment to the PR thread using the following template:
+
+> "Hello maintainers,
+>
+> The dependency update is fully functional on Linux and local environments, but the CI build is failing on Windows due to a path length error (see logs above). Since I do not have access to a Windows environment that reproduces this specific path depth, I cannot verify a fix locally.
+>
+> **Request for Assistance:**
+> Could a maintainer or community member with a Windows machine assist in troubleshooting? I propose the following next steps:
+> 1.  **Diagnosis:** Can someone reproduce this locally by cloning the repo and running the build?
+> 2.  **Potential Fix:** If confirmed, the solution may involve enabling long path support in the Git configuration (`git config --system core.longpaths true`) or adjusting the build script to shorten intermediate directory paths.
+> 3.  **Validation:** I am happy to push a candidate fix immediately for you to test on your local Windows setup before we re-run the full CI suite.
+>
+> I want to ensure this merge is safe across all platforms. Please let me know how you would like to proceed or if you need any additional logs from my end."
+
+**3. Proposed Technical Mitigation**
+If the error confirms a path length issue, suggest a specific, low-risk change in your comment:
+*   Ask if the project can enable `core.longpaths` in the CI configuration.
+*   Offer to modify the build script to move the build output directory closer to the drive root (e.g., `C:\build` instead of a deep nested folder) to reduce total character count.
+
+**Summary of Action Plan**
+*   **Do:** Keep the PR open to maintain momentum.
+*   **Do:** Provide full error context and explicitly state your inability to reproduce locally.
+*   **Do:** Invite maintainers to test a candidate fix on their local machines.
+*   **Don't:** Push blind guesses without asking for local verification first.
+*   **Don't:** Withdraw the PR unless the maintainers explicitly request it.
+
+This approach demonstrates responsibility, provides all necessary data for others to act, and turns a blocker into a collaborative troubleshooting effort.
+
+*Note: Ensure you monitor the PR for responses so you can quickly implement any feedback provided by Windows users.*

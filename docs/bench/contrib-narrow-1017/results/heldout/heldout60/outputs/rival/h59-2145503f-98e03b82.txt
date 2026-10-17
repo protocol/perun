@@ -1,0 +1,30 @@
+Do not attempt to upstream this patch in its current form. Submitting a contribution that functionally depends on closed-source, proprietary modules violates the fundamental principles of open-source collaboration and will almost certainly be rejected immediately, potentially damaging your team's reputation with the maintainers.
+
+The core issue is not just about "refactoring"; it is about **dependency integrity**. If your performance fix relies on three prior modifications for proprietary authentication, the code is not portable. The main project cannot merge code that breaks without your private secrets. Furthermore, attempting to hide the nature of these dependencies while asking for help creates a trust deficit. Maintainers need to understand the full context of a change to verify it doesn't introduce security risks or architectural debt.
+
+To proceed ethically and effectively, you must take one of the following three paths:
+
+**1. Isolate the Performance Logic (The Ideal Path)**
+You must engineer a version of the patch that achieves the 20% throughput improvement *without* relying on your proprietary authentication hooks.
+*   **Action:** Create a clean branch off the upstream `main` (not your internal fork). Attempt to re-implement the performance fix using only standard, public APIs available in the main project.
+*   **Reality Check:** If the performance gain is *only* possible because of your specific authentication architecture (e.g., it bypasses locks that your auth module removes), then the fix is not generalizable. In this case, the performance improvement is a side-effect of your proprietary system, not a universal bug fix, and it cannot be upstreamed.
+
+**2. Propose a Generic Abstraction (The Hard Path)**
+Since maintainers have previously rejected "abstraction layers for vendor-specific plugins," you must pivot the proposal. Do not mention authentication.
+*   **Action:** Identify if the hook your code uses can be generalized into a standard concurrency primitive or a neutral interface that benefits *all* users, not just Hooli.
+*   **Strategy:** Open an issue (not a PR) discussing the *performance bottleneck* abstractly. Ask: "Would the project accept a generic interface to allow custom contention handling?" If they say no, stop. If they say yes, implement *only* the generic interface and the performance fix using that interface, leaving your proprietary auth logic out of the commit history entirely.
+
+**3. Maintain the Fork (The Realistic Path)**
+If the performance fix is inextricably linked to your proprietary auth modules, you cannot upstream it.
+*   **Action:** Accept that this specific optimization is a competitive advantage unique to your internal infrastructure. Continue maintaining your fork for this feature.
+*   **Contribution Alternative:** Look for other, non-dependent improvements in your codebase (documentation, bug fixes, unrelated performance tweaks) that can be cleanly separated and contributed. This maintains good will without risking IP leakage or submitting broken code.
+
+**How to communicate with maintainers:**
+Never mention the "proprietary authentication modules." Instead, focus strictly on the technical merit of the performance fix in isolation.
+*   **Do say:** "We identified a contention bottleneck in [Module X] and drafted a patch that improves throughput by 20% in high-load scenarios. We want to verify if this approach aligns with the project's architecture before finalizing."
+*   **Do not say:** "This patch depends on some internal changes we can't show you."
+
+If you cannot make the patch work on a fresh clone of the public repository without your private keys or code, it is not ready for open source. Prioritize isolating the logic; if isolation fails, retain the code internally.
+
+Note: Attempting to obscure dependencies often leads to "works on my machine" failures during CI, which wastes maintainer time.
+Ensure any discussion happens in public issues, not private channels, to maintain transparency.

@@ -1,0 +1,15 @@
+To prepare this submission without leaking confidential information, you must synthesize a **structural twin** of the failing input rather than sanitizing the real one. Do not attempt to mask the real log line; even masked financial data can violate privacy agreements if the structure reveals the partner's specific schema.
+
+Follow this procedure to construct your test case:
+
+1.  **Isolate the Triggering Grammar:** Identify the specific syntactic features of the malformed JSON that cause the panic (e.g., deeply nested objects, specific unicode escape sequences, malformed number formats, or key ordering). Ignore the semantic meaning (account numbers, IDs).
+2.  **Construct a Synthetic Payload:** Create a new JSON string from scratch that replicates *only* the structural anomaly. Replace all sensitive values with generic placeholders (e.g., `"account": "00000000"`, `"txn_id": "synthetic-uuid"`). Ensure the synthetic input is minimal and contains no data derived from the real log line other than the abstract error pattern.
+3.  **Verify the Panic:** Run your fix against this synthetic input in a local environment. Confirm that:
+    *   The original code (without your fix) panics on this synthetic input.
+    *   Your fixed code returns a graceful error on this synthetic input.
+4.  **Document the Abstraction:** In your PR description and commit message, explicitly state: *"The regression test uses a synthesized input that replicates the structural anomaly of the reported bug. No real user data or partner-specific schemas were used to generate this test case."*
+
+This approach satisfies the maintainers' requirement for a regression test while strictly adhering to your privacy agreements. The test proves the code handles the *class* of error, which is the actual engineering requirement, without exposing the *instance* of the error found in production.
+
+Note: Never include the original log line, even partially masked, in the public repository or PR discussion.
+Note: If the panic relies on a specific data length or byte sequence that feels too unique, vary those lengths in your synthetic test to prove the fix is general, not overfitted to one specific string.

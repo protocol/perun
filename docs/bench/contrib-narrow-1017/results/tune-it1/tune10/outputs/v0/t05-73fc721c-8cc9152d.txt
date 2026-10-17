@@ -1,0 +1,16 @@
+To prepare your submission without leaking confidential information, you must synthesize a **minimal, structurally equivalent test case** that triggers the exact same parsing logic without containing any real data.
+
+Follow this procedure:
+
+1.  **Isolate the Structural Trigger:** Identify the specific syntactic pattern in the malformed JSON that causes the panic (e.g., an unclosed string at a specific nesting depth, a malformed unicode escape sequence, or a specific integer overflow). The panic is caused by the *structure* and *syntax*, not the specific values of the account numbers or transaction IDs.
+2.  **Construct a Synthetic Payload:** Create a new JSON input that replicates this structural flaw using entirely fictitious data.
+    *   Replace real account numbers with generic placeholders like `"ACCT_00000000"`.
+    *   Replace transaction IDs with simple sequences like `"TXN_123"`.
+    *   Ensure the synthetic input preserves the exact byte-level or token-level anomaly that triggers the bug (e.g., if the bug is a missing quote after 50 characters, your synthetic input must also miss a quote after 50 characters, regardless of what those characters are).
+3.  **Verify Path Equivalence:** Confirm that your synthetic input drives the parser into the identical internal state where the panic occurred. If your fix handles the synthetic input gracefully, it proves the logic is corrected for that class of error.
+4.  **Document the Generalization:** In your pull request description, explicitly state: *"The original triggering input contained sensitive financial data and has been excluded. This regression test uses a synthesized input that replicates the specific malformed JSON structure responsible for the panic, ensuring the fix covers the root cause without exposing private data."*
+
+This approach satisfies the maintainers' requirement for a regression test while strictly adhering to your privacy agreements. The test proves the *class* of bug is fixed, which is the standard for secure software development.
+
+Note: Never attempt to "mask" real data in a test suite; always generate entirely new, fictitious data that mimics the structural properties of the bug.
+Note: If the bug relies on specific data lengths or character encodings found in the real log, ensure your synthetic data matches those physical properties exactly.

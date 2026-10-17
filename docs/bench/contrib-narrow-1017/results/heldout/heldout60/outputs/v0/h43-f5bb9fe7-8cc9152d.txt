@@ -1,0 +1,38 @@
+### Benchmarking Strategy for Confidential Data
+
+To satisfy the requirement for reproducible benchmarks without leaking Acme Industries' confidential transaction logs, you must decouple the **data structure** from the **data content**. The goal is to create a synthetic dataset that mimics the statistical properties of your real data (size, schema, distribution, and cardinality) without containing any actual customer information.
+
+**1. Create a Synthetic Data Generator**
+Instead of exporting real logs, write a small script (e.g., `generate_bench_data.py`) included in your contribution. This script should:
+*   **Match Schema:** Replicate the exact column names and data types of the Acme logs.
+*   **Match Scale:** Generate the same number of rows (e.g., 10 million records) to ensure memory and I/O pressure are identical to your internal tests.
+*   **Match Distribution:** If your performance gain relies on specific patterns (e.g., high cardinality in a "user_id" column or skewed timestamps), configure the generator to produce random data with those same statistical characteristics. Use libraries like `Faker` or `numpy` to generate plausible but fake values.
+*   **Determinism:** Seed the random number generator with a fixed integer. This ensures that anyone running the script gets the exact same dataset, satisfying the "reproducible" requirement.
+
+**2. Define the Benchmark Harness**
+Since the project lacks a formal suite, propose a simple, standard format. Create a script (e.g., `run_benchmarks.sh` or a Python script using `timeit` or `pytest-benchmark`) that:
+*   Runs the data generator.
+*   Executes the DataStream processing pipeline on the generated data.
+*   Measures **wall-clock time** and **peak memory usage**.
+*   Runs the test multiple times (e.g., 5 iterations) and reports the average and standard deviation to account for system noise.
+*   Compares the "before" (main branch) and "after" (your PR) versions side-by-side.
+
+**3. Addressing the "Random Data" Concern**
+Your worry that random data won't reflect real gains is valid only if the optimization depends on specific *values*. If the 15% speedup comes from algorithmic efficiency (e.g., better indexing, reduced copying, optimized loops), it will manifest on any data of the same shape and volume. In your PR description, explicitly state: *"The synthetic data preserves the row count, schema, and value distribution of production workloads to ensure the benchmark reflects real-world computational complexity."* This demonstrates rigor.
+
+### Communicating with the Maintainer
+
+You should be transparent about your inexperience while framing it as a proactive learning opportunity. Maintain a tone of collaboration rather than uncertainty.
+
+**Draft Message to Jane:**
+
+> "Hi Jane, thanks for the feedback. I agree that reproducible benchmarks are essential. Since the project doesn't currently have a formal suite and I cannot share Acme's confidential customer logs, I have implemented a solution that generates a deterministic, synthetic dataset.
+>
+> This generator replicates the scale and statistical distribution of our production data without containing any real PII. I've included the generator script and a new benchmark runner in the PR that compares performance across multiple runs.
+>
+> As this is my first time setting up a formal benchmarking harness from scratch, I would appreciate your review of the methodology to ensure it aligns with the project's standards. I aimed to make it robust enough to validate the ~15% improvement we observed internally, but I am happy to refine the approach based on your expertise."
+
+This approach shows you solved the privacy constraint technically, took initiative to build the missing tooling, and respectfully invited expert review on the specific format.
+
+*Note: Ensure your synthetic data generator is fast enough to run in CI; if it takes too long, add a "quick" mode with fewer rows for pull request checks.*
+*Note: Never commit the script that generated the original internal numbers if it contains hardcoded seeds derived from real data analysis.*

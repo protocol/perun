@@ -1,0 +1,51 @@
+**Deliverable: Step-by-Step Guide for Emailing C Patches**
+
+1.  **Generate the Diff Correctly**
+    Do not copy-paste from a GUI. Use the command line to ensure context and whitespace are preserved. Run this in your project root:
+    `git diff -p --stat > fix-large-attachments.patch`
+    The `-p` flag ensures standard patch format; `--stat` adds a summary. Verify the file looks correct with `cat fix-large-attachments.patch`.
+
+2.  **Configure Your Email Client (The Critical Step)**
+    Webmail interfaces (Gmail, Outlook Web, corporate portals) often reformat text, wrap lines, or convert characters, breaking C patches.
+    *   **Recommended:** Use a dedicated mail client like **Thunderbird** or **Mut** configured for plain text.
+    *   **Settings:** Disable "Rich Text" or "HTML" entirely. Set line wrapping to **0** (disabled) or **998** characters. Ensure the character encoding is set to **UTF-8** without BOM.
+    *   **If you must use Webmail:** Do not paste the diff into the compose window. Instead, save the diff as a `.txt` file and attach it *only if* the project allows attachments. Since LegacyMail requires inline diffs, you must use a command-line tool like `git send-email` or `mut` to bypass the web interface's formatting engine.
+
+3.  **Using `git send-email` (Most Reliable Method)**
+    This tool handles headers, encoding, and line breaks automatically.
+    *   Install: `sudo apt-get install git-email` (or equivalent).
+    *   Configure (`~/.gitconfig`):
+        ```ini
+        [sendemail]
+            from = Your Name <your.personal.email@example.com>
+            smtpserver = smtp.example.com
+            smtpuser = your.username
+        ```
+        *Note: Use a personal email address, not your `Acme Corp` address, to avoid leaking corporate identifiers (see Step 4).*
+    *   Send: `git send-email --to=legacymail-list@example.org fix-large-attachments.patch`
+
+4.  **Strip Corporate Identifiers (Mandatory)**
+    Before sending, scrub all traces of your employer.
+    *   **Email Address:** Do not send from `@acme-corp.com`. Use a neutral or personal address.
+    *   **Code Content:** Search the diff for `acme`, `corp`, internal hostnames, or specific file paths like `/home/jsmith/acme-billing`. Replace them with generic terms (e.g., `host.example`, `/app/src`).
+    *   **Commit Message:** Ensure no internal ticket numbers (e.g., `ACME-4412`) appear.
+
+5.  **Subject Line Formatting**
+    LegacyMail maintainers typically require a specific prefix. Based on standard C project conventions, use:
+    `[PATCH] Fix corruption in attachments larger than 10MB`
+    If the project uses a subsystem tag, it might look like:
+    `[PATCH mime] Fix corruption in attachments larger than 10MB`
+    *Check the project's `README` or archived emails for the exact required prefix.*
+
+6.  **Verification Before Sending**
+    Send the patch to yourself first. Download the raw email source and check:
+    *   Are there any soft line breaks (lines ending in `=` in quoted-printable encoding)?
+    *   Is the indentation preserved?
+    *   Does `git am < received-email` apply cleanly on a test clone?
+
+**Common Pitfalls to Avoid:**
+*   **Line Wrapping:** If your email client wraps lines at 76 or 80 characters, the patch will fail to apply. Disable wrapping.
+*   **Tab Expansion:** Ensure tabs are not converted to spaces.
+*   **Signature Blocks:** Do not include an HTML signature with images or complex formatting below the patch.
+
+**Note:** Since you mentioned "Acme Corp," ensure no internal paths or ticket IDs remain in the diff; replace them with generic placeholders before sending. If the maintainers reject the format again, ask them specifically which mail client they recommend for contributors.

@@ -1,0 +1,25 @@
+You cannot submit this PR in its current form. In open-source C projects, a memory fix without a reproducible test case is functionally incomplete and will almost certainly be rejected, regardless of the legal constraints. The maintainers cannot verify your claim, and "it works on my machine with proprietary data" is not evidence.
+
+Do not describe the frame structure of the Apex Films clip. Even abstract descriptions of proprietary encoding patterns can violate NDAs if they reveal trade secrets or specific implementation details of the commercial content.
+
+Instead, you must decouple the **bug trigger** from the **proprietary content**. Memory leaks in decoders are rarely about the *semantic* content of the video (the movie itself) but rather the *structural* properties of the bitstream (e.g., specific header flags, malformed frame sizes, unusual GOP patterns, or edge-case timestamp jumps).
+
+Here is your action plan:
+
+1.  **Analyze the Trigger, Not the Content:** Identify the exact structural anomaly in the 30-second clip that causes the leak. Is it a specific combination of resolution and bitrate? A malformed SEI message? A non-standard frame duration? Write this down as a set of logical constraints (e.g., "Frame N has size X, followed immediately by a flush command").
+2.  **Generate a Synthetic "Fuzz" Asset:** Write a small, separate C program (or use a tool like `ffmpeg` with filter graphs) to generate a **synthetic** raw bitstream or container file that mimics *only* those structural constraints. This file should contain garbage data or solid-color frames, ensuring it contains zero copyrighted material from Apex Films.
+3.  **Verify the Synthetic File:** Confirm that this new synthetic file triggers the crash on the unpatched version and runs cleanly on your patched version.
+4.  **Submit the PR with the Synthetic File:**
+    *   **The Code:** Your fix to the allocation logic.
+    *   **The Test:** The synthetic file (usually very small, few KB) added to the `tests/` or `fuzz/` directory.
+    *   **The Description:** Explicitly state: "This test case reproduces the memory leak using a synthetic bitstream constructed to mimic specific structural edge cases found in production footage. No proprietary content is included."
+
+If you absolutely cannot generate a synthetic file because the trigger relies on an unrecoverable proprietary codec state, you must still provide **quantitative evidence** in the PR description, though this is weaker:
+*   Include `valgrind` or `AddressSanitizer` logs showing the leak on the old code vs. clean output on the new code using your private clip.
+*   Redact any filenames or timestamps in the logs.
+*   Add a bold disclaimer: "Reproduction requires proprietary input; however, ASan logs attached confirm the allocation path is now balanced. I am willing to walk a maintainer through a private screen-share under NDA if required."
+
+Be prepared for the maintainers to ask you to sign a contributor license agreement (CLA) or a specific NDA to share the private clip directly with a trusted maintainer, but leading with a synthetic test case is the standard professional approach that respects both open-source verification needs and corporate IP laws.
+
+*Note: Do not mention "Apex Films" or the specific movie in the public PR; refer to it only as "proprietary production footage."*
+*Note: If the project uses fuzzing infrastructure (like OSS-Fuzz), integrating your structural constraints into their existing fuzz harness is often preferred over adding a new static test file.*

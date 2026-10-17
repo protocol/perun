@@ -1,0 +1,34 @@
+### Sanitized Test Case and PR Description Strategy
+
+To validate your fix without exposing Stark Industries' confidential data, you must synthesize a **minimal, generic reproduction case** that triggers the same algorithmic failure mode (nested group exponential backtracking) without containing any proprietary patterns, account details, or internal identifiers.
+
+**1. Constructing the Sanitized Test Case**
+Do not use the customer's actual data. Instead, create a synthetic input that mathematically mirrors the complexity of the failing pattern.
+*   **Pattern:** Replace the proprietary regex with a generic equivalent known to cause catastrophic backtracking, such as `(a+)+` or `(\w+)+`.
+*   **Input:** Generate a string of repeated characters (e.g., `"aaaaaaaaaaaaaaaaaaaaaaaab"`) that forces the engine to explore the same depth of nested groups as the real data.
+*   **Verification:** Confirm that your unpatched library hangs on this synthetic input and that your patch (recursion limit) resolves it within milliseconds. This proves the *class* of bug exists without revealing the *source*.
+
+**2. Drafting the Pull Request Description**
+Write the description to focus entirely on the technical mechanism and the synthetic proof.
+
+*   **Title:** "Fix: Prevent indefinite hang in regex engine via recursion depth limit"
+*   **Problem Statement:** "The current regex implementation enters an infinite loop (catastrophic backtracking) when processing deeply nested grouping patterns. This occurs due to unbounded recursion in the matching algorithm."
+*   **Reproduction Steps:**
+    1.  Compile the pattern: `^(a+)+$`
+    2.  Match against input: `"aaaaaaaaaaaaaaaaaaaaaaaac"` (25 'a's followed by 'c')
+    3.  **Observed Behavior (Unpatched):** The process hangs indefinitely / CPU spikes to 100%.
+    4.  **Expected Behavior:** The engine should fail fast or return no match within a reasonable timeframe.
+*   **Solution:** "Implemented a recursion depth limit in the matching engine. When the depth exceeds threshold $N$, the engine aborts the match and returns a timeout/failure status rather than continuing indefinitely."
+*   **Evidence:** Include the runtime comparison using the synthetic data: "Unpatched: >30s (killed); Patched: <5ms."
+*   **Confidentiality Note:** Explicitly state: "This issue was reported via a private security channel. The specific proprietary patterns triggering this in production have been generalized into the synthetic test case above to protect user confidentiality. The fix has been validated against the original private data internally."
+
+**3. What to Exclude**
+*   **Never** include the internal ticket number, customer name, or any fragment of the real data.
+*   **Never** describe the specific business context (e.g., "processing customer logs").
+*   **Never** imply the existence of the specific client; refer only to "a reported case" or "production usage."
+
+By providing a working, minimal example that any maintainer can run immediately, you satisfy the requirement for concrete validation while adhering to strict privacy constraints. The maintainers care that the *bug class* is fixed, not the specific data that found it.
+
+---
+*Ensure your patch includes the synthetic test case in the project's test suite to prevent regression.*
+*If the maintainers require further proof, offer to demonstrate the fix on a call using screen-sharing without transmitting data.*

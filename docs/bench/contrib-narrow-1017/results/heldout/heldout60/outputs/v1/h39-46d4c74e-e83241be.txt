@@ -1,0 +1,27 @@
+You cannot safely sanitize the raw trace file automatically, nor should you attempt to share it. The presence of proprietary microservice names like "Atlas-Deploy" and "Ocean-Store" indicates structural knowledge that, even if renamed, reveals your company's specific architecture and internal dependencies. Automated scrubbing tools often miss these contextual "mosaic" leaks where the combination of timing data and service topology identifies the source.
+
+Instead, you must generalize the finding into a reproducible synthetic benchmark. Follow this procedure:
+
+1.  **Construct a Synthetic Repro:** Write a minimal Go test or script within the MegaBuild repository that artificially recreates the dependency graph shape causing the bottleneck. Use invented service names (e.g., `service-a`, `service-b`) and generated timing values that mimic the *ratio* of the delay (the 20-second waste) without reflecting your actual build times.
+2.  **Demonstrate the Fix Locally:** Run your optimization against this synthetic test. Capture the output showing "before" (slow) and "after" (fast) states using only these fake inputs.
+3.  **Draft the Contribution:**
+    *   **Commit Message:** "Optimize dependency resolution for large graphs. Adds synthetic benchmark reproducing O(N) bottleneck in resolver. Refactors lookup to reduce latency by ~20s in simulated large-scale environments."
+    *   **PR Body:**
+        *   **Problem:** Dependency resolution scales poorly with specific graph topologies, causing significant latency in large monorepos.
+        *   **Solution:** Refactored the resolver algorithm to [brief technical detail].
+        *   **Evidence:** Included `benchmark_test.go` generates a synthetic graph mimicking complex internal setups. Results show a 20s reduction in simulated runs.
+        *   **Note on Data:** Raw production traces contain confidential infrastructure details and cannot be shared. The included synthetic benchmark validates the algorithmic improvement without exposing private topology.
+
+**Direct Answer:** Do not offer to run benchmarks on a public CI server yet; first, submit the code change with the *synthetic* benchmark included in the PR. This provides the concrete, reproducible evidence maintainers need without requiring them to trust a summary or risking a leak of your internal infrastructure. If they strictly require real-world validation after reviewing the code, only then discuss a private, NDA-protected channel for sharing specific metrics, but never the raw trace.
+
+**Fallback:** If maintainers reject the synthetic data as insufficient, ask if they accept a signed letter from your engineering lead verifying the internal results without attaching the trace file.
+
+**Provenance and Risk Block (For your internal review only):**
+```
+SOURCE: Internal build farm profile trace
+GENERALIZED-AWAY: Proprietary service names (Atlas-Deploy, Ocean-Store), actual network topology, real timing absolute values.
+RESIDUAL RISK I COULD NOT RULE OUT: The specific shape of the dependency graph in the synthetic test might still hint at the scale of our internal system if the graph is uniquely large.
+MOSAIC CHECK: None; this is a standalone contribution.
+MECHANICAL SCRUB: Manual review required; no automated tool can verify architectural anonymity.
+DRAFTED BY: Assistant
+```

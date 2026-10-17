@@ -1,0 +1,27 @@
+Do not share the sanitized OmniCorp log. Even with identifiers removed, query patterns, table schemas, and timing distributions can reveal proprietary business logic, operational scale, and internal workflows. Most open-source licenses and contributor agreements implicitly require that you own or have explicit redistribution rights for all data submitted to the repository; sharing employer data without written legal clearance violates this and risks your employment.
+
+Instead, propose a **reproducible synthetic benchmark strategy** that validates your optimization without exposing sensitive data. Here is the safe approach:
+
+1.  **Publish the Benchmark Harness, Not the Data:** Submit a PR that includes the *code* for the benchmark (e.g., a Rust/Go/Python script using the driver) and the exact command-line flags to run it. This satisfies the "reproducible" requirement because anyone can run the harness against *their own* data or a generated dataset.
+
+2.  **Provide a Statistical Data Generator:** Instead of the real log, write a small utility within the benchmark harness that generates synthetic data matching the *statistical properties* of your workload without copying the actual patterns. Configure it to mimic:
+    *   **Concurrency levels:** (e.g., "50 concurrent writers").
+    *   **Payload sizes:** (e.g., "random blobs averaging 2KB").
+    *   **Write distribution:** (e.g., "bulk inserts of 1,000 rows").
+    *   **Schema complexity:** (e.g., "tables with 3 indexes").
+
+    You do not need to perfectly replicate OmniCorp's logic; you only need to create a load profile stressful enough to trigger the lock contention you fixed. If your optimization works, it should show improvement on *any* high-contention synthetic load, not just your specific production trace.
+
+3.  **Share Aggregated Results with Methodology:** In your PR description, present a clear table of results comparing `main` vs. your branch using the synthetic generator. Include:
+    *   Throughput (ops/sec) with confidence intervals.
+    *   Lock wait time reductions.
+    *   The exact seed and parameters used for the synthetic generator so results are deterministic.
+
+    Explicitly state: *"Real production data cannot be shared due to proprietary constraints. However, the included synthetic generator reproduces the high-contention conditions where the optimization yields gains. Results show a X% improvement under these modeled conditions."*
+
+4.  **Offer a Private Verification Channel (Optional):** If maintainers remain skeptical that the synthetic data is representative, offer to run the benchmark privately against the real data and share a signed/verified log of the *raw numbers* (not the queries) via a secure channel, or invite a trusted maintainer to a sanitized screen-share session where you run the test live. This proves the result exists without transferring the data.
+
+This approach shifts the burden from "trusting my specific data" to "verifying my code and methodology," which is the standard contract of open-source contribution. It protects your employer while giving maintainers the evidence they need to merge.
+
+*Note: Check your employment contract regarding "invention assignment" before publishing even synthetic generators derived from internal knowledge.*
+*Note: If the project strictly forbids AI-assisted contributions, disclose that this strategy was formulated with AI assistance but the benchmark code and results are your own.*

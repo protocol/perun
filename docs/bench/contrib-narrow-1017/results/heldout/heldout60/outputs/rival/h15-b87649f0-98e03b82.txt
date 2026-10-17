@@ -1,0 +1,38 @@
+Do not submit a documentation PR for `--force-atomic` yet. Documenting an undocumented, unannounced flag violates the core principle of "minimal diff" and "scope contract" because you are effectively proposing a public API contract for a feature the maintainers may not consider stable. If the flag is experimental and removed in the next version, your documentation becomes technical debt, and your PR signals a lack of due diligence.
+
+Instead, follow this discovery-first workflow:
+
+**1. Verify the "Undocumented" Status**
+Before assuming it's a hidden gem, confirm it isn't omitted intentionally. Check the project's `CONTRIBUTING.md` for clauses on "experimental features" or "undocumented flags." Search the issue tracker for "force-atomic," "atomic," or "corruption" to see if maintainers have discussed hiding it. If the code contains comments like `// TODO: remove before release` or `// experimental`, do not proceed.
+
+**2. Open an Inquiry Issue (Not a PR)**
+Since you cannot verify the maintainer's intent via code inspection alone, your first contribution must be communication, not code. Open a new issue titled: "Question: Stability and documentation plan for `--force-atomic` flag."
+
+In the issue body, include:
+*   **Observation:** "While debugging a deployment interruption, I discovered `--force-atomic` prevents corruption."
+*   **Evidence:** Provide the exact command you ran and the specific network condition (e.g., "simulated 500ms packet loss during tarball extraction") where it succeeded where the standard flag failed.
+*   **The Ask:** "Is this flag considered stable API, experimental, or internal? I have drafted documentation per the contribution guidelines, but I want to confirm it is safe to document before submitting a PR."
+
+**3. Phrasing the Description (If Approved)**
+If maintainers confirm the flag is stable and invite documentation, structure your PR description to explicitly address the "why" and "safety" concerns:
+
+*   **Summary:** "Docs: Add usage guide and example for `--force-atomic` to prevent archive corruption during network interruptions."
+*   **Use Case:** Clearly describe the failure mode (network blip during write) and how this flag alters the write strategy (e.g., "writes to temp file then atomic rename").
+*   **Working Example:** Include the exact command you used in production, sanitized of sensitive paths.
+    ```bash
+    zipmaster archive --force-atomic --output build.tar.gz ./dist
+    # Simulate network drop; verify archive integrity
+    ```
+*   **Stability Note:** Add a small callout: "Confirmed stable by maintainers in Issue #N."
+
+**4. Questions to Ask Maintainers**
+If you get a response to your inquiry issue, ensure you have answers to these before coding:
+*   "Is the behavior of `--force-atomic` guaranteed across future versions, or is it subject to change?"
+*   "Are there known performance penalties or side effects (e.g., increased disk I/O) we should warn users about?"
+*   "Should this be marked as 'Experimental' in the docs, or is it ready for general adoption?"
+
+**Conclusion**
+Your instinct to hesitate is correct. In open source, documenting hidden features without permission is often seen as overstepping. By opening an issue first, you transform a potential "noise" PR into a collaborative discussion, respecting the maintainers' authority over their own API surface. If they say "no," you have saved yourself time; if they say "yes," your subsequent PR will be welcomed as a requested improvement rather than an unsolicited assumption.
+
+*Note: Never assume a flag is safe to document just because it works in one scenario; maintainers may hide flags specifically because they break under edge cases you haven't tested.*
+*Always prioritize an issue discussion over a speculative PR when dealing with undocumented behavior.*

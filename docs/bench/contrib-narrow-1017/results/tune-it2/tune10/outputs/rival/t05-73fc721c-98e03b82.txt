@@ -1,0 +1,30 @@
+### Strategy for Safe Regression Test Construction
+
+To satisfy the maintainer's requirement for a regression test without violating data privacy agreements, you must synthesize a **minimal reproducible input** that triggers the identical parsing state using dummy data. Follow this procedure:
+
+1.  **Abstract the Sensitive Payloads**
+    Replace all real account numbers, transaction IDs, and masked fields with generic placeholders that match the original data types but contain no real-world meaning.
+    *   *Real:* `"account": "****1234-5678-90AB"`
+    *   *Synthetic:* `"account": "XXXX0000-0000-00XX"`
+    *   *Real:* `"txn_id": "TXN-99887766"`
+    *   *Synthetic:* `"txn_id": "TXN-00000000"`
+
+2.  **Isolate the Structural Trigger**
+    Since you identified the exact parsing state where the panic occurs, strip the JSON down to the smallest possible structure that forces the parser into that specific state. Remove all unrelated fields, nested objects, or array elements that do not contribute to the failure. The goal is a JSON snippet often under 10 lines that isolates the logic error (e.g., a specific sequence of escaped characters, an unexpected null in a required field, or a malformed unicode sequence).
+
+3.  **Verify State Equivalence**
+    Run your fixed code against the synthetic input. Confirm that:
+    *   The original code (without your fix) panics on the synthetic input at the exact same logic branch.
+    *   The fixed code returns a graceful `Err` instead of panicking.
+    *   No external network calls or file system reads are required to reproduce the crash.
+
+4.  **Document the Synthesis in the PR**
+    In your PR description's **Test Plan** section, explicitly state:
+    > "The regression test uses a synthesized input derived from the reported crash. All sensitive financial identifiers have been replaced with dummy values. The synthetic input preserves the structural properties (field order, data types, and specific malformed sequences) required to trigger the original panic state, ensuring the fix addresses the root cause without exposing partner data."
+
+5.  **Submit the Test**
+    Add this synthetic JSON as a string constant in the crate's test suite (e.g., `tests/regression_panic_fix.rs`). Assert that parsing this specific string returns an error rather than panicking. This provides permanent, automated protection against reintroducing the bug while maintaining zero data leakage.
+
+This approach fulfills the "evidence" requirement of the quality gate phase by providing a reproducible, automated check that any maintainer can run instantly, while strictly adhering to your privacy constraints.
+
+Note: Ensure your synthetic data does not accidentally match real valid formats (e.g., don't use a real credit card test number like 4111111111111111 if the validator checks Luhn algorithms); use clearly invalid placeholders like "0000" or "INVALID".

@@ -1,0 +1,15 @@
+Do not share the sanitized OmniCorp production log excerpt, even with identifiers removed. Query patterns, table schemas, and timing distributions constitute a "mosaic leak" that can reveal proprietary business logic, usage volumes, and operational strategy to competitors or adversaries. Pattern-matching scrubs often fail to catch these semantic leaks.
+
+Instead, propose the following three-part approach to the maintainers:
+
+1.  **Synthetic Workload Generator:** Write and contribute a deterministic script that generates synthetic data mimicking the *statistical properties* of your workload (e.g., distribution of batch sizes, read/write ratios, contention hotspots) without containing any real business logic or schema names. Use generic table names (e.g., `table_a`, `table_b`) and abstracted query structures. This satisfies the reproducibility requirement while ensuring zero data leakage.
+2.  **Aggregated Results Only:** Run the benchmark using the synthetic generator and the real private data locally. Share only the final aggregated throughput numbers, latency percentiles, and lock contention metrics in the PR description. Do not include raw logs, traces, or intermediate data files.
+3.  **Methodology Description:** Provide a detailed textual description of the benchmark methodology, including hardware specifications, configuration flags, and the specific metrics measured. Explain *why* the synthetic generator was designed with specific statistical properties to mirror real-world contention scenarios, without revealing what those scenarios actually are.
+
+If the maintainers insist on verifying the results against real data, offer to run the benchmark live in a controlled session (e.g., a screen-share or recorded video) where they can observe the execution and results in real-time without ever receiving the data files. Alternatively, if the project has a trusted maintainer with a signed NDA or a private repository access level, you might share the data there under strict confidentiality, but never in the public PR thread.
+
+The core principle is: **reproducibility of the *method*, not the *data*.** Your contribution is the optimization and the proof that it works under realistic conditions; the specific conditions themselves are proprietary and must remain private.
+
+---
+*Note: Generating high-fidelity synthetic data is hard; focus on reproducing the *contention characteristics* (lock frequency, batch sizes) rather than exact query semantics.*
+*If maintainers reject synthetic data, the live-demo compromise is your safest fallback before considering any data sharing.*

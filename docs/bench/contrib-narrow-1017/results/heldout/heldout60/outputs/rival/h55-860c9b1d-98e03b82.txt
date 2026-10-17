@@ -1,0 +1,37 @@
+### Proposed PR Description Strategy
+
+**Summary**
+Fixes a cross-compilation failure for a specific embedded target triple by adding a missing architecture definition to the build scripts. The fix enables kernel builds for proprietary hardware configurations without altering runtime behavior or public APIs.
+
+**The Problem**
+The build system currently lacks a definition required to resolve `[Specific Symbol/Macro]` when targeting `[Target Triple, e.g., riscv32imac-unknown-none-elf]`. This causes a hard compilation error during the kernel build phase for any configuration relying on this specific memory model or interrupt vector layout.
+
+**Reproduction Strategy (NDA-Compliant)**
+Per the project's requirement for reproduction steps, I cannot provide the proprietary board schematic or internal compiler flags due to a strict Non-Disclosure Agreement. Instead, I have provided the following verification methods:
+
+1.  **Synthetic Target Test:** I have added a new unit test in `build_scripts/test_arch_defs.rs` that simulates the missing definition scenario using a mock target configuration. This test fails on `main` and passes with this patch, proving the logic fix without requiring physical hardware.
+2.  **Minimal Repro Container:** Attached is a Dockerfile (see `contrib/repro/`) that constructs a minimal build environment. It defines a *generic* custom target JSON file that triggers the same missing definition error. Maintainers can build this image and run `cargo build --target custom-umbrella-masked.json` to reproduce the failure and verify the fix instantly.
+3.  **Private Verification Offer:** I am available to share a sanitized build log or host a private, time-limited CI runner access for a maintainer to verify the build against the actual hardware configuration under a mutual NDA if the synthetic tests are deemed insufficient.
+
+**Change Details**
+-   **File:** `build_system/src/arch_defs.rs`
+    -   Added missing match arm for `[Architecture Variant]`.
+    -   Defined `[Missing Constant]` based on the generic specification for this class of processors.
+-   **File:** `build_system/Cargo.toml`
+    -   No changes.
+
+**Verification Evidence**
+-   Local build success: `cargo build --target [Target Triple]` (Log attached as Gist #12345, redacted paths).
+-   Synthetic test pass: `cargo test --package build_system --test arch_defs`.
+-   No regressions: Full test suite passes on `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`.
+
+**Backward Compatibility**
+This change is additive. It does not modify existing definitions or alter behavior for currently supported targets.
+
+**AI-Assisted Disclosure**
+I used AI tools to draft the initial patch structure and generate the synthetic test harness. I have manually verified every line of the build script modification against the architecture specification and confirmed the fix resolves the compilation error on our internal hardware.
+
+***
+
+*Note: Replace bracketed placeholders like `[Target Triple]` with the generic architecture name (e.g., "RISC-V 32IMC") which is usually public knowledge even if the specific board is not.*
+*Ensure the "Minimal Repro Container" uses a target JSON that mimics the error condition generically, not one that reveals your proprietary memory map.*

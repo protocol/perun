@@ -1,0 +1,43 @@
+### Contribution Draft: Rust Serialization Panic Fix
+
+**Stop Checks Required**
+Before proceeding, you must clear the following internally:
+1.  **Employer IP/Legal Approval:** Confirm your employer permits contributing this specific fix upstream, even in generalized form.
+2.  **Contributor Agreement:** Ensure you can personally sign the project's DCO or CLA attesting the code is yours to give.
+3.  **Security Protocol:** Verify this panic is not a security vulnerability requiring private disclosure to the maintainers first.
+
+**Generalization Strategy**
+Do not attempt to sanitize the real log line. Instead, reconstruct the defect class using synthetic data:
+1.  **Isolate the Structure:** Identify the specific JSON syntax pattern (e.g., an unterminated string, a specific nesting depth, or an invalid escape sequence) that triggers the panic. The actual values (account numbers, IDs) are irrelevant to the parser's logic; only the structural malformedness matters.
+2.  **Synthesize Input:** Create a minimal JSON snippet using invented values (e.g., `"account": "XXXX-0000"`) that replicates *only* the structural flaw. If the real log had a 50-character ID, your test case should use a 4-character placeholder. The goal is to trigger the exact same parsing state machine transition without carrying any semantic data from the partner.
+3.  **Verify Reproduction:** Run your fix against this synthetic input. It must panic on the `main` branch and pass gracefully on your fix branch. If the synthetic input does not panic, you have not yet isolated the true structural cause; do not guess, refine the pattern until the panic reproduces reliably with dummy data.
+
+**Stripping Identifiers**
+Ensure the following are removed from the patch, commit message, and PR body:
+*   **Paths:** Change `/home/user/acme-payments/src` to `/app/src`.
+*   **Names:** Remove any mention of the payment partner, "financial data," or specific industry contexts. Refer to it generically as "malformed JSON input."
+*   **Logs/Traces:** Replace any stack traces containing internal function names or line numbers with standard output generated from the synthetic test.
+*   **Commit Metadata:** Use a personal or noreply email address for the commit author.
+
+**Draft PR Content**
+*   **Title:** Fix panic when parsing malformed JSON with [specific structural defect]
+*   **Problem:** The parser panics instead of returning an error when encountering [describe structural pattern, e.g., "an escape character at the end of a buffer"].
+*   **Change:** Added bounds checking/state validation to handle this edge case gracefully.
+*   **Test:** Added a regression test using synthetic input that reproduces the panic on the previous version and passes on this fix.
+*   **Risk:** Low; strictly scoped to the error handling path for malformed input.
+
+**Provenance and Risk Block (For Your Review)**
+```
+SOURCE (internal only): Internal payment processing service
+GENERALIZED-AWAY: Specific partner log structure, masked account numbers, transaction IDs, and financial context.
+RESIDUAL RISK I COULD NOT RULE OUT: The structural pattern itself might be unique to the partner's specific logging format, potentially allowing inference of their system architecture if combined with other public knowledge.
+MOSAIC CHECK: None identified; this is an isolated parser defect.
+MECHANICAL SCRUB: Pending local run of privacy gate scripts.
+DRAFTED BY: Assistant (Contribution Flow)
+```
+
+**Next Steps**
+Run your local privacy gate scripts against the drafted files. Once cleared, you must manually review the "Residual Risk" above, confirm the synthetic test truly decouples the bug from the partner's data, and then open the PR yourself. Do not ask the assistant to push or file this.
+
+Note: If the structural flaw is inextricably linked to a specific data length or format unique to the partner, keep the fix local and file an issue describing the *symptom* only, asking if the maintainers have seen similar patterns.
+Do not contribute if the fix requires changing kernel paths, CI gates, or banlists; those edits must be authored and justified entirely by humans.

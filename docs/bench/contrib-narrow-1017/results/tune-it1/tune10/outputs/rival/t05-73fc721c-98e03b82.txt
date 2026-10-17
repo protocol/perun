@@ -1,0 +1,43 @@
+### Strategy: Synthetic Minimal Reproduction
+
+To satisfy the maintainer's requirement for a regression test without leaking sensitive financial data, you must construct a **synthetic minimal reproduction**. This involves reverse-engineering the *structural* properties of the failing input that trigger the panic, rather than preserving its *semantic* (financial) content.
+
+**1. Isolate the Structural Trigger**
+Analyze the real log line to identify the specific syntax pattern causing the panic. In JSON parsers, panics usually stem from:
+*   Unexpected token sequences (e.g., a comma followed immediately by a closing brace).
+*   Depth limits or recursion issues.
+*   Specific unicode escape sequences or malformed strings.
+*   Integer overflows in numeric fields.
+
+Strip away all actual account numbers, transaction IDs, and monetary values. Replace them with generic placeholders that preserve the *type* and *length* constraints but contain no real data.
+*   *Real:* `"account": "ACCT-998877-XYZ"`
+*   *Synthetic:* `"account": "ACCT-000000-AAA"`
+
+If the panic is triggered by a specific string length or character set, replicate those properties using dummy characters (e.g., `"aaaa..."`) rather than the original digits.
+
+**2. Construct the Test Case**
+Create a new test function in the crate's test suite (e.g., `tests/regression_issue_XXX.rs`) using the synthetic input. The test should assert that the parser returns an `Err` variant instead of panicking.
+
+```rust
+#[test]
+fn test_malformed_json_does_not_panic() {
+    // Synthetic input mirroring the structural flaw of the real log
+    // without containing any PII or financial data.
+    let input = r#"{"transaction": {"id": "", "amount": -9223372036854775808, "data": "unclosed_string}}"#;
+
+    // The fix should ensure this returns an Error, not panics.
+    let result = parse_finance_log(input);
+    assert!(result.is_err());
+}
+```
+
+**3. Document the Obfuscation**
+In your PR description, explicitly state that the test input is synthetic. Explain that while the real-world trigger involved sensitive partner data, the provided test case isolates the exact parsing state responsible for the panic. This demonstrates due diligence regarding data privacy while fulfilling the technical requirement for a regression test.
+
+**4. Verify Locally**
+Before submitting, run the test against the *original* (unfixed) version of the code to confirm it reproduces the panic, then run it against your fixed version to confirm it passes. This proves the synthetic input is a valid proxy for the real bug.
+
+By decoupling the *mechanism* of the failure from the *content* of the data, you provide the maintainers with a reproducible, safe, and mergeable contribution.
+
+*Note: Ensure your synthetic input does not accidentally match any real account formats used by the partner, even if the numbers are fake.*
+*If the bug relies on a specific hash collision or cryptographic edge case, mention this limitation in the PR comments.*

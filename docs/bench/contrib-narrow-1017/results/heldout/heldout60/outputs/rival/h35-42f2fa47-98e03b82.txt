@@ -1,0 +1,13 @@
+Do **not** generate synthetic logs and do **not** share the real logs containing user data, even in a "private" channel, unless you have explicit written consent from every affected user. Generating synthetic logs risks failing to reproduce the specific race condition timing that causes the crash, leading maintainers to reject the fix as unverified. Sharing real logs with PII (Personally Identifiable Information) violates data protection laws and your own privacy policy, creating legal liability for both you and the project maintainers.
+
+Instead, follow this secure submission protocol:
+
+1.  **Create a Minimal Reproduction Project:** Isolate the faulty thread synchronization logic into a tiny, standalone Swift script or Xcode project that deterministically triggers the crash without requiring any user data, device identifiers, or location context. The crash must be reproducible purely based on the code logic and timing.
+2.  **Sanitize the Logs for Context Only:** Take your existing logs and strip **all** unique identifiers (UDID, IP addresses, precise coordinates, user IDs). Replace them with generic placeholders like `[DEVICE_ID_REDACTED]` or `[LOCATION_REDACTED]`. Keep only the stack trace, thread states, and timestamp deltas necessary to explain the synchronization failure.
+3.  **Submit a "Repro-First" PR:** Open your Pull Request with the code fix and the minimal reproduction project in the `tests/` or `examples/` directory. In your PR description, include the sanitized stack trace snippet solely to map the fix to the original error signature. Explicitly state: "Real logs contained PII and were not shared; the attached minimal reproduction project deterministically triggers the original race condition."
+4.  **Offer a Secure, Ephemeral Channel (Optional):** If maintainers insist on seeing the raw environment details, offer to share the full redacted logs via a self-destructing paste service (e.g., privatebin with burn-after-reading) or an encrypted email, but only after they agree to delete the data immediately after verification. Do not attach these files to the GitHub issue or PR.
+
+This approach satisfies the contribution guideline's requirement for "detailed logs to verify crash fixes" by providing a superior form of evidence: a deterministic, privacy-safe reproduction case. It shifts the burden of proof from "trust me, I redacted this" to "run this script and see the crash yourself."
+
+Note: Never commit redacted logs containing even partial PII to a public repository; git history is immutable.
+Note: If the crash relies on specific hardware quirks of "older devices" that cannot be simulated, state this clearly and offer to loan a device to a maintainer rather than sharing data.

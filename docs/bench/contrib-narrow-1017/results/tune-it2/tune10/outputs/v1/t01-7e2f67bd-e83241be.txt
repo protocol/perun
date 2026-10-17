@@ -1,0 +1,52 @@
+Do not anonymize the heap dump; discard it entirely for the public contribution. Anonymization of real production data is risky because structural patterns or metadata can still reveal sensitive information, and the mere presence of real filenames violates the project's strict privacy rules. Instead, you must construct a **synthetic test case** that programmatically generates fake data to trigger the exact same memory allocation and deallocation failure.
+
+Here is your strategy to prepare the contribution safely:
+
+1.  **Isolate the Logic:** Identify the specific function call sequence that causes the leak (e.g., `resize_image()` followed by a missing `free()` on the buffer).
+2.  **Create Synthetic Input:** Write a minimal C test program that creates a fake image buffer in memory using `malloc` with arbitrary dimensions (e.g., 100x100 pixels) and dummy byte values. Do not read from any file on disk.
+3.  **Reproduce the Leak:** Call the problematic function with this synthetic buffer. Use a tool like Valgrind or AddressSanitizer on your local machine to confirm that this synthetic input triggers the same "definitely lost" bytes error as your production dump.
+4.  **Draft the Fix:** Implement the missing `free()` call or correct the ownership logic in the library source.
+5.  **Verify the Fix:** Run the same synthetic test against your patched version to ensure the memory leak report disappears.
+
+**Ready-to-paste Commit Message:**
+```text
+fix: free buffer after scaling to prevent memory leak
+
+The resize function failed to release the temporary buffer allocated
+during the scaling operation, causing a memory leak proportional to
+the number of images processed.
+
+This change ensures the buffer is freed immediately after the scaled
+data is committed or if an error occurs during processing.
+
+Tested with synthetic input using AddressSanitizer; leak report cleared.
+```
+
+**Ready-to-paste PR Body:**
+```markdown
+## Problem
+A memory leak occurs in the image scaling function where the temporary buffer is not freed after use. This accumulates memory over time in long-running services.
+
+## Reproduction
+The issue is reproduced using a synthetic test case that allocates a dummy buffer, calls the resize function, and checks for leaked memory using AddressSanitizer. No real image files or customer data are required to trigger this behavior.
+
+## Solution
+Added a `free()` call to release the buffer in all exit paths of the scaling function.
+
+## Testing
+- Created a minimal C test harness generating fake image data in memory.
+- Confirmed leak exists in v[Current Version] via Valgrind/ASan.
+- Confirmed leak is resolved in this branch.
+
+## Privacy Note
+This contribution contains only synthetic, generated data. No production logs, heap dumps, or customer filenames are included.
+```
+
+**Direct Answer to Your Uncertainty:**
+You asked if you should anonymize the dump or describe the pattern abstractly. The answer is **neither**. Do not touch the dump again. Describe the allocation pattern *only* through the code of your synthetic test case. The code itself is the abstract description that is safe to share; the dump is irrelevant to the fix and too dangerous to sanitize reliably.
+
+**Fallback if Maintainers Stay Silent:**
+If there is no response after two weeks, post a polite follow-up comment linking only to your synthetic test code snippet (not the full PR yet) asking if this reproduction method aligns with their contribution guidelines before you formally submit.
+
+**Note:** Ensure your employer's legal team approves this submission before sending, as it originates from proprietary work.
+**Note:** Never include your corporate email in the `Signed-off-by` line; use a personal or generic address.

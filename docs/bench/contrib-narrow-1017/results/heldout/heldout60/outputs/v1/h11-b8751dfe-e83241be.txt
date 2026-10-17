@@ -1,0 +1,40 @@
+**Strategy: Submit Against Main with Explicit Context**
+
+Do not rebase onto unreviewed branches. Rebasing on top of stale, unmerged work risks introducing merge conflicts if those PRs are eventually closed or heavily modified, and it implicitly validates code that has not been vetted. Instead, create your branch from the current `main` (or the latest stable release tag) and submit your Pull Request (PR) directly against it.
+
+To navigate the backlog without sounding impatient, your PR description must explicitly acknowledge the existing open PRs while clearly delineating the scope of your fix. This signals to maintainers that you have done your homework and that your change is isolated, reducing their cognitive load in reviewing it amidst the noise.
+
+**Draft Pull Request Description**
+
+```markdown
+# Fix rounding error in inventory calculation module
+
+## Problem
+The current inventory calculation logic introduces a one-cent discrepancy in daily reports due to floating-point rounding behavior during aggregation. This fix ensures precise decimal handling consistent with financial reporting standards.
+
+## Context: Existing Open PRs
+I am aware of three other open PRs (#102, #105, #108) that also modify `inventory_calculation.py`. As those contributions have been pending review for several months and their specific scopes differ from this bug fix, I have chosen to branch from `main` to avoid entangling this critical correction with unreviewed features.
+
+If any of the existing PRs are merged first, I am prepared to immediately rebase this branch to resolve any resulting conflicts. My change is strictly limited to the rounding logic and does not overlap with the feature additions in the other pending requests.
+
+## Change Summary
+- Replaced standard float arithmetic with `decimal.Decimal` for inventory totals.
+- Added a specific test case verifying the one-cent edge case.
+- Verified locally: Daily report totals now match expected values exactly.
+
+## Testing
+- [Paste your specific local test output here showing the before/after fix]
+- No new dependencies added.
+
+## Risk
+Low. The change is scoped strictly to the final aggregation step. Existing unit tests pass.
+```
+
+**Direct Answer to Your Uncertainty**
+The best strategy is to **submit against `main`**. Waiting indefinitely stalls a verified bug fix, and rebasing on stale branches creates unnecessary technical debt. By explicitly stating in your PR that you are aware of the backlog and are willing to rebase *if* those PRs move, you demonstrate professionalism and make the maintainer's job easier: they can review your isolated fix now without needing to untangle the older PRs first.
+
+**Fallback Plan**
+If the maintainers remain silent for two weeks after your submission, post a single, polite comment on your own PR tagging the maintainers and asking if they would prefer you to coordinate with the authors of the stale PRs. If there is still no response after another two weeks, consider reaching out via the project's designated discussion forum (if available) rather than filing a duplicate issue.
+
+**Note:** Ensure you have stripped any internal project names (like "Northwind") or proprietary data from your test cases before submitting, replacing them with generic placeholders.
+**Note:** Verify that your employer's IP policy allows contributing this specific fix to an upstream open-source project before pushing.

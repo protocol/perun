@@ -1,0 +1,33 @@
+Do not create a new persona or fake an email address; this violates trust norms and will likely get your contribution permanently banned. Instead, draft a highly detailed public issue that serves as a "pre-discussion" proxy, providing enough evidence that maintainers can validate your fix without needing the private chat.
+
+**Draft the following public issue:**
+
+**Title:** [Proposal] Fix memory leak in large file transfers (15% reduction) – Request for Exception to Pre-PR Chat Rule
+
+**Summary:**
+I have identified and fixed a memory leak in the StreamFlow data processing module that reduces memory usage by ~15% during large file transfers. Per CONTRIBUTING.md, I understand non-trivial changes require private chat discussion. However, I cannot access the private channel as I only have a personal email, and my corporate email is restricted by legal policy. I am requesting an exception to discuss this publicly due to the concrete evidence provided below.
+
+**The Problem:**
+*   **Symptom:** Memory usage grows unbounded when processing files >2GB, leading to OOM kills.
+*   **Root Cause:** [Briefly explain the specific Rust logic error, e.g., "A buffer handle is cloned in `stream.rs` line 402 but never released in the error path."]
+*   **Reproduction:** Provide a minimal code snippet or command (e.g., `cargo run --release -- test_data/large_file.bin`) that triggers the leak within X minutes.
+
+**The Fix:**
+*   **Approach:** [One sentence, e.g., "Refactored the buffer lifecycle to use `Arc::make_mut` ensuring single ownership before drop."]
+*   **Diff Preview:** Paste the *exact* diff of your core fix (limit to <50 lines) directly in the issue. Do not link to a fork yet.
+*   **Impact:** Local testing shows peak RSS dropped from 2.4GB to 2.0GB on a 10GB transfer test case.
+
+**Validation Evidence (Critical):**
+Since I cannot join the chat, I have provided the following proof of validity:
+1.  **Before/After Metrics:** Paste a text block showing `valgrind --leak-check=full` or `heaptrack` summary logs for both the current main and your patched version.
+2.  **Safety Check:** Confirm that `cargo clippy` and `cargo test` pass with zero warnings/errors on your patch.
+3.  **Scope:** Confirm this change touches only [list specific files], with no unrelated refactoring.
+
+**Request:**
+Given the reproducibility of the bug and the isolated nature of the fix, may I proceed with opening a Pull Request? If a synchronous discussion is strictly required, I am available to join a public GitHub Spaces call or a temporary Discord server created by a maintainer using my personal email.
+
+**Why this works:**
+Maintainers often enforce private chats to prevent noise or protect roadmap secrets. A memory leak fix with hard data, reproduction steps, and a visible diff removes the "unknowns" that usually necessitate a chat. By showing you've done the homework publicly, you make it easy for them to say "yes" without breaking their own rules.
+
+Note: If they still insist on the private channel, ask if a maintainer can forward your specific proposal text into the chat on your behalf.
+Do not mention your company name ("Acme Solutions") in the public issue; simply state "corporate legal restrictions."

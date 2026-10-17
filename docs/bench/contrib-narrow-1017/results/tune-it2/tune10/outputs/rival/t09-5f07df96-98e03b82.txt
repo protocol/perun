@@ -1,0 +1,34 @@
+To sanitize your Kubernetes manifest for public contribution while retaining its educational value, you must replace all organization-specific identifiers with generic, illustrative placeholders. The goal is to demonstrate the *structure* of a correct configuration without revealing your *implementation* details.
+
+**Fields You Must Anonymize or Replace:**
+
+1.  **`metadata.namespace`**: Never expose internal namespace naming conventions (e.g., `hd-prod-db-01`).
+    *   *Action*: Replace with a generic example like `database-example` or `my-app`.
+2.  **`metadata.labels` and `metadata.annotations`**: Remove any custom labels used for internal tooling, cost tracking, or security zoning (e.g., `cost-center: helios-eng`, `security-tier: internal`).
+    *   *Action*: Keep only standard Kubernetes labels (like `app.kubernetes.io/name`) or create obvious placeholders (e.g., `team: example-team`).
+3.  **`spec.selector.matchLabels`**: Ensure these match your generic `metadata.labels` and do not reference internal service mesh identifiers or proprietary routing tags.
+4.  **Image Repositories**: If the manifest references a private registry or a specific internal path (e.g., `registry.helios-dynamics.internal/operator:v1.2`), it leaks your infrastructure topology.
+    *   *Action*: Use the public upstream image (e.g., `ghcr.io/project/operator:latest`) or a clearly fake placeholder like `example-registry/operator:tag`.
+5.  **Resource Requests/Limits Values**: While you fixed the *structure*, specific values (e.g., `memory: 14Gi`) might hint at your specific node sizes or workload density.
+    *   *Action*: Round to standard, clean numbers that illustrate the *ratio* rather than your exact production tuning (e.g., change `14Gi` to `16Gi` or `8Gi` to `10Gi`), unless the specific value is critical to the fix itself.
+6.  **Storage Class Names**: Internal storage classes (e.g., `helios-fast-ssd`) reveal your backend storage provider details.
+    *   *Action*: Use standard classes like `standard`, `gp2`, or `local-path`, or explicitly comment `# replace with your storage class`.
+7.  **Service Accounts & Secrets**: Ensure no references to internal service accounts or secret names that follow a proprietary pattern.
+    *   *Action*: Use generic names like `db-operator-sa` or `db-credentials`.
+
+**Fields Generally Safe to Leave As-Is (if they are standard K8s):**
+
+*   **API Versions** (`apiVersion: apps/v1`): These are universal.
+*   **Kind** (`Deployment`, `StatefulSet`): Universal.
+*   **The Corrected Resource Logic**: The fact that you increased the CPU limit from `100m` to `500m` is the valuable fix. The specific number `500m` is usually safe if it looks like a reasonable example, but ensure it doesn't look like a precise fingerprint of your load.
+*   **Standard Probes**: Liveness/readiness probe paths (e.g., `/healthz`) are usually standard application behavior, not internal secrets.
+
+**Recommended Workflow:**
+
+1.  **Create a "Golden Example"**: Draft the manifest assuming a user named "Alice" deploying a "demo-db".
+2.  **Add Comments**: Where a user *must* change a value for their own cluster (like `storageClassName` or `image`), add a YAML comment: `# UPDATE: Choose a storage class available in your cluster`.
+3.  **Review for "Accidental" Leaks**: Scan for IP addresses, specific domain names, or comments left by your team (e.g., `# Fixed by Bob during the Q3 outage`).
+
+By stripping these identifiers, you transform the manifest from a "leaked config" into a "reference implementation," which is exactly what maintainers want for an examples directory.
+
+Ensure you also update the PR description to explicitly state that examples are generic and require adaptation for production use.

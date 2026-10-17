@@ -1,0 +1,31 @@
+Here is a rewritten, privacy-scrubbed pull request description that focuses strictly on the technical defect and removes all corporate identifiers:
+
+---
+
+**Title:** Fix attachment upload failure for filenames containing special characters
+
+**Description:**
+This PR resolves an issue where file attachments fail to upload if the filename contains certain special characters (e.g., `&`, `%`, `#`, or non-ASCII symbols). The failure manifests as a generic server error during the multipart form-data submission.
+
+**Root Cause Analysis:**
+Investigation indicates that the current implementation does not properly encode or escape special characters in the `Content-Disposition` header. While standard filenames process correctly, unescaped characters trigger a rejection. This behavior is exacerbated in network environments where intermediate proxies or firewalls strictly enforce RFC compliance on header syntax, causing the request to be dropped before reaching the application logic.
+
+**Reproduction Steps:**
+1. Attempt to upload a file named `report&data.txt` (or similar).
+2. Observe the generic upload failure error.
+3. Verify that renaming the file to `report_data.txt` allows the upload to succeed.
+
+**Proposed Fix:**
+The fix implements proper URL encoding for the filename parameter within the `Content-Disposition` header, ensuring compliance with RFC 5987. This prevents syntax errors in the header string and ensures compatibility with strict network intermediaries.
+
+**Testing:**
+- Added unit tests for filenames with various special characters.
+- Verified successful uploads in environments with strict header validation.
+- Confirmed backward compatibility with standard alphanumeric filenames.
+
+**Impact:**
+This is a critical fix for users in enterprise environments or behind strict security gateways who frequently use descriptive filenames containing special characters. Without this fix, these users are unable to attach relevant documentation, blocking core workflow functionality.
+
+---
+
+**Regarding the enterprise firewall context:** You should **not** mention your specific enterprise firewall setup. Stating that the bug is "exacerbated in network environments where intermediate proxies or firewalls strictly enforce RFC compliance" is sufficient. This frames the issue as a general compatibility concern with standard network infrastructure rather than leaking details about your specific internal topology or security vendors. The technical fix (proper header encoding) resolves the issue regardless of the specific firewall brand, so the specific infrastructure detail is unnecessary for the maintainers to understand or merge the change.

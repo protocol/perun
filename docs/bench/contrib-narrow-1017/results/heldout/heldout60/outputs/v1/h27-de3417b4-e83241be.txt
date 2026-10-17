@@ -1,0 +1,36 @@
+### Stop Checks and Strategy
+Before drafting, you must clear two hurdles: **Employer IP Approval** (ensure Acme Retail legal permits contributing this fix upstream) and **Project Policy** (check if StockSync requires an issue ticket before a PR for behavioral changes). Since this reverts intentional behavior, opening a discussion issue first is often safer than a direct PR to gauge maintainer sentiment.
+
+**Technical Argument Strategy:** Do not frame this as "restoring old behavior for Acme." Frame it as "the new update introduced a breaking change in error handling that violates the library's contract for graceful degradation." The argument is that crashing on out-of-stock items is a **regression in robustness** for any retailer allowing backorders, not just Acme. The fix should be presented as restoring the **principle of fail-safe defaults**: when data is missing, the system should degrade gracefully (show backorder) rather than fail hard (crash), unless explicitly configured otherwise.
+
+### Draft Pull Request Description
+
+**Title:** fix: Restore graceful degradation for out-of-stock items to prevent checkout crashes
+
+**Problem**
+The recent update to StockSync changed the handling of out-of-stock inventory checks to throw a hard exception, causing immediate checkout termination. While this improved performance for strict-inventory workflows, it introduced a regression for retailers supporting backorders or pre-orders. For these users, an out-of-stock status is a valid business state, not a fatal error. The current behavior forces downstream applications to wrap all inventory calls in excessive try-catch blocks or risks production outages during standard sales flows.
+
+**Change**
+This PR modifies the inventory resolution logic to distinguish between "unavailable due to error" and "unavailable due to stock level."
+- Reverts the hard crash when `quantity == 0` if the item allows backordering.
+- Restores the previous behavior of returning a `BackorderStatus` object, allowing the UI to render the appropriate message.
+- Preserves the new performance optimizations for the standard in-stock path.
+
+**Testing**
+- Verified that items with `allowBackorder=true` no longer trigger exceptions.
+- Confirmed that strict-inventory items still fail fast as intended by the previous update.
+- Ran synthetic load tests showing no performance degradation in the happy path.
+- [Paste specific unit test output or CI link here]
+
+**Risk & Configuration**
+This change affects the default error handling path. To address concerns about forcing a specific workflow, this PR optionally introduces a configuration flag `stocksync.strict-mode=true`.
+- If `true`: Maintains the new hard-fail behavior (default for new installs).
+- If `false` (or legacy mode): Restores graceful degradation.
+*(Note: If the maintainers prefer no config flag, argue that graceful degradation should be the universal default for a library, with hard-fails opt-in.)*
+
+**Impact**
+This prevents catastrophic checkout failures for a wide class of e-commerce platforms that support backorders, aligning the library with standard retail resilience patterns.
+
+---
+**Note:** Replace bracketed placeholders with actual synthetic test results; do not include Acme-specific logs.
+**Note:** If maintainers reject the revert, propose the configuration flag as the primary solution to satisfy both strict and flexible inventory models.

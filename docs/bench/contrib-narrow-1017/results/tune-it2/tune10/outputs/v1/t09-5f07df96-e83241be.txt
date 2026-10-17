@@ -1,0 +1,46 @@
+To safely contribute your fix without leaking proprietary information, you must replace all infrastructure-specific identifiers with generic, community-standard placeholders while preserving the structural correction of the resource limits.
+
+**1. Fields to Anonymize or Replace**
+*   **Namespace:** Change any custom namespace (e.g., `helios-db-prod`, `hd-operators`) to a generic example like `default`, `database-demo`, or `example-ns`. Add a comment in the YAML noting that users should change this to their target namespace.
+*   **Labels and Selectors:** Remove labels that encode internal topology or naming conventions (e.g., `team: helios-backend`, `env: prod-west-2`, `cost-center: 12345`). Replace them with functional labels relevant to the operator itself, such as `app: postgres-cluster` or `component: database`. Ensure the `matchLabels` in the operator configuration aligns with these new generic labels.
+*   **Resource Names:** Rename the manifest files and the metadata `name` fields if they contain project codes or internal abbreviations (e.g., `hd-main-cluster` becomes `example-cluster`).
+*   **Annotations:** Strip any annotations used for internal monitoring, logging pipelines, or policy engines specific to Helios Dynamics (e.g., `internal.monitoring.io/scrape-path`). Keep only annotations required by the operator or standard Kubernetes tooling.
+*   **Image Registries:** If your manifest points to an internal container registry (e.g., `registry.helios.internal/operator:v1.2`), replace it with the public image repository specified in the project's documentation (e.g., `ghcr.io/project/operator:v1.2`).
+
+**2. Fields Safe to Leave As-Is (with context)**
+*   **Resource Limits/Requests:** The core fix (CPU/Memory values) is safe to keep if the values are reasonable for a generic production example. You do not need to obscure the numbers themselves, as they represent the technical solution to the crash. However, ensure they aren't tied to specific internal node types (e.g., remove comments like `# fits on our m5.2xlarge`).
+*   **Operator Configuration:** Standard configuration fields required by the operator (e.g., `replicas`, `storageSize`, `version`) should remain, provided their values are illustrative and not dependent on internal storage classes or secrets.
+
+**3. Generalization Strategy**
+Rebuild the example manifest from scratch using the corrected resource values rather than editing your internal file line-by-line. This prevents accidental retention of obscure fields. Use synthetic data for any example content (e.g., dummy database names like `my-db` instead of `billing-primary`).
+
+**Commit Message Draft:**
+```text
+fix: correct resource limits in example manifests to prevent OOM crashes
+
+Updates the example Kubernetes manifests with realistic resource requests
+and limits that prevent pod eviction under load. Internal infrastructure
+specifics (namespaces, labels, registries) have been replaced with generic
+placeholders to ensure the examples are portable and vendor-neutral.
+
+Tested: Verified pods remain stable under synthetic load with these values.
+```
+
+**PR Body Draft:**
+```markdown
+## Problem
+The existing example manifests lacked sufficient resource limits, causing database pods to crash during high-load scenarios.
+
+## Solution
+This PR updates the examples with robust default resource configurations. All infrastructure-specific identifiers (namespaces, labels, internal registries) have been generalized to ensure these examples serve as a clean starting point for any user.
+
+## Testing
+- Validated stability under load using synthetic traffic.
+- Confirmed no internal naming conventions or topology details remain.
+```
+
+**Direct Answer to Your Uncertainty:**
+You must replace **namespaces, custom labels, internal image registries, and annotations** with generic placeholders. The **resource limit values themselves** are safe to keep as they constitute the technical fix, provided they are presented as illustrative defaults rather than specific requirements for your internal hardware.
+
+**Fallback:**
+If the maintainers request more specific tuning advice, provide general guidelines on how to calculate limits based on workload characteristics rather than sharing your specific production metrics or topology.

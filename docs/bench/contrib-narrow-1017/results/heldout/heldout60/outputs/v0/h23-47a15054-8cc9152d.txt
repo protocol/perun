@@ -1,0 +1,44 @@
+To reproduce the daylight saving time (DST) shift bug without exposing proprietary data, you must synthesize a test case that isolates the **time zone transition** and the **recurrence logic**, rather than mimicking your specific meeting details. The bug exists in the library's math, not in your company's schedule.
+
+Here is how to construct the synthetic test case:
+
+### 1. Select a Public Time Zone with DST
+Do not use your local time zone if it reveals your location. Instead, pick a well-known, public time zone that observes DST, such as `America/New_York` or `Europe/London`. The specific zone matters only in that it has a known "spring forward" or "fall back" date.
+
+### 2. Define Generic Recurrence Rules
+Replace your "weekly team standup" with a generic rule. The complexity likely lies in the library's handling of the `RRULE` (Recurrence Rule) standard, not your specific meeting type.
+*   **Frequency:** Weekly (`FREQ=WEEKLY`)
+*   **Day:** Every Tuesday (`BYDAY=TU`)
+*   **Time:** 09:00 AM (A time that clearly exists before and after the shift)
+
+### 3. Target the Transition Date
+Identify the exact date of the DST transition for your chosen year and zone (e.g., the second Sunday in March for the US).
+*   **Start Date:** Set the event to start two weeks *before* the transition.
+*   **End Date:** Set the series to end two weeks *after* the transition.
+*   **The Trigger:** The specific occurrence that falls *on* or immediately *after* the transition date is where the library will likely miscalculate the offset, causing the one-hour shift.
+
+### 4. Construct the Synthetic Data
+Create a JSON or JavaScript object using completely fake identifiers.
+
+```javascript
+const syntheticEvent = {
+  id: "synthetic-test-event-001", // Fake ID
+  summary: "Generic Weekly Sync", // Generic title
+  location: "Virtual", // No real location
+  timeZone: "America/New_York", // Public zone
+  recurrenceRule: "FREQ=WEEKLY;BYDAY=TU;COUNT=5",
+  startTime: "2024-03-05T09:00:00", // Date before DST starts
+  // Expected behavior: All occurrences should be at 09:00 local time.
+  // Bug behavior: Occurrences after March 10, 2024, shift to 08:00 or 10:00.
+};
+```
+
+### 5. Write the Assertion
+Your test should not check for "Acme Industries" patterns. It should assert a universal truth about time:
+*   **Input:** An event defined as "Every Tuesday at 09:00 AM New York Time."
+*   **Assertion:** The calculated UTC timestamp for the occurrence *after* the DST switch must reflect the new offset, but the **local time** displayed must remain 09:00 AM.
+*   **Failure Condition:** If the library outputs 08:00 AM or 10:00 AM local time for the post-transition event, the bug is reproduced.
+
+By using public time zone data, generic recurrence rules, and fake identifiers, you create a minimal, reproducible example that proves the mathematical error in OpenCal without leaking any information about your employer's internal operations.
+
+This approach satisfies the maintainers' requirement for a failing test while adhering to strict privacy boundaries.

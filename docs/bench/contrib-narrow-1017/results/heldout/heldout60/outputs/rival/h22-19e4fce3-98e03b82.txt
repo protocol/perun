@@ -1,0 +1,33 @@
+Do not open a public Pull Request or issue yet. Since this involves live credentials and a critical security flaw, you must follow a responsible disclosure workflow to prevent attackers from exploiting the information before a fix is available.
+
+**Step 1: Private Contact (Immediate Action)**
+Locate the project's `SECURITY.md` file in the repository root or check the "Security" tab on the GitHub project page. If neither exists, look for maintainer emails in the `OWNERS` file or commit history. Send a private email with the subject line: `[SECURITY] Critical Credential Leakage in debug.log`.
+*   **State the impact clearly:** "When error levels are set to verbose, `debug.log` writes API keys and database passwords in plain text."
+*   **Do not attach screenshots:** Describe the *format* of the leak (e.g., "The log entry includes the full connection string without masking") but never share actual secrets, even redacted ones, until a secure channel is established.
+*   **Request a secure channel:** Ask for a PGP key or a private vulnerability reporting platform (like GitHub Private Vulnerability Reporting) to share your sanitized reproduction case.
+
+**Step 2: Constructing the Sanitized Reproduction Script**
+Once a secure channel is established (or if you must prepare the artifact for that moment), create a minimal Go program that proves the bug without using real data.
+*   **Fake Credentials:** Hardcode obviously fake values (e.g., `API_KEY="SANITIZED_TEST_VALUE_123"`, `DB_PASSWORD="fake_password"`).
+*   **Trigger the Bug:** Configure the script to initialize the RiverLog logger with `Level: Verbose` and force an error condition that triggers the debug write.
+*   **Verification:** The script should read the generated `debug.log` and assert that the fake secrets appear in plain text.
+*   **Delivery:** Share this script *only* through the private channel agreed upon in Step 1. Do not commit this script to your public fork.
+
+**Step 3: Preparing the Public Fix (Post-Agreement)**
+Do not submit your fix until the maintainers acknowledge the report. When you are cleared to proceed:
+*   **Branch:** Create a branch named `fix/security-mask-debug-logs` off the latest `main`.
+*   **Implementation:** Modify the logging function to detect sensitive fields (like keys or passwords) and replace their values with `***REDACTED***` before writing to disk. Ensure this applies regardless of the log level.
+*   **Tests:** Add a unit test to the existing test suite that verifies sensitive fields are redacted. Use the same fake credentials from your reproduction script.
+*   **PR Description:**
+    *   **Summary:** "Prevent plain-text leakage of sensitive credentials in `debug.log` when verbose logging is enabled."
+    *   **Motivation:** Reference the privately reported security issue (e.g., "Per private disclosure on [Date]").
+    *   **Test Plan:** "Added unit test `TestDebugLogRedaction` verifying that fields tagged as sensitive are masked."
+    *   **Security Considerations:** Explicitly state, "No real credentials were used in testing; reproduction case shared via private channel."
+    *   **AI Disclosure:** If you used AI to help draft the redaction logic, include the standard disclosure statement.
+
+**Critical Constraints:**
+*   Never push the reproduction script containing even fake secrets to a public branch if it mimics your internal structure too closely.
+*   Do not mention "Acme Corp" or specific infrastructure details in the public PR.
+*   If the project has no security policy and does not respond within 48 hours, consider contacting the platform hosting the repo (e.g., GitHub Security) for guidance on orphaned vulnerabilities.
+
+This approach protects your company's data while giving maintainers the evidence they need to verify and merge the fix rapidly.

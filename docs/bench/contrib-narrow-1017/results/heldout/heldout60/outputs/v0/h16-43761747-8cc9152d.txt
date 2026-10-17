@@ -1,0 +1,40 @@
+Here is a sanitized template for your stack trace and a strategy for providing the necessary context without leaking sensitive information.
+
+### Sanitized Stack Trace Template
+
+Replace your actual paths, hostnames, and usernames with the generic placeholders shown below. This preserves the relative directory structure and file names (which are critical for debugging) while removing all infrastructure-specific details.
+
+**Original (Example):**
+`Exception in thread "main" java.lang.NullPointerException at com.cloudnet.handler.ConnectionHandler.processPacket(ConnectionHandler.java:142) at /home/ravi/projects/cloudnet-staging/src/main/java/com/cloudnet/handler/ConnectionHandler.java:142`
+`Server: staging-east-1.internal.corp`
+
+**Sanitized Version:**
+```text
+Exception in thread "main" java.lang.NullPointerException
+  at com.cloudnet.handler.ConnectionHandler.processPacket(ConnectionHandler.java:142)
+  at <project-root>/src/main/java/com/cloudnet/handler/ConnectionHandler.java:142
+  ... [rest of stack trace] ...
+
+Environment Context:
+- Hostname: [REDACTED-STAGING-NODE]
+- User: [DEVELOPER]
+- OS: [e.g., Ubuntu 22.04 / Kernel Version]
+- Java/Runtime Version: [e.g., OpenJDK 17.0.2]
+```
+
+**Key Sanitization Rules Applied:**
+1.  **Absolute Paths:** Replace `/home/ravi/projects/cloudnet-staging/...` with `<project-root>/...` or simply `src/...`. Maintainers only need to know the file path *relative* to the source root, not your local disk layout.
+2.  **Hostnames:** Replace `staging-east-1.internal.corp` with a generic label like `[STAGING-NODE]` or omit it entirely if the OS version is provided.
+3.  **Usernames:** Replace `ravi` with `[USER]` or remove the path segment entirely if using the `<project-root>` placeholder.
+
+### Additional Context to Provide
+
+Since you are removing absolute paths, you must explicitly confirm the following in your issue description to ensure the trace remains useful:
+
+1.  **Standard Directory Structure:** Explicitly state: *"The stack trace uses a standard Maven/Gradle directory layout where `src/main/java` contains the source code."* This confirms that the relative paths in the sanitized trace correspond to the repository structure.
+2.  **Build Configuration:** Mention if you are using a specific build tool or custom classpath that might alter package loading, as this is often the only reason absolute paths matter.
+3.  **Reproduction Steps:** Provide a minimal code snippet or a unit test that triggers the large packet handling. This is far more valuable than file paths for diagnosing logic errors.
+4.  **Private Details Channel:** If the maintainers determine they absolutely need the raw logs (unlikely for a logic crash), offer to send the full, unsanitized stack trace via a private channel (e.g., direct email to a maintainer or a private gist) rather than posting it publicly.
+
+**Note:** Never guess which parts of a path are "safe"; if a path segment contains your company name, project codename, or user names, redact it entirely.
+**Note:** If the crash depends on a specific file permission or disk layout unique to your server, describe that *condition* textually (e.g., "running as non-root user") rather than showing the path.

@@ -1,0 +1,54 @@
+You cannot use your Acme Corp webmail interface to send this patch. Web-based email clients (like Outlook Web, Gmail, or corporate web portals) automatically convert plain text to HTML, wrap long lines at 78 or 80 characters, and alter whitespace. This corruption makes the `diff` unapplyable, which is why your previous attempts were rejected. For a C project of this size managed via email, you must use command-line tools to generate and send the patch directly from your development environment.
+
+### Step 1: Generate the Patch Correctly
+Do not copy-paste diffs. Use `git` to generate a patch that preserves exact whitespace and line endings.
+
+1.  Ensure your fix is committed:
+    ```bash
+    git add src/attachment_handler.c
+    git commit -m "fix: prevent corruption of attachments >10MB"
+    ```
+2.  Generate the patch file. The `-p1` format is standard for most C projects:
+    ```bash
+    git format-patch -1 --stdout > fix-attachment-corruption.patch
+    ```
+    *Alternatively, if not using git, use `diff -u` carefully, but `git format-patch` is safer for metadata.*
+
+### Step 2: Configure Your Email Client
+You must bypass the web interface. Install a command-line mail user agent (MUA) like `git send-email` (recommended) or `mutt`.
+
+**Using `git send-email` (Standard for Kernel-style projects):**
+1.  Install it (usually part of the `git` package on Linux/macOS, or `git-email` on some distros).
+2.  Configure it once with the project's SMTP server (not necessarily your corporate web relay, which may block script-based sending):
+    ```bash
+    git config --global sendemail.smtpserver smtp.your-corp-server.com
+    git config --global sendemail.smtpserverport 587
+    git config --global sendemail.smtpencryption tls
+    git config --global sendemail.smtpuser your.email@acme.com
+    ```
+3.  Send the patch:
+    ```bash
+    git send-email --to=maintainers@legacymail.org --cc=dev-list@legacymail.org fix-attachment-corruption.patch
+    ```
+    This tool ensures the email is sent as raw `text/plain`, disables line wrapping, and sets the correct headers.
+
+**If you absolutely cannot install tools:**
+Use `mutt` or `alpine` configured to send plain text only. Never compose the email in a browser. If you must use a desktop client (like Thunderbird), you must:
+*   Set "Composition" to "Plain Text Only".
+*   Disable "Wrap long lines" in settings.
+*   Attach the `.patch` file generated in Step 1 **only if** the project accepts attachments (you stated they require inline diffs, so this option is likely invalid for you).
+*   Copy the *content* of the `.patch` file into the email body, ensuring your editor does not add rich text formatting.
+
+### Step 3: Subject Line Formatting
+Email-based projects rely on subject prefixes for filtering and archiving. Based on standard conventions for C projects:
+*   **Prefix:** Use `[PATCH]` followed by the subsystem or component.
+*   **Format:** `[PATCH] attachment: fix corruption for files >10MB`
+*   **Versioning:** If you need to resend, increment the version: `[PATCH v2] ...`
+
+### Critical Pitfalls to Avoid
+1.  **Line Wrapping:** The most common failure. If any line in your diff exceeds 78 characters and the mail server wraps it, the patch fails. `git send-email` handles this; webmail does not.
+2.  **Character Encoding:** Ensure your email is sent as `UTF-8` or `ASCII` without "Quoted-Printable" encoding if possible, though `git send-email` manages this automatically.
+3.  **HTML Artifacts:** Never send HTML. Even a single `<div>` tag or hidden CSS style will cause the maintainer's `git am` command to reject the patch immediately.
+
+**Note:** Contact your IT department if your corporate SMTP server blocks port 587 for non-GUI clients; you may need an exception or an app-specific password.
+**Note:** Always send a test patch to yourself first and attempt to apply it locally (`git am < email`) before sending to the maintainers.

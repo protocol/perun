@@ -1,0 +1,63 @@
+### Sanitized Kubernetes Manifest Example
+
+Below is the generalized version of your manifest. All Helios Dynamics-specific identifiers, namespace conventions, and internal label selectors have been replaced with generic, community-standard placeholders.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-cluster-example
+  namespace: default
+  labels:
+    app: database-cluster
+    component: primary
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database-cluster
+  template:
+    metadata:
+      labels:
+        app: database-cluster
+        component: primary
+    spec:
+      containers:
+        - name: database
+          image: postgres:15
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          env:
+            - name: POSTGRES_DB
+              value: "example-db"
+            - name: POSTGRES_USER
+              value: "user"
+            - name: POSTGRES_PASSWORD
+              value: "changeme"
+          ports:
+            - containerPort: 5432
+```
+
+### Key Changes Made
+1.  **Namespace:** Changed from your internal convention (e.g., `helios-prod-db-01`) to `default` or a generic `database`.
+2.  **Labels:** Removed unique topology labels (e.g., `zone: helios-us-east-1a`) and replaced them with standard `app` and `component` labels.
+3.  **Naming:** Renamed resources from internal codes (e.g., `hd-billings-primary`) to descriptive generic names (`database-cluster-example`).
+4.  **Secrets/Env:** Ensured no real credentials or internal service endpoints remain; used standard placeholder values.
+
+### Provenance and Risk Block (For Human Review)
+
+```
+SOURCE (internal only, stripped from the public artifact): Helios Dynamics internal cluster config
+GENERALIZED-AWAY: Specific namespace naming conventions, unique label selectors indicating deployment topology, internal resource naming codes.
+RESIDUAL RISK I COULD NOT RULE OUT: The specific resource limit values (1Gi/1000m) might hint at the scale of your production load if combined with other public data, though they are within standard ranges.
+MOSAIC CHECK: None. This is a standalone example fix; no prior contributions reveal infrastructure patterns.
+MECHANICAL SCRUB: Pending manual run of privacy gate script on final diff.
+DRAFTED BY: Assistant (Contribution Flow)
+```
+
+**Note:** Before opening the PR, ensure you have explicit approval from Helios Dynamics legal or IP teams to contribute this fix, as it derives from production experience. Do not sign the commit with your corporate email; use a personal or noreply address.

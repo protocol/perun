@@ -1,0 +1,52 @@
+### Steps to Squash Commits and Remove Private Data
+
+1.  **Create a Safety Backup**
+    Before rewriting history, create a backup branch in case you need to recover the original state:
+    ```bash
+    git branch backup-before-squash
+    ```
+
+2.  **Start Interactive Rebase**
+    Launch the rebase tool to edit the last three commits (replace `HEAD~3` with the specific commit hash before your first change if your branch has more history):
+    ```bash
+    git rebase -i HEAD~3
+    ```
+
+3.  **Edit the Commit List**
+    Your editor will open with a list of three commits. Modify the lines to look like this (keep the top one as `pick`, change the others to `squash` or `s`):
+    ```text
+    pick <hash1> Fix inventory calculation off-by-one error
+    squash <hash2> Address reviewer feedback on logic
+    squash <hash3> Update tests for edge cases
+    ```
+    Save and close the file.
+
+4.  **Rewrite the Commit Message**
+    A new editor window will appear showing the combined message of all three commits.
+    *   **Delete** the line containing `TKT-9988` or any reference to "Acme Logistics."
+    *   **Write** a single, clear message describing the fix without internal identifiers.
+    *   **Example:**
+        ```text
+        Fix inventory calculation off-by-one error
+
+        Corrects the stock count logic in the Northwind module where
+        decrement operations resulted in an inaccurate total. Adds
+        regression tests for boundary conditions.
+        ```
+    Save and close the file. If the rebase stops due to conflicts, resolve them, run `git add <files>`, then `git rebase --continue`.
+
+5.  **Verify the Scrub**
+    Check your new history to ensure the ticket number is gone:
+    ```bash
+    git log -p
+    ```
+    Search the output for "TKT-9988" or "Acme". If found, you must restart the rebase or edit the specific commit again.
+
+6.  **Force-Push Safely**
+    Update the remote branch. Use `--force-with-lease` instead of `--force`; this prevents overwriting the branch if someone else pushed to it while you were working:
+    ```bash
+    git push --force-with-lease origin <your-branch-name>
+    ```
+    The pull request will automatically update to reflect the single, clean commit.
+
+**Note:** If `git push --force-with-lease` is rejected, it means the remote branch has changed since you last fetched; run `git fetch` and inspect the difference before trying again. Never commit internal ticket numbers even temporarily if your company policy forbids it; if this message was already pushed previously, you may need to coordinate with the project maintainers to ensure the old commit is fully removed from their logs.

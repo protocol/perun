@@ -1,0 +1,45 @@
+Do **not** open a new pull request manually porting the code. Since the fix already exists in a release branch and the project relies on an automated cherry-pick bot, manually recreating the changes violates the "smallest diff" and "single source of truth" principles. It creates unnecessary review work, risks introducing subtle differences between the branches, and bypasses the project's established release workflow.
+
+Instead, your goal is to trigger the existing automation with maximum clarity and minimal friction for the maintainer.
+
+### 1. How to Request the Port
+Locate the original commit hash in the old release branch that contains the fix. You need to create a clear, actionable request that allows a maintainer to apply the label and verify the bot's trigger condition in seconds.
+
+If the project uses GitHub Issues for tracking ports, open a new issue titled:
+`chore: request cherry-pick of <commit-hash> to main for zoom-marker bug`
+
+If the project prefers comments on the original commit or PR, post your request there.
+
+### 2. Formatting for a Quick Response
+Maintainers are slow because they lack context. Your request must provide the "why," the "what," and the "proof" immediately. Use this template:
+
+```markdown
+## Cherry-Pick Request
+
+**Source Commit:** `<insert-commit-hash>` (from branch `<old-branch-name>`)
+**Target Branch:** `main`
+**Bot Label Required:** `<insert-label-name-if-known>`
+
+### Problem Impact
+Zooming causes markers to disappear in the latest release. This breaks spatial visualization for all new TerraView deployments. The fix is already verified and merged in `<old-branch-name>`.
+
+### Verification Evidence
+- Legacy systems (using `<old-branch-name>`) do not exhibit this bug.
+- Reproduced on `main` at commit `<current-main-head>`: markers vanish on zoom level > 12.
+- Fix commit `<source-commit-hash>` resolves the issue locally when cherry-picked.
+
+### Action Required
+Please apply the `<bot-label-name>` label to commit `<source-commit-hash>` to trigger the cherry-pick bot. If manual intervention is needed due to merge conflicts, I am ready to assist immediately.
+```
+
+### 3. If the Bot Fails
+Automated bots often fail due to merge conflicts or context mismatches. If the bot comments with an error or stays silent after the label is applied:
+
+1.  **Do not panic or re-apply the label.** This can spam the CI system.
+2.  **Reply directly to the bot's error comment** (or the maintainer's notification) with a specific offer of help:
+    > "The bot failed due to [conflict in file X / missing context]. I have prepared a local resolution. Would you prefer I open a new PR with the resolved cherry-pick, or should I push a fixup commit to a temporary branch for the bot to retry?"
+3.  **Prepare a manual fallback PR only if asked.** Keep this PR strictly limited to the cherry-picked commit plus the minimal conflict resolution. Do not add extra changes. Title it clearly: `fix: manual cherry-pick of <commit-hash> (bot failed)`.
+
+By respecting the automation workflow and providing a pre-packaged justification, you reduce the maintainer's cognitive load from "investigate and fix" to "click label and verify," significantly speeding up the merge.
+
+*Note: Always check the project's `CONTRIBUTING.md` for specific bot command syntax before posting, as some bots require `/cherry-pick` comments instead of labels.*

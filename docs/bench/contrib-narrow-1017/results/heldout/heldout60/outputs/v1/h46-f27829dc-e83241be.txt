@@ -1,0 +1,44 @@
+**Recommended Action:** Do not submit the pull request yet. Instead, open a new issue titled "Windows Path Resolution Crash: Proposed Fix Needs Review" to break the deadlock.
+
+**Step-by-Step Plan:**
+
+1.  **Sanitize and Generalize the Fix:**
+    Before sharing anything, strip all internal identifiers.
+    *   *Remove:* "Hooli," "deployment team," "internal Windows Server cluster," and specific internal file paths (e.g., change `Z:\hooli_sync\data` to `C:\app\data`).
+    *   *Generalize:* Describe the bug as "crashes on long file paths (>260 chars) during resolution" rather than referencing your specific deployment scenario.
+    *   *Reproduce:* Create a minimal, synthetic test case using invented filenames (e.g., `test_long_path_aaa...txt`) that triggers the crash on any Windows machine, ensuring no customer data or logs are attached.
+
+2.  **Draft the Issue (Not the PR yet):**
+    Since the guidelines require a platform maintainer's review and Ravi is inactive, an issue is the correct mechanism to solicit help without violating the "untested" constraint.
+    *   *Title:* `Windows: Crash in FileSync when handling long file paths`
+    *   *Body:*
+        *   **Problem:** FileSync crashes on Windows when paths exceed standard limits.
+        *   **Proposed Fix:** A change to `path_resolution.py` (example) that normalizes paths before processing.
+        *   **Testing Status:** Verified on Windows Server 2019/2022. **Gap:** Needs verification on consumer Windows 10/11 versions to ensure no regressions.
+        *   **Call to Action:** "Seeking a Windows maintainer or community member to review and validate this fix on consumer hardware, as the listed maintainer appears inactive."
+    *   *Attachment:* Include the sanitized patch file or a link to a draft branch, clearly marked as "Draft - Needs Validation."
+
+3.  **Engage the Community:**
+    Post the issue link in the project's general communication channel (e.g., Discord, Slack, or mailing list) asking specifically for Windows users willing to test a patch. This shifts the burden from "submitting untested code" to "collaboratively finding a tester."
+
+4.  **Final Submission:**
+    Once a community member or new maintainer confirms the fix works on consumer versions (or provides necessary adjustments), update the branch, mark the tests as verified, and then open the Pull Request referencing the issue.
+
+**Direct Answer to Your Uncertainty:**
+You should **not** submit the PR yet. Submitting a platform-specific fix without the required maintainer review or adequate test coverage violates the project's contribution guidelines and risks introducing regressions. The correct path is to use an issue to transparently disclose the testing gap and recruit a reviewer, rather than bypassing the safety check.
+
+**Fallback if Silence Continues:**
+If the issue receives no response after two weeks, post a polite follow-up tagging the general maintainers (not just Ravi) asking if the project has an alternative process for orphaned platform support. If there is still no movement after another two weeks, you may need to maintain the patch internally or fork the project, as pushing unreviewed platform-specific code is unsafe.
+
+**Provenance and Risk Block (For your internal records only):**
+```
+SOURCE: Internal Hooli deployment fix
+GENERALIZED-AWAY: Company name, specific cluster details, internal paths
+RESIDUAL RISK I COULD NOT RULE OUT: Potential regression on obscure consumer Windows versions (e.g., older builds, specific locale settings) not covered by Server testing.
+MOSAIC CHECK: None (first contribution of this nature).
+MECHANICAL SCRUB: Pending manual run of privacy gate on sanitized patch.
+DRAFTED BY: Assistant
+```
+
+*Note: Ensure you run the project's specific privacy gate script on your final patch before attaching it to the issue.*
+*Do not sign off on behalf of Hooli; the commit author must be your personal email.*

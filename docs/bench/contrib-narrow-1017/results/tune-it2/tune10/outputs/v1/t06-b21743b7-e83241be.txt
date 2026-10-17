@@ -1,0 +1,32 @@
+**Do not submit this change to the upstream open-source repository yet.**
+
+Your proposed contribution violates the core principles of open-source maintenance because it introduces a hard dependency on a non-public, proprietary SDK that neither the maintainers nor the general community can access. Submitting code that breaks the build for everyone else unless they possess a specific private license is generally rejected by major projects. Furthermore, your employer's Non-Disclosure Agreement (NDA) regarding "Vertex Interactive" and the specific console architecture creates a legal barrier; even if you strip the company name, the unique combination of the niche console and the private SDK constitutes a "structural tell" that could leak confidential business relationships.
+
+**Action Plan:**
+
+1.  **Stop and Verify Policy:** Before writing any code, check the engine's `CONTRIBUTING.md` or issue tracker for policies on "proprietary toolchains" or "closed-source dependencies." Most large C++ projects explicitly forbid merging code that cannot be built by the public CI.
+2.  **Keep Changes Local:** Maintain your build script modifications in your studio's private fork. Do not generalize this yet; a quirk that requires a private SDK is not an upstream defect, it is a local configuration.
+3.  **Engage Maintainers First:** Open a generic issue (without naming your studio or the specific console if under NDA) asking: "What is the project's stance on supporting build targets that require optional, proprietary third-party SDKs?"
+    *   *Draft Question:* "Is there a supported mechanism for downstream consumers to integrate optional, closed-source platform SDKs via out-of-tree modules or specific CMake presets without modifying the core build scripts?"
+4.  **Alternative Implementation:** If the maintainers are open to the idea, the standard pattern is **not** to merge the integration code itself, but to merge a *hook* or *abstraction layer* that allows the integration to happen externally.
+    *   *Bad:* Merging `#include <private_console_sdk.h>` into the core.
+    *   *Good:* Merging a generic `PlatformExtension` interface in the core, while your studio keeps the actual implementation in a private repo that links against the public engine.
+
+**Direct Answer to Your Uncertainty:**
+Adding conditional compilation flags (`#ifdef CONSOLE_X`) directly to the main repository is inappropriate if the corresponding headers and libraries are not publicly available. This creates "dead code" for 99% of users and breaks continuous integration pipelines. The change is only appropriate if the project supports a plugin architecture or out-of-tree build definitions where your studio hosts the proprietary bits separately.
+
+**Fallback:**
+If the maintainers state they do not support proprietary toolchains in the core, you must maintain a long-lived private fork. You can still contribute *upstream* by refactoring the engine's build system to be more modular (e.g., improving CMake flexibility), provided those refactors are tested and valuable without your private SDK.
+
+**Provenance and Risk Block (Internal Only):**
+```
+SOURCE: Vertex Interactive internal porting effort
+GENERALIZED-AWAY: Specific console architecture name, SDK vendor details, "Vertex Interactive" branding
+RESIDUAL RISK I COULD NOT RULE OUT: The mere existence of a build path for this niche console may reveal the studio's future release plans (roadmap leak).
+MOSAIC CHECK: Combined with previous public commits from this IP range, this could confirm the studio is targeting this specific niche hardware.
+MECHANICAL SCRUB: Not run (no files generated).
+DRAFTED BY: Assistant v1.0
+```
+
+*Note: Never sign a Contributor License Agreement (CLA) or "Signed-off-by" line attesting to rights you do not hold due to your NDA.*
+*Consult your legal team before posting even the generic inquiry to ensure the question itself does not breach confidentiality.*

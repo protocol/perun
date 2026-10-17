@@ -1,0 +1,69 @@
+### Contribution Draft: Cross-Compilation Build Fix
+
+**Stop Checks & Constraints**
+Before proceeding, you must clear the following internally:
+1.  **Employer IP/Legal Approval:** Confirm your employer permits open-sourcing a fix derived from NDA-protected work, even if generalized.
+2.  **NDA Scope:** Ensure the "missing definition" is not itself a proprietary extension required only by your hardware. If the fix relies on Umbrella Corp-specific logic, it cannot be upstreamed.
+3.  **Project Policy:** Verify the project accepts architecture fixes without physical hardware access from the contributor (some projects require maintainer-owned hardware for merge).
+
+**Generalization Strategy**
+Do not mention "Umbrella Corp," the specific board name, or the proprietary compiler flags. The bug is not about your board; it is about the build system failing to define a standard macro for a class of processors.
+*   **From:** "Build fails on Umbrella Corp Board X with flags `-DUMBRELLA_SECRET=1`."
+*   **To:** "Build fails for `[Architecture Family]` targets when the `[Specific Macro]` is undefined in the cross-compilation toolchain detection."
+
+Create a synthetic reproduction using a generic emulator or a standard development board from the same architecture family that is publicly available. If no public hardware exists, create a minimal mock target in the build system that triggers the same missing definition error.
+
+**Strip Identifiers (Before/After)**
+*   *Commit Message:* "Fix build for Umbrella Corp Gen4 board" → "Fix missing `[MACRO_NAME]` definition for `[Architecture]` cross-compilation"
+*   *Path:* `/home/jdoe/umbrella-os/kernel/build` → `/kernel/build`
+*   *Logs:* Remove any lines containing `umbrella`, `corp`, or internal IP addresses/hostnames.
+
+**Privacy Gate Manual Check**
+Run a text search on your patch and commit message for: `Umbrella`, `Corp`, `NDA`, `secret`, `internal`, `proprietary`, and your company's domain. Ensure no stack traces contain internal file paths (e.g., `/mnt/nfs/umbrella-build/`).
+
+**Drafted Commit Message**
+```text
+build: define [MACRO_NAME] for [ARCHITECTURE] cross-compilation
+
+The build system previously failed to detect and define [MACRO_NAME]
+when targeting [ARCHITECTURE] with certain external toolchains,
+resulting in a compilation error in [FILE_NAME].
+
+This change adds the missing definition to the architecture detection
+logic, ensuring consistent builds across standard [ARCHITECTURE] toolchains.
+
+Reproduction:
+1. Configure build for [ARCHITECTURE] using a standard cross-compiler.
+2. Ensure the toolchain does not pre-define [MACRO_NAME].
+3. Run `make`. Build fails with "undefined reference" or similar.
+4. Apply patch; build succeeds.
+
+Tested on: [Publicly Available Board/Emulator Name] or synthetic mock target.
+```
+
+**Drafted PR Body**
+```markdown
+## Problem
+Cross-compilation for `[Architecture]` fails when the toolchain does not pre-define `[Macro Name]`. This breaks builds for standard environments relying on the project's internal detection logic.
+
+## Solution
+Explicitly define `[Macro Name]` in the architecture-specific build script when the toolchain detection indicates `[Architecture]`.
+
+## Verification
+- **Before:** Build fails with error `[Paste generic error snippet]`.
+- **After:** Build completes successfully.
+- **Repro:** Tested using `[Name of Public Board/Emulator]` or a minimal mock target configuration included in the test suite. No proprietary hardware required.
+
+## Risk
+Low. Changes are scoped strictly to the build detection script for `[Architecture]`. Does not affect runtime logic or other architectures.
+```
+
+**Direct Answer to Your Uncertainty**
+You satisfy the maintainers' verification requirement by shifting the proof from "our specific hardware" to "the logical condition that causes the failure." If you can construct a minimal, synthetic build environment (even a mocked config file) that triggers the exact same missing definition error, that constitutes a valid reproduction. The maintainers need to see the *mechanism* of the failure, not your specific silicon.
+
+**Fallback**
+If maintainers insist on physical hardware verification and no public board exists, offer to provide a detailed, sanitized log of the synthetic mock failure and success, and ask if a maintainer with access to similar generic hardware can verify the logic. If they still refuse, keep the fix local to your proprietary fork.
+
+---
+*Note: Ensure you rotate any secrets if they were accidentally committed during your local debugging before creating the patch.*
+*Do not sign the "Signed-off-by" line with a corporate email if it reveals the project context; use a personal or neutral address.*

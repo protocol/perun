@@ -1,0 +1,35 @@
+You should **not** attempt to upstream this specific patch in its current form. Because your performance improvement is inextricably linked to three proprietary authentication modifications that the maintainers have explicitly rejected, the change cannot be generalized into a standalone, upstream-compatible fix without leaking the existence or structural details of your private modules.
+
+Here is the concrete path forward:
+
+1.  **Stop and Isolate:** Do not send any code yet. Your "Stop Check" fails because the change depends on proprietary logic (employer IP) and violates a known project rule (rejection of vendor-specific abstraction layers). Sending this would force you to either reveal proprietary architecture or submit broken code.
+2.  **Analyze the Dependency:** Determine if the 20% throughput gain comes from the *authentication logic itself* (e.g., a faster hash you can't share) or from a *structural change* (e.g., lock contention reduction) that merely happens to be implemented alongside your auth modules.
+    *   If the gain relies on your proprietary auth: Keep the patch internal. It is not upstreamable.
+    *   If the gain is structural: You must rewrite the patch to apply to the vanilla codebase without *any* reference to authentication.
+3.  **Refactor for Generalization:** Create a new branch off the main project's current head. Re-implement the performance fix using only standard, synthetic inputs.
+    *   *Bad:* "Optimizes handshake during custom auth."
+    *   *Good:* "Reduces mutex contention in the connection pool during high-frequency handshakes."
+    *   Ensure the code compiles and passes tests without your private auth modules. If it doesn't compile without them, the fix is not standalone.
+4.  **Draft the Approach (Internal Only):** Once you have a standalone patch, draft a neutral inquiry to the maintainers *before* opening a PR.
+    *   *Subject:* "Question regarding contention optimization in [Module]"
+    *   *Body:* "We observed a bottleneck in [specific generic function] under high contention. We have a local prototype that refactors [specific mechanism] to reduce locking, yielding ~20% improvement in synthetic benchmarks. Is this an area you are accepting changes in, or is there a different architectural direction we should align with?"
+5.  **Hand Off:** Have a human review the standalone patch to ensure no "structural tells" (like function names or flow patterns) inadvertently reveal your proprietary auth system.
+
+**Direct Answer to Your Uncertainty:**
+You cannot refactor the current patch to hide the dependencies while keeping the code functional; if the code *requires* the auth modules to run, it is not a general fix. You must extract the algorithmic improvement and re-implement it cleanly on the public codebase. If the performance gain vanishes when the proprietary auth is removed, the improvement belongs solely to your internal fork and should not be upstreamed.
+
+**Fallback:**
+If the maintainers indicate that the area is frozen or they prefer a different architectural approach (e.g., they are rewriting the broker), accept the feedback, keep your optimization internal, and do not pursue the PR.
+
+**Provenance and Risk Block (For Internal Review Only)**
+```
+SOURCE: Hooli internal fork / message broker
+GENERALIZED-AWAY: Proprietary authentication modules, specific vendor logic, internal benchmark data
+RESIDUAL RISK I COULD NOT RULE OUT: The specific pattern of lock contention reduction might hint at the nature of the proprietary auth load if the internal load profile is unique.
+MOSAIC CHECK: None; this is an isolated performance inquiry.
+MECHANICAL SCRUB: Pending manual review of standalone refactor.
+DRAFTED BY: Assistant
+```
+
+*Note: Never include the Provenance Block in public communications.*
+*Ensure your synthetic benchmarks do not use timing data derived from real customer traffic.*

@@ -1,0 +1,50 @@
+**Deliverable: Unified Branch Workflow & Draft Content**
+
+**Workflow Strategy**
+Do **not** open separate pull requests. Create all documentation updates in the **same branch** as your approved code fix. Since the code change is already approved, adding documentation to the same branch allows the maintainer to merge everything atomically once the docs are verified. Opening separate PRs would fragment the review, delay the merge, and risk the code merging without the required migration warnings, which could break user systems.
+
+**Action Plan**
+1.  **Checkout your existing branch:** `git checkout fix-memory-leak-network-protocol`
+2.  **Create/Edit the files** using the drafts below.
+3.  **Commit separately** for clarity: `git add <file> && git commit -m "docs: add changelog entry for memory leak fix"` (repeat for docs and migration guide).
+4.  **Push:** `git push origin fix-memory-leak-network-protocol`
+5.  **Notify Ravi:** Comment on the PR: "Hi Ravi, I've pushed the changelog, docs, and migration guide updates to this same branch. Please let me know if the tone or technical details need adjustment."
+
+**Draft Content (Fill bracketed placeholders)**
+
+*1. Changelog Entry (`CHANGELOG.md`)*
+```markdown
+## [Version Number] - [Date]
+### Fixed
+- **Critical Memory Leak**: Resolved a memory leak in the network protocol handler occurring during high-frequency packet processing. This fix prevents gradual memory exhaustion in long-running trading sessions.
+  - *Impact*: Eliminates OOM risks under sustained load; no API changes.
+  - *Config*: Requires update to `config.ini` structure (see Migration Guide).
+```
+
+*2. Documentation Site Paragraph (`docs/network-protocol.md`)*
+```markdown
+### Memory Leak Resolution
+A critical memory leak affecting high-frequency trading workloads has been resolved. Previously, sustained packet throughput could cause gradual memory accumulation, leading to potential process termination. The updated protocol handler now correctly releases resources after each transaction cycle. Users upgrading to this version should expect stable memory footprint regardless of session duration. Note that this fix introduces a structural change to the configuration file; please consult the Migration Guide before deploying.
+```
+
+*3. Migration Guide Warning (`MIGRATION.md`)*
+```markdown
+## Upgrading to [Version Number]
+### ⚠️ Breaking Change: Configuration Structure
+This release fixes a critical memory leak but requires a manual update to your configuration file (`config.ini`). The previous structure is no longer supported and will cause the service to fail on startup.
+
+**Action Required:**
+1. Stop the service.
+2. Rename your existing `config.ini` to `config.ini.bak`.
+3. Copy the new default `config.ini` from the installation package.
+4. Migrate your custom settings (e.g., port numbers, API keys) from the backup to the new file manually.
+5. Restart the service.
+
+*Failure to update the configuration structure will result in immediate startup failure.*
+```
+
+**Addressing Your Uncertainty**
+You should absolutely keep these in the same branch. In mature projects, "documentation as code" is standard; splitting them creates unnecessary coordination overhead. Regarding tone and style: since no template exists, mimic the existing `CHANGELOG.md` syntax exactly and use clear, imperative language for the migration guide (as drafted above). Ravi can easily edit text files if the style isn't perfect, but they cannot merge code without the safety warnings.
+
+**Note:** Ensure you do not include any internal company paths or specific trading firm names in these public documents.
+**Note:** If Ravi requested specific file paths not listed here, ask for clarification before committing.

@@ -1,0 +1,67 @@
+**Immediate Action Plan: Secure Disclosure and Sanitized Contribution**
+
+**1. Private Disclosure (Do This First)**
+Do not open a public issue or PR yet. Security flaws require private coordination to prevent exploitation before a fix is ready.
+*   **Locate the Security Channel:** Check the RiverLog repository for a `SECURITY.md` file, a "Security" tab on GitHub, or a maintainer email listed in `OWNERS`. If none exist, look for a PGP key in the project documentation.
+*   **Draft the Private Report:** Send a concise email or encrypted message containing:
+    *   **Summary:** "Critical information leakage in debug mode: sensitive environment variables (API keys, DB passwords) written to `debug.log` in plain text."
+    *   **Impact:** High severity; allows local privilege escalation or credential theft if log files are accessible.
+    *   **Sanitized Proof:** Do **not** attach your screenshots. Instead, provide a minimal Go code snippet (see below) that reproduces the behavior with fake data.
+    *   **Request:** Ask for a private channel to share the full technical details or a timeline for a patch.
+
+**2. Constructing the Sanitized Reproduction Script**
+Create a file named `repro_leak.go` in a temporary directory. This script must trigger the bug using synthetic data, proving the flaw without exposing Acme's infrastructure.
+
+```go
+package main
+
+import (
+	"os"
+	"github.com/riverlog/riverlog" // Replace with actual import path
+)
+
+func main() {
+	// Set fake credentials strictly for reproduction
+	os.Setenv("API_KEY", "FAKE_KEY_12345_NOT_REAL")
+	os.Setenv("DB_PASSWORD", "super_secret_fake_password")
+
+	// Initialize logger with verbose/debug level to trigger the bug
+	logger := riverlog.New(os.Stderr)
+	logger.SetLevel(riverlog.LevelDebug)
+
+	// Trigger the logging action that leaks the env vars
+	logger.Info("Starting application")
+	// The bug causes the above line (or internal init) to write
+	// the real env vars to debug.log instead of masking them.
+}
+```
+*   **Verification:** Run this locally. If `debug.log` contains `FAKE_KEY_12345_NOT_REAL`, you have proven the mechanism. Include this output in your private report.
+
+**3. Preparing the Public Pull Request (After Maintainer Acknowledgement)**
+Once the maintainers acknowledge the issue and agree on a fix strategy:
+*   **The Fix:** Modify the logging library code to explicitly filter or mask known sensitive environment variable patterns (e.g., `*KEY*`, `*PASSWORD*`, `*SECRET*`) before writing to disk.
+*   **The Commit Message:**
+    ```text
+    fix: prevent sensitive env vars from leaking in debug logs
+
+    When logging level is set to Debug/Verbose, the logger previously
+    wrote all environment variables to debug.log in plain text. This
+    change implements a allowlist/mask filter for common sensitive
+    variable patterns (API_KEY, DB_PASSWORD, etc.).
+
+    Fixes security issue reported privately on [Date].
+    ```
+*   **The PR Body:**
+    *   **Problem:** Debug mode leaks sensitive configuration data to local storage.
+    *   **Solution:** Implemented sanitization logic to mask values matching sensitive patterns.
+    *   **Testing:** "Verified using synthetic credentials that masked output appears in logs. Original reproduction script now outputs `[REDACTED]` instead of plain text."
+    *   **Risk:** Low; only affects debug output formatting.
+
+**Addressing Your Uncertainty**
+You do not need to prove the severity with real data; the *mechanism* of leakage is the severity. Showing that *any* string assigned to an environment variable appears unmasked in the log file is sufficient proof. Maintainers care that the pipe is broken, not what specific water flowed through it.
+
+**Fallback Strategy**
+If the maintainers do not respond within 48 hours to a direct security email, check if the project has a listed security contact on their website or documentation outside the repo. If still silent, and the risk is critical, you may need to coordinate with your internal security team at Acme to decide whether to disclose via a national CERT or similar body, but do not publish the exploit details publicly yourself.
+
+*Note: Ensure your internal legal team at Acme approves this disclosure if company time/resources were used to find the bug.*
+*Never commit the actual screenshots or real logs to any branch, even private ones.*

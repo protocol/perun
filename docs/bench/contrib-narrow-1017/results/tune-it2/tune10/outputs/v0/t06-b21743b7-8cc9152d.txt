@@ -1,0 +1,15 @@
+Do not contribute this change to the main repository in its current form. Adding build logic that depends on a private, non-redistributable SDK violates the fundamental principle of reproducible builds required by almost all major open-source projects. If merged, your changes would break the build for every other contributor and CI system that lacks access to your specific licensed SDK, effectively halting development for the community.
+
+Instead, structure your work as follows:
+
+1.  **Maintain a Fork:** Keep your modified build scripts and integration logic in your own private or public fork. This allows your studio to maintain the port without imposing broken dependencies on the upstream project.
+2.  **Abstract the Interface (If Possible):** Refactor your changes to introduce generic abstraction layers (e.g., a `PlatformConsoleX` interface) within the engine's existing hardware abstraction layer. Ensure the core engine code only interacts with these abstract interfaces, not the specific SDK headers directly.
+3.  **Submit Upstream-Ready Abstractions Only:** If your refactoring successfully decouples the engine from the specific SDK binaries, you may contribute *only* the abstract interface definitions and the build system hooks that allow optional platform targets. Do not include the actual implementation that links to the private SDK.
+4.  **Document Externally:** Write a detailed guide on how to integrate the private SDK using your fork. Share this documentation via a blog post, wiki, or separate repository. You can then propose a documentation-only PR to the main repo linking to your external guide as an "Unofficial Porting Guide," clearly stating it requires a separate commercial license.
+
+Regarding conditional compilation flags: Do not add flags that enable code paths requiring non-public headers. This creates "dead code" in the eyes of the CI system (which cannot compile it) and technical debt for maintainers who cannot test or verify the logic. Most maintainers will reject such PRs immediately to preserve build integrity.
+
+Your contribution is valuable to your studio, but for the open-source community, the value lies in the architectural abstraction, not the proprietary integration itself.
+
+Note: This approach respects your NDA while adhering to open-source collaboration standards.
+Always verify specific project contribution guidelines before preparing any pull request.

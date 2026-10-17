@@ -1,0 +1,29 @@
+You must not share the screenshots containing live credentials under any circumstances. Your immediate priority is to contain the leak within your own organization. Rotate every API key and database password exposed in those logs immediately, treat them as compromised, and audit your staging server for unauthorized access.
+
+To report this flaw without leaking private data, follow this procedure:
+
+**1. Private Disclosure First**
+Do not open a public issue or pull request yet. Locate the maintainers' security contact (often `SECURITY.md`, a `security@` email address, or a private vulnerability reporting feature on their repository host). Send a private report containing:
+*   A high-level summary: "RiverLog writes sensitive environment variables to `debug.log` in verbose mode."
+*   The specific code paths causing the leak (file names and line numbers), which you can share as they are public code.
+*   A statement confirming you have verified this behavior but cannot share raw logs due to contained secrets.
+*   Offer to provide a sanitized reproduction script upon establishing a secure channel.
+
+**2. Constructing a Sanitized Reproduction Script**
+Create a minimal Go program that uses RiverLog exactly as your application does, but with **fake data**.
+*   Set up fake environment variables (e.g., `DB_PASSWORD=fake_secret_123`, `API_KEY=fake_key_456`).
+*   Configure the logger to verbose mode.
+*   Trigger an error condition.
+*   Read the generated `debug.log` and print its contents to the console or include it in your report.
+This script proves the *mechanism* of the leak without revealing any actual Acme Corp infrastructure details. The maintainers can run this script locally to verify the bug instantly.
+
+**3. Preparing the Public Fix**
+Once the maintainers acknowledge your private report:
+*   Draft a pull request that modifies the logging logic to explicitly filter or redact sensitive keys (like `PASSWORD`, `SECRET`, `KEY`, `TOKEN`) before writing to disk.
+*   Include your sanitized reproduction script in the test suite to prevent regression.
+*   In the PR description, describe the vulnerability class ("improper logging of sensitive environment variables") and the fix. Do not mention Acme Corp, your specific server setup, or the fact that real credentials were leaked. State only that the behavior was verified using synthetic data.
+
+This approach allows you to responsibly disclose the vulnerability, provide undeniable proof of concept, and contribute a fix while strictly adhering to your internal security protocols and protecting your company's private data.
+
+Note: If no private contact method exists, attempt to message maintainers directly via verified channels to request one before posting anything public.
+Ensure your reproduction script is self-contained and requires no external network access or private files to run.

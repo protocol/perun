@@ -1,0 +1,25 @@
+### Deliverable: Safe Submission Strategy
+
+To submit this fix without leaking confidential financial information, you must replace the real log line with a **synthetic, minimal reproduction case** that triggers the identical parsing state. Follow these steps:
+
+1.  **Abstract the Input Structure**: Analyze the real log line to identify only the structural elements required to trigger the panic (e.g., specific nesting depth, escape sequence placement, or integer overflow boundary). Discard all semantic data (account numbers, transaction IDs, partner names).
+2.  **Construct Synthetic Data**: Create a new JSON string using invented values that mimic the *structure* but contain no real-world correlation.
+    *   *Instead of*: `"account": "MASKED-12345-REAL-ID"`
+    *   *Use*: `"account": "0000000000"` or `"account": "X"`
+    *   Ensure the synthetic input is the smallest possible string that still causes the panic in the unpatched version.
+3.  **Validate the Reproduction**: Run your fix against this synthetic input. Confirm that:
+    *   The unpatched crate panics on this synthetic input.
+    *   The patched crate returns a graceful error on this same input.
+    *   No part of the synthetic input resembles the real partner data.
+4.  **Draft the Commit and PR**:
+    *   **Commit Message**: "Fix panic in JSON parser when handling malformed nested structures. Adds regression test with synthetic input."
+    *   **PR Body**: Describe the class of error (e.g., "unexpected end of input within a string literal") rather than the specific business context. State clearly: "The included test uses a synthesized input designed to reproduce the parsing state; no real-world data was used."
+5.  **Internal Clearance**: Before opening the PR, ensure your employer's legal or IP team approves the contribution, as you are submitting code derived from internal incident analysis.
+
+**Direct Answer to Your Uncertainty**: You do not need the real data structure to prove the bug. Parsers fail based on *syntax* and *state transitions*, not the semantic meaning of the data. If your synthetic input forces the parser into the same invalid state (e.g., expecting a digit but finding a closing brace), it is a valid regression test.
+
+**Fallback**: If maintainers request the original input for verification, politely decline citing privacy agreements and offer to demonstrate the panic live via a screen share or provide a binary reproduction tool that generates the synthetic case internally.
+
+---
+*Note: Ensure your git configuration uses a personal email address, not your corporate one, to avoid leaking employer domain details in the commit metadata.*
+*Remember: The human must perform the final privacy check and open the PR; this draft is for your review only.*

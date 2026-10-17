@@ -1,0 +1,26 @@
+Do not contribute this fix upstream yet. The lesson you have learned is currently **project-specific** and contains **unresolved privacy risks** that prevent it from meeting the generalization and safety gates required for public contribution.
+
+Here is the correct path forward:
+
+1.  **Imprint Locally, Do Not Contribute Upstream:** The crash fix for `.acme3d` parsing and the specific handling of Northwind Logistics' data structure is a **project-specific quirk**, not a universal defect in the VertexEdit codebase itself. According to contribution guidelines, specific client integrations belong in your local fork's `AGENTS.md` or internal documentation (Phase 6: Imprint), not in the public skillset or main repository. Contributing client-specific parsing logic upstream violates the "Generality Gate."
+
+2.  **Never Commit Confidential Data:** You must **never** commit the real sample files, even if you attempt to scrub them. Paraphrased facts (like specific asset identifiers or layout structures derived from the client's warehouse) are semantic leaks that pattern-matching tools cannot catch. Only a human with full context can authorize such a release, and in this case, the legal contract likely forbids it entirely.
+
+3.  **Synthetic Data is the Only Valid Path for Upstream Tests:** If the parsing bug reveals a **general** flaw in how VertexEdit handles malformed headers or edge cases in *any* binary format (not just `.acme3d`), you may contribute a fix for that underlying principle. To do so:
+    *   Create **synthetic dummy files** that reproduce the crash (e.g., a file with the specific header byte sequence that triggers error 0x992) but contain **zero** real client data.
+    *   Ensure these synthetic files are mathematically generated or manually crafted to isolate the bug without referencing Northwind's specific assets.
+    *   The test case must prove the *class* of error is fixed, not that the *client's* file works.
+
+4.  **PR Structure (If a General Principle Exists):** If you isolate a general parsing vulnerability:
+    *   **Title:** "Fix heap overflow in binary header parsing (Error 0x992)" (Generic, no client names).
+    *   **Body:** Describe the technical root cause (e.g., "missing bounds check on header length"). State: "Test case added using synthetic binary blob reproducing the overflow condition."
+    *   **Provenance Block:** You must include a risk statement for the human reviewer:
+        ```
+        SOURCE: Internal fork handling proprietary .acme3d imports.
+        GENERALIZED-AWAY: All Northwind Logistics data, specific asset IDs, and warehouse layout structures.
+        RESIDUAL RISK: NONE. The test case uses a manually crafted 12-byte synthetic header with no relation to client data.
+        MOSAIC CHECK: NONE. This is an isolated parsing fix.
+        MECHANICAL SCRUB: Passed (no PII detected).
+        ```
+
+**Immediate Action:** Stop preparing an upstream PR for the specific `.acme3d` support. Instead, fix the crash in your private fork using the client's files, document the solution internally for your team, and only consider upstreaming a fix if you can reproduce the crash with a completely synthetic, non-confidential file that demonstrates a universal bug in VertexEdit's core parsing logic.

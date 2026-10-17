@@ -1,0 +1,26 @@
+**Immediate Guidance:** Do not submit the client's files or any data derived directly from them. You must generate **synthetic dummy files** that reproduce the parsing logic failure without containing any real-world layout data, asset identifiers, or proprietary content from Northwind Logistics. Open-source licenses and community standards generally forbid including confidential third-party data in public repositories. The test case must verify the *parser's robustness* against the specific structural pattern causing error `0x992`, not the specific content of the client's warehouse.
+
+**Action Plan:**
+
+1.  **Isolate the Structural Defect:** Analyze *why* error `0x992` occurs. Is it a specific header byte sequence, an unexpected chunk size, a malformed index table, or a missing terminator? Identify the minimal structural condition that triggers the crash.
+2.  **Generate Synthetic Input:** Write a small, local script (do not commit this script unless it uses only standard libraries and generates purely random/fake data) to create a `.acme3d` file.
+    *   **Bad:** Copying the Northwind file and deleting sensitive strings (residual data often remains in binary structures).
+    *   **Good:** Constructing a file byte-by-byte or using a generator that creates valid headers but inserts the specific "poison" structure that triggers `0x992`. Use placeholder values like `ASSET_001` or coordinates `(0,0,0)` instead of real warehouse dimensions.
+3.  **Verify the Fix Locally:** Ensure your synthetic file crashes the *unpatched* version of VertexEdit and imports successfully with your *patched* version.
+4.  **Commit the Synthetic File:** Add this generated file to the `tests/data/` directory (or project equivalent). It is now a safe, reproducible test case owned by the project, not the client.
+5.  **Draft the Pull Request:**
+    *   **Title:** `fix: Prevent crash (error 0x992) when parsing malformed .acme3d chunk headers`
+    *   **Description:**
+        *   **Problem:** Importing `.acme3d` files with specific malformed chunk structures causes an immediate crash (error `0x992`).
+        *   **Solution:** Added bounds checking/validation logic to the parser to gracefully handle this edge case.
+        *   **Testing:** Included `tests/data/malformed_acme3d_crash_0x992.acme3d`. This is a synthetic file constructed to reproduce the specific structural defect. It contains no real-world data.
+        *   **Verification:** "Fails before (crash), passes after (graceful error handling)."
+
+**Addressing Your Uncertainty:**
+You asked whether to use synthetic files or a secure reference. **You must use synthetic files.** There is no standard "secure way" to reference confidential client files in a public open-source test suite; doing so would require external private hosting which breaks the reproducibility requirement for most CI/CD pipelines and violates the principle of self-contained repositories. Maintainers expect contributors to sanitize data. A synthetic file that triggers the exact same code path is legally safe and technically sufficient.
+
+**Fallback Strategy:**
+If maintainers reject the synthetic file claiming it doesn't prove the fix works on "real" data, respond politely: *"The synthetic file reproduces the exact memory access violation/exception path identified in the bug. The internal data payload of the original file is irrelevant to the parser's structural validation logic. If the project requires testing against specific proprietary real-world corpora, that testing must occur in a private fork or via a confidential channel established by the maintainers, as I cannot legally share the Northwind assets."*
+
+**Note:** Before opening the PR, ensure your employer's IP policy allows contributing this specific fix (the logic, not the data) upstream.
+**Note:** Never include your corporate email or hostname in the commit metadata; configure git locally to use a personal or generic address before committing.

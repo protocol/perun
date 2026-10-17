@@ -1,0 +1,35 @@
+Do not include the real patient file, any derivative containing actual PHI, or a description detailed enough to reconstruct the specific patient's data. Instead, proceed with the following three-step approach to satisfy reproducibility requirements without violating privacy:
+
+1.  **Generate a Synthetic, Deterministic Test Fixture**
+    Create a small, synthetic file (e.g., `test_large_unicode_overflow.dat`) that you generate via a script included in the PR. This script should:
+    *   Construct a buffer larger than 50MB using repeated patterns of the specific Unicode sequences that trigger the overflow.
+    *   Use entirely fake data (e.g., "Patient Name: [Redacted]", "ID: 000000").
+    *   Be committed to the repository as a binary asset or generated on-the-fly during the test suite run.
+    *   **Crucially:** Ensure this synthetic file triggers the *exact same* crash (buffer overflow) as the real file. If the crash requires a specific byte-offset alignment found in the real note, hardcode that alignment pattern into the generator, not the real data itself.
+
+2.  **Add a Regression Test to the Suite**
+    Write a C test case (using the project's existing testing framework, e.g., `check`, `cmocka`, or `gtest`) that:
+    *   Invokes the parser on your synthetic fixture.
+    *   Asserts that the process exits cleanly (no crash) with your patch applied.
+    *   Asserts that the process crashes (or returns the specific error code) when the patch is reverted.
+    *   This provides the "reproducible test case" the guidelines demand, automated within CI.
+
+3.  **Draft the PR Description with Explicit Privacy Disclosure**
+    In your PR body, add a dedicated section explaining the situation transparently. Use this template:
+
+    ```markdown
+    ## Reproducibility & Privacy Note
+    The original crash was identified using a real-world file containing Protected Health Information (PHI) which cannot be shared due to HIPAA/privacy regulations.
+
+    To satisfy the requirement for a reproducible test case without leaking private data:
+    1. I have included `scripts/generate_test_fixture.c` which deterministically creates a 50MB+ file mimicking the specific Unicode byte-patterns that trigger the overflow.
+    2. The new test `test_unicode_buffer_overflow_large_file` uses this synthetic fixture to verify the fix.
+    3. The synthetic file reproduces the exact same `buffer overflow detected` abort at the same code path as the original incident.
+
+    Maintainers can verify the crash behavior by running `make test-large-file` on the unpatched branch.
+    ```
+
+This approach respects the contribution guidelines by providing an automated, reproducible failure mode while strictly adhering to privacy laws. Maintainers generally accept synthetic fixtures when real data is sensitive, provided the synthetic data reliably triggers the same bug.
+
+*Note: Ensure your synthetic generator does not accidentally embed any substrings from the real medical note.*
+*Note: If the project maintainers reject synthetic data, offer to demonstrate the crash via a live screen-share session instead of sending files.*

@@ -1,0 +1,23 @@
+You must **create a synthetic test file** that mimics the structural pattern of the bug without containing any real patient data. Do not describe the pattern in detail without a file, as maintainers of a two-million-line C project will likely reject a report they cannot reproduce locally. A "buffer overflow" claim without a failing test case is often treated as hypothetical or unmergeable.
+
+Here is your step-by-step plan to proceed safely:
+
+1.  **Stop and Verify Internal Rules**: Before drafting anything, confirm with your employer's legal or compliance team that you are authorized to submit this fix upstream. Ensure you are not violating any internal IP policies regarding code written during work hours.
+2.  **Generalize the Input**: Analyze the medical note to identify the *structural* trigger (e.g., a specific sequence of multi-byte Unicode characters at a specific offset relative to a 50MB boundary). Create a new, small file (under 100KB if possible, or exactly 50MB+ if size is the strict trigger) filled with synthetic data.
+    *   Replace "John Doe" with "Patient A".
+    *   Replace specific dates with generic placeholders like `2023-01-01`.
+    *   Use a script to generate the required volume of padding data using repeated, non-sensitive characters, inserting the specific Unicode corruption sequence at the exact offset that triggers the bug.
+3.  **Strip Identifiers**: Ensure the synthetic file contains zero references to "Northwind Health," real names, real dates of birth, or medical record numbers. The file should look like random noise with a specific structural anomaly.
+4.  **Draft the Commit and PR**:
+    *   **Commit Message**: `fix(parser): resolve buffer overflow on large files with specific Unicode sequences`
+    *   **PR Title**: `Fix buffer overflow in parsing module for files >50MB with specific Unicode patterns`
+    *   **PR Body Section (Test Case)**: "Added `test_unicode_overflow_large_file.c` which generates a synthetic 50MB+ buffer containing the specific Unicode sequence that triggers the overflow. This replaces the original private medical record which cannot be shared due to HIPAA/privacy regulations. The synthetic file reproduces the crash deterministically on the unpatched version and passes on the patched version."
+5.  **Run a Local Privacy Gate**: Before finalizing, scan your patch and the new test file. Ensure no comments in the code reference the original hospital, the specific patient, or the internal ticket number (e.g., remove `// Fix for Northwind ticket #1234`).
+6.  **Hand Off to Human**: Do not push this yourself. Present the draft patch, the synthetic test file, and the PR text to your internal reviewer. They must sign off on the "Residual Risk" (confirming the synthetic file truly leaks no information via structure) before you open the PR.
+
+**Direct Answer to Your Uncertainty**: Choose the synthetic file. Maintainers need to run `make test` or a specific reproduction script; a text description forces them to guess the exact byte sequence, which delays the fix and increases the chance of rejection.
+
+**Fallback**: If maintainers argue the synthetic file doesn't perfectly match the production environment, offer to run their specific debugging commands on your private data locally and share only the *output logs* (sanitized of PII) or a stack trace with memory addresses randomized, but insist the public repo only holds the synthetic reproducer.
+
+**Note**: Never include the original file in any attachment, even in a private email to maintainers, unless a secure, encrypted channel explicitly approved by both legal teams is established.
+**Note**: If the bug relies on specific content semantics (e.g., a specific word) rather than byte structure, replace that word with a nonsense token in the synthetic file that preserves the byte length and encoding properties.

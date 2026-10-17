@@ -1,0 +1,19 @@
+Do not anonymize the heap dump or include any part of it in your contribution. Even sanitized filenames can be considered private data under strict project policies, and the risk of accidental leakage is unnecessary. Instead, construct a **synthetic, deterministic test case** that replicates the memory allocation pattern without using any production data.
+
+Here is your strategy:
+
+1.  **Abstract the Allocation Pattern**: Identify the specific conditions triggering the leak (e.g., "scaling an image where width % 4 != 0" or "resizing to a dimension larger than the internal buffer"). You do not need real filenames to trigger this; you only need specific image dimensions and formats.
+2.  **Generate Synthetic Assets**: Write a small, local script (using Python/PIL, ImageMagick, or even raw byte manipulation) to generate a tiny dummy image (e.g., 1x1 pixel or a solid color block) that matches the *dimensions* and *format* required to reproduce the bug. Name this file generically, such as `test_leak_trigger.png`.
+3.  **Create a Minimal C Test Harness**: Write a C test file (compatible with the project's existing test framework, likely `cmocka`, `gtest`, or a custom runner) that:
+    *   Loads your synthetic image.
+    *   Calls the specific resizing function with the parameters that cause the leak.
+    *   Uses the project's existing memory tracking macros (or `valgrind`/`AddressSanitizer` if standard in their CI) to assert that memory is not freed.
+4.  **Describe the Bug Abstractly**: In your PR description and any linked issue, describe the trigger condition logically (e.g., "Leak occurs when `scale_factor` > 1.5 and input width is odd") rather than referencing your production environment.
+5.  **Submit the Fix and Test Together**: Your PR should contain:
+    *   The code fix (the missing `free()` call).
+    *   The new test file (the synthetic image).
+    *   The new test code (which fails on `main` and passes with your fix).
+
+This approach provides the maintainers with a reproducible, zero-risk way to verify the bug and the fix. It demonstrates respect for their privacy rules while providing the concrete evidence they need to merge your contribution quickly.
+
+Note: Ensure your synthetic image is small (<1KB) to keep the repository size minimal. If the project uses Valgrind in CI, explicitly mention in your PR description that the new test fails under Valgrind on the base branch.

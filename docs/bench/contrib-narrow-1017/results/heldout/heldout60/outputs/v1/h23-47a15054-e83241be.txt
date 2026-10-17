@@ -1,0 +1,65 @@
+Here is a synthetic test case design that reproduces the daylight saving time (DST) shift bug without using any proprietary data. This example uses a generic "Project Sync" event with fake dates and standard recurrence rules that trigger the same edge case.
+
+### Synthetic Test Case: `dst-recurrence-shift.test.js`
+
+```javascript
+import { RecurringEvent, TimeZone } from '../src/core';
+import { expect } from 'chai';
+
+describe('RecurringEvent DST Boundary', () => {
+  it('should maintain consistent local time when crossing DST spring-forward boundary', () => {
+    // Arrange: Generic weekly event in a region with DST (e.g., America/New_York)
+    // Fake data: "Team Sync" every Monday at 09:00 AM, starting before DST starts
+    const timeZone = new TimeZone('America/New_York');
+    const startDate = '2023-03-06T09:00:00'; // Monday, March 6, 2023 (Before DST)
+    const recurrenceRule = 'FREQ=WEEKLY;BYDAY=MO'; // Standard weekly rule
+
+    const event = new RecurringEvent({
+      title: 'Generic Weekly Sync',
+      start: startDate,
+      timeZone: timeZone,
+      rrule: recurrenceRule
+    });
+
+    // Act: Generate occurrences spanning the DST transition (March 12, 2023 in US)
+    const occurrences = event.getOccurrences({
+      start: '2023-03-06T00:00:00',
+      end: '2023-03-20T00:00:00'
+    });
+
+    // Assert: All occurrences must remain at 09:00 AM local time
+    // Bug manifestation: The post-DST occurrence shifts to 10:00 AM or 08:00 AM
+    expect(occurrences[0].localTime).to.equal('09:00'); // March 6 (Pre-DST)
+    expect(occurrences[1].localTime).to.equal('09:00'); // March 13 (Post-DST) - This likely fails currently
+
+    // Additional check: Ensure UTC offset changed correctly while local time stayed constant
+    expect(occurrences[0].utcOffset).to.equal(-5); // EST
+    expect(occurrences[1].utcOffset).to.equal(-4); // EDT
+  });
+});
+```
+
+### Key Generalizations Applied
+1.  **Removed Identifiers**: Replaced "Acme Industries" and "Standup" with "Generic Weekly Sync."
+2.  **Synthetic Dates**: Used March 2023 (a known DST transition period in the US) instead of your company's specific meeting dates.
+3.  **Generic Rules**: Swapped your complex internal recurrence rule for a standard `FREQ=WEEKLY;BYDAY=MO`, which is sufficient to trigger the logic error in most libraries.
+4.  **No Employee Data**: Zero participant lists or meeting IDs are included.
+
+### Commit Message Draft
+```text
+fix: correct recurring event time shift across DST boundaries
+
+Adds a failing test case where a weekly event crossing the spring-forward
+DST boundary incorrectly shifts local time by one hour. The fix ensures
+the event maintains the intended local time while adjusting the UTC offset.
+
+Tested with synthetic dates in America/New_York timezone.
+```
+
+### Direct Answer to Your Uncertainty
+You do not need complex, proprietary recurrence rules to trigger this bug. The error almost certainly lies in how the library applies the UTC offset *after* calculating the next occurrence interval. A simple `WEEKLY` rule crossing the specific date when clocks spring forward (or fall back) is sufficient to reproduce the one-hour drift. The complexity of your internal rule was likely coincidental to the timing of the event, not the root cause of the calculation error.
+
+### Fallback Strategy
+If the maintainers request a more complex rule to verify the fix, generate a synthetic `FREQ=MONTHLY;BYDAY=2TU` (second Tuesday of every month) using fake dates. Do not revert to real company data; instead, explain that the logic error is fundamental to the offset application and independent of rule complexity.
+
+**Note**: Before submitting, run the project's specific privacy gate script if available to ensure no residual metadata exists in the test file. Ensure you have employer approval to contribute this fix, as it derives from internal work.

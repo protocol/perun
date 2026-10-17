@@ -1,0 +1,38 @@
+**Deliverable: Recommended Action Plan**
+
+Do not manually port the code yet. The most efficient and rule-compliant path is to formally request the maintainers apply the bot label to the existing fix. Manual porting risks creating a duplicate PR, which violates the "duplicate open PR or issue" stop check, and may confuse the project history if the bot later runs on the original commit.
+
+**Step 1: Verify Stop Checks**
+Before acting, confirm there is no active PR already requesting this cherry-pick. Check the project's security policy; if this bug exposes user locations (spatial data), it might require a private disclosure channel rather than a public issue comment. Ensure your employer (TerraView) has cleared you to disclose that "zooming causes markers to disappear," as this specific behavior might reveal internal usage patterns.
+
+**Step 2: Draft the Request to Maintainers**
+Post a comment on the original fixed commit or open a new issue (if no issue exists) linking to that commit. Use this template to maximize clarity and speed:
+
+> **Title:** Request to cherry-pick fix for marker disappearance on zoom to main branch
+>
+> **Body:**
+> The fix for [Issue #XYZ if known, otherwise describe: "markers disappearing during zoom"] exists in commit `<old-commit-hash>` on the `<legacy-branch-name>` branch.
+>
+> This bug affects the latest release used in new deployments. The automated cherry-pick bot requires the `<required-label-name>` label and a trigger comment to port this to `main`.
+>
+> Could a maintainer please apply the label or trigger the bot?
+>
+> **Verification:**
+> - Fix verified in `<legacy-branch-name>`: Yes
+> - Reproducible on `main`: Yes (markers vanish on zoom level change)
+> - Duplicate PR check: None found
+
+**Step 3: Handling Silence or Bot Failure**
+If the maintainers do not respond within two weeks, send one polite follow-up asking if there is a different venue to raise this. If the bot fails to execute after the label is applied:
+1.  Check the CI logs for the bot's run to see if it failed due to a merge conflict.
+2.  If a conflict exists, *then* you should manually port the change. Create a new branch, cherry-pick the commit locally, resolve conflicts, and open a new PR.
+3.  In the new PR description, explicitly state: "Manual port of `<old-commit-hash>` requested on `<date>`; bot failed due to merge conflicts."
+
+**Direct Answer to Your Uncertainty**
+You should **not** open a manual PR immediately. Opening a duplicate PR before the bot has a chance to run (or before maintainers reject the bot request) creates noise and violates the project's workflow rules. Only manual porting is appropriate if the bot fails technically (e.g., merge conflicts) or if maintainers explicitly tell you to proceed manually.
+
+**Fallback Strategy**
+If the maintainers remain silent indefinitely and the bug is critical to your operations, your fallback is to maintain a private patch in your TerraView fork. Do not force a public contribution if the project is unresponsive; simply apply the fix locally to your deployment pipeline.
+
+**Note:** Ensure no internal TerraView project names or client-specific map coordinates appear in your public request.
+**Note:** Never attempt to apply the label yourself if the project rules state only maintainers can do so.

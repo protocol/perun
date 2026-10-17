@@ -1,0 +1,19 @@
+Do not share the sanitized OmniCorp production log, even with identifiers removed. Query patterns, table schemas, and timing distributions constitute a "mosaic leak" that can reveal proprietary business logic, usage volumes, and operational strategy. Pattern-matching scrubs often fail to catch these semantic leaks, and once shared, the data cannot be recalled.
+
+Instead, adopt one of the following safe approaches to satisfy the maintainers:
+
+1.  **Synthetic Workload Generation (Preferred):** Create a synthetic dataset that mimics the *statistical properties* of your workload without reproducing the actual data. You do not need to perfectly replicate the complexity. Focus on reproducing the specific stressor your optimization addresses:
+    *   Generate a schema with similar table widths and index structures.
+    *   Script a bulk-insert pattern that creates comparable lock contention (e.g., similar batch sizes, concurrency levels, and key distribution).
+    *   Document the generation script in your PR. This ensures reproducibility without exposing proprietary logic. Maintainers care about the *mechanism* of improvement (reduced contention), not the specific business data.
+
+2.  **Methodology + Aggregated Results:** If synthetic data proves too difficult to calibrate, provide a rigorous description of your benchmark methodology and share only high-level, aggregated results.
+    *   **Detail the Setup:** Specify hardware, database version, configuration flags, concurrency settings, and batch sizes.
+    *   **Describe the Load:** Characterize the load abstractly (e.g., "high-concurrency bulk inserts with hot-key distribution") rather than showing the queries.
+    *   **Share Metrics:** Provide throughput (ops/sec), latency percentiles, and lock wait time comparisons.
+    *   **Offer Private Verification:** Propose that a maintainer with a Non-Disclosure Agreement (NDA) can run the benchmark against your private dataset to verify the claims, while the public PR contains only the methodology and aggregated numbers.
+
+**Recommendation:** Prioritize the **Synthetic Workload** approach. It satisfies the requirement for reproducible benchmarks while completely decoupling the performance proof from your employer's sensitive operational data. If you must use the real data for final validation, keep that execution private and share only the resulting aggregate numbers publicly.
+
+Note: Never attempt to "scrub" the real log yourself; the risk of leaking structural secrets is too high.
+Note: Frame your PR to highlight the reduction in lock contention as the universal principle, not the specific OmniCorp data.

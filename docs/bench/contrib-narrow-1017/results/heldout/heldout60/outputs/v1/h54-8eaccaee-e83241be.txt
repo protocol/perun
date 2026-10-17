@@ -1,0 +1,26 @@
+### Stop Checks and Strategy
+Before drafting anything, you must clear three critical barriers:
+1.  **Security Protocol:** Do not file a public issue or PR for a remote code execution (RCE) flaw. Most projects require reporting these via a private security channel first. Sending this publicly could expose clients to attacks before a fix is ready.
+2.  **Maintainer Stance:** The maintainers explicitly discourage legacy contributions. Pushing a PR immediately without consensus may result in it being closed without review.
+3.  **Employer Approval:** Ensure your legal team approves releasing a security patch derived from internal work, even if generalized.
+
+### Generalized Proposal Draft
+**Subject:** Private Security Report: RCE via Malformed Header in LTS Branch [Version X]
+
+**Body:**
+"We have identified a critical remote code execution vulnerability in the LTS branch affecting header parsing. While we understand the project's preference for users to upgrade, we recognize that specific hardware constraints in the wider community (particularly in embedded or legacy industrial sectors) make immediate migration impossible for many deployments.
+
+We have developed a minimal patch that resolves the memory safety issue without altering the public API or introducing new features. This fix is strictly a safety backport.
+
+Given the severity of RCE and the known inability of a significant segment of the user base to upgrade immediately, would the security team be open to reviewing a private backport patch? We can provide a reproducible test case using synthetic data that demonstrates the flaw and the fix, ensuring no proprietary configurations are exposed. If a formal backport is not feasible, could we discuss a mechanism to publish a security advisory warning users of the risk while we explore community-supported mitigation strategies?"
+
+### Addressing Your Specific Uncertainty
+You asked how to justify the effort without revealing client configurations. **Do not mention your clients at all.** Instead, frame the justification around "embedded systems," "industrial hardware," or "legacy infrastructure" as a general class of users. This is a known, public reality for many LTS software projects. By stating that "a significant segment of the user base" cannot upgrade due to "hardware constraints," you highlight a community-wide problem rather than a specific client's secret environment. The maintainers care about the *class* of affected users, not the identity of your specific customers.
+
+### Fallback Plan
+If the maintainers refuse to accept the patch or issue an advisory:
+1.  Publish a generic security advisory on your own company blog (after legal review) warning that "Version X is susceptible to RCE via malformed headers" without releasing the exploit code.
+2.  Maintain the patch privately for your clients, ensuring you have a process to re-base it if the upstream eventually releases a fix for newer versions that can be adapted.
+
+**Note:** Never attach the actual patch or a real stack trace to the initial email; wait for the security team's response.
+**Note:** Ensure your "synthetic data" test case is created from scratch and contains zero bytes from your production logs.

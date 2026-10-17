@@ -1,0 +1,44 @@
+### Strategic Rollout Plan for Upstreaming Patches
+
+Do not open twenty pull requests at once. Instead, execute a phased triage and submission strategy over several months to respect maintainer bandwidth and ensure quality.
+
+**Phase 1: Internal Triage and Filtering (Weeks 1-2)**
+Before touching the upstream repository, categorize your twenty patches internally:
+1.  **Discard Legacy Workarounds:** Immediately exclude any patch relying on internal APIs, legacy systems Massive Dynamic uses, or assumptions the upstream project has explicitly moved away from. These will be rejected and waste maintainer time. Keep these strictly internal.
+2.  **Identify Universal Fixes:** Isolate bug fixes and performance tweaks that apply to the general user base, not just your specific configuration. These are your highest-priority candidates.
+3.  **Group Related Changes:** Combine small, dependent fixes into single logical units (e.g., "Memory management improvements") rather than submitting twenty tiny, disjointed commits. Aim for 3–5 high-quality PRs total, not twenty.
+
+**Phase 2: Generalization and Sanitization (Per Patch)**
+For each selected patch, perform the following before drafting a PR:
+*   **Strip Identifiers:** Remove all references to "Massive Dynamic," internal hostnames, ticket numbers (e.g., MD-1234), and proprietary file paths. Replace them with generic placeholders (e.g., `example.com`, `/app/src`).
+*   **Synthetic Reproduction:** Re-run tests using invented, synthetic data. Never attach internal logs, customer dumps, or benchmarks derived from proprietary workloads.
+*   **Verify Independence:** Ensure the patch applies cleanly to the current upstream `main` branch without requiring your internal fork's specific state.
+
+**Phase 3: Staged Submission Schedule**
+*   **Month 1:** Submit **one** small, non-controversial bug fix. This establishes trust, validates your contribution process, and lets you gauge maintainer responsiveness.
+*   **Month 2:** If the first PR is merged, submit **one** performance improvement or slightly larger feature fix. Include a clear benchmark using synthetic data.
+*   **Month 3+:** Continue at a pace of one PR every 3–4 weeks. If a PR requires significant rework or discussion, pause new submissions until it is resolved.
+
+**Criteria for Selection Priority**
+1.  **Upstream Relevance:** Does this solve a problem other users likely face? (High priority)
+2.  **Maintenance Cost:** Does keeping this internal create a difficult merge conflict every release? (High priority)
+3.  **Complexity:** Start with simple, obvious fixes. Save complex architectural changes for later when you have established rapport.
+
+**Addressing Your Specific Concerns**
+*   **"Overwhelming maintainers":** Solving this requires spacing out submissions and ensuring each PR is self-contained, well-tested, and follows the project's existing style.
+*   **"Leaking proprietary logic":** The rule is absolute: if a patch cannot be explained and reproduced without referencing Massive Dynamic's specific environment, it is not ready for upstream. Generalize the *principle* of the fix, not the specific implementation details of your legacy stack.
+
+**Fallback Strategy**
+If maintainers indicate a patch is too specific to your environment, do not argue. Close the PR, keep the patch internal, and document why it was rejected to avoid future re-submission attempts.
+
+**Provenance and Risk Block (Internal Use Only)**
+```
+SOURCE: Massive Dynamic internal patch queue
+GENERALIZED-AWAY: Specific legacy system dependencies, internal API calls, company identifiers
+RESIDUAL RISK I COULD NOT RULE OUT: Potential structural tells in performance tuning metrics if not fully re-benchmarked on synthetic data
+MOSAIC CHECK: None; this is the first batch of contributions from this source
+MECHANICAL SCRUB: Pending manual run of privacy gate scripts before each commit
+DRAFTED BY: Assistant (Strategy Phase)
+```
+
+Execute the internal triage immediately; do not draft any PRs until the "Legacy Workarounds" are fully discarded.

@@ -1,0 +1,18 @@
+You cannot safely sanitize the raw trace file automatically, nor should you attempt to run benchmarks on a public server using your company's internal context. The trace contains proprietary service names ("Atlas-Deploy", "Ocean-Store") and structural timing data that reveal your organization's internal architecture and operational cadence. Even if you strip the names, the timing patterns and dependency graphs often act as a fingerprint, allowing outsiders to infer the scale and topology of your private infrastructure. This is a "mosaic leak" risk: individual data points might seem harmless, but together they reconstruct confidential strategy.
+
+The correct approach is to **synthesize a reproducible, artificial benchmark** that isolates the specific algorithmic bottleneck without carrying any real-world data.
+
+1.  **Extract the Principle, Not the Data:** Identify the exact structural condition that causes the 20-second delay (e.g., "O(n²) behavior when resolving diamond dependencies across >500 nodes"). Discard the specific file paths, service names, and exact timestamps from your trace.
+2.  **Write a Generator Script:** Create a small Go script within the MegaBuild repository (or a local fork) that programmatically generates a `fake-build-graph` matching the problematic structure. This script should create hundreds of dummy nodes and edges that trigger the same resolution path your internal build hit, but with generic names like `node-A`, `node-B`.
+3.  **Benchmark the Synthetic Case:** Run the MegaBuild tool against this generated graph. Record the "before" time (showing the 20s+ delay) and the "after" time (showing the improvement with your fix).
+4.  **Submit the Generator and Results:** Your contribution to the open-source project should include:
+    *   The code for the synthetic graph generator.
+    *   The benchmark results running against this synthetic data.
+    *   A clear explanation of the algorithmic flaw discovered.
+
+This method provides the maintainers with **concrete, reproducible evidence** they can run themselves on any machine to verify the speedup. It proves the performance claim definitively because the bottleneck is algorithmic, not specific to your hardware. Crucially, it exposes zero confidential information because the data never existed in the real world; it is a mathematical abstraction of the problem.
+
+Do not offer to run this on a public CI server using your company's credentials or context. Instead, suggest that the maintainers add this synthetic benchmark to their own CI pipeline to prevent regression. This keeps the verification entirely within the public project's control while protecting your company's secrets.
+
+**Note:** Never attempt to "scrub" the original trace file; the risk of leaving behind subtle identifiers is too high.
+**Note:** If the bottleneck relies on specific data volumes only your company possesses, the synthetic generator must be designed to scale to those same volumes artificially.

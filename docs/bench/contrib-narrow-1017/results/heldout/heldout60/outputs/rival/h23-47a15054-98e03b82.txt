@@ -1,0 +1,55 @@
+### Synthetic Test Case Design for OpenCal Time Zone Bug
+
+To satisfy the maintainer's requirement without exposing proprietary data, you must construct a **minimal, synthetic recurrence rule** that isolates the DST transition logic. The bug (one-hour shift) is triggered by the interaction between the recurrence interval and the DST boundary, not by specific meeting IDs, participant names, or complex corporate rules.
+
+Here is the design for a generic test case you can include in your PR:
+
+**1. Synthetic Event Parameters**
+Replace your real meeting data with these abstract values. They preserve the mathematical conditions required to trigger the bug while being completely untraceable to Acme Industries.
+
+*   **Event Title:** "Synthetic Weekly Recurrence"
+*   **Start Date (Pre-DST):** `2023-03-12T01:30:00` (Choose a date 30 minutes before a known DST spring-forward transition, e.g., US Eastern time).
+*   **Time Zone:** `America/New_York` (or any zone with a standard 1-hour DST shift).
+*   **Recurrence Rule:** `FREQ=WEEKLY;COUNT=3`
+    *   *Why this works:* You only need three occurrences: one before the shift, one during the transition (which often gets dropped or shifted), and one after. Complex rules are rarely required to trigger the core offset calculation error.
+*   **Expected Behavior:** The event should occur at the same *wall-clock* time (e.g., 01:30) each week, adjusting the UTC offset automatically.
+*   **Actual Bug Behavior:** The third occurrence shifts by one hour (e.g., appearing at 02:30 or 00:30) because the library fails to re-evaluate the offset for the new date.
+
+**2. Test Implementation Structure**
+Write the test to assert the *wall-clock time* consistency. Do not assert UTC timestamps directly, as the bug manifests as a mismatch between local time and UTC conversion.
+
+```javascript
+it('should maintain consistent wall-clock time across DST boundary', () => {
+  // Arrange: Synthetic event starting just before DST spring-forward
+  const event = {
+    title: 'Synthetic Weekly Recurrence',
+    start: '2023-03-12T01:30:00', // 1:30 AM EST
+    timeZone: 'America/New_York',
+    rrule: 'FREQ=WEEKLY;COUNT=3'
+  };
+
+  // Act: Generate occurrences
+  const occurrences = openCal.generateOccurrences(event);
+
+  // Assert: All occurrences must happen at 01:30 local time
+  // The bug typically causes the post-DST occurrence to shift to 02:30 or 00:30
+  expect(occurrences[0].getHours()).toBe(1);
+  expect(occurrences[0].getMinutes()).toBe(30);
+
+  expect(occurrences[1].getHours()).toBe(1); // Transition week
+  expect(occurrences[1].getMinutes()).toBe(30);
+
+  expect(occurrences[2].getHours()).toBe(1); // Post-DST week (Bug triggers here)
+  expect(occurrences[2].getMinutes()).toBe(30);
+});
+```
+
+**3. Data Sanitization Checklist**
+Before committing, verify the following to ensure zero leakage:
+*   **No Internal IDs:** Ensure no `meeting_id`, `corp_uuid`, or internal database keys are present.
+*   **Generic Names:** Use "User A", "User B" if participants are required by the schema, or omit the field entirely if optional.
+*   **Standard Rules:** Stick to `FREQ=WEEKLY` or `FREQ=DAILY`. If your real rule uses `BYDAY=+2TU` (second Tuesday), simplify it to `BYDAY=TU` (every Tuesday) for the test. The DST bug is agnostic to specific day qualifiers.
+
+This approach provides the maintainers with a reproducible, failing test that proves the logic error exists, fulfilling the contribution requirement while strictly protecting your employer's privacy.
+
+*Note: Run this test against the current `main` branch first to confirm it fails (reproducing the bug), then run it against your fix branch to confirm it passes.*

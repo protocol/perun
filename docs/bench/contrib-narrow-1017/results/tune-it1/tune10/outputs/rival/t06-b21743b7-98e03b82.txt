@@ -1,0 +1,18 @@
+Do not open a pull request to the main repository with this change in its current form. Submitting code that depends on a private, non-redistributable SDK without prior maintainer approval will almost certainly result in the PR being closed immediately, as it breaks the build for all other contributors and violates the principle of reproducible builds.
+
+Instead, follow this specific contribution path:
+
+1.  **Open a Feature Request Issue First:** Before writing any upstream code, open a detailed issue titled "Proposal: Support for [Console Name] via optional private SDK." Clearly state that you have a working internal port, explain the licensing constraints of the SDK, and explicitly ask if the maintainers are willing to accept an *optional* build target gated behind specific flags. Do not attach code yet; seek consensus on the architectural approach.
+
+2.  **Implement Strict Conditional Compilation:** If maintainers express interest, structure your code so the new platform is completely inert unless specific preprocessor definitions (e.g., `TARGET_CONSOLE_X`) are provided. The default build configuration must remain unchanged. Your changes should look like "holes" or stubs in the main codebase that are only filled when the user manually provides the missing headers and libraries.
+
+3.  **Provide a "Bring Your Own SDK" Template:** Since you cannot include the binaries, create a separate, public repository (or a gist) containing a template directory structure. This template should include empty placeholder files and a `README` explaining exactly where a licensed user must drop their proprietary SDK headers and binaries. Link to this external resource in your PR description and the build documentation.
+
+4.  **Isolate Platform-Specific Code:** Ensure all proprietary logic is confined to the engine's existing platform abstraction layer (e.g., `src/platform/console_x/`). Do not leak `#ifdef` checks into core engine logic. The goal is to make the proprietary dependency look like any other optional system library (like a specific GPU driver) that the user must install separately.
+
+5.  **Document the NDA Constraint:** In your PR description, explicitly state: "This target requires a licensed SDK not included in this repository. Builds will fail on this target unless the user manually installs the SDK and defines the required flags. This change does not affect default builds."
+
+By separating the *mechanism* (which you can share) from the *dependency* (which you cannot), you allow the project to support your niche architecture without compromising its open-source integrity or violating your NDA.
+
+Note: If the maintainers indicate that they do not support proprietary toolchains at all, respect that decision and maintain your port in a private fork.
+Note: Never commit hashes, signatures, or even file names from the private SDK to the public repository.

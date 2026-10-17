@@ -1,0 +1,60 @@
+### Immediate Action Plan: Sanitize and Disclose
+
+**1. Do Not Push the Current Branch**
+Under no circumstances should you push the branch containing `test.env` to the public remote. Even if the token is revoked, the presence of a secret pattern triggers automated security scanners, which may automatically close your PR, flag your account, or alert the maintainers in a way that looks like a negligence incident rather than an honest mistake.
+
+**2. Rewrite History to Scrub the File (Required)**
+Adding a new commit to "remove" the file is insufficient because the secret remains visible in the previous commit's history. You must rewrite the branch history to pretend the file never existed. Since you have not yet shared the branch link or opened a PR, this is safe and the correct procedure.
+
+Run the following commands locally to remove the file from the entire history of your feature branch:
+
+```bash
+# Ensure you are on your feature branch
+git switch <your-feature-branch>
+
+# Use filter-branch to strip the file from all commits (modern git approach)
+git filter-branch --force --index-filter \
+  "git rm --cached --ignore-unmatch test.env" \
+  --prune-empty --tag-name-filter cat -- --all
+
+# Alternatively, if you have Git 2.23+, use the faster 'git filter-repo' logic manually or via install:
+# git filter-repo --path test.env --invert-paths
+```
+
+*Note: If `git filter-branch` feels too heavy for a single file on a fresh branch, you can often simply reset to the commit before the mistake and re-commit your work:*
+```bash
+# If the bad commit is the most recent one:
+git reset --hard HEAD~1
+# If it is deeper, use interactive rebase:
+git rebase -i origin/main
+# (Mark the commit with 'edit', remove the file, commit --amend, then continue)
+```
+
+**3. Verify the Cleanup**
+Before proceeding, confirm the file is gone from every commit:
+```bash
+git log --all --full-history -- test.env
+# This should return NO output.
+git ls-tree -r --name-only HEAD | grep test.env
+# This should also return NO output.
+```
+
+**4. Force Push with Lease**
+Since you are rewriting history, you must force push. Use `--force-with-lease` to ensure you don't overwrite any unexpected changes (though unlikely if you haven't shared it):
+```bash
+git push origin <your-feature-branch> --force-with-lease
+```
+
+**5. Transparent but Secure Disclosure**
+Do not highlight the leak in the main PR description where it becomes permanent public record. Instead, add a discrete note in the **"Security Considerations"** section of your PR description, or send a direct message to a maintainer if the project has a security policy contact.
+
+**Draft for PR Description (Security Section):**
+> **Security Considerations**
+> During local development, a temporary test configuration file (`test.env`) was accidentally staged but has been completely purged from the branch history prior to this submission. No valid credentials or staging secrets are present in any commit in this PR. The file was excluded via `.gitignore` in the final commit to prevent recurrence.
+
+**Why this approach?**
+*   **Scrubbing vs. Reverting:** Scrubbing ensures security scanners never see the secret pattern. Reverting leaves the secret in commit #X and a "deletion" in commit #X+1; scanners still flag commit #X.
+*   **Timing:** Because you caught this *before* pushing, rewriting history is the professional standard. It shows competence. Pushing a "fix" commit later looks like damage control after a breach.
+*   **Disclosure:** Acknowledging the near-miss builds trust (you were vigilant enough to catch and fix it), but keeping the details minimal prevents the PR from being flagged as a "security incident" requiring a heavy-weight response from the maintainers.
+
+Proceed with the history rewrite immediately. Do not open the PR until `git log` confirms the file is extinct.

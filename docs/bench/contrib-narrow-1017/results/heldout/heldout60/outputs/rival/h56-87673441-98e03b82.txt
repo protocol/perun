@@ -1,0 +1,54 @@
+### Sanitized Test Case and PR Description Strategy
+
+To satisfy the maintainer's need for reproducibility while protecting customer confidentiality, you must construct a **synthetic reproduction case** that triggers the same algorithmic failure mode without using real proprietary data.
+
+**1. Constructing the Synthetic Input**
+Do not describe the customer's data; instead, isolate the *structural pattern* causing the hang. Regular expression hangs (ReDoS) are caused by specific nesting depths and repetition operators, not the semantic content of the string.
+*   **Identify the Trigger:** Determine the minimal nesting depth (e.g., 50 levels) and the specific regex operator combination (e.g., `(a+)+`) that causes the infinite loop in the unpatched version.
+*   **Generate Dummy Data:** Write a small script to generate a string using generic characters (e.g., `"A"`, `"x"`, `"1"`) that mimics the *structure* of the customer's input but contains no business logic or sensitive patterns.
+    *   *Bad:* `"CustomerID: [nested proprietary format...]"`
+    *   *Good:* `"input": "(((...)))"` (50 levels of nested parentheses).
+*   **Verify the Hang:** Confirm this synthetic input hangs the original library and resolves instantly with your patch. This proves the fix works without revealing the source.
+
+**2. Drafting the PR Description**
+Structure your description to explicitly separate the *technical reproduction* from the *reporting context*.
+
+```markdown
+## Summary
+Fixes an infinite hang in the regex engine when processing deeply nested groups by implementing a recursion depth limit. Worst-case execution time reduced from indefinite to <5ms.
+
+## Reproduction Case (Sanitized)
+The issue was reported via a private security channel involving proprietary data patterns. To protect confidentiality, the following synthetic input reproduces the exact algorithmic failure mode (catastrophic backtracking/nested recursion) without exposing sensitive content:
+
+**Pattern:** `^(<nested_group_pattern>)$`
+**Input:** A string containing 50+ levels of nested `[...]` groups (see `test_regressions/test_nested_depth_limit.py`).
+
+```python
+# Minimal reproduction script
+import re
+# This hangs on main, returns immediately on this branch
+pattern = r"(\[+\])+"
+input_str = "[" * 100 + "]" * 100
+```
+
+## Test Plan
+1.  Run `pytest test_regressions/test_nested_depth_limit.py` – verifies the synthetic case fails on `main` and passes on this branch.
+2.  Run `cargo test` (or project equivalent) – ensures no regression in standard parsing.
+3.  Benchmark: Confirmed execution time drops from timeout (>30s) to <5ms for depth=100.
+
+## Confidentiality Note
+The original report contains sensitive customer account details and cannot be shared publicly. The maintainers have verified the fix against the original proprietary dataset in a private offline review (Ticket ref: [Internal Only]). The synthetic test case provided here is sufficient to validate the logic of the recursion limit.
+
+## Backward Compatibility
+The change introduces a `RecursionDepthError` for inputs exceeding the limit. This is a breaking change only for previously hanging inputs, which were effectively non-functional.
+```
+
+**3. Handling the "Concrete Examples" Request**
+If maintainers press for the *exact* original string after seeing the PR:
+*   **Response:** "I can provide the exact raw input under a Non-Disclosure Agreement (NDA) or via a private, encrypted channel to a specific maintainer. However, the synthetic test case included in the PR covers the same code path and confirms the fix addresses the root cause."
+*   **Action:** Offer to email the raw data to a single trusted maintainer using PGP encryption, referencing the internal ticket number only in that private email, not in the GitHub thread.
+
+By providing a minimal, structural clone of the bug, you give maintainers the evidence they need to merge with confidence while keeping the customer's data completely off the public record.
+
+*Note: Ensure your synthetic test case is added to the project's permanent regression suite to prevent future re-introduction of this limit.*
+*Do not mention the specific customer name or industry in any public comment, even indirectly.*

@@ -1,0 +1,47 @@
+## Summary
+Fixes a race condition in SecureAuth's token validation logic where expired tokens incorrectly remain valid for up to five minutes under high concurrency. This is a critical security vulnerability affecting all deployments using time-based token expiration.
+
+## What
+- Modified `lib/validators/token.js` to enforce strict expiration checks before cache retrieval.
+- Added a new regression test `test/token-expiry-race.test.js` that deterministically reproduces the timing window.
+- Updated documentation to clarify expected behavior under load.
+
+## Why
+Under high load, the library's caching layer checks token validity *after* retrieving the cached session, rather than before. If a token expires while sitting in the cache, subsequent requests within a specific concurrency window bypass the expiration check. This creates a universal window where expired credentials are accepted. This fix moves the expiration assertion to the critical path, ensuring validity is checked atomically with retrieval.
+
+## Test Plan
+You can verify the vulnerability and the fix using the included load simulation script. It requires no external data or private logs.
+
+**To reproduce the bug (on the base branch):**
+1. Run `node test/scripts/reproduce-race-condition.js`.
+2. This script spawns 50 concurrent workers hammering the validation endpoint with a token set to expire in exactly 300 seconds.
+3. Observe the output: approximately 5-10% of requests made *after* the theoretical expiry time will incorrectly return `valid: true`.
+
+**To verify the fix (on this branch):**
+1. Run the same script: `node test/scripts/reproduce-race-condition.js`.
+2. Observe the output: 0% of requests made after expiry return `valid: true`. All post-expiry requests are correctly rejected immediately.
+
+The script uses purely synthetic traffic patterns and mocked time to create the race condition deterministically.
+
+## Backward Compatibility
+Fully backward compatible. The change tightens security logic; valid tokens continue to work exactly as before. Only previously accepted *invalid* (expired) tokens will now be rejected.
+
+## Security Considerations
+This patch addresses a logic flaw allowing unauthorized access via expired credentials. No new dependencies were added. The fix does not alter the public API, only the internal validation order.
+
+## Related Issue
+Fixes the reported token validation inconsistency. (Note: Specific incident details are withheld per organizational security policy, but the technical reproduction is fully self-contained in the test suite).
+
+## Checklist
+- [x] Code follows project style guidelines.
+- [x] New tests added and passing locally.
+- [x] No unrelated refactoring included.
+- [x] Commit messages follow Conventional Commits.
+
+## AI-Assisted Disclosure
+I developed this fix independently while investigating a production issue. I used AI tools solely to help draft this generic explanation and to structure the synthetic load-test script to ensure it runs without external dependencies. I have reviewed every line of code and test logic; the fix is my own.
+
+***
+
+**Note:** The included script mocks system time to create the race condition without needing real high-load infrastructure.
+**Note:** Do not mention "Acme Bank" or specific attack vectors in the PR comments; refer only to "a production environment" if pressed.

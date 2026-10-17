@@ -1,0 +1,31 @@
+To sanitize your Kubernetes manifest for public contribution while retaining its educational value, you must replace all organization-specific identifiers with generic, illustrative placeholders. The goal is to demonstrate the *structure* of a correct configuration without revealing your *implementation* details.
+
+**Fields You Must Anonymize or Replace:**
+
+1.  **`metadata.namespace`**: Never expose internal namespace naming conventions (e.g., `hd-prod-db-01`).
+    *   *Action*: Replace with generic examples like `default`, `database`, or `example-namespace`.
+2.  **`metadata.labels` and `metadata.annotations`**: Remove any custom labels used for internal tooling, cost centers, or topology tracking (e.g., `helios-zone: us-west-2a`, `team-id: db-core`).
+    *   *Action*: Keep only standard Kubernetes labels (like `app.kubernetes.io/name`) or create obvious placeholders (e.g., `environment: production`).
+3.  **`spec.selector.matchLabels`**: Ensure these match the generic labels in your pod template, not your internal service discovery tags.
+4.  **Image Repositories**: If you are referencing an internal registry (e.g., `registry.helios-dynamics.internal/operator:v1.2`), this leaks your infrastructure stack.
+    *   *Action*: Use the public upstream image (e.g., `ghcr.io/project/operator:v1.2`) or a clearly fake placeholder (e.g., `example/operator:latest`).
+5.  **Resource Limits/Requests**: While you fixed the values, ensure the *magnitude* doesn't reveal specific hardware constraints unique to your cloud contract unless necessary for the example.
+    *   *Action*: Standardize on common, round-number examples (e.g., `512Mi`, `1000m`) that are clearly illustrative.
+6.  **Storage Class Names**: Internal storage classes (e.g., `helios-fast-ssd`) reveal backend providers.
+    *   *Action*: Use `standard` or `generic-ssd`.
+7.  **Secrets and ConfigMap Names**: Do not reference internal secret names that might hint at your credential management strategy.
+    *   *Action*: Use generic names like `db-credentials` or `operator-config`.
+
+**Fields Generally Safe to Leave As-Is (if generic):**
+
+*   **The corrected Resource Limits values themselves**: If the fix is technically universal (e.g., increasing memory from `128Mi` to `512Mi` to prevent OOM), the numbers are likely safe *provided* they aren't tied to a specific internal instance type.
+*   **Standard Kubernetes API fields**: `apiVersion`, `kind`, and standard spec fields like `replicas` are universal.
+*   **Container ports**: Standard database ports (e.g., `5432`, `3306`) are public knowledge.
+
+**Recommended Strategy:**
+
+Create a "golden path" example. Strip the manifest down to the minimum viable configuration that proves your fix works. If your internal config has 5 labels, reduce it to the 1 or 2 required for the operator to function. Add a comment in the YAML explicitly stating: `# Example configuration; adapt labels and namespaces to your environment.`
+
+This approach protects Helios Dynamics' topology while providing the maintainers with a clean, mergeable example that any user can adopt without needing to decipher your internal standards.
+
+Ensure you double-check the `image` field specifically, as internal registry URLs are the most common accidental leak in operator manifests.

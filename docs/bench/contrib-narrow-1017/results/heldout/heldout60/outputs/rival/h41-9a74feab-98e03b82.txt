@@ -1,0 +1,25 @@
+Do not open a pull request yet. Submitting code that relies on unshareable, confidential test data violates the project's requirement for reproducible test cases and will likely result in your PR being closed immediately. Maintainers cannot verify your fix if they cannot run the tests.
+
+Instead, execute this three-step strategy to satisfy both your legal constraints and the project's quality gates:
+
+**1. Generate Synthetic "Golden" Test Data**
+You must create dummy `.acme3d` files that trigger the exact same parsing error (code 0x992) without containing any Northwind Logistics sensitive data.
+*   **Structure:** Reverse-engineer the file header and chunk structure just enough to reproduce the crash condition. The data inside can be zeros or random noise; only the structural markers that confuse the parser matter.
+*   **Verification:** Ensure your synthetic file crashes the current `main` branch exactly as the client's file does.
+*   **Commit:** Add these synthetic files to the repository under `tests/fixtures/`. This proves the bug exists and that your fix resolves it, satisfying the maintainer's reproducibility requirement without leaking IP.
+
+**2. Isolate Proprietary Logic (If Necessary)**
+If the `.acme3d` format specification itself is proprietary and not just the *content* of the files:
+*   Check if the project supports dynamic plugins or runtime-loaded modules. If so, implement the proprietary decoder as a separate plugin that you do *not* commit to the public repo.
+*   Commit only the interface hooks and the synthetic test files that verify the hooks work.
+*   If the format spec is entirely secret and cannot be plugin-ized, you may need to open an issue first to discuss adding a "proprietary format" abstraction layer before submitting code.
+
+**3. Structure the Pull Request Description**
+Your PR description must explicitly address the data constraint to build trust. Use this structure:
+
+*   **Summary:** "Fix crash (0x992) when importing .acme3d files by correcting header length parsing."
+*   **Test Data Disclosure:** Add a specific section stating: *"Real-world regression files contain confidential client data (Northwind Logistics) and cannot be shared. I have included `synthetic_crash_0x992.acme3d` in `tests/fixtures/`, which reproduces the exact crash condition using non-sensitive dummy data. The fix passes against this synthetic case."*
+*   **Test Plan:** List the exact command to run the new test (e.g., `./vertextest --filter acme3d_crash`).
+*   **Verification:** Confirm that the synthetic file fails on `main` and passes on your branch.
+
+**Note:** Never mention specific client internal asset identifiers in public issues or comments, even in passing. If the format specification itself is under NDA, you must obtain written permission from the client before contributing *any* code that implements it, regardless of test data sanitization.

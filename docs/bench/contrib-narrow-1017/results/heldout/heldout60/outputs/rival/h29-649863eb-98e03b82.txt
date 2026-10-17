@@ -1,0 +1,32 @@
+Do not open a pull request yet. In a project of 500k lines with strict "no cosmetic mixing" rules, a 40-file PR for a typo will likely be closed as noise or metric-gaming, regardless of your good intentions.
+
+**Recommended Strategy:**
+
+1.  **File an Issue First:** Open a single issue titled "Proposal: Correct 'LIcence' typo in license headers across core modules."
+    *   Explicitly state: "This is a cosmetic-only change affecting ~40 files. No logic is modified."
+    *   Ask: "Does the team prefer a single atomic commit for this, or should it be batched by module? Is there an automated script maintained internally for this?"
+    *   **Why:** This forces the maintainer to define the scope. If they say "run this script yourself," you have your answer. If they say "we'll handle it," you saved yourself time. If they say "go ahead, one PR is fine," you have explicit permission that protects you from "noise" accusations.
+
+2.  **Verification (Zero Logic Change):**
+    Once authorized, do not manually edit 40 files. Use a strict regex replacement tool (like `sed` or `rg`) to ensure only the specific string changes.
+    *   **Command:** Run a diff check that ignores whitespace to confirm only the typo changed:
+        `git diff --ignore-all-space`
+    *   If this command returns *any* output, you have accidentally altered logic or formatting. Stop immediately.
+    *   **Secondary Check:** Run the project's specific build/test command (e.g., `make test` or `ninja check`) locally. If the build fails or behavior changes, you broke something.
+
+3.  **Commit Message Strategy:**
+    If the maintainer approves a single PR, use a conventional commit format that emphasizes the *atomic* nature and *cosmetic* scope to justify the file count:
+    ```text
+    chore(license): correct "LIcence" typo in 40 core file headers
+
+    - Fixes recurring typo "LIcence" -> "License" in copyright headers.
+    - No functional code changes; verified via `git diff --ignore-all-space`.
+    - Applied uniformly to [list 2-3 example paths] and related core modules.
+    - Split from functional work to maintain clean history per CONTRIBUTING.md.
+    ```
+
+**Specific Process Check:**
+Large C++ projects often have internal tools for license header management. By asking in the issue first, you avoid submitting a PR that conflicts with their internal automation. Do not split this into 10 PRs; that creates more review overhead (10 notifications, 10 CI runs) than one well-justified atomic commit.
+
+**Note:** If the maintainer does not respond to the issue within a week, do not submit the PR; silent rejection is common for cosmetic tasks in massive repos.
+**Note:** Ensure your editor's "auto-format on save" is disabled during this edit to prevent unintended whitespace churn.
