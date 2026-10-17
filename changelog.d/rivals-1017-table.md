@@ -1,0 +1,2 @@
+### Changed
+- `docs/perun-vs-rivals.md`: the bottom line is now a per-skill table of the 2026-10-17 held-out PCSS runs under judge protocol v2 (bench dir, judge, n, win rate with 95% CI, verdict), all n=40 or more and never blended with n=10 rows. Confirmed wins at n=60: agentic-ceo, positioning, product-discovery. Not wins: agentic-delivery (round 1 withdrawn for an id collision, round 2 lower bound 0.487), idea-critic (parity, two sets), communication-structure (losing), business-ops (unproven). The previous bottom line is kept below, condensed.
