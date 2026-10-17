@@ -1,0 +1,21 @@
+idea-critic against its rival, round 4, 2026-10-17. Preregistration: PREREGISTERED.md (hashes in SHA256-frozen.txt, taken before any scenario or arm generation); tune result and choice: PREREGISTERED-CHOICE.md (SHA256-choice.txt, written before the held-out run). Builds on ../exec-1017 and on round 3 (docs/bench/exec-round3-1017, on branch feat/exec-round3-v2, not part of this tree; the round-3 judge records read for the root cause are there); bench4.py reuses ../exec-1017/bench.py and bench2.py.
+
+Result, held-out n=40 fresh fictional scenarios (scenarios4/, hashes in SHA256-scenarios4.txt), Perun win rate against the rival (1 Perun, 0.5 tie, 0 rival), bootstrap 95% interval, three judges in both orders with strict agreement and a majority of three:
+  arm                                   win rate [95%]          wins/ties/losses   decision
+  v0 (unedited current SKILL.md)        0.450 [0.338, 0.562]    9 / 18 / 13        reference
+  cA (capped first tranche)             0.412 [0.300, 0.525]    7 / 19 / 14        reverted (lower bound not above 0.5; below v0)
+Tune (n=10, selection only): v0 0.55, cA 0.65, cB 0.50, cC 0.50; cA was chosen by the preregistered rule and did not hold up on the fresh set (tune n=10 is a weak selector; its interval [0.50, 0.80] already overlapped v0's).
+Slot-1 rate per judge over all of its calls (0.5 would be unbiased): cA DeepSeek-V4-Flash 0.525, GLM-5.2 0.700, MiniMax-M2.5 0.713; v0 0.600, 0.675, 0.800. All three prefer the first slot, so only both-order agreement counts.
+
+What changed in the repository: nothing under .claude/. No SKILL.md edit ships; the rival still leads or ties unedited Perun idea-critic on this bar (v0 0.450). The tested edits are preserved only as prompts/perun_idea-critic_{cA,cB,cC}.txt (mk4.py builds them from SKILL.md; v0 equals SKILL.md at the time of the run, version 1.588.0).
+
+Root cause read from the round-3 judge records (details in PREREGISTERED.md): in the votes the rival won, pilot/sprint/phase/cap wording appears in 11 of 14 v0 loss reasons and figure/arithmetic wording in 9 of 14 (keyword counts, a lead not a proof). Round 3's forced Figures line did not reduce the figure losses. Round 4's staged-decision edit (cA) did not beat the unedited skill on a fresh set, so no claim is made that the staged-decision shape is the cause.
+
+Reproduce: PCSS_ENV=<file with PCSS_KEY> python3 -I mk4.py, then python3 -I bench4.py rival tune; run PERUN_<v0|cA|cB|cC> tune (run_tune.sh); then bench4.py scen; rival h4; run PERUN_cA h4; run PERUN_v0 h4 (run_heldout.sh). Generations (outputs/), judge records (judge4/) and every call (ledger.jsonl: tag, model, seconds, usage, no text) are committed.
+
+Caveats, all of which weaken the claim:
+- Judges and generator are open models on one hosting cluster, not humans or another vendor; both arms are system-prompt only (no references, tools or scripts), and the rival is the named rival's text run by the same generator. The held-out set is synthetic.
+- Ties count 0.5 and dominate (about 18-19 of 40 for both arms); one run per arm; API nondeterminism moved earlier re-judges by 0.01 to 0.1. The gap between cA and v0 (0.038) is inside the noise; the result supports "no measured gain", not "cA is worse".
+- Rival fix: each RIVAL answer was generated exactly once before any arm ran, and its hashes are frozen in RIVAL-sha256-*.json; run refuses to start if a rival file is missing or changed. Both arms were judged against the same rival files.
+- ledger.jsonl holds URLError/HTTPError lines: a first detached launch had no network and generated nothing (its ledger and logs were deleted before the real run), and the real run had intermittent network errors that the 4-attempt retry absorbed. One held-out judge record (cA h10) lost a call to a failed request and so would have counted a verdict as a tie; it was deleted and re-judged once with the same driver, and the rerun is the record kept. After that, every judge record in judge4/ has all of its calls; no other record was re-run.
+- Disjointness: the 40 settings and their company names (prompts/seeds4.txt) do not appear elsewhere under docs/bench by grep; the scenarios were generated from them by the writer model with the unchanged briefs, with a privacy-gate regenerate rule fixed before generation.
