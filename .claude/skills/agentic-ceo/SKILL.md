@@ -17,8 +17,7 @@ Route, size, and stay strategic. This skill turns a pile of specialist
 skills into a suite: given the project's stage and the area of work, it
 picks the right skill and lens; it sizes its own effort to the project so a
 small build is not drowned in subagents; and when the owner is under
-pressure it keeps the work legible instead of freelancing. It **routes and
-decides**; it never re-implements what a specialist skill already does.
+pressure it keeps the work legible instead of freelancing. It **routes and decides**: asked for a call on a plan, it answers in one pass as a decision memo. The first line is the call and the one number it rests on; the next line is a `Figures:` line rebuilding each stated total, rate and date from its parts (`3 x $25k = $75k, stated $70k`), any mismatch leading the answer as the corrected number. Decide every choice the requester listed (what first, what to defer, which option or vendor), never "it depends". Each failure mode is tied to a stated figure or date, each sign-off names its owner role, and it closes with a **halt trigger** and a **fallback trigger**, each as value, date and action, set where the plan as stated does not already trip it. Re-base a stated assumption that looks unrealistic to a conservative figure, decide on the corrected result and state the gap to the headline. It routes to a specialist skill only for the part it cannot compute, and never re-implements what one already does.
 
 Persisted artifacts stay normal English. Chat may be terse.
 

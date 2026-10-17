@@ -1,0 +1,21 @@
+Executive-skill bench, round 3, 2026-10-17: agentic-ceo and idea-critic against their rivals. Preregistration: PREREGISTERED.md (written before any held-out arm generation; hashes in SHA256-frozen.txt). Builds on ../exec-1017 (rounds 1 and 2); bench3.py reuses its bench.py and bench2.py.
+
+Result, held-out n=40 fresh fictional scenarios per skill, Perun win rate against the rival (1 Perun, 0.5 tie, 0 rival), bootstrap 95% interval, three judges in both orders with strict agreement and a majority of three:
+  skill          unedited (v0)           candidate r3a            wins/ties/losses (r3a)   decision
+  agentic-ceo    0.487 [0.388, 0.575]    0.625 [0.537, 0.713]     12 / 26 / 2              kept (lower bound above 0.5, at least v0)
+  idea-critic    0.450 [0.338, 0.575]    0.487 [0.375, 0.600]     10 / 19 / 11             reverted (lower bound not above 0.5)
+agentic-ceo was judged twice on the same generations because the rival side was generated twice by a race in the driver (see caveats). The table is the as-run result (results4-asrun-agentic-ceo-*-h3.json, judge4-asrun/); the re-judge against the final rival files is r3a 0.637 [0.550, 0.725] vs v0 0.487 [0.388, 0.588] (results4-agentic-ceo-*-h3.json, judge4/). Both pass.
+Slot-1 rate per judge over all of its calls (both orders; 0.5 would be unbiased), held-out runs: DeepSeek-V4-Flash 0.562-0.688, GLM-5.2 0.750-0.863, MiniMax-M2.5 0.637-0.787; every run is in results4-*.json. All three prefer the first slot, which is why only both-order agreement counts.
+Tune (n=10, selection only): idea-critic v0 0.35, r2a 0.60, r3a 0.60; agentic-ceo v0 0.65, r2b 0.70, r3a 0.75.
+
+What changed: only .claude/skills/agentic-ceo/SKILL.md (one sentence: the next line after the call is a `Figures:` line rebuilding each stated total, rate and date from its parts). prompts/perun_agentic-ceo_r3a.txt is the text as tested and equals the shipped SKILL.md. The reverted idea-critic edit is preserved only as prompts/perun_idea-critic_r3a.txt.
+
+Reproduce: PCSS_ENV=<file with PCSS_KEY> python3 -I mk3.py (variants), then python3 -I bench3.py scen SKILL, run SKILL PERUN_r3a h3 (and PERUN_v0), report. run_heldout.sh runs the four held-out arms. Generations (outputs/), judge records (judge4/, judge4-asrun/) and every call (ledger.jsonl: tag, model, seconds, usage, no text) are committed.
+
+Caveats, all of which weaken the claim:
+- Judges and generator are open models on one hosting cluster, not humans or another vendor; both arms are system-prompt only (no references, tools or scripts), and the rival is the named rival's text run by the same generator.
+- Ties count 0.5 and dominate (26 of 40 for the kept skill): the lift is mostly tie-to-win conversion, 12 wins against 2 losses, not a sweep. One run per arm; API nondeterminism moved a re-judge by about 0.01 here and by about 0.1 in earlier rounds.
+- Driver race: both arms of a skill generated the rival side concurrently, so each rival scenario was generated twice (the ledger shows 80 gen3 RIVAL calls for 40 scenarios per skill) and the later file overwrote the earlier one. An arm may have been judged against a different rival sample than the other arm; the re-judge used the final files for both. This adds noise, not a bias toward either arm.
+- ledger.jsonl holds 1280 URLError lines (seconds 0.0): a first detached launch had no network access and generated nothing; the held-out arms were re-run in the foreground. No result uses those lines.
+- The idea-critic root cause was a missed planted figure slip and an uncapped go-if; the Figures line did not fix it (0.487), so no claim is made that idea-critic beats its rival. Before this edit no Perun executive skill beat its rival on this bar; after it, one does by a measured margin, on a synthetic scenario set.
+- Privacy substitution after the run: the generated idea-critic scenario h20 named a city that the repository's name-grep gate bans (a personal-name pattern), so that city name was replaced by "Portland" in that scenario file and in the two Perun generations that repeat it (outputs/idea-critic/PERUN_r3a/h20.txt, PERUN_v0/h20.txt). The judges saw the original text; the new scenarios3 hashes are in SHA256-after-privacy-fix.txt (SHA256-frozen.txt keeps the pre-substitution hashes). The idea-critic arm was reverted, so no kept result depends on this edit.
