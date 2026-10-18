@@ -1,0 +1,37 @@
+**Measurement Plan for SoundWave Engineering Sprint (Target: May 1st Beta)**
+
+**1. North Star Metric: Weekly Active Listeners Completing a "Meaningful Interaction"**
+Reject "Session Length" and "Total Logins" as primary metrics; they are vanity indicators that rise even when users are passive or bouncing. Define a "Meaningful Interaction" as a user who either speaks for >30 seconds, reacts emotionally (emoji/use of reaction feature), or returns to the same room within 24 hours. The North Star is the count of unique users performing this action weekly. This measures value delivery, not just presence.
+
+**2. Critical Event Taxonomy (Instrument Only These)**
+Given limited server capacity, do not log "everything." Instrument only these four events to answer specific retention questions:
+
+*   **`room_join_attempt`**
+    *   *Question:* Are users entering rooms but leaving immediately (the "leaky bucket")?
+    *   *Properties:* `room_id`, `user_id` (pseudonymous), `entry_source` (feed vs. link), `timestamp`.
+*   **`room_early_exit`** (Triggered if time_in_room < 15 seconds)
+    *   *Question:* Is the content mismatched to user expectation or is audio quality failing?
+    *   *Properties:* `room_id`, `time_elapsed_ms`, `device_type`, `network_type`.
+*   **`core_action_performed`** (Triggered by: speaking >30s, sending a chat message, or using a reaction)
+    *   *Question:* Did the user activate? This is the strongest predictor of retention in social audio.
+    *   *Properties:* `action_type` (speak/chat/react), `room_id`, `user_role` (listener/speaker).
+*   **`return_visit`** (User opens app within 7 days of first `core_action_performed`)
+    *   *Question:* Are we retaining users who found value?
+    *   *Properties:* `days_since_first_action`, `cohort_week`.
+
+**3. Implementation Constraints & Identity Seam**
+*   **Stable Identifier:** You must generate a stable, pseudonymous `user_cohort_id` at first launch to track users across sessions. Do not use raw PII (phone numbers/emails) in event logs. Route PII mapping to a secure, access-controlled table separate from analytics streams (refer to privacy compliance protocols).
+*   **Sampling:** If volume threatens server capacity, sample `room_join_attempt` at 10% but log 100% of `core_action_performed` and `room_early_exit`. We cannot afford to miss signal on activation or immediate churn.
+
+**4. Analysis Strategy: Retention First**
+Do not analyze acquisition channels yet. Read the funnel bottom-up:
+1.  Calculate the % of `room_join_attempt` that result in `room_early_exit`. If this is >40%, fixing audio latency or room discovery is the only priority; monetization will fail.
+2.  Calculate the % of joiners who trigger `core_action_performed`.
+3.  Only after stabilizing these, look at `return_visit` rates by cohort.
+
+**This Week's Steps for Priya:**
+1.  **Schema Finalization:** Define the JSON schema for the four events above by Wednesday; reject any proposal to add "page_view" or generic "click" events.
+2.  **Identity Service:** Implement the pseudonymous ID generation logic before event logging begins to ensure cohort continuity.
+3.  **Baseline Query:** Once live, run a query comparing `room_early_exit` rates between "invited rooms" vs. "public feed rooms" to identify the highest-leak entry point.
+
+*Note: Do not estimate current retention rates; without the `room_early_exit` event, any current figure is UNVERIFIED. Wait for the first 48 hours of new data.*

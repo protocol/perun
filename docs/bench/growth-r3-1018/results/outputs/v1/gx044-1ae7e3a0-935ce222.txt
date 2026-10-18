@@ -1,0 +1,32 @@
+**To:** Engineering Lead
+**From:** Product Analytics
+**Date:** February 24
+**Subject:** Instrumentation Requirements for Sleep Module & Core Journey
+
+**Objective**
+Enable correlation between specific sleep story interactions and retention to validate the hypothesis that "3+ stories/week drives retention." Current data (`session_start`, `sleep_recorded`) is insufficient to distinguish passive background play from active engagement.
+
+**Required Event Schema**
+Instrument the following events immediately. Each must include `user_id` (pseudonymous), `session_id`, `timestamp`, and `content_id` (story/timer ID).
+
+| Event Name | Trigger Condition | Question Answered | Key Properties |
+| :--- | :--- | :--- | : |
+| `sleep_story_started` | User selects and begins playback of a sleep story. | Are users initiating sleep content, or just browsing? | `story_title`, `category`, `duration_expected` |
+| `sleep_story_completed` | Playback reaches 90% of expected duration without interruption. | Did the user fall asleep listening, or stop early? | `duration_actual`, `completion_rate` |
+| `sleep_story_skipped` | User manually skips intro, outro, or entire story. | Is the intro causing drop-off? Is the content mismatched? | `skip_point_seconds`, `reason_code` (if available) |
+| `timer_adjusted` | User changes the sleep timer setting during playback. | Are default durations misaligned with user needs? | `previous_duration`, `new_duration` |
+| `background_transition` | App moves to background while audio is active. | Did the user intend to sleep (app backgrounded) or switch tasks? | `audio_state` (playing/paused) |
+| `wake_up_interaction` | First app interaction after a `background_transition` > 4 hours. | Did the user return immediately upon waking? | `time_elapsed`, `action_taken` |
+
+**Implementation Constraints & Priorities**
+1.  **Stable Identity:** Ensure `user_id` persists across app restarts and background states to link "waking" meditation sessions with "sleeping" story sessions. This ID must be pseudonymous; route any raw device IDs or PII to the privacy compliance review before logging.
+2.  **Granularity over Volume:** Do not log every second of playback. Log state changes (start, stop, skip, adjust) to minimize data noise and cost.
+3.  **Hypothesis Validation:** These events specifically allow us to calculate the "3 stories/week" metric. Without `sleep_story_completed`, we cannot distinguish a user who fell asleep listening from one who closed the app after 10 seconds.
+
+**Next Steps for Sprint Planning (March 1)**
+- **Priority 1:** Implement `sleep_story_started`, `sleep_story_completed`, and `background_transition`. This minimum set allows us to define "active sleep usage."
+- **Priority 2:** Add `timer_adjusted` and `wake_up_interaction` in the following sprint if engineering bandwidth is constrained.
+- **Verification:** Once deployed, query the cohort of users with `sleep_story_completed` ≥ 3 in week 1 and compare their Week 2 retention against those with 0–2 completions. If the lift is <5%, the hypothesis is invalid, and we pivot to investigating content quality rather than frequency.
+
+**Note:** Current "30% increase in daily sessions" is a vanity metric until correlated with `sleep_story_completed`; high session counts with low completion rates indicate users are trying but failing to sleep.
+**Note:** Do not estimate current completion rates; they are `UNVERIFIED` until these events are live.

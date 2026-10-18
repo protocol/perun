@@ -1,0 +1,31 @@
+### Proposed Event Taxonomy and Funnel Structure for Mehmet
+
+To isolate friction in the photo upload flow and account for draft behavior, replace the single "upload" step with the following granular event sequence. Each event answers a specific diagnostic question and supports cohort analysis for returning users.
+
+**Core Funnel Stages (Event Name → Diagnostic Question)**
+1.  `estimate_started` → Did the user commit to creating an estimate? (Baseline)
+2.  `camera_permission_requested` → Do users drop off before seeing the camera? (OS-level friction)
+3.  `camera_permission_granted` → If requested, did they allow access? (Trust friction)
+4.  `photo_capture_attempted` → Did they try to take a picture? (UI clarity)
+5.  `photo_capture_success` → Did the hardware/software successfully capture? (Technical failure)
+6.  `photo_preview_confirmed` → Did they accept the image or retake? (Quality/UX friction)
+7.  `photo_upload_completed` → Did the image successfully transmit to the server? (Network/Backend friction)
+8.  `estimate_draft_saved` → Did they save and exit? (Identifies the 15% returning cohort)
+9.  `estimate_resume_started` → Did a returning user reopen a draft? (Retention signal)
+10. `estimate_completed` → Final conversion (320 users).
+
+**Handling Drafts and Returning Users**
+To track the 15% who save and return, every event must include a `session_id` and a persistent `user_pseudonym_id` (do not use raw PII; route identity mapping to privacy compliance).
+*   **Logic:** A funnel step is considered "complete" for a user if the event exists *anytime* before `estimate_completed`, regardless of session breaks.
+*   **Analysis:** Create a "Resume Rate" metric: (`estimate_resume_started` / `estimate_draft_saved`). If this is low, the friction is re-entry, not the upload flow itself.
+
+**Recommended Engineering Actions for April 10 Sprint**
+1.  **Instrumentation:** Implement the 10 events above with properties: `device_os`, `app_version`, and `is_resume_session` (boolean).
+2.  **Drop-off Query:** Build a dashboard showing conversion rates between each adjacent pair (e.g., `camera_permission_requested` → `camera_permission_granted`). The largest percentage drop indicates the primary friction point.
+3.  **Hypothesis Validation:** Only after establishing the baseline drop-off rates can you validate the "25% increase" hypothesis. If the drop-off is at `camera_permission_requested`, simplifying the capture UI will yield zero lift; you must fix the permission prompt first.
+
+**This Week's Step**
+Ask Mehmet to instrument `camera_permission_requested`, `photo_capture_attempted`, and `photo_upload_completed` immediately. Run the drop-off query on the existing 4,000 users by April 8th. If the drop between "requested" and "granted" exceeds 40%, allocate the sprint to redesigning the permission explanation screen, not the camera UI.
+
+*Note: All metrics must be compared to your own March 5–April 1 baseline; do not benchmark against external "industry standards" which are unavailable for your specific context.*
+*Ensure `user_pseudonym_id` remains stable across devices to accurately track the draft-resume cohort.*

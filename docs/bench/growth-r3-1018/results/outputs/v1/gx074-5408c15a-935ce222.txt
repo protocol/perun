@@ -1,0 +1,40 @@
+### Analysis: The Click-Completion Divergence
+
+The 35% rise in clicks paired with a 12% drop in completions indicates **vanity engagement**: the badge/leaderboard successfully triggered curiosity (clicks) but failed to support value delivery (completions). Users are likely clicking to inspect rewards, finding the effort-to-reward ratio misaligned, and abandoning the task. This is not necessarily a difficulty mismatch; it is a **broken activation loop** where the incentive draws attention away from the core action rather than reinforcing it.
+
+Since you cannot fabricate a "good" completion rate, we must compare current performance against your own pre-May 20 baseline. The divergence suggests the new UI introduces friction *after* the click or sets an expectation the module cannot immediately satisfy.
+
+### Recommended Event Taxonomy & Behavioral Metrics
+
+Instrument only these events to answer specific questions before the June 15th iteration. Do not track "everything."
+
+| Event Name | Question It Answers | Critical Properties |
+| :--- | :--- | :--- |
+| `badge_viewed` | Are users clicking just to see the reward without intent to start? | `source` (start screen vs. profile), `time_on_badge_modal` |
+| `module_started` | Does the click actually convert to an attempt? | `difficulty_level`, `time_since_badge_view` |
+| `module_abandoned` | Where exactly do they drop off after starting? | `progress_percent`, `time_spent`, `error_encountered` (if any) |
+| `module_completed` | Is the core value being delivered? | `duration`, `score`, `badge_awarded` (boolean) |
+
+**The Identifier Seam:** To analyze retention cohorts and individual drop-off points, you must link these events via a **stable, pseudonymous user ID**. Do not use raw PII (names/emails) in analytics logs; route identity mapping to your privacy compliance protocol.
+
+### Diagnostic Strategy: Read Retention First
+
+Do not pour more traffic (acquisition) into this leaky bucket. Analyze the funnel bottom-up:
+1.  **Retention of Core Action:** Filter for users who completed a module *before* May 20. Did *their* completion rate drop? If yes, the gamification is actively distracting existing users. If no, the new clicks are low-intent noise.
+2.  **Activation Gap:** Calculate the conversion rate from `badge_viewed` → `module_started`. If this is high but `started` → `completed` is low, the problem is **module difficulty or length**, not the badge itself. If `viewed` → `started` is low, the badge is a dead-end distraction.
+
+### Experiment Rigor Warning
+
+Your current read ("35% up, 12% down") is an observational trend, not a causal test result. If you plan to A/B test a fix (e.g., hiding badges until completion):
+*   **Pre-commit:** Define the sample size and duration *before* looking at results.
+*   **Primary Metric:** `module_completed` per daily active user.
+*   **Guardrail:** `session_duration` (ensure you aren't just making the app faster by removing features users like).
+*   **No Peeking:** A result observed mid-test is `UNVERIFIED`. Wait for the pre-committed end date.
+
+### This-Week Step
+
+1.  **Query:** Run a cohort analysis comparing `module_completed` rates for Week 1 (May 20–26) vs. the three weeks prior, segmented by `badge_viewed` (true/false).
+2.  **Instrument:** Add `time_on_badge_modal` to your tracking plan immediately to distinguish "inspection" from "engagement."
+3.  **Decision Rule:** If users who view badges for >10 seconds have a 20% lower completion rate than those who skip them, **hide the badge modal** on the start screen for the June 15th build and move it to the post-completion success screen.
+
+*Note: All baseline comparisons must use your internal analytics data; no external benchmarks are applied. If `module_abandoned` events lack `progress_percent`, instrument this property before any further testing.*

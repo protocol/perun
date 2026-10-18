@@ -1,0 +1,42 @@
+### Investigation Plan: September Discount Cohort Retention Diagnosis
+
+**Objective:** Isolate whether the 40% renewal rate stems from price shock, content mismatch, or low-intent acquisition to determine the viability of the discount strategy.
+
+#### 1. Core Metric Definition
+*   **North Star for this Analysis:** **Net Revenue Retention (NRR)** of the September cohort at Month 2, compared to the historical baseline.
+*   **Primary Diagnostic Metric:** **Renewal Rate by Price Sensitivity Segment** (not just a single aggregate number).
+*   **Guardrail Metric:** **Customer Acquisition Cost (CAC) Payback Period**. If the discount extends payback beyond 3 months due to churn, the strategy destroys value regardless of top-line conversion.
+
+#### 2. Data Segmentation & Event Taxonomy
+Do not rely on the contradictory survey data alone. Instrument and query the following specific segments to answer named questions:
+
+*   **Segment A: The "Price Shock" Hypothesis**
+    *   *Question:* Do users churn exactly when the full price hits, or earlier?
+    *   *Event:* `subscription_renewal_attempt` (Success/Fail) with property `price_paid`.
+    *   *Action:* Compare churn timing distribution. If 80% of churn occurs within 48 hours of the billing date, the issue is price sensitivity. If churn is spread evenly across the month, the issue is content/value.
+*   **Segment B: The "Bargain Hunter" Hypothesis**
+    *   *Question:* Did these users ever engage with core premium features?
+    *   *Event:* `premium_feature_usage` (count per user) during the discounted month.
+    *   *Action:* Correlate usage depth with renewal. If non-renewers had near-zero usage, they were low-intent signups. If they used features heavily but still churned, the full price exceeds their perceived value.
+*   **Segment C: The "Content Mismatch" Hypothesis**
+    *   *Question:* Is there a specific content gap causing drop-off?
+    *   *Event:* `search_no_results` or `content_skip_rate` within the first 7 days.
+    *   *Action:* Identify if the discount attracted a demographic that your content library does not serve.
+
+#### 3. Lifetime Value (LTV) Reconstruction
+Calculate the **Realized LTV** for the September cohort versus the historical average:
+*   *Formula:* `(Initial Discounted Revenue) + (Renewal Rate [40%] × Full Price × Expected Lifespan)`.
+*   *Comparison:* Compare this against the **Historical LTV** (65% renewal at full price).
+*   *Decision Threshold:* If `Realized LTV < CAC`, the campaign is unprofitable. If `Realized LTV > CAC` but `< Historical LTV`, the strategy scales user base but dilutes margin.
+
+#### 4. Recommended Immediate Actions (This Week)
+1.  **Run the "Usage vs. Churn" Cohort Query:** Group September converts by usage frequency (High/Med/Low) and plot renewal rates for each. This isolates "value failure" from "price failure."
+2.  **Analyze the Billing Edge:** Filter churn events to the 3 days surrounding the first full-price billing cycle. A spike here confirms price elasticity issues; a flat line confirms product fit issues.
+3.  **Re-weight Survey Data:** Discard general sentiment. Only analyze responses from users who *used* premium features but still churned. Their feedback is the only valid signal for product dissatisfaction.
+
+**Decision Framework for Monday:**
+*   **If churn spikes at billing & usage was high:** Pivot to a "graduated pricing" model (e.g., 25% off for months 1-3) rather than a steep one-month cliff.
+*   **If churn is uniform & usage was low:** Stop the discount immediately. It attracts low-intent users who degrade unit economics. Focus on activation flows instead of acquisition incentives.
+*   **If Realized LTV is negative:** Cease the campaign. No amount of "top-line growth" justifies burning cash on users who do not stay.
+
+*Note: All metrics must be calculated using your internal analytics platform; do not rely on industry benchmarks for "good" renewal rates. Ensure user IDs used for this cohort analysis are pseudonymized before sharing with finance.*

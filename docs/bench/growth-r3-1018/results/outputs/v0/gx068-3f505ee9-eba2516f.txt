@@ -1,0 +1,33 @@
+**Recommendation: Do Not Add Mid-Flight Telemetry; Optimize Event Payloads Instead**
+
+Based on your current data volume (300 flights) and incident rate (2 battery incidents), adding high-frequency mid-flight events (altitude adjustments, battery temperature) is **not recommended** for the June 1st expansion. The bandwidth cost outweighs the statistical signal, and increasing data load directly threatens your primary constraint: maintaining connection during the 3% of flights currently experiencing dropouts.
+
+**Analysis of Proposed Events**
+
+1.  **Battery Temperature Spikes:**
+    *   **Potential Insight:** Correlation between ambient heat, load, and thermal runaway.
+    *   **Current Signal:** Extremely low. With only 2 incidents in 300 flights (~0.6% failure rate), you lack sufficient data to train a predictive model or define a "spike" threshold reliably. Streaming this continuously consumes bandwidth for a rare event.
+    *   **Verdict:** **Reject continuous streaming.** Instead, implement **edge-logging** (store locally on the drone) with a "black box" trigger: only transmit temperature data if a critical threshold is breached or if the flight ends in a failure. This captures the diagnostic data needed for the rare failure cases without clogging the pipeline for the 99.4% of successful flights.
+
+2.  **Mid-Flight Altitude Adjustments:**
+    *   **Potential Insight:** Wind shear mapping or obstacle avoidance patterns.
+    *   **Current Signal:** Low priority for *safety/reliability* compared to connection stability. Unless altitude adjustments are directly linked to the 3% connection loss (e.g., flying into terrain shadows), this is optimization data, not critical safety data.
+    *   **Verdict:** **Reject.** This adds high-cardinality noise. If altitude is a factor in connection loss, aggregate this data locally and report only "max altitude achieved per segment" or "number of significant deviations," rather than a stream of adjustments.
+
+**Strategic Priority: Protect the Connection**
+Your most critical metric is **Delivery Completion Rate**. The current 3% connection loss is a far greater risk to patient safety than an unmonitored battery temperature on a successful flight. Increasing telemetry payload size increases transmission time and packet loss probability, likely worsening the 3% dropout rate.
+
+**Action Plan for CTO (Firmware Update)**
+
+1.  **Maintain Current Stream:** Keep only `Takeoff`, `Landing`, and `Package Release`. These define the AARRR "Retention/Revenue" equivalent for operations: did the value get delivered?
+2.  **Implement Local "Black Box" Logging:** Configure drones to record high-frequency telemetry (battery temp, altitude, motor RPM) to local storage.
+3.  **Add Conditional Triggers:** Program the firmware to upload the detailed "black box" log *only* if:
+    *   A flight fails (no landing confirmation).
+    *   Battery temperature exceeds a hard safety limit (preventing fire, not just monitoring trends).
+    *   Connection is re-established after a dropout (upload a summary of the gap).
+4.  **Define the North Star:** Measure **Successful Medical Deliveries per Attempted Flight**. Do not measure "Data Points Received."
+
+**Conclusion**
+Do not trade connection reliability for speculative data. With only two battery incidents, you cannot yet justify the bandwidth cost of continuous temperature monitoring. Secure the 97% success rate first; gather deep diagnostic data only when things go wrong.
+
+*Note: This approach treats your satellite link as a scarce resource, prioritizing the confirmation of value delivery over granular process monitoring until failure rates justify deeper instrumentation.*

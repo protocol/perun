@@ -1,0 +1,37 @@
+### Executive Summary: Recommendation Engine Experiment (October)
+
+**Verdict:** **DO NOT SHIP** in current configuration. The experiment presents a classic "vanity win" (items per cart) that masks value destruction (lower order value, higher returns). The result is `UNVERIFIED` as a net positive until the profit impact is calculated.
+
+**Conflicting Outcomes:**
+*   **Volume Up (+5%):** Users are adding more items, but the data suggests these are lower-priced impulse buys rather than the targeted premium titles.
+*   **Value Down (-3%):** Average Order Value (AOV) declined, indicating the algorithm is successfully surfacing cheaper goods, contradicting the hypothesis of finding "relevant, premium titles."
+*   **Quality Risk (+2% Returns):** The increase in return rates for recommended items signals a relevance failure. Users are buying the wrong books, not just cheaper ones.
+
+**Critical Analysis:**
+The assumption that volume would correlate with premium value has been falsified. The engine is optimizing for click/add volume, likely at the expense of margin and customer satisfaction. Prioritizing "price" explicitly would likely exacerbate the return rate and brand dilution. Prioritizing "relevance" requires redefining the optimization target away from "items added" toward "items kept" or "margin generated."
+
+**Required Data Points for Net Profit Impact Calculation:**
+To answer the open question of whether volume compensates for margin erosion, you must calculate the **Net Profit Delta** using these specific figures from your analytics:
+
+1.  **Baseline vs. Treatment Gross Margin:** Calculate `(Items per Cart × AOV × Gross Margin %)` for both groups. Do not assume margin % is constant; cheaper books often have different margin structures.
+2.  **Cost of Returns:** Quantify the financial impact of the +2% return rate. Include:
+    *   Refunded revenue.
+    *   Reverse logistics costs (shipping, processing).
+    *   Inventory depreciation (if returned books cannot be resold as new).
+3.  **Long-Term Retention Signal:** Check if the treatment group shows lower retention in Week 2–4 compared to control. High return rates often predict churn, which is a lagging guardrail metric not yet visible in the 4-week window.
+
+**Decision Framework for the Director:**
+Present a break-even analysis. The 5% volume lift must generate enough *additional* gross profit to cover:
+*   The 3% loss in total revenue value.
+*   The absolute cost of the incremental returns.
+*   Any increase in customer support load.
+
+If `(Lift in Volume Profit) - (Loss in AOV Profit) - (Cost of Incremental Returns) < 0`, the feature destroys value regardless of the "engagement" lift.
+
+**This Week's Step:**
+1.  **Query:** Run a cohort analysis joining `cart_add_events`, `transaction_value`, and `return_flags` for the treatment vs. control groups to compute the **Net Profit Per User**.
+2.  **Test Design:** If the net profit is negative, do not tweak weights arbitrarily. Design a new A/B test with **Net Profit** as the primary metric and **Return Rate** as a hard guardrail. Pre-commit to a sample size that detects a 1% change in net profit, and do not peek before the term ends.
+
+---
+*Note: Ensure user identifiers in this analysis are pseudonymous; route any PII handling for return reasons to your privacy compliance protocol.*
+*Do not present the 5% lift in isolation; it is a vanity metric without the profit context.*

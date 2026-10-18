@@ -1,0 +1,45 @@
+### Pilot KPIs: SMS Reminder System (HealthConnect)
+
+**Audience:** Clinical Operations Director & IT Steering Committee
+**Objective:** Validate no-show reduction without compromising patient communication health.
+
+#### 1. North Star Metric (Customer Value)
+**Net No-Show Reduction Rate**
+*Definition:* The percentage point decrease in no-shows among piloted clinics, adjusted for any patients who opted out of all communications.
+*Why:* A raw drop in no-shows is vanity if it comes at the cost of patients blocking future contact. This metric rises only if we successfully keep patients engaged and present.
+*Target:* Move the baseline from 18% downward while maintaining opt-out rates below the tripwire (see below).
+
+#### 2. Input Metrics (The Levers)
+*   **Reminder Delivery Success Rate:** % of SMS successfully delivered (critical for rural areas with varying data/network coverage).
+*   **Actionable Response Rate:** % of patients who reply "Confirm" or "Reschedule" (measures activation, not just delivery).
+*   **Opt-Out Rate (Spam Signal):** % of patients replying "STOP" or manually blocking the number within 48 hours of the pilot start.
+
+#### 3. Guardrail Metric (Communication Health)
+**Cumulative Opt-Out Rate per Clinic**
+*Definition:* The total percentage of patients in a specific clinic who opt out of *all* future communications during the pilot.
+*Threshold for Action:* If any clinic exceeds **2.5%** opt-outs (or 3x the historical baseline if known), the frequency strategy for that clinic is immediately paused for review. This prevents scaling a "spammy" configuration.
+
+#### 4. Event Taxonomy (What to Instrument)
+Do not instrument "everything." Track only these events to answer specific questions:
+*   `sms_sent` (Properties: `clinic_id`, `time_before_appt`, `network_provider`) → *Question: Are messages reaching rural networks?*
+*   `sms_opt_out` (Properties: `clinic_id`, `time_since_last_sms`) → *Question: Is the 2-hour reminder triggering spam complaints?*
+*   `appointment_status_changed` (Properties: `old_status`, `new_status`, `source`) → *Question: Did the reminder drive a reschedule vs. a no-show?*
+*   `patient_no_show` (Properties: `clinic_id`, `reminder_count_received`) → *Question: Does receiving 2 reminders reduce no-shows more than 1?*
+
+#### 5. Experiment Design & Reading Rules
+*   **Pre-commitment:** The pilot runs for **4 weeks** or until **5,000 appointments** are processed. Do not peek at significance before this endpoint.
+*   **Primary Read:** Compare Net No-Show Reduction between the pilot group and a holdout group (clinics continuing current manual processes).
+*   **The "Peeking" Trap:** If the Opt-Out Rate spikes in Week 1, investigate immediately (safety), but do not declare the no-show metric a "win" until the full duration completes. Early wins often regress.
+*   **Segmentation:** Analyze results by **urban vs. rural clinic** and **mobile network provider**. If rural delivery fails >15%, the 2-hour reminder is wasted cost and noise for that segment.
+
+#### 6. Decision Matrix (What the numbers mean)
+*   **Ship to all 300 clinics:** Net No-Show Reduction > 4 percentage points AND Opt-Out Rate < 1.5%.
+*   **Iterate (Adjust Frequency):** Net No-Show Reduction > 2 points BUT Opt-Out Rate > 1.5%. *Action:* Test removing the 2-hour reminder for rural clinics only.
+*   **Stop Pilot:** Net No-Show Reduction < 1 point OR Opt-Out Rate > 2.5%. *Action:* The friction outweighs the benefit; revert to manual calls for high-risk patients.
+
+#### This Week's Steps
+1.  **Instrument:** Implement the four events listed above in the analytics pipeline, ensuring `clinic_id` and `network_provider` are captured pseudonymously.
+2.  **Baseline Query:** Run a query on the last 30 days of data to establish the current opt-out baseline (if any) and no-show variance by clinic size.
+3.  **Holdout Selection:** Randomly assign 10 of the 50 pilot clinics to a "control" group (no automated SMS) to isolate the true causal lift of the system.
+
+*Note: All metrics must be read against HealthConnect's own baseline trends; no external industry benchmarks are applied. Patient PII must remain segregated from analytics logs per privacy compliance standards.*

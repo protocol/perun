@@ -1,0 +1,34 @@
+### Executive Recommendation: Revert Immediately, Then Retune
+
+**Decision:** Revert the algorithm to the previous version by end of day.
+**Rationale:** The current trade-off is economically negative and operationally unsustainable. The cost of friction ($60,000) currently exceeds the fraud prevented ($50,000), yielding a net loss of $10,000 over just three days, excluding long-term churn risk from 300 blocked customers.
+
+#### 1. Cost Framework: Friction vs. Fraud
+To evaluate future models, categorize costs using this formula:
+*   **Cost of Fraud (CoF):** Direct loss amount + investigation labor. (Current Benefit: $50k).
+*   **Cost of Friction (CoFr):** (False Positives × Avg. Transaction Value) + (Support Tickets × Cost Per Ticket) + (Estimated Churn Value).
+    *   *Current Calculation:* 150k transactions/day × 0.7% increase in false positives × 3 days ≈ 3,150 extra blocked transactions. Even at a low $19 average transaction value, direct blockage costs ~$60k. Adding 300 support tickets (est. $15/ticket) and reputational damage confirms the net negative.
+*   **Rule of Thumb:** A model update is only acceptable if `CoF Saved > 3 × CoFr Incurred`. High friction drives immediate churn; fraud is often recoverable or insured.
+
+#### 2. Actionable Segmentation for Tuning
+Once reverted, analyze the last three days of false positives using these four segments to retune the model:
+*   **Geographic Velocity:** Isolate transactions where the location differs from the user's history by >500 miles within <4 hours. This likely confirms your "unusual location" hypothesis.
+*   **Merchant Category Code (MCC):** Group false positives by industry (e.g., Travel, Electronics, Grocery). If 80% of errors are in "Travel," apply a temporary whitelist or higher threshold for that sector.
+*   **Transaction Value Brackets:** Segment into <$50, $50–$200, and >$200. High-sensitivity models often over-flag low-value, high-frequency legitimate spending.
+*   **Customer Tenure:** Compare false positive rates for customers <6 months vs. >2 years. Long-term customers with sudden flags are almost certainly false positives and should have lower sensitivity thresholds.
+
+#### 3. Visualization for Non-Technical Stakeholders
+Present a **"Trade-Off Balance Scale"** chart to the Risk Director:
+
+*   **Visual Type:** A dual-axis bar chart with an overlay line.
+*   **X-Axis:** Time (Last 7 Days: 4 days pre-update, 3 days post-update).
+*   **Left Y-Axis (Bars):** Daily Volume of False Positives (Red) vs. True Fraud Caught (Green).
+    *   *Effect:* Visually demonstrates the red bar spiking 2.4x while the green bar shows marginal gain.
+*   **Right Y-Axis (Line):** Cumulative Net Financial Impact ($).
+    *   *Effect:* The line should clearly dip below zero on Day 1 of the update, illustrating the immediate net loss.
+*   **Annotation:** Add a callout box on Day 5 (Tuesday) labeled "Algorithm Update" with a text bubble: "Friction Cost ($60k) > Fraud Saved ($50k)."
+
+This visual instantly communicates that the "safety" gain is costing more than the fraud it prevents, justifying the revert without requiring statistical expertise.
+
+*Note: Immediate reversion stops the bleeding; segmentation analysis can proceed in parallel to prepare a v2 model.*
+*Ensure support teams are alerted to prioritize tickets from the "Long-term Tenure" segment upon revert to recover trust quickly.*

@@ -1,0 +1,38 @@
+### Recommended Event Taxonomy and Success Score for LutongKusina Video
+
+Do not use "total watch time" or raw view counts as your primary success metric; these are vanity metrics that rise regardless of whether creators feel valued. Your community managers' observation is correct: for a supply-constrained ecosystem (only 5% video uploads), **retention of the creator** is the North Star, not passive consumption. A 30-second view on a 2-minute recipe is `UNVERIFIED` as success or failure until tied to a specific outcome.
+
+**1. The North Star Metric**
+Define your North Star as **Weekly Active Creators completing a "Value Delivery" loop**.
+*   **Definition:** A creator who uploads a video AND receives at least one "High-Intent Interaction" within 7 days.
+*   **Why:** This measures whether the ecosystem rewards the effort of making a video. If this number rises, your supply of cooking tutorials grows. If it falls, you are building a ghost town regardless of total watch time.
+
+**2. Event Taxonomy: Instrument Only What Answers a Question**
+Stop instrumenting "everything." Define these specific events with the following properties to answer named questions:
+
+| Event Name | Question It Answers | Required Properties |
+| :--- | :--- | :--- |
+| `video_upload_completed` | Are creators finishing the friction-heavy upload flow? | `video_duration`, `recipe_category`, `creator_tenure` |
+| `video_view_threshold_30s` | Did the viewer get enough context to judge the recipe? | `video_id`, `viewer_is_returning`, `completion_rate` (30s/total) |
+| `high_intent_interaction` | Did the content drive community action (comments/shares/saves)? | `interaction_type` (comment, share, save), `video_id`, `timestamp` |
+| `creator_return_upload` | Did the previous upload's feedback loop cause a repeat upload? | `days_since_last_upload`, `previous_video_interactions_count` |
+
+**3. Defining the "Success Score" for the Dashboard**
+Replace "engagement rate" with a **Creator Resonance Score (CRS)** for each video. Do not average raw numbers; weight them by their correlation to repeat uploads.
+*   **Formula:** `CRS = (Saves × 3) + (Comments × 2) + (Shares × 2) + (Threshold Views × 0.5)`
+*   **Logic:** A "Save" or "Comment" signals a user intends to cook the dish (high value in Filipino culture). A passive 30-second view is low signal.
+*   **Threshold Definition:** A video is "Successful" if its CRS places it in the **top 40% of that creator's own history**, not against a global average. This accounts for new creators vs. established ones.
+
+**4. The 30-Second Question**
+A 30-second view on a 2-minute video is **neutral**. It becomes "Success" only if:
+*   It leads to a `high_intent_interaction`.
+*   OR, the `completion_rate` cluster for that recipe type shows 30s is the "aha moment" (e.g., seeing the final plating).
+*   **Action:** Run a cohort analysis this week comparing `video_view_threshold_30s` against `high_intent_interaction`. If the correlation is <0.1, 30s is noise. If >0.4, it is a valid activation event.
+
+**This Week's Steps**
+1.  **Instrument:** Implement the four events above with the specified properties; disable tracking of generic "pageviews" for video to reduce noise.
+2.  **Query:** Calculate the correlation coefficient between `high_intent_interaction` count per video and `creator_return_upload` within 14 days for the April 5–May 1 cohort.
+3.  **Decision Rule:** If the correlation is positive, set the May 30 dashboard default sort to "Creator Resonance Score." If negative, revert to "Comments Only" as the primary signal and mark "Watch Time" as a secondary guardrail.
+
+*Note: Ensure the `creator_id` used for cohorting is pseudonymous and stable across sessions; route PII handling to your privacy compliance protocol.*
+*Do not fabricate a "good" CRS threshold; establish the baseline from your first week of clean data.*

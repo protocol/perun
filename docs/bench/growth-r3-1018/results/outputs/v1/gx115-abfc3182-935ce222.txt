@@ -1,0 +1,51 @@
+### Critical Questions for Governance Approval
+
+To finalize the event taxonomy, the committee must answer these four questions before code is written:
+
+1.  **What is the specific "core action" that delivers value to ZurichChain?** Is it Total Value Locked (TVL) stability, trading volume, or fee generation? If the goal is stability, a user who locks for 30 days but never trades may be more valuable than a high-frequency trader who provides fleeting liquidity.
+2.  **What defines "Retention" in this context?** Given the 60% withdrawal rate within 24 hours, is retention defined as *duration* of capital (time-lock completion) or *recurrence* of interaction (returning to deposit again)?
+3.  **What is the "Aha Moment" for a liquidity provider?** Is it the first time they earn a fee, or the moment their lock matures? The event marking this moment becomes the primary activation metric.
+4.  **How do we attribute value to non-trading providers?** If a user provides liquidity but never trades, do they generate value via depth/stability alone? If yes, the taxonomy must track "passive stability contribution" separate from "active trading fees."
+
+### Proposed Event Taxonomy: Speculators vs. Participants
+
+Group events by **intent** and **outcome**, not just raw on-chain function calls. Discard the "instrument everything" approach; only track events that answer the questions above.
+
+#### Group A: Acquisition & Activation (The Entry)
+*   **`liquidity_deposit_initiated`**: User sends tokens to the pool.
+    *   *Properties:* `token_type`, `amount`, `is_first_deposit`.
+    *   *Question Answered:* Are we attracting capital?
+*   **`liquidity_lock_commitment`**: User signs the transaction to lock for a specific term (e.g., 30 days).
+    *   *Properties:* `lock_duration_days`, `bonus_tier_eligible`.
+    *   *Question Answered:* Did the user intend to stay? (Distinguishes intent from action).
+
+#### Group B: Retention & Core Value (The Stay)
+*   **`liquidity_lock_matured`**: **This is your "Successful Lock" event.** It fires only when the full term completes without early withdrawal.
+    *   *Properties:* `actual_duration_days`, `bonus_claimed`.
+    *   *Question Answered:* Did the incentive work? (Initial deposit is vanity; maturity is value).
+*   **`liquidity_early_exit`**: User withdraws before the term ends.
+    *   *Properties:* `days_remaining`, `penalty_applied`.
+    *   *Question Answered:* Where is the leakage? (Use this to analyze the 60% drop-off).
+*   **`passive_value_accrual`**: A daily/weekly snapshot event for wallets that provided liquidity but executed zero trades.
+    *   *Properties:* `avg_pool_share_percentage`, `days_active`.
+    *   *Question Answered:* How much value do non-traders provide via stability?
+
+#### Group C: Engagement & Revenue (The Activity)
+*   **`swap_executed_by_provider`**: A trade executed by a wallet that currently has an active liquidity position.
+    *   *Properties:* `trade_volume`, `liquidity_depth_at_time`.
+    *   *Question Answered:* Does providing liquidity correlate with trading activity?
+*   **`fees_claimed`**: User withdraws earned fees.
+    *   *Properties:* `fee_amount`, `source_token`.
+
+### Segmentation Logic for Dashboards
+
+Do not segment by "unique wallets" alone. Segment by **behavioral cohort**:
+
+1.  **Speculative Farmers:** Trigger `liquidity_deposit_initiated` but trigger `liquidity_early_exit` within 48 hours. *Action:* Monitor cost of bonuses paid to this group vs. value gained.
+2.  **Stable Partners:** Trigger `liquidity_lock_matured`. *Action:* This is your North Star input. Track the % of depositors who reach this state.
+3.  **Active Traders:** Trigger `swap_executed_by_provider` > 3 times/month.
+4.  **Passive Anchors:** Trigger `passive_value_accrual` but zero swaps. *Action:* Validate if their capital depth reduces slippage for others.
+
+**This Week's Step:** Draft the schema for `liquidity_lock_matured` and `liquidity_early_exit` with exact property names and present these two definitions to the committee as the sole criteria for bonus eligibility. Without these binary states, the dashboard cannot distinguish farming from retention.
+
+*Note: Ensure the identifier used to track these events across sessions is a pseudonymous wallet hash, not raw PII, and route any consent logic to your privacy compliance review.*

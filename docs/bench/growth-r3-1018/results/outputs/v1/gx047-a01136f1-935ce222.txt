@@ -1,0 +1,42 @@
+# VietPay Crypto Integration: Data Tracking Specification
+
+**Audience:** Legal Counsel & Product VP
+**Goal:** Balance product optimization with Vietnamese regulatory compliance and user trust.
+**Status:** Baseline crypto adoption is `UNVERIFIED`; no benchmark exists. All metrics must be derived from internal post-launch data.
+
+## 1. North Star Metric
+**Metric:** Weekly Active Users (WAU) completing a **verified crypto transaction** (send, receive, or swap) > $0.
+*Why:* Raw "wallet opens" or "KYC starts" are vanity metrics that rise without delivering value. This metric only increases when a user successfully derives value from the feature.
+*Input Metrics:* KYC completion rate, first transaction success rate, weekly retention of transacting users.
+
+## 2. Event Taxonomy (Question-Driven)
+Instrument only events that answer specific product or compliance questions. Do not track "just in case."
+
+| Event Name | Question Answered | Properties (Pseudonymous ID required) | Compliance Note |
+| :--- | :--- | :--- | : |
+| `crypto_feature_viewed` | Is awareness translating to interest? | `entry_point`, `device_type` | None |
+| `kyc_crypto_initiated` | Where do users drop off in verification? | `step_number`, `error_code` | Log timestamp for audit trail |
+| `kyc_crypto_completed` | What is the activation funnel conversion? | `verification_level`, `duration_sec` | **Mandatory:** Store proof of verification status |
+| `crypto_tx_created` | Are users attempting transactions? | `asset_type`, `estimated_fee`, `is_test_tx` (<$10) | **Mandatory:** Log intent before execution |
+| `crypto_tx_confirmed` | **North Star Input:** Did value transfer succeed? | `tx_hash`, `amount_usd`, `counterparty_type` | **Mandatory:** Immutable record for AML/CFT |
+| `crypto_tx_failed` | What friction blocks adoption? | `failure_reason`, `step_failed` | Log for fraud monitoring |
+| `compliance_alert_triggered` | Is the system catching risky behavior? | `alert_type`, `risk_score`, `action_taken` | **Mandatory:** Reportable to authorities |
+
+**Identifier Seam:** Use a stable, pseudonymous `user_cohort_id` to track behavior across sessions. Do not use raw PII (name, phone) in analytics logs. Route PII mapping and consent records to the secure compliance database (`privacy-compliance.md`), not the product analytics warehouse.
+
+## 3. Compliance & Privacy Guardrails
+*   **Data Minimization:** Do not log wallet private keys, seed phrases, or full IP addresses in product analytics.
+*   **Audit Trail:** All `confirmed` and `failed` transactions must be logged with immutable timestamps and hashes for regulatory reporting, separate from behavioral analytics.
+*   **Test Transaction Hypothesis:** Tracking sub-$10 transactions (`is_test_tx=true`) is a valid hypothesis for "comfort," but treat this as `UNVERIFIED` until launch. Do not assume this correlates to long-term retention without cohort analysis.
+
+## 4. Experiment Rigor (Post-Launch)
+*   **No Peeking:** Do not declare "success" based on day-1 or day-2 conversion rates. Pre-commit to a sample size or duration (e.g., 14 days) before analyzing A/B tests on onboarding flows.
+*   **Guardrails:** Any experiment optimizing for speed must have a guardrail metric for `compliance_alert_triggered` to ensure we do not inadvertently increase regulatory risk.
+
+## 5. This-Week Steps
+1.  **Engineering:** Implement the 7 events above with pseudonymous IDs; ensure `tx_hash` and `kyc_status` are routed to the secure compliance ledger, not the general analytics stream.
+2.  **Legal:** Define the exact `risk_score` thresholds that trigger a mandatory report to Vietnamese authorities; hardcode these as non-bypassable rules.
+3.  **Product:** Draft the analysis plan for the "small test transaction" hypothesis, defining the specific retention cohort (e.g., "Users with >2 txs <$10 in Week 1") that will validate or invalidate the assumption.
+
+*Note: All adoption rates and conversion benchmarks are currently `UNVERIFIED`. Compare future performance strictly against VietPay's own Week 1 baseline, not external market data.*
+*Ensure the "small test" definition (<$10) is configurable without code changes to adjust for market volatility.*

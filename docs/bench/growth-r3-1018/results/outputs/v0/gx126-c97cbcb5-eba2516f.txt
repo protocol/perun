@@ -1,0 +1,40 @@
+### BoxJoy EU Expansion: Unit Economics & Retention Dashboard Proposal
+
+**North Star Metric:** **Net Value Retention per Market** (Revenue retained from existing subscribers minus churn and service costs, segmented by country). This rejects vanity metrics like "total new signups" which rise even if unit economics collapse.
+
+**1. Unit Economics Guardrails (The "Stop" Signals)**
+These metrics must be tracked weekly. If any breach the tripwire, acquisition spend in that specific market pauses immediately.
+*   **Fully Landed Cost per Box:** Tracks actual shipping + taxes + duties.
+    *   *Baseline:* US $4.50.
+    *   *Tripwire:* >$6.10 (US baseline + 35% buffer). Your 30% assumption is a hypothesis; this metric validates it against reality. If actuals exceed $6.10, margins are at risk.
+*   **Contribution Margin per Box:** (Subscription Price) − (COGS + Fully Landed Cost + Variable Support).
+    *   *Tripwire:* <15% (or your specific target). A negative trend here indicates the expansion is destroying value regardless of volume.
+*   **Delivery Variance Index:** (Actual Delivery Days) − (Promised Delivery Days).
+    *   *Context:* Do not compare raw days to the US baseline due to unknown holiday/disruption variables. Instead, track the *gap* between promise and reality.
+    *   *Tripwire:* Variance >2 days sustained for 2 weeks. This signals local logistics failure before churn spikes.
+
+**2. Retention & Cohort Health (Read Bottom-Up)**
+Do not look at aggregate churn. Analyze retention by **Launch Cohort** (e.g., "Germany Sept Week 1") to isolate market-specific issues from product issues.
+*   **Month-1 Retention Rate (by Market):** The percentage of subscribers who renew after the first box.
+    *   *Baseline:* US 95% (5% churn).
+    *   *Analysis:* Compare EU cohorts only to the US baseline *after* 30 days of data. If DE/FR Month-1 retention drops below 85% while US holds at 95%, the issue is local (shipping experience/cultural fit), not global product fit.
+*   **Churn Reason Taxonomy:** Tag cancellations specifically with "Shipping Delay," "Customs Issue," or "Product Fit."
+    *   *Action:* If >40% of churn in a market is tagged "Shipping/Customs," the logistics partner is the failure point, not the snack curation.
+
+**3. Event Taxonomy & Instrumentation Rules**
+Instrument only what answers a named question. Do not track "page views" for this dashboard.
+*   **Event:** `order_fulfilled_landed` (Properties: `market`, `actual_total_cost`, `delivery_days`). *Question: Are we losing money on every box shipped?*
+*   **Event:** `subscription_renewed` (Properties: `market`, `cohort_month`, `days_since_last_delivery`). *Question: Did delivery delays cause this specific cohort to churn?*
+*   **Identifier Seam:** Use a stable, pseudonymous `customer_id` to track users across sessions and markets for cohort analysis. Do not use raw PII (names/emails) in analytics logs; route PII handling to privacy compliance protocols.
+
+**4. Implementation Timeline & Next Steps**
+*   **By August 18 (Dashboard Ready):** Define the SQL queries for "Fully Landed Cost" and "Delivery Variance" using dummy data to verify logic.
+*   **September 1 (Launch):** Begin data collection. **No decisions** on scaling spend until 14 days of actuals are recorded.
+*   **September 15 (First Review):** Compare actual landed costs against the $6.10 tripwire.
+
+**This Week's Actions:**
+1.  **Define the Calculation:** Finalize the exact formula for "Fully Landed Cost" with Finance to ensure tax/duty fields are captured in the ERP.
+2.  **Tagging Schema:** Update the cancellation flow to require a specific "Logistics/Customs" reason code for EU users only.
+3.  **Baseline Lock:** Document the current US delivery variance and churn rate as the immutable baseline for comparison.
+
+*Note: All thresholds above are derived from your provided US baseline and stated risk assumptions; no external industry benchmarks were fabricated. If actual tax data is unavailable pre-launch, the "Fully Landed Cost" metric will initially read as UNVERIFIED until the first shipments clear customs.*

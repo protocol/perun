@@ -1,0 +1,34 @@
+**To:** Sarah, VP of Product
+**From:** Growth Analytics
+**Date:** [Current Date]
+**Subject:** Success Criteria & Guardrails for Deliverability Feature Launch
+
+**Primary Outcome Metric: Customer-Attributed Open Rate Lift**
+Do not track "authentication pass rate" or "bounce rate reduction" as the success metric; these are vanity inputs that rise regardless of customer value. The North Star is the **percentage increase in unique opens per delivered email** for the beta cohort compared to their own pre-launch baseline.
+*   **Why:** The hypothesis states delivery improvement *may* increase opens. If authentication hits 98% but open rates remain flat, the feature delivered technical compliance but no customer value (content relevance remains dominant). Success is defined strictly by the lift in this engagement metric, not the technical pass rate.
+*   **Measurement:** Compare Week 1–4 post-launch open rates against the same clients' Week 1–4 pre-launch baseline. Do not compare against industry benchmarks.
+
+**Guardrail Metrics (Unintended Consequences)**
+To ensure we do not trade delivery for reputation or user trust, monitor these two metrics with hard stop thresholds:
+
+1.  **Spam Complaint Rate (Per Thousand Delivered)**
+    *   **Risk:** Aggressive authentication changes or header modifications might trigger stricter filtering heuristics at ISPs, causing legitimate mail to land in spam folders, driving users to manually flag it.
+    *   **Tripwire:** If the complaint rate increases by >10% relative to the client's baseline, halt the rollout for that segment. A rise here indicates the "improved" delivery is actually degrading sender reputation.
+
+2.  **Unsubscribe Rate (Per Thousand Delivered)**
+    *   **Risk:** If the feature inadvertently alters email rendering or timing, or if "delivered" emails are now reaching inboxes of disengaged users who previously never saw them (and thus didn't unsubscribe), volume may spike while sentiment drops.
+    *   **Tripwire:** If the unsubscribe rate increases by >15% relative to baseline, pause expansion. This signals that increased visibility is driving negative user action rather than engagement.
+
+**Experiment Design & Read-Out Rules**
+*   **Pre-commitment:** The 5,000 beta users constitute the test group. Their pre-launch 30-day average serves as the control. Do not peek at results daily. Define the analysis date (e.g., 14 days post-full rollout) and read the data **once** at that endpoint to avoid false positives from "peeking."
+*   **Decision Logic:**
+    *   **Ship:** Primary metric shows statistically significant lift (>0%) AND both guardrails are within thresholds.
+    *   **Stop:** Primary metric is flat/negative OR either guardrail trips its threshold.
+    *   **Extend:** If variance is too high to determine significance at the read-out date, extend the observation window by 7 days only if pre-committed in the plan.
+
+**This Week's Step**
+1.  Instrument the `email_opened` event linked to a stable, pseudonymous customer ID (not raw PII) to enable cohort comparison against the pre-launch baseline.
+2.  Configure the dashboard to calculate the *percentage change* from baseline for Open Rate, Complaint Rate, and Unsubscribe Rate automatically; hide raw cumulative counts to prevent vanity interpretation.
+3.  Document the exact "stop" thresholds (10% complaint lift, 15% unsubscribe lift) in the launch runbook before January 15th.
+
+*Note: All metric values are currently UNVERIFIED until the instrumentation is live and baseline data is queried from your analytics platform. Do not estimate expected lift percentages without this data.*

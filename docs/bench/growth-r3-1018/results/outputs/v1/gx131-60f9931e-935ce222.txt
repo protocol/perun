@@ -1,0 +1,20 @@
+**Recommendation: Do not roll out globally yet; extend the experiment to reach pre-committed statistical power, specifically targeting the mobile segment.**
+
+The current 2.1% lift fails to meet your 4% success threshold, rendering the result a "no-win" against your original hypothesis. More critically, the wide confidence interval on mobile indicates the sample size for that cohort was insufficient to detect a true effect, not necessarily that the feature failed. Rolling out now risks deploying a feature with neutral or negative revenue impact on a major platform. Killing the feature entirely discards potential value hidden by noise. The correct path is to treat the current data as an interim read and continue the test until the mobile cohort reaches the minimum sample size required to narrow the confidence interval below your decision threshold.
+
+**Specific Data Points & Actions Required to Resolve Uncertainty:**
+
+1.  **Mobile-Specific Sample Size & Power Calculation:** Calculate the exact number of mobile users needed to detect a 4% lift with 80% power given your current variance. Compare this to the 21-day accumulation. If under-sampled, extend the test duration specifically for mobile traffic until this N is reached.
+2.  **Guardrail Metric Check (Cancellation Rate):** Before extending, verify the "unsubscribe" or "complaint" rate for the mobile treatment group. If the reminder frequency causes a spike in cancellations (even if renewal lift is ambiguous), the risk outweighs the potential gain, and you should kill the feature immediately.
+3.  **Revenue Per User (RPU) by Device:** Since the VP cares about long-term revenue, stop looking at renewal *rates* alone. Calculate the RPU lift for desktop vs. mobile. A smaller percentage lift on high-value desktop users might justify a partial rollout there, while mobile remains in testing.
+4.  **Pre-Commitment Validation:** Confirm the original test design specified a fixed end date or sample size. If the team peeked at data daily to find significance, the current p-values are invalid. You must re-calculate the required duration based on a strict sequential testing rule or a fixed horizon to ensure the next read is statistically valid.
+
+**Decision Logic for the Steering Committee:**
+*   **If mobile guardrails are clean:** Extend the test 14 more days (or until N is met) to resolve the mobile signal.
+*   **If mobile guardrails show harm:** Kill the feature for mobile; consider a desktop-only rollout if desktop RPU is positive and significant.
+*   **If extended test still shows <4% lift:** Kill the feature globally; the engineering effort does not yield the required ROI.
+
+**This Week's Step:** Run the power analysis for the mobile cohort tonight to determine the exact additional days needed. Present the VP with a binary choice: "Extend 14 days to validate mobile revenue" or "Roll out to Desktop only based on current significance," backed by the RPU calculation.
+
+*Note: Ensure the user identifier used for mobile cohorts is pseudonymous and stable across sessions to accurately track renewal behavior without violating privacy compliance standards.*
+*All baseline comparisons must use StreamFlow's internal historical data; no external industry benchmarks were applied.*

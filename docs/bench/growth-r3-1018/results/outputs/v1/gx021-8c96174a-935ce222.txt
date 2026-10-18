@@ -1,0 +1,58 @@
+**To:** Chen, Hardware Engineering Lead
+**From:** Product Team
+**Date:** October 8
+**Subject:** Firmware v1 Event Prioritization & Memory Schema (2MB Limit)
+
+**Decision: Prioritize Core Health Validation; Defer Environmental Granularity**
+
+To meet the seven-day battery claim and validate health claims within the 2MB daily local storage limit, we must instrument only events that directly prove the "North Star" value: accurate health trend delivery. We will defer high-frequency environmental data that does not immediately impact the core health algorithm or user safety.
+
+**1. Events to Include in Firmware v1 (Must-Have)**
+These events answer the specific question: "Did the device accurately capture the core health metric required for our launch claims?"
+
+*   **`heart_rate_sample` (Adaptive Frequency)**
+    *   *Question:* Can we reconstruct HRV trends without draining battery?
+    *   *Spec:* Do **not** hard-code 15-minute intervals. Implement an adaptive schema: 1-minute sampling during detected activity/sleep, 15-minute sampling during sedentary wakefulness.
+    *   *Storage Impact:* Variable. Estimated ~400KB/day average.
+    *   *Action:* If battery < 20%, auto-throttle to 30-minute intervals. This validates the "7-day life" claim under stress.
+
+*   **`motion_intensity_bout` (Aggregated)**
+    *   *Question:* Did the user move enough to trigger health benefits?
+    *   *Spec:* Do not store raw accelerometer streams. Store aggregated 5-minute buckets (steps, intensity zone, duration).
+    *   *Storage Impact:* ~100KB/day.
+    *   *Validation:* Essential for calorie burn and activity minute claims.
+
+*   **`gps_run_summary` (Night Run Optimization)**
+    *   *Question:* Do Taipei night runners tolerate lower GPS fidelity for battery?
+    *   *Spec:* **Defer continuous GPS tracking.** Record GPS only at run start, run end, and every 2 minutes during the run (down from every 15s). Store path simplification (Douglas-Peucker algorithm) locally.
+    *   *Trade-off:* We lose precise pace mapping but gain ~40% battery on run days.
+    *   *Validation:* This tests the tolerance hypothesis. If user complaints about map accuracy exceed 5% in beta, we adjust in v2.
+
+*   **`battery_health_checkpoint`**
+    *   *Question:* Are we meeting the 40% bedtime threshold?
+    *   *Spec:* Log battery % at 8:00 PM daily.
+    *   *Action:* If average < 40% after 3 days of beta, automatically disable `gps_run_summary` in v1.0.1.
+
+**2. Events to Defer to Firmware v2**
+These are "nice-to-have" environmental readings that consume disproportionate power/storage for non-critical insights in the MVP phase.
+
+*   **`ambient_temperature_continuous`**: Defer. Sample only once per hour instead of per-minute. Temperature trends do not require high frequency for health claims.
+*   **`raw_accelerometer_dump`**: Defer. Raw data exceeds storage limits. Rely on the on-device processed `motion_intensity_bout`.
+*   **`spo2_frequent_sampling`**: Defer. Limit to on-demand user checks or sleep-only sampling until v2 validates battery impact.
+
+**Trade-off Analysis: Motion vs. Environment**
+*   **High-Frequency Motion:** Critical for health claim validation (steps, active minutes). Must be preserved but **aggregated** before storage. Raw data is forbidden under the 2MB limit.
+*   **Sporadic Environmental:** Low value for immediate health claims. Reducing GPS frequency during night runs is the primary lever to extend battery. The risk of reduced map precision is acceptable compared to the risk of the device dying before bedtime (which breaks the core value prop).
+
+**Validation Metrics for Health Claims (Local)**
+To legally and technically validate health claims locally without cloud dependency, the firmware must verify:
+1.  **Data Completeness:** % of expected `heart_rate_sample` windows present. If < 90%, flag "Data Insufficient" to the user rather than showing a false trend.
+2.  **Sensor Continuity:** Gap detection in `motion_intensity_bout`.
+3.  **Battery Correlation:** Confirm that on days with `gps_run_summary`, the `battery_health_checkpoint` remains > 40%.
+
+**This Week's Step**
+1.  **Chen:** Implement the adaptive `heart_rate_sample` logic and the 2-minute GPS interval for runs in the memory schema by Oct 10.
+2.  **Product:** Define the exact "Data Insufficient" UI string to show users when adaptive sampling reduces data density, ensuring transparency.
+3.  **QA:** Run a 48-hour simulation with night runs to verify the 2MB limit is not breached when both motion and reduced GPS events are active.
+
+*Note: All user identifiers in these logs must be pseudonymous; route any PII handling to the privacy compliance protocol. Do not invent retention benchmarks; measure against the beta cohort's own baseline.*

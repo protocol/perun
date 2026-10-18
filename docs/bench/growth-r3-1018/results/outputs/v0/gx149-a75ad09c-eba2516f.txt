@@ -1,0 +1,34 @@
+### Diagnostic Plan: Isolating Shipping Cost vs. Layout Friction
+
+To confirm whether the 40% abandonment spike is driven by the $3 fee increase, the layout change, or external factors (like coupon hunting), execute the following three-step analysis using your existing analytics data. Do not rely on assumptions; verify against your baseline.
+
+**1. Establish the Counterfactual Baseline (Pre/Post Analysis)**
+Compare the conversion rate at the "Shipping Display" step for the 14 days prior to September 5th against the 14 days after.
+*   **Action:** Segment users by device type (mobile/desktop) and traffic source.
+*   **Verification:** If the drop is uniform across all segments, the cost is the likely driver. If the drop is isolated to mobile, the layout change (prominence of total price) is the probable culprit.
+*   **Metric:** Step-to-step conversion rate (Review Page → Payment Entry).
+*   **Status:** If you do not have pre-September 5th data tagged distinctly, this comparison is `UNVERIFIED`. You must reconstruct the cohort from raw event logs.
+
+**2. Isolate the Variable via Micro-Segmentation**
+The $3 increase was an *average*. Not every user paid exactly $3 more.
+*   **Action:** Break down the post-September 5th abandonment rate by specific shipping cost bands (e.g., $0–$5 increase, $5–$10 increase, no increase).
+*   **Logic:** If abandonment correlates linearly with the *magnitude* of the price hike, cost is the root cause. If users with $0 increase show the same abandonment spike as those with a $10 increase, the layout change or a technical bug is the cause.
+*   **Coupon Hunt Detection:** Analyze the time-on-page at the review step. A sharp increase in average time spent suggests users are searching for codes. A flat or decreased time suggests immediate rejection (sticker shock) or confusion.
+
+**3. Qualitative Triage (The "Why" Gap)**
+Analytics tells you *where* they leave, not *why*.
+*   **Action:** Deploy a one-question exit survey triggered only when the cursor moves to close the tab or back-button is pressed on the Review Page. Ask: "What stopped you from completing your purchase?" with options: "Shipping too expensive," "Looking for a coupon," "Confused by the layout," or "Just browsing."
+*   **Constraint:** Do not instrument "everything." This single event answers the specific question of intent.
+
+**Decision Framework for Subsidization**
+Do not subsidize shipping until you isolate the cause. Use this logic tree based on the data above:
+*   **If** abandonment correlates strictly with cost magnitude **AND** time-on-page is low → **Subsidize.** The price elasticity is confirmed.
+*   **If** abandonment is high even for users with no cost increase → **Fix Layout.** Subsidizing will burn margin without fixing the UX friction.
+*   **If** time-on-page spiked significantly → **Offer Codes.** Users are motivated but seeking validation; a visible "promo code" field or auto-applied discount may recover them cheaper than universal free shipping.
+
+**This Week's Steps:**
+1.  Query the step-to-step conversion rate segmented by *exact shipping cost delta* for the period Sept 5–Present.
+2.  Compare average time-on-page for the Review Page pre- and post-Sept 5.
+3.  If the correlation between cost delta and abandonment is weak (<0.6), pause rate negotiations and audit the CSS changes made to the Review page on Sept 5.
+
+Note: All metrics must be calculated from your internal analytics; no external benchmarks for "good" abandonment rates exist for your specific context. If pre-Sept 5 data is missing, the root cause remains `UNVERIFIED` until a controlled A/B test (showing old vs. new pricing to split traffic) is run.

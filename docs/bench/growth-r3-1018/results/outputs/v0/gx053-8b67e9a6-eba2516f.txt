@@ -1,0 +1,30 @@
+### Measurement Plan for SoundWave Beta Launch (Target: May 1st)
+
+**1. Define the North Star Metric**
+Stop tracking "Session Length" as your primary success indicator. In social audio, long sessions can indicate confusion or passive lurking, not value.
+*   **New North Star:** **Weekly Active Listeners who complete a "Meaningful Interaction."**
+*   **Definition:** A user who joins a room AND performs at least one high-intent action (speaking, reacting, or following a host) within their first 3 sessions.
+*   **Why:** This measures *value delivery* (connection) rather than *presence* (vanity).
+
+**2. Critical Event Taxonomy (Prioritized for Engineering)**
+Given limited server capacity, instrument **only** these four events. Each answers a specific question about retention leaks. Do not log generic "clicks."
+
+| Event Name | Properties to Capture | Question It Answers |
+| :--- | :--- | :--- |
+| `room_joined` | `room_id`, `user_id` (pseudonymous), `join_source` (feed/link), `room_size` | **Acquisition/Activation:** Are users entering rooms relevant to their interests? |
+| `interaction_performed` | `type` (speak/react/follow), `room_id`, `time_since_join` | **Activation:** Did the user overcome the "lurker barrier"? (Target: < 2 mins). |
+| `room_left` | `room_id`, `duration_seconds`, `last_action_type` | **Retention:** Did they leave immediately (< 30s)? This identifies "bounce" rooms. |
+| `return_visit` | `days_since_first_join`, `previous_room_id` | **Retention:** Did they come back to the *same* community or host? |
+
+**3. Implementation Constraints & Privacy Seam**
+*   **Identifier Strategy:** Use a stable, pseudonymous `user_id` for cohort analysis. Do not log PII (names, phone numbers) in these events. Route all PII handling to your privacy compliance protocol.
+*   **Capacity Optimization:** Do not log every second of audio. Aggregate duration on the client side and send only the final `duration_seconds` on `room_left`.
+*   **Stage Appropriateness:** Since you are moving from MVP to Growth, do not instrument "nice-to-have" features (e.g., profile views, share clicks) yet. Focus strictly on the loop: Join → Interact → Return.
+
+**4. Immediate Next Steps for Priya (Engineering Lead)**
+1.  **Sprint 1:** Implement `room_joined` and `room_left` with accurate timestamps. Calculate the "Bounce Rate" (% of users leaving < 30s).
+2.  **Sprint 2:** Implement `interaction_performed`. Correlate this event with `return_visit` after 7 days to validate your "Meaningful Interaction" definition.
+3.  **Validation:** Before May 1st, verify that the `user_id` persists correctly across app restarts to enable cohort tracking.
+
+**Note:** Do not compare your retention rates to global benchmarks; they are irrelevant to your specific cultural context in Indonesia. Baseline against your own Week 1 data post-launch.
+**Warning:** If "Bounce Rate" exceeds 40% in beta, delay monetization. Monetizing a leaky bucket wastes ad spend and damages trust.

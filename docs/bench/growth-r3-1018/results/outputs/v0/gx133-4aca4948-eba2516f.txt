@@ -1,0 +1,35 @@
+### Core Event Taxonomy for HomeChef Tech (Pre-Code Freeze)
+
+To distinguish power users from casual observers and diagnose the 35% weekly retention leak, instrument only these four events. Each answers a specific question about user value; do not instrument "cooking history views" or "recipe shares" yet, as you have not validated that users care about them.
+
+**1. `remote_preheat_started`**
+*   **Question:** Do users derive value from the core convenience feature (saving time)?
+*   **Properties:** `timestamp`, `target_temperature`, `time_until_cook_start` (calculated), `user_cohort` (new vs. returning).
+*   **Why:** Validates your primary hypothesis. If this is low, the "smart" value prop is failing.
+
+**2. `doneness_notification_engaged`**
+*   **Question:** Does the notification prevent overcooking (the core safety/quality value)?
+*   **Properties:** `notification_type` (push/in-app), `action_taken` (opened_app/dismissed/ignored), `time_to_open` (seconds).
+*   **Why:** High dismissal rates indicate the alert is annoying or inaccurate; high engagement correlates with retention.
+
+**3. `cooking_session_completed`**
+*   **Question:** Are users actually finishing meals using the device, regardless of app usage?
+*   **Properties:** `session_duration`, `mode_used` (bake/roast/etc.), `manual_override_used` (boolean).
+*   **Why:** This is your **North Star input**. A user who cooks often but doesn't open the app is a "hardware loyalist," not a churned app user. This distinguishes true churn from "app unnecessary" behavior.
+
+**4. `app_opened`**
+*   **Question:** What is the trigger for opening the app?
+*   **Properties:** `entry_point` (notification_deep_link/manual_icon_push/home_screen_widget), `days_since_last_cook`.
+*   **Why:** Diagnoses the 35% stat. If `entry_point` is 90% notification_deep_link, users only open the app when forced. If `manual_icon_push` is high, they value the interface itself.
+
+**Implementation Rules for Engineering:**
+*   **Stage Awareness:** You are in `mvp`/early growth. Do not track "recipe shares" or "history views" until `doneness_notification_engaged` and `remote_preheat_started` show strong retention. Instrumenting them now is noise.
+*   **Identifier Seam:** Use a **stable, pseudonymous user_id** to link sessions across devices for cohort analysis. Do **not** use raw device MAC addresses or emails as event properties.
+*   **Privacy Routing:** Any data regarding *what* is being cooked (e.g., "chicken," "lasagna") inferred from modes or manual entry must be flagged for review against `privacy-compliance.md` (Domain Q) before schema finalization. Do not store PII in event streams.
+
+**This Week's Step:**
+1.  Define the exact property schema for the four events above by November 22nd.
+2.  Query the first week of post-launch data to calculate the retention curve of `cooking_session_completed` vs. `app_opened`. If `cooking_session_completed` is high but `app_opened` is low, the problem is not product value—it's that the app is unnecessary for the core workflow.
+
+*Note: Do not fabricate benchmarks for "good" retention; compare your December numbers strictly against your own November baseline.*
+*Note: If engineering requests "track everything for later," reject it; unused events increase cost and obscure signal.*

@@ -1,0 +1,44 @@
+# Executive Summary: Revenue Data Remediation Plan
+
+**Objective:** Restore CFO confidence by delivering accurate end-of-quarter revenue figures within three weeks, while implementing immediate controls to prevent further data degradation.
+
+## Phase 1: Immediate Historical Correction (Weeks 1-2)
+
+We will bypass the slow ingestion-layer rewrite and apply a targeted transformation layer directly to the reporting dataset. This approach isolates the fix to the specific problem field without risking broader system stability.
+
+**Normalization Logic:**
+We will execute a SQL-based transformation script on the historical data warehouse table covering the current quarter. The logic enforces a strict standard:
+1.  **Standardize:** Convert all variations (`$`, `USD`, `usd`, `Usd`) to the ISO standard `USD`.
+2.  **Impute Missing Values:** For the ~15% of records missing currency, we will infer the value based on the `user_country` or `billing_address` fields. If the country is the US, default to `USD`. If the country is ambiguous, flag these rows as "Unverified" rather than guessing, ensuring transparency.
+3.  **Audit Trail:** Create a shadow column `currency_original` to preserve the raw input for future auditing, ensuring the transformation is reversible and transparent.
+
+**Validation Protocol:**
+Before publishing to the CFO dashboard, we will run a reconciliation check:
+*   **Sum Check:** Compare the total revenue of the cleaned dataset against the raw dataset (excluding unverified rows) to ensure no value drift occurred.
+*   **Sample Audit:** Manually verify 50 random transactions against the source payment gateway logs to confirm the imputation logic holds.
+
+## Phase 2: Future-Proofing & Ingestion Controls (Weeks 2-3)
+
+While the full ingestion refactor proceeds on its two-month timeline, we will implement "Guardrail Rules" in the current pipeline to stop new bad data from entering.
+
+**Immediate Mitigations:**
+1.  **Schema Enforcement:** Update the current streaming job to reject any event where `currency` does not match the regex `^[A-Z]{3}$`. Rejected events will be routed to a "Dead Letter Queue" for manual review rather than polluting the main table.
+2.  **Defaulting Logic:** Apply the same country-based defaulting logic to real-time streams for missing values, marking them with a `is_imputed: true` flag.
+3.  **Alerting:** Configure an automated alert to notify the engineering lead if the rate of rejected or imputed events exceeds 1% of total volume, allowing for immediate intervention.
+
+## Phase 3: Strategic Schema Audit (Post-Quarter)
+
+The currency inconsistency suggests a systemic lack of schema governance. Once the quarter closes, we will expand this remediation pattern:
+1.  **Automated Profiling:** Run a data quality scan on all critical financial and user-identity fields to identify similar formatting inconsistencies (e.g., date formats, state codes).
+2.  **Contract Testing:** Implement automated tests in the CI/CD pipeline that fail builds if tracking events do not match the defined schema contracts.
+
+## Expected Outcomes
+
+*   **Day 14:** Cleaned historical dataset available for Q3 review with documented confidence intervals.
+*   **Day 21:** Real-time data stream stabilized with <1% anomaly rate.
+*   **Deliverable:** A "Data Confidence Memo" accompanying the Q3 report, explicitly detailing the normalization methodology and the margin of error for imputed rows.
+
+This approach prioritizes speed and accuracy for the immediate business need while laying the groundwork for long-term data integrity without delaying the existing engineering roadmap.
+
+*Note: This plan assumes access to reliable `user_country` data for imputation; if this field is also compromised, the "Unverified" segment will increase.*
+*Full ingestion refactoring should proceed as planned to eliminate the need for downstream transformations long-term.*

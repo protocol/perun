@@ -1,0 +1,36 @@
+**Strategy for Data Harmonization and Regulatory Compliance**
+
+**1. Handling Missing Properties: The "Null-Explicit" Approach**
+Do not discard incomplete records, nor apply probabilistic imputation for regulatory reporting. Discarding 40% of SwiftWave data introduces selection bias and violates data completeness principles required by regulators. Probabilistic imputation fabricates evidence, creating unacceptable compliance risk when the source of truth is ambiguous.
+
+Instead, implement a "Null-Explicit" strategy:
+*   **Preserve Raw Fidelity:** Ingest all 2 million profiles with the `device_type` field explicitly marked as `NULL` or a standardized sentinel value (e.g., `unknown_source`) for SwiftWave records.
+*   **Schema Unification:** Create a unified view where `device_type` is an enumerated type including `mobile`, `desktop`, `landline`, and `unknown`.
+*   **Contextual Tagging:** Add a metadata column `source_schema_version` to every row. This preserves historical context, allowing auditors to distinguish between GlobalLink's native data and SwiftWave's legacy data instantly.
+*   **Reporting Logic:** Configure your churn aggregation queries to report `device_type` distributions in two tiers:
+    1.  **Verified:** Counts only where `device_type` is known.
+    2.  **Total Addressable:** Includes `unknown` as a distinct category.
+    *Never* hide the `unknown` segment; explicitly reporting the gap demonstrates data integrity to regulators.
+
+**2. Verifying Data Integrity Pre-Aggregation**
+Before running any churn calculations, execute these three validation gates:
+
+*   **Gate A: Record Count Reconciliation (Completeness)**
+    Verify that the sum of records in the unified table equals the exact sum of the source GlobalLink and SwiftWave tables.
+    *Formula:* `Count(Unified) == Count(GlobalLink_Source) + Count(SwiftWave_Source)`
+    Any deviation indicates join errors or accidental filtering during the merge.
+
+*   **Gate B: Primary Key Uniqueness (Deduplication)**
+    Since duplication is a known risk, run a uniqueness check on the composite primary key (e.g., `user_id` + `event_timestamp` + `event_type`).
+    *Action:* Isolate and quarantine any duplicate keys. Do not aggregate until duplicates are resolved to a single canonical record based on a documented hierarchy (e.g., "prefer GlobalLink schema over SwiftWave when timestamps match").
+
+*   **Gate C: Null Distribution Audit (Accuracy)**
+    Generate a profile report showing the percentage of `NULL` values per critical column, segmented by `source_schema_version`.
+    *Expectation:* GlobalLink segment should show ~0% nulls for `device_type`; SwiftWave segment should show ~40%.
+    *Failure Condition:* If GlobalLink records show unexpected nulls, or if SwiftWave nulls drop significantly without a documented enrichment process, the merge logic is flawed.
+
+**3. Regulatory Defense Strategy**
+For the October 15th deadline, your defense relies on transparency, not perfection. Present the churn report with a dedicated "Data Lineage and Limitations" appendix. Explicitly state: "40% of legacy SwiftWave interactions lack device attribution. These are reported as 'Unknown' to prevent statistical fabrication." This approach satisfies regulatory requirements for accuracy and auditability while meeting the hard deadline.
+
+**Note:** Manual mapping should focus on defining the transformation rules, not row-by-row editing.
+**Note:** Freeze the raw source data immediately to ensure an immutable audit trail exists before any transformation logic is applied.

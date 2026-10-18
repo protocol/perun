@@ -1,0 +1,23 @@
+### Prioritized Event Trackers for Retention Dashboard
+
+To isolate true user commitment from speculative volatility, instrument these three events. They prioritize **behavioral consistency** over **transactional volume**, answering the specific question: "Is the user returning to engage with the guild's core value, regardless of token price?"
+
+**1. `guild_session_start` (with `session_type` property)**
+*   **Definition:** Fires when a user opens the guild dashboard or app, tagged as `active` (interacting) or `passive` (viewing/strategizing).
+*   **Why this first:** This directly addresses your fear of missing non-transacting users. By separating `passive` views (reading strategy guides, checking leaderboards) from `active` play, you capture the "watchers" who remain loyal during market dips.
+*   **Trade-off:** You lose granularity on *what* they viewed inside the session if you don't track every click. However, for a retention North Star, knowing they returned to the ecosystem is more resilient than knowing which specific page they hovered over. It rejects "wallet connection" as a proxy, as a user can connect a wallet without actually engaging with the guild.
+
+**2. `core_action_completed` (with `action_category` property)**
+*   **Definition:** Fires only when a user completes the guild's specific value proposition (e.g., "scholar assigned," "strategy guide saved," "team formed"), distinct from generic game actions.
+*   **Why this second:** This is your activation/retention filter. Token swings drive raw logins; only genuine commitment drives the completion of guild-specific workflows. If this metric stays flat while DAU spikes, the spike is purely speculative noise.
+*   **Trade-off:** Defining the "core action" requires strict product discipline. If you define it too broadly (e.g., "clicked any button"), it becomes vanity. If too narrowly, you miss edge cases. The engineering cost lies in ensuring this event fires reliably across different partner games, but it is the only metric that proves the guild model works independent of the market.
+
+**3. `returning_user_identified` (7-day rolling window)**
+*   **Definition:** Fires when a previously seen pseudonymous ID returns within 7 days, regardless of whether they transact.
+*   **Why this third:** This creates a volatility-proof retention cohort. Instead of measuring "Day 1 retention" which swings wildly with new speculative signups, this measures the stickiness of your existing base. It ignores the 17,000 transient users from the launch spike and focuses on whether the 8,000 baseline users are sticking around.
+*   **Trade-off:** This requires a stable, pseudonymous user identifier (not just a wallet address, which users might swap). It shifts the focus from "how many new users did we get?" (acquisition) to "are we keeping the ones we have?" (retention). It renders transaction volume irrelevant for this specific metric, solving your volatility problem.
+
+### Why We Ignore Transaction Volume & Wallet Frequency
+Transaction volume is a **lagging economic indicator**, not a product health metric. In a volatile market, high transaction volume often signals panic selling or hype buying, neither of which correlates with long-term guild loyalty. Similarly, wallet connection frequency is a **friction metric**; a user might disconnect to save gas fees but still remain a committed community member reading your docs. By focusing on the three events above, you present a dashboard that rises only when users derive **real value** from the guild, filtering out the noise of token speculation.
+
+**Note:** Ensure the user identifier used for `returning_user_identified` is pseudonymous and routed to your privacy compliance protocol, distinct from raw wallet addresses. Do not attempt to benchmark these retention rates against industry averages; compare them strictly to ChainGuild's own pre-spike baseline.

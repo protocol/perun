@@ -1,0 +1,39 @@
+**To:** Engineering Director, FleetFlow
+**From:** Product Lead
+**Subject:** Event Taxonomy Reduction Plan for Infrastructure Optimization
+
+Per the capacity constraints and the goal to reduce driver distraction, the following 15 events are prioritized for immediate, real-time tracking. These directly answer the question: "Is the driver safe and on route right now?" All other current events (385+) should be archived, sampled at 1%, or shifted to batch processing.
+
+**Priority 1: Real-Time Safety & Navigation (Keep Full Fidelity)**
+*These events trigger immediate UI updates and alerts. Latency must remain <500ms.*
+1.  `route_deviation_detected` – Answers: Is the truck off the planned path? (Triggers re-routing).
+2.  `hard_braking_event` – Answers: Is there an immediate collision risk or aggressive driving?
+3.  `rapid_acceleration_event` – Answers: Is fuel efficiency and safety compromised?
+4.  `fuel_level_critical_threshold` – Answers: Does the driver need immediate refueling to avoid stranding?
+5.  `driver_distraction_alert` – Answers: Is the driver interacting with the device while moving?
+6.  `geofence_entry_exit` – Answers: Has the truck arrived at or left a customer site?
+7.  `speed_limit_violation` – Answers: Is the vehicle exceeding legal limits in the current zone?
+8.  `emergency_button_pressed` – Answers: Is there a manual SOS request?
+
+**Priority 2: Operational State (Keep, but allow 5-10s latency)**
+*These inform dispatch but do not require sub-second driver UI updates.*
+9.  `engine_fault_code_active` – Answers: Is there a mechanical issue requiring immediate attention?
+10. `cargo_door_opened_unscheduled` – Answers: Is there a security breach or theft risk?
+11. `idle_time_start_stop` – Answers: Is fuel being wasted due to excessive idling?
+12. `shift_start_end` – Answers: Are we compliant with Hours of Service regulations?
+
+**Priority 3: Maintenance & Analytics (Archive or Sample at 1%)**
+*These are low-frequency or historical analysis events. They do not prevent accidents in real-time.*
+13. `detailed_maintenance_log_entry` – **Action:** Move to batch nightly. (Your assumption holds; this does not prevent immediate accidents).
+14. `ui_click_heatmap_data` – **Action:** Sample at 1% or disable. (Vanity metric for live ops; use for quarterly reviews only).
+15. `full_telematics_snapshot` – **Action:** Reduce frequency from 1Hz to 1 per minute unless an anomaly (events 1-4) is detected.
+
+**Decision Logic for the Director:**
+If we retain only these 15 events at full fidelity, we reduce the event volume by approximately 96%, directly addressing the 3-second latency spike. The excluded events (e.g., detailed maintenance logs, granular UI clicks) correlate poorly with *immediate* accident prevention. Their analysis can happen post-trip without impacting driver safety.
+
+**This Week's Step:**
+1.  Implement the filter to drop all events not on this list from the real-time stream by Wednesday.
+2.  Run a 24-hour A/B test on 10% of the fleet comparing the new latency against the current baseline; if peak latency drops below 500ms without an increase in `hard_braking_event` frequency, roll out to 100% by Friday.
+
+*Note: Correlation between specific low-frequency events and accident prevention is currently UNVERIFIED as no causal analysis has been run on historical data; do not assume archived events are useless, only that they are not critical for real-time intervention.*
+*Ensure any user identifiers used for the 1% sampling are pseudonymized per privacy compliance standards.*

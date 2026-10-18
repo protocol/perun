@@ -1,0 +1,44 @@
+**Measurement Plan: Checkout Flow Redesign Experiment**
+**To:** VP of Product, FreshCart
+**From:** Product Lead
+**Date:** [Current Date]
+**Subject:** North Star Definition and Decision Framework for Checkout Redesign
+
+**1. Primary North Star: Revenue Per Active User (RPAU)**
+Do not choose between Order Frequency and Basket Size in isolation. Selecting either alone invites the exact failure mode you identified: optimizing for basket size while cannibalizing frequency, or vice versa. The single metric that rises only when the business wins is **Revenue Per Active User** over a fixed observation window (e.g., 30 days post-exposure).
+
+*   **Formula:** (Total Revenue from Cohort) / (Total Active Users in Cohort).
+*   **Why:** This mathematically captures the net effect of your hypothesis. If basket size increases by 10% but frequency drops by 15%, RPAU will fall, correctly signaling a failed experiment despite the "win" in basket size.
+
+**2. Input Metrics & Guardrails**
+While RPAU is the verdict, track these inputs to diagnose *how* the result occurred:
+*   **Primary Input:** Average Basket Size (per transaction).
+*   **Primary Input:** Inter-Order Interval (days between orders).
+*   **Guardrail Metric:** Checkout Abandonment Rate. (Ensure simplification does not introduce friction that kills conversion entirely).
+
+**3. Interpreting Conflicting Results**
+If Basket Size rises while Order Frequency falls (or inter-order interval lengthens), apply the following decision logic based on the net impact on RPAU:
+
+*   **Scenario A: RPAU Increases.**
+    *   *Interpretation:* The value of the larger immediate order outweighs the delay in the next purchase. Users are likely consolidating trips but spending more overall.
+    *   *Action:* **Ship.** Monitor long-term churn to ensure this isn't a one-time stock-up followed by cancellation.
+*   **Scenario B: RPAU Decreases.**
+    *   *Interpretation:* The delay in frequency is costing more revenue than the impulse buys generate. The "simplification" may be removing necessary engagement triggers or the impulse items are low-margin distractions.
+    *   *Action:* **Stop.** Do not ship. The hypothesis that impulse buys drive net growth is invalid for this flow.
+*   **Scenario C: RPAU is Flat (within confidence interval).**
+    *   *Interpretation:* The trade-off is neutral financially.
+    *   *Action:* **Defer to Margin.** Calculate the gross margin impact. If impulse buys have lower margins than staple goods, **Stop**. If margins are neutral/higher, consider qualitative user feedback before deciding.
+
+**4. Experimental Rigor Requirements**
+To ensure this read is valid and not noise:
+*   **Pre-commitment:** Define the sample size and duration (minimum 2 full purchase cycles, approx. 3–4 weeks) *before* launch. Do not peek at day 3 and stop if p < 0.05; this inflates false positives.
+*   **Unit of Randomization:** Randomize by **User ID**, not session, to accurately measure frequency changes across multiple orders.
+*   **Data Source:** All figures must be pulled from FreshCart's production analytics. No external benchmarks will be used.
+
+**This Week's Next Steps:**
+1.  **Instrumentation:** Verify the event taxonomy tracks `checkout_started`, `checkout_completed`, and `item_added` with a stable, pseudonymous User ID to link sessions across days.
+2.  **Power Analysis:** Calculate the minimum detectable effect on RPAU given current traffic to confirm the November 15th launch allows for a full 30-day readout by mid-December.
+3.  **Guardrail Check:** Confirm current baseline abandonment rates to set the tripwire for immediate rollback if the new flow breaks.
+
+*Note: Ensure User IDs used for cohorting are pseudonymous; route any PII handling to the privacy compliance protocol.*
+*Baseline frequency (2.4/mo) and basket ($65) are for internal power calculations only, not external benchmarks.*

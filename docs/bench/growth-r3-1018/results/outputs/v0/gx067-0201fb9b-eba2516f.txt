@@ -1,0 +1,37 @@
+**Decision: Do not ship. Extend the test with guardrails or revert immediately.**
+
+The 9% lift in click-through rate (CTR) is `UNVERIFIED` as a success metric because it lacks a pre-committed quality guardrail. The data you provided reveals a classic "peeking" failure mode: optimizing for a vanity metric (raw clicks) while ignoring the downstream behavior (quality consumption and retention). The fact that 60% of clicks target unverified, hour-old content suggests the algorithm is gaming the metric rather than delivering user value.
+
+**Recomputed Analysis & Confounders**
+You cannot claim a win on CTR alone when the composition of those clicks has fundamentally shifted toward low-authority sources. The confounder here is **mix shift**: you are measuring clicks on "breaking news snippets" against a baseline of established articles. These are not equivalent actions. If users click but bounce immediately (low time-on-page) or fail to return (churn), the 9% lift is actually a tax on user trust. Your baseline monthly churn of 5% is the critical benchmark; if this test accelerates churn even by 0.5%, the CTR gain is financially negative.
+
+**Required Framework: Quality-Adjusted Funnel**
+To evaluate this properly, you must instrument and analyze the following three layers before making a final decision. Do not rely on aggregate CTR.
+
+1.  **Define a Quality-Adjusted North Star**
+    Replace "Search CTR" with **"Validated Reading Sessions."**
+    *   *Instrumentation:* A click only counts if `time_on_page > 45 seconds` OR `scroll_depth > 60%`.
+    *   *Logic:* This filters out "rage clicks" or accidental taps on sensationalist headlines. If the 9% CTR lift disappears when applying this filter, the feature is harmful.
+
+2.  **Implement Guardrail Metrics (The "Do No Harm" Layer)**
+    You must track these specifically for the treatment group vs. control:
+    *   **Short-term Retention:** Day-1 and Day-7 return rates for users who interacted with the "fresh" content.
+    *   **Authority Ratio:** Percentage of clicks going to domains with an internal trust score > X.
+    *   **Bounce Rate:** Specifically for articles published < 1 hour ago.
+    *   *Tripwire:* If Day-7 retention drops by >2% relative to baseline, or if the Authority Ratio falls below 40%, the test fails automatically regardless of CTR.
+
+3.  **Cohort Analysis for Long-Term Impact**
+    Segment users by their interaction with the new ranking:
+    *   *Cohort A:* Users who clicked >3 "fresh/low-quality" articles.
+    *   *Cohort B:* Users who clicked >3 "established" articles.
+    *   Compare the 30-day churn probability of Cohort A against your 5% baseline. If Cohort A churns at 7%+, the algorithm is actively destroying lifetime value.
+
+**This-Week Action Plan**
+1.  **Engineering:** Query the existing logs to compute the "Validated Reading Session" rate for the treatment group using `time_on_page` and `scroll_depth`. Do not run new code yet; use historical data from the 10-day test.
+2.  **Editorial:** Define a binary "Trust Score" for your top 500 domains. Re-run the test analysis filtering only for clicks on high-trust domains.
+3.  **Decision Gate:** If the quality-adjusted CTR lift is <2% or if the projected churn impact exceeds 0.2%, revert the ranking change immediately. If the lift holds with quality guardrails, extend the test to 30 days to capture a full monthly churn cycle before full rollout.
+
+Do not optimize for the click; optimize for the return visit.
+
+*Note: This analysis assumes your logs capture `time_on_page` and `domain_metadata`; if not, these are `UNVERIFIED` and must be instrumented before re-testing.*
+*Never compare your churn to industry averages; use your own 5% baseline as the sole truth.*

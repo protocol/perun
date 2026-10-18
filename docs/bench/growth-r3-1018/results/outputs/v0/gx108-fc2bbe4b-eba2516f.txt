@@ -1,0 +1,20 @@
+**Recommendation: Do not roll out yet. Extend the test to rebalance traffic or re-analyze using weighted estimators before deciding.**
+
+The results are likely **directionally valid but statistically unreliable** for a final business decision due to the severe traffic imbalance (80/20 split). Your assumption is correct: the imbalance drastically reduces statistical power and inflates the variance of the treatment effect estimate, leading to the wide confidence intervals you observed. While a significant result despite low power suggests a strong underlying effect, the precision of that estimate is too low to confidently predict revenue impact or guardrail metrics (e.g., margin erosion).
+
+**Specific Risks of Acting Now:**
+1.  **Overestimation of Lift:** With only 20% of users in the variant, a few high-volume outliers can skew the mean transaction volume, creating a false "win." The wide confidence intervals indicate the true lift could be near zero or even negative.
+2.  **Hidden Guardrail Violations:** The imbalance makes it difficult to detect negative side effects on profitability or user retention in the variant group. You may roll out a fee structure that drives volume but destroys unit economics.
+3.  **Invalid P-Values:** Standard t-tests assume equal variance and balanced designs for optimal performance. While unequal sample sizes don't strictly invalidate the test if variances are equal, any difference in variance between groups (heteroscedasticity) — common in pricing tests where price-sensitive users behave differently — will inflate the false-positive rate.
+
+**Required Adjustments & Checks Before Presentation:**
+*   **Recompute with Weighted Estimators:** Do not use standard pooled variance. Apply **Welch's t-test** (which does not assume equal variances) or a **regression-based approach** (e.g., OLS with robust standard errors) controlling for pre-experiment covariates (CUPED) to reduce noise.
+*   **Check Variance Homogeneity:** Explicitly test if the variance in transaction volume differs between the 80% and 20% groups. If variances differ significantly, standard confidence intervals are invalid.
+*   **Sensitivity Analysis:** Calculate the **break-even lift**. Given the lower fee, what minimum increase in volume is required to maintain total revenue? Compare this threshold to the *lower bound* of your confidence interval, not the point estimate. If the lower bound is below break-even, the risk is too high.
+*   **Extend or Re-run:** The most robust path is to extend the test duration to gather more variant data or, ideally, correct the traffic split to 50/50 for a subsequent period. This will narrow the confidence intervals and provide a precise estimate of the financial impact.
+
+**Executive Context to Provide:**
+Present the **range of outcomes** (the wide confidence interval) rather than the single "significant" lift number. Explicitly state: "While the variant shows potential, the 80/20 split creates high uncertainty. Rolling out now carries a X% risk that the fee cut reduces total revenue. We recommend a 1-week extension with corrected traffic allocation to confirm the profit impact before the September competitive window."
+
+*Note: The "significance" found under low power often implies a large effect size, but the cost of being wrong on pricing is permanent revenue loss. Precision matters more than speed here.*
+*Ensure your analytics tool is configured to handle unequal sample sizes in its significance calculations; if not, export raw data for external analysis.*

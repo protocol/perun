@@ -1,0 +1,50 @@
+### Diagnostic Data Points to Isolate the Cause
+
+To distinguish between a latency issue (SMS delay) and a usability issue (UI confusion), pull the following event-level data for the period since March 12, segmented by device screen size and carrier:
+
+1.  **Time-to-Code (TTC):** The delta between `sms_request_triggered` and `sms_code_received` (logged when the user first interacts with the input field or via backend delivery logs).
+    *   *Interpretation:* If the median TTC exceeds 15 seconds, latency is the primary friction point.
+2.  **Time-to-Submit (TTS):** The delta between `sms_code_received` (or screen load if receipt isn't tracked) and `verification_submitted`.
+    *   *Interpretation:* A long TTS with a short TTC suggests the user is struggling to find the field, copy-paste, or understand the error state.
+3.  **Retry Rate:** The percentage of users triggering `sms_request_triggered` more than once within a 2-minute window.
+    *   *Interpretation:* High retry rates (>20%) strongly indicate non-delivery or extreme latency.
+4.  **Abandonment Timestamp:** The exact time elapsed between screen load and session end for drop-offs.
+    *   *Interpretation:* Immediate abandonment (<5 seconds) suggests UI confusion or shock. Abandonment after 45+ seconds suggests patience exhaustion due to waiting.
+5.  **Error Message Exposure:** Count of users who trigger an "invalid code" or "expired code" error before abandoning.
+    *   *Interpretation:* High error rates prior to abandonment point to input design or clarity issues, not delivery speed.
+
+**Segmentation Requirement:** Break all metrics down by **Device Model** (to catch small-screen layout breaks) and **Mobile Carrier** (to identify specific network delivery failures).
+
+### Proposed Validation Test Structure
+
+Do not roll back the feature for everyone. Instead, run a targeted A/B test on the 29% of users currently entering the verification flow.
+
+**Hypothesis:** Because users are abandoning due to perceived inactivity during SMS delivery, providing a dynamic countdown timer and an earlier "Resend Code" option will reduce abandonment by 10%.
+
+**Test Design:**
+*   **Control (50% of flow entrants):** Current experience (static text, standard resend delay).
+*   **Variant (50% of flow entrants):**
+    *   Add a visible countdown timer showing exactly when the code expires or when resend is available.
+    *   Reduce the "Resend Code" lockout period from 60s to 30s.
+    *   Add an inline status message: "Sending code..." immediately after request.
+
+**Metrics:**
+*   **Primary:** Verification Completion Rate.
+*   **Guardrail:** Support ticket volume regarding "code not received."
+*   **Secondary:** Average Time-to-Submit.
+
+**Sample Size & Duration:**
+With 45,000 daily mobile visitors, assuming a 20% entry rate to this step, you have ~9,000 daily users in the funnel. Splitting this gives 4,500 per variant.
+*   To detect a 10% relative lift (from 71% to 78% completion) with 95% confidence, you need approximately 3,800 users per variant.
+*   **Duration:** You will reach statistical significance in **less than 24 hours**. Run the test for 3 full days to capture weekend/weekday variance before presenting.
+
+### Recommendation Logic for Friday's Meeting
+
+*   **If Variant Wins:** The issue is psychological friction caused by uncertainty. Implement the UI updates globally.
+*   **If Control Wins (No Difference) but Data Shows High TTC:** The issue is purely infrastructure. Recommend switching SMS providers or implementing email fallback immediately.
+*   **If Control Wins but Data Shows High Error Rates:** The input field design is flawed. Recommend a design sprint to simplify the input mechanism (e.g., auto-paste support, larger touch targets).
+
+This approach isolates the variable without risking the 71% success rate of the current cohort, as the test only optimizes the conversion of those who already engage.
+
+*Ensure engineering logs the exact timestamp of SMS gateway handoff to accurately calculate Time-to-Code.*
+*Exclude bot traffic from the analysis, as they often skew retry rates.*

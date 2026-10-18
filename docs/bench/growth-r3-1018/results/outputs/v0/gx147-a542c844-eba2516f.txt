@@ -1,0 +1,34 @@
+### Instrumentation Plan: LinkGear Japan Launch (Oct–Jan)
+
+**1. North Star Metric**
+**"Week-2 Active Farms"**: The count of unique farms where the sensor successfully transmits valid data at least once every 48 hours during the second week post-unboxing.
+*Why:* This rejects vanity metrics like "units shipped" or "app downloads." It proves the user derived actual value (monitoring) rather than just completing a setup step.
+
+**2. Event Taxonomy: The Unboxing & Pairing Funnel**
+Instrument only these specific events to answer named questions. Do not track "everything."
+
+| Event Name | Question Answered | Key Properties (Pseudonymous) |
+| :--- | :--- | :--- |
+| `box_opened_detected` | Did the user physically interact with the unit? | `batch_id`, `warehouse_region`, `time_since_manifest` |
+| `pairing_initiated` | Did the user attempt to connect via the app? | `app_version`, `os_type`, `connection_method` (BT/NFC) |
+| `pairing_failed` | Where does the process break? | `failure_code` (timeout, auth_error, signal_weak), `step_index` |
+| `first_data_transmit` | Did the device successfully go online? | `signal_strength_rssi`, `network_type` (LTE/WiFi/LoRa), `latency_ms` |
+| `week_2_retention_ping` | Is the device still providing value? | `days_since_activate`, `battery_level`, `transmission_success_rate` |
+
+**3. Distinguishing User Error vs. Product Defect**
+Since you cannot diagnose offline hardware remotely, you must infer the cause from the *sequence* and *context* of the events above:
+
+*   **Likely User Error:** High volume of `pairing_failed` with `failure_code: timeout` or `auth_error`, followed by a successful `first_data_transmit` within 24 hours. This indicates friction in the guide, not broken silicon.
+*   **Likely Product Defect:** High volume of `box_opened_detected` with **zero** subsequent `pairing_initiated` events, OR immediate `pairing_failed` with `failure_code: hardware_init_fail` across a specific `batch_id`.
+*   **Connectivity Issue (Rural Japan):** Successful `pairing_initiated` but high latency or failure in `first_data_transmit` correlated with low `signal_strength_rssi`. This isolates the issue to local infrastructure, not the device.
+
+**4. Implementation Constraints & Privacy**
+*   **Identifier Seam:** Use a stable, pseudonymous `device_uuid` generated at first boot to correlate hardware batches with software sessions. Do not use raw PII. Route any farmer personal data to your privacy compliance protocol.
+*   **Offline Handling:** The device must locally buffer `pairing_failed` logs. If the device never connects, these logs are lost; therefore, the **ratio** of `box_opened` (inferred via warehouse scan or initial power-on beacon if possible) to `pairing_initiated` is your critical early warning signal for dead-on-arrival units.
+
+**5. This-Week Steps**
+1.  **Define the "Defect" Threshold:** Calculate the baseline failure rate for `pairing_failed` in your lab environment. Any field rate exceeding this by >20% per `batch_id` triggers a supply chain alert.
+2.  **Draft the "Connectivity" Query:** Prepare a dashboard filter that segments `first_data_transmit` success rates by `warehouse_region` to identify if specific rural areas in Japan are causing false "defect" reports due to poor coverage.
+3.  **Pre-commit the A/B Test:** Before the January shipment, design a test comparing the current onboarding guide vs. a simplified version. The primary metric is `time_to_first_data_transmit`; the guardrail is `support_ticket_volume`. Do not peek at results before the sample size is reached.
+
+*Note: All benchmarks must be derived from your October 15th launch baseline; do not compare against generic industry retention rates. If `box_opened` cannot be detected without connectivity, rely on warehouse scan data as the proxy funnel top.*

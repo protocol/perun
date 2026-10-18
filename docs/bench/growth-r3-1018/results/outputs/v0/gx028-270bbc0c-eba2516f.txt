@@ -1,0 +1,37 @@
+**Diagnostic Framework: Referral Coefficient Drop-off (ShopBuddy)**
+
+To distinguish between natural saturation (power user exhaustion) and a broken user experience (technical failure), execute the following three data slices immediately. Do not rely on the aggregate coefficient alone; it masks the divergence between user cohorts.
+
+**1. Cohort-Based Conversion Funnel (Day 1–3 vs. Day 4+)**
+Segment users by the date they generated their first referral code. Compare the funnel steps for the "Early Cohort" (Days 1–3) against the "Late Cohort" (Day 4 onwards):
+*   **Step A:** Code Generated → Link Clicked.
+*   **Step B:** Link Clicked → Landing Page Loaded.
+*   **Step C:** Landing Page Loaded → Sign-up Completed.
+*   **Step D:** Sign-up Completed → First Purchase (if applicable to reward trigger).
+
+*Interpretation:*
+*   **Saturation Signal:** If Step A (generation) drops significantly for the Late Cohort, but Steps B–D remain stable percentages, the issue is **saturation**. Users aren't sharing because they ran out of friends, not because the link is broken.
+*   **Technical Signal:** If Step A remains steady but Step B (Click → Load) or Step C (Load → Sign-up) collapses for the Late Cohort, the issue is **technical**. The links are being generated but failing to convert traffic, pointing to the server maintenance window.
+
+**2. Error Rate & Latency Correlation on Referral Endpoints**
+Query server logs specifically for the referral landing page and redemption API endpoints, filtered by the timestamp of the server maintenance (Day 3) and subsequent traffic.
+*   **Metric:** HTTP 5xx error rates and average latency for requests containing referral parameters.
+*   **Slice:** Compare error rates before maintenance vs. after maintenance.
+*   **Interpretation:** A spike in 5xx errors or timeout rates post-maintenance confirms a **technical break**. If error rates are flat and low (<0.1%), the infrastructure is likely healthy, reinforcing the saturation hypothesis.
+
+**3. "Depth of Tree" Distribution Analysis**
+Analyze the distribution of successful referrals per user (the "branching factor") for both cohorts.
+*   **Metric:** Percentage of users achieving 1, 2, 3, 4+ successful referrals.
+*   **Interpretation:**
+    *   **Saturation:** The Early Cohort shows a "heavy tail" (many users with 5+ refs), while the Late Cohort shows a sharp cutoff at 1 or 2 refs. This indicates the "low-hanging fruit" (easy-to-convert friends) are gone.
+    *   **Technical/Fatigue:** If the Late Cohort shows a high volume of users attempting to share (high generation count) but *zero* users achieving >1 successful referral, this suggests a systemic block (broken link) or immediate reward fatigue (the offer no longer motivates the second-degree connection).
+
+**Decision Matrix for James (Deadline: May 20th)**
+
+*   **Kill the Program:** If data confirms **Saturation** (Step A drop, stable funnel %, heavy tail disappearance) AND the cost to acquire new referrers exceeds the Lifetime Value (LTV) of the referred users. Natural saturation at 0.6 may be the new baseline; if 0.6 < 1.0, the loop is not self-sustaining without paid top-ups.
+*   **Iterate on Rewards:** If data shows **Fatigue** (high generation, high click-through, but drop-off at Step D/Redemption). This implies the incentive works for the sharer but not the referee. Test a dual-sided reward or higher value.
+*   **Fix & Relaunch:** If data confirms **Technical Failure** (spike in errors, drop in Step B/C). Roll back the server changes, verify link integrity, and re-promote to the unconverted audience from Days 4–present.
+
+**Immediate Next Step:** Run the Cohort-Based Conversion Funnel query tonight. If Step B/C conversion for Day 4+ users is <50% of the Day 1–3 baseline, assume technical failure and halt spend until engineering validates the referral endpoint.
+
+*Note: All metrics must be compared against ShopBuddy's own baseline; no external benchmarks are applied. Ensure user identifiers in these slices are pseudonymized per privacy compliance standards.*

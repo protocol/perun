@@ -1,0 +1,39 @@
+**Diagnostic Approach: Referral Funnel Isolation**
+
+The 210% spike in invites (5,000 → 15,500) with flat conversions (450) indicates a collapse in conversion rate from ~9% to ~2.9%. Do not assume technical failure yet; this pattern often signals behavioral shifts (e.g., spammy incentivization) or a specific funnel break. Isolate the break using this bottom-up funnel analysis:
+
+**1. Validate the "Sent" Metric (Data Integrity Check)**
+Before analyzing user behavior, confirm the 15,500 figure is real.
+*   **Query:** Pull raw event logs for `invite_sent` between Oct 1–7. Group by `user_id`.
+*   **Hypothesis:** A bug or bot is firing the event without sending an email, or a specific cohort of users is programmatically triggering the event.
+*   **Signal:** If >20% of `user_ids` account for >80% of the volume, this is likely abuse or a loop, not organic growth.
+
+**2. Isolate the Drop-off Point (The "Where")**
+Instrument or query these three specific stages to pinpoint the leak:
+*   **Stage A: Delivery Rate.** Compare `invite_sent` vs. `email_delivered` (from your ESP logs).
+    *   *If Delivery < 80%:* The issue is domain reputation or spam filtering (deliverability).
+*   **Stage B: Click-Through Rate (CTR).** Compare `email_delivered` vs. `landing_page_view` (filtered by `referrer_source=invite`).
+    *   *If CTR dropped significantly:* Users aren't opening emails (subject line fatigue/spam folder) or links are broken.
+*   **Stage C: Landing Page Conversion.** Compare `landing_page_view` vs. `signup_completed` (filtered by `referrer_source=invite`).
+    *   *If Conversion dropped:* The landing page is broken, loading slowly, or the offer is unclear for this specific traffic surge.
+
+**3. Cohort Segmentation (The "Who")
+*   **Query:** Segment the 15,500 invites by `user_tenure` and `account_type`.
+*   **Hypothesis:** Did a specific segment (e.g., new free-tier users) suddenly gain access to a referral feature and abuse it?
+*   **Action:** If one cohort drives the spike, isolate their specific conversion metrics. If their conversion is near zero, the issue is low-quality invites (invalid addresses), not technical failure.
+
+**Immediate Data Pull List for Head of Growth**
+To prepare for Friday's board review, extract these exact figures by EOD tomorrow:
+1.  **Top 10 Senders:** List of `user_ids` with highest `invite_sent` volume last week and their respective conversion rates.
+2.  **Funnel Drop-off Rates:** Week-over-week % change for: Sent → Delivered, Delivered → Clicked, Clicked → Signed Up.
+3.  **Error Logs:** Count of HTTP 4xx/5xx errors on the referral landing page for Oct 1–7, filtered by `utm_source=referral`.
+
+**Remediation Path Based on Findings**
+*   **If Data Integrity Fail:** Roll back the recent deployment triggering false `invite_sent` events.
+*   **If Abuse/Spam:** Implement rate limits on invites per user and validate email domains before sending.
+*   **If Landing Page Fail:** Revert recent UI changes to the referral landing page immediately.
+*   **If Deliverability Fail:** Pause the program temporarily to warm up IP reputation and audit email content.
+
+Do not present "technical failure" as the sole cause until the `invite_sent` vs. `email_delivered` gap is quantified. The flat signup count despite massive invite volume suggests the bottleneck is likely *after* the send event.
+
+**Note:** This analysis relies on your existing analytics; no external benchmarks are used. If `email_delivered` events are not currently tracked, mark that metric as UNVERIFIED and prioritize integrating ESP webhook data immediately.

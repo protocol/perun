@@ -1,0 +1,27 @@
+**Recommendation: Do not ship to the Q1 enterprise package yet. Extend the test with a pre-committed design or adopt a phased rollout limited to high-risk facilities.**
+
+The current result (18% reduction, p=0.14) is **UNVERIFIED** as a causal win. A p-value of 0.14 indicates that the observed reduction is consistent with random noise roughly 14% of the time; it does not meet standard thresholds for statistical significance, nor does it justify a full enterprise rollout given the cost of a false positive.
+
+**Risk of False Positive (Type I Error)**
+Shipping based on this data carries a high risk that the "18% reduction" is an illusion caused by variance in rare events. With only 14 clients and infrequent downtime, a single facility having a "good winter" due to weather rather than your software could skew the entire result. If you ship a feature that does not actually work:
+1.  **Revenue Risk:** You risk churn if the feature fails to deliver promised uptime to enterprise clients paying €45,000/year.
+2.  **Credibility Risk:** In B2B industrial software, false alarms or missed predictions erode trust faster than in consumer apps.
+3.  **Opportunity Cost:** Engineering resources will shift to maintaining a flawed feature rather than fixing the actual algorithm.
+
+**Why Bayesian Methods Are Not a Magic Bullet**
+While Bayesian methods allow you to incorporate prior beliefs (e.g., "we expect maintenance alerts to help"), they cannot manufacture signal from silence. With only 14 clients and events occurring "a few times a year," your data likelihood is too weak to overcome any reasonable prior. A Bayesian analysis would likely yield a posterior distribution so wide that the probability of the feature having *negative* or *zero* impact remains substantial. It would not give you the certainty needed for a Q1 enterprise mandate.
+
+**Action Plan: The "This-Week" Step**
+Do not choose between "stop" and "ship." Choose "learn faster with guardrails."
+
+1.  **Reject the current read:** Declare the current test inconclusive. Do not count the 18% as a win.
+2.  **Pre-commit to a sequential design:** Instead of a fixed date, define a stopping rule based on accumulated events, not time. Given the low frequency, time-based tests (e.g., "run for 3 more months") may still fail.
+    *   *Action:* Calculate the minimum number of downtime events required to detect an 18% lift with 80% power. If this number is unattainable in Q1, lower your success criterion to a larger effect size (e.g., "We only ship if we see a 30% reduction") which requires fewer samples to verify.
+3.  **Implement a Guardrail Metric:** Define a failure mode immediately. For example, if the alert feature increases false positives (triggering unnecessary maintenance calls), the cost may outweigh the downtime savings. Monitor "maintenance tickets generated per alert" as a guardrail. If this rises, stop immediately regardless of downtime stats.
+4.  **Phased Rollout Alternative:** If business urgency demands revenue, restrict the Q1 launch to a "Beta Tier" with discounted contracts and explicit risk-sharing clauses, rather than the full enterprise package. This limits liability while gathering the necessary sample size.
+
+**Conclusion**
+The data suggests promise but proves nothing. The rigorous path is to acknowledge the sample size is too small for the event frequency. Extend the learning phase with a design focused on event counts, not calendar dates, or limit the commercial exposure until the signal is verified.
+
+*Note: The 14-client sample is the primary constraint; no statistical method can fully compensate for such sparse event data without increasing false discovery risk.*
+*Ensure any extended test pre-defines the primary metric and guardrail to avoid "peeking" bias.*

@@ -1,0 +1,30 @@
+### Core Metric Definitions for BuildFlow Safety Compliance Beta
+
+**1. North Star Metric: Weighted Safety Compliance Rate (WSCR)**
+*Purpose:* Measures real user value (safety adherence) normalized for firm size and project activity, rejecting vanity counts of total checks.
+*Formula:*
+$$ \text{WSCR} = \frac{\sum (\text{Completed Required Checks per Project})}{\sum (\text{Total Required Checks per Project})} \times 100 $$
+*Logic:* The denominator ("Total Required Checks") is dynamic. It is calculated only for projects in an **Active Construction** state based on the specific safety plan assigned to that project type. Projects in **Planning** phase are excluded from this calculation entirely, as their required check volume is zero or negligible, preventing skew. This ensures a single-person operator and a 50-person firm are compared on *adherence to their specific obligations*, not raw volume.
+
+**2. Input Metric A: Active Project Activation Rate**
+*Purpose:* Diagnoses if users are moving projects from "Planning" to "Active" where safety checks actually matter.
+*Formula:*
+$$ \frac{\text{Projects transitioning to 'Active' status with a Safety Plan attached}}{\text{Total Projects created in period}} \times 100 $$
+*Logic:* Tracks whether the module is driving the behavioral shift needed to generate safety data. Low WSCR may simply mean projects are stuck in planning, not that safety is being ignored.
+
+**3. Input Metric B: Firm-Level Consistency Score**
+*Purpose:* Measures retention of the safety habit across a firm's workforce, normalizing for fluctuating daily headcounts.
+*Formula:*
+$$ \text{Average of } \left( \frac{\text{Days with } \geq 1 \text{ completed check}}{\text{Days with reported active workers}} \right) \text{ per firm} $$
+*Logic:* Instead of counting checks, this counts *days* the safety ritual occurred relative to days work happened. It answers: "When workers are on site, did the safety protocol happen?" This prevents large firms from looking better simply because they have more people logging more items.
+
+**4. Event Taxonomy (What to Instrument)**
+Do not instrument "check logged." Instrument only these events to answer specific questions:
+*   `safety_plan_assigned` (Question: Is the project ready for tracking?)
+*   `project_status_changed_to_active` (Question: Did the project enter the phase requiring checks?)
+*   `daily_checklist_completed` (Properties: `project_id`, `required_count`, `completed_count`, `worker_count_on_site`)
+*   `worker_count_reported` (Question: What is the denominator for today's risk exposure?)
+
+**Implementation Notes for Customer Success:**
+*   **Success Definition:** A beta participant is "successful" if their WSCR exceeds 80% *and* their Consistency Score exceeds 70% after 30 days of active projects.
+*   **Data Requirement:** These metrics are `UNVERIFIED` until the `worker_count_reported` and `project_status_changed` events are live in your analytics. Do not estimate baseline values; establish the user's own baseline during week 1 of the beta.

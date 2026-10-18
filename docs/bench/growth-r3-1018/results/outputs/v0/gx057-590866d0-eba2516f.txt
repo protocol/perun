@@ -1,0 +1,32 @@
+For the June 10th beta launch, reject the "track everything" approach. Instrumenting 200 events or focusing on every error code will create noise that hides whether users find value. You have capacity for only 20 events; use them to answer specific questions about user value, not just system health. System logs (error codes, latency traces) belong in your engineering observability stack, not your product analytics, unless they directly block a user goal.
+
+Prioritize these 12 events to distinguish "helpful" from "functional." Each includes the specific question it answers.
+
+**Core Value & Retention (The North Star Inputs)**
+1.  `session_started` (Question: How many users actually try the device after setup?)
+2.  `core_action_completed` (Question: Did the user successfully execute the primary value prop, e.g., "lights on" or "music play"?)
+3.  `core_action_failed_user_visible` (Question: Did the system fail in a way the user noticed, causing abandonment?)
+4.  `repeat_attempt_same_intent` (Question: Did the user have to try twice within 30 seconds? Indicates poor recognition or execution.)
+5.  `day_2_return` (Question: Did the user come back the next day? This is your earliest retention signal.)
+
+**Activation & Friction**
+6.  `onboarding_step_completed` (Question: Where do users drop off during initial setup?)
+7.  `first_successful_command_latency` (Question: Is the time-to-first-value under 5 seconds? Long latency kills activation.)
+8.  `help_request_triggered` (Question: Are users confused enough to ask for help immediately?)
+
+**Satisfaction vs. Functionality Signals**
+9.  `command_abandoned_mid-sentence` (Question: Did the user stop speaking because the assistant didn't wake or respond? A strong dissatisfaction signal.)
+10. `negative_feedback_explicit` (Question: Did the user thumbs-down or say "that was wrong"?)
+11. `positive_feedback_explicit` (Question: Did the user thumbs-up or say "thanks"?)
+12. `feature_discovery_used` (Question: Did the user try a secondary feature, indicating growing comfort?)
+
+**Implementation Rules for Sarah:**
+*   **Stable Identifier:** Ensure every event carries a pseudonymous `device_user_id` to track cohorts across sessions. Do not use raw PII.
+*   **Properties Only:** For `core_action_completed`, include properties like `intent_type` and `latency_ms`. Do not create separate events for every intent type.
+*   **Error Aggregation:** Do **not** instrument individual error codes (e.g., `error_503`, `error_timeout`). Instead, instrument one `core_action_failed_user_visible` event with an `error_category` property (e.g., "network", "parse_fail", "device_offline"). This saves event slots and focuses on user impact.
+*   **Stage Appropriateness:** Since this is an MVP/Beta, ignore referral and revenue events. Focus entirely on Activation and Retention.
+
+**48-Hour Triage Plan:**
+Upon launch, ignore total signups. Look strictly at the ratio of `session_started` to `core_action_completed`. If this conversion is below 40%, the product is not functional enough for users to see value. Next, check `repeat_attempt_same_intent`. If >15% of sessions show repeats, your recognition engine or latency is the show-stopper. Finally, monitor `day_2_return` for the first cohort; if near zero, the "helpful" promise is broken regardless of uptime.
+
+**Note:** Any metric value mentioned above (e.g., 40%, 15%) is a hypothetical tripwire for discussion; you must calibrate these based on your actual Day 1 data. Do not invent benchmarks.

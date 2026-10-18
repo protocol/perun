@@ -1,0 +1,36 @@
+**To:** Chief Technology Officer, CloudStream
+**From:** Growth Analytics Lead
+**Date:** March 15
+**Subject:** Instrumentation Plan for API v2.0 Adoption & Risk Mitigation
+
+Tracking simple call counts is insufficient and dangerous for this migration. High call volume with an 8% error rate on aggregation endpoints indicates "superficial usage" (testing) rather than "stable adoption." If we rely on volume alone, we risk cutting off major clients who are calling v2.0 but failing silently or intermittently in production.
+
+To distinguish true migration from noise, we must instrument **outcome-based events** that prove a developer has successfully integrated v2.0 into a live workflow. We will reject vanity metrics (total calls) in favor of a North Star metric: **"Weekly Active Integrations Successfully Completing Core Aggregation."**
+
+### Required Event Taxonomy
+Do not instrument "everything." Implement only these three specific events to answer our critical questions before the June 30 cutoff:
+
+**1. `api_v2_integration_validated`**
+*   **Question Answered:** Has this API key moved from "testing" to "production-ready"?
+*   **Definition:** Triggered only when a specific API key successfully executes the complex data aggregation endpoint **three times within a 24-hour window** with **zero errors**.
+*   **Properties:** `api_key_hash` (pseudonymous), `client_tier`, `endpoint_name`, `latency_p95`.
+*   **Why:** A single call is a test; repeated success over time indicates a live workflow. This filters out the noise causing the current 8% error skew.
+
+**2. `api_v2_critical_failure`**
+*   **Question Answered:** Which specific clients are blocked from migrating?
+*   **Definition:** Triggered on any 5xx error or timeout on the aggregation endpoints for v2.0.
+*   **Properties:** `api_key_hash`, `error_code`, `payload_size`, `retry_count`.
+*   **Why:** We must correlate these failures to specific clients immediately. An 8% error rate is unacceptable for a hard cutoff; this event allows us to proactively contact at-risk clients before June 30.
+
+**3. `api_v1_to_v2_migration_complete`**
+*   **Question Answered:** Has the client fully deprecated v1.0?
+*   **Definition:** Triggered when an API key sends **zero** requests to v1.0 for 7 consecutive days while maintaining >99% success rate on v2.0.
+*   **Properties:** `days_since_v1_last_seen`, `v2_success_rate`.
+*   **Why:** This is our true "adoption" signal. It confirms the client is not just dual-running but has fully switched.
+
+### Immediate Actions (This Week)
+1.  **Engineering:** Implement the `api_v2_integration_validated` logic by March 22. Do not wait for the full dashboard; we need the raw list of `api_key_hash` values that meet this criteria to identify our "safe to cut" cohort.
+2.  **Support:** Cross-reference the `api_v2_critical_failure` logs against our top 20 enterprise clients. If any appear in the failure log, initiate immediate outreach. The 8% error rate suggests a systemic issue with data aggregation that must be resolved before we can confidently set a hard cutoff.
+3.  **Governance:** Define the "Go/No-Go" tripwire for June 30. If fewer than 95% of active v1.0 keys have triggered `api_v2_integration_validated` by June 1, the cutoff date must be extended. Proceeding with high failure rates will cause major disruption.
+
+**Note:** User identifiers (`api_key_hash`) must remain pseudonymous; route any PII handling to the privacy compliance team. Do not invent benchmarks for "good" error rates; compare strictly against our current 8% baseline and aim for reduction week-over-week.

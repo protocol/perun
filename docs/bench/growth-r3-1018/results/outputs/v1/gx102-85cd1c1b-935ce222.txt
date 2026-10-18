@@ -1,0 +1,27 @@
+### Strategy for Timestamp Integrity and Reporting
+
+**1. Flagging Logic (Suspicious Entry Rules)**
+Apply the following filters to your 200,000 daily records to isolate the ~15% inconsistent data without deletion. Mark these rows with a `data_quality_flag` rather than removing them.
+
+*   **Future Timestamp Rule:** Flag any event where `event_timestamp` > `current_processing_time` + 15 minutes (allowing for minor network latency). True future dates are impossible and indicate clock skew or timezone misconfiguration.
+*   **Midnight UTC Artifact Rule:** Flag any event where `event_timestamp` equals `00:00:00` UTC exactly. This pattern strongly suggests a default value assignment during the March 3rd migration when a valid timestamp was missing or failed to convert from the legacy system.
+*   **Timezone Mismatch Rule:** Since operations are in Chile (CLT/CLST), flag records where the local hour component is inconsistent with typical delivery windows (e.g., if converted local time shows deliveries occurring strictly at midnight local time, matching the UTC artifact).
+
+**2. Cleaning and Correction Approach**
+Do not delete flagged records immediately. Instead, create a "cleaned_for_analysis" view:
+*   **Exclude from Aggregation:** Remove flagged records from the calculation of "Average Delivery Time" for the director's report.
+*   **Segmented Analysis:** Run the average delivery time calculation twice: once including all data (to show the distortion) and once excluding flagged data (the reliable metric).
+*   **Regional Segmentation:** To answer your hypothesis about southern districts, group the *flagged* records by region. If the percentage of flagged records in the south significantly exceeds the global 15% average, the issue is regional; if it matches, the issue is systemic to the March 3rd migration configuration.
+
+**3. Summary Statistics for Reliability Proof**
+Present these four specific metrics to Elena to demonstrate data reliability:
+
+*   **Total Record Volume:** Total daily records (e.g., 200,000).
+*   **Integrity Rate:** Percentage of records *not* flagged (e.g., "85% of records passed integrity checks").
+*   **Distortion Impact:** The difference in "Average Delivery Time" between the raw dataset and the cleaned dataset (e.g., "Raw average: 4.2 hours; Cleaned average: 2.1 hours"). This proves why cleaning was necessary.
+*   **Regional Consistency:** A simple table showing the % of flagged records per region. If the variance between regions is low (<2%), state that the issue is uniform and not geographically isolated.
+
+**Deliverable Format for Tuesday**
+Provide a one-page summary containing the **Cleaned Average Delivery Time** trend line for Q1 (excluding the bad data) and a small footnote table listing the count of excluded records by date and region. This allows Elena to see the true performance trend while acknowledging the data gap transparently.
+
+Note: Verify if the "midnight UTC" records have valid non-timestamp data (like driver ID or location); if so, they may be recoverable via log correlation later. Ensure the "future timestamp" threshold accounts for any known clock synchronization delays in your new cloud provider's specific region.

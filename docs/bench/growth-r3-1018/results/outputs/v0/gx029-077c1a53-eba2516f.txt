@@ -1,0 +1,33 @@
+### Diagnostic Plan: Isolating Design vs. Performance Impact
+
+**1. Segment Funnel Data by Device and Network (The "Where")**
+Immediately slice your checkout funnel data into four distinct cohorts to isolate the variable:
+*   Desktop (Control for design, baseline performance)
+*   Mobile on Wi-Fi (Tests design impact; isolates layout from network speed)
+*   Mobile on 4G/5G (Tests combined impact of design + latency)
+*   Legacy Mobile Users (If available, users who cached the old version)
+
+**Hypothesis Validation:**
+*   **If the drop is universal** across Desktop and Mobile/Wi-Fi: The **design change** (trust badges below the fold) is the primary driver. French consumers' hesitation is triggered by layout, not load time.
+*   **If the drop is isolated** to Mobile/4G while Mobile/Wi-Fi remains near the 4.5% baseline: The **performance degradation** (2s → 4s load) is the primary driver.
+*   **If both segments drop:** You have a compound failure requiring both a design tweak and performance optimization.
+
+**2. Analyze Session Recordings for Behavioral Signals (The "Why")**
+Filter session recordings for the 40 support tickets and random samples from the segmented cohorts above. Look for specific behavioral markers:
+*   **Design Friction:** Users scrolling rapidly up and down the page (searching for trust badges), hovering over the payment section without clicking, or abandoning immediately after the fold loads.
+*   **Performance Friction:** Users abandoning during the white-screen load phase, rage-clicking on unresponsive elements while the page loads, or sessions cutting off before the DOM fully renders.
+
+**3. Correlate Support Tickets with Technical Logs**
+Map the 40 support tickets to user agents and connection types.
+*   If >70% of "confusion" tickets come from Desktop or Mobile/Wi-Fi, the issue is **clarity/layout**.
+*   If tickets cite "page wouldn't load" or "timed out" and correlate strictly with mobile carriers, the issue is **latency**.
+
+**4. Decision Matrix for Sophie (CTO)**
+Based on the segmentation above, execute one of the following by June 1st:
+*   **Scenario A (Design is the culprit):** Do not roll back the entire build. Deploy a **hotfix** moving trust badges back above the fold immediately. Monitor if conversion rebounds to ~4.5% on Mobile/Wi-Fi.
+*   **Scenario B (Performance is the culprit):** Roll back the specific assets causing the 2s→4s spike (likely heavy images or scripts in the new design) while keeping the layout if possible. If asset optimization cannot happen by June 1st, **roll back** the release to restore stability.
+*   **Scenario C (Compound Failure):** **Roll back immediately.** Trying to A/B test a fix while losing 18% of revenue is too costly. Restore the baseline, then re-launch with optimized assets and the original badge placement.
+
+**Immediate Next Step:** Run the device/network segmentation query on your analytics platform today. If Mobile/Wi-Fi conversion is below 4.0%, assume design failure and prepare the badge hotfix. If Mobile/Wi-Fi is stable, focus engineering solely on asset optimization.
+
+*Note: Do not rely on aggregate averages; the 18% drop is likely masking distinct behaviors between network types. Ensure all user identifiers in session tools are pseudonymized to comply with French GDPR standards.*

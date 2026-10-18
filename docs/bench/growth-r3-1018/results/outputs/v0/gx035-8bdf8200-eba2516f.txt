@@ -1,0 +1,40 @@
+### Validation Protocol: MelodyStream ID Deduplication
+
+**Objective:** Verify data integrity and financial accuracy before and after merging duplicate user IDs, ensuring zero loss of listening history and correct royalty attribution.
+
+**1. Pre-Merge Snapshots (T-0)**
+Capture these exact counts for the affected cohort (Social Login, Jan–Jun 2022) and the global total:
+*   **Account Count:** Total registered accounts vs. distinct internal user entities.
+*   **Listening Volume:** Sum of `listening_hours` and `track_play_count` grouped by the current (duplicate) `user_id`.
+*   **Financial Liability:** Calculated royalty payout per `user_id` based on current logs.
+*   **History Depth:** Average `session_count` and `first_listen_date` per duplicate cluster.
+*   **Recommendation State:** Hash of the top-50 recommended track IDs for a statistically significant sample (e.g., 1,000) of affected users.
+
+**2. The Consistency Equation (Post-Merge Verification)**
+To verify total listening hours remain consistent, the following equality must hold exactly:
+> `SUM(Listening_Hours_Pre_Merge_All_Records)` = `SUM(Listening_Hours_Post_Merge_Merged_Records)`
+
+If the difference is >0.00%, the merge logic is dropping or duplicating event logs. Do not proceed to financial reconciliation until this matches bit-for-bit.
+
+**3. Specific Counters to Compare**
+Run these queries immediately after the script completes on a staging environment:
+*   **Delta in Account Count:** Should equal the number of duplicate records removed.
+*   **Orphaned Events:** Count of listening events where `user_id` no longer exists in the user table (must be 0).
+*   **Royalty Variance:** `(Post-Merge Royalty per Artist) - (Pre-Merge Royalty per Artist)`. Any variance indicates double-counting was previously occurring or history was lost.
+*   **Session Continuity:** For the sampled users, verify the `last_listen_date` and `total_hours` match the sum of their previous duplicate profiles.
+
+**4. Risk Mitigation for Recommendations**
+Your concern about disrupting personalized recommendations is valid if the merge discards the interaction history of the "losing" ID.
+*   **Validation:** Re-run the recommendation engine for the sampled 1,000 users using the new merged ID. Compare the output hash against the pre-merge aggregate of their duplicate profiles.
+*   **Safe Guard:** If the recommendation list changes significantly (>10% turnover in top 20), the merge logic is likely weighting recent sessions incorrectly or dropping older history.
+
+**5. Go/No-Go Tripwires**
+*   **STOP** if `Listening_Hours_Delta` ≠ 0.
+*   **STOP** if `Orphaned_Events` > 0.
+*   **STOP** if `Royalty_Variance` for any single artist exceeds $0.01 (indicating fractional cent errors that scale).
+*   **PROCEED** only if all counters reconcile and the recommendation hash stability is within tolerance.
+
+**Execution Order:** Run on 1% of affected users → Validate counters → Run on 10% → Validate → Global rollout. Do not delete source records until 48 hours of post-merge monitoring confirms stability.
+
+*Note: This protocol measures product data integrity; it does not address the PII implications of merging social login tokens, which must be reviewed under privacy compliance guidelines separately.*
+*Ensure the "stable per-user identifier" used post-merge is pseudonymous and decoupled from raw social provider IDs to maintain future cohort analysis validity.*

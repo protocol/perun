@@ -1,0 +1,30 @@
+**GiftHaven Checkout Failure Analysis Plan**
+
+**Objective:** Isolate the exact failure point in the gift card redemption flow and quantify segment impact to restore revenue before the February 5th campaign.
+
+**1. Event Taxonomy & Instrumentation (Immediate)**
+Instrument three distinct events to replace the aggregate "checkout error" metric. Each event answers a specific diagnostic question:
+*   `gift_card_input_submitted`: Did the user attempt to enter a code? (Properties: `card_format_year`, `user_segment`).
+*   `gift_card_validation_api_call`: Did the request reach the validation logic? (Properties: `api_response_code`, `latency_ms`).
+*   `gift_card_authorization_final`: Did the transaction complete? (Properties: `failure_reason`, `gateway_response`).
+
+*Note:* Do not instrument "everything." These three events specifically isolate whether the drop-off occurs at UI input, backend validation, or final authorization.
+
+**2. Diagnostic Funnel Analysis (Bottom-Up)**
+Analyze the data from January 15–30 using a segmented funnel. Do not look at overall conversion yet; isolate the leak:
+*   **Step A (Input vs. Validation):** Compare `input_submitted` count to `validation_api_call` count. If these numbers diverge significantly for pre-2022 cards, the failure is in the **input stage** (frontend regex or formatting logic rejecting old codes before sending).
+*   **Step B (Validation vs. Authorization):** Compare `validation_api_call` count to `authorization_final` count. If the drop occurs here, the failure is in the **validation logic or gateway conflict** (backend rejecting valid old formats).
+*   **Segmentation:** Slice all three events by `card_format_year` (pre-2022 vs. post-2022) and `user_type` (new vs. returning). This confirms if the hypothesis regarding older card formats is statistically valid or if the issue affects all segments.
+
+**3. Experiment & Resolution Protocol**
+Once the failure point is identified, treat the fix as a high-priority experiment with a guardrail:
+*   **Primary Metric:** `gift_card_authorization_final` success rate for pre-2022 cards.
+*   **Guardrail Metric:** Overall checkout error rate for *non*-gift-card transactions (ensure the fix does not break standard payments).
+*   **Execution:** Deploy the fix to a small cohort (e.g., 10% of traffic or internal staff) first. Verify the success rate returns to the January 1–14 baseline (~98%). Do not declare victory based on a single day of data; verify stability over 48 hours.
+
+**4. This-Week Steps**
+1.  **Deploy Instrumentation:** Add the three named events to the checkout pipeline by EOD tomorrow. Without these, the $45k loss estimate remains `UNVERIFIED` regarding the specific cause.
+2.  **Run Segmented Query:** Execute the funnel analysis splitting by `card_format_year`. If pre-2022 cards show >15% drop at the `validation_api_call` step, the hypothesis is confirmed.
+3.  **Decision Gate:** If the hypothesis is confirmed, prioritize the gateway logic patch immediately. If the drop is at `input_submitted`, roll back the recent frontend update. If data shows no correlation with card age, halt the Valentine's campaign launch until the root cause is found to prevent amplified revenue loss.
+
+The baseline for success is the January 1–14 error rate (2%). Any solution must demonstrate a return to this baseline for the affected segment before full rollout.

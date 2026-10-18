@@ -1,0 +1,30 @@
+**To:** Founder, AlpineGear
+**From:** Lead Analyst
+**Subject:** Checkout Trust Badge Test Strategy (Pre-January Peak)
+
+**Recommendation:** Do not run a standard fixed-duration A/B test targeting a 10% lift. With 500 daily visitors and a 2.5% baseline, detecting a 10% lift (to 2.75%) with 80% power requires approximately **260,000 visitors per variant**, or roughly **520 days** of traffic. Waiting six weeks will yield an `UNVERIFIED` result prone to false positives if we peek early.
+
+Instead, we will use a **Sequential Testing design (Group Sequential with Alpha Spending)**. This allows us to check results at pre-defined intervals (e.g., every 3 days) without inflating the false-positive rate, enabling an early stop if the effect is massive, while protecting us from noise if it is not.
+
+**1. Evaluation Criteria & Design**
+*   **Primary Metric:** Checkout Completion Rate (Purchases / Unique Visitors entering checkout).
+*   **Guardrail Metric:** Average Order Value (AOV). We must ensure badges do not inadvertently signal "cheapness" or distract high-value climbers, reducing basket size.
+*   **Hypothesis:** Trust badges increase conversion.
+*   **Realistic Minimum Detectable Effect (MDE):** Given our traffic, we cannot reliably detect a 10% lift before January. To see a result in **6 weeks (42 days)** with ~21,000 total visitors, we can only detect a massive **~45% relative lift** (from 2.5% to ~3.6%).
+    *   *Decision:* If the true lift is only 10%, this test will remain inconclusive by January. We must accept that we are testing for a "home run" effect, not a subtle optimization.
+
+**2. Execution Plan (Sequential Approach)**
+We will pre-commit to a maximum duration of 6 weeks (ending mid-December) with **7 interim looks** (every 6 days).
+*   **Stopping Rule:** We calculate adjusted significance thresholds for each look using an alpha-spending function (e.g., O'Brien-Fleming). Early looks require very strong evidence (e.g., p < 0.001) to stop; later looks relax toward p < 0.05.
+*   **Protocol:**
+    1.  Launch test with 50/50 split.
+    2.  Review data *only* on the pre-scheduled dates.
+    3.  If the metric crosses the adjusted threshold at any look, **stop immediately** and ship.
+    4.  If the test runs the full 6 weeks without crossing the threshold, **stop and declare no winner**. Do not extend hoping for significance; the winter season demand profile will change, invalidating the baseline.
+
+**3. This-Week Steps**
+1.  **Instrumentation:** Verify the "Checkout Start" and "Purchase Complete" events are firing with a stable, pseudonymous user ID to ensure accurate session tracking.
+2.  **Configuration:** Set up the experiment platform to use a sequential testing engine (or manually compute O'Brien-Fleming boundaries for 7 looks) rather than a standard t-test calculator.
+3.  **Launch:** Go live immediately to capture pre-holiday traffic. If no signal is detected by December 15th, shelve the test and rely on qualitative user feedback for the January peak, as quantitative validation is impossible at this volume for small effects.
+
+*Note: We are comparing against AlpineGear's own baseline trend, not industry benchmarks. If conversion spikes due to seasonal demand rather than badges, the guardrail metrics and holdout group will isolate the cause.*

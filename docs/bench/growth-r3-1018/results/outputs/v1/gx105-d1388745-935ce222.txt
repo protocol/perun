@@ -1,0 +1,30 @@
+### Recommended Event Taxonomy & Success Definition for SoundWave Water Tracker
+
+**North Star Metric:** Weekly Active Users completing **3+ daily water logs**.
+*Why:* Raw session counts or total voice commands are vanity metrics; they rise even if users abandon the skill after one day. This metric rises only when users derive recurring value (habit formation).
+
+**Definition of a "Successful Session":**
+A session where the user **logs at least one water intake event** and receives confirmation.
+*Why:* In a voice interface, listening to tips or asking "how much water should I drink?" without logging is curiosity, not value. The core action is the *log*.
+
+#### Essential Events to Instrument (Code Freeze: Oct 25)
+Do not instrument every voice command. It creates noise, increases storage costs, and complicates privacy compliance. Instrument only these four events to answer specific growth questions:
+
+| Event Name | Properties to Capture | Question This Answers |
+| :--- | :--- | :--- |
+| `skill_enabled` | `user_id` (pseudonymous), `date` | **Activation:** Did the user complete setup and grant permissions? |
+| `water_logged` | `user_id`, `amount_ml`, `session_id`, `timestamp` | **Core Value:** Did the user perform the primary action? (Used to calculate the North Star). |
+| `reminder_triggered` | `user_id`, `reminder_type` (scheduled/ad-hoc) | **Engagement:** Are our prompts driving behavior, or are they ignored? |
+| `session_ended` | `user_id`, `actions_in_session` (count), `duration_sec` | **Friction:** Do users drop off before logging, or do they log and leave immediately? |
+
+**Why these over others?**
+1.  **Privacy & Cost:** We avoid capturing raw voice transcripts or unrelated queries (e.g., "what's the weather?"), reducing PII risk and storage volume.
+2.  **Signal vs. Noise:** Tracking "every command" obscures the specific drop-off point between opening the skill and logging water. These four events isolate the activation漏斗 (funnel).
+3.  **Retention Correlation:** We cannot know yet which specific interaction correlates to retention. By isolating `water_logged`, we can cohort users who log 1x vs. 3x per week and observe which group returns in Week 2.
+
+#### Implementation Notes
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for cohort analysis (tracking the same user across days). Do not use raw device IDs or voice profiles in analytics logs; route any PII mapping to your privacy compliance protocol.
+*   **Stage Appropriateness:** As an MVP launching Nov 5th with ~1,000 DAU, this lightweight taxonomy prevents "analysis paralysis." Add granular error tracking or A/B test events only after validating that users return for the core action.
+
+**Next Step for Jennifer:**
+Approve this four-event schema by October 20th to allow 5 days for QA validation before the code freeze. Any event not on this list is deferred until December's retention review.

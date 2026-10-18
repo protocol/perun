@@ -1,0 +1,34 @@
+### Event Taxonomy for HomeChef Tech App (Target: Nov 20 Code Freeze)
+
+**North Star Metric:** Weekly Active Users completing a **Successful Remote Cook Cycle** (Start → Doneness Notification Acknowledged). This measures realized value, not just app opens.
+
+**Core Event Schema**
+Instrument only these events to answer specific questions about retention and user segmentation.
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `cook_cycle_started` | **Activation:** Do users initiate the core value prop (remote pre-heat) after opening the app? | `source` (push/notification/manual), `recipe_id`, `oven_model`, `user_cohort` |
+| `doneness_notification_viewed` | **Engagement:** Is the "smart" feedback loop actually being consumed? | `cycle_duration`, `notification_channel` (push/in-app), `time_to_view` |
+| `cook_cycle_completed` | **Retention:** Did the user finish the job? (Primary North Star input) | `completion_status` (success/aborted), `manual_override_used` (bool) |
+| `history_viewed` | **Hypothesis Test:** Do users return to track past performance? | `days_since_last_cook`, `view_depth` (single vs. list) |
+| `recipe_share_initiated` | **Hypothesis Test:** Is social sharing a driver for power users? | `share_destination`, `recipe_id` |
+| `app_session_ended` | **Context:** Session length analysis for casual vs. power users. | `session_duration`, `actions_per_session` |
+
+**Segmentation Logic (Power vs. Casual)**
+Do not rely on "app opens." Define segments based on behavior:
+*   **Power User:** ≥2 `cook_cycle_completed` events per week AND uses `history_viewed`.
+*   **Casual Observer:** Opens app but <1 `cook_cycle_completed` per week.
+*   **Leak Diagnosis:** If `app_session_ended` occurs before `cook_cycle_started` >65% of the time, the friction is in activation, not retention.
+
+**Privacy & Identifier Seam**
+*   **Identifier:** Use a stable, pseudonymous `device_user_id` for cohort tracking. Do not use raw emails or names in event properties.
+*   **Home Data:** Do not log specific temperatures, food types, or camera feeds unless explicitly consented to for a specific feature. Route all PII and consent flags to the `privacy-compliance.md` domain; this schema assumes only behavioral metadata.
+*   **Retention:** Define a data retention policy (e.g., 13 months) for behavioral logs to comply with GDPR/CCPA by default.
+
+**This Week's Step**
+1.  **Engineering:** Implement the six events above with the specified properties by Nov 20. Reject any "nice-to-have" logging that lacks a named question.
+2.  **Product:** Define the SQL/query for "Successful Remote Cook Cycle" now so the dashboard is ready Day 1 post-launch.
+3.  **Decision Rule:** If `history_viewed` is <5% of power users by Dec 15, de-prioritize history features in Q1. If `recipe_share_initiated` is <1% overall, remove the share button from the primary flow to reduce clutter.
+
+*Note: The 35% weekly open rate is a vanity metric until correlated with `cook_cycle_completed`. A user opening the app daily without cooking is not retaining value.*
+*No benchmarks for "good" share rates are asserted; compare Dec 2024 data against Jan 2025 internal baselines only.*

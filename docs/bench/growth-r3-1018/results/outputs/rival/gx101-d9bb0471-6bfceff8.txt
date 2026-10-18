@@ -1,0 +1,30 @@
+**Recommendation: Declare this a technical failure and discard the experiment results.**
+
+Do not attempt to statistically adjust for the missing data or salvage signal from the first three days. The imbalance in group sizes (4,500 control vs. 2,100 variant) combined with the specific nature of the crash (affecting the new code path harder) indicates **selection bias** that cannot be corrected post-hoc.
+
+**Why the data is unusable:**
+1.  **Broken Randomization:** A/B testing relies on the assumption that users are randomly assigned and remain in their assigned group regardless of technical performance. Because the variant code caused or exacerbated the crash, the users remaining in the variant group are no longer a random sample. They are specifically the users who *didn't* encounter the fatal errors that drove others away. Comparing this "survivor" group to the stable control group will produce misleadingly positive or negative results that reflect server stability, not user preference.
+2.  **Time-Bound Bias:** Isolating the first three days (Oct 12–14) introduces time-based bias. User behavior on Tuesday–Thursday often differs significantly from weekends or the following week. Furthermore, if the marketing push drove the traffic spike that caused the crash, the early traffic composition may differ from the later intended audience.
+3.  **No Statistical Fix:** There is no statistical method to reliably reconstruct what the missing 50% of variant users would have done. Any adjustment would require assuming the behavior of the crashed sessions, which is exactly the unknown variable you are trying to measure.
+
+**Metrics to Confirm the Decision (for your internal validation):**
+While the decision is to discard, review these to confirm the severity to Marcus:
+*   **Error Rate by Variant:** Compare server-side error logs (5xx errors) for Control vs. Variant. A significant delta confirms the variant code was the instability vector.
+*   **Session Duration Drop-off:** Check if Variant sessions ended abruptly at the checkout step compared to Control.
+*   **Traffic Source Mix:** Ensure the marketing push didn't alter the source/medium mix between the two groups before the crash.
+
+**How to Explain This to Sarah (VP of Product):**
+
+Do not present confidence intervals or p-values, as they are mathematically invalid in this context. Instead, frame this as a risk-mitigation success.
+
+*   **The Narrative:** "The experiment successfully identified a critical scalability risk in the new checkout flow before a full rollout. The data collection stopped not because of a process failure, but because the system correctly flagged the variant as unstable under load."
+*   **The Confidence Statement:** "We have **zero statistical confidence** in the conversion difference between the groups because the technical failure broke the randomization. The variant group is now composed only of users who didn't crash, making them unrepresentative. Trusting this data would be gambling on a flawed sample."
+*   **The Recommendation:** "We should treat this as a 'Technical Learning' rather than a 'Conversion Test.' The go/no-go decision for the *design* is paused; the immediate next step is a engineering review to resolve the stability issue. Once fixed, we must re-run the test with a fresh randomization to get a valid go/no-go on the user experience."
+
+**Next Steps:**
+1.  Archive the current experiment data with a "Invalidated by Technical Incident" tag.
+2.  Schedule a post-mortem with engineering to fix the scalability issue.
+3.  Plan a re-launch of the test once stability is verified, aiming for a fresh 2-week run.
+
+*Note: Attempting to report partial results risks shipping a feature based on false positives, which could lead to revenue loss or further outages upon full scaling.*
+*Discarding the data now protects the integrity of future decision-making.*

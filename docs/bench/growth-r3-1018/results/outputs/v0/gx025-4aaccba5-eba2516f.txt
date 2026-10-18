@@ -1,0 +1,45 @@
+Do not instrument ten events yet. Your request violates the core principle of growth analytics: **instrument only what answers a named question.** Tracking ten events for a pilot launch with a 1M record/day cap and intermittent connectivity is premature optimization that risks drowning your signal in noise.
+
+Your assumption that "share-to-WhatsApp" equals viral growth is **UNVERIFIED**. A share is a vanity metric unless it leads to a returning user who performs the **core action**. In a low-connectivity market, measuring private shares without measuring the resulting *activation* of the recipient creates a blind spot where you see output (shares) but not outcome (retention).
+
+For a **pilot/MVP stage**, you must read the funnel bottom-up: **Retention first**, then Activation, then Acquisition. If users do not return to the core action after joining, viral shares are useless.
+
+Here is the prioritized instrumentation plan for Tunde, limited to the **five essential events** required to answer your critical questions. Do not add more until these prove stable.
+
+### Essential Events (Instrument These First)
+
+1.  **`app_open_success`** (Retention)
+    *   **Question:** Can users actually open the app given intermittent connectivity?
+    *   **Why:** In Lagos, network failure is the primary churn driver. If this fails, no other metric matters.
+    *   **Properties:** `connection_type` (wifi/mobile_data/offline), `load_time_ms`.
+
+2.  **`core_action_completed`** (Retention/North Star Input)
+    *   **Question:** Are users getting value? (Define "core action": e.g., posting to a local group, reading a neighbor's update).
+    *   **Why:** This is your true North Star input. Rising shares mean nothing if this flatlines.
+    *   **Properties:** `action_type`, `group_id`, `content_length`.
+
+3.  **`share_initiated`** (Activation/Viral Hypothesis)
+    *   **Question:** Are users attempting to share?
+    *   **Why:** Distinguishes intent from success. High initiation with low completion indicates UX friction or connectivity drops during the handoff.
+    *   **Properties:** `share_target` (WhatsApp, SMS, Copy Link), `screen_name`.
+
+4.  **`share_completed`** (Acquisition/Viral Hypothesis)
+    *   **Question:** Did the share actually leave the device?
+    *   **Why:** Validates your "WhatsApp is primary" assumption. Compare `share_initiated` vs. `share_completed` to measure drop-off.
+    *   **Properties:** `share_target`, `time_to_complete_ms`.
+
+5.  **`referral_landing_view`** (Acquisition/Activation)
+    *   **Question:** Do shared links actually bring people back who then activate?
+    *   **Why:** This closes the viral loop. Without this, you cannot attribute new users to shares.
+    *   **Properties:** `referrer_id` (pseudonymous), `landing_page_type`.
+
+### Nice-to-Have (Defer Until Post-Pilot)
+*   *Scroll depth, button hovers, profile edits, notification clicks, search queries.*
+*   **Reason:** These do not answer the immediate "Product-Market Fit" question. They add cost and noise. Add them only if the five above show stable retention but stalled growth.
+
+### Implementation Notes for Tunde
+*   **Identifier Seam:** Use a **stable, pseudonymous user ID** for cohort analysis (linking `referral_landing_view` to `core_action_completed`). Do not use raw phone numbers or PII in event properties; route identity mapping to a secure, compliant store per `privacy-compliance.md`.
+*   **Connectivity Strategy:** Queue events locally on failure and batch-upload when connectivity is restored to prevent data loss and reduce request overhead.
+*   **Budget Check:** 5 events × estimated daily active users (DAU) must stay under 1M records. If DAU > 200k, sample non-critical properties, not the events themselves.
+
+**This Week's Step:** Define the exact definition of `core_action_completed` with your product team. Without this definition, you cannot measure retention, and any share metric is meaningless. Once defined, have Tunde implement only these five events.

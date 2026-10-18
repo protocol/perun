@@ -1,0 +1,39 @@
+### BorderlessMart Cross-Border Measurement Framework
+
+**North Star Metric:** Weekly Active Buyers completing a successful cross-border transaction (not just registered users). Registration is a vanity metric; value is only realized when a user in Indonesia, Vietnam, or Thailand successfully pays and receives an order confirmation.
+
+**Funnel Strategy: Read Bottom-Up**
+Do not optimize acquisition until you verify retention and conversion. If users from Vietnam drop off at payment due to local preference mismatches, pouring marketing spend into that region is waste. Diagnose in this order:
+1.  **Retention:** Do users who activated return to browse or buy again in Week 2?
+2.  **Activation:** Do they complete the core action (first purchase)?
+3.  **Acquisition:** Are we attracting the right traffic?
+
+**Event Taxonomy: Answering Named Questions**
+Track only events that distinguish technical failure from user hesitation. Every event below must include properties for `country`, `device_type`, `payment_method_selected`, and `currency_displayed`.
+
+| Stage | Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- | :|
+| **Browse** | `product_viewed` | Is browsing behavior culturally different? | `category`, `time_on_page`, `scroll_depth` |
+| **Intent** | `checkout_initiated` | Did they commit to buying? | `cart_value_local`, `cart_value_usd` |
+| **Friction** | `payment_method_selected` | Do local preferences match our options? | `method_name` (e.g., COD, E-wallet), `country` |
+| **Drop-off** | `checkout_abandoned` | **Why** did they leave? (Hesitation vs. Error) | `step_failed`, `error_code` (if any), `last_visible_step` |
+| **Success** | `order_completed` | Did the cross-border logic hold? | `payment_method`, `total_fees_local`, `delivery_country` |
+| **Error** | `system_error_thrown` | Was this a technical failure? | `error_type`, `api_endpoint`, `country` |
+
+**Distinguishing Failure Types**
+*   **Technical Failure:** High correlation between `system_error_thrown` and `checkout_abandoned` at a specific step (e.g., currency conversion API timeout). Action: Fix the bug.
+*   **User Hesitation:** High `checkout_abandoned` rates *without* error codes, specifically after `payment_method_selected` shows an unsupported local method (e.g., user selects "Bank Transfer" in Vietnam but only Credit Card is offered). Action: Integrate local payment gateway.
+
+**Experiment Rigor for Regional Heads**
+To allocate spend by Week 4, you must run controlled tests, not just observe trends.
+*   **Pre-commit:** Define the sample size needed to detect a 10% lift in conversion before launching any campaign.
+*   **Primary Metric:** Conversion rate (Order Completed / Checkout Initiated).
+*   **Guardrail Metric:** Average Order Value (ensure discounts don't destroy margin).
+*   **Rule:** Do not stop a test early because "p < 0.05" on Day 2. This is peeking and creates false positives. Read the result only at the pre-committed end date or use a valid sequential testing rule.
+
+**This Week's Steps**
+1.  **Instrument:** Implement `checkout_abandoned` with explicit `error_code` vs `no_error` flags before launch. Without this, you cannot distinguish friction from bugs.
+2.  **Baseline:** Define the "Day 7 Retention" query for each country now. If Week 2 retention is <20% of activators, pause acquisition spend in that country regardless of signup volume.
+3.  **Verify:** Confirm that `user_id` is stable and pseudonymous across sessions to track cohorts, routing any PII handling to your privacy compliance protocol.
+
+*Note: All benchmarks must be derived from your own Week 1 data; no external "good conversion rate" exists for your specific cross-border friction. Unknown values without instrumentation are UNVERIFIED.*

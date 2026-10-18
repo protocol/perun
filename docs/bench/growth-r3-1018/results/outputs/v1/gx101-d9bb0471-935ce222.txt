@@ -1,0 +1,21 @@
+**Decision: Declare this a technical failure and discard the experiment results for decision-making purposes.**
+
+You cannot salvage a valid causal signal from this test. The crash on October 19th introduced severe **selection bias** and **survivorship bias** that no statistical adjustment can fix. Your variant group (2,100 users) is not a random sample; it is a self-selected group of users who either (a) converted before the crash, or (b) experienced a specific subset of errors that allowed them to remain in the funnel. The control group (4,500 users) operated under normal conditions. Comparing these two groups now compares "normal traffic" against "traffic surviving a infrastructure collapse," rendering any difference in conversion rates meaningless regarding the checkout flow design itself.
+
+**Metrics to Review (For Post-Mortem Only, Not Go/No-Go):**
+Do not look at conversion lift. Instead, pull these three metrics solely to quantify the engineering incident for Marcus:
+1.  **Error Rate by Variant:** Confirm the variant path had a significantly higher error rate starting Oct 19. This proves the treatment was contaminated by the outage.
+2.  **Session Duration Drop-off:** Identify the exact minute traffic diverged. If the variant sessions cut off abruptly while control sessions remained stable, this confirms the data censoring is non-random.
+3.  **Pre-Crash Baseline Stability:** Check Oct 12–18 only. If the sample sizes were too small in those 7 days to reach your pre-committed power (which is likely, given you planned for 14), then even the "clean" data is statistically underpowered and `UNVERIFIED`.
+
+**Explanation to VP of Product (Sarah):**
+Frame this not as a lack of data, but as a violation of experimental integrity. Use this script:
+
+*"Sarah, we cannot make a go/no-go decision on the checkout flow from this test. On October 19th, a database crash disproportionately affected the variant group, corrupting the data. This means the users remaining in the variant are not representative of our actual customer base; they are simply the ones who didn't hit the crash. Statistically, this is 'selection bias.' If we analyze this data, we risk shipping a feature based on noise or, worse, missing a real problem because the error logs are masking user behavior. The only rigorous path is to mark this experiment as 'Invalid – Infrastructure Contamination,' fix the stability issue identified by Marcus, and re-run the test with a fresh, clean randomization. Attempting to 'adjust' the numbers would give us a false confidence level that could cost us revenue if we ship a broken flow."*
+
+**This Week's Steps:**
+1.  **Stop Analysis:** Halt any current reporting on conversion lift for this experiment; label all outputs `UNVERIFIED`.
+2.  **Schedule Re-run:** Define the new start date only after Marcus confirms the database cluster handles the projected traffic spike without error.
+3.  **Pre-commit Design:** Before relaunching, calculate the required sample size for the *new* test and set a hard stop date based on that N, not a calendar window, to prevent future peeking or mid-test interruptions.
+
+*Note: No benchmark for "acceptable" data loss exists; any systematic bias invalidates the randomization. The cost of a delayed decision is lower than the cost of shipping based on corrupted data.*

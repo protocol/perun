@@ -1,0 +1,48 @@
+# MindfulMoments Core Event Schema Requirements
+
+**Objective:** Enable correlation between meditation usage, sleep story interactions, and sleep quality outcomes to validate the hypothesis that 3+ weekly sleep stories drive retention.
+
+**Priority:** High (Required for Sprint Planning, March 1st)
+
+## 1. Sleep Story Interaction Events
+*Capture granular engagement within the new sleep module.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `sleep_story_started` | User taps play on a sleep story | `story_id`, `story_title`, `category` (e.g., rain, narrative), `duration_total` |
+| `sleep_story_completed` | Story reaches natural end | `story_id`, `duration_listened`, `completion_rate` |
+| `sleep_story_skipped` | User manually skips intro/section | `story_id`, `timestamp_skip`, `section_skipped` |
+| `sleep_timer_adjusted` | User changes auto-off timer | `story_id`, `timer_previous`, `timer_new`, `context` (e.g., mid-story, pre-play) |
+| `sleep_story_abandoned` | User exits before completion (>80% incomplete) | `story_id`, `duration_listened`, `exit_point` |
+
+## 2. Unified Session Context
+*Bridge waking meditation and sleeping states for journey mapping.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `session_start` | App opened | `session_id`, `user_state` (waking/sleeping), `time_of_day`, `device_type` |
+| `mode_switched` | User toggles between Meditate/Sleep modes | `from_mode`, `to_mode`, `session_id` |
+| `session_end` | App backgrounded or closed | `session_id`, `total_duration`, `modes_used`, `features_accessed` |
+
+## 3. Outcome & Quality Events
+*Link behavior to the "sleep quality" metric.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `sleep_quality_logged` | User inputs morning rating | `rating_score` (1-5), `sleep_duration_hours`, `wake_up_time`, `story_consumed_previous_night` (boolean) |
+| `retention_milestone` | System calculates weekly activity | `user_id`, `stories_count_week`, `meditation_count_week`, `is_retained` (boolean) |
+
+## Implementation Guidelines for Engineering
+
+1.  **Naming Convention:** Use `snake_case` with `object_action` format (e.g., `sleep_timer_adjusted`).
+2.  **User Identity:** Ensure `user_id` is persistent across devices and states to link night-time listening with morning ratings.
+3.  **Timestamps:** All events must include server-side timestamps to accurately calculate "weekly" frequency regardless of local device time changes.
+4.  **Property Consistency:** `story_id` must match the content management system ID to allow joining with metadata (author, length, category).
+
+## Analytical Goals Enabled
+*   **Hypothesis Validation:** Calculate retention rates for users with `stories_count_week` ≥ 3 vs. < 3.
+*   **Interaction Analysis:** Determine if `sleep_timer_adjusted` or `sleep_story_skipped` correlates with lower `sleep_quality_logged` scores.
+*   **Journey Mapping:** Visualize paths where `mode_switched` occurs (e.g., Meditation → Sleep) and its impact on session length.
+
+*Note: Please confirm if PII (like specific wake-up times) requires anonymization before logging based on current privacy policies.*
+*Recommendation: Implement a "debug view" in the staging environment to validate these events before the March 1st sprint.*

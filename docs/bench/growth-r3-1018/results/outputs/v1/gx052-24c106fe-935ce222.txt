@@ -1,0 +1,30 @@
+**To: Country Manager, France**
+**Subject: Re-evaluating the 'Group Order' A/B Test Results**
+
+**Current Verdict: UNVERIFIED**
+We cannot declare the 'Group Order' feature a win based on the March 10–24 data. While the treatment group showed a higher average order value (24€ vs. 22€), the massive confidence intervals and unaccounted external variables (holidays, weather) mean this result is statistically indistinguishable from noise. Shipping now risks allocating engineering resources to a feature that may not drive real value.
+
+**Recommended Approach: Covariate-Adjusted Re-analysis & Follow-up**
+
+To distinguish signal from noise without indefinite testing, we will apply the following two-step plan:
+
+**1. Immediate Re-analysis (CUPED Method)**
+The high variance (3x historical norm) is masking the true effect. We will re-calculate the test results using **CUPED (Controlled-Experiment Using Pre-Experiment Data)**.
+*   **Action:** Use each user's average order value from the 14 days *prior* to the test as a covariate.
+*   **Why:** This mathematically removes the "noise" caused by inherent user spending differences and external factors that affect all users equally, shrinking the confidence intervals.
+*   **Decision Rule:** If the adjusted p-value remains >0.05 or the lower bound of the confidence interval dips below our break-even threshold (e.g., <1% lift), we stop development on this specific iteration.
+
+**2. Follow-up Validation Design (Stratified Sequential Test)**
+If the re-analysis suggests potential but lacks certainty, we will run a focused follow-up with a rigid design to handle local volatility.
+*   **Stratification:** Randomization will be stratified by "Office Cluster" rather than individual users to neutralize local holiday/weather impacts. If an office closes for a holiday, the entire cluster is excluded from that day's analysis, preventing skew.
+*   **Metric Definition:** Shift the primary metric from "Average Order Value" (highly volatile) to "Revenue Per Active Office Cluster" (stabilizes the unit of analysis).
+*   **Stopping Rule:** We will use a **Group Sequential Design** with pre-committed interim looks (e.g., Day 7, Day 14). We will *not* peek daily. This allows us to stop early for futility if the feature clearly fails, saving engineering time, while maintaining statistical validity if we continue.
+*   **Guardrail:** Monitor "Individual Order Frequency" to ensure group orders are not cannibalizing solo lunches.
+
+**This Week's Actions**
+1.  **Data Pull:** Extract pre-experiment order history (Feb 24–Mar 9) for all users in the France cohort to run the CUPED adjustment.
+2.  **Event Audit:** Verify that the `order_completed` event includes a `location_id` property to enable office-level stratification. If missing, instrument this immediately.
+3.  **Design Sign-off:** Define the break-even lift (e.g., 2% revenue increase) required to justify the engineering cost. If the CUPED-adjusted result does not clear this bar, we kill the project.
+
+**Note:** We are comparing these results only against Acme Eats' own baseline trends, not external market benchmarks.
+**Note:** All user identifiers used for stratification must be pseudonymized before analysis to comply with privacy standards.

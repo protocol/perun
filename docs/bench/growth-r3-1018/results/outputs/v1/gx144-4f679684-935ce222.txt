@@ -1,0 +1,40 @@
+# Proposal: Privacy-Preserving Aggregate Metrics for HealthConnect
+
+To evaluate user experience and infer friction points without storing Personally Identifiable Information (PII) or using device fingerprinting, we propose an instrumentation strategy based on **stateless, aggregated event counters** and **coarse-grained session metadata**. This approach satisfies legal mandates while providing the Ministry CIO and Legal Counsel with actionable data to improve the 20% completion rate.
+
+### 1. The North Star Metric
+**Metric:** `Weekly Completed Vaccination Appointments`
+**Definition:** The count of successful booking confirmations generated per week.
+**Rationale:** This measures actual citizen value delivered, distinct from vanity metrics like total page views or initiated sessions. It aligns directly with the goal of serving one million citizens.
+
+### 2. Funnel Instrumentation (Aggregate Only)
+We will instrument discrete, anonymous counters at each critical step of the booking flow. No user ID will be attached to these events.
+*   `event: booking_started` (Count)
+*   `event: eligibility_check_viewed` (Count)
+*   `event: eligibility_check_completed` (Count)
+*   `event: slot_selected` (Count)
+*   `event: booking_confirmed` (Count)
+
+**Friction Inference:** By comparing the drop-off rates between consecutive aggregate counters (e.g., `eligibility_check_viewed` minus `eligibility_check_completed`), we can quantify exactly where users abandon the process. If the largest percentage drop occurs at the eligibility stage, the hypothesis regarding confusion is validated by aggregate volume loss, not individual tracking.
+
+### 3. Solving the Device Blind Spot (Without Fingerprinting)
+Since device fingerprinting is restricted, we will rely on **User-Agent string parsing at the edge** (load balancer or CDN level) before data enters the analytics store.
+*   **Method:** The infrastructure extracts a binary flag: `device_type` (values: `mobile`, `desktop`, `tablet`). This flag is attached to the aggregate event count but is immediately discarded after aggregation; no specific browser version or OS detail is stored.
+*   **Actionable Insight:** We will generate two parallel funnels: one for `device_type=mobile` and one for `device_type=desktop`. If the mobile funnel shows a 40% drop at "slot selection" while desktop shows 10%, we infer a mobile-specific UI friction point without ever identifying a specific user or device.
+
+### 4. Session Context (Time-to-Complete)
+To infer confusion without tracking paths, we will measure **aggregate duration** between funnel steps.
+*   **Metric:** `avg_seconds_between_eligibility_view_and_complete`
+*   **Inference:** A statistically significant increase in time spent on the eligibility page correlates with confusion. If users spend 5 minutes on a page designed for a 30-second read, the content is likely unclear. This is measured as a rolling average of anonymous session durations, not tied to specific IDs.
+
+### 5. Compliance & Data Governance
+*   **No PII Storage:** The analytics pipeline accepts only integer counts and coarse categorical flags (`mobile`/`desktop`). No IP addresses, names, or health data enter the system.
+*   **Threshold Suppression:** To prevent re-identification in low-traffic scenarios (e.g., a rare eligibility category in a small region), any aggregate bucket with fewer than 10 events will be suppressed or rounded to zero in reports.
+*   **Data Retention:** Aggregated daily totals are retained for trend analysis; raw session logs are purged immediately after aggregation.
+
+### This-Week Step
+1.  **Legal/IO Approval:** Submit this specific list of 5 aggregate event names and the `device_type` binary flag for formal sign-off, explicitly noting the exclusion of all unique identifiers.
+2.  **Baseline Query:** Once approved, run the first aggregate funnel report to calculate the exact drop-off percentage at the "Eligibility" step for Mobile vs. Desktop to confirm the confusion hypothesis.
+
+*Note: All metrics described are `UNVERIFIED` until the instrumentation is deployed; no current values beyond the stated 20% completion rate are assumed.*
+*This design inverts standard observability by strictly avoiding per-user labels, adhering to the privacy seam required for government health data.*

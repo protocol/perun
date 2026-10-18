@@ -1,0 +1,34 @@
+# BuildFlow Safety Compliance Module: Beta Metric Definitions
+
+To ensure fair comparison across firms of varying sizes and projects at different stages, the following normalized metrics should be used to measure adoption and utility. These definitions replace raw counts with efficiency rates and context-aware completion scores.
+
+### 1. Worker-Level Compliance Rate (Adoption)
+**Purpose:** Measures individual user adoption regardless of firm size. This prevents large firms from skewing data with high raw volumes while small firms appear inactive.
+**Formula:**
+$$ \text{Worker Compliance Rate} = \left( \frac{\text{Total Safety Checks Completed by User}}{\text{Total Days User Logged as "On-Site"}} \right) \times 100 $$
+*Note:* The denominator uses "On-Site" days only, excluding days where the user is marked as "Off-Site" or "Planning Only."
+
+### 2. Project Stage-Adjusted Completion Score (Utility)
+**Purpose:** Accounts for the drastic difference in required checks between "Planning" and "Active Construction" phases. A planning project with 0/50 checks is not a failure; it is accurate.
+**Logic:**
+1.  **Determine Required Checks:** The system must dynamically assign a `Required_Check_Count` based on the project's current phase (e.g., Planning = 5 checks/day; Active Construction = 25 checks/day).
+2.  **Calculate Daily Score:**
+    $$ \text{Daily Project Score} = \left( \frac{\text{Checks Completed}}{\text{Dynamic Required\_Check\_Count}} \right) \times 100 $$
+3.  **Beta Period Aggregate:** Average the Daily Project Score over the beta period.
+**Success Benchmark:** A score >90% indicates the module is correctly identifying necessary checks for that specific phase.
+
+### 3. Active Project Utilization Rate
+**Purpose:** Distinguishes between projects that have adopted the module versus those merely existing in the system.
+**Formula:**
+$$ \text{Utilization Rate} = \left( \frac{\text{Projects with } \ge 1 \text{ Check Logged in Last 7 Days}}{\text{Total Projects in "Active Construction" Phase}} \right) \times 100 $$
+*Exclusion:* Projects in "Planning" phase are excluded from this specific metric to avoid diluting the activity rate of active sites.
+
+### 4. Firm Size Normalized Engagement
+**Purpose:** Allows Customer Success to compare engagement across your diverse client base (1-person vs. 50+ person firms).
+**Formula:**
+$$ \text{Firm Engagement Index} = \frac{\text{Average Worker Compliance Rate (Firm)}}{\text{Industry Benchmark Compliance Rate}} $$
+*Usage:* An index of 1.0 means the firm matches the average; >1.0 means they are outperforming. This allows you to tell a single-person operator they are performing "20% above the network average" just as easily as telling a large firm the same.
+
+### Implementation Notes for Customer Success
+*   **Defining "On-Site":** Ensure beta users understand that marking a worker as "On-Site" in the app is the trigger for the denominator in Metric #1. If they don't log attendance, their compliance rate cannot be calculated.
+*   **Phase Accuracy:** The validity of Metric #2 relies entirely on the Project Manager keeping the project phase (Planning vs. Active) up to date in BuildFlow.

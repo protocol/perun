@@ -1,0 +1,33 @@
+**Risk Assessment and Migration Strategy: Event Timestamp Normalization**
+
+**Executive Summary**
+The 12% session duration mismatch stems from timezone and precision drift between mobile (UTC/ms) and web (Local/s) streams. While normalizing to UTC is the correct target state, a blind retroactive transformation carries a high risk of data corruption due to irreversible precision loss (seconds to milliseconds) and ambiguous local time conversions (DST transitions). We recommend a "Dual-Write Cutover" strategy rather than a full historical reprocess, preserving raw fidelity while fixing forward-looking analytics.
+
+**Risk Analysis: Retroactive Transformation**
+Reprocessing the last three months (May–July) introduces three critical risks:
+1.  **Irreversible Precision Loss:** Converting web events from second-level to millisecond precision requires inventing data (e.g., appending `000`). This creates false confidence in metrics requiring sub-second accuracy and invalidates strict equality joins.
+2.  **Ambiguous Local Time Mapping:** Web events recorded in local time during Daylight Saving Time transitions (e.g., the "fall back" hour) may map to two possible UTC timestamps. Without original offset metadata, these records cannot be deterministically corrected, leading to potential session fragmentation or duplication.
+3.  **Pipeline Stability:** Rewriting three months of historical data may trigger downstream recomputation cascades, risking temporary dashboard outages before the September 10th QBR.
+
+**Proposed Migration Strategy: Dual-Write Cutover**
+To meet the September 10th deadline with minimal resource allocation and zero data loss, execute the following:
+
+1.  **Ingestion Layer Update (Immediate):** Modify the ingestion pipeline to enforce UTC+ms for all *new* events starting August 1st. Reject or flag any incoming events that do not meet this schema.
+2.  **Historical Data Handling (No Rewrite):** Do not rewrite raw historical tables. Instead, create a new **Analytics View** (or materialized table) for the May–July period.
+    *   Apply a best-effort UTC conversion to web events using the IP-derived or user-profile timezone at the time of the event.
+    *   Explicitly tag these converted records with a `confidence_level: low` flag where precision was inferred.
+    *   Leave the raw "bronze" layer untouched for auditability.
+3.  **Dashboard Segmentation:** Update QBR dashboards to clearly distinguish between "Normalized (Aug+)" and "Legacy/Converted (May–Jul)" data. Do not merge these datasets into a single trend line without a visual break or confidence interval.
+4.  **Resource Allocation:** Assign one backend engineer for the ingestion schema update (2 days) and one data analyst for the view logic and dashboard segmentation (3 days). Total effort: <1 engineering week.
+
+**Decision Logic & Next Steps**
+*   **If the QBR requires strict year-over-year comparison:** Proceed with the Analytics View approach but exclude sub-second metrics from the historical comparison.
+*   **If the 12% error obscures core retention trends:** Prioritize fixing the *current* funnel (August onward) and annotate July reports with a known-error margin rather than risking corruption on old data.
+
+**This Week's Actions:**
+1.  Audit a sample of 10,000 web events from July to quantify exactly how many fall into DST ambiguity zones; if >1%, abort full reprocessing.
+2.  Draft the SQL logic for the "Analytics View" that handles the timezone conversion without altering raw storage.
+3.  Present the "Dual-Write" option to the Director, emphasizing that it secures the QBR timeline while avoiding irreversible data mutation.
+
+*Note: This strategy prioritizes data integrity over historical consistency, as invented millisecond precision cannot be validated.*
+*Ensure the "confidence_level" flag is propagated to all downstream BI tools to prevent accidental aggregation of low-fidelity data.*

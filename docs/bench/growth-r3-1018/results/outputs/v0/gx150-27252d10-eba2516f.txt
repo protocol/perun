@@ -1,0 +1,35 @@
+### Experiment Plan: Recency vs. Popularity Ranking
+
+**1. Hypothesis & Design**
+*   **Hypothesis:** Prioritizing recency increases visit frequency but may reduce session depth (read time), risking a net neutral or negative impact on the North Star metric (Daily Read Time).
+*   **Design:** A/B Test with 50/50 split.
+    *   **Control (A):** Current popularity-weighted algorithm.
+    *   **Treatment (B):** Recency-first algorithm (decay factor applied to popularity).
+*   **Duration:** Pre-commit to a fixed duration (e.g., 14 days) or a pre-calculated sample size to detect a 5% lift in read time. **Do not peek** at results daily to declare a winner; this inflates false positives. Read the primary metric once at the end.
+
+**2. Metrics to Monitor**
+*   **North Star (Primary):** Average Daily Read Time per Active User.
+    *   *Goal:* Move from 18m → 20m.
+    *   *Decision Rule:* Ship only if Treatment B shows a statistically significant increase without violating guardrails.
+*   **Input Metrics (Diagnosis):**
+    *   *Visit Frequency:* Sessions per user per week (expected to rise).
+    *   *Depth per Session:* Minutes per session (expected to fall; monitor magnitude).
+    *   *Return Rate (Retention):* % of users returning within 48 hours (critical to verify the "fresher content" assumption).
+*   **Guardrail Metrics (Trust & Quality):**
+    *   *Category Mix:* % of impressions by category (Politics, Sports, etc.). Ensure niche categories aren't drowned out by high-volume breaking news.
+    *   *Source Diversity:* Number of unique sources clicked per session. Prevent consolidation onto only major outlets.
+    *   *Negative Feedback:* Rate of "hide story" or "report low quality" actions per 1,000 impressions.
+
+**3. Category-Specific Analysis**
+Do not aggregate all users. Segment results by primary interest category (derived from historical read behavior):
+*   **Politics/Hard News:** Likely benefits from recency. Check if read time holds steady.
+*   **Sports/Entertainment:** May suffer if "evergreen" analysis is buried. Check for drop-offs in depth.
+*   *Action:* If Treatment B wins overall but fails specifically for "Sports" users, consider a hybrid model where recency weighting is category-dependent.
+
+**4. Execution Steps for This Week**
+1.  **Instrumentation:** Define and log the event `article_read_complete` with properties: `algorithm_version` (A/B), `category`, `source_id`, and `time_on_page`. Ensure a stable, pseudonymous user ID is used to track cohorts across sessions.
+2.  **Pre-commitment:** Calculate the required sample size to detect a 2-minute lift (from 18 to 20) with 80% power. Set the stop date based on this N. Document the primary metric (Read Time) and guardrails (Source Diversity, Negative Feedback) in the experiment ticket before launch.
+3.  **Launch:** Deploy to 5% of traffic initially to verify data integrity, then scale to 50%.
+4.  **Analysis:** At the pre-committed end date, compute the lift in Read Time. If the result is positive but the "Source Diversity" guardrail trips (e.g., diversity drops >10%), the result is **UNVERIFIED** for shipping; iterate on the algorithm to re-balance diversity before re-testing.
+
+**Note:** Do not estimate current category-specific retention rates; these are `UNVERIFIED` until the instrumentation above is live. Compare all results strictly against NewsPulse's own baseline, not external industry benchmarks.

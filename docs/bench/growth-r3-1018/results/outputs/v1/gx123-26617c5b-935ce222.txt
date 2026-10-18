@@ -1,0 +1,43 @@
+### Minimum Viable Event Taxonomy for Heritage Bank Mobile App
+
+To satisfy both product growth and risk compliance without overwhelming the 5,000 TPS pipeline, we reject "track everything" in favor of events that answer specific, named questions. This list prioritizes retention of core value and fraud detection over vanity metrics.
+
+#### 1. Core Value & Retention (Product Analytics)
+*Instrument only what proves users derive value. Read retention of these actions before analyzing acquisition.*
+
+| Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- |
+| `app_session_start` | Did the user return this week? (Retention baseline) | `user_cohort`, `device_type`, `network_type` |
+| `core_action_completed` | Did the user achieve the primary value prop? | `action_type` (e.g., transfer, bill_pay), `amount`, `duration_to_complete` |
+| `onboarding_step_finished` | Where do new users drop off during activation? | `step_name`, `is_first_time`, `time_in_step` |
+| `feature_adoption_triggered` | Are users finding new modernized features? | `feature_id`, `entry_point` |
+
+#### 2. Risk, Fraud & Compliance (Audit Trails)
+*Instrument only high-signal security events. Button clicks are noise; state changes and anomalies are signal.*
+
+| Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- |
+| `auth_attempt_result` | Is there a brute-force or credential stuffing pattern? | `result` (success/fail), `failure_reason`, `ip_reputation_score`, `geo_location` |
+| `transaction_initiated` | Can we reconstruct the full audit trail for every money movement? | `txn_id`, `amount`, `currency`, `payee_hash`, `risk_score_pre_auth` |
+| `transaction_finalized` | Did the transaction clear, and what was the final latency? | `txn_id`, `final_status`, `processing_time_ms` |
+| `security_challenge_triggered` | Are we friction-blocking legitimate users or catching fraud? | `challenge_type` (2FA, biometric), `outcome`, `trigger_reason` |
+| `pii_access_logged` | Who viewed sensitive data, satisfying compliance audits? | `data_field_accessed`, `user_role`, `context` |
+
+#### 3. Implementation Strategy by Stage
+*   **Pre-Launch (Now – Dec 1):** Implement only the 9 events above. Do not instrument generic "button_click" events; they inflate volume without answering named questions.
+*   **Post-Launch (Growth):** Add events only when a specific hypothesis arises (e.g., "Users drop off at the photo-check deposit step").
+*   **Governance:** Any new event requires a documented "Question Answered" before approval. Retire events that go 30 days without a query.
+
+#### 4. Addressing the Open Question: Historical Data Backfill
+You cannot backfill behavioral event data (e.g., `core_action_completed`) for users migrating mid-cycle if the new definitions differ from the legacy system.
+*   **Action:** Establish a "Day 0" baseline for the new schema.
+*   **Mitigation:** For trend analysis, run parallel cohort reports: "Legacy Cohort" (old schema) vs. "Modern Cohort" (new schema). Do not attempt to merge these into a single continuous time-series for individual users; it creates false precision.
+*   **Audit Trail Exception:** For compliance, ensure the *transactional* ledger (SQL database) remains the source of truth for historical financial data, not the event stream. The event stream is for behavior, not the legal record.
+
+#### 5. Immediate Next Steps (This Week)
+1.  **Define the Schema:** Finalize the JSON property structure for the 9 events above, ensuring `user_id` is pseudonymous (hashed) to separate product analytics from PII held in the secure identity store.
+2.  **Load Test:** Simulate the 5,000 TPS peak using only these 9 events to verify pipeline latency; do not test with the legacy 500-event volume.
+3.  **Baseline Query:** Write the SQL/analytic query for "Week 1 Retention on `core_action_completed`" now, so it is ready to run immediately upon go-live.
+
+**Note on Identifiers:** Product cohorts require a stable per-user ID to track retention, which conflicts with strict ops observability rules; ensure this ID is pseudonymous and route PII mapping to the privacy compliance team.
+**Note on Benchmarks:** No industry retention or fraud benchmarks are asserted here; success will be measured against Heritage Bank's own Week 1 baseline.

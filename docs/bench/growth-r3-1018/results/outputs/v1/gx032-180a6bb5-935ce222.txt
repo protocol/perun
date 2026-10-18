@@ -1,0 +1,33 @@
+### Activation Definition Framework for CulinaLog
+
+**Recommendation:** Shift the activation definition from a fixed volume threshold ("3 ingredients") to a **value-realization event** centered on the first successful unlock of premium content or the completion of a single full recipe log. Given that support tickets indicate value is found with just one logged recipe, the current "3-item" gate is likely a friction point causing false negatives in your activation metrics.
+
+**Evaluation Framework: Predictive Retention Analysis**
+To determine the optimal activation criterion without arbitrary counts, your data science lead should execute the following analysis using the existing six-month historical data:
+
+1.  **Cohort Segmentation by Behavior Depth:**
+    Instead of binary "activated/not activated," segment users into mutually exclusive groups based on their first-week behavior:
+    *   Group A: Logged 1 ingredient (no unlock).
+    *   Group B: Logged 1+ ingredients and unlocked premium content.
+    *   Group C: Logged 2 ingredients (no unlock).
+    *   Group D: Logged 3+ ingredients (current definition).
+
+2.  **Retention Curve Comparison:**
+    Plot the Week-4 and Week-8 retention curves for each group. The correct activation definition is the *earliest* behavioral milestone where the retention curve flattens and diverges significantly from the churn of non-activators.
+    *   *Decision Rule:* If Group B (1 item + unlock) shows a retention trajectory statistically similar to Group D (3 items), then "1 item + unlock" is your true activation event. Frequency (logging multiple items) is secondary to Depth (completing the value loop).
+
+3.  **Frequency vs. Depth Weighting:**
+    *   **Depth (Primary Weight):** Does the user complete the core loop (Log → Unlock/View)? This is the strongest predictor. If a user logs one recipe and consumes the premium insight, they have realized value.
+    *   **Frequency (Secondary Weight):** Only weigh frequency if the data shows that users who log *repeatedly* in week 1 retain significantly better than those who log once deeply. If the curves are flat after the first deep interaction, frequency is a vanity metric for activation.
+
+**Proposed New Activation Criteria:**
+A user is "Activated" when they **log their first full recipe AND view the resulting premium insight/unlock**, regardless of the total ingredient count, provided this occurs within 7 days of signup.
+
+**Implementation Steps for Data Science Lead:**
+1.  **Query:** Calculate Day-30 retention for users who hit "1 log + unlock" vs. "3 logs (any outcome)."
+2.  **Validate:** If retention rates are within 5% of each other, adopt the "1 log + unlock" definition immediately.
+3.  **Instrument:** Ensure the event taxonomy captures `recipe_log_completed` and `premium_content_viewed` as distinct events to track this new funnel.
+
+**This Week's Action:** Run the retention comparison on the "1 log + unlock" cohort versus the current "3 log" cohort. If the retention curves overlap, update the dashboard definition next Monday and cease optimizing for the third ingredient log.
+
+*Note: This framework relies entirely on your internal retention baselines; no external benchmarks are applied. Ensure user identifiers used for this cohort analysis are pseudonymized per privacy standards.*

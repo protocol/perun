@@ -1,0 +1,53 @@
+# SiamSafe Medical Upgrade Drop-off Analysis Plan
+
+**To:** Regional Product Lead, Bangkok
+**From:** Analytics Team
+**Date:** March 1, 2024
+**Subject:** Investigation Plan for Medical Upgrade Purchase Decline (Feb 1–28)
+
+## Executive Summary
+Despite a 15% increase in clicks on the new one-click medical coverage upgrade, the final purchase completion rate for policies including this upgrade decreased by 5% during February. This report outlines the data segmentation and event tracking required to isolate whether the drop-off is driven by price sensitivity ("sticker shock") or a technical failure in the confirmation flow. Findings are critical for compliance review prior to Songkran season adjustments.
+
+## 1. Funnel Segmentation Strategy
+To pinpoint the exact drop-off location, we must slice the user journey into four distinct stages, comparing users who clicked the upgrade against those who did not:
+
+*   **Stage A: Upgrade Interaction** (Button Click)
+*   **Stage B: Price Review** (Time spent on payment summary screen post-click)
+*   **Stage C: Confirmation Attempt** (Click on "Pay Now" or "Confirm Purchase")
+*   **Stage D: Transaction Success** (Receipt generation)
+
+**Required Data Slices:**
+*   **Device & Browser:** Is the drop-off isolated to mobile iOS/Android vs. desktop? (Common for payment gateway errors).
+*   **Traffic Source:** Do users from specific channels (e.g., direct vs. affiliate) exhibit higher abandonment?
+*   **Policy Type:** Does the drop-off correlate with specific trip durations or base plan tiers?
+
+## 2. Hypothesis Investigation
+
+### Hypothesis A: Sticker Shock (Price Sensitivity)
+*Indicator:* Users click the upgrade, view the new total, and navigate away or close the tab *before* clicking "Pay Now."
+*   **Metric to Track:** `exit_rate` on the Payment Summary page specifically after the `upgrade_added` event.
+*   **Behavioral Signal:** Measure `time_on_page` between the upgrade click and exit. A very short duration (<3 seconds) suggests immediate price rejection.
+*   **Action:** If confirmed, we will A/B test displaying the upgrade cost as a daily rate (e.g., "+$1.50/day") rather than a lump sum to reduce cognitive friction.
+
+### Hypothesis B: Technical Failure
+*Indicator:* Users click "Pay Now" but never reach the Receipt page, with no explicit "Exit" event recorded.
+*   **Metric to Track:** Error logs associated with the `payment_submission` event where `policy_type` includes "medical_upgrade."
+*   **Behavioral Signal:** High rate of `button_clicked` (Pay Now) followed by session timeout or page reload without `transaction_complete`.
+*   **Action:** Immediate engineering audit of the payment gateway payload for policies with the upgrade flag enabled. Check for validation errors in the API response.
+
+## 3. Immediate Data Requests
+To execute this analysis within 48 hours, the following raw event logs are required from the data warehouse:
+1.  **Event Stream:** `view_payment_page`, `upgrade_button_clicked`, `upgrade_added`, `pay_button_clicked`, `transaction_complete`, `error_thrown`.
+2.  **Properties:** `total_cart_value`, `upgrade_cost`, `device_type`, `browser_version`, `session_id`.
+3.  **Cohort:** All sessions from Feb 1–28 where `destination` = "Thailand".
+
+## 4. Compliance & Next Steps
+Once the drop-off point is isolated:
+*   **If Price Sensitivity:** We will prepare a revised pricing display mockup for compliance review, ensuring clear disclosure of coverage benefits alongside the cost.
+*   **If Technical Error:** Engineering will deploy a fix, and we will request a compliance waiver to retroactively honor failed transactions if data shows intent to purchase.
+
+**Deadline:** Preliminary findings to be presented to the Bangkok compliance team by March 4 to ensure readiness for the Songkran festival surge.
+
+---
+*Note: Ensure all exported data strips PII (names, passport numbers) before sharing with the broader product team to maintain GDPR/PDPA compliance.*
+*Analysis assumes no changes to the base insurance premium occurred during the February window.*

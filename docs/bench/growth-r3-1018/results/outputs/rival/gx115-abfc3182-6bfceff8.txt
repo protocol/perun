@@ -1,0 +1,47 @@
+### Critical Questions for Governance Approval
+
+Before finalizing the event taxonomy, the committee must resolve these four strategic definitions:
+
+1.  **What is the specific business goal of the 30-day lock?** Is the objective to secure Total Value Locked (TVL) for protocol stability (where the *deposit* is the success) or to ensure sustained participation (where *completion* without early exit is the success)? This determines whether "success" is recorded at T=0 or T=30 days.
+2.  **How do we define "churn" in a permissionless environment?** Since users can withdraw instantly, does a "failed retention" event trigger only after an early withdrawal, or does it include wallets that deposit but fail to reach a minimum threshold duration (e.g., <24 hours)?
+3.  **What is the primary value driver: Liquidity Provision or Protocol Usage?** Does the protocol reward the *state* of having funds deployed (passive LP) or the *action* of generating fees/volume (active trader)? This dictates whether we track "Liquidity Active" as a continuous state or "Swap Executed" as a discrete event.
+4.  **What is the minimum viable commitment for "Long-Term" status?** Is 30 days the binary cutoff, or should we tier retention (e.g., 7-day, 30-day, 90-day) to capture gradations of loyalty rather than a simple pass/fail metric?
+
+### Proposed Event Taxonomy: Speculators vs. Participants
+
+To separate short-term farming from long-term alignment, structure your events into three distinct categories. Do not track all 50 on-chain actions; aggregate them into these decision-ready groups.
+
+#### 1. Acquisition & Entry Events (The "Hook")
+*Focus: Identifying the source and intent of capital.*
+*   `liquidity_deposit_initiated`: User connects wallet and approves token spend.
+*   `liquidity_position_opened`: **Key Metric.** Funds successfully deposited into the pool.
+    *   *Properties:* `amount_usd`, `token_pair`, `lock_duration_selected`, `referrer_source`.
+*   `incentive_claim_eligibility_checked`: User queries rewards before committing (high correlation with speculative behavior if not followed by deposit).
+
+#### 2. Retention & Commitment Events (The "Filter")
+*Focus: Distinguishing speculators (exit <24h) from participants.*
+*   `lock_term_completed`: **Success Event.** User reaches the 30-day mark without withdrawing principal.
+    *   *Properties:* `days_locked`, `rewards_accrued`.
+*   `early_withdrawal_executed`: **Churn Event.** User exits before the 30-day term.
+    *   *Properties:* `days_locked`, `penalty_applied`, `net_profit_usd`.
+*   `position_renewed`: User exits and immediately re-enters a new lock term (indicates strong retention despite technical withdrawal).
+
+#### 3. Value Generation Events (The "Utility")
+*Focus: Separating passive farmers from active ecosystem users.*
+*   `swap_executed_within_pool`: User trades against the liquidity they (or others) provided.
+    *   *Properties:* `volume_usd`, `is_liquidity_provider` (boolean flag).
+*   `fees_claimed`: User harvests trading fees (distinct from mining rewards).
+*   `governance_vote_casted`: Ultimate signal of long-term alignment.
+
+### Segmentation Logic for Dashboards
+
+Use these event combinations to create your user segments:
+
+*   **The Speculator:** Triggers `liquidity_position_opened` AND `early_withdrawal_executed` where `days_locked` < 2. High volume, low retention.
+*   **The Passive Farmer:** Triggers `liquidity_position_opened` AND `lock_term_completed` BUT zero `swap_executed_within_pool` events. High TVL, low utility.
+*   **The Core Participant:** Triggers `lock_term_completed` AND >5 `swap_executed_within_pool` events OR `governance_vote_casted`. High TVL, high utility, high retention.
+
+**Recommendation:** Define "Successful Lock" as the firing of `lock_term_completed`. Treat `liquidity_position_opened` merely as an acquisition metric. If a user withdraws at day 29, they have not successfully completed the retention loop required for your specific incentive goal.
+
+*Ensure your smart contract emits these specific event strings directly to the indexer to avoid reliance on noisy raw transaction logs.*
+*Require the governance committee to sign off on the "early withdrawal" penalty logic before finalizing the `early_withdrawal_executed` definition.*

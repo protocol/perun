@@ -1,0 +1,43 @@
+# SwiftDrop Expansion Readiness: Low-Volume Measurement Strategy
+
+## Executive Summary
+To support a go/no-go decision on Q4 expansion with only ~12 active drivers per zone, we must abandon traditional "statistical significance" in favor of **operational thresholds** and **leading indicators**. With your current volume, waiting for statistically valid A/B tests will delay decisions indefinitely. Instead, we will measure **capacity utilization** and **funnel leakage** to determine if the bottleneck is supply (drivers) or efficiency (matching).
+
+## 1. Redefine Success: From "Conversion Rate" to "Capacity Capture"
+With sparse data, a 45% completion rate is ambiguous. It could mean you lack drivers, or that your matching logic is failing. We will split the single "completion rate" metric into two diagnostic ratios that require smaller sample sizes to interpret:
+
+*   **Supply Capture Rate:** (Orders Completed) / (Total Orders where a driver was *available* within 5km).
+    *   *Signal:* If this is low (<80%), the issue is **algorithmic matching**, not driver count. You have drivers but aren't using them.
+    *   *Action:* Do not expand. Fix matching logic first.
+*   **Demand Saturation Rate:** (Orders Completed) / (Total Orders Requested).
+    *   *Signal:* If Supply Capture is high (>90%) but Demand Saturation is 45%, the issue is **true driver scarcity**.
+    *   *Action:* This validates the need for more drivers. Expansion is only viable if the new city has a pre-committed driver pipeline.
+
+## 2. Fix the "Invisible Drop-off" (Tracking Strategy)
+You cannot measure wait-time impact if users vanish before seeing an ETA. We must implement **client-side heartbeat tracking** immediately, independent of server success states.
+
+*   **The Fix:** Implement a local event listener on the "Search/Loading" screen that fires every 5 seconds while the app is open, regardless of server response.
+*   **The Metric:** **Time-to-Abandon**. Measure the exact second users close the app during the "finding driver" phase.
+*   **The Threshold:** If 60% of users abandon between seconds 15–30, wait time is confirmed as the primary friction point. If abandonment is random or immediate (0–5s), the issue is likely price or app performance, not wait time.
+
+## 3. The Go/No-Go Decision Framework
+Do not wait for December to hit a 60% target. Use these **leading indicators** to make the expansion decision next quarter:
+
+| Metric | Green Light (Go) | Red Light (No-Go) | Interpretation |
+| :--- | :--- | :--- | :--- |
+| **Supply Capture Rate** | > 85% | < 70% | **Go:** You are maximizing existing supply. **No-Go:** Your tech is wasting driver capacity. |
+| **Median Time-to-Abandon** | > 45 seconds | < 20 seconds | **Go:** Users are patient; drop-off is due to actual timeout. **No-Go:** Users reject the service instantly (UX/Price issue). |
+| **Driver Utilization** | > 75% active time | < 40% active time | **Go:** Drivers are maxed out; you need more heads. **No-Go:** Drivers are idle; you need better matching, not expansion. |
+
+## Recommendation for Operations Director
+**Condition for Expansion:** Proceed to City 4 **only if** Supply Capture Rate is >85% and Driver Utilization is >75%. This proves your current tech stack is efficient and the bottleneck is purely headcount, which can be solved by recruiting in a new city.
+
+**Condition for Pause:** If Supply Capture is <70%, expanding will replicate your inefficiencies in a new market. Pause expansion and dedicate Q4 to fixing the matching algorithm.
+
+## 4. Reading Early Signals with Low Volume
+Since you cannot rely on averages, use **cohort tagging**:
+1.  Tag every order as "Matched Instantly" vs. "Search > 30s".
+2.  Compare completion rates between these two tiny groups.
+3.  If "Search > 30s" has a 10% completion rate and "Instant" has 90%, you have confirmed the wait-time hypothesis with as few as 20–30 data points, bypassing the need for large-scale statistical power.
+
+*Note: Implement the client-side heartbeat tracking within 48 hours to capture the next peak window. Without this, any decision on wait time is speculative.*

@@ -1,0 +1,48 @@
+### Pilot Measurement Plan: RoboCare Riyadh Deployment
+
+**Audience:** Chief Operating Officer, Hospital Procurement Directors
+**Objective:** Determine Go/No-Go for March 15 rollout based on operational efficiency and technical viability.
+
+#### 1. The North Star Metric
+**Metric:** *Weekly Active Clinical Sessions Completed Without Technical Interruption.*
+**Definition:** A session counts only if a doctor completes a full patient round interaction via the unit without dropping below HD quality or experiencing >2s latency.
+**Why:** This measures realized value. High sign-up counts or total minutes logged are vanity metrics if the video quality frustrates users and halts adoption.
+
+#### 2. The Funnel (Read Bottom-Up)
+Do not measure acquisition (number of hospitals signed) until retention is proven. Diagnose in this order:
+
+*   **Retention (The Leak Check):** Do doctors use the unit for a second shift after the first?
+    *   *Signal:* If usage drops >40% between Shift 1 and Shift 2, the value proposition or technical experience is failing. Pause rollout.
+*   **Activation (The "Aha" Moment):** Did the nurse save the targeted time?
+    *   *Metric:* *Average Nurse Travel Time Saved Per Shift.*
+    *   *Threshold:* Your hypothesis is ≥20 minutes. If the pilot average is <15 minutes after Week 1, the workflow integration is flawed.
+*   **Technical Viability (The Guardrail):** Can the infrastructure support the load?
+    *   *Metric:* *Percentage of Sessions with Latency >2 seconds or Resolution Drop.*
+    *   *Threshold:* If >10% of sessions suffer latency, the Wi-Fi infrastructure is the bottleneck, not the product. This requires a network upgrade before rollout, regardless of nurse time savings.
+
+#### 3. Event Taxonomy (Instrument Only These)
+Every event below answers a specific decision question. Do not instrument "just in case."
+
+| Event Name | Question Answered | Properties to Capture |
+| :--- | :--- | :--- |
+| `session_started` | Are staff attempting to use the unit? | `user_role`, `hospital_id`, `shift_time` |
+| `video_quality_degraded` | Is the Wi-Fi failing during rounds? | `latency_ms`, `resolution_current`, `wifi_signal_strength` |
+| `session_completed_success` | Did the round finish without frustration? | `duration_minutes`, `patients_visited` |
+| `nurse_travel_log` | Did we actually save time? | `travel_time_saved_minutes` (self-reported or sensor-derived) |
+| `repeat_usage` | Is the habit sticking? | `days_since_first_use`, `total_sessions_week` |
+
+#### 4. How to Read the First Two Weeks
+*   **Days 1–3 (Baseline & Noise):** Expect high variance. Ignore aggregate averages. Look for immediate "hard stops" (e.g., video freezing consistently in Ward B).
+*   **Days 4–10 (Trend Confirmation):** Calculate the *cohort retention* of doctors who used it on Day 1. Are they returning? Compare travel time savings against the 20-minute target.
+*   **Days 11–14 (Decision Gate):**
+    *   **GO:** Retention >60% AND Avg Time Saved ≥20 mins AND Technical Failure Rate <10%.
+    *   **PAUSE (Technical):** High retention intent but Technical Failure Rate >10%. *Action:* Upgrade hospital Wi-Fi before March 15.
+    *   **PAUSE (Value):** Low retention OR Avg Time Saved <15 mins. *Action:* Redefine workflow; do not rollout to new hospitals.
+
+#### 5. This Week's Steps
+1.  **Define the Identifier:** Generate a pseudonymous ID for each medical staff member to track cross-shift usage without storing PII (route PII handling to compliance protocols).
+2.  **Deploy the "Quality Degraded" Event:** Ensure the device logs latency and resolution drops locally if the network is too unstable to send real-time telemetry.
+3.  **Set the Tripwire:** If Day 7 data shows >15% of sessions failing the latency guardrail, trigger the network infrastructure audit immediately.
+
+*Note: All benchmarks above are derived from your stated 20-minute hypothesis and standard video-conferencing tolerance levels; actual "good" retention will be determined by your pilot's internal baseline, not external market data.*
+*Unknown values (e.g., current Wi-Fi signal strength in specific wards) are marked UNVERIFIED until the pilot instruments them.*

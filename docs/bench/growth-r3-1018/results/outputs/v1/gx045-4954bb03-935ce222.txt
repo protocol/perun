@@ -1,0 +1,37 @@
+**To:** Chief Technology Officer, GiftHaven
+**From:** Growth Analytics Lead
+**Date:** January 31
+**Subject:** Urgent Resolution Plan: Gift Card Checkout Failure (Jan 15–30)
+
+**Executive Summary**
+The 16-point spike in gift card error rates (2% → 18%) represents a critical leakage in the retention and revenue funnel, directly threatening the Valentine's Day campaign ROI. We cannot rely on the assumption that the payment gateway update is the sole cause without verifying the specific failure layer. The following plan isolates the break point and quantifies the impact by segment within 48 hours.
+
+**1. Diagnostic Event Taxonomy (Immediate Instrumentation)**
+We will instrument three distinct events to replace the generic "checkout error" metric. Each event answers a specific question to locate the failure:
+*   `gift_card_input_submitted`: Did the user successfully enter the code? (Answers: Is the UI blocking input?)
+*   `gift_card_validation_api_response`: Did the validation service return a status? (Answers: Is the logic failing at the API layer?)
+*   `gift_card_authorization_final`: Did the transaction clear? (Answers: Is the final gateway handshake failing?)
+
+*Action:* Deploy these events to the staging environment immediately and verify data flow to production analytics by EOD tomorrow. Do not instrument "everything"; only these three steps are required to triangulate the drop-off.
+
+**2. Segmentation Analysis Plan**
+Once data flows, we will slice the error rate by the following dimensions to identify the affected cohort:
+*   **Card Issue Date:** Pre-2022 vs. Post-2022 (Validates the hypothesis regarding older formats).
+*   **Error Code Type:** Group by specific API return codes (e.g., "Invalid Format" vs. "Gateway Timeout").
+*   **User Platform:** Mobile Web vs. Desktop vs. App (Rules out client-side rendering issues).
+*   **Traffic Source:** Organic vs. Paid Campaign (Determines if new acquisition is disproportionately affected).
+
+**3. Decision Matrix & Next Actions**
+Based on the data from steps 1 and 2, we will execute one of the following paths:
+*   **If failure is at `validation_api_response` for Pre-2022 cards:** The hypothesis is confirmed. **Action:** Roll back the specific validation regex rule for legacy formats immediately.
+*   **If failure is uniform across all card ages:** The issue is likely a broader gateway timeout or configuration error. **Action:** Engage the payment provider with the specific error logs; do not attempt a code fix internally yet.
+*   **If failure is isolated to Mobile:** The issue is likely a UI/JS conflict. **Action:** Hotfix the mobile checkout script.
+
+**4. This-Week Step (Deadline: Feb 2)**
+*   **Day 1:** Deploy the three specific event trackers listed above.
+*   **Day 2:** Run the segmentation query on the Jan 15–30 dataset. Identify the exact step where the 18% error occurs and the primary card age segment affected.
+*   **Day 3:** Execute the corresponding fix from the Decision Matrix and monitor the `gift_card_authorization_final` success rate for a 4-hour window.
+
+**Revenue Guardrail:** We will treat "Gift Card Success Rate" as a primary guardrail metric for the Valentine's launch. If the rate does not return to <3% error by Feb 4, the marketing campaign launch must be delayed to prevent burning ad spend on a broken funnel.
+
+*Note: All metrics cited are derived from your reported baseline; no external benchmarks were used. Ensure user IDs in these logs are pseudonymized before sharing with third-party gateway support.*

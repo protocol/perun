@@ -1,0 +1,39 @@
+### Event Taxonomy for ShopLive India
+
+Stop instrumenting "every button click." Your data team is correct: unused events create cost and noise without answering specific questions. Adopt a question-driven taxonomy where every event maps to a specific stage of the user journey from stream entry to payment.
+
+**1. The Core Question & North Star**
+*   **North Star Metric:** "Weekly Active Buyers completing a purchase via Live Stream." (Reject raw view counts or cumulative signups as vanity).
+*   **Primary Question:** "Do users who engage with product details during a stream convert at a higher rate than passive viewers?"
+
+**2. The Event Schema (Grouped by Journey Stage)**
+Define these four canonical events. Do not create new ones without a named question.
+
+| Stage | Event Name | Purpose (The Question) | Key Properties |
+| :--- | :--- | :--- | : |
+| **Exposure** | `live_stream_viewed` | Did the user enter the experience? | `stream_id`, `referrer_source` (internal vs. social), `entry_timestamp` |
+| **Engagement** | `product_detail_viewed` | Did the user show intent beyond chatting? | `product_id`, `time_in_stream`, `engagement_type` (chat vs. detail_view) |
+| **Intent** | `checkout_initiated` | Did the user attempt to buy? | `product_id`, `cart_value`, `payment_method_selected` |
+| **Conversion** | `purchase_completed` | Did the transaction finalize? | `transaction_id`, `revenue`, `payment_status` |
+
+**3. Handling Traffic Sources**
+Do not create separate events for "social" vs. "internal." Use the `referrer_source` property on the `live_stream_viewed` event.
+*   *Values:* `internal_feed`, `facebook_share`, `whatsapp_link`, `instagram_story`.
+*   *Analysis:* Filter cohorts by this property to compare conversion drop-offs between third-party referrers and internal traffic.
+
+**4. Distinguishing Chat vs. Purchase Intent**
+Your requirement to separate chatters from buyers is solved by the `engagement_type` property or distinct events:
+*   If the goal is to measure community health: Track `chat_message_sent`.
+*   If the goal is conversion analysis (your priority): Rely on `product_detail_viewed`. A user who chats but never views details is a "Community Participant," not a "Shopper." Analyze these cohorts separately.
+
+**5. Implementation Rules for Ravi**
+*   **Stable Identifier:** Ensure a pseudonymous `user_id` persists across sessions to track the full funnel. Do not use raw PII; route identity management to privacy compliance standards.
+*   **Consistency:** Enforce snake_case naming (`purchase_completed`, not `click_buy`).
+*   **Stage Awareness:** Since you are scaling for Diwali (Growth stage), this full funnel is required. If this were a prototype, we would track only `purchase_completed`.
+
+**This Week's Step:**
+1.  Deprecate all events not mapping to the four stages above.
+2.  Implement `product_detail_viewed` with the `engagement_type` property immediately.
+3.  Run a cohort query comparing `purchase_completed` rates for users with `engagement_type: detail_view` vs. those with only `chat_message_sent` to validate the hypothesis that detail views drive revenue.
+
+*Note: No benchmark for "good" conversion rates is provided; compare your post-implementation data against your own February 10 baseline. Ensure the `user_id` remains pseudonymous to comply with privacy standards.*

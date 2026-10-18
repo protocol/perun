@@ -1,0 +1,52 @@
+# Privacy-Compliant Analytics Proposal for HealthConnect
+
+## Executive Summary
+This proposal outlines a measurement framework that evaluates user experience and identifies friction points using strictly aggregated, anonymized data. No Personally Identifiable Information (PII) will be collected, stored, or transmitted to analytics tools. All metrics are derived from session-level aggregates that cannot be reverse-engineered to identify individuals.
+
+## Core Measurement Principles
+1.  **Zero PII Collection:** No user IDs, names, health card numbers, IP addresses, or precise geolocation data will be sent to analytics platforms.
+2.  **Aggregation Thresholds:** All reported data will be aggregated with a minimum threshold (e.g., k-anonymity of k=50) to prevent isolation of small groups.
+3.  **Session-Based Analysis:** Metrics focus on session behavior patterns rather than cross-session user journeys.
+
+## Proposed Aggregate Metrics
+
+### 1. Funnel Aggregation Rates
+Instead of tracking individual drop-off points, we will measure conversion rates between major, anonymized stages:
+*   **Stage 1:** Landing Page View → Eligibility Checker Start
+*   **Stage 2:** Eligibility Checker Start → Eligibility Checker Complete
+*   **Stage 3:** Eligibility Complete → Appointment Selection Start
+*   **Stage 4:** Appointment Selection → Booking Confirmation
+
+*Implementation:* Events are named generically (e.g., `step_1_complete`, `step_2_complete`) with no user parameters. We analyze the percentage delta between steps to identify where the largest aggregate loss occurs.
+
+### 2. Technical Environment Aggregates
+To infer device-related friction without fingerprinting:
+*   **Metric:** Completion rate grouped by broad `device_category` (mobile, tablet, desktop) and `browser_type` (Chrome, Safari, Edge).
+*   **Privacy Safeguard:** Data is only reported if the group size exceeds the minimum threshold. Specific OS versions or screen resolutions are excluded to prevent fingerprinting.
+*   **Insight:** If mobile completion is <10% while desktop is >40%, we infer a responsive design or mobile-UX issue without knowing *who* used mobile.
+
+### 3. Time-to-Complete Distributions
+*   **Metric:** Histogram buckets of time spent on key pages (e.g., "0-30s", "30-60s", "60s+").
+*   **Privacy Safeguard:** No exact timestamps or duration logs per user.
+*   **Insight:** A spike in the "60s+" bucket on the Eligibility page suggests confusion or complexity, validating the hypothesis of criteria ambiguity.
+
+### 4. Error Event Aggregation
+*   **Metric:** Count of generic error triggers (e.g., `form_validation_error`, `system_timeout`) per session.
+*   **Privacy Safeguard:** Error messages are categorized by type only; no input data causing the error is captured.
+*   **Insight:** High correlation between `form_validation_error` events and session exits indicates unclear form requirements.
+
+## Inferring Friction Without Individual Paths
+We will use **Cohort-Level Correlation** rather than user paths:
+*   **Method:** Compare aggregate exit rates on Page X against aggregate time-spent on Page X.
+*   **Inference:** If Page X has high time-spent AND high exit rates, it indicates confusion (users trying and failing). If Page X has low time-spent AND high exit rates, it indicates irrelevance or immediate rejection.
+*   **Eligibility Hypothesis Test:** If the drop from "Eligibility Start" to "Eligibility Complete" is disproportionately high compared to other steps, and time-spent on that page is high, we confirm the "confusion" hypothesis at a population level without tracking individuals.
+
+## Compliance Verification
+*   **Data Stream:** All events are stripped of PII at the source (client-side) before transmission.
+*   **Retention:** Raw event logs are not stored; only pre-aggregated tables are retained.
+*   **Audit:** Legal counsel can review the event naming convention and property list to verify zero PII fields exist.
+
+This approach provides the Ministry CIO with actionable data to improve the 20% completion rate while guaranteeing strict adherence to privacy mandates.
+
+*Note: Implementation requires a "data layer" review by engineering to ensure no accidental PII leakage via automatic variables.*
+*Approval from legal is required specifically on the "device_category" grouping logic to ensure it meets local anonymization standards.*

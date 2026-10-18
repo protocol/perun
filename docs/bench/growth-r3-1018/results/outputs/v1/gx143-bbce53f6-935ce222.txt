@@ -1,0 +1,38 @@
+### BorderlessMart Cross-Border Measurement Framework
+
+**North Star Metric:** Weekly Active Buyers completing a successful cross-border transaction (distinct from mere signups or cart adds).
+
+**Funnel Strategy (Retention-First):**
+Do not optimize acquisition until you verify that users who attempt to buy actually succeed and return. Analyze drop-offs in this order:
+1.  **Retention:** Do users who bought once return within 30 days?
+2.  **Activation:** Do users complete the *core action* (successful payment) after landing?
+3.  **Acquisition:** Only scale traffic once the above two are stable.
+
+**Event Taxonomy & Questions Answered**
+Track only these events. Each must include properties for `country`, `device_type`, `payment_method_selected`, and `currency_displayed`.
+
+| Event Name | Question Answered | Diagnostic Logic (Technical vs. Hesitation) |
+| :--- | :--- | :--- |
+| `checkout_initiated` | Did they intend to buy? | Baseline for all downstream drop-offs. |
+| `payment_method_viewed` | Did they see local options? | **Drop-off here:** If high in ID/VN/TH but low elsewhere, local payment methods are missing or hidden (Content/Config issue). |
+| `payment_method_selected` | Did they choose a method? | **Drop-off here:** User hesitation. They see options but don't trust/select them. |
+| `payment_gateway_redirect` | Did the handoff succeed? | **Drop-off here:** **Technical Failure.** The app failed to pass data to the provider (e.g., GoPay, MoMo, PromptPay). |
+| `payment_return_success` | Did the bank approve it? | **Drop-off here:** Bank decline or insufficient funds (User/Bank issue, not platform). |
+| `payment_return_failure` | Did the bank reject it? | Capture `error_code`. High specific error rates = Technical integration flaw. |
+| `order_confirmed` | Did the journey end well? | Final conversion count. |
+
+**Regional Allocation Logic (For Week 4 Decision)**
+Allocate marketing spend based on **Activation Rate** (`order_confirmed` / `checkout_initiated`) per country, not raw traffic.
+*   **Scenario A:** High traffic, low activation in Vietnam → Pause spend; fix payment integration.
+*   **Scenario B:** Low traffic, high activation in Thailand → Increase spend; the product works there.
+*   **Scenario C:** High drop-off at `payment_method_selected` across all regions → Cultural hesitation; requires UI copy changes, not engineering fixes.
+
+**Experiment Rigor Warning**
+Do not declare a "win" on conversion improvements before day 14 or reaching a pre-committed sample size. Early reads (e.g., "conversion up on day 2") are often noise caused by peeking. Pre-declare your primary metric (Activation Rate) and a guardrail (Refund Rate) before testing any checkout changes.
+
+**This Week's Steps**
+1.  **Instrument:** Implement the 7 events above with strict pseudonymous user IDs to track cross-session behavior without violating privacy compliance.
+2.  **Baseline:** Run a query on Day 7 to calculate the Activation Rate split by `country` and `payment_method_selected`.
+3.  **Decision Rule:** If `payment_gateway_redirect` failure rate > 2% in any country, halt marketing in that region immediately and engage engineering; otherwise, proceed with current spend.
+
+*Note: All benchmark comparisons must be made against your own Week 1 baseline, not external industry averages. Unknown values without instrumentation are UNVERIFIED.*

@@ -1,0 +1,44 @@
+### Diagnostic Plan: Isolating Shipping Cost Impact on Cart Abandonment
+
+**Objective:** Confirm whether the 40% abandonment spike at the shipping review step is caused by the $3 fee increase (Sept 5) or UI prominence, enabling a subsidy decision for the Nov 1 promotion.
+
+**1. Establish the Baseline and Trend (Retention/Behavior First)**
+Do not compare against industry benchmarks. Compare StyleCart's own data:
+*   **Cohort Analysis:** Plot the "Shipping Step Drop-off Rate" daily from August 1 to present.
+*   **Verification:** Confirm the break aligns exactly with the Sept 5 deployment. If the rise was gradual or started before Sept 5, the fee is likely not the sole culprit.
+*   **Segment Split:** Separate users by cart value. If high-AOV users (less sensitive to $3) show the same drop-off rate as low-AOV users, the cause is likely **layout prominence** (UX friction) rather than **sticker shock** (price sensitivity).
+
+**2. Isolate the Variables (The "What to Measure" Taxonomy)**
+Instrument or query only these specific events to answer named questions:
+*   **Event:** `shipping_cost_viewed`
+    *   *Properties:* `shipping_cost_amount`, `cart_total`, `user_segment` (new/returning).
+    *   *Question:* Does drop-off correlate linearly with the specific dollar amount shown, or is it binary (any cost vs. free)?
+*   **Event:** `coupon_field_interaction`
+    *   *Properties:* `action` (clicked, typed, abandoned).
+    *   *Question:* Are users leaving to find codes? If `coupon_field_interaction` spikes before abandonment, the behavior is "code hunting," not pure rejection.
+*   **Event:** `exit_destination` (if technically feasible via referrer tracking)
+    *   *Question:* Do they bounce to a search engine (code hunting) or close the tab (abandonment)? *Note: If this data is unavailable, label this metric UNVERIFIED and rely on the coupon interaction proxy.*
+
+**3. The Decision Matrix (Actionable Cuts)**
+Run the analysis across these segments to dictate the next move:
+*   **Cut A: Device Type.** If the drop is significantly higher on mobile, the **layout** (prominence) is the issue.
+    *   *Action:* Fix UI layout; do not subsidize shipping.
+*   **Cut B: Cart Value.** If drop-off is high only for carts under $50, the **fee** is the issue.
+    *   *Action:* Subsidize shipping only for carts >$50 (threshold test).
+*   **Cut C: Returning vs. New.** If returning users (who know the old rates) abandon at higher rates than new users, the **price change** is the driver.
+    *   *Action:* Prepare a "loyalty free shipping" offer for the holiday promo.
+
+**4. Experiment Design for Validation (Pre-Commitment)**
+Before negotiating rates or launching the full promo, run a targeted A/B test:
+*   **Hypothesis:** Subsidizing shipping for carts >$X recovers more margin than the cost of the subsidy.
+*   **Design:** Pre-commit to a sample size of N users (calculate based on current traffic to detect a 5% lift in conversion).
+*   **Primary Metric:** Checkout Completion Rate.
+*   **Guardrail Metric:** Average Order Value (ensure users aren't downgrading carts to hit free shipping thresholds) and Gross Margin per Order.
+*   **Rule:** Do not peek at results daily. Read once at the pre-committed end date. If the test is stopped early due to "significance," the result is UNVERIFIED.
+
+**This Week's Steps:**
+1.  Query the `shipping_cost_viewed` drop-off rate segmented by **Device** and **Cart Value** for the week of Sept 5 vs. Aug 15.
+2.  Check `coupon_field_interaction` rates post-shipping view to quantify "code hunting" vs. hard abandonment.
+3.  Draft the A/B test plan for a "Free Shipping over $X" threshold, defining the primary metric and guardrail before engineering begins.
+
+*Note: All metrics must be derived from StyleCart's internal analytics; no external benchmarks are applied. If exit destination data is missing, rely on the coupon interaction proxy.*

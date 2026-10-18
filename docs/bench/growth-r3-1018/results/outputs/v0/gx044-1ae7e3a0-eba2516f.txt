@@ -1,0 +1,46 @@
+**To:** Engineering Lead
+**From:** Product Analytics
+**Date:** February 26
+**Subject:** Essential Event Schema for Sleep Module & Retention Correlation
+
+We must shift from tracking raw volume to measuring value delivery. Our current "30% increase in sessions" is a vanity metric if it does not correlate with retention or sleep quality. To validate the hypothesis that "3+ stories/week drives retention," we need an event taxonomy that answers specific questions about user behavior within the sleep flow.
+
+Do not instrument "everything." Implement only the following events to bridge the gap between waking meditation and sleeping states. Each event includes the specific question it answers.
+
+### 1. Core Value Events (The North Star Inputs)
+These events determine if the user received value.
+*   **`sleep_story_completed`**
+    *   **Question:** Did the user listen long enough to potentially fall asleep?
+    *   **Properties:** `story_id`, `duration_listened_seconds`, `completion_percentage` (e.g., >90%), `device_state` (screen off/on).
+    *   *Note:* A "start" without a "completed" (or high duration) is noise. We need to distinguish between a user who fell asleep (success) and one who quit after 30 seconds (failure).
+*   **`meditation_session_completed`**
+    *   **Question:** Is the core waking action being retained alongside sleep features?
+    *   **Properties:** `session_type`, `duration_seconds`, `is_post_sleep` (boolean: occurred within 2 hours of waking).
+
+### 2. Interaction & Friction Events (Diagnosing the Leak)
+These events explain *why* users do or do not complete stories.
+*   **`sleep_story_skipped_intro`**
+    *   **Question:** Are intros too long, causing early drop-off?
+    *   **Properties:** `story_id`, `intro_duration_seconds`.
+*   **`timer_adjusted`**
+    *   **Question:** Are users customizing the experience to fit their sleep latency?
+    *   **Properties:** `previous_duration`, `new_duration`, `story_id`.
+*   **`playback_abandoned`**
+    *   **Question:** At what exact point do users stop listening?
+    *   **Properties:** `story_id`, `timestamp_seconds`, `reason_code` (if available, e.g., app backgrounded vs. explicit stop).
+
+### 3. The Identifier Seam (Critical for Cohorts)
+To correlate "waking" meditation with "sleeping" usage, we must track the same user across sessions without violating privacy.
+*   **Requirement:** All events must include a **stable, pseudonymous `user_cohort_id`**.
+*   **Constraint:** Do not use raw PII (email/name) in analytics events. This ID allows us to query: "Do users with `user_cohort_id` X who completed 3 sleep stories in Week 1 return in Week 2?"
+*   **Compliance:** Route any mapping of this ID to real identity to the `privacy-compliance` protocol; do not store PII in the event stream.
+
+### Implementation Priority
+1.  **Immediate:** Implement `sleep_story_completed` with `completion_percentage`. Without this, we cannot define "active usage."
+2.  **Secondary:** Add interaction events (`skipped_intro`, `timer_adjusted`) only if completion rates are low. Do not build these until we have a baseline for completion.
+3.  **Verification:** Any dashboard claiming "improved retention" must show the trend of `sleep_story_completed` per cohort, not just total sessions.
+
+**This Week's Step:**
+Instrument `sleep_story_completed` and the `user_cohort_id` before the March 1st sprint. Once live, run a cohort query comparing retention of users with >3 completed stories vs. <1 completed story. If the delta is <5%, the hypothesis is false, and we stop optimizing for frequency.
+
+*Note: We are not asserting a "good" retention rate; we are measuring the lift against our own baseline. Do not estimate values for these events prior to instrumentation; they are currently UNVERIFIED.*

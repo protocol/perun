@@ -1,0 +1,40 @@
+### Analysis Approach: Quantifying the Volume vs. Quality Trade-off
+
+**1. Define the North Star and Input Metrics**
+Reject "total applications" as a vanity metric; it rises even if quality falls. Adopt **"Qualified Hires per Week"** (or "Interviews Scheduled" as a leading proxy) as your North Star. The input metrics are **Application Completion Rate** (volume) and **Post-Application Success Rate** (quality).
+
+**2. Event Taxonomy: Instrument Specific Questions**
+Do not instrument "everything." Define these specific events to answer your named questions:
+*   `application_started`: Triggers when a user clicks "Apply."
+*   `portfolio_upload_attempted`: Did they try to upload? (Identifies friction point).
+*   `application_abandoned`: Did they drop off *after* the portfolio step?
+*   `application_submitted`: The final completion.
+*   `candidate_advanced`: Did this specific applicant move to "Interview" or "Hired" within 14 days?
+
+**3. The Identifier Seam**
+To measure quality, you must link the anonymous applicant to the hiring outcome. Ensure a **stable, pseudonymous user ID** passes from the job board frontend to the ATS (Applicant Tracking System). Do not use raw emails or PII in analytics tools; route consent and data retention limits to your privacy compliance protocol.
+
+**4. Diagnostic Method: Cohort Analysis (Not Averages)**
+Your assumption that the portfolio causes the drop-off is likely correct, but unproven. Compare two cohorts over the last 30 days:
+*   **Cohort A (Pre-Update):** Users who applied before the portfolio requirement.
+*   **Cohort B (Post-Update):** Users who applied after the update.
+
+Calculate the **Conversion-to-Hire Rate** for both:
+*   *Cohort A:* (Hires / Applications Submitted)
+*   *Cohort B:* (Hires / Applications Submitted)
+
+If Cohort B's conversion rate is not significantly higher than Cohort A's, the extra 3 minutes are destroying value without returning quality. If Cohort B converts 2x better, the volume loss is justified.
+
+**5. Experiment Rigor: Avoid Peeking**
+Do not make a decision based on a "feeling" or a single week of data. If you plan to A/B test a simplified form against the current one:
+*   **Pre-commit** to a sample size (e.g., 2,000 applicants per variant) or a fixed duration (e.g., 14 days).
+*   Define the **Primary Metric** (Conversion-to-Hire) and a **Guardrail Metric** (Enterprise Client Satisfaction/NPS).
+*   Do not stop the test early because "p < 0.05" on day 2; this inflates false positives. Read the results once at the end.
+
+**6. This-Week Step**
+1.  **Query:** Pull the `candidate_advanced` rate for applicants in the 30 days pre-update vs. post-update. If the post-update quality lift is <20%, the volume loss is likely unjustified.
+2.  **Instrument:** Verify the `portfolio_upload_attempted` event exists. If 40% of users start the upload but fail/abort, the issue is technical friction, not policy.
+3.  **Decision Tripwire:** If the "Quality Lift" (increase in hire rate) does not exceed the "Volume Loss" (decrease in total applicants) by a factor of 1.5x within 14 days, recommend reverting to the simplified form for non-enterprise roles.
+
+*Note: All benchmarks must be derived from your internal historical data; do not rely on external "industry standard" conversion rates which are often fabricated or irrelevant to your specific niche.*
+*Ensure the "Quality" definition (e.g., "Interviewed") is agreed upon by both Product and Sales before running the query to prevent moving goalposts.*

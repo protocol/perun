@@ -1,0 +1,39 @@
+### Recommendation: Do Not Roll Out Yet
+
+The results are statistically valid but operationally risky to act upon immediately. While an uneven split (80/20) does not invalidate the *direction* of a significant result, it drastically reduces statistical power and precision, explaining your wide confidence intervals. More critically, a pricing test with asymmetric fee structures carries a high risk of negative revenue impact even if transaction volume increases. You must quantify the net revenue effect before presenting to the executive committee.
+
+### Why the Results Look This Way
+
+1.  **Validity vs. Precision**: The imbalance does not create a false positive if the p-value is significant; the variant likely *does* drive higher volume. However, allocating only 20% of traffic to the variant means your effective sample size for the treatment is small (40,000 users vs. 160,000 control). This creates high variance in the estimate, resulting in wide confidence intervals. You know the effect is positive, but you are unsure *how large* it is.
+2.  **The Revenue Trap**: Your hypothesis measured "transaction volume," but the business goal is likely "net revenue" or "profit." A lower fee structure requires a massive lift in volume to break even.
+    *   *Example*: If fees dropped 20%, volume must increase by >25% just to maintain flat revenue.
+    *   With wide confidence intervals, your true lift could be 10% (revenue loss) or 50% (revenue gain). Acting on the lower bound could destroy margin before competitors even react.
+
+### Required Adjustments & Checks
+
+Before recommending a rollout, perform these three specific analyses:
+
+**1. Recalculate the Primary Metric to Net Revenue**
+Stop analyzing "transaction volume" in isolation. Create a new metric: `Total Fee Revenue = Sum(Transaction Value × Fee Rate)`.
+*   Compare the mean revenue per user (ARPU) between Control and Variant.
+*   If the confidence interval for *Revenue ARPU* includes zero or negative values, the test is inconclusive for business purposes, regardless of volume significance.
+
+**2. Check for Variance Heterogeneity**
+You suspected behavior variance might differ. In pricing tests, this is common (e.g., the lower fee attracts high-volume, low-margin users who behave differently).
+*   Run a check for equal variances (e.g., Levene's test) on the revenue metric.
+*   If variances are unequal, standard t-tests are unreliable. Use Welch's t-test or bootstrapping to generate accurate confidence intervals for the revenue difference.
+
+**3. Segment by User Cohort**
+Ensure the 20% allocation didn't accidentally skew toward a specific user type (e.g., new vs. existing, high vs. low balance) due to randomization drift over two weeks.
+*   Compare pre-test characteristics of both groups. If they differ, you must normalize the results (e.g., via CUPED or regression adjustment) before trusting the lift.
+
+### Risks to Present to the Executive Committee
+
+When presenting to Ahmed and the committee, explicitly frame these risks:
+
+*   **Margin Erosion Risk**: "We have confirmed volume increases, but the wide confidence interval means there is a [X]% probability that net revenue will decrease if we roll out globally. We cannot afford to trade volume for loss."
+*   **Competitor Reaction Timing**: "Rushing a rollout based on imprecise data may force us to reverse course later, damaging customer trust more than a delayed launch. Competitors reacting in September gives us time to run a corrected test."
+*   **Sample Size Deficit**: "To narrow the confidence interval to a decision-ready range (e.g., ±5%), we need to extend the test or re-run it with a 50/50 split for another 10–14 days."
+
+### Final Action Plan
+Recommend extending the test for 10 more days with a **50/50 split**. This will double your variant sample size, narrow the confidence intervals, and allow you to measure *net revenue* with sufficient precision to guarantee profitability before a full rollout.

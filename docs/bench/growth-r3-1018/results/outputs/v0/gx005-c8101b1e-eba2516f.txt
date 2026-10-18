@@ -1,0 +1,16 @@
+**Assessment: Do not trust these results to make a permanent change. You must re-run the test.**
+
+The 85/15 traffic split fundamentally compromises the validity of your conclusion for three specific reasons that volume cannot fix:
+
+1.  **Confounding Variables (Bias):** Your suspicion regarding device types and time-of-day patterns is correct. An uneven split amplifies the risk that external factors (e.g., a weekend spike, a specific mobile OS update, or marketing campaign timing) disproportionately affected the larger variant group. With such a severe imbalance, standard statistical controls often fail to fully isolate the treatment effect from these temporal or segment-based confounders. You cannot verify post-hoc if the 2.5% lift was caused by the code change or by the variant group accidentally capturing a higher proportion of high-intent users during peak hours.
+2.  **Statistical Power & Precision:** While the variant group is large, the effective sample size of an A/B test is driven heavily by the smaller group (the control). With only 15% in control, your ability to detect a true difference with precision is severely reduced, resulting in the wide confidence intervals you observed. A "directional signal" is insufficient for a permanent roadmap decision; it is merely a hypothesis generator. Acting on it risks deploying a change that provides no value or, worse, degrades experience for the majority of users.
+3.  **Experiment Rigor:** A valid experiment requires a pre-committed design where the analysis plan matches the data collection. Analyzing a test with a known configuration error violates the principle of rigorous measurement. The result is technically `UNVERIFIED` because the randomization assumption—the bedrock of causal inference—is suspect.
+
+**Recommended Action Plan:**
+*   **Immediate Step:** Halt any rollout plans based on this data. Treat the 2.5% lift as an interesting observation, not a verified win.
+*   **Re-run Design:** Launch a new test with a balanced 50/50 split. Calculate the required sample size based on your Minimum Detectable Effect (MDE) and commit to a fixed duration or sample count before starting.
+*   **Guardrails:** Define a primary metric (checkout conversion) and a guardrail metric (e.g., page load time or error rate) before launch.
+*   **Timeline:** Given your end-of-month deadline, a properly powered re-run may not conclude in time. If the deadline is immovable, the only safe path is to **delay the roadmap decision** or ship the change as a limited canary (e.g., 5% of traffic) with strict monitoring, rather than a full permanent update.
+
+**Note:** The wide confidence intervals are a direct mathematical consequence of the small control group size, not just noise.
+**Note:** Ensure your randomization unit (user ID vs. session ID) remains consistent in the re-run to avoid seeding bias.

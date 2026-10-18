@@ -1,0 +1,37 @@
+### Event Taxonomy for ShopLive India
+
+To replace the current noise with a sustainable framework for Ravi, instrument only events that answer specific questions about the journey from stream to payment. Do not track every button click; track state changes that indicate intent or value.
+
+**1. Core Event Schema**
+Every event must include: `event_name`, `timestamp`, `user_id` (pseudonymous stable ID), `session_id`, `stream_id`, and `traffic_source` (internal vs. social_referrer).
+
+| Event Name | Trigger Condition | Question Answered | Key Properties |
+| :--- | :--- | :--- | : |
+| `stream_viewed` | Video plays > 5 seconds | Did the user actually enter the experience? | `referrer_type`, `product_count` |
+| `product_details_viewed` | User clicks product card overlay | Did the user show intent beyond passive watching? | `product_id`, `time_in_stream` |
+| `chat_message_sent` | User submits a chat message | Is the user engaging socially or commercially? | `message_length` (optional) |
+| `checkout_initiated` | User clicks "Buy Now" | Did the user attempt to purchase? | `product_id`, `price`, `currency` |
+| `payment_completed` | Transaction success callback | Did the user derive value (North Star input)? | `transaction_id`, `revenue`, `payment_method` |
+| `stream_abandoned` | User exits before purchase after viewing details | Where is the retention leak in the funnel? | `last_action`, `duration_watched` |
+
+**2. Traffic Source Grouping**
+Do not create separate events for social vs. internal traffic. Use the `traffic_source` property to segment later.
+*   **Values:** `internal_feed`, `social_referrer_whatsapp`, `social_referrer_instagram`, `social_referrer_facebook`.
+*   **Logic:** This allows you to compare conversion rates (e.g., `payment_completed` / `stream_viewed`) across sources without duplicating event definitions.
+
+**3. Distinguishing Engagement Types**
+Your requirement to separate chatters from buyers is solved by analyzing sequences, not new events:
+*   **Social Engagers:** Users who trigger `stream_viewed` + `chat_message_sent` but *no* `product_details_viewed`.
+*   **Commercial Intent:** Users who trigger `product_details_viewed`.
+*   **Analysis:** Compare the `payment_completed` rate of "Social Engagers" vs. "Commercial Intent" users to see if chat drives sales or just noise.
+
+**4. Implementation Rules for Ravi**
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` to track users across sessions and referrers. Do not use raw PII here; route identity mapping to the privacy compliance protocol.
+*   **Naming Convention:** Use `snake_case` verbs followed by nouns (e.g., `product_details_viewed`). Reject vague names like `click_buy`.
+*   **Stop Condition:** Do not instrument events "just in case." If an event does not map to a funnel step (View → Intent → Action → Value) or a specific hypothesis, do not build it.
+
+**This Week's Step:**
+1.  Define the SQL/query for the "Activation Rate" (`product_details_viewed` / `stream_viewed`) segmented by `traffic_source` using existing raw logs where possible.
+2.  Draft the schema above into a ticket for Ravi with a hard deadline of two weeks for implementation, ensuring the `traffic_source` property is populated correctly for the October scale-up.
+
+*Note: Current transaction volume (15k) is a vanity metric without the associated `stream_viewed` count to calculate conversion rates; treat the 15k figure as UNVERIFIED context until the funnel baseline is established.*

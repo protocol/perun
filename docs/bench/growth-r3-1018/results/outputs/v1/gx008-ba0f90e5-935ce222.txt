@@ -1,0 +1,44 @@
+# ShopViet Mobile Migration: 30-Day Measurement Plan
+**Audience:** CEO & Board of Directors
+**Objective:** Validate the migration of 40% of web users to the app and test the hypothesis that app users generate 30% higher Lifetime Value (LTV).
+
+### 1. The North Star Metric
+**Weekly Active App Users Completing a Core Purchase.**
+*Why:* Raw downloads and cumulative signups are vanity metrics; they rise regardless of value. This metric only increases when a user derives actual economic value on the new platform. It directly ties to the LTV hypothesis.
+
+### 2. The Funnel (Read Bottom-Up)
+We will diagnose leakage starting from retention, not acquisition. Pouring marketing spend into acquisition is wasted if the app experience fails to retain.
+*   **Retention (Primary Focus):** % of Day-1 installers who complete a core purchase in Week 2.
+    *   *Decision Rule:* If Week 2 retention is <50% of the desktop baseline, pause paid user acquisition and fix the mobile onboarding flow.
+*   **Activation:** % of installers who enable push notifications and view a product detail page within 24 hours.
+    *   *Decision Rule:* If activation is low but installs are high, the "aha moment" is missing; revise the first-run experience.
+*   **Acquisition:** % of targeted desktop users who click the "Get the App" prompt and complete installation.
+    *   *Decision Rule:* Only optimize this channel once Retention and Activation are stable.
+
+### 3. Event Taxonomy (Instrument Only What Answers a Question)
+Do not instrument "everything." Track only these three events to answer specific strategic questions:
+1.  `app_install_source` (Properties: `web_user_id`, `desktop_session_count`, `last_device_type`)
+    *   *Question:* Which specific web behaviors (e.g., frequency of visits, cart size) predict a successful install?
+2.  `push_permission_granted` (Properties: `time_to_prompt`, `user_segment`)
+    *   *Question:* Does enabling push notifications correlate with the hypothesized 30% LTV lift?
+3.  `mobile_purchase_complete` (Properties: `order_value`, `is_repeat_customer`, `days_since_install`)
+    *   *Question:* Are app purchasers actually higher value than their desktop counterparts, or is this cannibalization?
+
+**Identifier Seam:** To track users from desktop web to mobile app, we must link sessions via a stable, pseudonymous `user_id`. This requires a login or persistent cookie match. **Note:** Raw PII (emails, names) must not be sent to the analytics engine; route identity resolution to the privacy compliance protocol.
+
+### 4. Experiment Rigor: The LTV Hypothesis
+Your assumption is that app users have **30% higher LTV**. We cannot verify this in 30 days with final LTV, so we will use a proxy: **Revenue Per Active User (RPAU) in Week 4**.
+*   **Design:** Compare the RPAU of the "App Cohort" against a matched "Desktop-Only Cohort" with similar historical purchase frequency.
+*   **Guardrail Metric:** Desktop Web Revenue.
+    *   *Risk:* If App revenue rises but Desktop revenue drops by an equal amount, the pivot is merely shifting channels, not growing value.
+*   **Reading Rule:** Do not declare the hypothesis "proven" based on Week 1 spikes (novelty effect). The read occurs only at Day 30.
+
+### 5. This-Week Steps
+1.  **Define the Core Action:** Engineering to confirm the exact event definition for `mobile_purchase_complete` matches the desktop equivalent to ensure apples-to-apples comparison.
+2.  **Baseline Query:** Analytics team to run a historical query: "What is the current 30-day retention rate of desktop users who visit >3 times/week?" This establishes the internal benchmark for success; no external industry benchmarks will be used.
+3.  **Instrumentation Audit:** Verify that the `web_user_id` is successfully passed to the mobile SDK upon login; without this seam, the migration funnel is `UNVERIFIED`.
+
+***
+
+*Note: All metrics will be compared strictly against ShopViet's own historical desktop baselines. No external "industry standard" retention rates will be cited as they are unverifiable and often misleading.*
+*If the Day-30 read shows high installs but low retention, the strategic call will be to halt migration incentives and repair the mobile product fit before scaling.*

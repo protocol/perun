@@ -1,0 +1,72 @@
+**To:** Tunde, Lead Data Engineer
+**Subject:** ConnectNG Pilot Event Taxonomy (Lagos Trial)
+**Deadline:** February 1st Launch
+
+Per the constraint of 1M daily records and intermittent connectivity, we will instrument only events that answer specific questions about value delivery and retention. We reject "track everything" to preserve bandwidth and budget. The following 10 events are prioritized by their ability to diagnose the funnel bottom-up (Retention → Activation → Acquisition).
+
+**Core Retention & Value (Instrument These First)**
+These events determine if users derive actual value. Without these, acquisition data is vanity.
+
+1.  `community_join_completed`
+    *   **Question:** Did the user successfully enter a local community?
+    *   **Why:** The primary "aha" moment. In low-connectivity zones, a failed join due to timeout kills retention immediately.
+    *   **Priority:** Essential.
+
+2.  `core_content_viewed` (e.g., thread opened, local alert read)
+    *   **Question:** Are users consuming local value, not just landing?
+    *   **Why:** Distinguishes between a signup and an active user. Must fire even on cached content loads.
+    *   **Priority:** Essential.
+
+3.  `local_post_created`
+    *   **Question:** Is the user contributing to the community ecosystem?
+    *   **Why:** Supply-side activation. A network dies without local content generation.
+    *   **Priority:** Essential.
+
+4.  `return_visit_day_7` (Derived cohort flag or explicit ping)
+    *   **Question:** Do users come back after one week?
+    *   **Why:** The single strongest predictor of product-market fit. Do not track daily logins; track weekly return specifically.
+    *   **Priority:** Essential.
+
+**Activation & Engagement Context**
+These explain *why* retention is happening or failing.
+
+5.  `onboarding_step_completed` (with `step_name` and `duration_ms`)
+    *   **Question:** Where do users drop off during setup?
+    *   **Why:** High drop-off here indicates friction exacerbated by poor connectivity.
+    *   **Priority:** Essential.
+
+6.  `in_app_comment_posted`
+    *   **Question:** Is engagement happening publicly within ConnectNG?
+    *   **Why:** Validates if the app itself is the community hub, rather than just a bridge to WhatsApp.
+    *   **Priority:** Essential.
+
+**Acquisition & Viral Signals**
+Your hypothesis on WhatsApp is valid, but must be measured against internal virality.
+
+7.  `share_to_whatsapp_initiated`
+    *   **Question:** Are users trying to invite others via the dominant channel?
+    *   **Why:** Tests your viral growth hypothesis. Must include `source_context` (e.g., "after_reading_alert").
+    *   **Priority:** Essential.
+
+8.  `share_to_whatsapp_success` (Callback from OS intent)
+    *   **Question:** Did the share actually leave the device?
+    *   **Why:** "Initiated" counts can be high even if the OS handoff fails on low-end devices. This verifies the funnel.
+    *   **Priority:** Essential.
+
+9.  `referral_link_opened` (Deep link entry)
+    *   **Question:** Are invites actually bringing new users back into the app?
+    *   **Why:** Measures the conversion of the viral loop, not just the attempt.
+    *   **Priority:** Nice-to-have (only if engineering bandwidth allows after core 8).
+
+10. `offline_queue_flushed`
+    *   **Question:** How much activity is happening asynchronously?
+    *   **Why:** Critical for Nigeria's connectivity reality. Helps distinguish between "no engagement" and "delayed reporting."
+    *   **Priority:** Nice-to-have (Infrastructure health).
+
+**Implementation Notes for Intermittent Connectivity:**
+*   **Batching:** All events must support local queuing and batch transmission when connectivity is restored. Do not block the UI waiting for a network response.
+*   **Payload Size:** Keep properties minimal. Avoid sending full text content; send IDs only.
+*   **Identity:** Use a stable, pseudonymous `user_id` generated at install to track cohorts across sessions, but do not send PII (phone numbers/names) in these event payloads. Route PII handling to our privacy compliance protocol.
+
+**This Week's Step:**
+Implement events 1–8 immediately for the Feb 1st launch. Verify that `community_join_completed` and `return_visit_day_7` are firing correctly in a low-bandwidth simulation before go-live. If the join completion rate is below 60% in the first 48 hours, pause acquisition spend and fix the onboarding timeout logic.

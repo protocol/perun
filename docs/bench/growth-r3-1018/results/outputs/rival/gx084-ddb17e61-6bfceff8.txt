@@ -1,0 +1,33 @@
+To diagnose the drop-off between ID upload and transfer confirmation for RemitFlow, you must immediately instrument specific backend events and properties that capture the *outcome* of the verification attempt, not just the start. Your current logs likely track "upload_started" but miss the critical failure states returned by your third-party provider.
+
+**Priority 1: Instrument These Specific Backend Events**
+Do not rely solely on session replay yet; it shows *where* users click but not *why* the API rejected them. You need structured data from your server-to-provider communication.
+
+1.  **`verification_attempted`** (Trigger: User submits document)
+    *   `document_type`: (e.g., passport, emirates_id, visa)
+    *   `file_size_kb`: Critical for detecting size limit rejections.
+    *   `file_format`: (e.g., jpg, pdf, heic) to catch unsupported formats.
+    *   `upload_duration_ms`: To identify timeout patterns.
+
+2.  **`verification_result_received`** (Trigger: Response from third-party provider)
+    *   `status`: (success, failed, pending, error)
+    *   `error_code`: **The most critical missing field.** Map the provider's raw codes (e.g., `DOC_BLURRY`, `GLARE_DETECTED`, `UNSUPPORTED_FORMAT`, `TIMEOUT`, `SIZE_LIMIT_EXCEEDED`).
+    *   `error_message_raw`: The full string from the provider for debugging.
+    *   `retry_count`: How many times the user attempted upload in this session.
+
+3.  **`verification_abandoned`** (Trigger: User leaves flow after upload but before confirmation)
+    *   `last_known_status`: (e.g., "uploading", "processing", "failed")
+    *   `time_since_upload_seconds`: Did they leave immediately (confusion) or after a long wait (timeout frustration)?
+
+**Priority 2: Define These Diagnostic Metrics**
+Once the events above are live, calculate these rates to pinpoint the bottleneck:
+
+*   **Rejection Rate by Error Code:** Group `verification_result_received` by `error_code`. If 40% fail with `GLARE_DETECTED`, the issue is user guidance, not tech. If 30% fail with `TIMEOUT`, it's infrastructure.
+*   **Drop-off by Document Type:** Compare completion rates for `emirates_id` vs. `passport`. Migrant workers may predominantly use one type that has higher friction.
+*   **File Size Distribution of Failures:** Plot `file_size_kb` for failed vs. successful uploads. A sharp cutoff indicates a hard limit users are hitting without clear feedback.
+*   **Abandonment Latency:** Average `time_since_upload_seconds` for abandoners. Immediate exits suggest confusing UI; long delays suggest processing anxiety.
+
+**Recommendation on Tools**
+Prioritize **backend event instrumentation** over session replay for this specific diagnosis. Session replay is qualitative and slow to analyze at scale; it cannot systematically categorize thousands of API error codes. Implement the three events above in your next release (or via a server-side tag if possible) to get quantitative answers within 48 hours. Use session replay only *after* you identify the top error code to watch *how* users react to that specific error message.
+
+**Note:** Ensure no PII (like actual ID images or numbers) is logged in these events; log only metadata and error codes to satisfy compliance requirements for Sarah's report.

@@ -1,0 +1,25 @@
+**Recommendation: Prioritize Battery Temperature Spikes; Defer Mid-Flight Altitude Adjustments**
+
+For the June 1st expansion of 50 clinics, you should immediately implement logging for **battery temperature spikes** and exclude **mid-flight altitude adjustments** from the real-time satellite stream.
+
+**1. Primary Recommendation: Log Battery Temperature Spikes**
+Despite only two incidents in 300 flights, the severity of a battery failure in a medical delivery context (potential fire, total loss of vehicle, missed critical supply) outweighs the low frequency. In hot climates, thermal runaway is often preceded by specific temperature gradients that standard "low battery" warnings miss.
+*   **Insights Gained:** You will establish a thermal baseline for your specific battery chemistry in Rwandan ambient heat. This data allows you to move from reactive replacement to predictive maintenance, identifying cells that degrade faster than others before they fail mid-flight.
+*   **Bandwidth Strategy:** Do not stream continuous temperature data. Configure the firmware to trigger an event log *only* when temperature exceeds a safe threshold (e.g., >45°C) or rises faster than a set rate (e.g., >2°C per minute). This captures the critical signal with minimal byte cost.
+
+**2. Secondary Recommendation: Defer Mid-Flight Altitude Adjustments**
+Logging every altitude adjustment generates high-volume noise with low safety signal for your current operational maturity. Unless you are actively testing new collision avoidance algorithms, these adjustments are usually routine responses to standard terrain or wind.
+*   **Insights Lost (Acceptable Risk):** You will miss granular data on how often drones deviate from planned paths due to wind shear in specific valleys.
+*   **Mitigation:** Store this data locally on the drone's black box. Download it physically when the drone returns to base for routine maintenance. This preserves the data for engineering analysis without clogging the live satellite link needed for mission-critical telemetry.
+
+**Addressing the 3% Connection Loss Rate**
+Your current 3% data loss during delivery is a critical risk that bandwidth-heavy logging will exacerbate. By restricting real-time transmission to "exception-based" events (like temperature spikes) rather than continuous streams (like altitude changes), you reduce the packet load. This increases the probability that critical status updates (like "package released" or "emergency landing") successfully transmit even on a degraded link.
+
+**Implementation Plan for CTO**
+1.  **Firmware Update:** Set battery temperature logging to "threshold-triggered" only.
+2.  **Local Storage:** Route altitude adjustment data to local SD card storage for post-flight download.
+3.  **Alerting:** Configure ground control software to flag any drone transmitting a temperature spike event for immediate monitoring.
+
+This approach maximizes safety signal per byte transmitted, directly addressing your constraint of limited satellite bandwidth while protecting the reliability of the 50-clinic trial.
+
+*Note: Given the medical nature of the cargo, consider adding a "connection lost" heartbeat event if not already present, to distinguish between a comms drop and a total power failure.*

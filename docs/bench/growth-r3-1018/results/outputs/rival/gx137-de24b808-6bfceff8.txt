@@ -1,0 +1,38 @@
+# NutriPath Onboarding Flow Tracking Plan
+
+## Primary Metrics (Decision Drivers)
+Track these aggregate rates to determine if the test succeeds or fails:
+1.  **Onboarding Completion Rate**: Users who finish all questions / Users who start onboarding.
+2.  **30-Day Retention Rate**: Users active at Day 30 / Users who completed onboarding.
+3.  **Recommendation Quality Score**: % of users who click "Save Plan" or "Start Tracking" within 24 hours of receiving recommendations.
+
+## Critical Interaction Points (Event List)
+Instruct the design team to observe and log these specific behaviors during user testing. Each event represents a potential friction point or validation step.
+
+| Event Name | Trigger Condition | Properties to Record | Why It Matters |
+| :--- | :--- | :--- | : |
+| `onboarding_started` | User clicks "Get Started" on the welcome screen. | `entry_source`, `device_type` | Establishes the baseline denominator for funnel analysis. |
+| `question_viewed` | A specific question slides into view. | `question_number`, `question_category` (e.g., allergies, goals) | Identifies exactly which question introduces friction. |
+| `question_abandoned` | User closes the tab or hits "Back" while a question is visible. | `question_number`, `time_spent_seconds` | **Critical:** Pinpoints the exact "tipping point" where friction outweighs value. |
+| `question_answered` | User selects an option and proceeds to the next step. | `question_number`, `answer_type` (single-select, multi-select, text) | Measures flow velocity; low velocity here suggests confusion or fatigue. |
+| `help_tooltip_clicked` | User clicks the "?" icon next to a question. | `question_number` | Indicates unclear wording or high cognitive load. |
+| `skip_option_used` | User clicks "Skip" or "Not sure" (if available). | `question_number` | Validates if users prefer skipping over quitting entirely. |
+| `onboarding_completed` | User sees the final "Generating Plan" loading state. | `total_time_seconds`, `questions_answered_count` | The primary conversion event for the acquisition team. |
+| `recommendation_viewed` | The personalized plan is fully rendered on screen. | `plan_complexity_score` | Confirms the user actually received the value proposition. |
+| `initial_action_taken` | User performs the first meaningful action in the app. | `action_type` (e.g., `log_meal`, `save_plan`) | Early proxy for the 30-day retention hypothesis. |
+
+## Qualitative Observation Checklist
+For next week's user testing sessions, ask designers to note:
+*   **Hesitation Points:** Where do users pause >5 seconds before answering?
+*   **Verbal Confusion:** Do users ask "What does this mean?" for specific questions?
+*   **Error Patterns:** Do users select an answer, then immediately change it?
+*   **Fatigue Signals:** Do users sigh, scroll rapidly, or mention "this is taking too long" after Question 3?
+
+## Analysis Strategy
+To find the tipping point, calculate the **Drop-off Rate per Question**:
+*(Users who saw Question N – Users who answered Question N) / Users who saw Question N*
+
+If the drop-off rate for Questions 4 and 5 exceeds 15%, the friction cost likely outweighs the data benefit. Compare the retention of users who answered all 5 questions vs. those who skipped the last 2 to validate the "quality of recommendations" hypothesis.
+
+*Ensure "question_abandoned" fires before the page unloads to capture exit intent accurately.*
+*Tag sessions with a `test_group` property (Control vs. New Flow) immediately upon entry.*

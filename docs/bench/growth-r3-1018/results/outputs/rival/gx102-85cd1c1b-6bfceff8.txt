@@ -1,0 +1,33 @@
+### Strategy for Timestamp Integrity and Data Cleaning
+
+**1. Diagnostic Rules to Flag Suspicious Entries**
+Apply the following logic to your 200,000 daily records to isolate the ~15% of affected events without deleting data. Create a new column named `data_quality_flag` with these conditions:
+
+*   **Future Timestamps:** Flag any record where `event_timestamp` > `current_processing_time` + 5 minutes (allowing a small buffer for network latency).
+*   **Midnight UTC Artifacts:** Flag any record where `event_timestamp` equals `00:00:00` UTC. This typically indicates a default value assigned when a timezone conversion fails or a null value is coerced.
+*   **Timezone Mismatch Check:** Since you operate in Chile (CLT/CLST), convert all UTC timestamps to local time. Flag records where the calculated local hour is between 02:00 and 05:00 if your historical data shows zero deliveries during these hours for specific regions. This helps identify if the "midnight" issue is actually a shifted timezone offset.
+*   **Regional Segmentation:** Add a `region_flag` to determine if the error correlates with the southern districts. Group the flagged records by `district_id` to confirm your hypothesis about regional concentration.
+
+**2. Cleaning Logic (Imputation vs. Exclusion)**
+Do not delete records. Instead, create two datasets: a "Raw Audit" set and a "Clean Analysis" set.
+
+*   **For "Midnight UTC" errors:** If the delivery date is known but the time is defaulted to 00:00:00, impute the time using the median delivery hour for that specific `district_id` and `day_of_week`. If the district data is also corrupted, use the national median for that day. Mark these as `imputed_time` in your audit trail.
+*   **For "Future" timestamps:** These are likely hard errors. Exclude them from time-duration calculations (average delivery time) but retain them in the count totals. Mark them as `excluded_duration_calc`.
+*   **Validation:** Re-calculate the average delivery time using only records flagged as `verified` or `imputed_time`. Compare this against a sample of manually verified logs from the southern districts to ensure the imputation logic holds.
+
+**3. Summary Statistics for Elena's Review**
+To prove reliability to the Operations Director, present a "Data Quality Reconciliation Table" alongside your Q1 trends. Include these specific metrics:
+
+*   **Total Record Volume:** Total records processed (e.g., 200,000/day × days in Q1).
+*   **Integrity Rate:** Percentage of records with valid timestamps (Target: >98% after cleaning).
+*   **Error Breakdown:**
+    *   Count of Future Timestamps (excluded from time calc).
+    *   Count of Midnight UTC defaults (imputed).
+    *   Percentage of errors originating from Southern Districts (validating the regional hypothesis).
+*   **Impact Analysis:** Show the "Average Delivery Time" calculated *with* the dirty data vs. *after* cleaning. This demonstrates the magnitude of the distortion (e.g., "Dirty data showed 4.2 hours; Cleaned data shows 3.1 hours").
+*   **Confidence Interval:** If possible, provide a margin of error for the imputed values based on the variance of the median hours used for replacement.
+
+**Deliverable Format:** Present the Q1 performance trends using the "Clean Analysis" dataset, with a footnote referencing the "Data Quality Reconciliation Table" to ensure full transparency regarding the March 3rd migration impact.
+
+*Note: Ensure all imputation logic is documented in a separate changelog for future audits.*
+*Verify if the cloud provider's default timezone setting was explicitly set to UTC during the March 3rd migration to prevent recurrence.*

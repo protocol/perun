@@ -1,0 +1,39 @@
+**Decision: Do not ship the "no-survey" variant yet. Extend the test with a pre-committed design to isolate the cause of the retention drop.**
+
+The current result presents a classic activation-retention trade-off, but the data provided is insufficient to determine causality. A 15% lift in setup completion paired with a 20% drop in 30-day retention suggests the survey acts as either a **commitment device** (filtering low-intent users) or a **personalization engine** (configuring the "aha" moment). Shipping based on this snapshot risks optimizing for vanity metrics (setup completion) while degrading the North Star (sustained value delivery).
+
+**Recomputed Analysis & Confounders**
+You cannot calculate the net impact on the business without knowing the absolute baseline rates.
+*   **Missing Baseline:** If baseline retention was 40%, a 20% drop means the variant retains 32%. If the setup conversion rose from 50% to 57.5%, you have traded 8 percentage points of retention quality for 7.5 points of activation volume. The net active user base might actually be *lower* or stagnant.
+*   **Confounder - Self-Selection:** The "no-survey" group likely includes users who would have abandoned the app immediately after the survey. Their subsequent churn inflates the retention drop. These users were never "retained" in the control group; they were filtered out.
+*   **Confounder - Personalization:** If the survey data drives initial workspace configuration, removing it may leave users in a generic state, delaying time-to-value.
+
+**Required Action Plan (This Week)**
+1.  **Define the North Star & Guardrails:**
+    *   **North Star:** Weekly Active Teams completing a core workflow (not just "setup complete").
+    *   **Guardrail:** Day-30 Retention Rate.
+    *   **Input Metric:** Time-to-First-Value (TTFV).
+
+2.  **Instrument Specific Events (Answer Named Questions):**
+    *   *Event:* `onboarding_survey_submitted` (Control only).
+    *   *Event:* `workspace_configured_personalized` vs. `workspace_configured_generic`.
+    *   *Question:* Does the variant group fail to configure personalized settings, leading to higher churn?
+    *   *Question:* Do users who skip the survey but *manually* configure settings later retain at the same rate as the control?
+
+3.  **Experiment Design (Pre-commit to avoid peeking):**
+    *   **Hypothesis:** The survey improves retention by enabling personalization, not just by filtering.
+    *   **Design:** Run a new A/B test for **4 weeks** (pre-committed duration) or until **N=15,000** per variant (calculate exact MDE based on current variance).
+    *   **Variants:**
+        *   A: Mandatory Survey (Control).
+        *   B: No Survey (Current Variant).
+        *   C: **Optional** Survey with default personalization based on role guess (New).
+    *   **Analysis Rule:** Read results **once** at the end of the period. Do not stop early if significance appears. Use **CUPED** variance reduction if you have pre-period data for these cohorts.
+
+4.  **Tripwire for Decision:**
+    *   **Ship Variant B/C only if:** The increase in *absolute number* of retained users at Day 30 exceeds the control by >5% (statistically significant), OR if TTFV decreases by >10% without a statistically significant drop in retention.
+    *   **Stop:** If Day-30 retention drops by >10% relative to control with no compensating volume gain.
+
+**Immediate Next Step:** Pull the cohort data for Variant B segmented by whether they eventually configured a personalized workspace manually. If their retention matches the Control group, the issue is missing personalization, not lack of commitment. If their retention remains low regardless of later configuration, the survey was acting as a filter.
+
+*Note: Ensure user identifiers used for this cohort analysis are pseudonymous and routed to your privacy compliance protocol; do not use raw PII for analytics segmentation.*
+*Do not present the April data as a final verdict to the Head of Product; frame it as a hypothesis generator requiring the extended test above.*

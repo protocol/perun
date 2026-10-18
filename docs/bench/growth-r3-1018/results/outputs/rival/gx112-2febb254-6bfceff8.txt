@@ -1,0 +1,22 @@
+**Executive Summary: Mumbai Checkout A/B Test**
+
+**Recommendation:** Do not discard the data, but do not report the aggregate result as conclusive. The current 12% conversion rate parity between control and variant is statistically unreliable due to extreme variance in session duration. Present the findings as "inconclusive at the aggregate level due to environmental noise" and propose an immediate re-analysis segmented by device and network quality to isolate the signal.
+
+**Explanation of High Variance**
+The wide confidence intervals are driven by the massive variance in session duration (45s to 20+ mins), which indicates that "time on page" is not a consistent proxy for intent in this specific cohort. Since server logs confirm consistent response times (<200ms), the latency is not server-side. The noise is likely caused by:
+1.  **Device Fragmentation:** Older Android devices common in the region may struggle with the new checkout flow's JavaScript execution, causing artificial delays that look like "browsing" but are actually rendering lag.
+2.  **Last-Mile Connectivity:** While server response is fast, intermittent packet loss on local mobile networks can cause client-side timeouts or retries that inflate session duration without triggering server errors.
+3.  **Behavioral Differences:** Users in this segment may be sharing devices or stepping away during checkout (multi-tasking), creating long-tail session durations that skew the mean.
+
+**Actionable Data Cuts for the Regional Director**
+To find the signal, request the engineering team to re-segment the raw data by the following dimensions before Friday:
+
+*   **Device Performance Tier:** Split users into "High-End" (last 2 years) vs. "Low-End" devices. If the variant wins on High-End but fails on Low-End, the issue is technical optimization, not flow logic.
+*   **Network Type:** Segment by 4G/5G vs. 3G/2G. If variance drops significantly on 4G/5G, the friction is connectivity-dependent.
+*   **Session Duration Buckets:** Exclude sessions >5 minutes from the primary analysis as outliers. Recalculate conversion rates for the "0–5 minute" cohort only. If the variant shows a lift here, the "friction" is only affecting users who get stuck, not those who flow through.
+*   **Drop-off Point Analysis:** Instead of overall conversion, compare drop-off rates at *specific* steps in the new flow. High variance in total duration often masks a specific step where low-end devices hang.
+
+**Next Steps**
+Advise the Director that launching based on current data carries high risk. Propose a "Targeted Rollout" strategy: if the re-segmented data shows the variant works for High-End/4G users (who represent high LTV), launch only to that segment while engineering optimizes the flow for lower-tier devices. This turns an inconclusive test into a phased growth opportunity.
+
+*Note: Ensure the re-analysis uses median session duration instead of mean to reduce the impact of extreme outliers in the presentation.*

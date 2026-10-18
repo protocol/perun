@@ -1,0 +1,42 @@
+# Referral Funnel Diagnostic Plan: ConnectNet Spike Analysis (Oct 1–7)
+
+**Objective:** Isolate the breakdown point between the 210% spike in invites sent (15,500 vs. 5,000 baseline) and flat conversions (~450) to determine if the root cause is technical tracking failure, deliverability issues, invalid user input, or landing page degradation.
+
+### Phase 1: Data Extraction & Validation
+Pull the following raw event logs for October 1–7 and compare against the September 24–30 baseline. Do not rely on aggregated dashboard summaries yet.
+
+1.  **Event Volume Verification**
+    *   **Metric:** Count of `referral_invite_triggered` events vs. `referral_invite_sent` confirmation events.
+    *   **Hypothesis:** If `triggered` is high but `sent` is low, the issue is an email provider API failure or queue backlog. If both are high, the emails likely left the building.
+    *   **Action:** Cross-reference with email provider (e.g., SendGrid/Mailgun) logs for "Sent" vs. "Delivered" status codes. Look for spikes in hard bounces (invalid addresses) or blocks (spam filtering).
+
+2.  **Link Integrity & Tracking Check**
+    *   **Metric:** Count of unique clicks on referral links (`referral_link_clicked`) attributed to the Oct 1–7 batch.
+    *   **Hypothesis:** If invites sent are high but clicks are near zero, the links are broken, malformed, or being flagged as spam before opening.
+    *   **Action:** Sample 50 live links from the spike period. Verify UTM parameters are intact and the redirect logic resolves to the correct landing page without 404s or infinite loops.
+
+3.  **Landing Page Funnel Analysis**
+    *   **Metric:** Conversion rate from `referral_landing_page_view` to `signup_started` and `signup_completed` specifically for traffic with `medium=referral`.
+    *   **Hypothesis:** If clicks are normal but signups are flat, the landing page experience degraded (e.g., slow load time, broken form, confusing offer) specifically for referred users.
+    *   **Action:** Segment landing page performance by device and browser. Check for recent deployments on Oct 1 that may have affected the referral template.
+
+4.  **User Behavior & Fraud Detection**
+    *   **Metric:** Distribution of invites per user and domain validity of recipient emails.
+    *   **Hypothesis:** The spike may be driven by a small group of users gaming the system (sending to invalid emails or themselves) or a bot attack, rather than genuine organic growth.
+    *   **Action:** Identify the top 1% of senders. If 50 users sent 10,000 invites combined, investigate those accounts for abuse. Validate the syntax and domain existence of recipient email addresses.
+
+### Phase 2: Synthesis for Board Presentation
+Construct the remediation narrative based on the data findings:
+
+*   **Scenario A (Deliverability/Technical):** High bounce rates or API errors confirm an infrastructure failure. *Remediation:* Fix provider integration, warm up IPs, or patch link generation logic.
+*   **Scenario B (Product/UX):** High delivery and click-through but low conversion confirms a landing page or offer mismatch. *Remediation:* A/B test landing page copy or fix form bugs.
+*   **Scenario C (Behavioral/Fraud):** High volume from few users with invalid emails confirms abuse. *Remediation:* Implement rate limits, email validation at entry, and revoke illegitimate credits.
+
+**Immediate Next Steps:**
+1.  Execute SQL queries to extract the four metric sets above by EOD today.
+2.  Schedule a war room with Engineering and Deliverability leads for tomorrow morning to review raw logs.
+3.  Draft the board slide deck focusing on the confirmed root cause and the specific engineering ticket required for resolution.
+
+This approach isolates the variable responsible for the drop-off, ensuring the board receives a fact-based remediation plan rather than speculation.
+
+*Note: Ensure all data pulls exclude internal test accounts to avoid skewing the baseline. Time zone consistency (UTC) is critical when comparing week-over-week data.*

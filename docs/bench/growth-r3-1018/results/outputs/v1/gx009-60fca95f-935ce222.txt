@@ -1,0 +1,44 @@
+### Analysis Plan: Quantifying the Volume vs. Quality Trade-off
+
+**1. Define the North Star and Input Metrics**
+*   **North Star:** *Weekly Hires Generated* (not applications started). This aligns both Product and Sales on the ultimate business value.
+*   **Input Metrics:**
+    *   *Funnel Conversion:* View → Start → Complete.
+    *   *Quality Proxy:* "Interview Request Rate" (percentage of completed applications that result in an employer interview) and "Time-to-Fill" per role.
+    *   *Friction Cost:* Average time-on-page and drop-off rate specifically at the portfolio upload step.
+
+**2. Event Taxonomy (Instrument Only What Answers the Question)**
+Do not instrument "everything." Implement these specific events to validate your hypothesis:
+*   `application_step_view` (Property: `step_name`, e.g., "portfolio_upload") → *Answers: Where exactly do they leave?*
+*   `application_abandon` (Property: `last_step`, `time_spent_total`) → *Answers: Is the 3-minute mark the breaking point?*
+*   `application_complete` (Property: `has_portfolio`, `duration_seconds`) → *Answers: Who finishes?*
+*   `employer_action` (Property: `action_type` ["view", "interview_request", "reject"], `candidate_id`) → *Answers: Does the portfolio correlate with higher quality?*
+
+**3. The Measurement Strategy: Cohort Comparison**
+Since you cannot A/B test this retroactively without risking enterprise client trust, run a **historical cohort analysis** comparing two groups over the last 30 days:
+*   **Cohort A (Pre-Update):** Users who applied before the portfolio requirement.
+*   **Cohort B (Post-Update):** Users who applied after the requirement.
+
+**Calculate the Trade-off Ratio:**
+$$ \text{Trade-off Ratio} = \frac{\text{Interviews}_{\text{Post}} / \text{Views}_{\text{Post}}}{\text{Interviews}_{\text{Pre}} / \text{Views}_{\text{Pre}}} $$
+
+*   **If Ratio > 1.0:** The quality lift outweighs the volume loss. The stricter form is justified.
+*   **If Ratio < 1.0:** You are losing more potential hires than you are gaining in quality. The form is hurting the business.
+
+**4. Addressing the "Quality" Assumption**
+Your assumption that portfolio submitters are higher quality is currently `UNVERIFIED`. To prove it:
+*   Segment completed applications by "Portfolio Attached" vs. "No Portfolio" (if some roles still allow skipping).
+*   Compare the **Interview Request Rate** between these segments. If candidates with portfolios are interviewed at 2x the rate of those without, the friction is buying quality. If the rates are identical, the 3-minute friction is pure waste.
+
+**5. Decision Framework for Stakeholders**
+Present the data using this decision matrix:
+*   **Scenario A (Keep Strict):** Valid only if *Interview Request Rate* increases by >25% to offset the ~75% volume drop (300/1200 completion vs previous baselines).
+*   **Scenario B (Simplify):** Required if *Interview Request Rate* remains flat or declines, indicating the portfolio is filtering out good candidates or employers don't value it.
+*   **Scenario C (Hybrid):** Make portfolio optional but highlighted. Measure if voluntary uploads maintain quality while recovering volume.
+
+**This Week's Steps:**
+1.  **Query:** Run the cohort analysis comparing Interview Request Rates (Pre- vs. Post-update) using existing ATS data.
+2.  **Instrument:** Add the `application_abandon` event with a `step_name` property to confirm the drop-off occurs specifically at the upload button, not earlier.
+3.  **Decide:** If the Interview Request Rate has not increased proportionally to the volume drop, recommend an immediate pilot making the portfolio optional for non-enterprise roles.
+
+*Note: Do not cite industry benchmarks for "good" conversion rates; compare only RemoteWorkHub's current baseline against its own historical data. Ensure candidate IDs used for cohort tracking are pseudonymized to comply with privacy standards.*

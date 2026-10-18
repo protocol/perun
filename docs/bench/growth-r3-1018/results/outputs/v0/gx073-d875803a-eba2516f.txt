@@ -1,0 +1,24 @@
+**Decision: Do not roll out nationwide based on these results. The 40% lift is `UNVERIFIED` and statistically invalid due to unquantifiable contamination.**
+
+The observed "win" is a measurement artifact, not a causal effect of the one-click checkout. Your experiment violated the core assumption of A/B testing: that external factors impact treatment and control groups equally. The bank outages on June 8–9 acted as a massive confounder. Since you cannot quantify how many users in each group were affected by the specific bank failures, you cannot isolate the feature's impact from the infrastructure noise. The stability in the treatment group may simply reflect a random imbalance in user distribution (e.g., fewer users from the affected banks ended up in the treatment arm by chance), rather than the feature's resilience.
+
+**How to interpret the data:**
+1.  **Discard the aggregate lift:** The 40% figure is meaningless. It compares a contaminated control group against a potentially unrepresentative treatment group during a crisis window.
+2.  **Segment by Bank/Region:** Immediately slice the data by the specific banks that experienced outages and by region (Lima vs. Arequipa).
+    *   If the treatment effect disappears or reverses within the "unaffected bank" segment, the original lift was entirely driven by the outage imbalance.
+    *   If the treatment effect holds consistently across *both* affected and unaffected banks, you may have a signal, but the confidence intervals will be too wide to trust for a nationwide rollout without more data.
+3.  **Check the Guardrail:** Did the outage cause an increase in support tickets or error rates in the control group that wasn't mirrored in treatment? If so, this further confirms the groups were not experiencing the same external reality.
+
+**Action Plan for the June 25th Decision:**
+*   **Extend the Test:** You must run the experiment longer to dilute the noise from June 8–9. Continue the test until you reach your pre-committed sample size *excluding* the contaminated days, or run for an additional 14 days of stable infrastructure to overwrite the anomaly.
+*   **Recompute Excluding Outage Days:** As a sensitivity analysis, re-run the metrics excluding June 8–9 entirely. If the lift drops significantly (e.g., from 40% to <5%), the result was purely an artifact of the outage.
+*   **Final Call:** If the re-computed lift (excluding outage days) does not meet your minimum detectable effect or statistical significance threshold, the decision is to **stop** or **extend**. Do not ship on a skewed 40% number.
+
+**Required Data Points to Examine This Week:**
+1.  Transaction completion rates segmented specifically by the two affected banks vs. all other banks.
+2.  Error rate logs correlated with user IP/region during the outage window to confirm the "contamination" magnitude.
+3.  The cumulative lift curve day-by-day; if the curve spikes only on June 8–9 and flattens thereafter, the feature provided no sustained value.
+
+The only valid benchmark is your own clean baseline, not a number distorted by regional bank failures.
+
+*Note: Ensure your user identifier strategy allows linking transactions to specific banks without violating privacy compliance (pseudonymous IDs). Do not use raw PII for this analysis.*

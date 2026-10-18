@@ -1,0 +1,45 @@
+# FleetFlow Event Prioritization Plan
+
+**Objective:** Reduce data pipeline load and latency by prioritizing events based on operational criticality for driver safety and real-time decision-making.
+
+### Tier 1: Must Track Immediately (Real-Time)
+*These 15 events are critical for preventing accidents, managing route deviations, and ensuring immediate fuel availability. They must retain 100% fidelity and sub-second latency.*
+
+1.  **route_deviation_detected** – Triggers immediate rerouting alerts; critical for ETA accuracy and safety.
+2.  **fuel_level_critical** – Alerts driver to locate fuel stations before running dry; prevents stranded vehicles.
+3.  **hard_brake_event** – Primary indicator of near-miss accidents or hazardous road conditions.
+4.  **rapid_acceleration_event** – Correlates with aggressive driving and increased accident risk.
+5.  **sharp_turn_event** – Indicates potential loss of control or unsafe maneuvering.
+6.  **collision_sensor_trigger** – Immediate emergency response requirement.
+7.  **driver_distraction_alert** – Real-time intervention needed if driver attention wanders (e.g., phone use).
+8.  **speed_limit_violation_start** – Essential for compliance and immediate risk mitigation.
+9.  **speed_limit_violation_end** – Confirms resolution of speeding event.
+10. **fatigue_warning_issued** – Prompts mandatory rest; directly prevents fatigue-related accidents.
+11. **weather_hazard_alert_received** – Real-time warning for ice, fog, or high winds affecting current route.
+12. **traffic_stoppage_detected** – Allows immediate route recalculation to avoid delays.
+13. **geofence_exit_unplanned** – Indicates potential theft or route deviation requiring immediate check-in.
+14. **emergency_button_pressed** – Highest priority safety event requiring instant dispatch response.
+15. **vehicle_system_failure_critical** – Engine, brake, or tire pressure failures requiring immediate stop.
+
+### Tier 2: Archive or Sample (Delayed/Batched)
+*These events can be batched (sent every 15–30 mins), sampled (1 in 10 events), or archived for offline analysis without impacting real-time safety.*
+
+*   **Maintenance Logs:** Oil changes, tire rotations, routine inspections (archive for weekly reporting).
+*   **UI Interaction Events:** Button clicks, menu hovers, screen scrolls (sample at 10% for UX analysis).
+*   **Login/Session Data:** Start/end session timestamps (batch hourly).
+*   **Historical Route Playback:** Full GPS breadcrumb trails (store locally, upload nightly).
+*   **Fuel Purchase Receipts:** Transaction details (batch daily).
+*   **Driver Feedback Forms:** Post-trip surveys (batch daily).
+*   **Vehicle Diagnostic Codes (Non-Critical):** Minor engine codes not affecting immediate operation (batch hourly).
+*   **Climate Control Adjustments:** AC/heater settings (sample at 5%).
+*   **Radio/Media Changes:** Entertainment system usage (exclude entirely or sample at 1%).
+*   **Cabin Lighting Adjustments** (exclude).
+*   **Seat Adjustment Events** (exclude).
+*   **Mirror Adjustment Events** (exclude).
+*   **Door Open/Close (Non-Emergency)** (batch hourly).
+*   **Cargo Temperature Logs (Stable)** (batch every 30 mins unless threshold breached).
+*   **Idle Time Reports** (batch hourly).
+
+**Recommendation:** Implement immediate filtering for Tier 2 events to reduce pipeline volume by approximately 60–70%. This should restore latency to under 500ms for Tier 1 safety events.
+
+*Note: Validate accident correlation hypotheses by running a retrospective analysis on archived hard_brake and collision events against maintenance logs offline.*

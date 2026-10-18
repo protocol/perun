@@ -1,0 +1,34 @@
+**Recommendation for CEO Mateo: North Star Metric Selection**
+
+**Selected North Star:** **Interview Request Rate per Profile View** (specifically, the percentage of profile views that result in an interview request within 48 hours).
+
+Do not optimize for "time spent per profile" (efficiency trap) or "offer acceptance rate" (latency trap). Optimize for the **decision to engage**.
+
+**Trade-off Analysis**
+
+1.  **Reduction in Time Spent per Profile:**
+    *   *The Trap:* This is a vanity efficiency metric. Recruiters could spend less time because they are confused, the video failed to load, or they are skipping critical qualification checks.
+    *   *Risk:* Optimizing here encourages "speed-running" the screening, likely increasing false negatives (rejecting good candidates) and hurting match quality. It measures activity, not value.
+
+2.  **Final Offer Acceptance Rate:**
+    *   *The Trap:* This metric has too much latency and too many confounders for a single test cycle. The signal arrives weeks after the profile view, influenced by salary negotiations, visa processes, and candidate counter-offers unrelated to the profile page design.
+    *   *Risk:* You will not have statistical significance before your traffic runs out. It fails the "one major test cycle" constraint.
+
+3.  **Interview Request Rate (The Winner):**
+    *   *Why it works:* This is the precise moment where efficiency meets quality. A recruiter only requests an interview if the profile (and video) convinced them the candidate is viable.
+    *   *Balance:* If the video speeds up the *correct* "yes" decisions, this rate goes up. If the video causes recruiters to skip qualified text-only candidates, this rate goes down. It captures the "aha" moment without waiting for the final hire.
+
+**Experiment Design & Guardrails**
+
+*   **Primary Metric:** % of Profile Views → Interview Requests (within 48h).
+*   **Guardrail Metric (Quality Check):** **Post-Interview Rejection Rate**.
+    *   *Logic:* If the Interview Request Rate rises but the Post-Interview Rejection Rate also spikes, the video is creating false positives (wasting engineering time on bad fits). If the Request Rate rises and Rejection Rate stays flat or drops, the video is improving both speed and quality.
+*   **Methodology:** Pre-commit to a fixed sample size based on your current baseline request rate. Do not peek at results daily; analyze once at the end of the cycle to avoid false positives.
+
+**This Week's Steps**
+1.  Instrument the `profile_view` and `interview_request_clicked` events with a stable, pseudonymous recruiter ID to track the 48-hour window.
+2.  Define the minimum detectable effect (e.g., a 10% lift in request rate) and calculate the required sample size before launching.
+3.  Set a hard stop rule: If the guardrail (post-interview rejection) increases by >5%, halt the rollout regardless of the primary metric's performance.
+
+*Note: Ensure video load times are monitored as a technical guardrail; a slow video will artificially inflate "time spent" and depress requests.*
+*All baseline figures must be pulled from your internal analytics; no external benchmarks are used.*

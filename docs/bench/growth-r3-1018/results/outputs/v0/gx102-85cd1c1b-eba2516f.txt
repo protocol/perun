@@ -1,0 +1,30 @@
+### Strategy for Timestamp Integrity and Reporting
+
+**1. Identification Rules (Flagging Logic)**
+Do not delete records yet. Create a new boolean column `is_timestamp_suspicious` and apply these three rules to flag rows:
+*   **Future Check:** Flag if `event_timestamp` > `current_processing_time` + 5 minutes (allowing for minor clock skew).
+*   **Midnight Anomaly:** Flag if `event_timestamp` equals `00:00:00` UTC exactly. This is a classic default value error when a timezone conversion fails or a null is cast incorrectly.
+*   **Logical Duration:** Flag if `delivery_complete_timestamp` < `delivery_start_timestamp`.
+
+**2. Cleaning & Segmentation Logic**
+Once flagged, segment the data rather than blindly deleting:
+*   **The "Midnight" Cluster:** Isolate all records hitting exactly `00:00:00` UTC. If these cluster heavily in the southern districts post-March 3rd, this confirms a regional migration mapping error. These records likely have valid dates but lost time precision; they may need to be excluded from *average time* calculations but kept for *volume* counts.
+*   **The "Future" Cluster:** These are physically impossible. Exclude them entirely from time-based metrics.
+*   **Valid Data Set:** Create a view `cleaned_delivery_metrics` that excludes flagged rows *only* for the calculation of "Average Delivery Time." Keep the full dataset for record-keeping.
+
+**3. Summary Statistics for Elena (Reliability Proof)**
+To prove the data is reliable for decision-making, present this specific table in your Tuesday report:
+
+| Metric | Pre-Clean (All Data) | Post-Clean (Validated) | Impact Notes |
+| :--- | :--- | :--- | :---
+| **Total Records** | ~6M (Q1) | ~6M (Q1) | No data lost, only segregated. |
+| **Flagged %** | ~15% | N/A | Explicitly state the error rate. |
+| **Avg Delivery Time** | [Distorted Value] | [Corrected Value] | Show the delta to highlight the bug's impact. |
+| **Error by Region** | [North: X%] [South: Y%] | N/A | Confirm if the South is the primary driver. |
+| **Error by Date** | [Pre-March 3: ~0%] [Post-March 3: 15%] | N/A | Correlates the issue directly to the migration. |
+
+**Recommendation for the Report:**
+State clearly: "The 15% anomaly is isolated to post-migration data and correlates with [Specific Region/Timezone]. By excluding these logically impossible entries, the remaining 85% of the dataset provides a statistically significant baseline for Q1 trends. We recommend treating the flagged 15% as 'unverified' rather than 'failed' until the source system logic is patched."
+
+**Note:** The "Midnight UTC" pattern strongly suggests a timezone conversion failure where local Chilean time (UTC-3 or UTC-4) was not applied, defaulting to the epoch start of the day.
+**Note:** Do not backfill missing times with estimates; report the gap honestly to avoid compounding the error in future forecasts.

@@ -1,0 +1,28 @@
+**Do not impute missing `vehicle_type` or mismatched currency codes for financial reporting.** Imputation introduces unquantifiable bias that will fail a CFO audit, especially when the root cause (network vs. bug) is unverified. Instead, execute this three-step containment plan:
+
+1.  **Isolate and Segment (Immediate)**
+    Split your dataset into four distinct cohorts based on the failure timeline and attributes:
+    *   **Cohort A:** Rides before Aug 18 (pre-update, pre-monsoon).
+    *   **Cohort B:** Rides Aug 18–19 (post-update, pre-monsoon).
+    *   **Cohort C:** Rides Aug 20+ with complete data.
+    *   **Cohort D:** Rides Aug 20+ with missing/mismatched data (the 45% affected).
+
+    Calculate average fares per district using **only Cohorts A, B, and C**. Explicitly exclude Cohort D from the primary revenue figure. Report the total revenue as "Verified Revenue" (A+B+C) and "Unverified Volume" (count of D), stating clearly that the latter cannot be recognized until data integrity is restored. This prevents contaminating accurate data with guessed values.
+
+2.  **Diagnose the Root Cause (Before Wednesday)**
+    Your assumption about network packet dropping specific fields is technically improbable; network instability usually drops entire events, not specific JSON properties. This pattern strongly suggests a serialization bug in the Aug 18 driver app update that fails to attach `vehicle_type` or currency context under specific conditions (perhaps triggered by low signal during rain).
+    *   **Action:** Query the raw logs for Cohort D. If the `vehicle_type` is null but the ride exists, the app failed to read the local config, not a network drop. If currency codes are mismatched, check if the app defaulted to a fallback code when the GPS location service timed out.
+    *   **Fix:** If it is a bug, patch the app immediately. For existing Cohort D rides, do not guess. If you have a secondary source of truth (e.g., payment gateway logs that record the charged amount and currency independently of the event stream), join against that to recover the data. If no secondary source exists, those rides are financially unrecoverable for this report.
+
+3.  **Sensitivity Analysis for the CFO**
+    Instead of imputing values, present a **bounding analysis** to show the maximum possible impact:
+    *   **Lower Bound:** Assume all Cohort D rides were the lowest fare tier (e.g., motorcycle) and the lowest valid currency conversion rate.
+    *   **Upper Bound:** Assume all Cohort D rides were the highest fare tier (e.g., SUV) and the most favorable currency rate.
+    *   **Report:** Present the "Verified Revenue" plus a footnote: "Potential unrecorded revenue lies between [Lower Bound] and [Upper Bound], representing X% to Y% of total estimated volume."
+
+**This Week's Steps:**
+1.  Run the cohort segmentation today to separate verified vs. unverified rides.
+2.  Join Cohort D against payment gateway logs (not app events) to recover actual charged amounts; if no match exists, mark as unrecoverable.
+3.  Deliver the report with "Verified Revenue" as the primary number and the bounding range as a risk disclosure, explicitly stating that imputation was rejected to ensure audit compliance.
+
+**Note:** Network packets do not selectively drop JSON keys; this is almost certainly an application-level serialization bug triggered by the update, not the weather. Treating it as a network issue will lead to the wrong engineering fix.

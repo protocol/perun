@@ -1,0 +1,36 @@
+### Pilot KPIs: SMS Reminder System (HealthConnect)
+
+**1. North Star Metric (Customer Value)**
+*   **Net No-Show Reduction Rate:** The percentage decrease in no-shows among piloted clinics compared to their own 3-month baseline, *minus* any negative impact from communication opt-outs.
+    *   *Why:* This isolates the actual value delivered (kept appointments) while penalizing the system if it drives patients away. Do not track "total reminders sent" or "raw no-show count" as primary metrics; these are vanity figures that rise with volume regardless of efficacy.
+
+**2. Input Metrics (The Levers)**
+*   **Reminder Delivery Success Rate:** Percentage of SMS successfully delivered vs. failed (critical for rural areas with unstable data/networks).
+*   **Opt-Out Rate per Clinic:** The percentage of patients replying "STOP" or manually unsubscribing within 48 hours of receiving the pilot sequence.
+    *   *Threshold for Action:* If opt-outs exceed 0.5% of the contacted cohort in any single week, the frequency assumption (24h + 2h) is failing the "spam" test.
+*   **Confirmation Action Rate:** Percentage of patients who reply to confirm or reschedule after the first reminder (24h). This indicates if the second reminder (2h) is redundant noise.
+
+**3. Guardrail Metrics (Safety & Health)**
+*   **Patient Complaint Volume:** Number of formal complaints to clinic staff regarding "too many messages."
+*   **Reschedule Friction:** Time delta between a reschedule request and the new appointment slot. If reminders drive panic-rescheduling into inefficient slots, operational efficiency drops even if no-shows fall.
+
+**4. Event Taxonomy (What to Instrument)**
+Do not instrument "everything." Log only these specific events to answer named questions:
+*   `sms_sent` (properties: `timing_window`, `clinic_id`, `region_type`): *Does delivery fail more in rural regions?*
+*   `sms_opt_out` (properties: `time_since_last_sms`, `clinic_id`): *Is the 2-hour message triggering the exit?*
+*   `appointment_status_changed` (properties: `old_status`, `new_status`, `trigger_source`): *Did the reminder cause a reschedule or a keep?*
+*   `no_show_occurred` (properties: `reminder_count_received`): *Did patients who received both messages still no-show?*
+
+**5. Experiment Design & Read-Out Rules**
+*   **Pre-commitment:** Define the pilot duration (e.g., 4 weeks) and the minimum detectable effect (e.g., a 3% absolute reduction in no-shows) before starting.
+*   **No Peeking:** Do not declare victory if no-shows drop in Week 1. Read the aggregate data only at the pre-committed end date to avoid false positives from weekly variance.
+*   **Baseline Comparison:** Compare the 50 pilot clinics strictly against their own historical performance, not against the other 250 clinics (which may have different patient demographics).
+*   **Identifier Seam:** Use a pseudonymous patient ID for cohort tracking across sessions. Do not log raw phone numbers in analytics tables; route PII handling to your privacy compliance protocol.
+
+**This Week's Step:**
+1.  Instrument the `sms_opt_out` and `no_show_occurred` events with the properties listed above in your staging environment.
+2.  Extract the 3-month baseline no-show rate for the specific 50 pilot clinics to establish the control trend.
+3.  Draft the "Stop Rule" for the steering committee: "If the opt-out rate exceeds 0.5% or delivery failure in rural regions exceeds 10%, the pilot pauses for frequency adjustment regardless of no-show improvements."
+
+*Note: All benchmark thresholds (e.g., 0.5% opt-out) are derived from standard product-led growth caution levels for communication channels; adjust based on your specific historical tolerance if available.*
+*Do not estimate the final reduction percentage; the model cannot fabricate your local data.*

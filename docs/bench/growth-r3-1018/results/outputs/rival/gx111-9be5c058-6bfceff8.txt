@@ -1,0 +1,35 @@
+### Decision Framework: Dynamic Pricing Rollout Analysis
+
+**1. Primary Decision Metric: Revenue Per Visitor (RPV)**
+Stop evaluating Average Daily Rate (ADR) and Conversion Rate (CR) in isolation. The conflicting directions (price up, conversion down) create a net effect that only RPV can resolve. Calculate RPV for both control and treatment groups:
+*   **Formula:** `Total Revenue / Total Unique Visitors`
+*   **Decision Rule:** If Treatment RPV > Control RPV with statistical significance, the price increase outweighs the conversion drop. If Treatment RPV ≤ Control RPV, the algorithm destroys value despite higher rates.
+
+**2. Statistical Significance of RPV**
+Do not rely on the significance of ADR or CR individually. You must test the significance of the *difference in RPV*.
+*   **Method:** Since RPV is a ratio metric with high variance, use a bootstrap resampling method or a delta-method approximation to generate a 95% confidence interval for the lift in RPV.
+*   **Interpretation:**
+    *   **Interval entirely above 0%:** Statistically significant gain. Proceed to rollout (pending segment checks).
+    *   **Interval crosses 0% (e.g., -1.2% to +3.5%):** Inconclusive. The test duration (14 days) or sample size was insufficient to detect the true effect. Do not rollout; extend the test.
+    *   **Interval entirely below 0%:** Statistically significant loss. Kill the project.
+
+**3. Isolating Segment Impact (The "Business Traveler" Hypothesis)**
+Your assumption that business travelers are less price-sensitive is unverified without segmentation. Since you lack direct "traveler type" flags for this window, use **proxy segmentation** immediately:
+*   **Booking Window Proxy:** Split data into "Last Minute" (<3 days before stay) vs. "Advanced" (>7 days). Business travel often correlates with shorter booking windows.
+*   **Device/Channel Proxy:** Segment by "Mobile App" (often leisure) vs. "Desktop Direct/Corporate Portal" (often business).
+*   **Calculation:** Calculate RPV lift *within* each proxy segment.
+    *   If "Last Minute" RPV is significantly positive while "Advanced" RPV is negative, your hypothesis holds: the algorithm extracts surplus from inelastic demand but repels price-sensitive leisure bookers.
+    *   If *all* segments show negative RPV, the algorithm is fundamentally flawed regardless of user type.
+
+**4. Guardrail Metrics**
+Before finalizing the decision, check these two guardrails to prevent long-term damage:
+*   **Cancellation Rate:** Did the dynamic pricing confuse users or cause buyer's remorse, leading to spikes in cancellations post-booking?
+*   **Customer Support Tickets:** Filter for keywords like "price," "confusing," or "error" during the test window. A spike here indicates UX friction that RPV alone won't capture.
+
+**Recommendation Path for Elena:**
+*   **Rollout:** Only if Overall RPV lift is statistically significant AND no critical guardrails are breached.
+*   **Targeted Rollout:** If Overall RPV is flat/negative, but specific high-value segments (e.g., Last Minute) show strong positive RPV, propose a phased rollout targeting only those segments rather than a global switch.
+*   **Kill:** If Overall RPV is negative or inconclusive, and no clear winning segment exists. The risk of alienating 30%+ of your base without proven gain is too high.
+
+*Note: Ensure your analysis excludes any outliers (e.g., group bookings >10 rooms) that could skew RPV calculations.*
+*Do not extend the test past Friday without a pre-registered analysis plan to avoid p-hacking.*

@@ -1,0 +1,31 @@
+**Decision Framework: Revert vs. Retain**
+
+Do not rely on assumptions; calculate the net impact using your own data. The model is currently generating **1,050 additional false positives daily** (150,000 transactions × 0.7% increase). Over three days, this equals 3,150 extra blocked customers, which aligns with your reported 300 tickets only if roughly 10% of blocked users contact support—a critical baseline metric to verify immediately.
+
+To decide by end of day, compute the **Break-Even Friction Cost**:
+1.  **Fraud Prevented:** $50,000 (given).
+2.  **Implied Cost Per Ticket:** Calculate (Total Support Cost + Estimated Churn Loss) / 300 tickets. If your fully loaded cost per support interaction (agent time + overhead) is $10, the direct cost is $3,000. If even 1% of those 3,150 blocked users churn with a Lifetime Value (LTV) of $200, the churn cost is $6,300.
+3.  **The Verdict:** If (Direct Support Cost + Churn Cost) > $50,000, **revert immediately**. If the cost is lower, the trade-off may be acceptable, but only if the friction is temporary or targeted. Without your specific LTV and support cost figures, this remains `UNVERIFIED`; however, a 300-ticket spike in three days suggests the friction cost is escalating faster than the linear fraud prevention benefit.
+
+**Actionable Segmentation for Tuning**
+
+Stop guessing about "unusual locations." Segment the 1,050 daily false positives by these three dimensions to find the leak:
+1.  **Merchant Category Code (MCC):** Are false positives concentrated in specific verticals (e.g., travel, digital goods, groceries)? A spike in one MCC indicates a rule too sensitive to that sector, not a global model failure.
+2.  **Velocity vs. Location:** Cross-tabulate "New Location" against "Transaction Frequency." If the model flags a loyal customer's first purchase in a new city, it is over-weighting location and ignoring history. If it flags high-frequency transactions in a new location, the logic may be sound but the threshold too low.
+3.  **Customer Tenure:** Segment by account age. Flagging a 5-year customer creates significantly higher churn risk than flagging a 5-day-old account. If >40% of false positives are from tenants >1 year, the model is attacking your core retention base.
+
+**Visualization for the Risk Director**
+
+Present a single **Trade-Off Scatter Plot**:
+*   **X-Axis:** Time (Hourly buckets since Tuesday's update).
+*   **Y-Axis (Left):** Count of False Positives (Bar chart).
+*   **Y-Axis (Right):** Cumulative Fraud Prevented ($) (Line chart).
+*   **Overlay:** A horizontal "Cost Breakeven" line representing the dollar value where friction costs equal fraud savings.
+*   **Insight:** This visually demonstrates if the fraud prevention line is flattening while the false positive bars remain high, proving diminishing returns.
+
+**This Week's Step:**
+1.  Query the last 72 hours of blocked transactions to calculate the exact **False Positive Cost per Dollar Saved** using your internal support and churn rates.
+2.  If the cost exceeds savings, **revert the deployment** before EOD; if not, isolate the top offending MCC and apply a temporary whitelist while retraining.
+
+*Note: This analysis uses only your provided baseline; no external benchmarks for "acceptable" false positive rates were applied as they vary by risk appetite.*
+*Ensure the support ticket volume (300) is reconciled against the calculated block volume (3,150) to validate the customer silence rate.*

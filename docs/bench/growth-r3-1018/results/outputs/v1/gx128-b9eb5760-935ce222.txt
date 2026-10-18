@@ -1,0 +1,27 @@
+**Executive Summary: Onboarding Survey A/B Test Decision**
+
+**Recommendation: Do not ship the "No Survey" variant yet. Extend the test to isolate the cause of retention loss before making a permanent change.**
+
+**Recomputed Trade-off Analysis**
+The test presents a classic activation vs. retention conflict. While removing the survey increased setup completion by 15% (activation gain), it caused a 20% drop in 30-day retention (value loss). In a bottom-up funnel view, retention leaks render acquisition gains inefficient; users who complete setup but churn do not deliver long-term value. The net effect is likely negative for the North Star metric (sustained team productivity), as the loss in retained users outweighs the gain in activated users who do not stay.
+
+**Diagnosis of Confounders**
+The current result is `UNVERIFIED` as a causal win for either hypothesis (personalization vs. commitment device) because the test lacks a mechanism to distinguish them. Two primary confounders exist:
+1.  **Mix Shift:** The "No Survey" variant may have attracted lower-intent users who would have churned regardless of personalization. The survey acted as a filter (commitment device), and removing it diluted the cohort quality.
+2.  **Missing Personalization:** The survey data might be actively used downstream to tailor the experience. If the app defaults to a generic state without survey data, users fail to reach their "aha" moment, causing churn.
+
+**Decision Framework & Next Steps**
+Shipping the "No Survey" variant based on current data risks degrading long-term growth. Instead, execute the following steps this week:
+
+1.  **Segment the Retention Drop:** Immediately query the analytics platform to compare 30-day retention of the "No Survey" group *conditional on whether they manually configured settings later*.
+    *   *If retention normalizes for users who self-configure:* The issue is missing personalization, not the survey itself. **Action:** Build a progressive profiling flow (ask questions contextually later) rather than a mandatory upfront gate.
+    *   *If retention remains low regardless of later configuration:* The survey acted as a commitment device/filter. **Action:** Keep the survey for now but A/B test a lighter version (e.g., 1 question instead of 5) to find the friction floor.
+
+2.  **Define the Guardrail Metric:** For any future onboarding test, set "Day-30 Retention" as a hard guardrail. A variant cannot be declared a winner if it moves activation up but breaches the retention floor derived from your current baseline.
+
+3.  **Refine the Hypothesis:** Re-run the experiment with a third variant: "No Survey + Default High-Value Template." This isolates whether the drop is due to lack of data (personalization) or lack of effort (commitment).
+
+**Final Call:** Extend the decision timeline by one sprint. Do not implement the "No Survey" variant globally. The 20% retention penalty indicates a fundamental break in the value delivery loop that must be diagnosed before optimizing for friction.
+
+*Note: Ensure user identifiers used for this cohort analysis are pseudonymous and routed according to privacy compliance standards, separating PII from behavioral logs.*
+*Baseline metrics must be recalculated excluding April's test traffic to establish a true control for future comparisons.*

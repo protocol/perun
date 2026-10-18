@@ -1,0 +1,39 @@
+### Essential Event Taxonomy for SoundWave Water Tracker (MVP Stage)
+
+Do not instrument every voice command. That approach creates noise, inflates storage costs, and introduces unnecessary privacy risk without answering specific business questions. For an MVP launching with ~1,000 DAU, instrument only the events that prove users are deriving **real value** (hydration) and returning to do it again.
+
+**1. The North Star Metric**
+Define success as **"Weekly Active Hydrators"**: users who log at least 5 water entries in a 7-day period.
+*   *Why:* Raw "sessions" or "commands" are vanity metrics; a user can say "hello" once and never return. Value is only delivered when water is actually tracked.
+
+**2. Required Events (Instrument Only These)**
+Each event below answers a specific named question. If an event does not answer one of these, do not build it yet.
+
+| Event Name | Properties to Capture | Question It Answers |
+| :--- | :--- | :--- |
+| `session_started` | `device_type`, `time_of_day` | Are users initiating the skill at consistent times (habit formation)? |
+| `water_logged` | `amount_ml`, `method` (voice vs. button), `session_id` | **Core Action:** Are users successfully recording intake? What is the average portion size? |
+| `goal_reached` | `daily_target_ml`, `days_since_install` | **Activation:** Did the user hit their daily target? Does hitting the target correlate with returning tomorrow? |
+| `session_ended` | `duration_sec`, `actions_count` | **Friction:** Did the session end abruptly (error) or naturally (goal met)? |
+
+**3. Defining a "Successful Session"**
+A successful session is **not** defined by duration or number of commands.
+*   **Definition:** A session where `water_logged` is triggered at least once AND `session_ended` occurs without an error state.
+*   *Rationale:* In a voice interface, efficiency is value. A 10-second session where water is logged is more successful than a 2-minute session where the user struggles to be understood.
+
+**4. Privacy & Identifier Strategy**
+*   **Identifier:** Generate a stable, pseudonymous `user_id` upon the first `session_started`. Do not use raw voice prints or personally identifiable information (PII) as keys.
+*   **Data Retention:** Store voice transcripts only if required for debugging specific failures; otherwise, store only the structured event data (e.g., "logged 250ml") to minimize privacy exposure.
+*   **Compliance:** Route any PII handling requirements to your legal/privacy team (`privacy-compliance.md`); this analytics plan assumes pseudonymous IDs only.
+
+**5. What to Exclude (For Now)**
+*   **Every voice command:** Too granular. Only log the *intent* (e.g., "log water") not the raw utterance ("I drank a glass").
+*   **Help/FAQ triggers:** Unless >10% of sessions fail, this is premature optimization.
+*   **Referral prompts:** Focus on retention first; referrals matter only after the bucket stops leaking.
+
+**This Week's Action Plan**
+1.  **Implement** the four events listed above with the specified properties before the October 25th code freeze.
+2.  **Define** the `user_id` generation logic to ensure it persists across days but remains pseudonymous.
+3.  **Validate** that `water_logged` fires correctly for 100% of successful voice intents in your staging environment; if this data is missing, your North Star is blind.
+
+*Note: Do not fabricate retention benchmarks (e.g., "good retention is 40%"); compare your December results strictly against your own November baseline. If `water_logged` does not fire, the session is technically a failure regardless of duration.*

@@ -1,0 +1,34 @@
+# MailSure Deliverability Feature: Success Criteria & Guardrails
+
+**Primary Outcome Metric: Net Delivered Engagement Rate**
+To validate the hypothesis that technical delivery improvements translate to business value, track the **Net Delivered Engagement Rate** rather than raw open rates alone. This metric isolates the impact of deliverability from content relevance.
+
+*   **Definition:** `(Unique Opens + Unique Clicks) / (Total Sent - Hard Bounces - Soft Bounces)`
+*   **Success Threshold:** A statistically significant increase of **≥5%** in this rate among the 5,000 beta users compared to the control group, concurrent with the authentication pass rate rising from 92% to 98%.
+*   **Rationale:** If bounce rates drop by the projected 20% but open rates remain flat, this metric will still rise, confirming the feature's value in reaching more inboxes. If open rates plummet due to poor content or aggressive filtering, this metric will flag the failure immediately. This directly answers Sarah's question on whether delivery improvements drive engagement or if content remains the bottleneck.
+
+**Guardrail Metrics (Unintended Consequences)**
+Monitor these two metrics daily during the beta rollout. If either breaches the defined threshold, the rollout must pause for investigation.
+
+1.  **Spam Complaint Rate (Per Thousand Delivered)**
+    *   **Definition:** `(Total Spam Complaints / Total Delivered Emails) × 1,000`
+    *   **Threshold:** Do not exceed **0.1 complaints per 1,000 delivered** (industry standard baseline). An increase of >20% over the control group baseline indicates the new authentication logic may be triggering false positives or altering email headers in a way that triggers spam filters despite passing authentication.
+    *   **Action:** Immediate pause if threshold breached. Investigate header changes and authentication alignment (DMARC/SPF/DKIM).
+
+2.  **Domain Reputation Delta**
+    *   **Definition:** Change in sender score/reputation for beta client domains (measured via tools like Google Postmaster Tools or Microsoft SNDS) compared to pre-launch baseline.
+    *   **Threshold:** No individual beta customer domain should experience a reputation drop of **>5 points** (on a 0-100 scale) within the first 14 days of rollout.
+    *   **Rationale:** Aggressive authentication changes can sometimes look suspicious to ISPs if not phased correctly, temporarily hurting reputation even if technical pass rates improve. This protects customers from long-term deliverability damage.
+    *   **Action:** If breached, isolate affected domains and revert their authentication settings while analyzing ISP feedback loops.
+
+**Reporting Cadence for VP Sign-off**
+Provide Sarah with a weekly summary leading up to the January 15th deadline, highlighting:
+*   Authentication pass rate progression (target: 98%)
+*   Net Delivered Engagement Rate lift (target: ≥5%)
+*   Status of both guardrail metrics (must remain within thresholds)
+*   Qualitative feedback from beta users regarding any delivery anomalies
+
+This framework ensures we measure actual business impact (engagement from delivered mail) while rigorously protecting customer reputation during the transition.
+
+*Note: Ensure the 5,000 beta users represent a diverse mix of sending volumes and industries to validate results across different ISP filtering behaviors.*
+*Final validation of the measurement script should occur 48 hours before beta launch to confirm bounce and complaint data are flowing correctly.*

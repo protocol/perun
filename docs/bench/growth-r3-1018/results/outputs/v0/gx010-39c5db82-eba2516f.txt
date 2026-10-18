@@ -1,0 +1,33 @@
+### North Star Metric
+**Credit-Attributed Incremental GMV**: The net increase in total platform Gross Merchandise Value driven specifically by orders that would not have occurred, or would have been smaller, without the credit facility. This rejects vanity metrics like "Total Credit Applications" or "Cumulative Loan Volume," which rise even if the feature merely cannibalizes existing cash transactions.
+
+### Input Metrics (Direct Product Performance)
+These measure the health of the credit engine itself, validating your hypothesis that speed drives value.
+1.  **Time-to-Cash (Median Hours)**: Measures the elapsed time from application submission to funds availability. This directly tests your assumption that speed outweighs interest rates for contractors with tight timelines.
+2.  **Approval-to-Funding Conversion Rate**: The percentage of approved users who actually draw down the credit. A low rate here suggests friction in the post-approval flow or that the terms (even if fast) are still unattractive.
+3.  **Default Rate by Cohort**: Critical for the CFO to assess risk exposure relative to the 500-application volume.
+
+### Input Metrics (Halo Effect & Incrementality)
+These address your concern about spend shifting versus new volume generation.
+1.  **Baseline Spend Lift**: Compare the GMV of credit users in the 30 days *post-approval* against their own 30-day *pre-application* baseline. If a user typically spends $10k/month and spends $10k/month with credit, the incremental lift is zero (cannibalization). If they spend $15k, the lift is $5k.
+2.  **Share of Wallet Expansion**: The percentage of a contractor's total material orders for a specific project processed through ProcureMiddleEast after credit approval versus before.
+3.  **New Supplier Activation Rate**: The number of previously inactive suppliers who receive their first order from a credit-enabled contractor. This captures marketplace expansion beyond existing relationships.
+
+### Measurement Strategy & Event Taxonomy
+Do not instrument "everything." Define events that answer specific questions:
+*   **Event:** `credit_application_submitted` (Properties: `project_deadline_days`, `requested_amount`). *Question: Do tighter deadlines correlate with higher sensitivity to approval speed?*
+*   **Event:** `order_completed_with_credit` (Properties: `is_repeat_supplier`, `order_size_vs_user_baseline`). *Question: Did this order expand the user's typical basket size or supplier network?*
+*   **Identifier Seam:** Use a stable, pseudonymous `contractor_id` to link credit events to historical order data for baseline comparison. Do not use raw PII; route consent and data retention policies to your privacy compliance framework.
+
+### Experiment Rigor for ROI Reporting
+To prove ROI to investors, you must distinguish correlation from causation.
+*   **Pre-commit a Guardrail:** Define a maximum acceptable default rate (e.g., 2%) before launch. If the "Incremental GMV" rises but the default rate breaches this guardrail, the feature is not a success.
+*   **Avoid Peeking:** Do not declare the feature a "win" based on Week 1 data. With only 500 expected applications, variance will be high. Commit to reading the primary metric (Incremental GMV) only after the full quarter or a statistically significant sample size is reached.
+*   **Cannibalization Check:** Explicitly calculate the ratio of *New GMV* to *Total Credit GMV*. If this ratio is below 0.3 (hypothetically), the halo effect is weak, and the feature is primarily a payment method swap, not a growth driver.
+
+### This Week's Steps
+1.  **Define the Baseline Query:** Write the SQL query today that calculates the average weekly GMV per contractor for the 90 days prior to launch. Without this, you cannot calculate "lift" later.
+2.  **Instrument the "Counterfactual" Flag:** Add a property to the checkout flow asking users (or inferring via logic) if they would have proceeded with this order size *without* credit. While self-reported, it provides an early signal while waiting for statistical significance on the baseline lift.
+3.  **Set the Tripwire:** Agree with the CFO on the specific Default Rate percentage that triggers an immediate pause on new approvals, regardless of GMV growth.
+
+*Note: All benchmark comparisons must be made against ProcureMiddleEast's own pre-launch baseline, not external industry averages, as no fabricated benchmarks are valid here. If baseline data is missing, the "Lift" metric remains UNVERIFIED until instrumentation is complete.*

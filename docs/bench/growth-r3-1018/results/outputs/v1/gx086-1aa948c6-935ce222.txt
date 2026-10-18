@@ -1,0 +1,38 @@
+**To:** Dr. Aris, Technical Director
+**From:** Growth Analytics Lead
+**Date:** June 24
+**Subject:** Lean Measurement Plan for September 12 Simulation Run
+
+**Recommendation: Reject "File Upload Volume" as the North Star**
+File uploads are a vanity metric in this context; they rise regardless of whether real scientific value is created (as seen in your pilot where critical discussion happens without uploads). Measuring them will mislead resource allocation.
+
+**1. The North Star: "Weekly Active Experiments with Multi-User Engagement"**
+Define a single metric that rises only when real value occurs: *The count of distinct experiment threads where at least two physicists perform a "value action" within a 48-hour window.*
+*   **Why:** This captures coordination (the core value of a consortium) rather than just storage usage.
+*   **Input Metrics:**
+    *   *Activation:* % of invited physicists who perform one value action in their first session.
+    *   *Retention:* % of active experiments that see a second value action in Week 2.
+
+**2. The Event Taxonomy (Instrument Only What Answers a Question)**
+Do not log every click. Instrument only these three events to answer specific questions about the September 12 readiness:
+
+| Event Name | Question It Answers | Properties to Log |
+| :--- | :--- | :--- |
+| `hypothesis_discussed` | Are teams aligning on theory before data generation? | `thread_id`, `participant_count`, `has_link_to_dataset` (boolean) |
+| `dataset_version_checked` | Is the team verifying data integrity without re-uploading? | `dataset_id`, `action_type` (view/download/compare), `user_role` |
+| `sync_session_joined` | Is synchronous coordination happening effectively? | `meeting_id`, `duration_bucket`, `attendee_count` |
+
+*Note:* Ignore raw comment counts or meeting scheduling links unless they result in the actions above. A scheduled meeting with no attendees is noise.
+
+**3. Infrastructure & Privacy Seam**
+*   **Stable Identifier:** Use a pseudonymous `researcher_id` (hashed) to track users across sessions for cohort analysis. Do not use raw emails or names in the analytics stream.
+*   **PII Routing:** Any metadata containing personal identifiers or specific experiment secrets must be routed to your secure compliance layer (`privacy-compliance.md`); the analytics engine receives only the hashed ID and event properties.
+*   **Cost Control:** By filtering out "chat only" events that lack a `has_link_to_dataset` or `version_check` signal, you reduce log volume by an estimated 40-60% compared to full instrumentation, preserving processing power for the September run.
+
+**4. This-Week Step**
+1.  **Define "Value Action":** Convene a 30-minute session with two lead physicists to confirm if `hypothesis_discussed` (with a dataset link) or `dataset_version_checked` better represents "progress" for the September 12 goal.
+2.  **Baseline Query:** Run a one-time historical query on the pilot data using this new definition to establish the current baseline of "Active Experiments." If this number is zero or near-zero, the tool is not yet supporting breakthroughs, regardless of upload volume.
+3.  **Approve Schema:** Finalize the JSON schema for the three events above by July 1 to ensure the monitoring architecture captures *coordination*, not just storage.
+
+**Note:** No external benchmarks for "good" collaboration rates exist; success is defined strictly by an upward trend in your own baseline leading up to September 12.
+**Note:** If the "Value Action" definition cannot be agreed upon by Friday, the measurement plan is `UNVERIFIED` and cannot proceed.

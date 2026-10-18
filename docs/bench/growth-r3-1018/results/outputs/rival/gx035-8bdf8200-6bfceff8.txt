@@ -1,0 +1,45 @@
+# MelodyStream Deduplication Validation Protocol
+
+## Pre-Migration Snapshots
+Capture these exact counts before executing the script:
+1. **Total Account Count**: Expected ~2.5M records.
+2. **Duplicate Pair Count**: Number of identified duplicate ID sets (estimated ~200k accounts involved).
+3. **Global Listening Hours**: Sum of all `listening_duration` across all accounts.
+4. **Royalty Pool Total**: Sum of all calculated royalty obligations pre-merge.
+5. **Affected User Sample**: Select 1,000 random duplicate sets for manual audit. Record their individual listening histories, playlist counts, and recommendation seeds.
+
+## Post-Migration Verification Counters
+Run these immediately after the script completes:
+1. **New Account Count**: Should equal (Pre-Migration Count) minus (Number of Merged Records).
+2. **Listening Hour Delta**: Calculate (Post-Merge Total Hours) minus (Pre-Merge Total Hours). **Target: 0.00**. Any variance indicates data loss or double-counting resolution errors.
+3. **Orphaned History Count**: Number of listening events not linked to any valid user ID (must be 0).
+4. **Recommendation Integrity Check**: For the 1,000 sampled users, verify that their top 5 recommended artists remain unchanged or improve in relevance (no empty recommendations).
+
+## Listening Hour Consistency Formula
+To prove royalty accuracy, validate this equation:
+```
+∑(Pre-Merge Hours for ID_A + ID_B) = ∑(Post-Merge Hours for Merged_ID)
+```
+Run this aggregation for every merged pair. If the sum differs by >0.01 hours for any pair, halt and investigate. The global sum must match exactly; listening time is additive and cannot disappear during a merge.
+
+## Royalty Payout Reconciliation
+1. **Per-Artist Variance**: Compare royalty obligations per artist pre- and post-merge. Variance should only reflect the removal of duplicate counting, not arbitrary shifts.
+2. **Threshold Alert**: Flag any artist whose reported royalties change by >5% solely due to deduplication for manual review.
+3. **Audit Trail**: Log every merged ID pair with a timestamp and the exact hour count transferred to the surviving record.
+
+## Rollback Triggers
+Abort the migration if:
+- Global listening hours variance exceeds 0.1%.
+- More than 0.5% of merged users lose >10% of their historical data.
+- Recommendation engines return null values for >1% of affected users.
+
+## Final Sign-Off Requirement
+The Head of Data Operations must receive a report showing:
+- Exact pre/post account counts.
+- Zero variance in global listening hours.
+- Successful validation of the 1,000-user sample.
+- Confirmed royalty recalculations for the top 50 affected artists.
+
+Do not proceed to global execution until the sample merge proves 100% data preservation for listening history and royalty calculations.
+
+*Note: Execute this validation in a staging environment with a full production data clone first. Ensure the deduplication script preserves the earliest signup date for merged accounts to maintain accurate cohort reporting.*

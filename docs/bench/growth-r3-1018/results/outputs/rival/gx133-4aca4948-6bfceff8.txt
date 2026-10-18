@@ -1,0 +1,46 @@
+# HomeChef Smart Oven App: Core Event Tracking Plan
+
+**Objective:** Distinguish power users from casual observers by measuring value-driving actions (remote control, notifications, history, sharing) to inform the December 1st release.
+**Deadline for Engineering:** November 20th.
+
+## Core Event Schema
+
+Implement these events to capture the full user journey from setup to habitual use. Properties allow segmentation by user type and device context.
+
+| Event Name | Trigger | Essential Properties | Business Question Answered |
+| :--- | :--- | :--- | : |
+| `oven_connected` | User successfully pairs app to oven | `oven_model`, `connection_method` (wifi/bt) | Is setup friction preventing activation? |
+| `remote_preheat_started` | User initiates pre-heat via app | `target_temp`, `preset_mode`, `time_of_day` | **Hypothesis:** Do power users rely on remote pre-heat more than casuals? |
+| `cooking_session_started` | Oven begins active cooking cycle | `recipe_id` (if used), `manual_vs_preset`, `estimated_duration` | Are users cooking manually or using guided recipes? |
+| `doneness_notification_viewed` | User opens/taps the push notification | `notification_type` (temp reached/timer done), `time_to_open` (seconds) | **Hypothesis:** Is the notification the primary retention hook? |
+| `cooking_history_viewed` | User navigates to the history tab | `filter_used` (date/recipe), `session_duration` | **Validation:** Do users actually care about tracking history? |
+| `recipe_shared` | User taps share button within app | `share_destination` (sms/social/copy), `recipe_id` | **Validation:** Is social sharing a driver for new acquisitions? |
+| `app_session_ended` | App moves to background or closes | `session_duration`, `actions_performed_count` | Calculate engagement depth per session. |
+
+## Segmentation Strategy: Power vs. Casual
+
+To address the 35% weekly active user concern, define segments based on event frequency and depth:
+
+*   **Power User:** Triggers `remote_preheat_started` OR `cooking_session_started` ≥ 3 times/week AND views `doneness_notification` within 2 minutes.
+*   **Casual Observer:** Triggers `app_session_ended` with 0 core cooking events, or only views `cooking_history` without initiating new cooks.
+*   **At-Risk:** Users who triggered `oven_connected` but have zero `cooking_session_started` events in 14 days.
+
+## Privacy & Compliance Considerations
+
+Since this involves home appliance data, strict privacy guards are required:
+
+1.  **No PII in Properties:** Never send user names, emails, or exact home addresses in event properties. Use anonymized `user_id` and `oven_id`.
+2.  **Granular Consent:** Remote control features (`remote_preheat_started`) may require explicit opt-in separate from general analytics consent, depending on local IoT regulations.
+3.  **Data Minimization:** Do not record video feeds or audio from the oven. Only transmit state changes (temp, mode, status).
+4.  **Retention Policy:** Define a clear retention window for `cooking_history` data. Allow users to delete their history locally and in the cloud.
+
+## Implementation Notes for Engineering
+
+*   **Naming Convention:** Use `object_action` format (e.g., `recipe_shared`) for consistency with GA4/Mixpanel standards.
+*   **Trigger Timing:** Fire events on the *client-side* confirmation of the action, not just the UI click, to ensure accuracy (e.g., fire `remote_preheat_started` only when the oven acknowledges the command).
+*   **Validation:** Verify that `doneness_notification_viewed` correctly attributes deep-link opens from the locked screen.
+
+This schema prioritizes understanding *value* (cooking success, convenience) over simple vanity metrics (page views), directly addressing the need to differentiate user types before the code freeze.
+
+*Ensure the `recipe_id` property maps to your internal content database for later ROI analysis on specific recipes.*
+*Test the `time_to_open` calculation logic to ensure it handles cases where notifications are dismissed without opening.*

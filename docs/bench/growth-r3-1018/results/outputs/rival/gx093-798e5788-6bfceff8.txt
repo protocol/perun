@@ -1,0 +1,31 @@
+# NeoSeoul VR Onboarding Funnel Instrumentation Plan
+
+## Proposed Event Hierarchy
+
+To balance actionable insight with engineering efficiency, track one primary conversion event supported by three diagnostic step events. This captures the "started vs. saved" dilemma by measuring the completion rate between them.
+
+| Event Name | Type | Key Properties | Purpose |
+| :--- | :--- | :--- | :--- |
+| `onboarding_step_viewed` | Diagnostic | `step_name` (e.g., "avatar_customization") | Measures entry volume into the specific flow. |
+| `avatar_customization_started` | Diagnostic | `entry_point` (e.g., "forced", "skipped_then_returned") | Captures intent; identifies users who engage but might struggle. |
+| `avatar_customization_saved` | **Primary Conversion** | `time_spent_seconds`, `items_equipped_count`, `is_first_session` | **The definitive success metric.** Tracks completed value realization. |
+| `onboarding_flow_abandoned` | Diagnostic | `last_step_viewed`, `session_duration_at_drop` | Explicitly tracks exit before save to calculate drop-off rates. |
+
+**Implementation Logic:**
+*   **Primary Milestone:** Use `avatar_customization_saved` as your key funnel milestone. "Started" indicates intent, but "Saved" confirms the user has invested effort and created a persistent identity, which correlates with your retention data.
+*   **Friction Calculation:** Calculate friction as the percentage of users who fire `avatar_customization_started` but fail to fire `avatar_customization_saved` within a 10-minute window.
+*   **Efficiency:** Do not track every button click within the editor. Only track the state change (Start → Save) and the explicit abandonment if the user navigates away mid-flow.
+
+## Three Critical Questions to Answer
+
+1.  **What is the specific drop-off rate between "Started" and "Saved," and does it correlate with session duration?**
+    *   *Why:* This validates if the complexity of the tool causes abandonment. If users start but don't save within 3 minutes, the UI may be too complex or confusing.
+
+2.  **Do users who "Save" an avatar with fewer than 3 customized items have lower 24-hour retention than those with highly detailed avatars?**
+    *   *Why:* This determines if the *quality* of customization matters. If quick/low-effort saves don't improve retention, the friction of a complex editor might be justified to force deeper engagement.
+
+3.  **At what exact timestamp or step property do users most frequently trigger the `onboarding_flow_abandoned` event?**
+    *   *Why:* Since you lack data on where users leave, this property will reveal if they quit immediately upon seeing the editor (intimidation) or after 5 minutes of editing (fatigue/frustration).
+
+**Note:** Ensure `time_spent_seconds` is calculated client-side to avoid server load during the beta spike.
+**Note:** Align on a definition of "abandonment" (e.g., closing the app vs. navigating to a different menu) before code freeze.

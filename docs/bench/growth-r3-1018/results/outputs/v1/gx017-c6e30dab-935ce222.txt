@@ -1,0 +1,38 @@
+# RoboArm X Beta Instrumentation Specification
+
+**Audience:** Engineering Leads, Beta Customer Success Manager
+**Goal:** Diagnose bottlenecks (user hesitation vs. system latency vs. mechanical error) without overwhelming bandwidth.
+**North Star Metric:** Successful Task Completions per Hour (filtered for valid operations only).
+
+## 1. Event Taxonomy: Answering Named Questions
+Do not instrument "everything." Embed only these three event types to isolate the source of variance in task completion times.
+
+| Event Name | Trigger Point | Properties Captured | Question Answered |
+| :--- | :--- | :--- | : |
+| `task_phase_start` | User initiates a specific assembly step in the app. | `task_id`, `step_id`, `user_id` (pseudonymous), `timestamp` | Is the delay occurring before the robot moves (user hesitation)? |
+| `robot_motion_exec` | Firmware confirms motion command sent to actuators. | `task_id`, `step_id`, `command_latency_ms`, `calibration_status` | Is the delay caused by network latency or mechanical calibration loops? |
+| `task_phase_complete` | Sensors confirm step completion criteria met. | `task_id`, `step_id`, `error_code` (if any), `timestamp` | Did the step succeed, and what was the total duration? |
+
+## 2. Implementation Constraints & Bandwidth Control
+- **Aggregation:** Do not stream raw telemetry. Aggregate events locally on the controller app and batch-upload every 15 minutes or upon task completion.
+- **Sampling:** If bandwidth is critically constrained during high-frequency operations, sample 100% of `error_code` events but only 10% of successful `robot_motion_exec` events.
+- **Identifier Seam:** Use a stable, pseudonymous `device_user_hash` for cohort analysis across sessions. Do not transmit PII; route any consent management to the privacy compliance protocol.
+
+## 3. Diagnostic Logic (The "Read")
+Analyze the delta between timestamps to categorize delays:
+1.  **User Hesitation:** Large gap between `task_phase_start` and `robot_motion_exec`. *Action:* Review UI clarity or provide in-app guidance.
+2.  **Network/Command Latency:** Large gap between app trigger and `robot_motion_exec` receipt, high `command_latency_ms`. *Action:* Optimize local controller logic or network stack.
+3.  **Mechanical/Calibration Error:** Large gap between `robot_motion_exec` and `task_phase_complete`, or frequent `error_code` retries. *Action:* Firmware tuning or mechanical recalibration.
+
+## 4. Success Criteria for Beta
+- **Baseline Established:** By April 12, we must have a baseline distribution of task times for the top 3 assembly operations.
+- **Bottleneck Identified:** We must be able to attribute >80% of outliers (>30 mins) to one of the three categories above.
+- **Reliability Threshold:** Define "Success" as <5% of tasks triggering a mechanical retry loop.
+
+## This Week's Steps
+1.  **Engineering:** Implement the three specific event hooks in the firmware/app build candidate by April 3; verify payload size is <2KB per batch.
+2.  **Customer Success:** Prepare the pilot onboarding script to explain that "performance data" is being collected to tune their specific arm, ensuring consent is recorded.
+3.  **Decision Rule:** If >40% of delays are categorized as "User Hesitation" after week 1, pause feature rollout and update the training manual before shipping remaining units.
+
+*Note: All metric thresholds (e.g., what constitutes "wildly" varying times) must be calculated from the pilot's own first-week baseline; no external industry benchmarks are applied.*
+*Unknown values (e.g., current error rates) are marked UNVERIFIED until the first data batch is received on April 5.*

@@ -1,0 +1,32 @@
+**Deliverable: Activation Definition & Measurement Plan for AutoBot SG**
+
+**1. The North Star Metric: "Production Value Delivered"**
+Reject "first bot built" (vanity) and "training completed" (input only). For enterprise banking, the "aha" moment is not creation; it is **reliable execution**.
+*   **Definition:** An account is "Activated" when a bot deployed to a live server successfully completes **50 automated transactions** within a 7-day window without manual intervention or support tickets.
+*   **Rationale:** This proves the bot is embedded in a live workflow, not just a sandbox experiment. It correlates directly with renewal because it represents realized ROI (labor saved) rather than potential ROI.
+
+**2. The Measurement Unit: Department-Level, Not Individual**
+Do not measure individual user activity. In enterprise sales, the buyer is the department head, and the renewal risk lies in **workflow integration**, not individual proficiency.
+*   **Metric:** "Active Department Workflows" = Count of distinct departments within a bank account hitting the "Production Value Delivered" threshold.
+*   **Why:** One power user building unused bots is noise. Three users in the Loans Department running daily reconciliations is stickiness.
+
+**3. Event Taxonomy (Instrument Only These)**
+Stop tracking generic clicks. Instrument only events that answer the question: *"Is this bot creating value in production?"*
+*   `bot_deployed_to_prod`: Properties: `department_id`, `bot_type`, `environment` (must be 'production').
+*   `transaction_executed_success`: Properties: `bot_id`, `department_id`, `duration_ms`, `error_code` (null).
+*   `manual_override_triggered`: Properties: `bot_id`, `reason`. (Critical negative signal).
+*   **Identifier Seam:** Use a stable, pseudonymous `department_hash` to track cohorts across sessions. Do not use raw PII; route user-level identity mapping to your privacy compliance protocol.
+
+**4. Diagnosing the Leak (Bottom-Up Funnel)**
+Your support tickets indicate a leak between "Build" and "Run." Diagnose in this order:
+*   **Retention First:** Of the bots deployed to prod last month, what % executed >50 transactions in week 2? If this is low, acquisition (new deals) is wasted.
+*   **Activation Second:** Of the bots built, what % reach `bot_deployed_to_prod`? If low, the barrier is deployment complexity or security approval, not bot building.
+*   **Acquisition Last:** Only analyze new logo acquisition once the above two are stable.
+
+**5. Immediate Actions for Priya (Customer Success)**
+Do not wait for Q3. Execute these three steps this week:
+*   **Query:** Pull a cohort report for the three banks showing `bot_deployed_to_prod` vs. `transaction_executed_success` (count > 50) per department. Identify departments with 0 successful transactions despite deployed bots.
+*   **Intervene:** For every department with a deployed but inactive bot, trigger a "Deployment Health Check" call. The script is not "How is training?" but "What is blocking the first 50 successful runs?"
+*   **Define Risk:** Flag any bank account where <30% of deployed bots hit the 50-transaction threshold as "At-Risk" for renewal. This is your early warning system, based on your own usage data, not external benchmarks.
+
+**Note:** Do not invent a "good" conversion rate; compare current bank performance against their own Month 1 baseline. If data for "successful transactions" is missing, label it UNVERIFIED and prioritize instrumenting that specific event before refining the model.

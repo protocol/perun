@@ -1,0 +1,44 @@
+**Subject: SiamSafe Thailand – Medical Upgrade Drop-off Investigation Plan**
+
+**Executive Summary**
+The 15% increase in upgrade clicks coupled with a 5% decline in final completion indicates a friction point *after* the user expresses intent but *before* confirmation. The hypothesis is either "sticker shock" (price transparency failure) or a technical breakdown in the specific policy bundle generation. We cannot attribute this to success; the current trajectory is losing revenue.
+
+**Required Data Slices & Event Taxonomy**
+To isolate the failure, we must instrument and query the following specific events. Do not rely on aggregate conversion rates.
+
+1.  **Event: `upgrade_price_revealed`**
+    *   **Trigger:** Immediately after the one-click button is pressed, when the new total price is rendered.
+    *   **Property:** `price_delta_percentage`, `original_total`, `new_total`.
+    *   **Question Answered:** Does drop-off correlate with specific price jump thresholds? (Tests "Sticker Shock").
+2.  **Event: `upgrade_confirmation_viewed`**
+    *   **Trigger:** The user lands on the final review/confirmation screen with the upgrade applied.
+    *   **Property:** `bundle_id`, `device_type`, `browser_version`.
+    *   **Question Answered:** Are users reaching the final step? If `upgrade_price_revealed` fires but this does not, the drop is immediate price rejection.
+3.  **Event: `purchase_attempt_failed`**
+    *   **Trigger:** Any error returned from the payment gateway or policy generation service.
+    *   **Property:** `error_code`, `failure_stage` (e.g., "bundle_calculation", "payment_tokenization"), `upgrade_status` (true/false).
+    *   **Question Answered:** Is there a technical error specific to the upgraded bundle? (Tests "Technical Error").
+4.  **Event: `purchase_completed`**
+    *   **Trigger:** Successful transaction.
+    *   **Property:** `has_medical_upgrade` (boolean), `time_to_complete_seconds`.
+
+**Analysis Method: Bottom-Up Funnel Diagnosis**
+Per growth analytics standards, we diagnose retention/completion before acquisition.
+*   **Cohort A:** Users who clicked upgrade → Completed Purchase.
+*   **Cohort B:** Users who clicked upgrade → Abandoned at Price Reveal.
+*   **Cohort C:** Users who clicked upgrade → Abandoned at Confirmation (with no error code).
+*   **Cohort D:** Users who clicked upgrade → Abandoned due to Error.
+
+Compare Cohort B's abandonment rate against the baseline (pre-Feb 1) users who manually added coverage. If Cohort B is significantly higher, the UI is hiding the cost until too late. If Cohort D is >0%, engineering must prioritize the bundle calculation logic immediately.
+
+**Compliance & Privacy Seam**
+*   **Identifier Strategy:** Use a stable, pseudonymous `session_user_id` to track the flow across steps. Do not use raw PII (names, passport numbers) in analytics events.
+*   **Data Routing:** Any logs containing full credit card details or health declaration text must be routed to secure storage compliant with Thai PDPA, not the analytics warehouse. The analytics team only receives the boolean `has_medical_upgrade` and numeric values.
+
+**This-Week Action Plan**
+1.  **Engineering:** Verify `purchase_attempt_failed` logging for the specific `bundle_id` associated with the one-click upgrade. If error rates are >1%, halt the feature flag for that bundle type.
+2.  **Product/Design:** Query the drop-off rate between `upgrade_price_revealed` and `upgrade_confirmation_viewed`. If drop-off exceeds 20% for price deltas >15%, prototype a "price breakdown" tooltip showing the cost *before* the click.
+3.  **Decision Tripwire:** If technical errors are <1% but abandonment at price reveal is >25% higher than the manual add-on baseline, **rollback the one-click UI** before Songkran. Do not launch a festival campaign on a broken funnel.
+
+**Note:** No external benchmarks for "good" conversion are used; all comparisons are against SiamSafe's own pre-February baseline.
+**Note:** If `purchase_attempt_failed` events are missing, the technical hypothesis remains `UNVERIFIED` until instrumentation is deployed.

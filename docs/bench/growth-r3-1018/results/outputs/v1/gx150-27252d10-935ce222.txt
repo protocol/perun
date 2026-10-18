@@ -1,0 +1,41 @@
+### Experiment Plan: Recency vs. Popularity Ranking
+
+**Objective**
+Determine if prioritizing recency increases daily read time without degrading session depth or user trust, specifically analyzing variance across content categories (e.g., Politics vs. Sports).
+
+**1. Experimental Design**
+*   **Method:** A/B Test with stratified randomization.
+    *   **Control (50%):** Current popularity-weighted algorithm.
+    *   **Treatment (50%):** Recency-weighted algorithm.
+*   **Duration:** Pre-commit to a fixed 14-day window to capture full weekly cycles (weekday vs. weekend news consumption). Do not peek at results before day 14 to avoid false positives from novelty effects.
+*   **Segmentation:** Ensure equal distribution of users across device types and geographic regions. Pre-define analysis slices for major content categories to detect mix shifts.
+
+**2. Primary Metric (North Star Input)**
+*   **Daily Read Time per Active User:** The direct measure of your year-end goal.
+    *   *Success Criterion:* Statistically significant increase toward the 20-minute target without violating guardrails.
+
+**3. Guardrail Metrics (Trust & Quality)**
+Monitor these to ensure the "speed" gain does not sacrifice "comprehensive coverage" or trust. If any dip below the stated thresholds, the test fails regardless of read time gains.
+*   **Session Depth (Articles per Session):** Measures if users are skimming headlines rather than reading deeply.
+    *   *Threshold:* No decrease >5% vs. Control.
+*   **Return Rate (Day-7 Retention):** Measures long-term trust. If fresh but low-quality content drives users away, this will drop.
+    *   *Threshold:* No decrease vs. Control baseline.
+*   **Negative Feedback Rate:** Explicit signals (e.g., "Hide this story," "Report misleading") per 1,000 impressions.
+    *   *Threshold:* No increase >10% vs. Control.
+
+**4. Category-Specific Analysis**
+To address the editorial board's concern about category variance, pre-commit to analyzing the **interaction effect** between the algorithm and content category.
+*   **Hypothesis:** Recency may boost Sports/News but degrade Politics/Analysis (where context matters more than speed).
+*   **Action Rule:** If Read Time increases globally but drops specifically for "Politics" or "Long-form" categories, do not roll out globally. Instead, adopt a **hybrid model**: apply recency weighting only to time-sensitive categories (Sports, Breaking News) and retain popularity weighting for evergreen/analysis categories.
+
+**5. Decision Framework**
+*   **Ship:** Read Time increases significantly AND all Guardrails hold.
+*   **Iterate:** Read Time increases, but Session Depth drops in specific categories. Implement category-specific weighting (hybrid approach).
+*   **Stop:** Read Time does not improve, OR Return Rate/Negative Feedback degrades. The hypothesis that "fresher = more engagement" is invalid for your user base.
+
+**6. This-Week Steps**
+1.  **Instrumentation Audit:** Verify that `article_read_time`, `session_article_count`, and `category_id` are logged with a stable, pseudonymous user ID to enable cohort tracking. If `category_id` is missing on impression events, engineering must add it before the test starts.
+2.  **Pre-Registration:** Document the 14-day duration, the 5% depth drop threshold, and the primary metric definition in your experiment tracker. Do not begin traffic splitting until this is signed off by the editorial board.
+
+*Note: All baseline comparisons must use your current internal data; no external industry benchmarks for "good" retention or read time are applied here.*
+*Ensure PII handling for user IDs follows your existing privacy compliance protocols.*

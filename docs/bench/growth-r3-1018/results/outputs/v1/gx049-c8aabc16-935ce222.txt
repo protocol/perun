@@ -1,0 +1,43 @@
+**Diagnostic Plan: TaskFlow 'Custom Workflow' Adoption Drop**
+**To:** Head of Design
+**Date:** November 26
+**Decision Deadline:** December 1
+
+**Objective**
+Differentiate between **discoverability failure** (users cannot find the entry point) and **usability friction** (users find it but abandon the configuration) to decide between reverting UI elements or launching in-app guidance.
+
+**Data Scope & Definitions**
+Analyze interaction logs for existing users from Oct 15–Nov 4 (baseline) vs. Nov 5–Nov 26 (post-launch).
+*   **Entry Point Event:** Click on the specific menu item/button leading to "Create Custom Workflow."
+*   **Configuration Start Event:** Load of the workflow builder interface.
+*   **Configuration Complete Event:** Successful save of a new custom workflow.
+
+**Diagnostic Logic**
+Compare the **Entry Rate** (Active Users → Entry Point Click) and the **Completion Rate** (Configuration Start → Configuration Complete).
+
+1.  **Scenario A: Discoverability Issue**
+    *   *Signal:* Entry Rate has dropped significantly (e.g., >20% decline), but Completion Rate remains stable compared to baseline.
+    *   *Interpretation:* Users who find the feature can still use it; the new navigation is hiding the entry point.
+    *   *Action:* **Revert/Adjust Interface.** Move the entry point to a higher-hierarchy menu or add a persistent shortcut. Do not invest in guidance yet; the path is blocked.
+
+2.  **Scenario B: Usability Friction**
+    *   *Signal:* Entry Rate is stable (or drops slightly <10%), but Completion Rate has plummeted.
+    *   *Interpretation:* Users are finding the feature but failing to complete the setup due to interface complexity or confusion in the new design.
+    *   *Action:* **Invest in In-App Guidance.** Deploy tooltips, a stepped wizard, or a "concierge" modal specifically for the configuration flow. Reverting navigation will not fix the breakage inside the tool.
+
+3.  **Scenario C: Compound Failure**
+    *   *Signal:* Both Entry Rate and Completion Rate show sharp declines.
+    *   *Interpretation:* The redesign failed on both visibility and usability.
+    *   *Action:* **Immediate Partial Revert.** Restore the previous entry point immediately to stop the bleeding, then A/B test the new configuration interface separately with a small cohort before full rollout.
+
+**Required Outputs by Nov 28**
+*   **Funnel Visualization:** A side-by-side bar chart of the three events (Entry, Start, Complete) for Baseline vs. Post-Launch.
+*   **Drop-off Heatmap:** If Scenario B is confirmed, identify the specific step within the configuration flow where abandonment spikes.
+*   **Segment Check:** Verify if the drop is uniform across device types (desktop vs. mobile) to rule out responsive design bugs.
+
+**This-Week Steps**
+1.  **Query Execution:** Run the funnel query defined above segmented by "Existing User" status only; exclude new signups to isolate the redesign impact.
+2.  **Decision Trigger:** If the Entry Rate drop accounts for >70% of the total volume loss, schedule the UI revert for Nov 29. If Completion Rate drop accounts for >70%, brief the content team on in-app guidance copy by Nov 29.
+
+*Note: Ensure user identifiers in logs are pseudonymized per privacy standards; do not use raw PII for this analysis.*
+*If logs lack specific "Configuration Start" events, tag the next build to instrument this immediately; current analysis will remain UNVERIFIED without it.*

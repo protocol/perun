@@ -1,0 +1,52 @@
+# GlobalChic Data Integrity Remediation Plan
+
+**Objective:** Diagnose duplicate purchase events, clean historical data, and validate corrected financials before the November 5th earnings call.
+
+## Phase 1: Root Cause Diagnosis (Days 1–5)
+*Goal: Confirm the source of duplication without altering production data.*
+
+1.  **Isolate Duplicate Patterns:** Query the raw event stream for the last 30 days to identify clusters of identical `purchase_completed` events. Group by `order_id`, `user_id`, and `timestamp`.
+    *   *Hypothesis Check:* If duplicates occur within <2 seconds of each other from the same IP/session, this confirms the "multiple click" theory.
+    *   *Scope Analysis:* Segment these clusters by region and payment method to identify if specific gateways or high-latency regions (e.g., specific countries among the 12) correlate with higher duplication rates.
+2.  **Audit Deduplication Logic:** Review the current script/logic failing to catch the 1,200 weekly errors. Test it against a sample of the identified duplicate clusters to pinpoint the failure condition (e.g., slight timestamp variance, differing session IDs).
+3.  **Real-Time Impact Assessment:** Determine if the duplicate events are flowing into real-time dashboards. If so, prepare a temporary filter rule for the analytics tool to exclude events matching the identified duplicate pattern while the fix is developed.
+
+## Phase 2: Historical Data Cleansing (Days 6–12)
+*Goal: Correct historical records in a controlled environment.*
+
+1.  **Create a Staging Environment:** Clone the production database to a secure staging environment. **Never** run cleanup scripts directly on production.
+2.  **Develop Idempotent Cleanup Script:** Write a script that:
+    *   Identifies duplicates based on the confirmed pattern (e.g., same `order_id` within a 5-second window).
+    *   Retains the earliest valid event and flags subsequent ones as "duplicate_void."
+    *   Logs every deleted/voided transaction ID for audit trails.
+3.  **Execute Dry Run:** Run the script on the staging environment covering the period from January 1st to September 30th.
+4.  **Calculate Financial Impact:** Recompute revenue figures from the cleaned staging data. Compare the new total against the reported figures to quantify the exact adjustment needed (targeting the ~8% inflation).
+
+## Phase 3: Validation & Sign-off (Days 13–18)
+*Goal: Prove data accuracy to the CFO.*
+
+1.  **Triangulation Validation:** Cross-check the cleaned revenue total against two independent sources:
+    *   **Payment Gateway Reports:** Aggregate settled transactions from your payment processors (Stripe, PayPal, etc.) for the same period. These are the source of truth for cash received.
+    *   **Order Management System (OMS):** Compare against the number of unique orders actually fulfilled/shipped.
+    *   *Success Criteria:* The cleaned analytics revenue must match the Payment Gateway total within a <0.5% margin of error (accounting for refunds/chargebacks).
+2.  **Segmented Spot Checks:** Manually verify 50 random "removed" transactions to ensure no legitimate sales were deleted.
+3.  **Final Report Generation:** Produce a reconciliation report showing:
+    *   Original Reported Revenue.
+    *   Total Deduplicated Amount.
+    *   Corrected Revenue.
+    *   Variance by Region and Payment Method.
+
+## Phase 4: Production Deployment & Prevention (Days 19–24)
+*Goal: Fix live data and prevent recurrence.*
+
+1.  **Deploy Fix to Production:** Execute the validated cleanup script on the production database during a low-traffic window.
+2.  **Implement Front-End Guardrail:** Instruct engineering to disable the 'buy' button immediately after the first click (loading state) until the server responds, preventing the user behavior causing the duplicates.
+3.  **Update Deduplication Logic:** Patch the analytics ingestion pipeline with the refined logic identified in Phase 1.
+
+**Timeline Summary:**
+*   **Diagnosis Complete:** Oct 4
+*   **Cleaned Data Validated:** Oct 17
+*   **Final Report to CFO:** Oct 20 (Allows 2 weeks for review before Nov 5 call)
+*   **Production Fix Live:** Oct 24
+
+**Note:** All revenue metrics in the final report must explicitly state the observation window and confirm that partial-period data was excluded from rate calculations. Ensure no PII is exposed in the audit logs generated during the cleanup process.

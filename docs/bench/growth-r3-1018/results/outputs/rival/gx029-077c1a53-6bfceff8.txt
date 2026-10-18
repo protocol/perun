@@ -1,0 +1,36 @@
+### Diagnostic Plan: Isolating Design vs. Performance Impact
+
+**1. Segment Funnel Data by Device and Network**
+Immediately filter your analytics funnel to compare pre-launch (stable 4.5% CR) and post-launch periods across four distinct segments:
+*   Desktop (All networks)
+*   Mobile WiFi
+*   Mobile 4G/5G
+*   Mobile 3G/Slow connections
+
+If the conversion drop is isolated to **Mobile 4G/3G** while Desktop and Mobile WiFi remain near 4.5%, performance (4s load time) is the primary driver. If the drop is **universal** across all segments (including Desktop and fast Mobile), the design change (trust badges below the fold) is the likely culprit, as French consumers' security hesitation would affect all users regardless of connection speed.
+
+**2. Correlate Load Time with Drop-off Points**
+Using session recordings and performance logs, create a scatter plot or cohort analysis matching individual session load times against checkout completion.
+*   **Hypothesis A (Performance):** Sessions with >3s load times show a sharp increase in abandonment at the *initial page load* or *cart view*, before users interact with the trust badges.
+*   **Hypothesis B (Design):** Sessions abandon specifically at the *payment information step*, regardless of load time. Look for "rage clicks" or rapid scrolling in session recordings around the folded area where trust badges now reside.
+
+**3. Analyze Support Tickets and Session Recordings**
+Review the 40 support tickets mentioning "confusion." Tag them by device type.
+*   If 80%+ of these tickets come from mobile users reporting "page wouldn't load" or "spinning wheel," this confirms the performance hypothesis.
+*   If tickets cite "couldn't find security logos" or "didn't feel safe entering card details," and session recordings show users scrolling past the fold then abandoning, this confirms the design hypothesis.
+
+**4. Execute a Targeted A/B Test (Hotfix Validation)**
+Before a full rollback, deploy a rapid A/B test to 10% of mobile traffic only:
+*   **Variant A (Control):** Current new design (badges below fold, slow load).
+*   **Variant B (Performance Fix):** Current design but with image compression/code splitting to restore 2s load times.
+*   **Variant C (Design Fix):** Original badge placement (above fold) with current slow load times.
+
+If Variant B recovers conversion rates to ~4.5%, the issue is purely performance. If Variant C recovers rates, the issue is design. If neither recovers fully, both factors are contributing.
+
+**Recommendation for Sophie:**
+Do not roll back entirely yet. The data suggests a high probability of **performance being the primary driver** given the specific mention of 4s load times on mobile, which typically causes immediate abandonment before design elements are even evaluated. However, the 40 support tickets regarding "confusion" suggest a secondary design issue.
+
+**Immediate Action:** Deploy a hotfix by June 1st that **optimizes mobile load times** (compress images, defer non-critical JS) to restore the 2s benchmark. Simultaneously, move trust badges back above the fold *only for mobile views* as a CSS-only change (low risk). This addresses both potential drivers simultaneously while you finalize the A/B test results.
+
+*Note: Ensure session recording tools are not themselves impacting load times during this diagnosis.*
+*Priority: Mobile 4G segment analysis must be completed within 4 hours to validate the performance hypothesis.*

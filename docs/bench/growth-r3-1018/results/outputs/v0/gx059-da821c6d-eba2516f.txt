@@ -1,0 +1,25 @@
+For LexFlow's contract review module, your North Star metric must be **Verified Contracts per Lawyer per Week**.
+
+This metric rejects vanity measures like "total contracts processed" (which rises with volume regardless of value) or raw "time saved" (which is difficult to verify without invasive monitoring). "Verified Contracts" only increments when a user completes the core loop: uploading a draft, running the automation, and explicitly accepting the output for use. This rises only when the tool delivers real value—speed *and* the confidence to proceed.
+
+**Primary Metric: Verified Contracts per Lawyer per Week**
+*   **Why:** It captures adoption (frequency) and value (completion). If lawyers use the tool but don't trust the output enough to finalize the contract, this metric stays flat, exposing a retention leak even if upload counts are high.
+*   **Input Metrics:**
+    1.  **Activation Rate:** % of uploaded contracts that reach the "review complete" state.
+    2.  **Override Rate:** % of automated suggestions manually edited or rejected by the lawyer (proxy for accuracy/trust).
+
+**Secondary Metrics (The ROI Inputs for James)**
+Do not track "time saved" as a direct event; it is an inferred outcome. Instead, instrument these to calculate it honestly:
+1.  **Cycle Time Delta:** The timestamp difference between *Upload Start* and *Final Verification*. Compare this against your baseline of 4 hours.
+2.  **Risk Mitigation Score:** Count of high-risk clauses flagged and resolved within the tool vs. contracts sent to external counsel for review (if trackable) or internal senior partner escalation.
+3.  **Retention Cohort:** % of lawyers who verify at least one contract in Week 2 after activating in Week 1.
+
+**Why this framework works for UK Law Firms**
+Legal professionals prioritize risk mitigation. If you lead with "speed," you signal corner-cutting. By measuring "Verified Contracts," you align with their workflow: the tool is only successful if the lawyer feels safe enough to hit "verify." A high override rate signals the engine isn't trustworthy yet, regardless of how fast it runs.
+
+**Implementation Plan (This Week)**
+1.  **Define the Event:** Instrument `contract_verified` with properties: `contract_type`, `clause_flags_count`, and `time_to_complete`. Do not instrument "page views" or "uploads" as success metrics.
+2.  **Baseline the Cohort:** Pull the Week 1 data for your three pilot firms. Calculate the average `time_to_complete` for verified contracts. If the average is not significantly below 4 hours, do not claim efficiency gains yet.
+3.  **Build the ROI Logic:** James should model ROI as: *(Baseline Hours - Actual Cycle Time) × Lawyer Hourly Rate* + *(Reduction in External Review Costs)*. Do not include "potential" time savings; use only the `time_to_complete` of verified contracts.
+
+**Note:** Do not fabricate a "good" override rate; compare the pilot's rate against their manual drafting error baseline if available, or treat high overrides as a product defect to fix before scaling. Ensure user identifiers are pseudonymous to comply with UK GDPR before storing event logs.

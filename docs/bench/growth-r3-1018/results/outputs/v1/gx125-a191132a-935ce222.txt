@@ -1,0 +1,41 @@
+### Experiment Readout Framework: Referral Credit Test
+
+**1. Recompute the Primary Claim (Verification Layer)**
+Before analyzing quality, validate the "15% increase" against the test design.
+*   **Check Pre-commitment:** Confirm the sample size (50k treatment) and duration (30 days) were fixed *before* August 1st. If the team peeked at data daily and stopped early because significance was hit, label the result `UNVERIFIED` due to inflated false-positive risk.
+*   **Recalculate Lift:** Derive the absolute lift from raw counts (Treatment Sign-ups vs. Control Sign-ups). Ensure the 15% figure isn't driven by a baseline anomaly in the control group during that specific month.
+
+**2. Define the "Quality" North Star (Beyond Sign-ups)**
+Reject "Total New Sign-ups" as the success metric; it is a vanity metric in this context. Replace it with a value-based North Star for this experiment: **"Week-2 Active Referral Pairs."**
+*   *Definition:* A dyad where both the referrer and referee have completed the core networking action (e.g., sending a message or connecting) within 14 days of the referee's sign-up.
+*   *Rationale:* This measures network density, not just account count.
+
+**3. The Diagnostic Funnel (Bottom-Up Analysis)**
+Analyze the data in this specific order to detect "credit farming":
+
+*   **Step A: Activation Rate (The "Empty Profile" Check)**
+    *   Compare the % of referred users who completed their profile *and* performed one core action within 48 hours (Treatment vs. Control).
+    *   *Signal:* If sign-ups are up 15% but activation is flat or down, you are acquiring low-intent users.
+*   **Step B: Retention Cohorts (The "Churn" Check)**
+    *   Plot Week-1 and Week-2 retention curves for the *referred* users only.
+    *   *Signal:* A steep drop-off after the credit is claimed indicates transactional behavior. Compare this cohort's retention to organic sign-ups from the same period.
+*   **Step C: Referrer Behavior (The "Gaming" Check)**
+    *   Segment referrers by volume. Identify users with abnormally high referral counts (>5 in a month).
+    *   *Signal:* If a small % of referrers drive the bulk of the lift, investigate if they are self-referring or farming credits.
+
+**4. Guardrail Metrics (Risk Assessment)**
+Present these alongside the lift to show due diligence:
+*   **Cost Per Active User (CPAU):** Did the cost of credits divide by *active* users increase?
+*   **Spam/Abuse Rate:** Monitor reports of spammy connection requests or profile flags from the treatment cohort.
+*   **Cannibalization:** Did organic (non-incentivized) referrals drop during the test period?
+
+**5. Decision Matrix (Pre-defined Actions)**
+Do not wait for the meeting to decide what the data means. Map the outcomes now:
+*   **Ship:** If Week-2 Active Pairs increase ≥10% AND spam rates remain stable.
+*   **Iterate:** If sign-ups are up but activation is low → Restrict credit payout until the *second* core action (not just profile completion).
+*   **Stop:** If retention of referred users is <50% of the organic baseline OR if abuse flags spike.
+
+**This Week's Step:**
+Run the SQL query for "Week-2 Active Referral Pairs" segmented by treatment/control immediately. If the data warehouse lacks a stable pseudonymous user ID to track the referrer-referee dyad across sessions, flag this as `UNVERIFIED` and request engineering support to instrument the link before finalizing the deck.
+
+*Note: Do not assert industry benchmarks for "good" retention; compare only against ConnectHub's own organic baseline from July. Ensure all user IDs used for cohorting are pseudonymized per privacy compliance standards.*

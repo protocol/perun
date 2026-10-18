@@ -1,0 +1,30 @@
+**Diagnosis Plan for CTO Sophie: Isolating Design vs. Performance Impact**
+
+**1. Segment Funnel Data by Device and Network (Immediate Action)**
+Query your analytics to split the checkout conversion funnel into four distinct cohorts: Desktop, Mobile-WiFi, Mobile-4G, and Mobile-3G/Edge.
+*   **Hypothesis A (Performance):** If the drop is isolated to Mobile-4G/3G (where load time jumped from 2s to 4s) while Desktop and Mobile-WiFi remain near the 4.5% baseline, performance is the primary driver.
+*   **Hypothesis B (Design):** If the drop is uniform across all cohorts (including Desktop where load times likely didn't change), the layout change (trust badges below the fold) is the primary driver.
+*   **Hypothesis C (Compound):** If Mobile-4G shows a catastrophic drop (e.g., >30%) while Desktop shows a moderate drop (e.g., 10%), both factors are contributing.
+
+**2. Analyze Session Recordings for Behavioral Signals**
+Review a statistically significant sample (e.g., 50 sessions per cohort) focusing on the "time-to-interact" and scroll depth.
+*   **For Performance:** Look for "rage clicks" on non-interactive elements during the 2–4 second load window, or sessions ending before the page fully renders.
+*   **For Design:** Look for users scrolling past the fold, hesitating at the payment section, or scrolling back up searching for trust signals before abandoning. Correlate these behaviors with the 40 support tickets mentioning "confusion."
+
+**3. Correlate Support Tickets with Cohorts**
+Tag the 40 existing support tickets by device type and network status (if available in logs).
+*   If >80% of "confusion" tickets originate from Desktop or WiFi users (who are not suffering the 4s load lag), this confirms the design hypothesis.
+*   If tickets are predominantly "page wouldn't load" or "timed out" from mobile users, this confirms the performance hypothesis.
+
+**Decision Matrix for June 1st Deadline**
+*   **Rollback Immediately:** If Desktop conversion is down >10% (proving design failure) OR if Mobile-4G conversion is near 0% (proving performance failure). Do not wait for a hotfix if the core revenue stream is blocked.
+*   **Deploy Hotfix (Design Only):** If Desktop is stable but Mobile-4G is down, revert the trust badge position via CSS (hotfix) while engineering optimizes load times.
+*   **Deploy Hotfix (Performance Only):** If the design impact is negligible (Desktop stable) but mobile load times are the sole culprit, prioritize image compression/script deferral over layout changes.
+
+**This Week's Steps**
+1.  Run the segmented funnel query (Desktop vs. Mobile-Network) today to establish the baseline split.
+2.  Watch 20 session recordings from the worst-performing cohort to identify the specific abandonment trigger (load spinner vs. missing trust badge).
+3.  If the drop is universal, prepare the rollback script; if isolated to mobile data, assign the CSS hotfix for trust badges and the performance optimization task in parallel.
+
+*Note: Do not assume the 18% drop is solely design-related until the desktop cohort is verified; a universal drop invalidates the "mobile performance only" theory.*
+*Ensure all session recording analysis adheres to GDPR pseudonymization standards before sharing with the engineering team.*

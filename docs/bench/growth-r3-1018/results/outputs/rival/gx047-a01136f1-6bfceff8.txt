@@ -1,0 +1,50 @@
+# VietPay Crypto Integration: Tracking Specification
+
+**Objective:** Balance product optimization (adoption, comfort) with Vietnamese regulatory compliance for the June 20th crypto feature launch.
+**Audience:** Legal Counsel, Product VP.
+**Effective Date:** June 1st (UAT Start).
+
+## 1. Core Principles
+*   **Privacy-First:** No PII (Personally Identifiable Information) stored in analytics tools. User IDs must be hashed.
+*   **Compliance-Mandatory:** Specific audit logs required by law are stored in a secure, immutable compliance database, separate from product analytics.
+*   **Action-Oriented:** Track only events that inform go/no-go decisions on feature rollout or UX friction.
+
+## 2. Event Tracking Plan (Product Analytics)
+*Tooling: Mixpanel/Amplitude (or existing stack). Data must be anonymized before ingestion.*
+
+| Event Name | Trigger | Essential Properties (Non-PII) | Business Question |
+| :--- | :--- | :--- | : |
+| `crypto_feature_viewed` | User opens crypto tab | `user_tenure_days`, `device_type`, `fiat_balance_tier` | Is there organic curiosity? |
+| `kyc_crypto_started` | User clicks "Verify Identity" for crypto | `entry_point` (banner vs. tab) | Where is the drop-off in compliance onboarding? |
+| `kyc_crypto_completed` | Successful regulatory verification | `duration_seconds`, `attempt_number` | Is the KYC flow too friction-heavy? |
+| `crypto_buy_initiated` | User enters buy amount | `currency_pair` (e.g., USDT/VND), `amount_tier` (<$10, $10-$50, >$50) | **Hypothesis Validation:** Are users starting with small test transactions? |
+| `crypto_buy_failed` | Transaction rejected | `error_code` (generic), `failure_stage` (bank_redirect, confirmation) | Where are transactions breaking? |
+| `crypto_buy_completed` | Transaction confirmed on-chain | `amount_tier`, `time_to_complete_seconds` | What is the true conversion rate? |
+| `crypto_sell_initiated` | User enters sell amount | `holding_duration_days`, `amount_tier` | Are users cashing out immediately (lack of trust) or holding? |
+
+**Note on "Small Test Transactions":** We will specifically monitor the `amount_tier` property. A spike in `<$10` transactions in Week 1 confirms the hypothesis that users require a "safety check" before larger adoption.
+
+## 3. Compliance & Audit Logs (Secure Database)
+*Tooling: Secure SQL Database / Immutable Ledger. Retention: 5 years (per Vietnam State Bank guidelines).*
+*These logs are NOT for product analysis but for regulatory inspection.*
+
+| Log Event | Mandatory Data Fields | Regulatory Purpose |
+| :--- | :--- | :--- |
+| `audit_user_verification` | `hashed_user_id`, `timestamp`, `verification_level`, `ip_address_country` | Proof of KYC/AML adherence. |
+| `audit_transaction_record` | `hashed_user_id`, `timestamp`, `transaction_hash`, `fiat_equivalent_vnd`, `counterparty_wallet_type` | Anti-money laundering (AML) tracking. |
+| `audit_risk_flag` | `hashed_user_id`, `risk_score`, `flag_reason` (e.g., velocity, unusual amount) | Automated suspicious activity reporting. |
+| `audit_consent_record` | `hashed_user_id`, `timestamp`, `terms_version_accepted` | Proof of user informed consent. |
+
+**Critical Constraint:** Never log raw wallet addresses, full names, or specific bank account numbers in the *Product Analytics* stream. These belong strictly in the Compliance Log.
+
+## 4. Implementation & Privacy Guardrails
+1.  **Data Segregation:** Product teams access aggregated data only. Legal/Compliance teams hold keys to the detailed Audit Logs.
+2.  **Consent Gate:** The `crypto_feature_viewed` event only fires *after* the user accepts the specific Crypto Terms of Service.
+3.  **Right to Deletion:** A script must exist to purge `hashed_user_id` from product analytics upon user account deletion, while retaining anonymized transaction aggregates for legal reporting.
+
+## 5. Success Metrics for June 20th Launch
+*   **Adoption Rate:** % of active fiat users who complete `kyc_crypto_completed`.
+*   **Comfort Index:** Ratio of `crypto_buy_completed` (amount >$50) to `crypto_buy_completed` (amount <$10) after 30 days.
+*   **Friction Point:** Drop-off rate between `crypto_buy_initiated` and `crypto_buy_completed`.
+
+This specification ensures we capture the "small test transaction" signal you hypothesized while maintaining a strict firewall between product optimization data and legal audit requirements.

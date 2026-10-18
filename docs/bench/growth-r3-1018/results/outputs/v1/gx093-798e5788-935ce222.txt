@@ -1,0 +1,41 @@
+### Proposed Event Hierarchy: Avatar Onboarding Funnel
+
+To balance friction detection with analytics team capacity, instrument only the events that answer specific drop-off or success questions. Do not track every click; track state changes.
+
+**1. `onboarding_session_started`**
+*   **Definition:** User lands on the initial welcome screen.
+*   **Properties:** `entry_source` (organic, invite, ad), `device_model`, `vr_headset_type`.
+*   **Question Answered:** What is the total volume entering the funnel?
+
+**2. `avatar_customization_started`**
+*   **Definition:** User clicks "Customize Avatar" or enters the editor space.
+*   **Properties:** `time_since_session_start` (seconds).
+*   **Question Answered:** Is the entry point to customization clear, or do users drop off before even trying?
+
+**3. `avatar_customization_saved` (Primary Milestone)**
+*   **Definition:** User successfully confirms and saves their avatar configuration.
+*   **Properties:** `time_spent_in_editor` (seconds), `customization_depth` (count of items changed: low/med/high), `abandonment_reason` (if applicable, e.g., "timeout", "error").
+*   **Question Answered:** Did the user complete the value-generating action? (Use this, not "started," as your activation metric. Your data shows skipping this step correlates with 60% lower retention; therefore, "saved" is the true indicator of potential retention).
+
+**4. `onboarding_completed`**
+*   **Definition:** User exits the tutorial and enters the main social hub.
+*   **Properties:** `total_onboarding_duration` (seconds).
+*   **Question Answered:** What is the end-to-end conversion rate from landing to social participation?
+
+---
+
+### Three Specific Questions to Answer
+
+1.  **Where is the precise friction point?**
+    *   *Analysis:* Compare conversion rates between `onboarding_session_started` → `avatar_customization_started` vs. `avatar_customization_started` → `avatar_customization_saved`.
+    *   *Decision Rule:* If the drop is before "started," the UI call-to-action is invisible or uninviting. If the drop is after "started" but before "saved," the editor itself is too complex, buggy, or time-consuming.
+
+2.  **Does customization depth correlate with Day-1 retention?**
+    *   *Analysis:* Cohort users by `customization_depth` (from the `saved` event) and measure their return rate at 24 hours.
+    *   *Decision Rule:* If users who make only 1–2 changes retain as well as those who make 10, simplify the editor to force a "quick save" path. If deep customizers retain significantly better, consider gamifying the editor to encourage more interaction before saving.
+
+3.  **What is the acceptable time threshold for the editor?**
+    *   *Analysis:* Plot `time_spent_in_editor` against `avatar_customization_saved`. Identify the time duration where abandonment spikes.
+    *   *Decision Rule:* Establish a performance budget. If abandonment rises sharply after 180 seconds, any session exceeding this limit triggers an alert for UX review or an automatic "save draft" intervention in future iterations.
+
+**Note:** Since you have no historical baseline, label all initial retention comparisons as `UNVERIFIED` until 7 days of post-launch data is collected. Do not compare your conversion rates to industry benchmarks; measure only against your own Day 1–7 trend.

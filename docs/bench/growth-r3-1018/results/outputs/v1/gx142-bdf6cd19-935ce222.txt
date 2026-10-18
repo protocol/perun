@@ -1,0 +1,37 @@
+**Growth Measurement Strategy for SwiftDrop Expansion Decision**
+
+**1. North Star Metric: Completed Orders per Active Driver-Hour**
+Reject "Total Orders" or "Raw Signups" as vanity metrics; they rise with marketing spend regardless of operational health. Given your supply constraint (12 drivers/zone), your true constraint is driver utilization. Define success as **Completed Orders per Active Driver-Hour**. This rises only when the system efficiently matches sparse supply to demand. If this metric stalls while total orders rise, you are simply burning driver hours without solving the matching inefficiency.
+
+**2. Funnel Diagnosis: Retention Before Acquisition**
+Do not expand to a fourth city (Acquisition) until the leak in the current funnel is plugged. Your current 45% completion rate indicates a massive retention failure.
+*   **Step A:** Fix the instrumentation gap immediately. You cannot diagnose "wait time" if you lose users before they see an ETA. Instrument a `session_abort_pre_eta` event with a timestamp and device type. This answers: "Are users leaving because the app is slow to calculate, or because the initial quote is too high?"
+*   **Step B:** Segment the 55% drop-off by **Zone-Hour**. With only 12 drivers, aggregate city-wide data will hide local failures. If Zone A at 6 PM has a 20% completion rate while Zone B has 70%, the issue is local supply distribution, not the algorithm globally. Expansion is a "No-Go" if more than one existing zone fails to hit a 55% baseline consistently.
+
+**3. Event Taxonomy for Sparse Data**
+Instrument only events that answer specific decision questions. Do not track "page views."
+*   `order_request_sent`: (Question: Is demand present?)
+*   `eta_calculated`: (Question: Did the system respond?)
+*   `session_abort_pre_eta`: (Question: Is latency killing conversion?)
+*   `driver_assigned`: (Question: Is supply available?)
+*   `order_completed`: (Question: Did value deliver?)
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` to track repeat attempts across sessions. Do not use raw PII; route consent logic to your privacy compliance protocol.
+
+**4. Reading Signals with Low Statistical Power**
+You cannot run standard A/B tests with small N. Instead, use **Single-Subject Design (Time-Series)**:
+*   **Baseline:** Establish the weekly completion rate per zone for 3 weeks.
+*   **Intervention:** Change one variable (e.g., expand the search radius for drivers) in *one* zone only.
+*   **Read:** Compare the post-intervention trend in that zone against its own baseline and the control zones. Look for a sustained shift in the trend line, not a single-day spike.
+*   **Decision Rule:** If the intervention does not move the needle in the test zone within 14 days, the hypothesis (e.g., "search radius is the blocker") is false. Do not scale.
+
+**5. Go/No-Go Criteria for Expansion**
+The Operations Director needs a binary trigger based on your own data, not industry benchmarks.
+*   **GO:** Two of the three current cities sustain >55% completion rates for 4 consecutive weeks *and* `Completed Orders per Driver-Hour` increases by >10%. This proves the model works with sparse supply.
+*   **NO-GO:** Completion rates remain <50% or vary wildly (>20% swing) between zones. This indicates the model is fragile and dependent on specific local conditions not replicable in a new city. Expanding now would dilute driver supply further, crashing completion rates in all four cities.
+
+**This Week's Actions:**
+1.  Deploy the `session_abort_pre_eta` event to quantify pre-ETA drop-off.
+2.  Generate a heatmap of completion rates by Zone-Hour to identify if the failure is universal or localized.
+3.  Halt expansion planning until the `session_abort` data confirms whether wait time is the primary driver of churn.
+
+*Note: All metrics above are `UNVERIFIED` until the new event instrumentation is live; do not estimate current values. Compare all future results strictly against SwiftDrop's internal baseline, not external delivery benchmarks.*

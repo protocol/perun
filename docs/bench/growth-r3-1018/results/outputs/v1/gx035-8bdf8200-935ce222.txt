@@ -1,0 +1,36 @@
+**Validation Protocol: User ID Deduplication Integrity Check**
+
+**Objective:** Verify that merging duplicate user IDs preserves total listening hours and ensures accurate royalty payouts without data loss.
+
+**1. Pre-Merge Snapshots (T-0)**
+Capture these exact aggregates for the affected cohort (Social Login, Jan–Jun 2022) and the global population:
+*   **Total Listening Hours (Global):** Sum of all `listening_duration` events.
+*   **Total Listening Hours (Affected Cohort):** Sum for users identified as duplicates.
+*   **Record Count (Affected Cohort):** Number of duplicate user records flagged for merge.
+*   **Event Count (Affected Cohort):** Total number of listening events associated with duplicate IDs.
+*   **Royalty Liability Estimate:** Calculated payout based on current pre-merge hour distribution for the affected cohort.
+
+**2. The Consistency Invariants (Success Criteria)**
+The migration is valid **only if** the following equations hold true post-merge:
+*   **Global Hour Conservation:** `Post-Merge Global Hours` MUST EQUAL `Pre-Merge Global Hours`. Variance must be 0.00%.
+*   **Cohort Hour Conservation:** `Post-Merge Cohort Hours` (summed by new merged ID) MUST EQUAL `Pre-Merge Cohort Hours`.
+*   **Event Integrity:** `Post-Merge Event Count` MUST EQUAL `Pre-Merge Event Count`. No events are dropped during the ID swap.
+*   **Unique User Count:** `Post-Merge Unique Users` MUST EQUAL `Pre-Merge Unique Users` minus `Number of Merged Duplicates`.
+
+**3. Validation Queries (Run Immediately Post-Merge)**
+Execute these checks before routing any royalty reports:
+*   **Delta Check:** Run a diff on `SUM(listening_duration)` globally. If `ABS(Post - Pre) > 0`, halt all reporting.
+*   **Orphaned Event Scan:** Query for listening events where `user_id` exists in the event log but not in the active user table. Count must be 0.
+*   **Double-Count Verification:** Ensure no single `session_id` or `event_id` is now associated with multiple user IDs.
+*   **Recommendation Spot-Check:** For a random sample of 50 merged users, verify that the `listening_history` array length post-merge equals the sum of the lengths of the individual pre-merge records.
+
+**4. Guardrails & Rollback Triggers**
+*   **Primary Guardrail:** Global listening hours variance. If variance ≠ 0, trigger immediate rollback.
+*   **Secondary Guardrail:** Affected cohort user count. If the reduction in user count does not exactly match the number of intended merges, trigger investigation.
+*   **Action:** Do not release royalty reports until the "Global Hour Conservation" invariant is signed off by the Data Operations Lead.
+
+**5. This-Week Steps**
+1.  **Define the Golden Dataset:** Isolate the specific `user_id` list and corresponding event IDs for the Jan–Jun 2022 social login cohort; store this snapshot in a read-only staging table.
+2.  **Dry-Run Calculation:** Execute the merge logic on a non-production clone of the data to verify the "Event Integrity" and "Hour Conservation" invariants hold before touching production.
+
+*Note: This protocol measures data integrity, not product growth; it ensures the baseline for future analytics is accurate. Ensure the merge logic appends history rather than overwriting it to preserve recommendation context.*

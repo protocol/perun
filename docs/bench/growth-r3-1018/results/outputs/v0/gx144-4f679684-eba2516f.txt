@@ -1,0 +1,44 @@
+### Proposal: Privacy-First Aggregate Measurement for HealthConnect
+
+To evaluate user experience and infer friction points without storing Personally Identifiable Information (PII) or using device fingerprinting, we propose an instrumentation strategy based on **stateless, aggregated event counts** and **cohort-level metadata**. This approach satisfies strict privacy mandates while providing the data needed to diagnose the 20% completion rate.
+
+**1. The North Star Metric**
+*   **Metric:** Weekly Completed Appointments (Aggregate Count).
+*   **Definition:** The total number of users who successfully reach the "Confirmation" state per week.
+*   **Why:** This measures actual citizen value delivered, distinct from vanity metrics like pageviews or session starts.
+
+**2. Funnel Instrumentation (Stateless Aggregation)**
+Instead of tracking individual user paths, we will instrument discrete, anonymous counters at each critical step of the booking flow. We do not link these events to a user ID; we only count occurrences.
+*   **Event Taxonomy:**
+    *   `booking_started`: Count of sessions entering the flow.
+    *   `eligibility_viewed`: Count of sessions reaching the criteria page.
+    *   `eligibility_error_triggered`: Count of sessions where the "Not Eligible" logic fires (validates the confusion hypothesis).
+    *   `booking_abandoned`: Count of sessions exiting after `booking_started` but before `booking_completed`.
+    *   `booking_completed`: Count of successful transactions.
+*   **Analysis Method:** Calculate conversion rates between steps (e.g., `eligibility_viewed` / `booking_started`). A sharp drop between "Started" and "Eligibility Viewed" indicates navigation confusion; a high count of `eligibility_error_triggered` confirms the hypothesis that criteria clarity is the blocker.
+
+**3. Inferring Device Friction Without Fingerprinting**
+Since unique device IDs are restricted, we will rely on **User-Agent string aggregation** processed at the edge or within the secure enclave before analytics ingestion.
+*   **Method:** Map User-Agent strings to broad categories (Mobile, Tablet, Desktop) immediately upon request, discard the raw string, and increment a counter for that category.
+*   **Metric:** `completion_rate_by_device_category`.
+*   **Insight:** If `completion_rate` for the "Mobile" aggregate is significantly lower than "Desktop," we infer a responsive design or mobile-UX friction point without ever identifying a specific device or user.
+
+**4. Temporal Cohort Analysis**
+To measure retention and return visits without PII:
+*   **Method:** Group events by **Date of First Visit** (anonymized). Compare the volume of `booking_completed` events in Week 1 vs. Week 2 for the cohort that started in Week 1.
+*   **Constraint:** Do not attempt to link specific users returning; measure the *flow volume* of the cohort over time.
+
+**5. Compliance & Governance Guardrails**
+*   **Data Minimization:** No event properties shall contain names, health card numbers, IP addresses, or precise timestamps (round to the nearest hour).
+*   **Threshold Suppression:** Apply a minimum threshold (e.g., k=10) to all reported aggregates to prevent statistical deduction of individuals in low-traffic segments.
+*   **Verification:** All instrumentation code must undergo a privacy impact assessment (PIA) to ensure no transient IDs are logged to disk.
+
+**Immediate Next Steps**
+1.  Define the exact JSON schema for the five aggregate events above, ensuring zero PII fields.
+2.  Deploy a pilot to the staging environment to verify that `eligibility_error_triggered` counts align with known test cases.
+3.  Present the "Device Category" aggregation logic to legal counsel for sign-off on the User-Agent parsing method.
+
+This framework shifts the focus from "who is failing" to "where is the flow breaking," providing actionable engineering insights while maintaining absolute citizen anonymity.
+
+*Note: This proposal assumes the backend can categorize User-Agents before logging; if not, this logic must be implemented in a privacy-preserving middleware layer.*
+*All metrics derived are `UNVERIFIED` until the proposed instrumentation is deployed and data begins flowing.*

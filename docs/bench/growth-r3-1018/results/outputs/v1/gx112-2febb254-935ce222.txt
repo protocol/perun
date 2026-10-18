@@ -1,0 +1,34 @@
+**Executive Summary for Regional Director: Mumbai Checkout A/B Test**
+
+**Recommendation:** Do not discard the data as inconclusive, but do not declare a winner yet. The current aggregate result (12% conversion, equal across variants) is statistically obscured by high variance, not necessarily a lack of effect. The immediate action is to **segment the analysis** before recomputing significance. The "noise" is likely a mix of device capability and connectivity stability, not cultural browsing habits.
+
+**Diagnosis of High Variance**
+The wide confidence intervals are driven by heterogeneity in the user environment, not random chance. Since server latency is consistent (<200ms), the variance stems from the "last mile" (client-side rendering on fragmented devices) or intermittent packet loss during the session. When high-friction environments are mixed with low-friction ones in a single average, the standard deviation inflates, masking potential gains in specific subgroups.
+
+**Actionable Data Cuts (The "This-Week" Plan)**
+To find the signal, re-aggregate the 8,000 users into these three specific cohorts. Each cut dictates a different decision:
+
+1.  **Device Tier Segmentation (High vs. Low End)**
+    *   **Action:** Split users by device model/RAM into "Entry-Level" (bottom 40% of specs) and "Mid/High-End."
+    *   **Hypothesis:** The new flow may rely on heavier client-side JavaScript that chokes entry-level devices, increasing drop-offs there while helping faster devices.
+    *   **Decision Rule:** If the variant wins on Mid/High-End but loses on Entry-Level, the insight is to **optimize the variant for low-spec devices** (e.g., reduce asset weight) rather than killing the feature. If it loses on both, the flow design is fundamentally flawed for the region.
+
+2.  **Connection Stability Cohorts (Not just Speed)**
+    *   **Action:** Group users by connection type (4G/5G vs. 3G/2G) and session interruption rates (if available via client logs), not just average speed.
+    *   **Hypothesis:** Intermittent connectivity causes long session durations (users retrying actions) and abandoned checkouts. The new flow might be more sensitive to state loss during network blips.
+    *   **Decision Rule:** If variance drops significantly within the "Stable 4G/5G" cohort and a conversion lift appears, the rollout strategy should be **conditional**: launch only to users with stable connections or implement aggressive local caching for the variant.
+
+3.  **First-Time vs. Returning User Split**
+    *   **Action:** Isolate the "First-Time" segment (the intended target) from returning users who may have cached data or saved preferences.
+    *   **Hypothesis:** Returning users have a different baseline behavior that dilutes the specific impact of the "friction reduction" designed for novices.
+    *   **Decision Rule:** If the signal appears only in First-Time users, the test is valid for its intended audience. Proceed with a **re-calculation of power** specifically for this smaller segment to determine if more sample size is needed.
+
+**Next Steps for Friday Presentation**
+Present the aggregate data as "inconclusive due to environmental variance," then immediately show the **segmented conversion rates** for the three cuts above.
+*   **If a segment shows >15% conversion with tighter intervals:** Propose a targeted rollout to that segment while engineering addresses the friction points for the others.
+*   **If all segments remain flat with high variance:** Recommend stopping the test and reverting to the control, as the new flow introduces complexity without value across all Mumbai conditions.
+
+Do not cite external benchmarks for "acceptable variance." Compare these segmented results only against SwiftCart's own baseline performance in Delhi to highlight the regional infrastructure gap.
+
+*Note: Ensure any user-level segmentation uses pseudonymous IDs; route raw device/connection data handling to the privacy compliance review before sharing with external stakeholders.*
+*If the segmented sample sizes drop below 400 users per cell, flag the result as `UNVERIFIED` due to low power, not as a negative result.*

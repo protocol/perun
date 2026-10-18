@@ -1,0 +1,28 @@
+**Risk Assessment: Retroactive Timestamp Normalization**
+
+Your assumption that normalizing to UTC will resolve alignment issues is directionally correct for future data, but applying this retroactively carries three specific risks that threaten the integrity of your July reporting and the QBR:
+
+1.  **Irreversible Precision Loss:** Converting web events from second-level precision to millisecond precision is mathematically impossible without inventing data. If you force a millisecond format on second-level data, you introduce false precision. More critically, converting local time to UTC for historical web records requires knowing the *exact* timezone offset active at the moment of each event. If the original local timestamp was stored without its corresponding offset (e.g., just "14:00:00" without "EST"), the UTC conversion is ambiguous. Daylight Saving Time transitions in July could shift records by an hour, corrupting session boundaries rather than fixing them.
+2.  **Session Fragmentation:** A 12% mismatch suggests existing sessions are already being split or merged incorrectly. A blind reprocessing script that shifts timestamps may break existing session IDs if they were generated based on the original, inconsistent time windows. This could inflate user counts and deflate retention metrics, creating a new set of discrepancies that are harder to explain to the Director than the current ones.
+3.  **Resource vs. Value Mismatch:** Reprocessing three months of data is engineering-heavy. If the root cause is missing timezone metadata in the raw web logs, no amount of reprocessing will recover the true UTC time. You risk spending weeks engineering a migration that results in "cleaned" data that is still factually wrong.
+
+**Proposed Migration Strategy**
+
+Do not attempt a full blind reprocessing of three months. Instead, execute a "Split-Stream" strategy to secure the QBR while planning a long-term fix.
+
+*   **Phase 1: Immediate Containment (Now – Aug 20)**
+    *   **Freeze Historical Reporting:** Mark all July and early August data in dashboards as "Provisional – Known Timestamp Variance." Do not attempt to rewrite history yet.
+    *   **Fix Ingestion Only:** Update the ingestion pipeline immediately to enforce UTC + millisecond precision for all *new* events starting today. Ensure web clients send the timezone offset or convert to UTC client-side before transmission.
+    *   **Validation:** Run parallel streams for 48 hours to confirm the new data has 0% mismatch.
+
+*   **Phase 2: Targeted Forensic Repair (Aug 21 – Sept 5)**
+    *   **Audit Sample:** Extract a 1% sample of July web logs. Determine if timezone offsets are recoverable (e.g., via IP geolocation lookup or user profile settings at the time).
+    *   **Decision Gate:**
+        *   *If offsets are recoverable:* Write a one-time backfill job for July only (not 3 months). Focus solely on the metrics required for the QBR (Session Duration, DAU).
+        *   *If offsets are missing:* Declare July web data as permanently unalignable at the session level. Calculate a statistical correction factor based on the known 12% error and apply a footnote to the QBR deck rather than corrupting the database with guessed values.
+
+*   **Phase 3: QBR Preparation (Sept 6 – Sept 10)**
+    *   Present August data as the new "Single Source of Truth."
+    *   Present July data with a clear "Data Quality Impact" slide explaining the variance and the steps taken to prevent recurrence. This demonstrates control and transparency, which is preferable to presenting potentially manipulated historical numbers.
+
+**Note:** Do not start the reprocessing job without confirming the presence of timezone offset metadata; without it, the transformation is guesswork. Prioritize the integrity of the August forward-looking data over the perfection of July history.

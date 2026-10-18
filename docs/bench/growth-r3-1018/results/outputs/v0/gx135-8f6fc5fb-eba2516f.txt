@@ -1,0 +1,16 @@
+**Decision: Do not roll out. Extend the experiment to isolate the tablet regression before committing.**
+
+The 6.5% aggregate lift is misleading because it masks a material failure on tablets (-3%). Rolling out now accepts a known degradation for a specific user segment, violating the guardrail principle that a win on a primary metric cannot justify a loss on a key segmentation guardrail. The divergence suggests the "simplified" flow likely removed mouse-dependent interactions (e.g., hover states, precise click targets) that tablet users rely on, or introduced a layout bug specific to that viewport. Treating this as a generic "smaller screen" issue is an assumption; you must verify if this is a bug or a design mismatch.
+
+**Follow-up Measurement Plan**
+
+1.  **Isolate the Tablet Funnel:** Immediately instrument or query the specific step where tablet users drop off compared to the control. Do not look at aggregate conversion; isolate the event taxonomy for `checkout_step_enter` → `checkout_step_complete` specifically for tablet viewports. Identify if the drop occurs at the shipping entry, payment selection, or final confirmation.
+2.  **Qualitative Session Review:** Pull 20–30 recorded sessions or heatmaps for tablet users in the variant group who abandoned the checkout. Look specifically for "rage clicks" or repeated taps on non-interactive elements, which would indicate a UI bug or unclear touch targets rather than a fundamental design rejection.
+3.  **Run a Targeted Follow-up Test:** Create a variant specifically for tablets that re-introduces the original interaction pattern for the identified friction step while keeping the desktop simplification. Run this as a segmented A/B test with a pre-committed sample size calculated to detect a 2% lift (or prevent a 2% drop) on tablets alone. Do not peek at results before reaching the required N.
+
+**Risk Profile for Head of Growth**
+*   **Current Risk:** High. A full rollout guarantees a ~3% revenue loss from the tablet segment, which may outweigh the desktop gains depending on your traffic mix.
+*   **Confounding Factor:** The "statistically flat" mobile result is also a risk; it implies the design changes neither helped nor hurt, suggesting the simplification may not address the core friction for touch interfaces generally.
+*   **Required Threshold for Rollout:** You need a variant that delivers positive lift on Desktop *and* non-negative performance (within confidence intervals) on Tablet and Mobile. If the tablet-specific fix cannot recover the -3% loss within two sprint cycles, revert the tablet experience to the control while rolling out to Desktop only.
+
+**This Week's Step:** Query the funnel drop-off rate by step for tablets only, review 20 abandonment sessions for that segment, and draft a pre-committed test design to fix the specific failing step on tablets.

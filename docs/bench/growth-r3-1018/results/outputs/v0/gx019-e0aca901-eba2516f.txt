@@ -1,0 +1,32 @@
+### Measurement Strategy: SA NewsFeed Retention Investigation
+
+**1. Reject Vanity, Define the North Star**
+Stop optimizing for "Clicks" or "Time-on-Page." High clicks with low retention indicate your current metrics are vanity measures that do not reflect real user value. Your North Star must be **Weekly Active Users who complete a "Value Session"** (e.g., reading ≥2 articles from different categories or returning 3+ times in a week). Clicks alone prove curiosity, not satisfaction.
+
+**2. Diagnose Bottom-Up (Retention Before Acquisition)**
+Your 12% Day-7 retention is the leak. Do not increase marketing spend until this is fixed. The gap between 18% CTR and 12% retention suggests users click but fail to find sustained relevance or face friction unique to the SA market.
+*   **Hypothesis A (Content Mismatch):** Users click headlines but bounce immediately (low dwell time relative to article length).
+*   **Hypothesis B (Data Friction):** Users abandon due to data costs (a critical SA constraint) before the content loads or when images/videos trigger.
+*   **Hypothesis C (False Activation):** The "Aha!" moment isn't a single click; it's likely consuming a specific mix of local vs. global news.
+
+**3. Event Taxonomy: Instrument Only Named Questions**
+Do not track "everything." Implement these specific events to answer your retention questions:
+
+| Event Name | Question It Answers | Critical Properties |
+| :--- | :--- | :--- |
+| `article_load_complete` | Did the content actually render, or did data costs abort the load? | `load_time_ms`, `data_size_kb`, `network_type` (WiFi/4G/LTE), `aborted_reason` |
+| `scroll_depth_reached` | Did the user engage with the body, or just click and bounce? | `percent_scrolled`, `time_to_scroll_50`, `article_category` |
+| `offline_save_triggered` | Are users trying to save for later due to data constraints? | `article_id`, `user_data_setting` |
+| `share_attempted` | Is social sharing a primary driver of value in this market? | `platform` (WhatsApp is critical in SA), `success_bool` |
+| `session_end_reason` | Why did they leave? | `last_action`, `session_duration`, `articles_read_count` |
+
+**4. The Identifier Seam & Privacy**
+To analyze retention cohorts, you need a **stable, pseudonymous user ID** to track individuals across sessions and devices. Do not use raw PII (phone numbers/emails) in analytics logs. Route any PII collection to your privacy compliance protocol (`privacy-compliance.md`). Ensure your analytics can link a user's `article_load_complete` events over 7 days without exposing their identity.
+
+**5. Immediate Next Steps (Before May 1 Launch)**
+*   **Cohort Analysis:** Segment your 5,000 users by `network_type` and `data_size_kb` consumed. If retention drops sharply for high-data articles on mobile networks, your recommendation engine is pushing content that is too expensive to consume.
+*   **Redefine Activation:** Calculate the correlation between `scroll_depth_reached` (>50%) and Day-7 retention. If users who scroll >50% retain at 40% while others retain at 5%, your "Value Session" definition changes immediately.
+*   **Guardrail Metric:** Track `avg_data_cost_per_session` as a guardrail. If your new recommendation model increases engagement but spikes data usage, it will kill retention in this market.
+
+**Note:** The "benchmark" you cited for other regions is irrelevant if the infrastructure (data costs/network stability) differs; compare SA users only against their own baseline trends.
+**Note:** Do not launch national marketing until the `article_load_complete` vs. `retention` correlation is understood; otherwise, you are scaling a leaky bucket.

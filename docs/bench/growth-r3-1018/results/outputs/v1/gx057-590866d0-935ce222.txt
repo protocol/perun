@@ -1,0 +1,41 @@
+### Beta Instrumentation Plan for VoiceFirst (Top 20 Events)
+
+**Objective:** Distinguish "helpful" (value delivered) from "functional" (system running) by prioritizing retention and core action completion over raw error logging. This list answers specific questions about user value within the first 48 hours.
+
+#### A. The North Star & Core Value (5 Events)
+*These determine if the product works for the user, not just if the server is up.*
+1.  **`session_started`** (Properties: `device_id`, `time_of_day`) – *Question: Are users actually initiating interactions?*
+2.  **`command_intent_recognized`** (Properties: `intent_category`, `confidence_score`) – *Question: Does the AI understand what is being asked?*
+3.  **`core_action_completed`** (Properties: `action_type` e.g., "lights_on", `latency_ms`) – *Question: Did the user get the result they wanted? (This is your North Star input).*
+4.  **`session_abandoned_pre_completion`** (Properties: `step_failed`, `last_intent`) – *Question: Where do users give up before getting value?*
+5.  **`repeat_command_same_session`** (Properties: `original_intent`, `retry_count`) – *Question: Is the first attempt failing, forcing frustration loops?*
+
+#### B. Retention & Satisfaction Signals (5 Events)
+*Retention is the primary indicator of "helpfulness." Track these before acquisition.*
+6.  **`day_1_return_visit`** (Properties: `user_id`, `hours_since_first_use`) – *Question: Do they come back immediately?*
+7.  **`feature_discovery_success`** (Properties: `feature_name`, `time_to_first_use`) – *Question: Are users finding advanced capabilities without prompting?*
+8.  **`explicit_feedback_submitted`** (Properties: `rating_1_to_5`, `sentiment_tag`) – *Question: What is the direct subjective signal? (Keep this optional/lightweight).*
+9.  **`passive_positive_signal`** (Properties: `command_chain_length` > 3) – *Question: Are users engaging in complex flows, indicating trust?*
+10. **`churn_risk_flag`** (Properties: `failed_attempts_last_hour` >= 3) – *Question: Who is about to stop using the device?*
+
+#### C. Critical System Health (User-Impact Only) (5 Events)
+*Do not log every error code. Log only errors that block the user's core action.*
+11. **`wake_word_failure_rate`** (Properties: `ambient_noise_level`, `failure_reason`) – *Question: Can users even start the interaction?*
+12. **`network_timeout_blocking_action`** (Properties: `command_type`, `duration_ms`) – *Question: Is connectivity killing the experience?*
+13. **`permission_denied_critical`** (Properties: `resource_requested`, `user_response`) – *Question: Are setup barriers preventing use?*
+14. **`hardware_misfire_false_positive`** (Properties: `trigger_source`, `context`) – *Question: Is the device activating when it shouldn't, causing annoyance?*
+15. **`service_degradation_active`** (Properties: `latency_threshold_exceeded`, `affected_feature`) – *Question: Is the system too slow to be useful?*
+
+#### D. Context & Cohorts (5 Events)
+*Essential for segmenting the "show-stopping" issues.*
+16. **`onboarding_step_completed`** (Properties: `step_name`, `time_spent_seconds`) – *Question: Where does setup friction occur?*
+17. **`device_environment_context`** (Properties: `room_type`, `connected_devices_count`) – *Question: Does performance vary by home complexity?*
+18. **`user_segment_tag`** (Properties: `tech_savvy_level`, `beta_invite_source`) – *Question: Are early adopters tolerating bugs that will kill mainstream users?*
+19. **`firmware_version_active`** (Properties: `build_number`) – *Question: Is a specific build causing regressions?*
+20. **`privacy_consent_status`** (Properties: `consent_level`, `opt_out_category`) – *Question: Are we compliant and is data collection blocking usage?*
+
+**Implementation Notes for Sarah:**
+*   **Identifier Seam:** Ensure `device_id` is stable across sessions for cohort analysis but pseudonymized; route any PII (like voice snippets) to `privacy-compliance.md` protocols, not this analytics stream.
+*   **Exclusion Rule:** Do not instrument specific error codes (e.g., `ERR_503`, `ERR_TIMEOUT_DETAIL`) unless they map directly to one of the 5 critical system health events above. Debug detailed logs via system observability tools, not product analytics.
+
+**This-Week Step:** Implement these 20 events by June 10th. On launch day (T+0), monitor `core_action_completed` vs `session_abandoned_pre_completion`. If the abandonment rate exceeds 40% in the first 48 hours, halt feature rollout and investigate `wake_word_failure_rate` and `network_timeout_blocking_action` immediately.

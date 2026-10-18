@@ -1,0 +1,43 @@
+# SoundWave Critical Event Tracking Plan (Pre-Beta Launch)
+
+**Objective:** Shift from measuring "presence" (session length) to measuring "meaningful connection" to predict retention prior to the May 1st monetization launch.
+
+**Priority Level:** P0 (Must ship before May 1st)
+
+## 1. Core Interaction Quality Events
+*These events distinguish passive listeners from active participants. High volume here correlates with retention.*
+
+| Event Name | Trigger Condition | Critical Properties | Why It Matters |
+| :--- | :--- | :--- | : |
+| `room_joined` | User enters a live audio room | `room_id`, `room_topic`, `user_count`, `referrer_source` | Baseline for funnel; allows cohort analysis by topic. |
+| `room_early_exit` | User leaves < 60 seconds after joining | `room_id`, `time_spent_seconds`, `did_speak` (bool) | **Key Metric:** Identifies "bounce" behavior. High rates indicate poor room matching or low-quality content. |
+| `mic_activiated` | User unmutes microphone | `room_id`, `time_to_unmute_seconds`, `user_role` (listener/speaker) | Strongest signal of comfort and intent to connect. |
+| `reaction_sent` | User sends an emoji/reaction | `room_id`, `reaction_type`, `target_user_id` (optional) | Low-friction engagement; predicts future speaking events. |
+| `follow_user` | User follows a speaker/host | `room_id`, `target_user_id`, `follow_back_status` | Direct proxy for "meaningful connection" and network effect formation. |
+
+## 2. Retention & Monetization Readiness
+*These events validate if users are forming habits worth monetizing.*
+
+| Event Name | Trigger Condition | Critical Properties | Why It Matters |
+| :--- | :--- | :--- | :--- |
+| `returning_room_join` | User joins a room hosted by a previously followed user | `host_user_id`, `days_since_last_interaction` | Validates social graph strength; highest retention predictor. |
+| `session_depth_reached` | User attends 3+ distinct rooms in one session | `room_count`, `total_duration_minutes` | Indicates "exploration" vs. "single-purpose" usage. |
+| `paywall_viewed` | User encounters the new monetization feature | `feature_name`, `user_segment`, `device_type` | Baseline conversion rate for upcoming launch. |
+
+## Implementation Constraints & Guidelines for Engineering (Priya)
+
+**Data Volume Optimization:**
+*   **Batching:** Do not send events individually. Batch `reaction_sent` and `room_early_exit` events to flush every 30 seconds or on app backgrounding to reduce server load.
+*   **Sampling:** If `room_joined` volume exceeds 10k events/minute, sample at 50% for non-critical properties (e.g., drop `referrer_source` on sampled events), but keep `room_id` and `user_id` at 100%.
+*   **Property Limits:** Strictly limit custom properties to the list above. Do not log full room metadata or chat transcripts at this stage.
+
+**Naming Convention:**
+*   Use `snake_case` for all event names and properties (e.g., `mic_activiated`, not `micActivated`).
+*   Ensure `user_id` is consistent across all events to enable user-level cohort analysis.
+
+**Immediate Next Steps:**
+1.  Instrument `room_early_exit` and `mic_activiated` first; these provide the highest signal-to-noise ratio for engagement quality.
+2.  Validate data flow in a staging environment by May 20th.
+3.  Establish a baseline "Activation Rate" (users who unmute or follow within first 3 sessions) by April 28th.
+
+*Note: This plan excludes complex social graph analysis to preserve server capacity; focus strictly on the explicit actions listed. Ensure GDPR/local Indonesia privacy compliance for `user_id` hashing before logging.*

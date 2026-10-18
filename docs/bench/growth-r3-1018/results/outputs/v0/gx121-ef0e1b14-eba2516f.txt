@@ -1,0 +1,28 @@
+**Measurement Plan: Checkout Flow Redesign Experiment**
+
+**1. Primary North Star for This Test: Revenue Per Active User (RPAU)**
+Do not choose between order frequency and basket size as the sole North Star. Selecting one invites the exact trade-off risk you identified: optimizing for basket size may depress frequency, while optimizing for frequency may erode margin or basket value. Instead, define the North Star as **Revenue Per Active User** over a fixed observation window (e.g., 30 days post-exposure). This metric mathematically captures the net effect of both frequency and basket size ($Frequency \times Basket = Revenue$). If users buy more per trip but return less often, RPAU reveals whether the net business value increased or decreased.
+
+**2. Input Metrics & Guardrails**
+Track these specific input metrics to diagnose *how* RPAU moves:
+*   **Primary Input:** Average Basket Size (per transaction).
+*   **Secondary Input:** Inter-order Interval (days between purchases) to detect delayed re-orders.
+*   **Guardrail Metric:** Checkout Abandonment Rate. Simplifying selection must not introduce friction that causes users to drop off before paying. If Basket Size rises but Abandonment spikes, the "simplification" failed.
+
+**3. Experimental Design & Rigor**
+*   **Pre-commitment:** Define the minimum detectable effect (MDE) and required sample size before launch. Do not peek at results daily.
+*   **Duration:** Run the test for a full purchase cycle plus buffer (minimum 14–21 days) to capture at least one re-order attempt. A 2-day read is `UNVERIFIED` because it cannot measure frequency changes.
+*   **Cohorting:** Analyze by user tenure. New users may behave differently than your baseline 2.4x/month loyalists.
+
+**4. Interpreting Conflicting Results**
+If Basket Size increases but Order Frequency decreases, apply the following decision logic based on the pre-committed RPAU goal:
+*   **Scenario A (RPAU Up):** Ship the change. The increase in basket value outweighs the loss in frequency. The user is buying more overall, just less often.
+*   **Scenario B (RPAU Flat/Down):** Do not ship. Even if basket size looks impressive, the business is losing total volume. This confirms your hypothesis that larger baskets cause users to "stock up" and delay returning.
+*   **Scenario C (RPAU Up, but Guardrail Fails):** If Revenue is up but Checkout Abandonment also rose significantly, investigate segment data. You may be winning with power users while losing fringe users. Extend the test or iterate on the friction point before a full rollout.
+
+**5. Immediate Next Steps (This Week)**
+1.  **Instrumentation:** Verify tracking for `checkout_start`, `item_added`, `checkout_complete`, and `user_id` (pseudonymized) to link sessions across days. Ensure `order_timestamp` is precise for interval calculation.
+2.  **Baseline Calculation:** Query the last 60 days of data to establish the current RPAU, Basket Size, and Inter-order Interval baselines for your Seattle cohort.
+3.  **Power Analysis:** Calculate the sample size needed to detect a 2% lift in RPAU with 80% power. If the required traffic exceeds your November 15th launch capacity, reduce the scope or extend the test duration rather than risking a false positive.
+
+**Note:** Do not assert industry benchmarks for "good" frequency; compare only against FreshCart's historical 2.4x baseline. Ensure user identifiers remain pseudonymous and comply with privacy standards before engineering implementation.

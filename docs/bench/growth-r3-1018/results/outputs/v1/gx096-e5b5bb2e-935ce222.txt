@@ -1,0 +1,34 @@
+**Executive Summary: Data Integrity Remediation Plan for GlobalChic**
+**Objective:** Isolate duplicate purchase events, correct historical revenue (currently inflated ~8%), and validate cleaned data before the November 5th earnings call.
+
+**Phase 1: Root Cause Diagnosis (Oct 1 – Oct 7)**
+*Action:* Instrument a specific forensic query on the raw event stream, not the aggregated dashboard.
+*   **Event Taxonomy:** Define a new diagnostic event `purchase_attempt_validation` that captures: `session_id`, `user_id` (pseudonymous), `timestamp_ms`, `network_latency_ms`, `payment_method`, `region`, and `client_retry_count`.
+*   **Hypothesis Testing:** Correlate duplicate `purchase_completed` events with high `network_latency_ms` and multiple `client_retry_count` flags within a 2-second window.
+*   **Segmentation:** Run this analysis separately for all 12 regions and top 5 payment methods to identify if the 1,200 weekly errors are concentrated (e.g., specific mobile carriers in Region X) or systemic.
+*   **Deliverable:** A matrix showing duplication rates by region/payment method confirming or refuting the "slow network" hypothesis.
+
+**Phase 2: Historical Data Cleansing (Oct 8 – Oct 20)**
+*Action:* Execute a backfill correction in a sandbox environment; do not touch production real-time streams yet.
+*   **Deduplication Logic:** Apply a deterministic rule: for identical `user_id`, `amount`, `currency`, and `items` occurring within a 5-second window, retain only the event with the earliest `timestamp_ms` and flag others as `dedup_removed`.
+*   **Scope:** Apply this logic to all data from January 1st through September 30th.
+*   **Real-Time Guardrail:** Deploy a temporary "staging layer" for new incoming events. Real-time reporting continues on the live stream, while the staging layer applies the new deduplication logic with a 15-minute delay for verification before merging.
+
+**Phase 3: Validation & Reconciliation (Oct 21 – Oct 28)**
+*Action:* Validate the cleaned dataset against external sources of truth, not internal baselines.
+*   **The "Money" Test:** Reconcile the cleaned internal transaction count and total revenue against the **payment gateway settlement reports** (Stripe, PayPal, Adyen, etc.) for the same period. The payment gateway is the single source of truth for actual cash movement.
+*   **Variance Analysis:** Calculate the delta between the cleaned internal data and the gateway reports. The variance must be <0.5%. If the gap remains >1%, the deduplication logic is either too aggressive (removing real distinct purchases) or insufficient.
+*   **Regional Spot-Check:** Manually audit 50 random flagged transactions from the highest-error region identified in Phase 1 against customer support tickets to ensure no legitimate "split shipments" were removed.
+
+**Phase 4: Reporting Preparation (Oct 29 – Nov 4)**
+*Action:* Finalize the CFO package.
+*   **Restated Financials:** Produce the P&L impact statement showing the -8% revenue adjustment.
+*   **Confidence Interval:** Present the validation results showing the <0.5% variance against payment gateways.
+*   **Forward-Looking Fix:** Confirm the permanent deployment of the updated deduplication logic to the real-time pipeline, scheduled for November 6th (post-earnings) to avoid mid-quarter data shifts.
+
+**This Week's Steps:**
+1.  Extract raw logs for the last 7 days including `network_latency_ms` and `client_retry_count` for the top 3 affected regions.
+2.  Run the correlation query to confirm if latency > 2000ms predicts 90% of the duplicates.
+3.  Request settlement reports from the primary payment gateway for September to establish the external baseline for validation.
+
+**Note:** Do not estimate the financial impact until the payment gateway reconciliation is complete; internal data alone is currently unverified. Ensure all `user_id` handling in the diagnostic phase adheres to pseudonymization standards before sharing with the finance team.

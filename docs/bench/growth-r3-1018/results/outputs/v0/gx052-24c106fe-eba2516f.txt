@@ -1,0 +1,26 @@
+**Decision: Do not ship. The result is `UNVERIFIED`.**
+
+The observed lift (22€ to 24€, ~9%) is statistically meaningless because the test design failed to account for known, high-variance confounders (holidays, weather) in a specific geographic market. The "wild fluctuation" and massive confidence intervals indicate that the noise from these external factors drowned out the signal. Reading a result from a test where the variance tripled due to uncontrolled variables is not a win; it is a measurement error.
+
+**Immediate Actions for the Country Manager:**
+
+1.  **Recompute with Covariates (CUPED-style adjustment):**
+    Do not simply extend the test. Instead, re-analyze the existing data by stratifying or regressing out the known confounders. Group the data by "Holiday vs. Non-Holiday" and "Weather Event vs. Normal." If the treatment effect disappears when controlling for these factors, the feature had no impact. If the effect persists *within* the stable subsets, you may have a signal. Without this adjustment, the current average is a mixture of two different populations and cannot be trusted.
+
+2.  **Define a Pre-Committed Follow-Up with Guardrails:**
+    Design a new validation run that explicitly treats these external factors as part of the design, not surprises.
+    *   **Stratified Randomization:** Ensure holidays and specific weather-prone days are either excluded from the test window or balanced perfectly between control and treatment before the test starts.
+    *   **Primary Metric:** Change from raw "Average Order Value" to "Lift in AOV relative to same-day-last-week baseline" to normalize for day-specific volatility.
+    *   **Guardrail Metric:** Monitor "Order Completion Rate." If the new feature adds friction during high-stress times (bad weather/holidays), users might abandon carts even if the order value of completed orders rises.
+    *   **Stopping Rule:** Pre-commit to a sample size calculated using the *observed* higher variance (3x historical norm) to ensure power, or use a sequential testing method (like mSPRT) that allows for valid peeking only if the stopping rule accounts for the volatility.
+
+**Data Points to Gather Before Re-running:**
+*   A calendar overlay of French public holidays and school zones for the test period.
+*   Historical weather data correlated with order volume for the France region.
+*   The ratio of office vs. residential deliveries during the test window (to confirm the "office lunch" hypothesis holds during holidays).
+
+**The Call:**
+Tell the Country Manager that engineering resources will be wasted building on a false positive. The correct path is to pause, re-analyze the current data with covariate adjustments to see if any signal remains, and then re-run a shorter, strictly controlled test that excludes known volatile days. Do not allocate resources based on the current 24€ figure.
+
+*Note: The identifier seam for this geographic cohort must remain pseudonymous; route any PII regarding user locations to privacy compliance protocols.*
+*This approach prioritizes retention of statistical rigor over the speed of a potentially flawed rollout.*

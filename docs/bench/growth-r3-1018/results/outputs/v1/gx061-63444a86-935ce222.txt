@@ -1,0 +1,35 @@
+**To:** Sarah Jenkins, VP of Product
+**From:** Growth Analytics
+**Date:** March 25
+**Subject:** Checkout Flow Experiment (South Africa) – Interim Read & Next Step
+
+**Current Status: UNVERIFIED**
+The reported 12% conversion drop is **not a valid read** of the design change. Because 60% of variant traffic suffered a 450ms latency spike (a known guardrail failure), the result is confounded. We cannot attribute the drop to the design; the signal is currently noise. Per our experiment rigor standards, a test with a breached guardrail during the run period yields no causal claim on the primary metric.
+
+**Isolating the Signal: The Analysis Plan**
+To determine if the design is neutral, positive, or negative, we must surgically remove the latency-affected traffic from the analysis. Do not look at the aggregate "Variant" bucket.
+
+1.  **Segment by Latency:** Query the experiment data splitting the Variant group into two cohorts:
+    *   **Cohort A (Clean):** Variant users with latency < 50ms (or baseline equivalent).
+    *   **Cohort B (Impacted):** Variant users with latency > 400ms.
+2.  **Compare Clean vs. Control:** Calculate the conversion rate difference between **Cohort A** and the **Control Group**.
+    *   *If Cohort A ≈ Control:* The design is neutral. The 12% drop was entirely latency-driven.
+    *   *If Cohort A > Control:* The design is positive, but masked by the infrastructure error.
+    *   *If Cohort A < Control:* The design itself is flawed, independent of latency.
+3.  **Device/Network Interaction:** Run the same segmentation specifically for **Mobile Users on 3G/older networks**. If the latency impact was non-uniform, Cohort B's drop will be significantly steeper here than on Desktop/Wi-Fi. This confirms whether the infrastructure failure disproportionately punished specific segments.
+
+**Recommendation & Decision Call**
+**Do not roll out globally yet.** Rolling out based on the aggregate -12% kills a potentially winning feature; rolling out assuming it's "fine" risks repeating the latency crash at scale.
+
+**Action for Friday Roadmap:**
+1.  **Run the "Clean Cohort" Query Today:** Isolate users in the Variant group who did *not* experience the latency spike.
+2.  **Decision Rule:**
+    *   If **Clean Cohort Conversion ≥ Control**: Approve global rollout *conditional* on the infrastructure fix being verified in staging. Treat the experiment as a "Pass with Caveat."
+    *   If **Clean Cohort Conversion < Control (statistically significant)**: Kill the design. The latency was a compounding factor, but the core design fails.
+    *   If **Clean Cohort sample size is too small** to reach significance: Extend the test for 7 days *only after* the routing error is confirmed fixed. Do not guess.
+
+**This Week's Step:**
+Execute the segmented query (Variant Clean vs. Control) by Thursday EOD. Bring the specific conversion delta of the "Clean" cohort to the Friday meeting. If the data shows the clean variant matches control, the roadmap item moves to "Ready for Deploy (Post-Fix)." If the clean variant still underperforms, the item is "Killed." No new traffic should be sent to the variant until the routing error is resolved.
+
+*Note: This analysis relies entirely on your existing logs linking session IDs to latency metrics. If that join is missing, the result remains UNVERIFIED.*
+*Ensure the user ID used for this cohort split is pseudonymous and routed per privacy compliance standards.*

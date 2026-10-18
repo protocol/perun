@@ -1,0 +1,39 @@
+### Critical Interaction Points for Onboarding A/B Test
+**Audience:** Design Team (User Testing Observation Plan)
+**Test Window:** Starts December 5th
+**Primary Tension:** Data Quality (5 extra questions) vs. Acquisition Friction (Sign-up Drop-off)
+
+Track these four specific events to answer the named questions below. Do not instrument generic "page views"; observe only these transitions.
+
+#### 1. Event: `onboarding_step_started`
+*   **Properties:** `step_name` (e.g., "Dietary Preferences", "Health Goals"), `variant` (Control vs. New Flow), `user_id` (pseudonymous).
+*   **Question Answered:** "Do users even attempt the new friction points?"
+*   **Observation Goal:** Verify if users hesitate, scroll up/down repeatedly, or abandon the screen immediately upon loading the new questions.
+
+#### 2. Event: `onboarding_step_completed`
+*   **Properties:** `step_name`, `time_spent_seconds`, `variant`, `fields_filled_count`.
+*   **Question Answered:** "Does the extra friction cause a leak before completion?"
+*   **Observation Goal:** Calculate the drop-off rate per step. If the drop-off between "Basic Info" and "Dietary Preferences" exceeds the baseline by >5%, the friction is too high. Watch for "rage clicks" or rapid back-button usage during user testing.
+
+#### 3. Event: `onboarding_finished` (Activation Threshold)
+*   **Properties:** `total_questions_answered`, `total_time_seconds`, `variant`, `reached_recommendation_engine` (boolean).
+*   **Question Answered:** "Did the user survive the flow to see value?"
+*   **Observation Goal:** This is your activation metric. If `reached_recommendation_engine` is false, the user never received value. Compare the completion rate of the New Flow against the Control. A 20% drop here validates your fear; <5% suggests the friction is acceptable.
+
+#### 4. Event: `recommendation_accepted`
+*   **Properties:** `recommendation_id`, `confidence_score` (if available), `variant`, `days_since_signup` (for retention).
+*   **Question Answered:** "Did the extra data actually improve the outcome?"
+*   **Observation Goal:** This validates the 10% retention hypothesis. In user testing, observe if users trust the result more in the New Flow. For the live test, this is the leading indicator of Day-30 retention. If completion drops but acceptance rises, the trade-off may be worth it.
+
+### Measurement Rules for the Design Team
+1.  **Retention First:** Do not celebrate increased sign-ups if `recommendation_accepted` stays flat. Acquisition is wasted if the core action (accepting a plan) isn't retained.
+2.  **No Benchmarks:** We will not judge success against industry averages. Success is defined strictly as: New Flow Completion Rate > (Control Rate - 5%) AND New Flow Acceptance Rate > Control Rate.
+3.  **Identifier Seam:** Use a stable, pseudonymous `user_id` to link `onboarding_finished` to `recommendation_accepted` across sessions. Do not store raw health data in event properties; route PII to secure storage per privacy compliance.
+
+### This Week's Steps
+1.  **Instrument:** Implement the four events above with the specified properties before December 5th.
+2.  **Pre-commit:** Define the "Stop Tripwire" now: If the New Flow `onboarding_finished` rate drops by >15% relative to control after 500 users, halt the test immediately to prevent excessive acquisition loss.
+3.  **Observe:** In next week's user testing, task users with completing the flow while thinking aloud; specifically note where they hesitate on the five new questions.
+
+*Note: The 10% retention lift is a hypothesis, not a verified metric until Day-30 data arrives. Do not peek at significance before the pre-committed sample size is reached.*
+*Ensure the `user_id` remains pseudonymous in all analytics logs to comply with health data regulations.*

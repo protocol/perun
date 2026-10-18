@@ -1,0 +1,44 @@
+To finalize your event taxonomy for the ZurichChain liquidity mining program, you must first reject the "instrument everything" approach. Tracking 50 actions without named questions creates noise, not insight. Your data shows a clear retention leak: 60% of wallets withdraw within 24 hours. This indicates your current metrics likely favor vanity (total interactions) over value (sustained liquidity).
+
+Here are the critical questions you must answer to define your schema, followed by a proposed event grouping.
+
+### Critical Questions for Definition
+1.  **What is the "North Star" value?** Does ZurichChain succeed when tokens are *locked*, when they are *available for trading*, or when they generate *fee revenue*? If the goal is protocol stability, the North Star is likely "Weekly Active Locked Value," not "Number of Deposits."
+2.  **What specific behavior distinguishes a farmer from a partner?** Is it duration (30+ days), consistency (re-locking after maturity), or depth (minimum threshold)? You must define the exact timestamp and condition that transitions a user from "Speculator" to "Participant."
+3.  **What is the single question each event answers?** If an event does not answer a specific hypothesis (e.g., "Do bonus locks reduce 24h churn?"), do not instrument it.
+
+### Proposed Event Taxonomy: Separating Speculators from Participants
+Group your events by the user journey stage, reading bottom-up from retention. Do not track raw on-chain calls; track semantic actions that answer your questions.
+
+**1. Activation (The "Aha" Moment)**
+*   **Event:** `liquidity_provided_initial`
+    *   **Question:** Did the user complete the minimum viable deposit?
+    *   **Properties:** `amount`, `token_pair`, `wallet_id` (pseudonymous).
+    *   **Note:** Ignore micro-deposits that don't meet a governance-defined threshold.
+
+**2. Retention (The Core Differentiator)**
+*   **Event:** `lock_term_commitment`
+    *   **Question:** Did the user explicitly choose a long-term lock over an instant withdraw?
+    *   **Definition:** Triggered only when a user selects a lock duration > 24 hours.
+    *   **Properties:** `lock_duration_days`, `bonus_tier_selected`.
+*   **Event:** `lock_term_completed`
+    *   **Question:** Did the user survive the full term without early exit?
+    *   **Definition:** Triggered at the exact block height where the 30-day term matures *and* funds remain locked or are re-staked.
+    *   **Why this matters:** This is your "Successful Lock." The initial deposit is merely a trial; the completion is the retention signal. If they withdraw at day 29, this event never fires.
+*   **Event:** `early_exit_triggered`
+    *   **Question:** At what point do speculators flee?
+    *   **Properties:** `days_held`, `penalty_paid`.
+
+**3. Value Contribution (Trading vs. Providing)**
+*   **Event:** `liquidity_utilized_by_trade`
+    *   **Question:** Did this specific liquidity pool actually facilitate a trade?
+    *   **Properties:** `trade_volume`, `fees_generated`, `provider_wallet_id`.
+    *   **Attribution Logic:** Do not value users solely on "providing." Value them on `fees_generated` attributed to their share. A user who provides liquidity that is never traded has high "TVL" (vanity) but zero "Utility" (value). A frequent trader with low liquidity contributes via `swap_volume` but is not a "liquidity partner."
+
+### Implementation Directive
+*   **Identifier Seam:** Ensure you use a stable, pseudonymous wallet identifier to track cohorts across sessions. Do not use raw PII. Route any consent management to your privacy compliance protocol.
+*   **Stage Awareness:** Since you are pre-code (planning phase), do not build a complex dashboard yet. Define these three core events (`lock_term_commitment`, `lock_term_completed`, `liquidity_utilized_by_trade`) and the specific SQL/queries needed to calculate the "30-day retention rate" of locked value.
+*   **Next Step:** Present these three definitions to the governance committee. Ask them to ratify the definition of `lock_term_completed` as the sole metric for bonus eligibility. If they cannot agree on that single definition, the incentive program is not ready for code.
+
+**Note:** Do not fabricate a "good" retention rate benchmark; compare your post-launch results strictly against your current 40% (100% - 60%) baseline.
+**Note:** Any metric not tied to a specific smart contract state change is `UNVERIFIED` and should be excluded from the schema.

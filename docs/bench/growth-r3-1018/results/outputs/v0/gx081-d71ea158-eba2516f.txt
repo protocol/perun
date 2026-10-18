@@ -1,0 +1,32 @@
+### Immediate Measurement Plan for CodeBridge Board Proposal
+
+**1. Define the North Star: "Weekly Resolved Interactions"**
+Reject "total posts" and "raw registrations" as vanity metrics; they rise regardless of value. Your North Star must be **Weekly Resolved Interactions**: the count of unique threads per week where a question receives an answer marked as "Accepted" or where the original poster replies confirming resolution. This measures *value delivered*, not just noise generated. If this number stalls while registrations rise, your community is leaking value.
+
+**2. Diagnose the Funnel Bottom-Up (Retention First)**
+Do not focus on Daily Active Users (DAU) yet; for a niche developer hub, **Weekly Returning Users** performing the *core action* is the true health signal. Diagnose in this order:
+*   **Retention:** Of users who posted a question in Week 1, what % returned in Week 2? If this is low, pouring money into moderators or ads is wasted.
+*   **Activation:** Of users who registered, what % actually posted a question or answered one within 7 days? High logins with zero contribution indicates a "lurker trap."
+*   **Acquisition:** Only analyze registration sources *after* fixing retention.
+
+**3. Instrument Specific Events (Answer Named Questions)**
+Stop tracking "unique logins." Implement these three specific events immediately, each tied to a board-level question:
+*   `question_resolved`: (Property: `time_to_first_answer`, `is_mentor_verified`).
+    *   *Question:* "Are developers finding solutions quickly?"
+*   `mentorship_handshake`: (Property: `user_role`, `thread_id`). Triggered when a designated mentor replies to a novice-tagged thread.
+    *   *Question:* "Is our moderator budget driving high-value guidance?"
+*   `solution_accepted`: (Property: `answerer_id`, `asker_id`).
+    *   *Question:* "What is our true solution acceptance rate?" (Currently `UNVERIFIED`).
+
+**4. The Identifier Seam & Privacy**
+To track retention cohorts (e.g., "January registrants vs. February registrants"), you must link sessions to a **stable, pseudonymous user ID**. Do not use raw emails or IPs in analytics tools. Ensure this ID generation complies with GDPR (relevant for Brno/Czech EU context) by routing PII handling to your privacy compliance protocol.
+
+**5. Experiment Rigor for Moderator Budget**
+When testing the impact of increased moderation, do not just watch total posts rise. Pre-commit to a metric: "Increase `question_resolved` rate by 15% over 4 weeks." Do not peek at day 3 and declare victory; read the result once at the pre-committed end date to avoid false positives from natural variance.
+
+**This Week's Steps:**
+1.  **Define "Resolved":** Agree with moderators on the exact tag or button click that constitutes a `question_resolved` event.
+2.  **Instrument the Core Action:** Add tracking to the "Accept Answer" button and the first reply from a "Mentor" role.
+3.  **Run the Baseline Query:** Pull the % of January registrants who returned in February to perform a core action. If this is <20%, present this leak to the board as the primary reason for the budget increase (fixing the bucket before filling it).
+
+*Note: All baseline figures (e.g., current retention %) are `UNVERIFIED` until you run the queries above; do not estimate them for the deck. The board needs the *trend* of resolved interactions, not a fabricated industry benchmark.*

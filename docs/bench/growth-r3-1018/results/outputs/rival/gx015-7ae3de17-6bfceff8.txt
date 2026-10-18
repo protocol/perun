@@ -1,0 +1,62 @@
+# FitEU Pricing Experiment Framework: Privacy-Compliant Cohort Analysis
+
+## Experimental Design Strategy
+
+Given your constraints (no persistent IDs, GDPR compliance in France/Germany, 14-day window), we will use a **Time-Based Cohort Randomization** approach rather than user-level randomization.
+
+### Setup Protocol
+
+**1. Randomization Unit: Session-Device Fingerprint**
+- Generate a transient, non-PII session token using browser/device characteristics (user agent, screen resolution, timezone) hashed with a daily salt.
+- This token expires at session end and cannot link users across days or devices, satisfying privacy requirements.
+- Assign pricing variants (Control vs. Test) at the session level using a deterministic hash function to ensure consistent pricing within a single browsing session.
+
+**2. Cohort Definition**
+- **Cohort A (Control):** Users landing on pricing pages March 1–7 see standard pricing.
+- **Cohort B (Test):** Users landing on pricing pages March 8–14 see variant pricing.
+- *Alternative (if traffic allows):* Split days randomly (e.g., odd days = Control, even days = Test) to mitigate day-of-week effects.
+
+**3. Measurement Window**
+- Track revenue attributed to each cohort over a 14-day observation period from the user's first touchpoint.
+- Since you cannot track users returning on day 5 from a day 1 visit, measure **Day-0 and Day-1 conversion revenue** primarily. Extend to Day-14 only for users who return within a new session that can be probabilistically matched (e.g., same device fingerprint within a short window), clearly labeling this as "partial attribution."
+
+### Metrics & Analysis
+
+**Primary Metric:** Revenue Per Session (RPS)
+- Formula: `Total Subscription Revenue from Cohort / Total Pricing Page Sessions in Cohort`
+- This avoids the need for user-level deduplication. If one user converts twice on two devices, they count as two sessions and two revenues, maintaining ratio integrity.
+
+**Secondary Metric:** Conversion Rate (Session-to-Purchase)
+- Tracks the percentage of pricing sessions resulting in a transaction.
+
+**Guardrail Metric:** Refund/Chargeback Rate
+- Monitor closely; pricing confusion often spikes refunds within 48 hours.
+
+### Addressing the "Multi-Device/Shared Account" Risk
+
+You cannot eliminate this noise without IDs, but you can quantify and contextualize it:
+1.  **Assumption of Stability:** Assume the rate of multi-device usage and account sharing is constant between the Control and Test weeks. Since the error applies equally to both groups, the *relative lift* remains valid even if absolute numbers are slightly inflated.
+2.  **Sensitivity Analysis:** Report results with a "noise margin." Explicitly state: "If multi-device users account for X% of traffic, the true lift is within range Y–Z."
+3.  **Device-Type Segmentation:** Analyze mobile vs. desktop separately. Multi-device behavior often differs by platform; if lift is consistent across both, confidence increases.
+
+### Reporting for Legal & Product Leadership
+
+**For Legal (Compliance Focus):**
+- **Data Minimization:** Confirm no persistent IDs are stored; session tokens are ephemeral and non-reversible.
+- **Purpose Limitation:** Data is aggregated for statistical analysis only; no individual profiling occurs.
+- **Transparency:** Ensure the pricing variation is disclosed in Terms of Service updates if required by local consumer law (especially Germany).
+
+**For Product (Decision Focus):**
+- **Result Interpretation:** Present lift as a range with confidence intervals, explicitly noting the "unknown multi-device margin."
+- **Decision Rule:** Proceed if the lower bound of the confidence interval shows positive revenue impact >5% (adjust based on risk tolerance).
+- **Recommendation:** If results are positive but noisy, recommend a follow-up test in a jurisdiction with slightly more flexible tracking (e.g., US) to validate the magnitude, while rolling out the winner in EU if the risk-adjusted return is positive.
+
+### Implementation Checklist
+- [ ] Hash function validated for non-reversibility.
+- [ ] Daily salt rotation implemented to prevent cross-day linking.
+- [ ] Aggregation scripts tested to ensure no PII leakage in logs.
+- [ ] Legal review of session token generation logic completed.
+
+This approach prioritizes compliance while delivering statistically actionable insights through aggregate ratios rather than user journeys.
+
+*Note: Ensure your analytics tool (e.g., GA4) is configured to disable user-ID features for this specific event stream to prevent accidental policy violations.*

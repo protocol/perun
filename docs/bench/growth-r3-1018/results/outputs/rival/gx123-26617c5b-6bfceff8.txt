@@ -1,0 +1,58 @@
+# Heritage Bank Mobile App: Minimum Viable Event Tracking Plan
+
+**Objective:** Balance real-time fraud detection, regulatory compliance, and product optimization within a 5,000 TPS constraint, replacing the legacy 500+ event schema.
+
+**Strategy:** Shift from "track everything" to "track for decisions and compliance." We will implement a tiered tracking architecture:
+1.  **Tier 1 (Critical/Real-Time):** Fraud, security, and core transaction integrity. Fired synchronously or via high-priority streams.
+2.  **Tier 2 (Product/Analytics):** User journey and feature adoption. Fired asynchronously/batched.
+3.  **Tier 3 (Deprecated):** Removed entirely (e.g., `flash_login_attempt`).
+
+## Prioritized Event List (MVP)
+
+### 1. Security & Fraud (Tier 1 - Mandatory)
+*These events satisfy audit trails and real-time risk engines.*
+
+| Event Name | Trigger | Critical Properties | Decision/Risk Use |
+| :--- | :--- | :--- | :--- |
+| `login_started` | User enters credentials | `device_id`, `ip_address`, `geo_location`, `app_version` | Detect brute force; geo-velocity checks. |
+| `login_completed` | Successful auth | `user_id`, `auth_method` (biometric/PIN), `session_id` | Audit trail; session anomaly detection. |
+| `login_failed` | Auth rejection | `error_code`, `failure_reason`, `attempt_count` | Account takeover prevention. |
+| `device_trust_changed` | New device recognized | `device_fingerprint`, `trust_level`, `verification_method` | Step-up authentication triggers. |
+| `transaction_initiated` | Payment screen load | `transaction_type`, `amount`, `payee_id`, `currency` | Real-time fraud scoring before submission. |
+| `transaction_completed` | Success confirmation | `transaction_id`, `status`, `latency_ms`, `risk_score_applied` | Reconciliation; false positive analysis. |
+| `transaction_failed` | Rejection | `error_code`, `failure_stage`, `risk_flag` | Friction analysis; system health. |
+| `profile_sensitive_viewed` | View SSN/Card # | `field_type`, `masking_status` | Compliance audit for data access. |
+
+### 2. Core Product Journey (Tier 2 - Asynchronous)
+*These events drive product decisions and identify usage drops.*
+
+| Event Name | Trigger | Critical Properties | Decision Use |
+| :--- | :--- | :--- | :--- |
+| `onboarding_step_completed` | Wizard step finish | `step_name`, `time_spent_sec` | Funnel drop-off analysis. |
+| `feature_accessed` | Main menu selection | `feature_name`, `entry_point` | Adoption rates; feature deprecation. |
+| `support_contacted` | Help section click | `topic_category`, `channel` (chat/call) | Identify UX friction points. |
+| `bill_pay_scheduled` | Confirmation | `frequency`, `payee_type`, `amount` | Engagement depth; retention modeling. |
+| `session_ended` | App background/close | `session_duration_sec`, `actions_count` | Engagement quality; crash correlation. |
+
+## Implementation Governance
+
+**Naming Convention:** `object_action` (lowercase, underscores). No PII in event names or properties (e.g., do not send full account numbers, only masked IDs).
+
+**Data Volume Control:**
+*   **Exclude:** Generic UI clicks (e.g., `tab_clicked`, `scroll_event`) unless tied to a specific conversion funnel step.
+*   **Batching:** Tier 2 events must be batched locally and sent every 30 seconds or on app backgrounding to protect the 5,000 TPS pipeline.
+*   **Sampling:** Non-critical diagnostic events (e.g., `api_latency_log`) should be sampled at 10% unless an error occurs.
+
+## Addressing Historical Data & Migration
+
+**The Challenge:** You cannot backfill behavioral history (clicks) for users migrating mid-cycle if the event definitions change.
+**The Solution:**
+1.  **Identity Resolution:** Ensure the `user_id` remains consistent between legacy and new systems.
+2.  **Snapshot Migration:** Migrate only *state* data (current balance, account status, last login date) to the new warehouse. Do not attempt to re-process 10 years of raw clickstreams into the new schema.
+3.  **Baseline Reset:** Establish a "Day 0" baseline for product metrics (conversion rates, DAU) starting December 1st. Compare post-launch performance against high-level legacy aggregates (e.g., "Monthly Active Users"), not granular event paths.
+4.  **Hybrid Reporting:** For Q1 post-launch, maintain a parallel legacy dashboard for long-term trend context while the new system matures.
+
+**Recommendation for Sign-off:** Approve this 15-event MVP for December 1st. This reduces pipeline load by ~95% compared to the legacy model while satisfying all critical risk and compliance requirements. Expand Tier 2 only after stability is confirmed.
+
+*Note: Coordinate with Legal to confirm if "profile_sensitive_viewed" meets specific regional audit granularity requirements.*
+*Note: Ensure the `device_fingerprint` generation logic is documented for external audit verification.*

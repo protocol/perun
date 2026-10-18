@@ -1,0 +1,33 @@
+### Pilot Measurement Plan: RoboCare Riyadh Deployment
+
+**1. The North Star: Clinical Rounds Completed per Shift**
+Reject "nurse travel time saved" as your primary metric; it is an input, not a value outcome. If the robot saves time but doctors refuse to use it due to latency, the business fails. Your North Star must be **Completed Remote Rounds per Shift**. This rises only when the technology delivers real clinical value. Pair this with two input metrics: **Average Video Latency (ms)** and **Session Completion Rate** (rounds started vs. finished without technical abort).
+
+**2. Event Taxonomy: Instrument Only What Answers a Question**
+Do not log every sensor reading. Instrument exactly three events to answer specific pilot questions:
+*   `round_started`: Answers "Are staff attempting to use the unit?" (Properties: hospital_id, shift_time).
+*   `video_quality_degraded`: Answers "Is Wi-Fi infrastructure causing friction?" (Properties: latency_ms, packet_loss, duration_seconds). Trigger only when latency exceeds 200ms for >5 seconds.
+*   `round_aborted_technical`: Answers "Did infrastructure failure kill the workflow?" (Properties: reason_code, time_elapsed).
+
+**3. Reading the Funnel Bottom-Up (Retention First)**
+Do not measure adoption by counting logins (vanity). Read the data in this order:
+*   **Retention/Quality First:** Look at `video_quality_degraded` frequency. If >15% of rounds experience degradation, acquisition is wasted. The Wi-Fi constraint is your bottleneck, not staff willingness.
+*   **Activation Second:** Check `round_aborted_technical`. If doctors start rounds but abort due to lag, the "20-minute savings" hypothesis is invalid because the workflow is broken.
+*   **Acquisition Last:** Only analyze usage volume once quality and completion are stable.
+
+**4. The Decision Framework: Proceed, Pause, or Pivot**
+You requested a decision rule for the COO and procurement directors based on the first two weeks. Use this strict logic:
+*   **PROCEED to Full Rollout:** If `Session Completion Rate` > 90% AND average `video_quality_degraded` incidents are < 2 per shift per hospital. This proves the infrastructure holds and the workflow delivers value.
+*   **PAUSE for Infrastructure Upgrade:** If `round_aborted_technical` > 10% of attempts AND correlates directly with `video_quality_degraded` spikes. Do not blame the product; the Wi-Fi is the blocker. Fix the network before March 15.
+*   **PIVOT Workflow:** If completion is high but `Completed Remote Rounds` remains low despite staff availability. The issue is not technical but procedural; the "20-minute savings" assumption may not align with actual hospital routines.
+
+**5. Critical Warning on Your Hypothesis**
+Your assumption that "reducing travel time correlates with adoption" is **UNVERIFIED** until the pilot runs. It is possible that saving 20 minutes is irrelevant if the video quality makes diagnosis feel unsafe. Do not optimize for time savings if the `round_aborted_technical` rate is high. Safety and reliability trump efficiency in a hospital context.
+
+**This Week's Actions:**
+1.  Define the exact latency threshold (e.g., 200ms) with your lead engineer and hard-code it into the `video_quality_degraded` event trigger before deployment.
+2.  Establish the baseline: Manually count current physical rounds per shift in these three wards to calculate the true lift later.
+3.  Prepare the dashboard to show `Session Completion Rate` by hospital, not aggregate totals, to isolate site-specific Wi-Fi failures immediately.
+
+*Note: All metrics must use a pseudonymous session ID to track rounds without exposing patient or staff PII, routing any identity mapping to your privacy compliance protocol.*
+*Do not fabricate benchmark retention rates; compare the pilot data strictly against the manual baseline you establish in Action #2.*

@@ -1,0 +1,29 @@
+### Data Cleaning and Imputation Strategy for SiamRide
+
+**1. Immediate Segmentation and Root Cause Isolation**
+Before imputing values, you must segment the data to distinguish between network-induced data loss and application logic bugs. Split your dataset into four cohorts based on the intersection of **App Version** (pre-Aug 18 vs. post-Aug 18) and **Weather Conditions** (Heavy Rain vs. Normal).
+*   **If the error rate is high only in the new app version regardless of weather:** This is a code bug. Do not impute; flag these records for engineering repair and exclude them from financial reporting until patched.
+*   **If the error rate correlates strictly with heavy rain across all versions:** This confirms network packet fragmentation. Proceed with the imputation strategies below.
+
+**2. Imputation Strategy for Missing `vehicle_type` (30% missing)**
+Do not use a global mode imputation (e.g., filling all blanks with "Sedan"), as vehicle distribution varies significantly by district and time. This would bias fare calculations.
+*   **Method:** Use **Stratified Hot-Deck Imputation**.
+*   **Execution:** For every record missing `vehicle_type`, identify a donor record from the same **District**, **Hour of Day**, and **Day of Week** that has valid data. Assign the donor's vehicle type to the missing record.
+*   **Rationale:** Ride patterns in Bangkok are highly localized. A missing vehicle type in Sukhumvit at 6 PM is statistically likely to match other rides in Sukhumvit at 6 PM. This preserves the local mix of premium vs. economy rides without inventing data.
+
+**3. Correction Strategy for Mismatched Currency Codes (15% inconsistent)**
+Since SiamRide operates in Bangkok, the vast majority of fares should be in THB. Mismatched codes (e.g., USD, EUR) are likely parsing errors where the numeric value was correct but the metadata tag failed.
+*   **Method:** **Deterministic Normalization**.
+*   **Execution:** Verify the fare amount magnitude. If a fare is recorded as "5.00 USD" for a typical short ride, it is likely a currency tagging error. Convert these outliers to THB using the specific daily exchange rate for the transaction date *only if* the converted value falls within the 95% confidence interval of average fares for that specific route and vehicle type.
+*   **Exclusion:** If the converted amount is still an outlier (e.g., a "5.00 EUR" ride converts to 200 THB, but the route average is 500 THB), flag the record as unrecoverable and exclude it from the average calculation rather than forcing a correction.
+
+**4. Sensitivity Analysis for the CFO**
+To demonstrate the impact of data quality on Q3 revenue, run three scenarios on the cleaned dataset:
+*   **Base Case:** The dataset using the Stratified Hot-Deck and Deterministic Normalization methods described above.
+*   **Conservative Bound:** Treat all missing `vehicle_type` records as the *lowest* fare category available in that district/hour. Treat all currency errors as zero revenue. This establishes the absolute minimum revenue floor.
+*   **Aggressive Bound:** Treat all missing `vehicle_type` records as the *highest* fare category available in that district/hour. Treat currency errors as valid foreign currency transactions. This establishes the ceiling.
+
+Report the final average fare as the **Base Case**, with a footnote stating: *"Estimated variance due to data quality issues is between -X% and +Y%."* If this range exceeds 2%, explicitly recommend a reserve adjustment in the Q3 audit.
+
+**Note:** Exclude any rides from the August 18+ cohort if the error pattern persists during clear weather, as this indicates a systematic app bug that imputation cannot safely fix.
+**Note:** Document the specific exchange rates used for currency normalization in the audit appendix for reproducibility.

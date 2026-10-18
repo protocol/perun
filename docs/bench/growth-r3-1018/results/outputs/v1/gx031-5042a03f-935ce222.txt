@@ -1,0 +1,38 @@
+### Data Points to Isolate the Cause
+
+To distinguish between latency (SMS delay) and usability (UI confusion), pull the following event properties for the `sms_verification_screen` cohort from March 12 onward, segmented by device screen width:
+
+1.  **Time-to-Code-Received:** Timestamp of `sms_sent` minus timestamp of `code_received_event` (triggered when the user pastes or enters the first digit). This isolates network/carrier latency.
+2.  **Time-to-Submit:** Timestamp of `code_received_event` minus timestamp of `submit_clicked`. This isolates input friction.
+3.  **Resend Frequency:** Count of `resend_clicked` events per session. High resends coupled with low `code_received_event` firing indicates delivery failure; high resends with immediate `code_received_event` suggests user error or confusion.
+4.  **Input Error Rate:** Count of `submit_failed` (invalid code) events. A spike here on small screens specifically points to UI/keyboard overlap or copy-paste failures, not latency.
+5.  **Drop-off Timestamp:** Exact time elapsed on screen before `session_ended` without submission. If users leave immediately (<5s), it is likely a UI rendering issue. If they leave after 45s+, it is likely latency frustration.
+
+**Interpretation Logic:**
+*   **Latency Hypothesis Confirmed:** High `Time-to-Code-Received` correlates strongly with `session_ended`. `Resend Frequency` is high, but `Input Error Rate` is stable.
+*   **UI Hypothesis Confirmed:** `Time-to-Code-Received` is normal, but `Time-to-Submit` is elevated on small screens. `Input Error Rate` spikes on devices <375px width. Drop-off occurs almost immediately upon screen load.
+
+### Proposed Follow-Up Test Structure
+
+Do not A/B test the SMS provider directly yet; isolate the variable with a **UI-only intervention** first, as it carries zero cost and rules out the design hypothesis immediately.
+
+**Test Design:**
+*   **Control:** Current SMS flow (10% of mobile traffic).
+*   **Variant A (UI Fix):** Enlarged input field, auto-focus, and numeric keyboard enforcement (10% of mobile traffic).
+*   **Variant B (Latency Mitigation):** "Magic Link" fallback option displayed after 15 seconds (10% of mobile traffic).
+*   **Holdback:** 70% remain on the current flow to preserve the 71% success rate for the majority while you diagnose.
+
+**Pre-commitment Rules:**
+*   **Primary Metric:** Completion rate of the verification step.
+*   **Guardrail Metric:** Support ticket volume regarding "login issues."
+*   **Duration:** Run for 7 days to capture full weekly seasonality. With 4,500 daily visitors per variant, you can detect a 2% absolute lift with 80% power.
+*   **Stopping Rule:** Read results **once** at day 7. Do not peek at day 2; early significance on abandonment rates is often noise due to daily traffic fluctuations.
+
+**Decision Matrix for Friday:**
+1.  **If Variant A wins:** The issue is UI. Roll out the design fix to 100%.
+2.  **If Variant B wins:** The issue is latency. Investigate SMS vendor SLAs or switch providers.
+3.  **If neither wins:** The drop-off is likely due to external factors (e.g., carrier blocking) or a combination; proceed to qualitative user testing on the specific drop-off segment.
+
+**This Week's Step:** Query the `sms_verification_screen` logs for `Time-to-Code-Received` vs. `Input Error Rate` segmented by screen width by Thursday EOD. If the error rate on small screens is >2x that of large screens, recommend the UI fix (Variant A) for immediate deployment. If latency is the outlier, prepare the vendor review for the steering committee.
+
+*Note: All timestamps must be synchronized to UTC to avoid timezone skew in duration calculations. Ensure user IDs are pseudonymized before analysis to comply with privacy standards.*

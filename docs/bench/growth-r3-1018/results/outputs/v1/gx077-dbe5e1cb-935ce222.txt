@@ -1,0 +1,41 @@
+### Recommended Event Taxonomy and Success Score for LutongKusina Video
+
+To define "engagement" without fabricating benchmarks, instrument only the events that answer specific questions about creator value and repeat behavior. Reject "total watch time" as a standalone North Star; it rewards passive length over actual utility. Instead, track the following four events, each tied to a named question:
+
+1.  **`video_completion_rate`**
+    *   **Question:** Did the user see the critical cooking steps?
+    *   **Definition:** Count of sessions where watch time ≥ 80% of video duration / Total video starts.
+    *   **Why:** A 30-second view on a 2-minute recipe is likely a failure (user missed the method), whereas a 30-second view on a 40-second tip is success. Normalizing by duration answers this.
+
+2.  **`active_interaction_rate`**
+    *   **Question:** Did the content spark community action (the signal your managers observed)?
+    *   **Definition:** (Count of `comment_added` + `share_initiated` + `recipe_saved`) / Total video starts.
+    *   **Why:** Your hypothesis is that active signals drive repeat uploads. This isolates those specific behaviors from passive scrolling.
+
+3.  **`creator_return_interval`**
+    *   **Question:** Does this engagement actually lead to more supply?
+    *   **Definition:** Time delta (in days) between a creator's `video_upload` event and their *next* `video_upload`, correlated against the `active_interaction_rate` of the previous video.
+    *   **Why:** This validates your community managers' observation. If high comments/shares correlate with shorter return intervals, that is your leading indicator.
+
+4.  **`quality_flag_rate`**
+    *   **Question:** Are we incentivizing the *right* kind of content?
+    *   **Definition:** Count of `content_reported` or `low_quality_flagged` / Total uploads.
+    *   **Why:** Prevents gaming the system with spammy short clips just to boost completion rates.
+
+#### The "Creator Health" Score Formula
+Do not present raw numbers alone. Combine these into a single weighted index for the dashboard:
+
+$$ \text{Health Score} = (0.4 \times \text{Completion Rate}) + (0.4 \times \text{Active Interaction Rate}) + (0.2 \times \text{Normalized Return Lift}) $$
+
+*Note: "Normalized Return Lift" is a derived metric comparing a creator's return interval against their own historical baseline (not a global benchmark).*
+
+**Implementation Constraints:**
+*   **Identifier Seam:** To calculate `creator_return_interval`, you must link events via a stable, pseudonymous `creator_id`. Do not use raw emails or device IDs directly in this analytics layer; route PII mapping to your privacy compliance protocol.
+*   **Baseline Rule:** The dashboard must display trends against the creator's *own* prior performance (e.g., "Your engagement is up 10% vs. your last 3 videos"). Do not display "Industry Average" thresholds; we have no source for Filipino recipe app benchmarks, and inventing one would be misleading.
+
+#### This-Week Steps
+1.  **Instrument:** Add `video_completion_rate` and `active_interaction_rate` to the event taxonomy immediately; verify these fire correctly on the May 30th build.
+2.  **Validate:** Run a historical query on April 5–present data to confirm if `active_interaction_rate` correlates with `creator_return_interval` for your top 50 creators. If the correlation is weak, re-weight the formula before launch.
+3.  **Define Success:** Set the dashboard default view to "Retention of Core Action" (repeat uploads) rather than "Acquisition" (total views), ensuring the team focuses on the leaky bucket first.
+
+*No external benchmarks were used; all thresholds must be derived from your April 5th baseline.*

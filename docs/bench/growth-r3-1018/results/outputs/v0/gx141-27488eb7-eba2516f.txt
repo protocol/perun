@@ -1,0 +1,34 @@
+### Top Three Metrics to Validate the CloudNest Pivot
+
+To validate your pivot to a specialized compliance tool within an eight-month runway, you must reject vanity metrics like total signups or pageviews. Instead, instrument these three specific metrics that directly correlate to customer value and renewal risk:
+
+**1. North Star: Weekly Active Audits Completed**
+Define "value" as the completion of a full audit workflow, not just login frequency. Track the count of unique financial firms that successfully complete an end-to-end audit cycle per week.
+*   **Why:** This rises only when clients derive actual compliance value. If this number stagnates while logins increase, you are building a dashboard, not a solution.
+*   **Implementation:** Instrument a single `audit_completed` event triggered only when the final compliance report is generated. Ignore partial drafts.
+
+**2. Activation Rate: Time-to-First-Audit (TTFa)**
+Measure the elapsed time from a user's first login post-pivot to their first `audit_completed` event.
+*   **Why:** In a narrow B2B pivot, friction kills adoption immediately. If clients cannot run an audit within their first session or two, they will churn before renewal discussions begin. This isolates onboarding friction from product value.
+*   **Implementation:** Capture the timestamp of the first session after the feature launch and subtract it from the timestamp of the first successful audit. Segment this by firm size to identify if enterprise clients face different barriers than smaller firms.
+
+**3. Retention Cohort: Week-4 Repeat Audit Rate**
+Track the percentage of firms that performed an audit in Week 1 and return to perform another audit in Week 4.
+*   **Why:** You hypothesize that reducing time-to-audit drives renewal. Renewal is a lagging indicator; repeat usage is the leading proxy. If users do not return to the core action within a month, the "time savings" hypothesis is false, regardless of how fast the first audit was.
+*   **Implementation:** Group users by their start week (cohort) and query the percentage active in the fourth subsequent week. Do not aggregate all users; compare Week 1 cohorts against Week 2 cohorts to see if product iterations improve stickiness.
+
+### Isolating Signal from Noise with Limited Bandwidth
+
+Do not instrument "everything just in case." With limited engineering resources, every unanalyzed event is technical debt.
+*   **The Identifier Seam:** Ensure your analytics use a stable, pseudonymous Firm ID to track users across sessions. Do not use raw PII; route identity mapping to your privacy compliance protocols. This allows you to follow a user's journey without violating data governance.
+*   **Question-First Instrumentation:** Only build an event if it answers a specific question: "Did they finish the audit?" or "Did they come back?" If an event does not feed into the three metrics above, do not build it yet.
+*   **Baseline Comparison:** Since you lack historical data for this specific workflow, do not guess benchmarks. Compare your current Week-4 retention against your own previous week's cohort. A rising trend is your only valid signal of product-market fit in the absence of external benchmarks.
+
+### Immediate Next Steps (Two-Week Sprint)
+
+1.  **Define and Instrument:** Engineering to implement the `audit_completed` event and capture start/end timestamps for the TTFa calculation. Verify these fire correctly in a staging environment within 3 days.
+2.  **Build the Cohort Query:** Analytics lead to construct the Week-4 repeat rate query using the new Firm ID. Run this manually on day 14 to establish the first baseline.
+3.  **Board Review Prep:** Prepare a single slide showing the trend of "Weekly Active Audits" vs. "Time-to-First-Audit." If TTFa drops while Active Audits rise, the pivot is working. If not, the hypothesis requires adjustment before Q3.
+
+*Note: Do not attempt A/B testing yet; your sample size is too small and the pivot is too binary. Focus entirely on observing the natural adoption curve of the new workflow.*
+*Any metric value cited in board meetings must be pulled directly from these queries; do not estimate or extrapolate numbers.*

@@ -1,0 +1,34 @@
+### Reconciliation Plan: Mobile Web vs. Native App Price Display
+
+**Objective:** Isolate the cause of the divergent click-through rates (CTR) to the payment page between native app (+15%) and mobile web (-10%) to inform the revert decision by October 25th.
+
+**1. Validate Data Integrity (The "Sanity Check")**
+Before analyzing user behavior, confirm the instrumentation is identical across channels.
+*   **Action:** Audit the event taxonomy for `click_payment_page`. Verify that the trigger condition (e.g., button click vs. page load) and the definition of the "price display feature" flag are consistent in the codebase for both iOS/Android and mobile web browsers.
+*   **Decision Rule:** If the event firing logic differs, the metric is `UNVERIFIED`. Fix instrumentation before analyzing behavior.
+
+**2. Segmentation to Isolate the Variable**
+Break down the mobile web decline to distinguish between technical rendering issues, demographic shifts, and noise.
+*   **Browser/OS Segmentation:** Segment mobile web CTR by browser (Safari, Chrome, Firefox) and OS version.
+    *   *Hypothesis:* If the drop is isolated to Safari iOS, it suggests a rendering bug specific to WebKit. If uniform across all browsers, it suggests a UX flow issue.
+*   **New vs. Returning Users:** Compare the lift/drop for new users vs. returning logged-in users.
+    *   *Hypothesis:* If only new users drop off, the feature may confuse first-time visitors (activation leak). If returning users drop off, it disrupts established habits.
+*   **Funnel Step Analysis:** Measure the drop-off at the specific step *before* the payment click (e.g., "viewed price details").
+    *   *Hypothesis:* If users view the price but don't click, the display is confusing. If they don't even view the price, the feature may be broken or hidden on load.
+
+**3. Statistical Significance & Noise Check**
+Determine if the -10% is signal or noise.
+*   **Action:** Calculate the confidence interval for the mobile web change using the pre-launch baseline variance.
+*   **Decision Rule:** If the confidence interval includes 0%, the result is `UNVERIFIED` noise; do not revert based on this data alone. If the lower bound is significantly below 0%, proceed to root cause.
+
+**4. Qualitative Validation (The "Why")**
+Since quantitative data shows *what* is happening, use qualitative methods to confirm *why*.
+*   **Action:** Deploy an on-site micro-survey on mobile web triggered only when a user abandons the price page: "Was anything unclear about the price display?"
+*   **Action:** Review session recordings (if available and consented) for mobile web users who dropped off, looking for "rage clicks" or rapid back-button usage near the price component.
+
+**Recommended Next Steps (This Week)**
+1.  **Engineering:** Audit the `click_payment_page` event definition across platforms by **October 18th** to rule out instrumentation drift.
+2.  **Analytics:** Produce the browser-specific and new-vs-returning cohort breakdowns by **October 20th**.
+3.  **Decision Gate:** If the mobile web drop is statistically significant (>95% confidence) and isolated to a specific rendering engine or user type, recommend a targeted fix. If the drop is uniform and significant across all mobile web segments with no clear technical fault, recommend reverting the change by **October 25th** to stop revenue leakage.
+
+*Note: Do not compare these results to external industry benchmarks; rely solely on LondonStay's pre-launch baseline. Ensure any user-level tracking for session replay adheres to pseudonymization standards.*

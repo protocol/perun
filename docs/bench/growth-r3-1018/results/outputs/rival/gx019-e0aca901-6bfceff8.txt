@@ -1,0 +1,58 @@
+# SA NewsFeed Retention Investigation Plan
+
+Your current tracking (clicks, time-on-page) measures consumption volume, not consumption quality or satisfaction. High clicks with low retention suggests users are clicking but not finding value, or facing friction unique to the South African context (e.g., data costs, load times on mobile networks). To diagnose this before the May 1 launch, you must shift from tracking "activity" to tracking "value realization."
+
+## 1. Critical Missing Events to Implement Immediately
+
+Add these events to your tracking plan to distinguish between "mindless clicking" and "meaningful engagement."
+
+### Content Quality & Satisfaction Signals
+| Event Name | Properties | Why It Matters |
+| :--- | :--- | :--- |
+| `article_read_completed` | `article_id`, `category`, `read_duration`, `scroll_depth_pct` | Differentiates a accidental click from actual reading. If `scroll_depth` < 20% on high-click articles, your headlines are clickbait. |
+| `article_abandoned_early` | `article_id`, `time_on_page`, `exit_section` | Identifies content that fails to deliver on the headline promise immediately. |
+| `content_saved_offline` | `article_id`, `network_type` (WiFi/Cellular) | Critical for SA market. Indicates intent to return and sensitivity to data costs. |
+| `content_shared` | `article_id`, `share_channel` (WhatsApp, Facebook, SMS) | WhatsApp is dominant in SA. High shares often correlate with higher retention; lack thereof suggests low relevance. |
+
+### Technical & Contextual Friction (SA Specific)
+| Event Name | Properties | Why It Matters |
+| :--- | :--- | :--- |
+| `data_saver_mode_toggled` | `state` (on/off), `network_type` | Users on limited data plans may bounce if the app consumes too much. |
+| `media_load_failed` | `asset_type` (image/video), `error_code`, `network_type` | High failure rates on mobile networks (MTN/Vodacom/Africell) will kill retention instantly. |
+| `app_backgrounded` | `session_duration`, `last_action` | Did they leave to check data balance? Did the app drain battery? |
+
+### Recommendation Feedback Loop
+| Event Name | Properties | Why It Matters |
+| :--- | :--- | :--- |
+| `recommendation_dismissed` | `article_id`, `reason` (optional), `position` | Explicit negative feedback for the algorithm. |
+| `category_muted` | `category_name` | Users actively telling you what they don't want. |
+| `search_performed_no_results` | `query_terms` | Reveals content gaps in your local coverage. |
+
+## 2. Measurement Strategy for Data Science
+
+Do not just aggregate these events. Your data team must construct the following derived metrics to investigate the retention gap:
+
+**A. The "Value per Click" Ratio**
+Calculate: `(Count of article_read_completed where scroll_depth > 50%) / (Total cta_clicked)`
+*   **Hypothesis:** If this ratio is low (<30%), users are being misled by headlines. The recommendation engine is optimizing for clicks, not satisfaction.
+
+**B. Data-Friction Cohort Analysis**
+Segment retention curves by `network_type` and `data_saver_mode_toggled`.
+*   **Hypothesis:** If retention for Cellular users is significantly lower than WiFi users, your app is too data-heavy for the average SA mobile experience.
+
+**C. The "Second Day" Trigger**
+Analyze the specific actions taken by the 12% who retained vs. the 88% who churned on Day 2.
+*   **Action:** Identify the "Magic Moment." Is it reading 3 articles? Saving 1 story? Sharing via WhatsApp? Once identified, force this action in the onboarding flow.
+
+**D. Content Category Heatmap**
+Map `article_read_completed` against `category`.
+*   **Hypothesis:** You may be over-recommending high-click/low-value categories (e.g., celebrity gossip) while under-serving high-retention categories (e.g., local load-shedding schedules, sports, finance).
+
+## 3. Immediate Next Steps
+
+1.  **Implement Tracking:** Deploy the events above via your analytics tool (e.g., Mixpanel, GA4, PostHog) within the next sprint.
+2.  **Historical Proxy Analysis:** If you cannot backfill data, run a qualitative survey with the 5,000 test users asking specifically about data usage and content relevance.
+3.  **Algorithm Adjustment:** Temporarily re-weight your recommendation model to prioritize `scroll_depth` and `read_completed` over `click` until the May 1 launch.
+
+*Note: Ensure all event properties exclude PII (personally identifiable information) to comply with POPIA (South Africa's data protection act).*
+*Validate implementation using DebugView before full rollout to ensure data integrity.*

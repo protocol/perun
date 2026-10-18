@@ -1,0 +1,41 @@
+**FitPulse Firmware v1.0 Event Prioritization Plan**
+
+**Objective:** Validate health claims and achieve 7-day battery life within 2MB daily local storage limit.
+**Deadline:** October 12th (Memory Allocation Schema Finalization)
+**Stakeholder:** Chen, Hardware Engineering Lead
+
+### 1. Mandatory Events (Include in v1.0)
+These events are non-negotiable for validating core health claims and must be stored locally before sync.
+
+| Event Category | Specific Metric | Frequency/Trigger | Storage Estimate (Daily) | Rationale |
+| :--- | :--- | :--- | :--- :--- |
+| **Cardiac Health** | Heart Rate (HR) & Heart Rate Variability (HRV) | Every 15 mins (Passive) + On-Demand (Active) | ~400 KB | Core health claim validation. 15-min intervals balance trend accuracy with power. |
+| **Activity Validation** | Step Count & Accelerometer Summary | Aggregated per minute | ~300 KB | Required for "active minutes" and basic step claims. Raw data is too heavy; store summaries. |
+| **Sleep Staging** | Motion + HR during sleep window | 1-min intervals during detected sleep (approx. 8 hrs) | ~500 KB | Essential for "sleep quality" claims. Lower frequency than wakefulness is acceptable. |
+| **GPS (Night Run)** | Location Coordinates | Every 60 seconds (Throttled from standard 1-5s) | ~150 KB | **Trade-off Accepted:** Reducing GPS frequency from 5s to 60s extends battery significantly with minimal loss of route fidelity for trend analysis. |
+| **System Health** | Battery Level, Sync Status, Error Logs | On change / Hourly | ~50 KB | Critical for debugging field performance and validating the 7-day claim. |
+| **Total Estimated Usage** | | | **~1.4 MB** | Leaves ~600 KB buffer for metadata and unexpected spikes. |
+
+### 2. Deferred Events (Move to v2.0)
+Defer these to reduce initial memory pressure and maximize battery performance for the launch claim.
+
+*   **Raw Accelerometer/Gyroscope Data:** Store only derived metrics (steps, fall detection) in v1. Raw data consumes excessive memory.
+*   **Environmental Sensors (Ambient Light/Temp):** Unless directly tied to a specific health claim for launch, defer. These are "nice-to-have" context, not core validation.
+*   **High-Frequency GPS (<30s):** Standard running tracking drains battery too fast for a 7-day claim. Stick to the 60s night-run throttle.
+*   **Continuous SpO2:** Limit to spot checks or sleep-only in v1. Continuous monitoring is too power-intensive.
+
+### 3. Critical Trade-offs & Recommendations
+
+**Battery vs. Data Richness:**
+To meet the **7-day battery claim**, you must prioritize *trend validity* over *granular precision*.
+*   **GPS Throttling:** Users in Taipei running at night will tolerate a 60-second GPS update interval. The route map remains 95% accurate for distance/pacing trends, but power consumption drops by ~80% compared to 5-second updates. This is the single highest impact decision for battery life.
+*   **HRV Frequency:** The 15-minute interval is sufficient for circadian rhythm and stress trend analysis. Increasing this to 5 minutes yields diminishing analytical returns while tripling the power draw for that sensor.
+
+**Storage vs. Fidelity:**
+*   **Aggregation is Key:** You cannot store raw motion data. The firmware must process accelerometer data on-device and store only the *minute-level aggregates* (step count, intensity score). This reduces storage needs by roughly 90%.
+*   **Buffer Management:** With a 1.4 MB estimated daily usage against a 2 MB limit, you have a ~30% safety margin. Do not exceed this. If logs approach 1.8 MB, implement a "oldest data drop" policy before sync fails.
+
+**Validation Strategy:**
+To validate health claims locally without cloud dependency, the device must retain at least **48 hours** of high-integrity HR/HRV and Sleep data. The proposed schema supports 3+ days of local storage, ensuring data isn't lost if a user misses a daily sync.
+
+**Final Recommendation:** Proceed with the **Mandatory Events** list above. Reject any request to add raw sensor streams or higher-frequency GPS for v1.0. The 60-second GPS interval is the specific compromise required to satisfy both the Taipei night-run use case and the 7-day battery marketing claim.

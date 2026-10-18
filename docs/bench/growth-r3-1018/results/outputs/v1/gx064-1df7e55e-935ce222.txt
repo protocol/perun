@@ -1,0 +1,45 @@
+### Core Metric Definitions for BuildFlow Safety Compliance Beta
+
+**1. North Star Metric: Weighted Safety Compliance Rate (WSCR)**
+*Definition:* The percentage of required safety protocols completed, normalized by project stage and active workforce, representing the true adoption of safety culture regardless of firm size or project phase.
+*Formula:* `(Sum of Completed Protocols across all active projects) / (Sum of Required Protocols based on Project Stage & Headcount)`
+*Why this works:* This rejects raw counts (vanity) which favor large firms. It answers: "Are users actually performing the safety work required for their specific context?"
+
+**2. Input Metric A: Stage-Normalized Activation Rate**
+*Definition:* The percentage of beta firms that complete their first full cycle of stage-appropriate safety checks within 7 days of onboarding.
+*Logic:*
+- **Planning Phase Projects:** Required cycle = Submission of Risk Assessment + Site Setup Checklist (2 items).
+- **Active Construction Projects:** Required cycle = Daily Hazard Log + Equipment Check + Personnel Briefing (3 items).
+*Formula:* `(Firms completing stage-specific cycle within 7 days) / (Total Firms onboarded)`
+*Context for CS Team:* Explain to small operators that "activation" means finishing their 2-item planning list, while large firms must finish their 3-item active list. Both count equally as "activated."
+
+**3. Input Metric B: Retention of Core Action (Weekly Cohort)**
+*Definition:* The percentage of firms that maintain a WSCR > 80% for at least 4 out of 5 days in a given week, measured by cohort (week of signup).
+*Logic:* Filters out "one-and-done" compliance. True value is consistent behavior.
+*Formula:* `(Firms with ≥4 days of WSCR > 80% in Week X) / (Total Active Firms in Week X)`
+*Context for CS Team:* Use this to identify struggling firms. If a single-person operator drops off, it's a usability issue. If a 50-person firm drops off, it's likely a workflow integration issue.
+
+**4. Event Taxonomy (Instrumentation Rules)**
+Only instrument events that answer the specific questions above. Do not track every click.
+- `safety_protocol_viewed`: Answers "Did they see the requirement?" (Property: `project_stage`, `firm_size_bucket`)
+- `safety_protocol_completed`: Answers "Did they do the work?" (Property: `protocol_type`, `worker_count_at_time`)
+- `project_stage_updated`: Answers "Did the requirements change?" (Triggers recalculation of denominator for WSCR)
+
+**Normalization Logic for Project Stages**
+To solve the variance between planning and active construction, the system must dynamically assign a "Required Protocol Count" per project per day:
+- **If Stage = Planning:** Denominator = 2 (Risk Assessment, Site Setup).
+- **If Stage = Active:** Denominator = 3 + (0.1 × Active Workers on Site). *Note: The worker multiplier caps at 5 to prevent large sites from skewing the average disproportionately.*
+- **If Stage = Paused:** Denominator = 0 (Project excluded from WSCR calculation for that day).
+
+**Customer Success Talking Points**
+- **For Single-Person Operators:** "Success is hitting 100% on your 2-item planning list. You aren't compared to the big guys."
+- **For Large Firms:** "Success is maintaining an 80% rate even with 50 workers. We measure your consistency, not just your volume."
+- **For Mixed Portfolios:** "Your dashboard shows a weighted average. A paused project doesn't hurt your score; it just drops out of the math until work resumes."
+
+**This Week's Steps**
+1. Implement the dynamic denominator logic (Stage + Worker Cap) in the analytics database before April 5th.
+2. Create three static cohorts in the dashboard: "Solo/Planning," "SME/Active," and "Enterprise/Mixed" to validate that WSCR distributions are comparable across groups.
+3. Train CS staff to interpret a low WSCR not as "low usage" but as "missing required steps for current stage," triggering a specific workflow intervention.
+
+*Note: All baseline thresholds (e.g., what constitutes "good" retention) must be derived from your own beta data after week 2; no external benchmarks are applied here.*
+*Ensure user IDs used for cohorting are pseudonymized before being passed to the analytics engine to comply with privacy standards.*

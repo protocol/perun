@@ -1,0 +1,33 @@
+**Experimental Approach: Fixed-Horizon Test with Manual Sampling**
+
+Do not attempt continuous monitoring or "peeking" at results. With one developer and limited traffic, the highest risk is a false positive caused by checking the data daily and stopping early. Instead, commit to a **fixed-horizon design**: decide the sample size and end date *before* launching, and read the data exactly once at the end.
+
+**1. The Design (Minimizing Engineering Effort)**
+*   **Duration:** 14 days. This captures two full weekly cycles (weekday/weekend donation patterns) without requiring complex seasonality adjustments.
+*   **Sample Size Calculation:** To detect a 10% relative lift (from 3.0% to 3.3%) with standard statistical power (80%) and significance (5%), you need approximately **26,000 visitors per variant**.
+*   **Feasibility Check:** At 800 visitors/day, you generate ~5,600 visitors/week. Over 14 days, you will reach ~11,200 total visitors. Split evenly, that is only ~5,600 per variant.
+*   **The Hard Truth:** You **cannot** statistically detect a 10% lift in one month with your current traffic. The test would be underpowered, meaning a "win" could easily be noise.
+*   **Pivot Strategy:** To make this viable for the board, change the success metric. Instead of a subtle 10% lift, design the test to detect a **larger effect size (e.g., 25% relative lift, moving conversion from 3% to 3.75%)**. This requires only ~3,000 visitors per variant, which is achievable in 8–9 days. If the new page cannot drive a massive 25% improvement, it is likely not worth the engineering maintenance anyway.
+
+**2. Implementation Plan for David (4 Hours/Week)**
+*   **Week 1 (Setup - 4 hrs):** Hard-code the B variant into the landing page. Use a simple cookie or URL parameter to split traffic 50/50. No complex platform integration.
+*   **Weeks 2–3 (Data Collection - 0.5 hrs/week):** David does not need to build dashboards. He only needs to ensure the server logs or database correctly flag which variant a donor saw.
+*   **Week 4 (Analysis - 2 hrs):** Export two numbers manually: *Total Visitors per Variant* and *Total Donations per Variant*. Calculate the conversion rate and confidence interval using a standard online calculator.
+
+**3. Manual Data Points to Collect**
+If automation is impossible, David must manually extract these four figures at the end of the test:
+1.  **Variant A Visitors:** Count of unique users shown the control page.
+2.  **Variant A Donations:** Count of completed transactions from Variant A.
+3.  **Variant B Visitors:** Count of unique users shown the new page.
+4.  **Variant B Donations:** Count of completed transactions from Variant B.
+*Do not track intermediate clicks or time-on-page; they add engineering overhead and do not answer the primary question of revenue impact.*
+
+**4. Framing Limitations for the Board**
+Present the findings with this specific narrative to justify budget:
+*   **The Constraint:** "We tested for a 'home run' (25% lift) because our current traffic volume cannot reliably detect small improvements without expensive tooling or more engineering time."
+*   **The Result:** If the test wins, it proves the new design is a major breakthrough worth scaling. If the test is inconclusive or loses, it proves that **our current traffic volume is too low to iterate quickly.**
+*   **The Ask:** "To run sophisticated, continuous experiments that detect smaller 5–10% gains (which compound over time), we need to invest in automated experimentation infrastructure or increase traffic acquisition. Our current manual process limits us to detecting only massive changes."
+
+This approach protects David from maintenance hell, avoids statistical errors from peeking, and turns a potentially "failed" small-lift test into a concrete business case for more resources.
+
+*Note: Ensure the traffic split is truly random (e.g., based on session ID hash) to avoid selection bias. Do not switch variants mid-test.*

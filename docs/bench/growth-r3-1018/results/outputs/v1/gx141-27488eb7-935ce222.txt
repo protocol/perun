@@ -1,0 +1,35 @@
+### Top Three Metrics for CloudNest's Compliance Pivot
+
+To validate your pivot to a specialized compliance tool within an eight-month runway, stop measuring broad collaboration activity. Your dashboard must reflect **customer value realization** specific to financial audits, not platform usage. Prioritize these three metrics, instrumented immediately:
+
+**1. North Star: Weekly Active Audits Completed**
+*   **Definition:** The count of distinct financial firms that successfully generate a final, exportable audit report using the new compliance workflow within a 7-day window.
+*   **Why it matters:** This rejects vanity metrics like "logins" or "documents uploaded." A user can log in daily and still fail to derive value. This metric only rises when a client achieves the core outcome: a finished audit. It directly correlates to renewal likelihood in a compliance context.
+*   **Implementation:** Instrument a single `audit_report_generated` event with properties for `firm_id`, `report_type`, and `time_to_complete`.
+
+**2. Input Metric: Time-to-First-Value (TTFV) for Compliance**
+*   **Definition:** The elapsed time from a user's first login post-pivot to their first completed `audit_report_generated` event.
+*   **Why it matters:** You hypothesize that reducing time-to-audit drives renewal. This metric validates that hypothesis. If TTFV is high, clients will churn before realizing the tool's benefit, regardless of its ultimate power. It isolates whether your new UX actually simplifies the workflow compared to the old suite.
+*   **Implementation:** Calculate the delta between `first_post_pivot_login` and `first_audit_report_generated` per `firm_id`. Track the median trend weekly.
+
+**3. Leading Indicator: Core Action Retention (Week 2)**
+*   **Definition:** The percentage of firms that complete at least one audit in Week 1 and return to complete another audit in Week 2.
+*   **Why it matters:** Do not pour engineering effort into acquisition or feature breadth until you prove users return to the core action. In B2B compliance, usage is often periodic, but the *intent* to use must be sticky. If this retention rate is near zero, the product-market fit for the narrow focus is broken, and you must pivot again before burning cash.
+*   **Implementation:** Run a simple cohort query grouping firms by their first audit week and checking for activity in the subsequent week.
+
+### Isolating Signal from Noise with Limited Bandwidth
+
+Given your two-week implementation window and skeptical board, adhere to these constraints to avoid over-engineering:
+
+*   **Instrument Only What Answers a Named Question:** Do not track "clicks," "page views," or "time on page." Every event logged must answer: "Did this firm complete an audit?" or "How long did it take?" Unused events are technical debt and cost money to store.
+*   **Use Your Own Baseline, Not Industry Benchmarks:** Ignore generic SaaS retention rates. Your only valid benchmark is your own Week 1 performance. If Week 2 retention drops from 40% to 10%, that is the signal. If it stays flat, that is the signal. Do not wait for an external "good" number to act.
+*   **Stable Identifier Seam:** Ensure your analytics tool links events via a stable, pseudonymous `firm_id` rather than individual user emails. Compliance workflows often involve multiple stakeholders within one client firm; you must measure the *firm's* progress, not individual activity. Route any PII handling to your privacy compliance protocol immediately.
+
+### This Week's Steps
+
+1.  **Define the Event Schema:** Product and Engineering to agree on the exact definition of `audit_report_generated` (e.g., does it require a specific file format?) by tomorrow.
+2.  **Implement Tracking:** Instrument the three events above (`audit_report_generated`, `first_post_pivot_login`) for the top 20 pilot customers only. Do not roll out to the entire base yet.
+3.  **Set the Review Cadence:** Schedule a board update for 14 days from now showing only the TTFV trend and Week 1 retention for those 20 firms. If TTFV > 4 hours or Retention < 20%, the hypothesis is `UNVERIFIED` and requires immediate product iteration.
+
+*Note: Since historical data on this workflow is missing, all initial targets are `UNVERIFIED` until the first 20 firms generate data. Do not fabricate success criteria.*
+*Ensure your analytics provider supports cohort analysis by `firm_id` before writing code.*

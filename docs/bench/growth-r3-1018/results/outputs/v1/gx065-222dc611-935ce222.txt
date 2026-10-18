@@ -1,0 +1,28 @@
+**Recommendation for GreenPatch North Star Metric**
+
+**Primary North Star: Weekly Active Plots with Harvest Activity**
+We recommend defining the North Star as the count of unique garden plots where a user logs a harvest event within a rolling 7-day window.
+
+While tool exchanges indicate community trust, they are a supporting behavior, not the core value proposition. The primary reason gardeners join GreenPatch is to grow food. A metric based on tool sharing risks optimizing for social features while the actual gardening (the retention driver) stagnates. Conversely, raw "plot utilization" is a vanity metric; a plot can be "allocated" but abandoned. "Harvest weight" is too variable due to seasonality and crop types, making it noisy for weekly engineering sprints.
+
+**Weekly Active Plots with Harvest Activity** satisfies the North Star criteria because:
+1.  **Customer Value:** It only rises when a user successfully completes the core loop: planting, maintaining, and harvesting.
+2.  **Business Alignment:** It directly correlates with long-term retention. If users are harvesting, they are returning to the app and the garden.
+3.  **Actionable:** Engineering can improve the flow of logging harvests or sending growth reminders; Community teams can focus on workshops that lead to successful yields.
+
+This metric shifts the focus from "signups" (450 registered) to "value realized." For the board, this demonstrates that capital is fueling actual food production, not just registration numbers.
+
+**Secondary Guardrail Metrics**
+To ensure we do not optimize for harvest logging at the expense of community health or operational stability, track these two guardrails:
+
+1.  **Tool Exchange Success Rate:** (Completed Exchanges / Requested Exchanges).
+    *   *Purpose:* Ensures the collaboration layer remains healthy. If the North Star rises but this rate drops, we are becoming a solitary tracking tool rather than a community platform.
+2.  **Plot Churn Rate:** (Plots marked "inactive" or unallocated in a 30-day window / Total Allocated Plots).
+    *   *Purpose:* Prevents "gaming" the harvest metric (e.g., users logging fake harvests to look active while actually quitting). If harvests go up but churn also goes up, the data is flawed or the value is superficial.
+
+**Implementation Note for September Expansion**
+Do not instrument "everything." For the city-wide launch, instrument only the events required to calculate these three metrics: `plot_allocated`, `harvest_logged`, `tool_requested`, `tool_completed`, and `plot_deactivated`. Any other data collection is premature noise until these baselines are established.
+
+**This Week's Steps**
+1.  **Define the Event Schema:** Finalize the properties for `harvest_logged` (must include plot_id, crop_type, and weight_optional) to ensure the North Star can be calculated accurately without PII issues.
+2.  **Baseline the Pilot:** Run a query on the existing 450 users to determine the current percentage of allocated plots that produced a harvest in the last 14 days. This establishes your true baseline before the September launch; do not assume a benchmark.

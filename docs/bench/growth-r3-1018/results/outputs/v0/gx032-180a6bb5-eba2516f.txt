@@ -1,0 +1,34 @@
+### Proposed Activation Framework for CulinaLog
+
+**1. Redefine the Core Value Event**
+Shift the definition of activation from a cumulative count ("3 ingredients") to a specific value-realization moment. Given your support data, the "Aha!" moment likely occurs when a user successfully logs their **first complete recipe** or achieves their **first content unlock**, regardless of the total ingredient count. A user logging one complex recipe may derive more value than a user logging three isolated ingredients.
+
+**2. The Retention Correlation Method**
+To determine the optimal threshold without arbitrary guessing, use your existing six-month historical data to run a correlation analysis between specific behavioral milestones and long-term retention (e.g., Week 4 retention).
+
+*   **Step A: Segment by Behavior, Not Count.** Instead of grouping by "1, 2, or 3 items," group users by specific actions:
+    *   Logged 1 ingredient only.
+    *   Logged 3 ingredients but no full recipe.
+    *   Logged 1 full recipe (regardless of ingredient count).
+    *   Unlocked premium content.
+*   **Step B: Plot Retention Curves.** Overlay the retention curves for these specific behavioral segments.
+*   **Step C: Identify the Inflection Point.** The correct activation criterion is the *simplest* action where the retention curve separates significantly from the churn baseline. If users who log "1 full recipe" retain at 40% while those who log "3 ingredients (no recipe)" retain at 15%, then "1 full recipe" is your true activation event, even if the ingredient count is low.
+
+**3. Weighing Frequency vs. Depth**
+Your framework should prioritize **Depth** (completing a meaningful unit of work) over **Frequency** (repetitive low-value actions) for the initial activation definition.
+*   **Depth Indicator:** Completing a recipe or unlocking content. This proves the user understood the workflow and received value.
+*   **Frequency Indicator:** Returning to log a second or third item within 48 hours. This is a *retention* signal, not an *activation* signal.
+
+**Recommendation:** Define activation as **"User logs all ingredients for a single recipe AND views the resulting premium content."** Test this against your current "3 ingredients" metric. If the retention rate of this new cohort is higher or equal, but the cohort size is larger, you have identified a more accurate leading indicator.
+
+**4. Implementation Plan for Data Science**
+*   **Event Taxonomy:** Ensure tracking distinguishes between `ingredient_logged` (atomic event) and `recipe_completed` (composite event).
+*   **Cohort Analysis:** Build a lookup table comparing the retention rates of users hitting the new "Recipe Complete" milestone versus the old "3 Ingredients" milestone.
+*   **Decision Rule:** Adopt the definition that captures the largest percentage of users while maintaining a retention rate at least 80% of your current best-performing segment. This balances sensitivity (catching more users) with precision (ensuring they actually stay).
+
+**Next Steps:**
+1.  Query historical data to calculate Week 4 retention for users who completed at least one full recipe vs. those who only logged isolated ingredients.
+2.  If "Recipe Complete" shows strong retention correlation, update the dashboard North Star input to track "% of new users completing a recipe within 7 days" instead of raw ingredient counts.
+
+*Note: Do not instrument "time spent" or "page views" as activation proxies; they are vanity metrics that do not correlate with the specific value proposition of unlocking content.*
+*Ensure user identifiers remain pseudonymous when exporting these cohorts for analysis, routing any PII handling to privacy compliance protocols.*

@@ -1,0 +1,20 @@
+**Decision: Do not roll out permanently yet; revert to the old version for the New Year flash sale.**
+
+The 12% lift is `UNVERIFIED` as a measure of design success because the concurrent 40% page load spike on December 24 introduces a severe negative confounder. You cannot isolate the design variable from the performance variable with the current aggregate data. A simplified form (design win) likely offset some friction caused by slow loading (performance loss), masking the true potential of the new flow. Rolling out now risks cementing a design that may only be "net positive" because it survived a performance hit, rather than proving it drives the targeted 15% lift on its own. Conversely, if the design itself is weak, the performance crash hid the failure, and a clean rollout will underperform.
+
+**Analysis of Variables**
+1.  **Design Variable:** The hypothesis was a ≥15% lift. The observed net result was 12%.
+2.  **Performance Variable:** A 40% load time spike typically correlates with significant conversion drop-off (often exceeding 10-20% depending on baseline).
+3.  **Interaction:** The observed 12% lift is likely the result of `True Design Lift` minus `Performance Drag`. If the performance drag was substantial, the `True Design Lift` could still be >15%. However, without segmenting users who experienced the slowdown versus those who did not, this remains an unproven assumption.
+
+**Immediate Actions (This Week)**
+*   **Revert for New Year Sale:** Restore the stable, known checkout flow to ensure maximum reliability during the next high-traffic event. Do not test two variables (design + infrastructure stability) simultaneously during critical revenue windows.
+*   **Segmented Retrospective Query:** Instruct analytics to split the Dec 20–26 data into two cohorts: "Normal Load" (Dec 20–23, 25–26) and "High Load" (Dec 24). Compare the conversion lift of the new flow *only* during normal load periods. If the lift during normal periods exceeds 15%, the design is valid, and the issue was purely infrastructure. If the lift remains <15% even during normal loads, the design hypothesis failed.
+*   **Controlled Re-test:** Schedule a new A/B test for mid-January (low traffic) with a pre-committed sample size and a strict guardrail metric for page load time. Only declare a win if the design lifts conversion ≥15% *and* performance remains within baseline SLOs.
+
+**Tripwire for Future Tests**
+Define a hard stop rule: If page load time increases by >10% in any experimental variant, the test pauses automatically regardless of conversion trends. This prevents performance degradation from corrupting design learnings.
+
+The current data proves the new flow is resilient, not that it is optimal. Validate the design in a stable environment before committing engineering resources to a permanent rollout.
+
+*Note: Ensure the "stable per-user identifier" used for cohorting is pseudonymous and routed to privacy compliance checks before analysis. Do not use raw IPs or PII for this segmentation.*

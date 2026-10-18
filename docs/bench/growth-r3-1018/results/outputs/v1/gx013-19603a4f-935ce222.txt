@@ -1,0 +1,38 @@
+**To:** Regional Product Lead, Bangkok
+**From:** Growth Analytics
+**Subject:** Investigation Plan: Medical Upgrade Drop-off (Feb 1–28)
+
+**Executive Summary**
+Despite a 15% increase in upgrade button clicks, the final purchase completion rate for policies with the medical upgrade fell by 5%. This indicates a friction point post-click, likely driven by price transparency ("sticker shock") or a technical failure in the confirmation logic. We cannot attribute this to "sticker shock" or "technical error" without verifying the specific drop-off coordinates. The following data slices are required to isolate the cause before the Songkran season.
+
+**Required Data Slices & Questions**
+
+1.  **Funnel Step Attrition (The "Where")**
+    *   **Slice:** Compare drop-off rates between "Upgrade Clicked" and "Payment Submitted" for two cohorts: (A) Users who clicked the upgrade vs. (B) Users who did not.
+    *   **Question:** Is the 5% decline isolated to the immediate post-click step (price reveal), or does it occur later at the "Confirm & Pay" action?
+    *   **Action Trigger:** If the drop is immediate post-click, the issue is price presentation. If the drop is at "Confirm & Pay," suspect a technical validation error or double-charging glitch.
+
+2.  **Device & Browser Segmentation (The "Technical Check")**
+    *   **Slice:** Break down the "Upgrade Clicked" → "Purchase Complete" conversion by device (Mobile Web vs. Desktop) and browser (Safari iOS vs. Chrome Android).
+    *   **Question:** Is the failure rate disproportionately high on mobile devices where screen real estate might hide the updated total price until too late?
+    *   **Action Trigger:** If mobile conversion is <50% of desktop, prioritize a UI fix for the mobile payment summary before adjusting pricing strategy.
+
+3.  **Price Elasticity Cohort (The "Sticker Shock" Test)**
+    *   **Slice:** Segment users by the *percentage increase* in their total premium caused by the upgrade (e.g., <10% increase vs. >25% increase).
+    *   **Question:** Does the abandonment rate correlate with the magnitude of the price jump?
+    *   **Action Trigger:** If abandonment spikes only when the total price increases by >20%, the issue is value perception, requiring a copy change explaining the medical benefit *before* the price is shown.
+
+4.  **Error Log Correlation (The "Silent Failure" Check)**
+    *   **Slice:** Cross-reference session IDs of abandoned "Upgrade Clicked" journeys with backend error logs for the `calculate_final_premium` and `validate_policy_rules` endpoints.
+    *   **Question:** Are specific error codes (e.g., timeout, rule mismatch) appearing for incomplete sessions that include the upgrade flag?
+    *   **Action Trigger:** Any correlated error code >1% frequency requires an immediate engineering hotfix before Songkran.
+
+**Compliance & Privacy Note**
+All user-level data used in these slices must utilize pseudonymous identifiers. Do not export raw PII (names, passport numbers) for this analysis; route any need for raw data access through the `privacy-compliance.md` protocol before sharing with the local compliance team.
+
+**This Week's Steps**
+1.  **Query:** Run the Funnel Step Attrition slice (Slice #1) segmented by device by EOD tomorrow to determine if this is a UI or logic failure.
+2.  **Decision Gate:** If mobile drop-off exceeds 40%, halt any pricing display changes and assign engineering to inspect the mobile payment summary component.
+3.  **Prepare:** Draft the preliminary finding (Technical vs. Price) for the compliance review meeting scheduled for early next week.
+
+*Note: No benchmark for "good" conversion is asserted here; we are measuring the delta against your own February baseline. If error logs are inaccessible, that data point remains UNVERIFIED until engineering provides access.*

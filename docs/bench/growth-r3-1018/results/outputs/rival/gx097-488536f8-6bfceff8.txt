@@ -1,0 +1,31 @@
+### Investigation Plan: Mobile Web vs. Native App Price Display Discrepancy
+
+To reconcile the conflicting metrics and determine whether to revert the mobile web change by October 25th, execute the following three-phase validation protocol. This approach isolates technical errors, demographic shifts, and rendering issues before making a final decision.
+
+#### Phase 1: Data Integrity & Implementation Audit (Days 1–2)
+Before analyzing user behavior, confirm the data collection itself is not broken. A 10% drop often signals missing events rather than actual user rejection.
+
+*   **Event Firing Validation:** Use GA4 DebugView or your tag manager's preview mode on mobile web (iOS Safari, Android Chrome) to verify the `click_to_payment` event fires on every click. Check if the new price display DOM element is blocking the click listener or if the event trigger path changed during the rollout.
+*   **Deduplication Check:** Query raw event logs to ensure the mobile web stream isn't double-counting page views (inflating the denominator) or dropping conversion events (deflating the numerator). Compare total session counts against server access logs; a divergence >2% indicates tracking loss.
+*   **Definition Consistency:** Verify that "click-through to payment" is calculated identically in both datasets. Ensure the native app isn't including pre-load clicks while mobile web requires a full page load, or vice versa.
+
+#### Phase 2: Controlled Segmentation Analysis (Days 3–5)
+If data integrity holds, segment the data to isolate whether the issue is demographic, technical, or behavioral.
+
+*   **Browser & OS Matrix:** Break down mobile web CTR by specific browser/version (e.g., Safari 16 vs. 17, Chrome 118 vs. 119). If the drop is isolated to one engine (e.g., only WebKit), the hypothesis of a rendering bug is confirmed.
+*   **User Cohort Comparison:** Split users into "New" vs. "Returning." If returning users show no drop but new users do, the issue may be UX confusion rather than a technical break. If both drop equally, it is likely a universal rendering or performance issue.
+*   **Device Resolution Bucketing:** Group by screen width buckets (e.g., <375px, 375–414px, >414px). The new price feature may be breaking the layout on specific common device sizes, pushing the CTA below the fold or obscuring it.
+*   **Performance Correlation:** Correlate CTR with Page Load Time and Largest Contentful Paint (LCP) for the mobile web cohort. If the new feature increased load time by >1 second, the drop may be due to abandonment before interaction, not confusion.
+
+#### Phase 3: Qualitative & Session Replay Verification (Days 6–8)
+Quantitative data identifies *where* the drop happens; qualitative data explains *why*.
+
+*   **Session Replay Sampling:** Watch 50–100 session recordings of mobile web users who viewed the price but did not click. Look specifically for "rage clicks" on the price area, scrolling past the CTA, or immediate bounces after the price renders.
+*   **Console Error Aggregation:** Filter client-side JavaScript errors for the mobile web cohort during the checkout flow. A spike in errors coinciding with the price render confirms a technical block.
+
+#### Decision Framework for October 25th
+*   **Revert Immediately If:** Event firing is broken, console errors spike >5%, or session replays show users physically unable to click the CTA due to layout shifts.
+*   **Iterate (Do Not Revert) If:** The drop is isolated to a specific older browser version (<5% of traffic) or correlates strictly with slower load times (optimize assets instead).
+*   **Hold Feature If:** Segmentation reveals the drop is entirely driven by a low-value demographic segment that historically converts poorly, while high-value segments remain stable.
+
+**Note:** Ensure all rate calculations use matching observation windows for numerator and denominator to avoid artificial skew. Do not aggregate segments with divergent behaviors; report the specific browser/OS combinations driving the decline.

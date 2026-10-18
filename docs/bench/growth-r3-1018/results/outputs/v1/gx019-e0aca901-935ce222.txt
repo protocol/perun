@@ -1,0 +1,40 @@
+### Measurement Strategy: SA NewsFeed Retention Investigation
+
+**1. North Star Metric: Weekly Active Readers Completing Core Value**
+Stop optimizing for "Clicks." Your high CTR (18%) with low retention (12%) indicates users are clicking but not finding lasting value.
+*   **New North Star:** *Weekly Active Users who consume ≥3 articles across ≥2 sessions.*
+*   **Why:** This measures repeated value delivery, not just initial curiosity. Clicks and time-on-page are now **input metrics** to this North Star, not the goal itself.
+
+**2. Diagnostic Funnel: Read Bottom-Up (Retention First)**
+Do not acquire more users until the leak is plugged. Diagnose in this order:
+*   **Retention (The Leak):** Are users returning in Week 2? Segment by device (mobile vs. desktop) and connection type (WiFi vs. Mobile Data). In South Africa, data costs are a primary churn driver; if users bounce after consuming their data allowance, no amount of content relevance will fix it.
+*   **Activation:** Did they hit the "Aha!" moment? Define this as *reading one full article + saving one item* within the first session. If they click but don't finish reading, the content or load times are the issue.
+*   **Acquisition:** Only analyze source quality after retention stabilizes.
+
+**3. Revised Event Taxonomy: Answer Named Questions**
+Discard "track everything." Instrument only these specific events to answer your retention hypotheses:
+
+| Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- |
+| `article_read_complete` | Did they actually consume the content or just click? | `article_id`, `load_time_ms`, `data_consumed_kb`, `connection_type` |
+| `content_saved_offline` | Are users trying to mitigate data costs? | `article_id`, `save_trigger` (manual vs. auto) |
+| `share_attempt` | Is social validation missing? | `platform` (WhatsApp is critical in SA), `success_bool` |
+| `session_end_reason` | Why did they leave? | `reason` (app_kill, network_error, content_exhausted) |
+| `paywall_hit` (if applicable) | Did cost block further engagement? | `article_tier`, `user_subscription_status` |
+
+**4. Immediate Experiment: The "Data-Saver" Hypothesis**
+Given the SA market context, test if data usage is the blocker.
+*   **Design:** A/B Test a "Lite Mode" (text-only, compressed images) for users on mobile data.
+*   **Primary Metric:** Day-7 Retention.
+*   **Guardrail:** Ad revenue per user (ensure Lite Mode doesn't destroy monetization).
+*   **Rule:** Pre-commit to a sample size of 2,000 users per variant. Do not peek at results before the full 7-day cycle completes.
+
+**5. This-Week Steps**
+1.  **Instrument `article_read_complete` with `data_consumed_kb` immediately.** Without this, you cannot verify if data costs are causing the 88% churn.
+2.  **Query current logs** to segment the 12% retained users by `connection_type`. If retention is significantly higher on WiFi, your model is fine, but your product mode is wrong for mobile data users.
+3.  **Draft the "Lite Mode" experiment design** using the parameters above. Do not launch marketing spend until this test runs.
+
+***
+
+**Note:** The "benchmark" of 12% being "lower than other regions" is a vanity comparison; your only valid baseline is your own trend after fixing the data-cost variable.
+**Note:** Ensure user identifiers for cohort analysis are pseudonymous; route any PII collection (like phone numbers for WhatsApp sharing) to your privacy compliance review.

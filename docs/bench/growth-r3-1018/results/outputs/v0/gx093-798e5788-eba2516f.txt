@@ -1,0 +1,36 @@
+### Proposed Event Hierarchy: Avatar Onboarding Funnel
+
+To balance friction detection with team capacity, instrument only the events that answer specific lifecycle questions. Do not track every click; track state changes and abandonment.
+
+**1. `onboarding_avatar_started`**
+*   **Definition:** Fired when the user first enters the avatar customization interface.
+*   **Purpose:** Establishes the denominator for the funnel. Distinguishes users who attempt customization from those who skip it entirely.
+
+**2. `onboarding_avatar_saved` (Primary Milestone)**
+*   **Definition:** Fired only when the user successfully commits changes and exits the customization flow with a saved asset.
+*   **Purpose:** This is your true **Activation** signal. Your data shows skipping this step correlates with a 60% drop in 24-hour retention; therefore, "started" is merely intent, while "saved" is the value realization. Use this as the key funnel milestone.
+
+**3. `onboarding_avatar_abandoned`**
+*   **Definition:** Fired when a user who triggered `started` exits the interface or closes the app without triggering `saved`.
+*   **Properties:** Must include `time_spent_seconds` and `last_interaction_type` (e.g., "color_picker", "body_shape", "confirm_button").
+*   **Purpose:** Pinpoints *where* the friction occurs without needing granular step-by-step tracking. The properties tell you if users are stuck on complexity or simply quitting.
+
+**Identifier Seam Note:** Ensure these events fire with a stable, pseudonymous user ID to link the onboarding event to the 24-hour retention check. Do not use raw PII; route identity mapping to your privacy compliance protocol.
+
+---
+
+### Three Critical Questions to Answer
+
+**1. What is the conversion rate from `started` to `saved`, and does it vary by device or locale?**
+*   *Why:* You expect 3,000 DAU. If 50% start but only 20% save, you have a massive leakage point. Breaking this down by device (e.g., standalone VR vs. PC-tethered) may reveal performance-induced friction rather than design flaws.
+
+**2. Among users who trigger `abandoned`, what is the distribution of `time_spent_seconds`?**
+*   *Why:* This distinguishes between "confusion" and "boredom." A very short duration suggests the UI is intimidating or broken immediately. A very long duration followed by abandonment suggests the tool is too complex or tedious. This dictates whether the fix is simplification or gamification.
+
+**3. Does completing `saved` actually drive the predicted 24-hour retention in the live beta?**
+*   *Why:* Your early test showed a correlation, but live traffic often behaves differently. Verify that "saved" remains the leading indicator of your North Star (returning users). If users save avatars but still don't return, the friction lies *after* onboarding, and optimizing the avatar flow further will yield diminishing returns.
+
+**Implementation Constraint:** Since you have no historical data on duration, do not set hard thresholds for "slow" users yet. Collect the raw `time_spent_seconds` for the first two weeks to establish a baseline before creating alerts.
+
+*Note: This plan assumes the beta stage; avoid adding granular "step_viewed" events until the core `saved` conversion is stable.*
+*Re-evaluate the event taxonomy after 14 days of live data to retire any properties that do not inform the three questions above.*

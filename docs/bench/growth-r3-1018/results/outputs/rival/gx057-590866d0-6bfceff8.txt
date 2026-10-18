@@ -1,0 +1,95 @@
+# VoiceFirst Beta Tracking Plan (Top 20 Events)
+
+**Objective:** Distinguish between "functional" (system works) and "helpful" (user value delivered) within 48 hours of beta launch.
+**Implementation Deadline:** June 10th
+**Recipient:** Sarah, Lead Engineer
+
+### Core Philosophy
+Do not track every error code individually. Instead, track the **intent** and the **outcome**. Group low-level system errors under a single "command_failed" event with an error_type property. This preserves your 20-event limit for high-value user signals.
+
+### Category 1: Activation & Reach (Is the device listening?)
+*These events determine if users can even start an interaction.*
+
+1.  **device_wake_detected**
+    *   *Properties:* wake_word_used, ambient_noise_level (low/med/high)
+    *   *Why:* Measures if the hardware is successfully activating.
+2.  **wake_word_false_positive**
+    *   *Properties:* triggered_by (tv, conversation, other)
+    *   *Why:* Critical for battery life and user annoyance; a show-stopper if high.
+3.  **wake_word_missed** (Client-side estimation or server-side gap analysis)
+    *   *Properties:* estimated_cause (silence, network_latency)
+    *   *Why:* Identifies if users are speaking but the device isn't reacting.
+
+### Category 2: Intent & Comprehension (Does it understand?)
+*These events measure if the AI parses commands correctly.*
+
+4.  **command_received**
+    *   *Properties:* intent_category (lighting, music, query, timer), confidence_score
+    *   *Why:* Baseline volume of attempted interactions.
+5.  **intent_confirmed**
+    *   *Properties:* intent_category, clarification_required (boolean)
+    *   *Why:* Did the system understand well enough to act without asking "What did you mean?"
+6.  **intent_misinterpreted**
+    *   *Properties:* expected_intent, actual_intent, user_correction_made
+    *   *Why:* Direct measure of AI failure; high rates here mean the model isn't ready.
+7.  **command_failed** (Consolidates all error codes)
+    *   *Properties:* error_category (network, api_timeout, unknown_intent, device_offline), retry_attempted
+    *   *Why:* Replaces 50+ specific error codes. Tells you *why* it failed without clutter.
+
+### Category 3: Execution & Value (Did it help?)
+*These events prove the assistant is "helpful," not just "on."*
+
+8.  **action_executed_successfully**
+    *   *Properties:* action_type, execution_time_ms, devices_affected_count
+    *   *Why:* The primary "success" metric.
+9.  **action_partial_success**
+    *   *Properties:* action_type, failed_sub_steps
+    *   *Why:* Common in smart homes (e.g., "Turn off lights" works for 3 of 4 bulbs).
+10. **multi_step_flow_completed**
+    *   *Properties:* flow_name (e.g., "goodnight_routine"), steps_completed, total_steps
+    *   *Why:* Complex routines are where smart home assistants provide the most value.
+11. **suggestion_accepted**
+    *   *Properties:* suggestion_type, context_trigger
+    *   *Why:* Measures proactive helpfulness (e.g., user accepts "It looks like rain, close windows?").
+
+### Category 4: User Satisfaction & Retention (Will they keep using it?)
+*Explicit and implicit signals of user sentiment.*
+
+12. **explicit_feedback_given**
+    *   *Properties:* rating (1-5), feedback_text_present, session_id
+    *   *Why:* Direct beta tester input.
+13. **command_abandoned**
+    *   *Properties:* step_abandoned, time_spent_before_quit
+    *   *Why:* Indicates frustration or confusion mid-flow.
+14. **repeat_command_same_session**
+    *   *Properties:* original_intent, time_delta_seconds
+    *   *Why:* Strong signal that the first attempt failed or was unsatisfactory.
+15. **feature_discovery_moment**
+    *   *Properties:* feature_name, was_prompted_by_onboarding
+    *   *Why:* Are users finding advanced capabilities on their own?
+
+### Category 5: System Health (Guardrails)
+*Minimal technical metrics to catch show-stoppers.*
+
+16. **session_start**
+    *   *Properties:* user_id, device_firmware_version, connection_type
+    *   *Why:* Essential for calculating DAU and segmentation.
+17. **session_end**
+    *   *Properties:* session_duration, commands_issued, final_status (success/fail/abandoned)
+    *   *Why:* Defines the engagement window.
+18. **ota_update_started**
+    *   *Properties:* version_from, version_to
+    *   *Why:* Critical for tracking adoption of bug fixes during beta.
+19. **ota_update_failed**
+    *   *Properties:* failure_reason, rollback_successful
+    *   *Why:* A bricked device is an immediate support ticket.
+20. **privacy_mode_toggled**
+    *   *Properties:* state (on/off), trigger_method
+    *   *Why:* High usage indicates trust issues or privacy concerns.
+
+### Implementation Notes for Sarah
+*   **Naming Convention:** Use `snake_case` for all event names and properties (e.g., `command_failed`, not `commandFailed`).
+*   **Error Grouping:** Do not create unique events for error codes 401, 403, 500, etc. Map them all to `command_failed` and pass the code as `error_category`.
+*   **PII Warning:** Ensure `user_id` is an anonymized internal ID, not an email or MAC address.
+
+This list balances technical stability with the critical need to prove user value within the first 48 hours.

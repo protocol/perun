@@ -1,0 +1,49 @@
+# LutongKusina Video Engagement Framework
+
+To build a creator dashboard that drives high-quality cooking tutorials, you must move beyond "total watch time" and define engagement as a composite of **Completion**, **Interaction**, and **Retention**. For recipe content, a 30-second view on a 2-minute video is not a failure if those 30 seconds covered the critical "ingredients list" or "final plating," but it is a weak signal compared to a user who watches the whole process and saves the recipe.
+
+## 1. Core Events to Track
+
+Your data science team should implement the following specific events. Do not rely on generic "video_played" events; you need context-aware triggers.
+
+| Event Name | Properties | Why It Matters for Recipes |
+| :--- | :--- | :--- |
+| `video_progress_checkpoint` | `checkpoint_pct` (25, 50, 75, 100), `recipe_step` | Identifies if users drop off during complex steps (e.g., "sautéing") vs. intro/outro. |
+| `recipe_step_rewind` | `step_number`, `timestamp` | High rewinds indicate confusion or high interest. Critical for tutorial quality. |
+| `ingredient_list_viewed` | `time_spent_seconds` | Users often pause video to read ingredients. This is a high-intent signal separate from watch time. |
+| `save_recipe_clicked` | `collection_name` | Stronger than a "like." Indicates intent to cook later. |
+| `share_recipe_clicked` | `share_destination` (FB Messenger, Viber, Copy Link) | Filipinos heavily share via Messenger/Viber. This drives viral growth. |
+| `comment_posted` | `comment_length`, `has_image` | Questions ("Can I use coconut milk?") signal active cooking attempts. |
+| `creator_repeat_upload` | `days_since_last_upload`, `video_count` | The ultimate north star: did this engagement drive the creator to post again? |
+
+## 2. Defining the "Success Score"
+
+Do not use a single metric. Instead, calculate a **Creator Health Score (0-100)** for each video using this weighted formula. This balances passive viewing with active community building.
+
+**Formula:**
+`Health Score = (Completion Rate × 0.4) + (Interaction Rate × 0.4) + (Retention Lift × 0.2)`
+
+*   **Completion Rate (40%):** Percentage of viewers who reach the 90% mark.
+    *   *Nuance:* For videos under 60 seconds, require 100% completion. For videos over 2 minutes, 75% completion is a "success."
+*   **Interaction Rate (40%):** `(Saves + Shares + Comments) / Total Views`.
+    *   *Weighting:* Count a `save` as 3 points, a `share` as 2 points, and a `comment` as 1 point. This prioritizes utility (saving to cook) over vanity (likes).
+*   **Retention Lift (20%):** Percentage of viewers who visit the creator's profile or upload another video within 7 days.
+    *   This directly addresses your goal of increasing repeat uploads from the current 5%.
+
+## 3. Interpreting the 30-Second View
+
+A 30-second view on a 2-minute video is **neutral** unless contextualized:
+*   **Failure:** If the drop-off happens at second 29 (during the intro), the hook is weak.
+*   **Success:** If the user triggers `ingredient_list_viewed` or `save_recipe_clicked` within those 30 seconds, the intent was fulfilled even without full watch time.
+*   **Action:** Tag videos where `average_view_duration` < 40% but `save_rate` > 5% as "High Utility." These are your hidden gems.
+
+## 4. Implementation Timeline for May 30th Launch
+
+1.  **Week 1:** Instrument `video_progress_checkpoint` at 10% intervals and specific `recipe_step` markers.
+2.  **Week 2:** Validate `share_destination` tracking (ensure Viber/Messenger shares are distinct from generic "copy link").
+3.  **Week 3:** Build the dashboard prototype using the **Creator Health Score** rather than raw view counts.
+4.  **Week 4:** User testing with 10 top creators to ensure the score aligns with their perception of success.
+
+By shifting focus from "how long they watched" to "did they cook and share," you will incentivize the specific type of high-quality tutorial content that grows your platform in the Philippines.
+
+*Note: Ensure all event properties exclude PII (personally identifiable information) to comply with the Philippines Data Privacy Act. Test the "rewind" event carefully to avoid firing duplicates on accidental taps.*

@@ -1,0 +1,32 @@
+### Proposed Conversion Funnel & Event Taxonomy
+
+To pinpoint friction for Mehmet's sprint planning, reject "photo upload" as a single step. It is a black box that hides whether users fail at permission, capture, or confirmation. Define the funnel by **named questions** and instrument only those events.
+
+**1. The Core Funnel Stages (Activation Focus)**
+Since you are in `mvp` stage (beta launched March 5), ignore acquisition vanity (4,000 downloads) and focus entirely on the leak between "Install" and "Value Delivered" (Completed Estimate).
+
+*   **Step 0: App Open** (Baseline)
+*   **Step 1: Estimate Started** (User enters flow)
+*   **Step 2: Camera Permission Requested** (System prompt shown)
+    *   *Question:* Do users deny access immediately?
+*   **Step 3: Photo Captured** (Image taken/uploaded)
+    *   *Question:* Is the drop-off in the act of taking the photo or the prior permission?
+*   **Step 4: Photo Confirmed** (User accepts the specific image)
+    *   *Question:* Do users retake endlessly or abandon after seeing the preview?
+*   **Step 5: Estimate Completed** (North Star Input: Value Delivered)
+
+**2. Handling Drafts & Return Users (The Identifier Seam)**
+You noted 15% save drafts. To track this without fabricating data, you must link sessions to a **stable, pseudonymous user ID** (not raw PII).
+*   **Event:** `estimate_saved_draft` (Property: `step_reached`, `timestamp`)
+*   **Event:** `estimate_resumed` (Property: `time_since_save`, `original_step`)
+*   **Analysis:** Create a **Retention Cohort** specifically for "Users who saved a draft." Compare their `estimate_resumed` → `estimate_completed` rate against users who finished in one session. If the resume rate is low, the friction isn't the upload complexity; it's the re-engagement mechanism.
+
+**3. Immediate Actions for Mehmet (Starting April 10)**
+Do not wait for "more data." Instrument these exact events now to validate the hypothesis:
+1.  **Instrument the Split:** Break the current "photo_upload" event into `permission_requested`, `photo_captured`, and `photo_confirmed`.
+2.  **Define the Tripwire:** If `photo_captured` / `permission_requested` < 80%, the friction is **camera access/UX**. If `photo_confirmed` / `photo_captured` < 90%, the friction is **image quality/preview**.
+3.  **Query for Drafts:** Run a cohort query: "Of users who triggered `estimate_saved_draft` in Week 1, how many triggered `estimate_resumed` within 48 hours?"
+
+**Verdict on Hypothesis:** Your 25% lift hypothesis is `UNVERIFIED` until the split events above are live. If the data shows 95% pass permission but only 40% confirm the photo, simplifying "access" will yield 0% lift; you must simplify the "preview/confirm" UI instead.
+
+**Note:** Ensure the stable user ID used for draft tracking is pseudonymous; route any PII handling to your privacy compliance review. Do not compare your 8% completion rate (320/4000) to external benchmarks; measure only against your own weekly trend post-fix.

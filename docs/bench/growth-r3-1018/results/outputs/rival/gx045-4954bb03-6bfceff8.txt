@@ -1,0 +1,39 @@
+# GiftHaven Checkout Funnel Failure Analysis Plan
+
+**Objective:** Isolate the specific failure point in the gift card redemption flow and quantify segment impact to enable a fix before the February 5th campaign launch.
+
+### Phase 1: Funnel Segmentation & Data Isolation (Days 1-2)
+To distinguish between input errors, validation failures, and authorization rejections, we will reconstruct the checkout funnel specifically for transactions attempting gift card usage between January 15 and January 30. We will define four distinct micro-conversion steps:
+1.  **Code Entry:** User submits a gift card code.
+2.  **Format Validation:** Front-end or initial back-end check of code structure.
+3.  **API Validation:** Call to the payment gateway/validation service.
+4.  **Authorization:** Final approval and balance application.
+
+We will query raw server logs and application performance monitoring (APM) data to calculate drop-off rates and error codes at each specific step. This isolates whether the 18% error rate is concentrated at the format check (suggesting a regex issue with pre-2022 codes) or the API call (suggesting a gateway integration conflict).
+
+### Phase 2: Root Cause Hypothesis Testing (Days 3-4)
+Based on the assumption that pre-2022 formats are conflicting with new validation logic, we will segment the error data by:
+*   **Gift Card Issue Date:** Pre-2022 vs. Post-2022.
+*   **Code Format Pattern:** Analyze the character structure of failed codes vs. successful ones.
+*   **Error Message Signatures:** Group specific error codes returned by the payment gateway (e.g., "Invalid Format" vs. "Gateway Timeout" vs. "Authorization Failed").
+
+This analysis will confirm if the spike correlates strictly with older card formats, validating the hypothesis that the recent payment gateway update introduced a regression for legacy data structures.
+
+### Phase 3: User Segment Impact Analysis (Day 5)
+To identify who is most affected, we will cross-reference failed transactions with user attributes:
+*   **User Type:** New vs. Returning customers (returning users are more likely to hold older gift cards).
+*   **Device/Browser:** Determine if the error is universal or specific to certain clients (ruling out front-end caching issues).
+*   **Geography:** Check for regional disparities that might indicate localized gateway routing issues.
+
+We will calculate the revenue loss per segment to prioritize communication strategies if a full fix cannot be deployed immediately.
+
+### Phase 4: Resolution Path & Recommendations (Day 6)
+The final deliverable will present:
+1.  **The Exact Failure Point:** A definitive statement identifying the step and technical cause (e.g., "Validation API rejects 16-character legacy codes introduced in update v2.4").
+2.  **Impact Quantification:** Total affected users and revenue at risk for the Valentine's campaign.
+3.  **Immediate Mitigation:** A temporary workaround (e.g., routing legacy format codes to a separate validation endpoint or disabling strict validation for pre-2022 patterns).
+4.  **Permanent Fix Estimate:** Timeline for patching the validation logic.
+
+This plan ensures the CTO has a data-backed diagnosis and a clear execution path to recover the $45,000 loss trajectory before the campaign launch.
+
+*Note: Immediate access to raw payment gateway logs and the specific commit history of the January payment update is required to execute Phase 1.*

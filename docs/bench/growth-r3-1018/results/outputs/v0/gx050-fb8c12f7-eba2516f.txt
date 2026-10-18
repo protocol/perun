@@ -1,0 +1,20 @@
+**Recommendation: Do not ship Variant B as a mandatory global rollout. Instead, implement a risk-based adaptive flow that triggers the secondary email confirmation only for high-risk recovery attempts, while preserving the low-friction flow for trusted contexts.**
+
+**Recomputed Impact & Trade-off Analysis**
+Your assumption that a 25-percentage-point drop in legitimate recovery (85% → 60%) is an acceptable trade-off for a 90% reduction in takeovers requires immediate validation against your specific baseline volumes, which are currently `UNVERIFIED`. Without knowing the ratio of legitimate recovery attempts to attack attempts, the net user impact is unknown. If legitimate attempts outnumber attacks by 100:1, Variant B harms 25 legitimate users to protect ~0.9 accounts, creating a net negative utility and likely driving the churn you fear. The "security win" is only valid if the absolute number of prevented takeovers outweighs the absolute number of locked-out legitimate users multiplied by the cost of churn and support tickets.
+
+**Critical Data Gaps (`UNVERIFIED`)**
+1.  **Attack vs. Legitimate Volume:** We cannot calculate the net benefit without the daily volume of fraudulent attempts versus legitimate requests.
+2.  **Churn Confirmation:** You hypothesize that the 40% failure rate leads to permanent churn. This is `UNVERIFIED`. These users may be contacting support (increasing OpEx) or attempting recovery repeatedly (inflating traffic metrics) before giving up.
+3.  **Trust Perception:** Brand perception impact is `UNVERIFIED`. High friction can signal "this app is secure" (positive trust) or "this app is broken" (negative trust) depending on user expectation and communication.
+
+**Required Immediate Actions (Before Sept 5th)**
+To make a data-driven decision, execute these three steps this week:
+1.  **Segment the Failure Cohort:** Query your analytics for the 40% who failed recovery in Variant B. Track their subsequent behavior over 7 days: Did they open a support ticket? Did they attempt recovery again? Did they delete the app? Define the "churn" event explicitly rather than assuming it.
+2.  **Calculate the Break-Even Attack Ratio:** Compute the specific ratio of attacks-to-legitimate-users where the cost of prevented takeovers equals the cost of lost legitimate users (including LTV and support costs). If your actual attack rate is below this threshold, Variant B destroys value.
+3.  **Design an Adaptive Test (Variant C):** Propose a new experiment where the secondary email step is triggered *only* by risk signals (e.g., new device, unusual location, IP reputation). Measure if this maintains the 90% security lift while restoring the 85% legitimate success rate for low-risk users.
+
+**Decision Framework for the Steering Committee**
+Present the recommendation as a conditional deployment: "Ship Variant B logic *only* as a risk-triggered rule, not a global mandate." The guardrail metric for any future test must be **Successful Legitimate Recovery Rate**, which must not drop below 80% (your defined tripwire) regardless of security gains. A global friction increase that locks out 40% of legitimate users is a product failure, even if it stops attacks, because it destroys the core utility of the application for your paying base.
+
+*Note: All benchmark comparisons (e.g., "acceptable" recovery rates) must be derived from SafeChat's historical baseline, not external industry standards. Ensure user identifiers used for this cohort analysis are pseudonymized and routed to privacy compliance protocols.*

@@ -1,0 +1,37 @@
+**To:** Field Engineering Manager, SteppeConnect
+**From:** Head of Operations
+**Date:** July 15
+**Subject:** Priority Event Instrumentation for August 1st Launch (5 Events Max)
+
+To address the 15% failure rate and optimize technician training before winter, we will instrument exactly five events. These are selected to isolate whether failures stem from technician skill (training), environmental factors (weather/terrain), or hardware limits, directly answering our core hypothesis about dish alignment versus external conditions.
+
+**The 5 Critical Events to Instrument:**
+
+1.  **`onboarding_started`**
+    *   **Properties:** `technician_id`, `aimag_id`, `timestamp`, `initial_weather_condition` (e.g., clear, cloudy, wind_speed).
+    *   **Question Answered:** What is the baseline context (location, operator, weather) at the start of every attempt? This establishes the denominator for success rates and allows us to correlate failure clusters with specific aimags or weather patterns.
+
+2.  **`alignment_attempt_started`**
+    *   **Properties:** `technician_id`, `terrain_type` (e.g., flat, hilly, obstructed), `dish_model`.
+    *   **Question Answered:** Does the difficulty of the terrain or the specific hardware batch correlate with the need for multiple alignment tries? This isolates "local terrain" as a variable before the work begins.
+
+3.  **`signal_lock_achieved`**
+    *   **Properties:** `time_elapsed_since_start` (seconds), `attempt_count` (number of re-alignments required), `signal_strength_dbm`.
+    *   **Question Answered:** Is our assumption correct that "time to align" predicts success? If successful installs have high `attempt_count` but low `time_elapsed`, the issue is precision, not speed. If `signal_strength_dbm` is low despite lock, hardware sensitivity is the bottleneck.
+
+4.  **`onboarding_completed`** OR **`onboarding_failed`** (Mutually Exclusive Terminal Events)
+    *   **Properties:** `final_status` (success/fail), `failure_code` (e.g., no_signal, hardware_fault, timeout), `total_duration_minutes`.
+    *   **Question Answered:** What is the definitive outcome? The `failure_code` is critical to distinguish between "could not align" (training issue) and "aligned but no internet" (network/weather issue).
+
+5.  **`connectivity_verified`** (Post-Installation Check)
+    *   **Properties:** `latency_ms`, `packet_loss_percent`, `time_since_completion` (minutes).
+    *   **Question Answered:** Did the installation actually work for the user after the technician left? This captures "false positives" where the dish is aligned but environmental interference (wind/heat) degrades service immediately, validating the "weather conditions" suspicion.
+
+**How to Read This Data (The Decision Rule):**
+*   **If** `alignment_attempt_started` shows high variance in `attempt_count` correlated with specific `technician_id`s, **then** the root cause is training; update the curriculum by August 15th.
+*   **If** `onboarding_failed` events cluster heavily around specific `initial_weather_condition` or `terrain_type` properties regardless of technician, **then** the root cause is environmental; prioritize hardware shielding or site-survey protocols over training.
+*   **If** `signal_lock_achieved` is frequent but `connectivity_verified` fails, **then** the issue is network stability, not installation; halt technician changes and escalate to network engineering.
+
+Do not track cumulative signups or page views. These five events provide the only data necessary to reduce the 15% failure rate by October.
+
+**Note:** Ensure `technician_id` is pseudonymous for privacy compliance; do not transmit personal names. Weather data must be captured locally on the tablet if field bandwidth is insufficient for real-time API lookups.

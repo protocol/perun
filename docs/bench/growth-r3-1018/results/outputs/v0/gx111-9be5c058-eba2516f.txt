@@ -1,0 +1,28 @@
+**Decision Framework: StayNest Dynamic Pricing Experiment**
+
+**1. Immediate Verdict: Do Not Roll Out Yet**
+The current result is **inconclusive and potentially risky**. A 4.2% lift in Average Daily Rate (ADR) paired with a 1.8% drop in conversion yields a net Revenue Per Visitor (RPV) gain of only ~2.3% (calculated as $1.042 \times 0.982 \approx 1.023$). Without segmented data or a confirmed statistical significance on this thin margin, rolling out globally risks alienating price-sensitive leisure travelers who drive volume, based on an unverified assumption about business travelers.
+
+**2. Metrics to Calculate Next (Isolate the Impact)**
+Since you lack pre-segmented data for this window, you must reconstruct segments using proxy events already in your logs before Friday:
+*   **Booking Lead Time:** Filter users booking <7 days out (proxy for business) vs. >14 days (proxy for leisure). Calculate ADR and Conversion lift for each group separately.
+*   **Device/Channel Context:** Segment by "Mobile + Last Minute" vs. "Desktop + Advance." Business travelers often book late on mobile; leisure plans ahead on desktop.
+*   **Return User Status:** Compare first-time visitors vs. logged-in repeat users. If your loyalty program skews business, this is a cleaner segment than traveler type.
+*   **Guardrail Metric – Cancellation Rate:** Dynamic pricing can induce buyer's remorse. Check if the treatment group has a higher cancellation rate, which would erase the 2.3% RPV gain.
+
+**3. Reading Statistical Significance on Conflicting Metrics**
+Do not look at ADR or Conversion in isolation. The **Primary Metric** must be **Revenue Per Visitor (RPV)**.
+*   **Recompute the Lift:** Use the raw counts to calculate the exact RPV difference and its confidence interval. A 2.3% lift often requires a much larger sample size than a 4% lift to be significant.
+*   **The "Peeking" Check:** Confirm the test ran for the full pre-committed duration (March 1–14) without mid-test stops. If the team checked significance daily and stopped when ADR looked good, the p-value is invalid (false positive risk).
+*   **Variance Check:** Pricing experiments often have high variance. If the confidence interval for RPV includes zero (e.g., -0.5% to +5.1%), the result is **UNVERIFIED**. You cannot claim a win.
+
+**4. The Decision Logic for Elena**
+*   **Ship:** Only if segmented RPV is positive and significant for *both* business and leisure proxies, AND cancellation rates are flat.
+*   **Kill:** If leisure proxy shows negative RPV (price sensitivity outweighs ADR lift) or if the overall RPV confidence interval crosses zero.
+*   **Extend/Iterate:** If the overall RPV is positive but not significant, or if segments show divergent results (business up, leisure down). In this case, do not roll out globally. Instead, design a **targeted rollout** where the dynamic algorithm applies *only* to the "business proxy" segment (e.g., bookings <7 days out) and re-test.
+
+**This Week's Step:**
+Run the segmented RPV analysis using "Lead Time < 7 days" as the business proxy by Thursday EOD. If the leisure segment shows any negative trend in RPV, recommend killing the global rollout and proposing a segment-specific test for the next sprint.
+
+*Note: Ensure the user identifier used for these retrospective segments is pseudonymous and routed according to privacy compliance standards.*
+*Do not fabricate a "good" significance threshold; rely strictly on the calculated confidence intervals from your raw data.*

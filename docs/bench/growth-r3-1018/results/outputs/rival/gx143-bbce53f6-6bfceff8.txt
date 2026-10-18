@@ -1,0 +1,67 @@
+# BorderlessMart Cross-Border Measurement Funnel
+
+## Overview
+This framework isolates cross-border friction from standard checkout issues across Indonesia, Vietnam, and Thailand. It enables weekly spend allocation by country starting Week 4.
+
+## Core Tracking Events
+
+Track these six critical stages. Every event must include these standard properties: `country`, `device_type`, `traffic_source`, `user_language`, and `currency_displayed`.
+
+| Stage | Event Name | Critical Properties | What It Diagnoses |
+|-------|------------|---------------------|-------------------|
+| **1. Product View** | `product_viewed` | `product_category`, `price_local`, `price_usd` | Baseline interest; detects if pricing display confuses users. |
+| **2. Cart Addition** | `cart_added` | `cart_value_local`, `item_count`, `shipping_estimate_shown` | Identifies if shipping estimates or total cost shock occur early. |
+| **3. Checkout Start** | `checkout_started` | `payment_methods_visible`, `delivery_country_selected` | Confirms user intent to buy after seeing total costs. |
+| **4. Payment Selection** | `payment_method_selected` | `method_name` (e.g., COD, e-wallet, card), `method_category` | **Key Diagnostic:** Reveals local preference mismatches (e.g., low card usage in Vietnam). |
+| **5. Payment Action** | `payment_attempted` | `method_name`, `error_code` (if any), `redirect_status` | Distinguishes technical failure (error codes) from hesitation (abandonment after selection). |
+| **6. Purchase Complete** | `purchase_completed` | `transaction_id`, `final_amount_local`, `payment_method_used` | Successful conversion. |
+
+## Distinguishing Technical Failure vs. User Hesitation
+
+To separate system errors from user doubt, implement this logic for drop-offs between **Stage 4 (Selection)** and **Stage 5 (Attempt)**:
+
+1.  **Technical Failure Indicators:**
+    *   Track `payment_error_displayed` immediately after `payment_method_selected`.
+    *   Properties: `error_type` (e.g., "gateway_timeout", "currency_mismatch", "3ds_failure").
+    *   *Interpretation:* High drop-off + High error rate = Fix the integration immediately.
+
+2.  **User Hesitation Indicators:**
+    *   Track `checkout_step_dwell_time` (time spent on payment page).
+    *   Track `coupon_code_attempted` (boolean).
+    *   *Interpretation:* High drop-off + Long dwell time + No errors = Price sensitivity or trust issues (e.g., unfamiliar payment logo). High drop-off + Short dwell time = Unexpected costs revealed late.
+
+## Regional Specifics to Monitor
+
+Cultural and infrastructural differences will skew standard metrics. Monitor these specific patterns:
+
+*   **Indonesia:** High preference for Cash on Delivery (COD) and e-wallets (GoPay, OVO). If `payment_method_selected` shows high card selection but low `payment_attempted`, users may be selecting cards by default without realizing COD is an option.
+*   **Vietnam:** Dominance of local e-wallets (MoMo, ZaloPay) and bank transfers. Low credit card penetration. A drop-off at Stage 4 often means the preferred local method is missing or hidden.
+*   **Thailand:** High adoption of PromptPay (QR code) and convenience store payments. Users expect QR options immediately.
+
+## Reporting Dashboard for Country Managers
+
+Provide each regional head with a simple weekly table. Do not show raw event counts; show **conversion rates between stages**.
+
+**Weekly Performance by Country (Week X)**
+
+| Funnel Stage | Indonesia (%) | Vietnam (%) | Thailand (%) | Benchmark Alert |
+| :--- | :--- | :--- | :--- | :--- |
+| View → Cart | [Calc] | [Calc] | [Calc] | < 10% indicates pricing/shipping shock |
+| Cart → Checkout Start | [Calc] | [Calc] | [Calc] | < 40% indicates friction in login/address |
+| Checkout → Payment Select | [Calc] | [Calc] | [Calc] | < 80% indicates delivery cost surprise |
+| **Payment Select → Attempt** | **[Calc]** | **[Calc]** | **[Calc]** | **< 60% signals method mismatch or tech failure** |
+| Attempt → Complete | [Calc] | [Calc] | [Calc] | < 70% signals gateway errors |
+
+*Note: "Benchmark Alert" thresholds are based on the 2.5% historical baseline; adjust if local norms differ.*
+
+## Implementation Rules for Data Quality
+
+1.  **Match Observation Windows:** Calculate weekly conversion rates using only users who entered the funnel that specific week. Do not divide this week's spend by next week's conversions.
+2.  **No PII:** Never send names, emails, or full credit card numbers in event properties.
+3.  **Consistent Naming:** Ensure `payment_method_selected` uses identical values (e.g., "cod", "momo") across all three countries to allow aggregation.
+
+By Week 4, compare the "Payment Select → Attempt" drop-off rate across the three countries. Allocate additional marketing spend to the country with the highest *technical* success rate but lowest *volume*, as this indicates market readiness rather than product friction.
+
+---
+*Ensure your development team implements server-side tracking for the `purchase_completed` event to prevent data loss from ad blockers or poor mobile connections common in the region.*
+*Review the `error_code` properties daily during the first two weeks to catch regional gateway outages immediately.*

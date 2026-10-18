@@ -1,0 +1,37 @@
+**Decision: Do not ship. Extend the test with a guardrail tripwire or roll back to control immediately.**
+
+The stated "40% win" is **UNVERIFIED** as a causal success because the test violated experiment rigor: you observed a guardrail failure (sentiment -15, 200 complaints) while optimizing a secondary metric (adoption). A result that regresses a core brand pillar (trust) while inflating a vanity-adjacent metric (frictionless opt-in) is a false positive driven by dark patterns, not value. The frictionless opt-in likely induced accidental adoption, creating a "leaky bucket" where users churn once they realize the privacy implication.
+
+**Recomputed Reality:**
+You cannot claim a 40% lift in *valuable* adoption without verifying retention. If users disable the feature or churn within 7 days due to privacy anxiety, the net value is negative. The 200 complaints are a leading indicator of future churn that outweighs the short-term adoption spike.
+
+**Investigative Questions & Data Slices (This Week's Step):**
+Execute these three queries against your analytics before any further rollout. Do not estimate; pull the actual numbers.
+
+1.  **Retention Cohort Analysis (The Sustainability Check)**
+    *   *Question:* Do users who adopted via the variant retain the core "NavigateNow" value (e.g., completed trips) at the same rate as control, or do they churn faster?
+    *   *Slice:* Compare Week-1 and Week-4 retention curves for Variant Adopters vs. Control Adopters.
+    *   *Decision Trigger:* If Variant Adopters show >5% higher churn or >10% lower core-action retention than Control by Day 14, the adoption is toxic. Roll back.
+
+2.  **Feature Reversal & Settings Churn**
+    *   *Question:* How many users immediately disabled the feature or navigated to privacy settings post-adoption?
+    *   *Slice:* Event funnel: `feature_enabled` (variant) → `feature_disabled` OR `privacy_settings_viewed` within 24 hours.
+    *   *Decision Trigger:* If >20% of adopters reverse the action within 24 hours, the "frictionless" design is creating noise, not value. Tweak messaging to require explicit intent.
+
+3.  **Sentiment-Linked Churn Correlation**
+    *   *Question:* Is the sentiment drop correlating with high-value user segments or new signups?
+    *   *Slice:* Cross-reference `complaint_tag: privacy` with user tenure (New vs. Power Users) and LTV deciles.
+    *   *Decision Trigger:* If complaints originate from top-quartile LTV users, the brand risk is existential. Segment immediately to exclude power users from frictionless opt-ins.
+
+**Required Experiment Redesign:**
+To re-test, you must pre-commit to a design that treats **Trust** as the primary guardrail.
+*   **Primary Metric:** Weekly Active Users completing a trip *with* location sharing enabled (value), not just "enabled" (vanity).
+*   **Guardrail Metric:** Net Promoter Score (NPS) or Support Ticket Volume regarding privacy.
+*   **Stopping Rule:** Use a sequential testing bound (e.g., mSPRT) that allows monitoring but controls false positives. Do not peek at Day 2.
+*   **Hypothesis:** Explicit consent (added friction) will lower initial adoption by X% but increase 30-day retention by Y%, resulting in higher net value.
+
+**Immediate Action:**
+Pause the variant for new users. Run the retention cohort query above. If the data shows accelerated churn among adopters, revert to control and redesign the flow to prioritize explicit consent over frictionless entry. Trust is your North Star; do not trade it for a temporary adoption spike.
+
+*Note: These steps assume your event taxonomy correctly distinguishes between "feature enabled" and "feature actively used." If not, instrument that distinction first.*
+*Do not fabricate a "good" retention benchmark; compare these cohorts strictly against your own historical baseline.*

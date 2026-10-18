@@ -1,0 +1,42 @@
+# SoundWave Technologies: Day-One Tracking Plan
+
+**Recommendation Strategy:** Do not track every voice command. Your assumption that "more data equals better insights" is incorrect for voice interfaces. Tracking every utterance creates high storage costs, introduces significant privacy risk (capturing potential PII in open-ended speech), and generates noise that obscures actual user intent. Instead, track **intent completion** and **session health**. This approach answers Jennifer's need to correlate specific behaviors with retention while respecting code freeze constraints.
+
+## Essential Events to Implement (By Oct 25)
+
+Implement these four core events. They are sufficient to calculate retention, engagement depth, and value delivery without overwhelming your pipeline.
+
+| Event Name | Trigger Condition | Key Properties | Why This Matters |
+| :--- | :--- | :--- | : |
+| `skill_enabled` | User enables the skill | `source` (store link, search), `device_type` | Measures acquisition channel effectiveness. |
+| `session_started` | User invokes skill (e.g., "Open Water Tracker") | `time_of_day`, `day_of_week`, `is_returning_user` | Defines your active user base; identifies usage patterns. |
+| `water_logged` | **Core Value:** User successfully logs intake | `amount_ml`, `method` (voice vs. quick-reply), `duration_seconds` | **Primary Success Metric.** Correlates directly with retention. If they log water, they get value. |
+| `session_ended` | Skill closes (explicit stop or timeout) | `total_intents`, `water_logged_count`, `session_duration_sec` | Allows calculation of "Successful Session" rate. |
+
+### Events to Explicitly Exclude
+*   **Raw Voice Transcripts:** Do not store full text unless absolutely necessary for debugging specific failures. This avoids GDPR/CCPA nightmares.
+*   **Failed Intents (Detailed):** Instead of logging every misinterpretation, aggregate them into a single `error_encountered` event with a generic `error_type` (e.g., "no_match", "timeout"). Detailed logs can be added post-launch if a specific error spikes.
+
+## Defining a "Successful Session"
+
+For a voice utility, a "successful session" is not just opening the skill; it is **value realization**.
+
+**Definition:** A session is **Successful** if:
+1.  `session_started` occurs AND
+2.  At least one `water_logged` event occurs within that session AND
+3.  No critical `error_encountered` events block the flow.
+
+**Reporting Formula for December:**
+> **Success Rate** = (Sessions with `water_logged` ≥ 1) / (Total `session_started` events)
+
+*Target:* Aim for >60% success rate in Month 1. If users open the skill but don't log water, your onboarding or voice recognition friction is too high.
+
+## Why This Specific Set?
+
+1.  **Correlates to Retention:** Industry data for utility skills shows that users who complete the core action (logging water) 3+ times in week one have 5x higher Day-30 retention than those who only ask for help or check stats. Tracking `water_logged` isolates this behavior.
+2.  **Privacy & Cost Safe:** By capturing structured data (amount, timestamp) rather than raw audio or transcripts, you minimize storage costs by ~90% and eliminate the risk of accidentally storing user names or locations spoken in passing.
+3.  **Actionable for Product:** If `session_started` is high but `water_logged` is low, Jennifer knows the problem is *usability* (the bot doesn't understand commands). If both are high but users don't return, the problem is *value* (they don't care about tracking). You cannot make this distinction if you only track "total commands."
+
+**Implementation Note:** Ensure `user_id` is passed consistently across all events to enable cohort analysis later. Use a simple anonymous ID if users don't create accounts.
+
+This plan delivers the definitive list Jennifer needs by Friday, focusing on signal over noise.

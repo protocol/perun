@@ -1,0 +1,28 @@
+### Experimental Design Framework: Privacy-First Pricing Test for FitEU
+
+**1. Unit of Randomization: Session-Device Cluster**
+Since persistent user IDs are prohibited, randomize at the **device-session level** upon the first pricing page view after March 1.
+*   **Mechanism:** Generate a transient, ephemeral token stored only in the browser/app memory for the duration of the session. Assign variation (Control: Current Price vs. Treatment: New Price) based on this token.
+*   **Constraint Acknowledgement:** Explicitly accept that multi-device users or account sharers may see different prices on different devices. This introduces noise (variance) but not systematic bias, provided the assignment is truly random. The metric will measure "revenue per exposed session" rather than "revenue per unique user."
+
+**2. Primary Metric & Guardrails**
+*   **Primary Metric:** **Revenue Per Session (RPS)** calculated as `Total Subscription Revenue / Total Number of Pricing Page Views` in each cohort. This normalizes the unknown denominator issue (duplicate users) by tying revenue directly to the exposure event.
+*   **Guardrail Metric:** **Refund/Chargeback Rate.** Monitor closely; if the treatment group shows a statistically significant spike in refunds, the price point may be perceived as deceptive or unsustainable, requiring an immediate halt.
+*   **Secondary Metric:** Conversion Rate (Sessions resulting in purchase / Total Sessions). Use this to diagnose if a revenue lift is driven by price or volume.
+
+**3. Statistical Rigor & Pre-commitment**
+*   **Design:** Fixed-horizon test. Do not peek at results before the end date.
+*   **Duration:** 14 days (March 1 – March 14).
+*   **Sample Size:** Calculate the Minimum Detectable Effect (MDE) based on current baseline RPS and variance *before* launch. If the calculated N requires more than 14 days of traffic, extend the duration or accept a higher MDE. Do not stop early if $p < 0.05$ on day 3; this is "peeking" and invalidates the result.
+*   **Analysis Rule:** Aggregate data only after the window closes. Compare mean RPS between cohorts using a t-test (or non-parametric equivalent if data is heavily skewed).
+
+**4. Interpretation for Leadership**
+*   **For Legal:** The design uses no persistent IDs, no cross-session linking, and no PII storage. Data is aggregated at the cohort level immediately post-session. The "noise" from multi-device users is a statistical limitation, not a privacy violation.
+*   **For Product:** A win is defined strictly as a statistically significant increase in RPS with no degradation in the refund guardrail. If results are inconclusive due to high variance (caused by the lack of user deduplication), the recommendation is to iterate on the price copy (value proposition) rather than the price point, as the signal-to-noise ratio is currently too low for fine-grained pricing optimization.
+
+**This Week's Steps:**
+1.  Implement the ephemeral session-token assignment logic and verify no PII is logged in the event stream.
+2.  Compute the required sample size for a 5% lift in RPS given current traffic volumes to confirm the 14-day window is sufficient.
+
+*Note: Without user-level deduplication, reported lift represents a conservative estimate of true user-level impact; multi-device users diluting the effect means a detected win is robust, but a null result may be a false negative.*
+*Ensure the refund guardrail is monitored daily by ops, even if the primary revenue readout waits until day 14.*

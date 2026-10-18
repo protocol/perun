@@ -1,0 +1,31 @@
+### Prioritized Event Trackers for Retention Dashboard
+
+Given your constraint of three new event trackers and the need to distinguish genuine engagement from speculative volatility, here is the prioritized list designed to capture commitment independent of token price swings.
+
+**1. `session_started` (with `client_type` property)**
+*   **Definition:** Fires immediately upon a successful wallet connection that loads the guild dashboard or game hub, regardless of whether a transaction occurs.
+*   **Why it wins:** This directly addresses your fear of missing "watchers" and "strategizers." It decouples presence from financial action. By including a `client_type` property (e.g., `web`, `mobile`, `api`), you can filter out bot traffic often associated with trading scripts.
+*   **Trade-off:** This is a "noisier" metric than transactions; it includes idle users. However, in volatile markets, *showing up* is the first true signal of intent. It is more stable than session time because it doesn't require the user to stay for a specific duration to count, capturing the "check-in" behavior typical during market swings.
+
+**2. `content_interaction` (with `interaction_type` property)**
+*   **Definition:** Fires when a user clicks to view guild strategies, reads scholarship terms, watches a tutorial, or inspects leaderboards.
+*   **Why it wins:** This is the strongest proxy for "strategizing." Users who are merely speculating rarely consume deep content; they check prices and leave. Users committing to the guild ecosystem consume information to improve their gameplay or earnings potential. This metric remains resilient even if token prices crash, as dedicated players still need to learn how to maximize yields in a down market.
+*   **Trade-off:** Implementation requires tagging multiple UI elements across different pages. It ignores passive consumption (e.g., video watching without clicks) unless you add auto-play listeners, which may exceed your engineering budget.
+
+**3. `community_action` (with `action_name` property)**
+*   **Definition:** Fires when a user joins a Discord channel via the dashboard, registers for a guild tournament, or votes on a guild proposal.
+*   **Why it wins:** Social graph lock-in is the highest form of retention in gaming guilds. A user who connects their identity to a community group is significantly less likely to churn due to temporary token dips than a user who only connects a wallet to farm. This signals long-term alignment with the guild, not just the current game season.
+*   **Trade-off:** This captures a smaller percentage of your total user base (only the most engaged), making it a lagging indicator for mass adoption but a leading indicator for core retention stability.
+
+### Metrics to Explicitly Ignore (and Why)
+
+You must present a clear case for **ignoring Transaction Volume** and **In-Game Session Time** to your CTO and partners:
+
+*   **Transaction Volume:** This is purely a function of token price and game mechanics, not user loyalty. In a volatile market, high transaction volume often indicates panic selling or speculative flipping, not retention. Instrumenting this now would corrupt your dashboard with noise that correlates to market charts, not user behavior.
+*   **In-Game Session Time:** As you suspected, this is unreliable during season launches. Spikes in session time often reflect botting farms or grind-heavy events that vanish once the season ends. It penalizes "strategizers" who spend 20 minutes planning but only 5 minutes executing.
+
+### Summary for Stakeholders
+
+This instrumentation plan shifts our definition of retention from "financial throughput" to "ecosystem participation." By tracking **presence** (`session_started`), **intent to learn** (`content_interaction`), and **social commitment** (`community_action`), we isolate users who are building a relationship with ChainGuild rather than just arbitraging the latest token pump. This provides a stable baseline for retention that engineering can build upon without needing constant recalibration as market conditions shift.
+
+*Note: Ensure your data pipeline filters for unique wallet addresses per day to prevent single users running scripts from inflating the `session_started` count.*

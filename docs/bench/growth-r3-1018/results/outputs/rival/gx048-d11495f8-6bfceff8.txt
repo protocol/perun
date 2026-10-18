@@ -1,0 +1,47 @@
+# Risk Assessment and Migration Strategy: Timestamp Normalization
+
+## Executive Summary
+Inconsistent timestamp formats (UTC/ms vs. Local/s) are causing a 12% session duration mismatch. While normalizing to UTC is the correct technical solution, a blind retroactive transformation carries a high risk of data loss due to irreversible timezone ambiguity in historical web records. We recommend a "Dual-Track" strategy: implement strict UTC enforcement for all new data immediately, while applying a conservative, heuristic-based correction only to high-value historical aggregates, leaving raw event logs untouched where timezone context is missing.
+
+## Risk Assessment: Retroactive Transformation
+
+**Critical Risk: Irreversible Timezone Ambiguity**
+Web events recorded in "local time" without an explicit timezone offset cannot be reliably converted to UTC after the fact.
+*   **Daylight Saving Time (DST) Collisions:** For timestamps falling during DST transitions (e.g., 2:00 AM appearing twice or skipping entirely), accurate conversion is impossible without knowing the specific user's locale at that exact moment.
+*   **Locale Uncertainty:** Unless every event payload includes a verified `user_timezone` property, assigning a timezone based on IP or profile data introduces inference errors.
+*   **Estimated Data Impact:** Approximately 15-20% of historical web events may be misaligned by ±1 hour if forced into UTC without perfect context, potentially worsening reporting accuracy rather than fixing it.
+
+**Secondary Risk: Pipeline Stability**
+Reprocessing three months of high-volume event data requires significant compute resources and risks introducing new bugs into the ingestion pipeline during the critical pre-QBR period.
+
+## Proposed Migration Strategy
+
+### Phase 1: Immediate Containment (Complete by Aug 20)
+*   **Action:** Update ingestion pipelines to enforce UTC with millisecond precision for all *new* incoming events (mobile and web).
+*   **Web Client Fix:** Deploy a quick patch to the web SDK to capture `Date.now()` (UTC ms) and append a `browser_timezone` property for future reference.
+*   **Outcome:** Stops the bleeding. August data will be 100% consistent.
+
+### Phase 2: Historical Triage (Complete by Aug 27)
+Do not reprocess raw logs. Instead, create a "corrected aggregate" layer for July:
+1.  **Identify High-Confidence Records:** Filter historical web events where `user_timezone` is explicitly known from session context or reliable IP geolocation.
+2.  **Apply Heuristic Conversion:** Convert only these high-confidence records to UTC.
+3.  **Flag Low-Confidence Records:** Mark records with ambiguous timezones as "unverified." Exclude these from precise session duration calculations in the QBR dashboard, or display them with a confidence interval.
+4.  **Documentation:** Clearly annotate July dashboards: *"Session durations for web traffic include a ±5% estimation margin due to legacy timezone formatting."*
+
+### Phase 3: Long-Term Schema Evolution (Post-QBR)
+*   Design a new schema version requiring strict UTC/ms and mandatory timezone properties.
+*   Plan a gradual backfill of historical data only as specific analytical needs arise, rather than a blanket reprocessing.
+
+## Resource Allocation & Timeline
+
+| Task | Owner | Effort | Deadline |
+|------|-------|--------|----------|
+| Ingestion Pipeline Update (UTC Enforcement) | Backend Eng | 3 days | Aug 20 |
+| Web SDK Patch (Timezone Capture) | Frontend Eng | 2 days | Aug 20 |
+| Historical Data Triage Script | Data Eng | 4 days | Aug 27 |
+| Dashboard Annotation & QBR Prep | Data Analyst | 2 days | Sep 05 |
+
+## Recommendation
+**Do not attempt a full retroactive transformation of raw logs before September 10th.** The risk of corrupting historical data outweighs the benefit of perfect alignment. Proceed with Phase 1 immediately to secure August data, and use Phase 2 to provide the best possible *estimated* view for July. This approach ensures the QBR presents accurate, defensible numbers without jeopardizing data integrity.
+
+*Note: This strategy prioritizes data integrity over cosmetic consistency. Full historical reconciliation should be treated as a separate Q4 initiative.*

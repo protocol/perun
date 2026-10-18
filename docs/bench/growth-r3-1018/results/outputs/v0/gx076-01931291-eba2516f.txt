@@ -1,0 +1,39 @@
+**North Star Metric:** "First-Day Connectivity Retention" – the percentage of households that successfully align their dish, achieve a stable signal, and remain connected through their first 24 hours of operation. This rejects vanity metrics like "technicians dispatched" or "hardware shipped," focusing strictly on realized customer value.
+
+**Prioritized Event Taxonomy (5 Events Max)**
+Given your bandwidth constraints and the hypothesis that terrain/weather outweigh alignment speed, instrument only these five moments to answer specific failure questions:
+
+1.  **`installation_started`**
+    *   *Question:* Did the technician arrive and begin work?
+    *   *Properties:* Timestamp, GPS coordinates (for terrain overlay), Technician ID.
+2.  **`environmental_snapshot`**
+    *   *Question:* What were the conditions at the critical moment of attempt?
+    *   *Properties:* Ambient temperature, wind speed (from device sensor if available, else manual entry), visibility score (1-5), terrain type (flat/hilly/obstructed). *This directly tests your weather/terrain suspicion.*
+3.  **`alignment_attempt_completed`**
+    *   *Question:* Was the physical setup finished, regardless of signal quality?
+    *   *Properties:* Duration since start (to test your "time to align" assumption), number of re-positioning moves (if sensor data allows), final elevation/azimuth angles.
+4.  **`signal_lock_achieved`**
+    *   *Question:* Did the hardware successfully handshake with the satellite?
+    *   *Properties:* Signal-to-noise ratio (SNR), latency ms, timestamp. *This is the binary success/failure gate.*
+5.  **`first_24h_stability_check`**
+    *   *Question:* Did the connection survive the first day (e.g., temperature shifts, wind changes)?
+    *   *Properties:* Uptime percentage, drop count, reason for drop (if detectable).
+
+**Reading the Funnel (Bottom-Up)**
+Do not optimize for faster alignment until you prove it matters. Read your data in this order:
+1.  **Retention/Stability:** Look at Event 5. If users lose connection after 6 hours, alignment speed (Event 3) is irrelevant; the issue is hardware tolerance or environmental shifts.
+2.  **Activation:** Look at the drop-off between Event 3 and Event 4. If alignment finishes but signal lock fails, correlate immediately with Event 2 (weather/terrain). If high wind correlates with failure, training should focus on wind-shielding techniques, not faster turning.
+3.  **Acquisition/Efficiency:** Only if the above are healthy, look at Event 3 duration. If bad weather causes long alignment times, the metric is a symptom, not the root cause.
+
+**Experiment Rigor & Baseline**
+You have a 15% failure rate baseline from preliminary tests. Do not invent a "good" target; your goal is to move this specific number down.
+*   **No Peeking:** With only 2,000 households, do not stop analysis early because a trend looks good in week one. Wait for the full cohort to complete their 24-hour check.
+*   **Identifier Seam:** Use a pseudonymous `Installation_ID` to link these five events across the technician tablet and the satellite modem. Do not transmit personal customer names with this telemetry; route PII handling to your privacy compliance protocol.
+
+**This Week's Step**
+1.  **Define the Query:** Instruct your data engineer to build a single dashboard view correlating `signal_lock_achieved` (Success/Fail) against `environmental_snapshot` (Wind/Temp/Terrain).
+2.  **Update Tablets:** Deploy the event schema above to technician tablets by July 20th, ensuring the "environmental snapshot" forces a manual entry if auto-sensors are missing.
+3.  **Decision Trigger:** If the correlation shows >40% of failures occur in wind speeds >X km/h, the immediate action is to revise the "go/no-go" installation policy for windy days, not to retrain on alignment speed.
+
+*Note: These events are designed for low-bandwidth transmission; ensure properties are enumerated (e.g., terrain types as integers) to save space.*
+*Unknowns such as specific signal thresholds remain UNVERIFIED until your devices transmit the first batch of real data.*

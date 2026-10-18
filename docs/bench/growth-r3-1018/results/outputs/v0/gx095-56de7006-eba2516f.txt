@@ -1,0 +1,45 @@
+**Status: UNVERIFIED**
+Your assumption that "90% retention" follows from "3 sensors in week 1" is currently **UNVERIFIED**. No benchmark exists for this specific hardware bundle, and your v1.0 data was incomplete. You cannot validate a hypothesis without a baseline; therefore, no event list can guarantee success until you measure the *actual* correlation in your own data post-launch.
+
+However, to test this hypothesis efficiently without crashing your pipeline, you must stop instrumenting "everything" and strictly track only the events that answer these three questions:
+1. Did the user complete the core value action (connect 3 sensors)?
+2. Did they return to do it again (Retention)?
+3. Did the system work reliably enough to let them try (Guardrail)?
+
+**Prioritized Event List (Top 10)**
+*Discard the other 190 events for now. Add them back only if a specific new question arises.*
+
+**North Star Input (The Hypothesis)**
+1. `sensor_pairing_completed` (Properties: `user_id`, `sensor_count_total`, `timestamp`)
+   *Question:* Did they hit the "3 sensors" threshold? This is your activation trigger.
+2. `weekly_active_user_core_action` (Properties: `user_id`, `sensor_interactions_count`)
+   *Question:* Are they still using the hub weekly? This measures the retention outcome, not just login.
+
+**Funnel Diagnostics (Bottom-Up: Retention & Activation)**
+3. `onboarding_step_finished` (Properties: `step_name`, `duration_seconds`)
+   *Question:* Where do users drop off before they even get to pair the first sensor?
+4. `first_sensor_paired` (Properties: `sensor_type`, `time_since_box_open`)
+   *Question:* How long does it take to get to the first win? (Time-to-value).
+5. `second_sensor_paired` (Properties: `time_since_first_sensor`)
+   *Question:* Is there a friction point specifically between sensor 1 and 2?
+6. `third_sensor_paired` (Properties: `time_since_second_sensor`)
+   *Question:* Does friction spike at the critical hypothesis threshold?
+7. `app_session_started` (Properties: `days_since_last_session`)
+   *Question:* Are they returning? (Essential for calculating Day-7 and Day-30 retention cohorts).
+
+**Guardrails (System Health & Quality)**
+8. `pairing_failure_error` (Properties: `error_code`, `sensor_type`, `attempt_number`)
+   *Question:* Is low activation caused by bad hardware/software rather than user behavior?
+9. `data_sync_lag_seconds` (Properties: `hub_id`, `lag_duration`)
+   *Question:* Is latency preventing the "aha" moment? (Keep this aggregated; do not log per-message).
+10. `firmware_update_status` (Properties: `version`, `success_boolean`)
+    *Question:* Are failed updates blocking engagement?
+
+**Implementation Rules**
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for all events to track cohorts across sessions. Do not use raw MAC addresses or PII in analytics logs; route those to your secure device management system per privacy compliance.
+*   **Vanity Rejection:** Do not track `page_view`, `button_click`, or `menu_open` unless it directly maps to one of the questions above. Cumulative `total_downloads` is useless for retention.
+*   **Stage Awareness:** You are in the `mvp` to `growth` transition. Instrument only what validates the "3-sensor" hypothesis. If an event does not help you calculate the conversion rate from "0 sensors" to "3 sensors" or the retention rate of those who did, delete it.
+
+**This Week's Step**
+1.  **Define the Query:** Write the exact SQL/analysis query today that calculates: "Retention rate at 6 months for users with `sensor_count_total` >= 3 vs < 3." If you cannot write this query with the proposed 10 events, the schema is incomplete.
+2.  **Set the Tripwire:** Pre-commit to a review date (e.g., 45 days post-launch). If the data shows no correlation between 3 sensors and retention by then, the hypothesis is false; do not optimize for "3 sensors" further, but investigate what *actually* drives retention.

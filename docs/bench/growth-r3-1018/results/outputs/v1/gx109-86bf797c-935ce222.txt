@@ -1,0 +1,38 @@
+**Recommendation: Adopt "Weekly Active Patients with a Verified Clinical Intervention" as your North Star Metric.**
+
+This metric counts the number of unique patients per week whose device data triggered a clinically validated alert that was acknowledged and acted upon by your care team within a defined SLA. It replaces "Daily Device Usage" (vanity) and serves as the leading indicator for "Hospital Readmissions" (lagging).
+
+**Evaluation of Candidates**
+
+1.  **Daily Device Usage (Reject as North Star)**
+    *   **Pros:** Easy to instrument; shows technical uptime.
+    *   **Cons:** As your pilot proved, this is a vanity metric. High usage with flat readmissions indicates patients are wearing devices without generating value. Optimizing this drives engineering to reduce false negatives but risks alert fatigue if not tied to action. It measures *activity*, not *outcome*.
+
+2.  **Hospital Readmission Rates (Reject as North Star)**
+    *   **Pros:** The ultimate business and clinical outcome; aligns perfectly with hospital partner financial incentives.
+    *   **Cons:** Too lagging (30–90 day delay) and noisy. As you noted, readmissions are influenced by comorbidities, social determinants, and hospital discharge policies outside your control. Using this as a primary driver demotivates teams when external factors cause failure despite perfect product execution. It is a **guardrail metric**, not a North Star.
+
+3.  **Verified Clinical Intervention (Selected)**
+    *   **Pros:** Directly links product behavior (device data) to clinical value (action taken). It is actionable weekly, allowing engineering to optimize detection accuracy and clinical teams to refine triage protocols. It filters out "noise" (data with no action) and "silence" (no data).
+    *   **Cons:** Requires a tight feedback loop between the app and the clinical workflow to log the "verification" event.
+    *   **Why it works:** If this metric rises, it means more patients are receiving timely care, which *should* theoretically lower readmissions over time. It aligns engineering (detection reliability) and clinical (response speed) on a shared definition of value.
+
+**Implementation Framework for Dr. Evans' Roadmap**
+
+To prevent gaming and ensure alignment, structure your metrics hierarchy as follows for the October 1st presentation:
+
+*   **North Star:** Weekly Active Patients with Verified Clinical Intervention.
+    *   *Definition:* Patient generates high-risk data → Alert created → Clinician acknowledges → Action logged (call, med adjustment, ER dispatch) within 2 hours.
+*   **Input Metrics (Drivers):**
+    *   *Signal Quality:* % of transmissions with sufficient data fidelity (Engineering owner).
+    *   *Triage Efficiency:* Median time from Alert to Acknowledgement (Clinical Ops owner).
+*   **Guardrail Metrics (Constraints):**
+    *   *False Positive Rate:* % of alerts resulting in "No Action Needed" (Prevents alert fatigue/gaming).
+    *   *30-Day Readmission Rate:* The ultimate outcome to monitor for long-term validation (No direct ownership, but monitored for drift).
+
+**This Week's Steps**
+1.  **Instrument the "Verification" Event:** Define and tag the specific workflow step where a clinician marks an alert as "Actioned" in your system; without this, the North Star is `UNVERIFIED`.
+2.  **Baseline the Ratio:** Calculate the current conversion rate of "High-Risk Alerts" to "Verified Interventions" from your pilot data to set the FY baseline.
+
+*Note: Ensure the patient identifier used for this cohort is pseudonymous and routed to your privacy compliance protocol, distinct from raw system logs.*
+*Do not set a benchmark target (e.g., "500 interventions") until you measure your own baseline trend over the next 30 days.*

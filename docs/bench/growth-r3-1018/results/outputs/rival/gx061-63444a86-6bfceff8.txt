@@ -1,0 +1,42 @@
+**To:** Sarah Jenkins, VP of Product
+**From:** Analytics Lead
+**Date:** March 26
+**Subject:** Urgent: Checkout Experiment Analysis & Recommendation
+
+**Executive Summary**
+The observed 12% conversion drop in the South Africa checkout experiment (March 10–24) is statistically confounded by a known infrastructure failure. A routing error introduced 450ms latency to 60% of variant traffic during Week 2. Given industry benchmarks where every 100ms delay can reduce conversion by ~1%, this technical debt likely accounts for the majority, if not all, of the negative result. We cannot attribute the failure to the design change based on current aggregate data.
+
+**Isolation Strategy: Separating Signal from Noise**
+To determine the true design effect before Friday's roadmap meeting, we must segment the existing data rather than re-running the test. Execute the following three-step analysis immediately:
+
+1.  **Temporal Segmentation (Week 1 vs. Week 2)**
+    Compare conversion rates between Week 1 (clean traffic) and Week 2 (contaminated traffic).
+    *   *Hypothesis:* If Week 1 shows neutral or positive lift for the variant, and Week 2 shows the sharp decline, the design is likely viable, and the drop is purely latency-driven.
+    *   *Action:* Calculate the lift % for Variant vs. Control for March 10–16 separately from March 17–24.
+
+2.  **Latency-Based Cohort Analysis**
+    Filter the variant group by actual experienced latency (using server logs joined with analytics user IDs).
+    *   *Cohort A:* Variant users with normal latency (<200ms).
+    *   *Cohort B:* Variant users with high latency (>450ms).
+    *   *Action:* Compare conversion rates of Cohort A against the Control group. If Cohort A performs equal to or better than Control, the design is successful. If Cohort A still underperforms, the design itself is flawed regardless of speed.
+
+3.  **Device & Network Interaction Check**
+    Address the unknown regarding mobile impact by cross-referencing the latency cohorts with device type.
+    *   *Action:* Determine if the conversion drop in Cohort B (high latency) is significantly steeper for mobile users on 3G/4G networks compared to desktop. This validates whether the design is fragile under poor network conditions or if the latency penalty is universal.
+
+**Recommendation**
+**Do not kill the design yet.** The presence of a confirmed external variable (latency spike) affecting the majority of the test population invalidates a "fail" conclusion.
+
+**Immediate Next Steps:**
+1.  **Run the segmented analysis above today.** Focus primarily on the "Clean Variant" (Week 1 + Low Latency users) performance.
+2.  **Decision Rule:**
+    *   If "Clean Variant" ≥ Control: **Approve global rollout.** The design works; the failure was infrastructure.
+    *   If "Clean Variant" < Control (statistically significant): **Kill the design.** The UX change is genuinely harmful independent of speed.
+3.  **Infrastructure Fix:** Confirm the routing error is permanently resolved before any rollout to prevent compounding issues.
+
+This approach utilizes existing data to isolate the variable in question without requiring a new month-long test cycle.
+
+***
+
+*Note: Ensure data engineering joins server log latency data with analytics user IDs immediately, as this key is required for the cohort analysis.*
+*If Week 1 sample size is too small for significance, rely heavily on the low-latency cohort within Week 2.*

@@ -1,0 +1,35 @@
+### Experimental Plan: Low-Overhead Donation Page Test
+
+**Recommendation:** Proceed with a **fixed-horizon A/B test** running for **14 days**. Do not use sequential monitoring or "peeking," as this requires complex statistical guards your team cannot maintain. Instead, commit to a single read at the end. This approach minimizes David's ongoing effort to just setup and one final data pull, while providing statistically valid results for your board.
+
+**1. The Design (Pre-committed)**
+*   **Hypothesis:** The new page increases donation conversion by 10% relative (from 3.0% to 3.3%).
+*   **Duration:** 14 days (2 weeks).
+*   **Traffic:** ~800 visitors/day × 14 days = 11,200 total visitors.
+*   **Split:** 50/50 (Control vs. Variant).
+*   **Sample Size Check:** To detect a 10% relative lift (3.0% → 3.3%) with 80% power and 5% significance, you technically need ~27,000 visitors per variant. Your 14-day run will yield only ~5,600 per variant.
+    *   *Implication:* You cannot statistically confirm a 10% lift with this traffic in two weeks. However, you *can* detect a larger effect (~20% relative lift, i.e., 3.0% → 3.6%) or establish a strong directional trend.
+    *   *Board Framing:* Frame this as a "Phase 1 Signal Test." If the lift is massive (>20%), you have a winner. If it is modest (~10%), the data will be inconclusive but will justify the budget request to scale traffic or extend testing.
+
+**2. Engineering Effort (David's 4 hours/week)**
+*   **Week 1 (Setup - 4 hrs):** Implement a simple cookie-based or URL-parameter split (no heavy framework needed). Ensure the variant loads instantly. Verify that the "Donate" button click is logged distinctly for Control vs. Variant.
+*   **Weeks 2-3 (Run - 0 hrs):** No monitoring. Do not check results daily.
+*   **Week 4 (Readout - 2 hrs):** Export raw counts from logs/analytics. Calculate final rates. Present to board.
+
+**3. Manual Data Collection (If Automation Fails)**
+If automated event tracking is unavailable, David must ensure the server logs or database capture these three specific fields for every session:
+1.  **Variant ID:** (e.g., "A" or "B") assigned at session start.
+2.  **Session Outcome:** Binary flag (0 = No Donate, 1 = Donate Completed).
+3.  **Timestamp:** To filter out the first 24 hours (novelty effect) if necessary.
+
+*Manual Fallback:* If even logging is impossible, use a unique URL for the variant (e.g., `greenhorizon.org/donate?v=b`) and manually count visits vs. successful transaction IDs in your payment processor dashboard at the end of 14 days.
+
+**4. Framing Limitations for the Board**
+Present the results with this specific narrative:
+*   **The Constraint:** "With current traffic, a 2-week test can only definitively prove *large* improvements (>20%). Smaller wins (10%) will appear as 'promising trends' rather than statistical certainties."
+*   **The Ask:** "If we see a strong positive trend (even if not statistically significant), it indicates potential revenue upside that we are currently leaving on the table due to traffic volume limits. We need budget for: (a) increased ad spend to accelerate data collection, or (b) dedicated engineering time to build a robust experimentation platform that reduces variance and allows faster reads."
+*   **The Guardrail:** Confirm that the new page did not *decrease* conversions by more than 5%. If it did, revert immediately regardless of other metrics.
+
+**This Week's Step:** Have David implement the split logic and verify the "Variant ID" is being recorded in your logs today. Do not launch the variant until this field is confirmed visible, ensuring your single read at day 14 is possible.
+
+*Note: Never check the conversion rate before day 14; early "wins" are often statistical noise that leads to false decisions. All baseline comparisons must use your own historical 3% rate, not industry benchmarks.*

@@ -1,0 +1,22 @@
+**Decision: Discard the experiment results entirely. Do not attempt statistical adjustment.**
+
+You cannot salvage a valid signal from this test. The crash on October 19th introduced a **selection bias** that fundamentally breaks the randomization required for an A/B test. Your variant group (2,100 users) is no longer a random sample; it is a self-selected group of users who either arrived before the crash or successfully navigated a broken path. The control group (4,500 users) represents normal traffic. Comparing these two groups now compares "normal users" against "survivors of a crash," rendering any difference in conversion rates meaningless.
+
+Statistical adjustments (like weighting or imputation) rely on the assumption that missing data is "missing at random." Here, the data is **missing not at random**; it is missing specifically because the variant code failed under load. No mathematical formula can reconstruct the behavior of the users who encountered errors and dropped out, as their experience was defined by the failure itself. Attempting to "adjust" for this would fabricate confidence where none exists.
+
+**Metrics to confirm the discard (for your own verification, not for the VP):**
+1.  **Error Rate by Group:** You will likely see a massive spike in errors for the variant post-October 19th. This confirms the treatment was "broken software," not "new design."
+2.  **Traffic Composition:** Check if the variant traffic source shifted during the marketing push. If the marketing push drove the spike, and the variant crashed, your variant group is now biased toward early adopters or specific traffic sources that didn't hit the crash window, further skewing the sample.
+
+**How to explain this to Sarah (VP of Product):**
+Do not present partial numbers or confidence intervals. They are lies. Frame this as a **technical invalidation of the experimental design**, not a business result.
+
+*   **The Narrative:** "The experiment failed to meet the basic requirement of a fair test. The database crash selectively removed users from the variant group, creating a biased sample. Any conversion rate we calculate now reflects who survived the crash, not whether the new flow works. Using this data would lead to a false positive or negative."
+*   **The Confidence Level:** "Zero. The randomization is broken. We cannot assign a probability of success to these results."
+*   **The Call:** "Declare this a technical failure. Discard the data. We must re-run the test with two changes: (1) Implement a circuit breaker to automatically halt the experiment if error rates spike, preserving the control group's integrity, and (2) Re-calculate the sample size needed to detect our minimum effect, then run for the full duration without interruption."
+
+**This Week's Step:**
+Cancel the Friday decision meeting regarding the *results*. Instead, schedule a 30-minute post-mortem with Engineering and Product to agree on the **guardrail metric** (e.g., error rate > 1%) that will automatically kill future experiments before they corrupt data, and set a new start date for a clean run.
+
+*Note: Peeking at data during a crisis often tempts teams to find "signal" in noise; resist this. A broken test provides no information other than "the infrastructure failed."*
+*Your baseline remains your pre-test conversion rate; do not update it with these corrupted figures.*

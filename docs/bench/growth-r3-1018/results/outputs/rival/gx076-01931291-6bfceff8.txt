@@ -1,0 +1,15 @@
+### Recommended Onboarding Events for SteppeConnect
+
+To diagnose the 15% failure rate and distinguish between technician skill, weather, and terrain issues within your five-event limit, instrument the following sequence. These events capture the start, environmental context, critical technical hurdles, and final outcome of every installation.
+
+| # | Event Name | Key Properties to Capture | Why This Matters |
+|---|------------|---------------------------|------------------|
+| 1 | `installation_started` | `technician_id`, `aimag`, `scheduled_time` | Establishes the baseline count and assigns ownership. Allows you to calculate failure rates per technician to identify training gaps. |
+| 2 | `environment_check_completed` | `weather_condition` (e.g., clear, rain, snow), `terrain_type` (e.g., flat, valley, mountainous), `visibility_score` (1-5) | Directly tests your hypothesis about weather and terrain. If failures correlate strongly with specific conditions here, the issue is environmental, not technical. |
+| 3 | `signal_acquisition_attempted` | `target_satellite`, `initial_signal_strength` | Marks the transition from physical setup to technical alignment. A drop-off after this point indicates hardware or alignment issues rather than site selection problems. |
+| 4 | `dish_alignment_adjusted` | `adjustment_count`, `time_spent_aligning` (seconds), `max_signal_reached` | Measures the "time to align" metric you suspect is critical. High `adjustment_count` or long `time_spent_aligning` preceding a failure indicates a need for better technician training or automated alignment tools. |
+| 5 | `installation_completed` | `status` (success/fail), `failure_reason_code` (e.g., no_signal, hardware_fault, weather_delay), `total_duration` (seconds) | The definitive outcome. The `failure_reason_code` provided by the technician at the moment of failure is crucial for qualitative context that sensor data might miss. |
+
+**Implementation Note:** Ensure `status` and `failure_reason_code` are mandatory fields for event #5; if the technician closes the app without marking completion, default the status to "fail" with reason "incomplete_process" to prevent data gaps.
+
+**Analysis Strategy:** Compare the `adjustment_count` and `time_spent_aligning` against `status`. If high adjustments lead to success, training is working. If high adjustments lead to failure, the hardware or terrain is likely the blocker.

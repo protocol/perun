@@ -84,6 +84,8 @@ and retention limits to `deep-code-review`'s `privacy-compliance.md` (domain Q).
   governance (retire dead events; one definition per metric).
 
 ### 5. Experiment rigor — pre-commit the design, no peeking
+Raise peeking, power or multiple-comparison points only when the requester's own read has
+that flaw; otherwise give the read they need with the one caveat in a line.
 An A/B result is only real if the test was designed before it was read. The failure class:
 watch the dashboard and **stop the moment p < 0.05** ("peeking") — repeated looks inflate the
 false-positive rate far above the nominal 5%, so the "win" is noise. Require one of: a
@@ -109,11 +111,22 @@ cancels, a guardrail floor), with number, date and action, at a level the plan a
 already trip. An arbitrary round threshold is not a tripwire. The user's own baseline stays the
 only benchmark.
 
-## Stage-awareness
-Keys to the stage model in `deep-code-review` (the `STAGE` field and *Project
-stage*). Early, less instrumentation is correct; the cost of a metrics stack on a
-`prototype` is the over-engineering to stop. `growth` is where the scoreboard
-earns its keep.
+### 7. Deliver what was asked, then apply the rules
+Produce the artifact the requester named (the event list, the plan, the summary
+for their director, the choice between the options they gave) in the format and
+for the audience stated, before any caveat. The rules above shape it; they never
+replace it with a refusal, a smaller list or a lecture. Pick among the
+requester's own options instead of inventing a third, leave a decision they
+reserved for someone else to them, use data they already have before proposing
+new tracking, and add an identifier or no-benchmark note only if the request
+touches one.
+
+### 8. Make every cut decide something
+For each segment, metric or test you propose, say what each result would mean and
+the next action it triggers (for example: if the drop is only on mobile, fix the
+layout; if it is uniform, test the price copy), and tie it to the money the
+decision-maker weighs: revenue per visitor, margin, payback or the cost of the
+change. A list of cuts with no reading rule is not an answer.
 
 ## Definition of done
 - One customer-value North Star named (vanity metrics rejected), with input
@@ -129,7 +142,7 @@ earns its keep.
 - The answer ends with a **this-week step**: two or three concrete actions naming the exact
   event, cohort, query or test design, and the result that would change the decision. "Share
   your data and I will help" is not a step; an unsupplied number stays `UNVERIFIED`.
-- The identifier seam and PII routing are stated, not restated from
+- When the request involves per-user ids, the identifier seam and PII routing are stated, not restated from
   `observability.md` / `privacy-compliance.md`.
 
 ## Anti-rationalization (excuse → rebuttal)
@@ -148,30 +161,12 @@ AARRR / "Pirate Metrics" (McClure); the North Star Metric framework;
 vanity-vs-actionable metrics; retention cohort analysis; "one metric that
 matters"; activation / aha-moment analysis; experiment rigor — peeking, fixed-horizon vs
 sequential testing, always-valid p-values, CUPED variance reduction; product-led growth
-(self-serve activation). Named leads only — fetch and log a
-source before citing a specific figure or threshold (repo convention). The
-product-analytics vs ops-observability identifier seam is described in
-`observability.md` (domain M); privacy of user identifiers in
-`privacy-compliance.md` (domain Q).
+(self-serve activation). Named leads only: log a source before citing a figure (repo convention).
 
 ## Verification
-- "What's a good retention rate?" is answered from the user's baseline, never a
-  fabricated benchmark (`no-fabricated-benchmarks`).
-- A North Star request rejects vanity metrics for a customer-value metric
-  (`north-star-not-vanity`).
-- "What should I track?" instruments only what answers a named question
-  (`instrument-answers-a-named-question`).
-- "How are we doing?" routes to the user's analytics / returns `UNVERIFIED`
-  without data, never an invented number (`routes-real-figures-to-analytics`).
-- A day-2 read of a 14-day A/B test is peeking → `UNVERIFIED`, not a win; a
-  pre-committed design + primary/guardrail is required
-  (`experiment-peeking-is-not-a-win-precommit-or-sequential`).
-- Rising signups with flat weekly-active users is read as a retention/activation
-  leak; the funnel is diagnosed bottom-up (retention before acquisition), not by
-  scaling ad spend (`diagnose-retention-before-pouring-in-acquisition`).
-- A retention read ends with named events/cohorts to pull this week and the result that
-  would change the decision, not a request for more data
-  (`ends-with-a-this-week-step-not-a-data-request`).
-- A "give a call" experiment ask recomputes the stated lift, names the confounders, and gives one call
-  with a tripwire derived from the stated numbers (`experiment-call-recomputes-then-decides`).
-- `evals/evals.json` plants these cases.
+`evals/evals.json` plants these cases: `no-fabricated-benchmarks` (a retention rate is answered from the
+user's baseline), `north-star-not-vanity`, `instrument-answers-a-named-question`,
+`routes-real-figures-to-analytics` (no data means `UNVERIFIED`, never an invented number),
+`experiment-peeking-is-not-a-win-precommit-or-sequential`,
+`diagnose-retention-before-pouring-in-acquisition`, `ends-with-a-this-week-step-not-a-data-request`,
+`experiment-call-recomputes-then-decides`, `delivers-the-asked-artifact-with-reading-rules`.

@@ -1,0 +1,59 @@
+### Critical Telemetry Schema for SiliconBundle v2.0 Launch
+**Audience:** CTO & Data Engineering
+**Goal:** Validate the "3-Sensor Activation" hypothesis and stabilize the data pipeline by reducing event volume from 200+ to essential business metrics.
+
+The following ten events are prioritized strictly to answer whether connecting three sensors in week one drives six-month retention. All other events should be deferred to post-launch diagnostics.
+
+1.  **`hub_first_power_on`**
+    *   **Question:** When does the user's journey actually begin?
+    *   **Properties:** `hub_id`, `firmware_version`, `timestamp`.
+    *   **Role:** Defines the start of the "first week" window for the activation hypothesis.
+
+2.  **`sensor_pairing_initiated`**
+    *   **Question:** Are users attempting to connect sensors, even if they fail?
+    *   **Properties:** `hub_id`, `sensor_type`, `attempt_id`.
+    *   **Role:** Distinguishes between lack of interest and friction in the pairing flow.
+
+3.  **`sensor_pairing_success`**
+    *   **Question:** Did the user successfully connect a sensor?
+    *   **Properties:** `hub_id`, `sensor_id`, `sensor_type`, `time_since_hub_start`.
+    *   **Role:** The core counter for the "3 sensors" hypothesis.
+
+4.  **`activation_threshold_reached`** (Derived/Server-side)
+    *   **Question:** Did the user hit the critical "3 sensors in 7 days" milestone?
+    *   **Properties:** `hub_id`, `days_since_start`, `sensor_count`.
+    *   **Role:** Directly flags the cohort predicted to have 90% retention.
+
+5.  **`core_action_performed`**
+    *   **Question:** Is the system being used for its intended value after setup?
+    *   **Properties:** `hub_id`, `action_type` (e.g., "automation_triggered", "status_check"), `sensor_involved`.
+    *   **Role:** Measures actual value delivery, distinct from mere setup completion.
+
+6.  **`weekly_active_user`** (Derived/Server-side)
+    *   **Question:** Is the user returning week over week?
+    *   **Properties:** `hub_id`, `week_number`.
+    *   **Role:** The primary retention metric to validate the 6-month prediction.
+
+7.  **`app_session_start`**
+    *   **Question:** How often do users engage with the control interface?
+    *   **Properties:** `hub_id`, `platform` (iOS/Android/Web), `session_id`.
+    *   **Role:** Context for engagement frequency; helps correlate app usage with sensor retention.
+
+8.  **`error_critical_flow`**
+    *   **Question:** What is blocking the "3 sensor" goal?
+    *   **Properties:** `hub_id`, `error_code`, `flow_stage` (e.g., "pairing", "cloud_sync").
+    *   **Role:** The only error event tracked; essential for fixing leaks in the activation funnel.
+
+9.  **`firmware_update_status`**
+    *   **Question:** Did a bad update break retention?
+    *   **Properties:** `hub_id`, `old_version`, `new_version`, `success_boolean`.
+    *   **Role:** A guardrail metric to ensure observed retention drops aren't caused by broken updates.
+
+10. **`churn_signal`** (Derived/Server-side)
+    *   **Question:** Has the user stopped engaging?
+    *   **Properties:** `hub_id`, `days_since_last_core_action`.
+    *   **Role:** Flags users at risk before the 6-month mark, allowing for early intervention analysis.
+
+**Implementation Notes:**
+*   **Identifier Seam:** All events must include a stable, pseudonymous `hub_id` to track users across sessions without exposing PII; route any raw MAC addresses or personal data to the privacy compliance review.
+*   **Baseline Warning:** The assumed "90% retention" is currently **UNVERIFIED**. These events will establish your true baseline; do not treat the assumption as a benchmark until the data confirms it.

@@ -1,0 +1,39 @@
+# ConnectNG Pilot Tracking Plan (Lagos)
+
+**Target:** 1M daily event limit. **Strategy:** Prioritize high-signal retention and viral loops over vanity metrics. All events include `user_id`, `session_id`, `device_type`, `network_quality` (2G/3G/4G/WiFi), and `location_lga`.
+
+## Essential Events (Retention & Core Value)
+*These 6 events are mandatory for calculating Day-1/7/30 retention and proving product-market fit.*
+
+1.  **`app_opened`** (Trigger: App foregrounded)
+    *   **Why:** Baseline for DAU/MAU. In intermittent connectivity markets, distinguishing between "opened" and "loaded" is critical to measure frustration if content fails to fetch.
+2.  **`community_joined`** (Properties: `community_id`, `join_method`)
+    *   **Why:** The primary "Aha!" moment. Retention correlates directly with joining a relevant local group within the first session.
+3.  **`content_viewed`** (Properties: `content_type`, `load_time_ms`, `cached_status`)
+    *   **Why:** Measures consumption. Tracking `cached_status` is vital for Nigeria to understand if users are engaging with offline-cached content vs. fresh data.
+4.  **`local_post_created`** (Properties: `media_type`, `character_count`, `upload_success_bool`)
+    *   **Why:** Indicates transition from consumer to creator. `upload_success_bool` helps diagnose connectivity drop-offs during media uploads.
+5.  **`comment_posted`** (Properties: `thread_depth`, `time_to_first_comment_mins`)
+    *   **Why:** Higher signal than likes. Public comments indicate community health and stickiness better than passive consumption.
+6.  **`session_ended`** (Properties: `duration_sec`, `disconnect_reason`)
+    *   **Why:** Differentiates between intentional closes and network-induced crashes/timeouts, crucial for stability metrics in low-bandwidth areas.
+
+## Viral & Growth Events (Acquisition)
+*These 3 events validate the WhatsApp viral hypothesis and measure public vs. private spread.*
+
+7.  **`share_initiated`** (Properties: `channel` [WhatsApp/SMS/CopyLink], `content_id`)
+    *   **Why:** Captures intent to share regardless of completion. High initiation but low completion indicates friction in the handoff to WhatsApp.
+8.  **`share_completed`** (Properties: `channel`, `share_location` [Post/Profile/Community])
+    *   **Why:** Your primary viral metric. Confirms the user successfully handed off content to WhatsApp. Compare ratio against `share_initiated`.
+9.  **`invite_link_clicked`** (Properties: `referrer_user_id`, `landing_community_id`)
+    *   **Why:** Attributes new signups to specific inviters. Essential for calculating K-factor and identifying super-spreaders in Lagos communities.
+
+## Nice-to-Have (Context & Optimization)
+*Implement only if daily volume remains under 800k after launch stabilization.*
+
+10. **`button_clicked`** (Properties: `button_id`, `screen_name`)
+    *   **Why:** Granular UX data. Useful for optimizing specific flows but often creates noise. Aggregate into `feature_used` if volume spikes.
+
+## Implementation Notes for Tunde
+*   **Sampling:** If `content_viewed` threatens the 1M limit, sample at 50% for non-logged-in users but keep 100% for registered users to preserve retention cohorts.
+*   **Batching:** Configure the SDK to batch events locally and flush only on WiFi or stable 4G to respect user data costs and prevent ingestion loss during dropouts.

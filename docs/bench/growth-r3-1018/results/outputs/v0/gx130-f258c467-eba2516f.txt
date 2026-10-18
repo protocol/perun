@@ -1,0 +1,39 @@
+### Executive Summary: Revenue Data Remediation Plan
+
+To restore confidence for the end-of-quarter review and secure long-term data integrity, we will execute a two-track strategy: an immediate **historical normalization** for the CFO's report and a **preventive governance layer** for future ingestion. This approach bypasses the two-month ingestion rewrite while delivering accurate figures within three weeks.
+
+#### Phase 1: Immediate Historical Correction (Weeks 1–2)
+We will apply a deterministic transformation script to the existing data warehouse to normalize the `currency` field for all historical records affecting the current quarter.
+
+1.  **Normalization Logic:**
+    *   Map symbolic values (`$`, `€`, `£`) to their ISO 4217 codes (`USD`, `EUR`, `GBP`) based on the transaction's geographic origin or merchant ID.
+    *   Impute missing values (`NULL`) by joining against the master merchant profile table, which holds the definitive currency setting for each seller.
+    *   Flag any records where imputation is impossible (e.g., missing merchant ID) as "Unverified" and exclude them from the top-line revenue sum, reporting them separately as a reconciliation item.
+
+2.  **Validation Protocol:**
+    *   **Reconciliation:** Compare the corrected total against the client's external payment processor settlements (Stripe/PayPal/Bank feeds). The variance must fall below a 0.5% threshold.
+    *   **Sample Audit:** Manually verify 50 random high-value transactions where the currency was altered to ensure the logic held.
+
+*Deliverable:* A "Certified Q3 Revenue" dashboard view with a footnote detailing the normalization methodology and the exact value of excluded "Unverified" transactions.
+
+#### Phase 2: Future-Proofing Without Full Rewrite (Weeks 2–3)
+To prevent recurrence without a two-month engineering cycle, we will implement a **schema enforcement middleware** at the ingestion entry point.
+
+1.  **Strict Typing & Defaulting:**
+    *   Deploy a lightweight validation function that rejects any event where `currency` is not a valid ISO 4217 code.
+    *   Implement a "dead-letter queue" for rejected events rather than dropping them, allowing engineering to fix specific source issues without halting the pipeline.
+    *   Enforce a defaulting rule: If the source system omits currency but provides a `merchant_id`, the middleware enriches the event with the correct currency code from the master profile before it hits the warehouse.
+
+2.  **Expanded Schema Audit:**
+    *   Since the scope of inconsistency is unknown beyond revenue, we will run a frequency distribution analysis on all top-20 critical dimensions (e.g., `product_category`, `region`, `payment_method`).
+    *   Any field with >5% variance in formatting (e.g., "USA" vs "US" vs "United States") will be added to the normalization backlog for Q4.
+
+#### Validation of Corrections
+Confidence will be re-established through a **triple-match verification** for the final report:
+1.  **Internal Consistency:** Pre- and post-correction variance analysis showing the reduction of the $50k discrepancy.
+2.  **External Match:** Direct line-item reconciliation with the primary payment gateway settlement reports.
+3.  **Process Proof:** Documentation of the new rejection logs showing zero invalid currency codes entering the system post-deployment.
+
+This plan delivers accurate financials for the CFO's review in three weeks while instituting a permanent guardrail against data drift.
+
+**Note:** This strategy assumes access to a reliable master merchant profile table for imputation; if this table is also corrupted, the "Unverified" bucket will increase. The expanded schema audit results will determine if additional fields require immediate normalization before the quarter closes.

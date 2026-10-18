@@ -1,0 +1,40 @@
+### Proposed Conversion Funnel: YenilemeEstimator Photo Upload Flow
+
+To pinpoint friction for Mehmet's sprint planning, treat the photo upload not as a single step, but as a **micro-funnel of four distinct events**. This granularity isolates whether users fail at permission, capture, selection, or confirmation.
+
+#### 1. Event Definitions & Properties
+Implement these specific events to track the flow. All events must include `user_id`, `session_id`, `device_type`, and `city` (Istanbul/Ankara).
+
+| Event Name | Trigger Point | Critical Properties | Purpose |
+| :--- | :--- | :--- | : |
+| `estimate_started` | User clicks "New Estimate" | `room_type`, `is_draft_resume` (bool) | Establishes the denominator; identifies returning draft users. |
+| `camera_permission_requested` | App prompts for camera access | `permission_status` (granted/denied/undetermined) | **Friction Point A:** Detects OS-level blocking or user hesitation. |
+| `photo_captured` | User takes a photo or selects from gallery | `source` (camera/gallery), `photo_count` | **Friction Point B:** Validates if users can successfully acquire an image. |
+| `photo_confirmed` | User accepts the specific photo for analysis | `retakes_count`, `time_spent_seconds` | **Friction Point C:** Identifies UI confusion or dissatisfaction with image quality. |
+| `estimate_completed` | Final cost calculation is displayed | `total_photos`, `completion_time_seconds` | The primary conversion goal. |
+
+#### 2. Handling Drafts & Returning Users
+Since 15% of users save and return, you must distinguish between a *new* attempt and a *resumed* session to avoid skewing drop-off rates.
+
+*   **Property Strategy:** Add `is_draft_resume: true/false` to `estimate_started`.
+*   **Logic:** If a user resumes a draft, they may skip `camera_permission_requested` if previously granted. Track a separate event `draft_resumed` if they re-enter the flow from the home screen.
+*   **Analysis:** Calculate completion rates separately for `is_draft_resume = true` vs. `false`. If draft resumption has a higher completion rate, the friction is likely in the *initial* setup, not the core utility.
+
+#### 3. Recommended Funnel Visualization for Mehmet
+Present the data to engineering as a step-by-step conversion rate. This highlights exactly where the 3,680 users (4,000 downloads - 320 completions) are lost:
+
+1.  **Started:** 4,000 users (100%)
+2.  **Permission Granted:** [X]% → *Drop-off here indicates need for better permission copy or timing.*
+3.  **Photo Captured:** [Y]% → *Drop-off here suggests camera UI bugs or complexity.*
+4.  **Photo Confirmed:** [Z]% → *Drop-off here implies users dislike the result or can't find the "Confirm" button.*
+5.  **Completed:** 8% (320 users)
+
+#### 4. Implementation Notes for Engineering
+*   **Naming Convention:** Use `snake_case` as shown above for compatibility with GA4/Mixpanel.
+*   **Timing:** Capture `time_spent_seconds` between `estimate_started` and `estimate_completed` to correlate speed with completion.
+*   **Validation:** Before April 10th, run a test on 50 internal devices to ensure `photo_captured` fires even if the user cancels the subsequent confirmation (to measure true capture success).
+
+This structure allows you to validate your hypothesis: if `photo_confirmed` is the lowest step, simplifying the review UI is the priority. If `camera_permission_requested` is the bottleneck, the fix is educational copy, not code refactoring.
+
+*Ensure Mehmet implements these events in the staging environment by April 5th to allow 3 days of data validation before the sprint starts.*
+*Do not group "Capture" and "Confirm"; merging them hides whether the issue is technical (camera fail) or UX (confirmation confusion).*

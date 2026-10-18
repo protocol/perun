@@ -1,0 +1,80 @@
+# API Migration Adoption Tracking Plan
+
+**To:** Chief Technology Officer, CloudStream
+**From:** Analytics Lead
+**Date:** March 15, 2024
+**Subject:** Instrumentation Requirements for API v2.0 Migration Monitoring
+
+To distinguish between superficial testing and stable production adoption before the June 30 sunset, we must move beyond simple call counts. The current 8% error rate on aggregation endpoints suggests integration friction that volume metrics alone cannot explain. We recommend instrumenting the following event schema immediately to allocate engineering resources effectively.
+
+## Core Events to Instrument
+
+### 1. `api_request_executed`
+*Trigger: Every API call to v2.0*
+**Properties:**
+- `api_version` (v1.0 | v2.0)
+- `endpoint_path` (e.g., `/data/aggregation`)
+- `http_status_code` (200, 400, 500, etc.)
+- `error_code` (if applicable, e.g., `INVALID_PARAM`, `RATE_LIMIT`)
+- `response_time_ms`
+- `client_sdk_version`
+- `is_beta_flag` (true/false)
+
+### 2. `integration_session_started`
+*Trigger: First successful v2.0 call from a unique client ID within a 24-hour window*
+**Properties:**
+- `client_id` (hashed/anonymized)
+- `client_tier` (enterprise, startup, free)
+- `previous_v1_usage_days` (days since last v1 call)
+- `migration_source` (direct, sdk, partner)
+
+### 3. `integration_pattern_detected`
+*Trigger: Heuristic analysis of call sequences indicating production usage*
+**Properties:**
+- `pattern_type` (cron_job, real_time_user_action, batch_process)
+- `calls_per_minute_avg`
+- `unique_endpoints_used_count`
+- `error_recovery_attempted` (true/false - did they retry after error?)
+- `days_active_in_week`
+
+### 4. `migration_blocker_encountered`
+*Trigger: Repeated failures on same endpoint from same client (>3 times in 1 hour)*
+**Properties:**
+- `client_id` (hashed)
+- `blocked_endpoint`
+- `failure_reason_category` (authentication, data_format, rate_limit, timeout)
+- `support_ticket_created` (true/false)
+- `days_since_first_v2_attempt`
+
+### 5. `production_commitment_signal`
+*Trigger: Sustained usage pattern meeting production thresholds*
+**Properties:**
+- `client_id` (hashed)
+- `consecutive_days_active`
+- `total_successful_calls_7d`
+- `critical_endpoint_usage` (boolean - using aggregation endpoints successfully)
+- `v1_calls_parallel` (boolean - still calling v1 alongside v2)
+
+## Key Metrics Dashboard
+
+Track these derived metrics weekly:
+
+1. **True Adoption Rate**: % of clients with `production_commitment_signal` = true
+2. **Testing vs. Production Ratio**: Clients with >10 calls but no `production_commitment_signal`
+3. **Blocker Resolution Time**: Average days from first `migration_blocker_encountered` to first successful call
+4. **Endpoint Health Score**: Success rate per endpoint, weighted by client tier
+5. **Migration Risk Score**: Clients with high v1 usage, low v2 success, approaching deadline
+
+## Critical Insights from Current Data
+
+The 8% error rate on aggregation endpoints requires immediate investigation. We must capture `error_code` and `failure_reason_category` to determine if this stems from:
+- Breaking changes in data format requiring code updates
+- Rate limiting issues specific to new endpoints
+- Documentation gaps causing implementation errors
+- Actual bugs in the v2.0 aggregation logic
+
+Without these events, we cannot differentiate between a client who made 100 test calls yesterday versus one who has processed production traffic for three weeks. The `integration_pattern_detected` and `production_commitment_signal` events are essential for predicting which clients will face disruption on June 30.
+
+**Implementation Priority:** High. Engineering should begin logging these events by March 31 to establish a 90-day baseline before the cutoff.
+
+*Note: This plan requires updates to our telemetry pipeline and client SDK instrumentation. No additional external tools needed.*

@@ -1,0 +1,19 @@
+**Decision: Pause National Rollout. Treat the rendering issue as a critical blocker, not a data artifact to be excluded.**
+
+Do not exclude low-end devices from the analysis. Excluding them would mask a severe regression in a key demographic, violating the principle of measuring real user value. The 25% spike in bounce rate on the payment confirmation screen for devices with <2GB RAM is a guardrail failure that invalidates the primary metric's reliability for that segment. If users believe a transaction failed when it succeeded, trust is eroded, leading to future churn and support costs that outweigh the immediate 12% lift.
+
+**Reconciliation of Signals:**
+The 12% increase in completed transactions is likely `UNVERIFIED` as a net gain because the "bounces" may include successful transactions that users abandoned due to perceived failure, or conversely, the "completed" count might be inflated by retry logic triggered by the confusion. You cannot declare a win when the user's perception of success is broken. The experiment design failed to account for device fragmentation as a stratification variable before the test began.
+
+**Required Actions (This Week):**
+1.  **Segmented Recomputation:** Immediately re-run the analysis splitting the treatment group into "<2GB RAM" and "≥2GB RAM." Calculate the conversion lift and bounce rate delta for each cohort separately. Do not aggregate these numbers.
+2.  **Qualitative Verification:** Trigger a rapid manual review (or session replay check if available) for 20–30 bounced sessions on <2GB devices to confirm the hypothesis: did the UI render incorrectly, causing the user to leave?
+3.  **Fix and Re-test:** Halt the rollout. Fix the rendering bug on low-end devices. Re-run the experiment *only* on the <2GB cohort with the fix, using a pre-committed sample size, to verify that the bounce rate returns to baseline while maintaining conversion gains.
+
+**Deployment Rule:**
+Roll out nationally only when the <2GB RAM cohort shows a non-negative delta in bounce rate (within a 2% confidence interval) and a positive lift in completed transactions. If the fix cannot stabilize the bounce rate on low-end devices within 14 days, consider a phased rollout that excludes these devices temporarily, but only with a explicit plan and timeline to support them, rather than treating them as invisible.
+
+The 12% lift is a potential upside; the 25% bounce spike is a confirmed downside risk. In growth analytics, retention and trust (indicated by clear confirmation) precede acquisition and conversion optimization. Fix the leak before pouring more traffic.
+
+*Note: Ensure your event taxonomy distinguishes between "transaction succeeded" (backend) and "confirmation viewed" (frontend) to detect this disconnect in future tests.*
+*Do not peek at daily data during the re-test; commit to a fixed duration or sequential testing rule to avoid false positives.*

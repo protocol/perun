@@ -1,0 +1,18 @@
+**Recommendation: Do not roll out city-wide. Kill the current configuration and extend the test to isolate the confounder.**
+
+The experiment failed its primary guardrail. While the treatment achieved the input metric goal (driver availability +22%, exceeding the 20% hypothesis), it negatively impacted the core business metric (order volume -8%). In a two-sided marketplace like rapidEats, supply gains that suppress demand destroy net revenue unless the margin expansion from higher prices mathematically offsets the volume loss. Without evidence that the 8% volume drop yields a net profit increase, this is a failed test, not a trade-off to be scaled.
+
+Furthermore, the result is **UNVERIFIED** as a causal effect of pricing due to the identified confounder: the local festival in Polanco. A concurrent local event invalidates the "all else equal" assumption required for A/B testing. The 8% drop may be entirely attributable to the festival altering traffic patterns or user behavior, rather than price sensitivity. Rolling out based on this data risks implementing a punitive pricing model city-wide based on noise.
+
+**Decision Logic for Q3 Budget:**
+1.  **Reject the "Win":** Do not count the driver availability increase as a success if order volume collapses. The North Star is successful deliveries/value transacted, not driver headcount.
+2.  **Isolate the Variable:** The festival makes the current 14-day read unusable for pricing elasticity conclusions. You cannot distinguish between "users hate rain pricing" and "users avoided Polanco due to the festival."
+3.  **Financial Guardrail:** Calculate the break-even volume drop. If your average margin per order is $X and the surge adds $Y, does $Y cover the loss of 8% of orders? If the net revenue per daily order is lower in the test zone than the control, the algorithm is value-destructive at this sensitivity level.
+
+**This Week's Steps:**
+1.  **Re-run the test window:** Extend the Polanco vs. Condesa test for another 14 days, explicitly excluding dates with known local festivals or holidays, to establish a clean baseline.
+2.  **Segment the drop:** Query the data to see if the 8% volume drop was uniform across all hours or concentrated strictly during the festival dates. If the drop disappears on non-festival rainy days, the price sensitivity hypothesis remains untested; if the drop persists, the price elasticity is real and too high for this configuration.
+3.  **Define the tripwire:** Before the next run, pre-commit to a stop-loss: if order volume drops >3% without a corresponding net revenue lift (price gain × volume > baseline revenue), the test auto-terminates.
+
+*Note: Ensure user identifiers used to track repeat ordering behavior across these zones are pseudonymized and comply with local data privacy regulations before re-running the cohort analysis.*
+*Do not adjust the algorithm parameters until the festival confounder is statistically ruled out.*

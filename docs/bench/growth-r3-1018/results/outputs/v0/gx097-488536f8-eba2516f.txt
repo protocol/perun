@@ -1,0 +1,33 @@
+### Immediate Action Plan: Reconciling Mobile Web vs. Native App Divergence
+
+**1. Validate Data Integrity (Rule Out Instrumentation Errors)**
+Before analyzing user behavior, confirm the metric definition is identical across platforms.
+*   **Action:** Audit the event taxonomy for "click-through to payment." Ensure the mobile web implementation fires on the exact same DOM interaction as the native app (e.g., button click vs. page load).
+*   **Check:** Verify that the "price display feature" code deployed to mobile web matches the spec. A common failure mode is a rendering bug that hides the CTA or delays its load time on specific browsers, artificially depressing the rate.
+*   **Deliverable:** A data quality report confirming event parity or identifying the specific tracking drift.
+
+**2. Segment by User Cohort (Isolate Demographics vs. Experience)**
+The divergence may stem from who uses each channel, not how the feature works.
+*   **Action:** Split the mobile web data by **new vs. returning users** and **device/OS/browser**. Native app users are often loyal repeat bookers; mobile web users may be price-sensitive first-timers.
+*   **Hypothesis Test:** If the drop is isolated to *new* mobile web users on *specific browsers* (e.g., Safari iOS), the issue is likely rendering or trust-related. If the drop is uniform across all mobile web segments, the feature itself may be confusing for the web context.
+*   **Deliverable:** A segmented retention and activation matrix showing the metric lift/drop per cohort.
+
+**3. Analyze the Funnel Bottom-Up (Retention & Activation)**
+Do not focus solely on the click-through rate (a vanity metric if it doesn't lead to value).
+*   **Action:** Trace the user flow from "Price View" → "Click Payment" → "Successful Booking."
+*   **Critical Check:** Did the mobile web "decrease" in clicks result in *fewer bookings*, or did it filter out low-intent users, maintaining conversion quality? Conversely, did the native app "increase" lead to more payment errors or drop-offs *after* the click?
+*   **Deliverable:** A funnel visualization comparing conversion rates *post-click** for both channels.
+
+**4. Controlled Validation (The "True Impact" Test)**
+Since you lack concrete evidence of the cause, run a targeted A/B test on mobile web only.
+*   **Design:** Revert the price display feature for 50% of mobile web traffic (Control) while keeping it for the other 50% (Treatment).
+*   **Pre-commitment:** Define the sample size and duration now to avoid "peeking." Set a guardrail metric (e.g., customer support tickets regarding pricing) to catch confusion early.
+*   **Decision Rule:** If the Treatment group shows a statistically significant drop in *completed bookings* (not just clicks) by October 20th, revert the change for all mobile web users by the October 25th deadline.
+
+**This Week's Steps:**
+1.  **Engineering:** Audit the mobile web event firing logic and browser compatibility by Wednesday.
+2.  **Analytics:** Pull the segmented funnel data (New vs. Returning, Browser-specific) by Thursday.
+3.  **Product:** Launch the 50/50 holdback test on mobile web by Friday to isolate causality before the deadline.
+
+**Note:** Do not assume the native app success translates to web; channel contexts differ fundamentally.
+**Note:** If the data shows the mobile web drop is isolated to a specific browser engine, prioritize a hotfix over a full revert.

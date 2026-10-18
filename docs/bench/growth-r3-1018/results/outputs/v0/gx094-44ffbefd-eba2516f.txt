@@ -1,0 +1,31 @@
+### Experiment Strategy for AlpineGear Checkout Test
+
+**Verdict:** Do not run a standard fixed-horizon A/B test aiming for a 10% lift with your current traffic; the risk of false positives from "peeking" is too high, and the duration will likely miss your January deadline. Instead, use a **sequential testing design** with a realistic Minimum Detectable Effect (MDE) adjustment.
+
+**1. The Constraints & Reality Check**
+With 500 daily visitors and a 2.5% baseline conversion rate, you generate roughly 12–13 conversions per day total.
+*   **The Trap:** If you aim for a 10% lift (moving from 2.5% to 2.75%) using a standard test, you would need approximately **30,000+ visitors per variant** to reach statistical significance. At 250 visitors/day per variant, this test would take **120 days (4 months)**. This misses your January peak.
+*   **The Risk:** Aggregating data over six weeks and checking results daily ("peeking") inflates your false-positive rate far above 5%. A "win" seen on day 10 of a 42-day plan is statistically `UNVERIFIED` noise, not a valid signal.
+
+**2. Recommended Approach: Sequential Testing (Always-Valid)**
+To balance speed and reliability without pre-committing to a 4-month fixed duration, implement a **sequential testing framework** (e.g., mSPRT or confidence sequences).
+*   **How it works:** This method allows you to monitor results continuously and stop early *only* if the data crosses a dynamically adjusting significance boundary. It mathematically corrects for the "peeking" problem.
+*   **Benefit:** If the trust badges have a massive impact (e.g., >20% lift), you can detect it in weeks. If the effect is small, the test naturally runs longer without invalidating the result.
+
+**3. Realistic Minimum Detectable Effect (MDE)**
+Given your low volume, you must adjust your expectations. You cannot reliably detect a 10% lift quickly.
+*   **Target MDE:** Aim to detect a **20–25% relative lift** (moving conversion from 2.5% to ~3.0–3.1%).
+*   **Why:** Detecting a larger effect requires significantly fewer samples. If the trust badges only provide a 5% or 10% lift, your traffic volume is insufficient to prove it before January without accepting high uncertainty. You must decide: is a smaller, unprovable lift worth the engineering cost?
+
+**4. Evaluation Criteria & Guardrails**
+*   **Primary Metric:** Checkout completion rate (unique visitors who purchase).
+*   **Guardrail Metric:** Average Order Value (AOV). Ensure trust badges do not inadvertently attract lower-value transactions or confuse high-value climbers.
+*   **Stopping Rule:** Define the sequential boundary upfront. If the metric crosses the upper bound, ship immediately. If it crosses the lower bound (negative impact), stop immediately. If it stays in the "continuation region" by late December, **stop the test** and make a decision based on the directional trend, acknowledging it is not statistically definitive.
+
+**5. Immediate Next Steps**
+1.  **Instrumentation:** Verify your analytics tool supports sequential testing or export daily aggregates to calculate confidence sequences manually.
+2.  **Launch:** Start the test immediately with a 50/50 split.
+3.  **Review Cadence:** Check the sequential boundary twice weekly, not daily, to reduce operational noise.
+
+**Note:** If the test remains inconclusive by mid-December, rely on qualitative user feedback regarding trust concerns rather than forcing a quantitative verdict.
+**Note:** Ensure user identifiers are pseudonymous for cohort tracking; route any PII handling to your privacy compliance protocol.

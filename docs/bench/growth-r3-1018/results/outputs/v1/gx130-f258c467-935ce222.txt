@@ -1,0 +1,28 @@
+# Executive Summary: Revenue Data Normalization Strategy
+
+To restore confidence in the end-of-quarter review within three weeks, we will execute a two-track strategy: an immediate **historical correction** for the CFO's report and a **forward-looking guardrail** to prevent recurrence, bypassing the two-month ingestion rewrite.
+
+### 1. Immediate Historical Correction (Weeks 1–2)
+We will apply a targeted transformation script to the existing data warehouse layer specifically for the quarter-to-date revenue fields. This approach isolates the fix to the reporting layer, avoiding a full pipeline rebuild.
+*   **Normalization Logic:** Implement a deterministic mapping rule: convert '$' to 'USD', standardize lowercase variants to 'USD', and flag missing values.
+*   **Handling Missing Data (The 15% Gap):** For records where 'currency' is missing, we will infer the value based on the transaction's `store_region` or `payment_gateway` metadata (which are assumed consistent). Records lacking both currency and regional context will be segregated into a "Reconciliation Required" bucket rather than guessed, ensuring the main report remains auditable.
+*   **Validation:** Before publishing, we will run a reconciliation query comparing the corrected total against the payment gateway's settled amount (the source of truth). The variance must be <0.1% to sign off.
+
+### 2. Future-Proofing Without Full Rewrite (Weeks 2–3)
+To stop the bleed while the long-term ingestion fix is developed, we will deploy a **schema enforcement middleware** at the collection point.
+*   **Allow-List Validation:** Configure the current collector to reject or quarantine any event where `currency` is not in the strict allow-list [`USD`, `EUR`, `GBP`, etc.]. This forces immediate visibility on new errors without changing the downstream architecture.
+*   **Defaulting Logic:** Apply a safe default (e.g., 'USD') only if the user's IP and store location definitively match a single-currency region; otherwise, the event is quarantined for manual review.
+
+### 3. Audit Expansion (Parallel Track)
+Since the scope of formatting issues beyond revenue is unknown, we will initiate a **high-impact property audit**. We will sample the top 5 revenue-driving events and scan for cardinality anomalies in critical fields (e.g., `product_id`, `order_status`). This identifies the next highest-risk data quality issue before it impacts financial reporting.
+
+### Decision Matrix for the CFO
+*   **If reconciliation variance > 1%:** We present the report with a clear footnote detailing the excluded "unrecoverable" transactions and their estimated maximum impact ($50k cap), preserving credibility over false precision.
+*   **If variance < 1%:** We certify the Q3 numbers as accurate and attach the new validation rules as evidence of controlled risk.
+
+**Next Steps:**
+1.  Approve the normalization logic for historical backfill by EOD tomorrow.
+2.  Authorize the temporary "quarantine" mode for incoming events with invalid currencies starting Monday.
+3.  Schedule the reconciliation review for [Date + 10 days] to finalize the Q3 deck.
+
+*Note: This plan treats the symptom to meet the deadline; the two-month ingestion refactor remains necessary for long-term scalability. All currency inferences are logged for audit trails.*

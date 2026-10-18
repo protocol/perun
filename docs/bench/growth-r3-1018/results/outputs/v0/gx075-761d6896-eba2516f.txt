@@ -1,0 +1,29 @@
+### Experiment Evaluation: Tooltip Frequency Test
+
+**Status: UNVERIFIED (Missing Pre-Committed Design & Guardrails)**
+The result cannot be declared a "win" based on the current data. The test appears to have been evaluated by observing a desirable outcome (ticket reduction) while ignoring a critical guardrail metric (power user satisfaction) that was likely not pre-defined as a stop condition. Furthermore, without a pre-committed sample size or duration calculated before February 10th, any significance claim is subject to "peeking" bias.
+
+**Recomputed Trade-Off Analysis**
+You are comparing a **lagging operational metric** (support tickets) against a **leading product metric** (power user retention/satisfaction).
+1.  **The False Positive:** A 20% drop in tickets is valuable, but if it causes churn in the 10% of users who drive the majority of your revenue (power users), the net business value is negative.
+2.  **The Confounder:** The "constant pop-ups" indicate a failure in segmentation, not necessarily the feature itself. Power users have already passed the "activation" phase; showing them onboarding content is friction, not value.
+3.  **The Missing Baseline:** You have not provided the baseline churn rate for power users or the monetary value of a saved support ticket versus a lost power user subscription. Without these, the trade-off is qualitative, not quantitative.
+
+**Decision Framework for March 1st**
+Do not make the change permanent globally. The data suggests a **segmentation error**, not a feature failure.
+*   **Call:** **STOP** the global rollout. **EXTEND** the experiment with a segmented design.
+*   **Tripwire:** If power user session duration drops by >5% or direct complaint volume exceeds 1% of the segment daily, the variant is immediately disabled for that cohort.
+
+**Required Metrics to Find the Tipping Point**
+To analyze the trade-off honestly, instrument the following events immediately (do not estimate):
+1.  **Tooltip Dismissal Rate (by User Segment):** Track how quickly tooltips are closed. A high dismissal rate (<1 second) for power users indicates annoyance.
+2.  **Core Action Completion Time:** Measure the time taken to complete key engineering tasks. If this increases for power users, the tooltips are degrading workflow efficiency.
+3.  **Retention Cohort (Power Users):** Compare Week-2 retention of power users exposed to high-frequency tooltips vs. a control group. This is your true North Star input; ticket volume is secondary.
+
+**This Week's Steps**
+1.  **Query:** Pull the "Core Action Completion Time" and "Tooltip Dismissal Rate" specifically for the 800 power users exposed to the test vs. those who were not.
+2.  **Design:** Define a new A/B test where the "treatment" is **conditional**: tooltips appear only for users who have completed the core action <5 times (novices) and are suppressed for users >50 times (experts).
+3.  **Pre-commit:** Calculate the required sample size for this segmented test to detect a 2% change in retention, set the end date, and declare "Power User Retention" as the primary guardrail metric before launching.
+
+*Note: The 150 complaints represent nearly 20% of your power user segment exposed to the test; this is a critical signal that requires immediate segmentation, not further global exposure.*
+*Ensure user identifiers used for this segmentation are pseudonymous and routed to your privacy compliance protocol.*

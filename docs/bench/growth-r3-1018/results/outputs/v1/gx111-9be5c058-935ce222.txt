@@ -1,0 +1,32 @@
+**Decision Framework: Dynamic Pricing Rollout Recommendation**
+
+**1. Immediate Verdict: Do Not Roll Out Globally Yet**
+The current result is **inconclusive and potentially dangerous**. A 4.2% lift in Average Daily Rate (ADR) coupled with a 1.8% drop in conversion yields a net Revenue Per Visitor (RPV) gain of only ~2.3% *if* the mix of bookers remains constant. However, without segmentation, you cannot verify if this gain is driven by price-insensitive users while simultaneously alienating high-volume segments. Rolling out globally risks a "silent leak" where total booking volume collapses even if ADR holds.
+
+**2. Required Metrics to Isolate Segment Impact**
+Since traveler-type data is missing for this window, you must proxy segments using available behavioral data to reconstruct the mix before re-running the test. Calculate these three metrics immediately:
+
+*   **Booking Lead Time Distribution:** Compare the median days-between-search-and-stay for converters in Control vs. Treatment.
+    *   *Hypothesis Check:* If Treatment converters have significantly shorter lead times, your assumption holds (business travelers booking last minute accepted higher rates). If lead times lengthened or stayed flat, leisure travelers are absorbing costs, and churn risk is high.
+*   **Length of Stay (LOS) Shift:** Calculate the average LOS for converters in both groups.
+    *   *Hypothesis Check:* Business trips often have fixed, short durations. If LOS dropped in Treatment, you may have priced out weekend leisure stays while retaining mid-week corporate bookings.
+*   **Device/Channel Mix Ratio:** Break down conversion rates by Mobile vs. Desktop and Direct vs. OTA referrals.
+    *   *Hypothesis Check:* Business travelers often book via Desktop/Direct. If Mobile conversion tanked while Desktop held steady, the algorithm is penalizing leisure/mobile-first users.
+
+**3. Interpreting Statistical Significance on Conflicting Metrics**
+Do not look at ADR or Conversion significance in isolation. The **Primary Metric** for this decision must be **Revenue Per Visitor (RPV)**.
+
+*   **The Math:** RPV = ADR × Conversion Rate.
+*   **The Significance Trap:** Even if ADR is statistically significant (p < 0.05) and Conversion is significant, RPV might *not* be. The variance of a product of two random variables is complex.
+*   **Action:** Recalculate the confidence interval specifically for RPV using the delta method or bootstrapping on the *combined* metric.
+    *   *Decision Rule:* If the lower bound of the 95% confidence interval for RPV lift includes 0% (or your minimum hurdle rate, e.g., 1%), the test is **statistically inconclusive**. You cannot claim a win based on ADR alone.
+    *   *Guardrail Check:* Set a hard guardrail on total booking volume. If total rooms booked drops by >1%, the long-term supply-side damage (hotel partner dissatisfaction) outweighs the short-term RPV gain.
+
+**4. Next Steps for Friday's Decision**
+*   **If RPV lower bound > 0% AND volume guardrail holds:** Approve a **phased rollout** (e.g., 50% traffic) *only* after implementing explicit traveler-type tagging in the instrumentation pipeline.
+*   **If RPV lower bound ≤ 0%:** Kill the current parameterization. The algorithm is too aggressive.
+*   **Mandatory Instrumentation Fix:** Before any further testing, instrument a `traveler_type` property (derived from loyalty status or booking pattern) on the `search_started` and `booking_completed` events. Without this, you are optimizing blindly.
+
+**Summary for Elena:** The net revenue impact is currently unverified due to missing segment data. We must proxy segments via lead time and device data today. If the recalculated RPV confidence interval does not clear our hurdle rate decisively, we pause global rollout to fix instrumentation and re-test with segmented guards.
+
+*Note: Ensure the `traveler_type` ID is pseudonymous and routed to privacy compliance protocols before storage. Do not use raw PII for cohort analysis.*

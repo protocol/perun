@@ -1,0 +1,69 @@
+# RoboArm X Beta Instrumentation Specification
+
+**Objective:** Diagnose bottlenecks in task completion (2–45 min variance) by distinguishing between user hesitation, network latency, and mechanical calibration errors prior to the April 5 beta launch.
+
+**Scope:** Firmware (Arm Controller), Controller App (UI), and Cloud Sync.
+**Privacy Constraint:** Do not log video feeds, proprietary CAD files, or PII. Log only metadata, timestamps, and status codes.
+
+## 1. Core Event Schema
+
+All events must include a unique `session_id`, `user_id` (anonymized), `arm_serial_number`, and `firmware_version`. Timestamps must be UTC epoch milliseconds.
+
+### A. Task Lifecycle Events (App & Firmware)
+*Trigger: User initiates/completes a defined assembly operation.*
+
+| Event Name | Source | Key Properties | Diagnostic Purpose |
+| :--- | :--- | :--- | :|
+| `task_started` | App | `task_type`, `complexity_score`, `planned_steps` | Establishes baseline intent. |
+| `task_step_started` | Firmware | `step_id`, `target_coordinates`, `payload_weight` | Marks actual mechanical engagement. |
+| `task_step_completed` | Firmware | `step_id`, `duration_ms`, `error_code` (if any) | Measures pure execution time. |
+| `task_completed` | App | `total_duration_ms`, `success_boolean`, `abort_reason` | Defines the numerator for "tasks per hour." |
+| `task_aborted` | App/FW | `abort_source` (user/system), `failure_step`, `error_log_ref` | Captures partial failures. |
+
+### B. Latency & Connectivity Events
+*Trigger: Network handshake or command transmission.*
+
+| Event Name | Source | Key Properties | Diagnostic Purpose |
+| :--- | :--- | :--- | :|
+| `command_sent` | App | `command_type`, `payload_size_bytes`, `local_timestamp` | Start of network round-trip. |
+| `command_received` | Firmware | `command_type`, `fw_receipt_timestamp` | End of network round-trip. |
+| `calibration_start` | Firmware | `calibration_type` (auto/manual), `trigger_reason` | Identifies frequency of auto-calibration. |
+| `calibration_end` | Firmware | `duration_ms`, `adjustment_magnitude`, `success_boolean` | Quantifies time lost to mechanical drift. |
+
+### C. User Interaction Events (Hesitation Detection)
+*Trigger: UI interaction or idle state.*
+
+| Event Name | Source | Key Properties | Diagnostic Purpose |
+| :--- | :--- | :--- | :|
+| `ui_interaction` | App | `element_id`, `action_type` (click, drag, confirm) | Maps user flow progression. |
+| `idle_timeout_start` | App | `current_step`, `last_action_timestamp` | Detects user hesitation (>10s inactivity). |
+| `idle_timeout_end` | App | `duration_ms`, `resume_action` | Quantifies hesitation duration. |
+| `help_docs_viewed` | App | `topic_id`, `search_query` | Correlates confusion with delays. |
+
+## 2. Derived Metrics for Analysis
+
+Engineering and CS will compute the following from raw events to isolate root causes:
+
+1.  **Mechanical Efficiency:** `SUM(task_step_completed.duration)` / `task_completed.total_duration`.
+    *   *Low ratio indicates non-mechanical delays (user/network).*
+2.  **Network Overhead:** `AVG(command_received.timestamp - command_sent.timestamp)`.
+    *   *Spikes >200ms indicate connectivity bottlenecks.*
+3.  **Calibration Overhead:** `SUM(calibration_end.duration)` per task.
+    *   *High values indicate unstable hardware or poor initial setup.*
+4.  **Hesitation Index:** `SUM(idle_timeout_end.duration)` / `task_completed.total_duration`.
+    *   *High values indicate UX confusion or insufficient training.*
+
+## 3. Implementation Constraints
+
+*   **Bandwidth Management:** Batch non-critical events (e.g., `ui_interaction`) and transmit every 5 minutes or on task completion. Transmit error/critical events immediately.
+*   **Local Buffering:** If offline, store events locally (max 50MB) and sync upon reconnection. Tag synced events with `sync_delay_ms`.
+*   **Sampling:** For high-frequency telemetry (e.g., motor torque logs >10Hz), sample at 1Hz unless an error state is triggered, then switch to full fidelity for 30 seconds.
+
+## 4. Deliverable Timeline
+
+*   **Firmware Update:** Must include new event hooks by March 25.
+*   **App Update:** Must include UI tracking and batching logic by March 28.
+*   **Dashboard:** CS team requires a raw event viewer by April 2 to validate data flow before shipping.
+
+*Note: Ensure all `error_code` properties map to a shared lookup table distributed to CS for immediate troubleshooting.*
+*Calibration events must capture `adjustment_magnitude` to detect if specific units are mechanically drifting faster than others.*

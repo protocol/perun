@@ -1,0 +1,39 @@
+### Pricing Test Evaluation Plan for DataPrecise CFO
+
+**Objective:** Determine within 60 days whether the €400→€600 price increase (effective March 1) sustains Annual Recurring Revenue (ARR) or triggers unacceptable churn, specifically isolating the impact on German manufacturing clients.
+
+**1. North Star Metric: Net Revenue Retention (NRR)**
+Do not track "churn rate" in isolation. A higher price naturally increases revenue per user even if some leave. The single metric that matters is **NRR**: *(Starting MRR + Expansion – Churn – Contraction) / Starting MRR*.
+*   **Target:** If NRR stays ≥100%, the price hike is mathematically successful despite higher churn.
+*   **Input Metrics:** Monthly churn rate by segment (SMB vs. Enterprise), upgrade rate to the new reporting module, and support ticket volume tagged "pricing" or "value."
+
+**2. Event Taxonomy: Instrument Only What Answers a Question**
+Stop guessing; instrument these three specific signals to detect dissatisfaction before cancellation:
+*   **Event:** `reporting_module_login_frequency`
+    *   *Question:* Are customers actually using the new feature justifying the €200 increase?
+    *   *Action:* If usage drops >20% post-hike compared to baseline, the value proposition is failing.
+*   **Event:** `support_ticket_sentiment_score` (manual tag or keyword search for "cost", "expensive", "budget")
+    *   *Question:* Is friction rising before the contract ends?
+    *   *Action:* A spike in negative sentiment in Weeks 1–4 predicts churn in Weeks 5–8.
+*   **Event:** `cancellation_survey_reason_code`
+    *   *Question:* Is the exit due to price or product fit?
+    *   *Action:* Mandatory field upon cancellation request.
+
+**3. Segmentation & Baseline Comparison**
+Compare the March/April cohort against your stable 3% baseline. Do not use industry benchmarks.
+*   **Segment A (Enterprise):** Test the hypothesis that they are less price-sensitive. If their churn remains near 3% while SMB churn spikes, the strategy holds for the top tier.
+*   **Segment B (SMB):** If churn exceeds 6% (double the baseline), calculate the break-even point.
+    *   *Math:* To maintain revenue with 6% churn vs 3% churn, you need the remaining customers to cover the loss. If the math fails, this segment requires a rollback or a discounted "legacy" tier.
+
+**4. The Decision Framework (May Board Meeting)**
+Present one of three clear paths based on the 60-day data:
+*   **Double Down:** If NRR ≥100% AND Enterprise churn <4%. *Action:* Aggressively sales-push the reporting module to remaining SMBs.
+*   **Segmented Rollback:** If SMB churn >6% BUT Enterprise holds. *Action:* Grandfather existing SMBs at €400; enforce €600 only on new logos and Enterprise renewals.
+*   **Full Revert:** If NRR <95% across all segments. *Action:* The perceived value of the reporting module is insufficient; revert to €400 and delay the module launch.
+
+**This Week's Steps:**
+1.  **Define the Query:** Instruct engineering to tag all support tickets with "pricing" keywords starting immediately; establish the baseline count from February.
+2.  **Pre-commit the Tripwire:** Set a hard rule now: If SMB churn hits 5.5% by April 15, automatically trigger the "Segmented Rollback" plan without waiting for the full 60 days.
+3.  **Instrument Value:** Ensure the `reporting_module_login` event is firing for all €600 tier users; if this data is missing, the value justification is `UNVERIFIED`.
+
+*Note: All churn comparisons must reference your internal 3% baseline, not external SaaS averages. Ensure customer IDs used for cohort tracking are pseudonymized to comply with German data privacy standards.*

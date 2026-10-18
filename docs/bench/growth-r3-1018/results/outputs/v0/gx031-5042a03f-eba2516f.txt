@@ -1,0 +1,29 @@
+### Data Points to Isolate the Cause
+
+To distinguish between latency (SMS delay) and usability (UI confusion), pull these four specific event properties for the March 12–present window, segmented by device screen width:
+
+1.  **`sms_request_to_code_received_latency`**: The delta between the "Send Code" click and the backend event confirming code delivery.
+    *   *Interpretation:* If abandonment correlates strongly with latency >8 seconds, the issue is infrastructure/carrier delay.
+2.  **`time_on_verification_screen`**: The duration from screen load to either submission or abandonment.
+    *   *Interpretation:* High latency users who abandon quickly indicate frustration. Users with low latency (fast delivery) who still spend excessive time on-screen before abandoning suggest UI confusion or input errors.
+3.  **`verification_attempt_count`**: Number of "Resend Code" clicks or failed validation attempts per session.
+    *   *Interpretation:* High resend rates with low latency point to users not receiving codes (carrier filtering) or misunderstanding the input format.
+4.  **`keyboard_trigger_failures`** (if available) or **`input_field_focus_duration`**: Time spent before the first digit is entered.
+    *   *Interpretation:* Long delays before typing on small screens specifically indicate the input field design is hindering interaction.
+
+**Analysis Logic:** Cross-reference `sms_request_to_code_received_latency` against `abandonment`. If the abandonment rate remains high (near 29%) even for sessions where latency was <3 seconds, the root cause is **UI/Design**, not delay. If abandonment drops to baseline (14%) for low-latency sessions, the root cause is **SMS Delivery Performance**.
+
+### Proposed Follow-Up Test Structure
+
+Do not run a standard A/B test that removes verification for a segment, as this compromises security for the 71% success group. Instead, run a **mitigation experiment** on the treatment group only:
+
+*   **Hypothesis:** If we proactively inform users of expected wait times or optimize the input field, abandonment will decrease despite current latency levels.
+*   **Treatment A (Latency Mitigation):** Display a dynamic countdown timer ("Code arriving in ~5s") and disable the "Resend" button until the timer expires. This manages expectation anxiety.
+*   **Treatment B (UI Mitigation):** Force the numeric keypad to trigger automatically on focus and enlarge the input field characters for devices with screen width <375px.
+*   **Guardrail Metric:** Monitor `successful_login_rate` post-verification to ensure the changes do not introduce new friction after the code is entered.
+*   **Sample Size & Duration:** With 45,000 daily visitors and a ~29% drop-off (~13,000 exposed users/day), split traffic 50/50 between Treatment A and Treatment B (or run sequentially if engineering resources are tight). To detect a 10% relative reduction in abandonment (from 29% to ~26%) with 95% confidence, you need approximately 3,500 users per variant. You will reach statistical significance in **less than 24 hours**.
+*   **Decision Rule:** Pre-commit to shipping the variant that reduces abandonment by at least 15% relative to the control without degrading the guardrail metric. If neither moves the needle, the issue is likely external (carrier blocking) requiring a vendor change, not a product fix.
+
+**This Week's Step:** Query the `sms_request_to_code_received_latency` distribution for abandoned vs. completed sessions immediately. If the median latency for abandoners is indistinguishable from completers, prioritize Treatment B (UI) for Friday's recommendation.
+
+*Note: Ensure all user identifiers in these logs are pseudonymized before analysis to maintain privacy compliance. Do not peek at results before the pre-committed sample size is reached to avoid false positives.*

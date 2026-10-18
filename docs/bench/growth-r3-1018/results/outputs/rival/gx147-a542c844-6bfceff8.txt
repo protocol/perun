@@ -1,0 +1,60 @@
+# LinkGear Japan Launch: Activation & Defect Detection Plan
+
+To distinguish between user error and genuine product defects while respecting privacy and offline constraints, implement the following three-layer instrumentation strategy. This plan correlates physical activation events with software pairing success to forecast support volume and refine onboarding materials before the January shipment.
+
+### 1. Physical Activation Signals (Hardware-Logged)
+Since devices may be offline during initial setup, the sensor must locally log timestamped events to non-volatile memory. These logs are uploaded to the cloud once the device successfully pairs and connects.
+
+*   **Power-On Event:** Timestamp of first battery insertion.
+*   **Pairing Mode Entry:** Timestamp when the hardware button is held to initiate Bluetooth/Wi-Fi broadcasting.
+*   **Pairing Attempt Count:** Integer count of how many times the device entered pairing mode before a successful handshake. (High counts suggest user confusion or hardware radio failure).
+*   **Successful Handshake:** Timestamp of successful connection to the mobile app.
+*   **First Data Transmission:** Timestamp of the first successful sensor reading sent to the cloud.
+
+**Defect vs. Error Logic:**
+*   **User Error:** High "Pairing Attempt Count" followed by a successful handshake and normal data transmission.
+*   **Hardware Defect:** Device powers on but never enters pairing mode, or enters pairing mode repeatedly without ever achieving a handshake across multiple days.
+
+### 2. App-Side Interaction Signals (Client-Side)
+Instrument the mobile app to capture the user's journey during the setup flow. These events fire immediately if the phone has connectivity, or queue locally if offline.
+
+*   `onboarding_started`: User opens the app and begins setup.
+*   `permission_granted_denied`: Specific tracking of Bluetooth/Location permission prompts. (Critical for Japan's strict Android/iOS permission behaviors).
+*   `device_scan_started`: User initiates the search for the sensor.
+*   `device_found`: App detects the sensor's broadcast signal.
+*   `pairing_failed`: App reports a failure code (e.g., timeout, authentication error, signal too weak).
+*   `pairing_success`: Successful bond established.
+*   `firmware_update_status`: Success/failure/duration of any initial OTA updates.
+
+**Defect vs. Error Logic:**
+*   **User Error:** `permission_granted_denied` followed by app exit, or `device_scan_started` with no `device_found` (indicating the user never put the hardware in pairing mode).
+*   **Connectivity Issue:** `device_found` occurs, but `pairing_success` fails repeatedly with timeout errors, specifically correlated with rural IP ranges or weak signal strength metadata.
+*   **Hardware Defect:** `device_found` never occurs despite the user logging "Power-On" and "Pairing Mode Entry" on the hardware side (indicates radio failure).
+
+### 3. Connectivity & Environmental Context
+To address rural connectivity concerns without invasive monitoring, append lightweight metadata to every transmission attempt:
+
+*   **Connection Type:** Cellular (4G/5G/LTE-M) vs. Wi-Fi.
+*   **Signal Strength (RSSI):** Recorded at the moment of pairing and first transmission.
+*   **Transmission Latency:** Time between sensor reading and cloud receipt.
+*   **Retry Count:** Number of attempts required to upload the initial log batch.
+
+### Implementation Timeline & Decision Framework
+
+**Phase 1: Pre-Launch (Now – Oct 15)**
+*   Embed logging firmware in the 5,000 units.
+*   Update app analytics to capture the specific events listed above.
+*   Define "Defect Threshold": If >15% of units show "Power-On" but no "Handshake" within 48 hours, trigger a hardware investigation.
+
+**Phase 2: Launch Monitoring (Oct 15 – Dec 15)**
+*   **Daily Dashboard:** Track the ratio of `Power-On` to `First Data Transmission`.
+*   **Cohort Analysis:** Segment activation rates by region (prefecture) to identify rural connectivity blackspots vs. uniform failure rates.
+*   **Support Triage:** When a user contacts support, agents query the device ID. If logs show high retry counts but eventual success, guide the user to the updated onboarding guide. If logs show zero handshake attempts despite power-on, authorize immediate replacement.
+
+**Phase 3: Iteration (Dec 15 – Jan Shipment)**
+*   Analyze drop-off points. If most failures occur at `permission_granted_denied`, revise the app's permission request copy and timing.
+*   If rural areas show high transmission latency but successful pairing, include signal booster recommendations in the January box inserts.
+
+This approach provides the Supply Chain Director with concrete return forecasts based on hard failure rates and gives the Country Manager data to localize support resources effectively.
+
+*Note: Ensure all logging complies with Japan's APPI regulations by avoiding collection of precise GPS coordinates during the setup phase unless explicitly consented to for agricultural mapping features.*

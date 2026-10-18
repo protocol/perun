@@ -1,0 +1,38 @@
+### Evaluation Plan: DataPrecise Pricing Tier Test (March 1 – April 30)
+
+**1. Define the North Star and Guardrails**
+*   **North Star:** Net Revenue Retention (NRR) for the €600 tier. This captures both churn and expansion, reflecting true value capture.
+*   **Primary Metric:** Monthly Churn Rate specifically for the €600 cohort vs. the legacy €400 cohort.
+*   **Guardrail Metric:** Support ticket volume tagged "pricing" or "billing" and a drop in core feature adoption (reporting module usage). If support spikes >20% or usage drops >15% relative to baseline, trigger an immediate review.
+
+**2. Instrumentation & Event Taxonomy (Answering Named Questions)**
+Do not track everything. Instrument only these events to answer specific questions:
+*   *Question:* Are customers engaging with the new value before paying?
+    *   *Event:* `reporting_module_accessed` (User ID, Timestamp).
+*   *Question:* Is price the friction point?
+    *   *Event:* `billing_page_viewed` followed by `session_ended_without_payment` (User ID, Timestamp).
+*   *Question:* Are they threatening to leave?
+    *   *Event:* `cancellation_flow_started` (User ID, Reason Code selected).
+*   *Identifier Seam:* Use a stable, pseudonymous Customer ID to track behavior across sessions. Do not use raw emails in analytics; route PII to your secure CRM per privacy compliance.
+
+**3. Reading the Signals (Bottom-Up Funnel)**
+Read retention signals before looking at acquisition or total revenue.
+*   **Week 1-2 (Activation/Value Check):** Compare `reporting_module_accessed` rates between €400 and €600 cohorts. If the €600 group does not access the new module at least 3x in the first 14 days, the perceived value is missing. This is a leading indicator of churn.
+*   **Week 3-4 (Friction Detection):** Monitor the drop-off rate at the billing page. A high view-to-pay drop-off compared to the historical €400 baseline indicates price resistance before cancellation occurs.
+*   **Week 5-8 (Retention Verification):** Calculate the actual churn rate for the €600 cohort. Do not wait for the full 60 days to see the trend; calculate the weekly run-rate. If the weekly churn implies a monthly rate >4.5% (50% increase), the hypothesis that "enterprise is less price-sensitive" is failing for this segment.
+
+**4. Experiment Rigor & Decision Framework**
+Since this is a live rollout without a control group (all new/updated users get the hike), you are running a **pre-post cohort analysis**.
+*   **Baseline:** Use the stable 3% churn of the €400 cohort as your control.
+*   **Significance:** Do not declare a "win" or "loss" based on one or two cancellations. Wait until the cohort size is large enough that a single churn event doesn't swing the rate by >1%.
+*   **The Call (Decision Tripwires):**
+    *   **Roll Back:** If the €600 cohort churn exceeds 5% monthly (approx. 1.7x baseline) OR if `reporting_module_accessed` is <50% of the legacy cohort's usage by Day 30.
+    *   **Double Down:** If churn remains ≤3.5% AND `reporting_module_accessed` matches or exceeds legacy usage.
+    *   **Extend/Test:** If churn is between 3.5% and 5%, isolate the "Small Business" vs. "Enterprise" segments within the €600 tier. If only small businesses churn, revert pricing for them only and maintain €600 for enterprises.
+
+**5. This Week's Steps**
+1.  **Query:** Pull `reporting_module_accessed` counts for the first 100 users on the €600 plan vs. a matched sample of €400 users.
+2.  **Tag:** Ensure customer support tags all inbound tickets with "pricing_concern" starting today to create a real-time leading indicator.
+3.  **Define:** Lock the "Roll Back" tripwire at 5% churn in your CFO's forecast model now, so the decision is data-driven, not emotional, in May.
+
+*Note: All metrics above are UNVERIFIED until pulled from your internal analytics; do not estimate values. This plan assumes no concurrent marketing campaigns that would confound the usage data.*

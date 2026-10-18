@@ -1,0 +1,40 @@
+# Diagnostic Plan: DesignFlow Trial Conversion Leak
+
+**Executive Summary**
+August data indicates a 6% conversion rate (120/2,000), significantly below the projected 12%. The primary hypothesis is that users fail to discover advanced export features within the critical first three days. This plan isolates the drop-off point and validates the cause using existing data and targeted instrumentation, avoiding vanity metrics in favor of core value retention.
+
+### 1. Quantitative Cohort Analysis (The "Where")
+We will segment the August trial cohort to pinpoint the exact friction step, reading the funnel bottom-up from retention rather than top-down from acquisition.
+
+*   **Activation Cohorts (Day 1–3):** Segment users by whether they performed the "Advanced Export" action within 72 hours.
+    *   *Metric:* Compare conversion rates of "Exporters" vs. "Non-Exporters."
+    *   *Decision Rule:* If "Exporters" convert at >15% while "Non-Exporters" remain <2%, the hypothesis is confirmed: discovery is the blocker. If both groups convert poorly, the issue is product utility or pricing, not feature discovery.
+*   **Time-to-Value Heatmap:** Map the percentage of users remaining active at Day 1, Day 2, and Day 3.
+    *   *Metric:* Drop-off rate between specific onboarding steps (e.g., project creation → first edit → export attempt).
+    *   *Decision Rule:* Identify the single step with the highest relative drop-off. This is the immediate fix priority.
+*   **Pricing Sensitivity Segment:** Isolate users who visited the pricing page but did not convert.
+    *   *Metric:* Conversion rate of users who viewed pricing before Day 7 vs. after Day 7.
+    *   *Decision Rule:* If early viewers drop off at high rates, pricing perception is a secondary leak requiring copy adjustment, not just feature discovery.
+
+### 2. Qualitative Validation (The "Why")
+Quantitative data identifies the leak; qualitative methods validate the cause without fabricating benchmarks.
+
+*   **Session Replay Sampling:** Review 50 random session recordings of users who dropped off between Day 2 and Day 3 without exporting.
+    *   *Action:* Look specifically for "rage clicks" near export menus or navigation loops indicating confusion.
+*   **Exit Intercept Survey:** Trigger a one-question survey for users canceling their trial: "What was the one thing missing that prevented you from upgrading?"
+    *   *Action:* Tag responses as "Feature Missing," "Too Expensive," or "Didn't Need It."
+    *   *Decision Rule:* If >40% cite "couldn't find export" or similar, the UX hypothesis holds.
+
+### 3. Instrumentation & Event Taxonomy
+Do not instrument "everything." Add only these events to answer specific questions:
+*   `export_menu_viewed`: Did they see the button? (Answers: Is it hidden?)
+*   `export_action_started`: Did they try to use it? (Answers: Is the workflow broken?)
+*   `export_completed`: Did they succeed? (Answers: Is the output valuable?)
+*   *Note:* Ensure these events tie to a stable, pseudonymous user ID to track cross-session behavior, adhering to privacy compliance for PII.
+
+### This Week's Steps
+1.  **Run the Activation Cohort Query:** Calculate conversion rates for users who exported vs. those who didn't in August. If the gap is >10%, proceed to step 2.
+2.  **Audit the Export Path:** Have a designer and engineer walk through the first 30 minutes of a new user journey to count clicks required to reach "Export." If >5 clicks, draft a UI simplification spec.
+3.  **Define the Guardrail:** Before testing any UI changes, set "Daily Active Users" as a guardrail metric to ensure simplification doesn't reduce overall engagement.
+
+**Status of Metrics:** Current conversion rate (6%) is verified from provided data. Projected rate (12%) is treated as an internal baseline; no external market benchmarks are applied. Specific drop-off percentages between steps are currently `UNVERIFIED` pending the cohort query execution.

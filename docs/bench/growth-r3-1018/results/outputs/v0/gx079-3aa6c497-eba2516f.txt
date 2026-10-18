@@ -1,0 +1,25 @@
+**Verdict: The test is invalid for causal inference; do not adjust the numbers, and do not ship based on this read.**
+
+The negligible difference you observed is `UNVERIFIED` as a measure of the offer's true lift. Your pre-committed design assumed an isolated control group, but the radio campaign introduced a massive confounder: **selection bias and treatment contamination**. Because ~25% of the control group was exposed to external ads promoting the annual plan, you can no longer attribute differences (or the lack thereof) solely to the in-app prompt. The "control" is no longer a baseline of organic behavior; it is a mixed population of organic users and radio-influenced users.
+
+You cannot mathematically "adjust" for this contamination without knowing the exact conversion rate of the radio-ad-exposed users versus the non-exposed users within the control group. Since you only have an *estimate* of exposure (25%) and no data on whether the radio ads had the same conversion power as the in-app prompt, any correction factor would be an invented benchmark, violating the prime directive of using only verified user data.
+
+**Recomputed Reality:**
+Your internal modeling expected a 15% lift. The observed result is ~0%.
+*   **Scenario A:** The offer works (15% lift), but the radio ads lifted the control group by a similar margin, masking the effect.
+*   **Scenario B:** The offer does not work, and the radio ads had no effect.
+*   **Scenario C:** The offer works slightly, but the radio ads were less effective, resulting in a net neutral read.
+
+Without isolating the radio effect, these scenarios are indistinguishable. Treating the current result as a "win" (because it didn't drop) or a "loss" (because it missed 15%) is guessing. A result read from a contaminated test is `UNVERIFIED`.
+
+**Decision & Tripwire:**
+**Stop** any rollout of the discounted annual plan based on this data. The tripwire to proceed is not a statistical adjustment, but a **clean re-run**.
+*   **Action:** Halt the pricing strategy finalization until a valid test is complete.
+*   **Tripwire:** You need a new test where the guardrail is **zero external marketing interference** in the control zone. If the CMO requires a decision by August 5th, you must present the current data as "inconclusive due to contamination" rather than forcing a false positive/negative.
+
+**This-Week Steps:**
+1.  **Query:** Segment the control group by actual radio exposure (if trackable via survey or geo-lift proxy) to see if the exposed subset converted higher than the unexposed subset. If you cannot separate them, label the metric `UNVERIFIED`.
+2.  **Design:** Draft a pre-committed re-test plan for August/September with a strict **guardrail metric**: "No external marketing campaigns targeting the test regions during the test window."
+3.  **Report:** Present the "0% lift" to the CMO explicitly as "Masked by 25% control contamination; true effect unknown," and recommend extending the timeline to run a clean test rather than guessing the Q3 strategy.
+
+Do not attempt to calculate a "corrected" lift percentage; without ground truth on the radio ad's efficacy, that number is fiction.

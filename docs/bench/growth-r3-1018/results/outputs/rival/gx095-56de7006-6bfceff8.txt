@@ -1,0 +1,74 @@
+# SiliconBundle v2.0 Critical Event Tracking Plan
+
+To validate your core hypothesis—that connecting ≥3 sensors in week one drives 90% six-month retention—and stabilize your data pipeline, you must reduce noise and focus exclusively on the user journey milestones that directly correlate to this outcome. The following ten events are the absolute minimum required to measure activation, engagement, and retention without overburdening your engineering team.
+
+### Core Activation & Hypothesis Validation
+These events directly measure the "3 sensors in 7 days" condition.
+
+1.  **`device_paired`**
+    *   **Trigger:** User successfully connects the main Hub to the app.
+    *   **Properties:** `device_id`, `firmware_version`, `pairing_timestamp`.
+    *   **Why:** Establishes the cohort start date (Day 0).
+
+2.  **`sensor_connected`**
+    *   **Trigger:** A specific proprietary sensor is successfully linked to the Hub.
+    *   **Properties:** `sensor_type` (motion, temp, etc.), `sensor_id`, `connection_order` (1st, 2nd, 3rd).
+    *   **Why:** The primary counter for your hypothesis. You must track the sequence to identify if the *type* of the third sensor matters.
+
+3.  **`activation_milestone_reached`**
+    *   **Trigger:** System logic confirms the user has connected their 3rd unique sensor within 168 hours of `device_paired`.
+    *   **Properties:** `time_to_activate` (hours), `sensor_mix` (e.g., "2 motion, 1 temp").
+    *   **Why:** This is your binary "Activated" flag. Calculating this server-side prevents client-side calculation errors and simplifies analysis.
+
+### Engagement & Value Realization
+These events confirm the user is deriving value, acting as leading indicators before the 6-month mark.
+
+4.  **`automation_created`**
+    *   **Trigger:** User sets up a rule (e.g., "If motion detected, turn on light").
+    *   **Properties:** `trigger_sensor_type`, `action_type`, `complexity_score`.
+    *   **Why:** Users who build automations are significantly stickier than those who only monitor data.
+
+5.  **`dashboard_viewed`**
+    *   **Trigger:** User opens the main status screen.
+    *   **Properties:** `view_duration`, `active_sensors_displayed`.
+    *   **Why:** A basic heartbeat metric to distinguish between "churned" and "passive" users.
+
+6.  **`alert_received`**
+    *   **Trigger:** A sensor triggers a notification sent to the user.
+    *   **Properties:** `alert_type`, `sensor_id`.
+    *   **Why:** Proves the system is working proactively, a key value prop for security/safety hubs.
+
+7.  **`alert_acknowledged`**
+    *   **Trigger:** User interacts with the notification or views the specific alert in-app.
+    *   **Properties:** `response_time` (seconds).
+    *   **Why:** Measures responsiveness and trust in the system.
+
+### Retention & Health
+These events track the long-term outcome and failure states.
+
+8.  **`subscription_renewed`** (or `premium_feature_accessed`)
+    *   **Trigger:** Monthly/Annual cycle completion or access to paid cloud features.
+    *   **Properties:** `plan_type`, `renewal_count`.
+    *   **Why:** The ultimate business outcome correlating to retention.
+
+9.  **`app_session_started`**
+    *   **Trigger:** User opens the application.
+    *   **Properties:** `session_id`, `days_since_activation`.
+    *   **Why:** Required to calculate frequency of use curves leading up to the 6-month mark.
+
+10. **`support_ticket_submitted`**
+    *   **Trigger:** User contacts support via the app.
+    *   **Properties:** `category` (connectivity, hardware, software), `severity`.
+    *   **Why:** High support volume immediately post-pairing indicates a broken onboarding flow that invalidates the hypothesis.
+
+### Deferred Items (Do Not Track at Launch)
+Move these to a backlog to stabilize the pipeline:
+*   Individual sensor heartbeat/ping events (aggregate these daily server-side instead).
+*   UI hover states or button clicks within settings menus.
+*   Granular network diagnostic logs (keep these in local device logs only).
+*   A/B test variant assignments unless a specific test is running on onboarding.
+
+By implementing only these ten events, you create a clean, high-fidelity dataset to prove or disprove your retention hypothesis without the instability of processing 200+ low-value signals.
+
+*Ensure `sensor_connected` includes a sequential index property to easily query "3rd sensor" types without complex window functions.*
+*All timestamps must be UTC to ensure accurate "first week" cohort calculations across time zones.*

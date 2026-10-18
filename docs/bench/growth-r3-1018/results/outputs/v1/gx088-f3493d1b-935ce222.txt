@@ -1,0 +1,30 @@
+**Deliverable: Activation Definition & Measurement Plan for AutoBot SG**
+
+**1. The Definition: "Production Value Realized"**
+For enterprise RPA, the "aha" moment is not building a bot (activity) nor completing training (compliance). It is the **first successful automated transaction in a live environment**.
+*   **Why:** Building a bot is easy; deploying it to a live server with real bank data proves trust and integration. If a bot runs once successfully, the technical barriers are broken, and the workflow is embedded. This correlates directly with renewal because it represents actual cost savings or risk reduction for the bank.
+*   **The Metric:** `Count of unique bots per account that have executed ≥1 successful live transaction.`
+*   **Threshold for "Activated Account":** An account is "Activated" when **3 distinct bots** from **2 different users** within that bank have each completed ≥1 live transaction. This moves the signal from individual curiosity to departmental workflow integration.
+
+**2. What to Measure (Event Taxonomy)**
+Instrument only these three events to answer the specific question: *"Is this account deriving recurring value?"*
+*   `bot_build_completed`: User finishes the designer. (Context: Vanity if not followed by run).
+*   `bot_deployed_to_live`: Bot configuration pushed to production server. (Context: High intent, but no value yet).
+*   `bot_live_run_success`: **The North Star Input.** A bot executes a transaction on live data without error.
+    *   *Properties:* `account_id`, `bot_id`, `user_id` (pseudonymous), `transaction_type`, `timestamp`.
+
+**3. How Priya's Team Should Read It (The "At-Risk" Logic)**
+Do not look at total signups or builds. Read the funnel bottom-up for each of the three banks:
+*   **Step 1 (Retention of Value):** Look at the weekly count of `bot_live_run_success`. Is the curve flat or declining? If a bank built 20 bots but has 0 live runs in 14 days, they are **Critical Risk**.
+*   **Step 2 (Activation Leak):** Compare `bot_build_completed` vs. `bot_live_run_success`.
+    *   *High Builds / Low Live Runs:* The barrier is deployment/security approval. Action: Engage IT security champions, not end-users.
+    *   *Low Builds / Low Live Runs:* The barrier is understanding the use case. Action: Executive workshop to identify processes.
+*   **Step 3 (Integration Depth):** Track the ratio of users running live bots. If only one "hero" user is running bots, the account is fragile (key-person risk). If multiple users are running live bots, the workflow is sticky.
+
+**4. This Week's Steps**
+1.  **Query Existing Logs:** Ask engineering to extract the count of `bot_live_run_success` per bank for the last 60 days. If this data doesn't exist, mark the activation status as `UNVERIFIED` and prioritize instrumenting this single event immediately.
+2.  **Segment the Three Banks:** Categorize each bank as "Integrated" (≥3 bots live), "Stalled" (bots built but not live), or "Dormant" (no activity).
+3.  **Targeted Intervention:** For any "Stalled" bank, schedule a technical deployment review with their IT lead within 5 days. Do not send generic training; the block is likely infrastructure, not knowledge.
+
+**Note:** Do not measure "training module completion" as a success metric; in enterprise sales, completed training often masks a lack of actual production usage.
+**Note:** Ensure `user_id` is pseudonymized before reaching the dashboard; route raw PII handling to your privacy compliance protocol.

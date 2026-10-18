@@ -1,0 +1,27 @@
+**Strategy for Data Harmonization and Regulatory Reporting**
+
+**1. Handling Missing Properties: Do Not Impute or Discard**
+In a strict regulatory environment, neither discarding records nor using probabilistic imputation is acceptable for the primary compliance report. Discarding 40% of the data creates selection bias and violates data completeness requirements. Probabilistic imputation introduces synthetic data, which obscures the factual audit trail required by regulators.
+
+Adopt a **Schema Union with Explicit Nulls** approach:
+*   **Unified Schema:** Create a superset schema that includes all fields from both GlobalLink and SwiftWave.
+*   **Provenance Flagging:** Add a mandatory `source_system` field (e.g., "GlobalLink" or "SwiftWave") to every record.
+*   **Explicit Nulls:** For the missing `device_type` in SwiftWave records, store the value as `NULL` (or a standardized "Unknown" token if the database strictly forbids nulls), never a guessed value.
+*   **Audit Column:** Add a `data_quality_flag` column. Mark records with missing critical fields as `INCOMPLETE_SCHEMA`. This preserves the historical context of the 2 million profiles while transparently exposing the data gap to the regulator.
+
+**2. Verifying Data Integrity Before Aggregation**
+Before running churn calculations, execute these three validation gates:
+*   **Referential Integrity Check:** Verify that every event in the unified stream links to a valid, existing user profile in the master identity table. Ensure no orphaned events were created during the merge.
+*   **Count Reconciliation:** Run row counts on the source systems and compare them to the ingested unified table. The sum of GlobalLink and SwiftWave records must equal the unified total exactly. Any deviation indicates duplication or loss during the ETL process.
+*   **Null Distribution Analysis:** Generate a profile report showing the percentage of `NULL` values for `device_type` grouped by `source_system`. Confirm that GlobalLink records have 0% nulls and SwiftWave records match the expected ~40% null rate. If GlobalLink records show nulls, the merge logic is flawed.
+
+**3. Reporting Strategy for the October 15th Deadline**
+Present the churn report with **segmented transparency**:
+*   **Primary Metric:** Calculate churn based on account status changes (a field present in both schemas), which remains unaffected by the missing `device_type`.
+*   **Secondary Analysis:** Present device-specific churn trends only for the GlobalLink segment.
+*   **Disclosure Statement:** Include a formal footnote stating: "Device-level segmentation for the SwiftWave cohort is unavailable due to legacy schema limitations. These records are preserved in the raw dataset with explicit null values to maintain audit integrity."
+
+This approach satisfies the regulatory deadline by delivering accurate high-level churn numbers while honestly documenting the limitation without fabricating data.
+
+*Note: Probabilistic imputation should only be considered for internal, non-regulatory product analysis after the compliance deadline has passed.*
+*Note: Ensure the `source_system` and `data_quality_flag` columns are indexed to prevent query performance degradation on the 2 million profiles.*

@@ -1,0 +1,23 @@
+**Strategy for Data Harmonization and Regulatory Reporting**
+
+**1. Handling Missing Properties: Do Not Impute or Discard**
+In a strict regulatory environment, neither discarding 40% of records nor using probabilistic imputation is acceptable. Discarding data introduces selection bias that invalidates churn analysis, while imputation fabricates facts that cannot be audited.
+*   **Action:** Create a unified schema where `device_type` is explicitly nullable. For the 40% of SwiftWave records lacking this property, populate the field with a distinct, auditable label: `UNKNOWN_SOURCE_SCHEMA`.
+*   **Rationale:** This preserves the full historical context of all 2 million user profiles without altering the raw truth. It allows the Chief Data Officer to report total churn accurately while transparently segregating records where device-specific analysis is impossible. Regulators require truthfulness about data limitations, not invented completeness.
+
+**2. Verifying Dataset Integrity Before Aggregation**
+Before running churn queries, execute three specific reconciliation checks to ensure the merge has not corrupted the baseline:
+*   **Count Preservation:** Verify that the row count of the merged dataset equals the exact sum of the GlobalLink and SwiftWave source files. Any deviation indicates accidental duplication or loss during the join.
+*   **Identifier Uniqueness:** Run a distinct count on the stable user identifier across the merged set. Ensure no user appears more than once per time bucket unless your business logic explicitly supports multiple sessions per user.
+*   **Event Timeline Continuity:** Sample 1,000 users who appear in both legacy systems. Confirm their event timelines are chronologically continuous and that no "gaps" were introduced by schema mismatch errors during ingestion.
+
+**3. Reporting Protocol for the October 15th Deadline**
+Given the three-week manual mapping estimate conflicts with your deadline, bypass manual enrichment for this specific report.
+*   **Deliverable:** Present the churn report with a dedicated footnote quantifying the `UNKNOWN_SOURCE_SCHEMA` segment.
+*   **Compliance Stance:** Explicitly state that device-level churn breakdowns are reported only for the 60% of records with verified data. This approach satisfies the regulatory requirement for accurate aggregate churn numbers while documenting the specific limitation of the merged dataset.
+
+**Recommended Next Steps**
+1.  Update the ETL pipeline to map missing SwiftWave `device_type` values to `UNKNOWN_SOURCE_SCHEMA` immediately, avoiding the three-week manual mapping delay.
+2.  Run the integrity checks above on a staging environment today; if counts match, proceed to production aggregation.
+
+*Note: This strategy prioritizes auditability over completeness, which is the standard defense against compliance risk. Do not attempt to infer device types from IP addresses or other proxies for this report, as probabilistic links are rarely defensible in regulatory filings.*

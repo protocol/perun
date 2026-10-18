@@ -1,0 +1,36 @@
+**Recommendation: Do not ship. Extend the experiment with quality guardrails to validate long-term value.**
+
+The observed 9% lift in click-through rate (CTR) is currently `UNVERIFIED` as a success because it lacks a pre-committed design for quality and retention. The data indicates a classic "peeking" risk where a superficial metric rose while a critical guardrail (content quality/authority) likely degraded. Shipping based solely on CTR invites the "leaky bucket" failure: acquiring clicks that do not convert into retained users.
+
+**Recomputed Analysis & Confounders**
+The 60% concentration of clicks on articles <1 hour old suggests the algorithm is optimizing for novelty, not utility. If these are low-quality snippets, the "win" is likely noise driven by curiosity rather than value. Your baseline monthly churn is 5%; if this change accelerates churn even slightly among power users, the short-term CTR gain will be erased by lifetime value loss. The confounder here is **mix shift**: the treatment group is consuming a fundamentally different product (breaking news feed) than the control (curated relevance), making a direct CTR comparison misleading without quality weighting.
+
+**Required Measurement Framework**
+To decide between reverting or tuning, you must instrument the following events immediately. Do not measure "everything"; measure only what answers these specific questions:
+
+1.  **Does the user find value after the click?**
+    *   *Event:* `article_read_complete`
+    *   *Properties:* `article_age_hours`, `source_authority_score`, `time_on_page_seconds`.
+    *   *Decision Rule:* If `time_on_page` for <1hr articles is <30 seconds (bounce) while CTR is high, the click is vanity. Revert immediately.
+
+2.  **Does this behavior hurt retention?**
+    *   *Event:* `user_return_session`
+    *   *Properties:* `cohort_treatment_vs_control`, `days_since_last_visit`.
+    *   *Decision Rule:* Compare Day-3 and Day-7 retention between groups. If treatment retention drops >0.5% relative to control, the freshness parameter is too aggressive.
+
+3.  **What is the quality-adjusted engagement?**
+    *   *Metric:* **Quality-Weighted CTR** = (Clicks × `time_on_page` > 60s) / Impressions.
+    *   *Decision Rule:* If Quality-Weighted CTR is flat or negative despite raw CTR rising, the algorithm is failing.
+
+**Experiment Rigor & Next Steps**
+You must treat this as a new test with a pre-committed design.
+*   **Primary Metric:** Quality-Weighted CTR (not raw clicks).
+*   **Guardrail Metric:** Day-7 Retention Rate and `report_article` frequency.
+*   **Design:** Run for a fixed 14 days (do not peek at day 2). Use your existing 2M user base but ensure the sample size is calculated to detect a 0.5% shift in retention, not just CTR.
+
+**This Week's Actions**
+1.  **Engineering:** Deploy the `article_read_complete` and `user_return_session` events with `article_age` properties within 48 hours. Do not analyze until data accumulates for 72 hours.
+2.  **Editorial/Engineering Joint Decision:** Set a hard tripwire: If `report_article` rate in the treatment group exceeds the control by 10% OR if Day-3 retention drops by 0.2%, revert the ranking change immediately.
+3.  **Analysis Plan:** Recompute the lift using only clicks where `time_on_page` > 45 seconds. Present this "quality-adjusted" lift to the stakeholders on Friday. If the adjusted lift disappears, the initial 9% was a false positive driven by low-quality curiosity.
+
+*Note: Ensure user identifiers used for retention cohorts are pseudonymous; route any PII handling to your privacy compliance protocol. Do not compare your 5% churn to external benchmarks; use your own historical trend as the sole baseline.*

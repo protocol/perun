@@ -1,0 +1,39 @@
+**To:** Chief Technology Officer, CloudStream
+**From:** Growth Analytics Lead
+**Date:** March 15
+**Subject:** Instrumentation Plan for API v2.0 Adoption & Risk Mitigation
+
+Tracking simple call counts is insufficient and risky; it conflates active production traffic with transient beta testing, masking the 8% error rate in critical aggregation endpoints. To distinguish stable adoption from superficial usage and prevent client disruption at the June 30 cutoff, we must instrument the following specific events immediately. Each event answers a named business question and directly informs our migration strategy.
+
+**1. Event: `api_request_lifecycle`**
+*   **Properties:** `api_version` (v1/v2), `endpoint_name`, `http_status_code`, `client_id` (pseudonymous stable ID), `environment_tag` (prod/staging/dev), `latency_ms`.
+*   **Question Answered:** "Is the 8% error rate isolated to specific clients or environments, and is it affecting production workflows?"
+*   **Decision Rule:** If errors >2% are tagged `environment_tag=prod` for a specific `client_id`, trigger an immediate account-manager alert. If errors are only in `dev/staging`, classify as safe integration friction.
+
+**2. Event: `client_session_continuity`**
+*   **Properties:** `client_id`, `time_since_last_success`, `consecutive_failures`, `feature_flags_used`.
+*   **Question Answered:** "Is the developer integrating v2.0 into a running workflow, or just hitting endpoints once?"
+*   **Decision Rule:** A "Stable Adopter" is defined as a `client_id` with >50 successful v2.0 calls over 3 distinct days with `consecutive_failures` < 2. Clients failing this threshold by May 1 are flagged for proactive engineering support.
+
+**3. Event: `migration_milestone_reached`**
+*   **Properties:** `client_id`, `milestone_type` (first_success, 90%_traffic_shift, v1_disabled), `timestamp`.
+*   **Question Answered:** "What percentage of our top revenue-generating clients have fully shifted traffic, not just tested?"
+*   **Decision Rule:** If a top-tier client has not logged `90%_traffic_shift` by June 1, the automatic sunset for that client must be paused to prevent revenue loss.
+
+**4. Event: `error_context_capture` (Specific to Aggregation Endpoints)**
+*   **Properties:** `endpoint_name`, `error_code`, `payload_size`, `query_complexity_score`, `stack_trace_hash`.
+*   **Question Answered:** "Is the high error rate caused by data volume, query complexity, or a code bug?"
+*   **Decision Rule:** If `query_complexity_score` correlates strongly with errors, we must update documentation or adjust rate limits before June 30. If `stack_trace_hash` is consistent, it is a code bug requiring an immediate hotfix.
+
+**Implementation Constraints & Privacy Seam:**
+*   **Identifier Strategy:** Use a stable, pseudonymous `client_id` to track cohorts across sessions. Do not log raw PII (emails, names) in these events; route any necessary PII mapping to our privacy compliance protocol.
+*   **Volume Control:** Do not instrument "everything." These four events specifically target the risk of false-positive adoption signals.
+
+**This Week's Actions:**
+1.  **Engineering:** Deploy the `api_request_lifecycle` and `error_context_capture` schemas to the beta group by Friday to isolate the root cause of the 8% error rate (complexity vs. bug).
+2.  **Product Ops:** Define the "Stable Adopter" query using the proposed `client_session_continuity` logic and run it against current beta data to establish a baseline retention curve.
+3.  **Customer Success:** Generate a list of the top 20 clients by volume who have *zero* `migration_milestone_reached` events and schedule technical reviews.
+
+Without these specific distinctions, we risk forcing the June 30 cutoff based on vanity metrics (total calls) while silently breaking production workflows for key customers.
+
+*Note: All thresholds (e.g., >50 calls, >2% error) are derived from the need to separate noise from signal in your specific context, not external benchmarks. Actual values will be validated against your March baseline.*

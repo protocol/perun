@@ -1,0 +1,25 @@
+**Deliverable: Data Remediation & Sensitivity Plan for SiamRide Q3 Audit**
+
+Do not impute missing `vehicle_type` or mismatched currency codes for the financial audit. Imputation introduces unquantifiable bias into revenue figures, which violates the integrity required for a CFO audit. Instead, execute the following three-step protocol:
+
+1.  **Segregate and Flag (Immediate)**
+    Split the dataset into "Verified" (complete properties) and "Unverified" (missing/mismatched). Do not merge them. Calculate average fares per district using *only* the Verified set. Label the Unverified set (approx. 45% of recent data) as `REVENUE_EXCLUDED_PENDING_RECONCILIATION`. This ensures the baseline report contains zero fabricated values.
+
+2.  **Root-Cause Isolation (Before Wednesday)**
+    Query the Unverified set to correlate errors with your two hypotheses:
+    *   **Weather Correlation:** Plot the % of missing `vehicle_type` against hourly rainfall data in Bangkok since Aug 20. If the error rate spikes strictly during heavy downpours across all app versions, the cause is likely network packet loss.
+    *   **Version Correlation:** Plot error rates by driver app version. If the 15% currency mismatch is concentrated entirely in the version released Aug 18, regardless of weather, the cause is a software bug.
+    *   *Action:* If it is a bug, hotfix immediately and re-ingest logs from local device caches if available. If it is network loss, those specific rides may be unrecoverable for exact fare validation.
+
+3.  **Sensitivity Analysis for the CFO Report**
+    Present the "Verified Revenue" as the primary figure. Append a sensitivity range showing the impact of the Unverified data:
+    *   **Lower Bound:** Assume Unverified rides generated $0 revenue (worst-case loss).
+    *   **Upper Bound:** Assume Unverified rides matched the district average of the Verified set (best-case recovery).
+    *   **Reporting Line:** "Q3 Audited Revenue is $X. Due to data integrity issues affecting 45% of post-monsoon records, actual revenue lies between $X and $Y. We recommend reserving $Z (the difference) until logs are reconciled."
+
+**This Week's Steps:**
+1.  Run the correlation query (error rate vs. rainfall vs. app version) today to confirm if this is a bug or infrastructure failure.
+2.  Generate the Verified vs. Unverified revenue split by district for Pracha's draft, explicitly marking the Unverified portion as `UNVERIFIED` rather than estimated.
+
+**Note:** Network instability rarely drops specific JSON fields while preserving others; this pattern strongly suggests a schema serialization bug in the Aug 18 driver app update rather than packet loss.
+**Note:** Do not backfill currency codes based on district averages; exchange rate fluctuations or promo codes could make such imputation financially inaccurate.

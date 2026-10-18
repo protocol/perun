@@ -1,0 +1,29 @@
+### Experimental Design Framework: Privacy-First Pricing Test
+
+**1. Unit of Randomization: Session-Device Fingerprint**
+Since persistent user IDs are prohibited, randomize at the **device-session level** using a transient, pseudonymous fingerprint (e.g., a hash of device model + OS version + IP subnet + browser locale) that expires after 24 hours. Do not attempt to link sessions across days for a single human. Instead, treat the **cohort-day** as your primary unit of analysis.
+*   **Action:** Assign variation (Control vs. Treatment) based on the fingerprint at the moment of the pricing page view. Store only: `Date`, `Country`, `Variation`, `PriceShown`, `PurchaseCompleted (Y/N)`, `RevenueAmount`. No user ID is stored.
+
+**2. Metric Definition: Aggregated Cohort Revenue**
+Your North Star is **Revenue Per Unique Device-Session** (not per user).
+*   **Primary Metric:** Total Revenue / Total Number of Pricing Page Sessions per cohort per day.
+*   **Guardrail Metric:** Conversion Rate (Purchases / Sessions). If price increases revenue but crashes conversion, the long-term LTV risk is high.
+*   **Handling Multi-Device/Shared Accounts:** Accept this as noise. In large samples (France/Germany aggregate), random distribution of multi-device users across Control and Treatment groups means the *bias* cancels out, even if the *absolute* user count is unknown. You are measuring the lift of the *offer*, not the specific human.
+
+**3. Statistical Rigor: Pre-Commitment & Sequential Testing**
+To avoid "peeking" errors over the 14-day window:
+*   **Pre-commit:** Define the Minimum Detectable Effect (MDE) and required sample size (number of sessions, not users) before March 1.
+*   **Analysis Rule:** Do not check significance daily. Use an **always-valid (anytime-valid) confidence sequence** or a pre-specified **group-sequential design** with alpha-spending. This allows you to monitor the trend without inflating false-positive rates if you must peek for safety, but the final decision must rely on the pre-committed end-date analysis.
+*   **Duration:** Run for the full 14 days regardless of early spikes to capture weekly seasonality (weekend vs. weekday fitness behavior).
+
+**4. Interpretation for Leadership**
+*   **For Legal:** The design stores no PII and no persistent identifiers. Data is aggregated by date and country before human review. The fingerprint is ephemeral and non-reversible.
+*   **For Product:** The result will be: "The new price generated X% more revenue per session with Y% confidence." Explicitly state: "This measures offer effectiveness on device sessions; individual user retention across devices is unverifiable by design but assumed statistically neutral between groups."
+*   **Decision Tripwire:** If the lower bound of the 95% confidence interval for revenue lift is >0% after 14 days, ship. If it includes 0 or is negative, stop. Do not extend the test hoping for significance.
+
+**5. Immediate Next Steps (This Week)**
+1.  Engineer the transient fingerprinting logic and verify it drops all ID data before storage.
+2.  Calculate the required number of *sessions* (not users) to detect a 5% revenue lift with 80% power, given current traffic volumes in FR/DE.
+3.  Draft the pre-analysis plan documenting the MDE, primary/guardrail metrics, and the specific sequential testing rule to be signed off by Legal before March 1.
+
+**Note:** Without persistent IDs, you cannot measure *retention* or *churn* in this experiment; you are strictly testing *acquisition monetization*. Any claim about long-term user value is `UNVERIFIED` without a separate, compliant longitudinal study.

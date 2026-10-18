@@ -1,0 +1,23 @@
+**Verdict: Do not discard the data; declare the aggregate result `UNVERIFIED` for a causal claim, and pivot immediately to segmentation.**
+
+The 12% conversion rate with identical control/variant performance indicates no aggregate lift, but the 3x higher standard deviation compared to Delhi confirms that "Mumbai" is not a monolithic cohort. High variance in session duration (45s–20m) combined with stable server latency (<200ms) rules out backend friction. The noise is the signal: it suggests distinct sub-populations with fundamentally different behaviors are being averaged together, masking potential wins or losses in specific segments.
+
+**Immediate Analysis Plan (Execute before Friday):**
+
+1.  **Segment by Device & OS Tier:**
+    Isolate users by device price tier or OS version. In high-fragmentation markets, a "new flow" may render perfectly on high-end devices but break layout or input handling on older, low-RAM Android devices common in the region. If variance drops significantly when filtering for "High-End Devices," the issue is technical compatibility, not user behavior.
+
+2.  **Segment by Network Type (Not Latency):**
+    Since server latency is stable, slice by connection type (4G vs. 3G vs. Wi-Fi) and packet loss indicators (if available in client-side logs). Intermittent connectivity causes long session durations (users waiting for retries) without spiking server response times. If the variant relies on heavier client-side JavaScript, it may timeout on unstable 3G connections, inflating variance.
+
+3.  **Behavioral Cohort: "Window Shoppers" vs. "Intent Buyers":**
+    Filter for users with >3 prior sessions vs. true first-timers. Cultural browsing habits may mean a larger portion of your "first-time" traffic in Mumbai is researching without immediate intent to buy, inflating session duration variance. If the variant converts "Intent Buyers" at 18% while "Window Shoppers" bounce faster, you have a win hidden in the noise.
+
+**Presentation Strategy for the Regional Director:**
+
+*   **State the Constraint:** "The aggregate A/B test is inconclusive (`UNVERIFIED`) due to cohort mixing, not lack of signal. The 3x variance indicates we are averaging distinct user realities."
+*   **Propose the Tripwire:** "We will re-run the analysis on [Specific Segment, e.g., 4G Users on Mid-Range Android] by Thursday. If the confidence interval narrows by 50% and shows a >2% lift, we proceed to a targeted rollout. If variance remains high across all technical segments, we halt the Mumbai rollout and investigate qualitative friction."
+*   **Actionable Insight:** Do not recommend a full launch. Recommend a **targeted experiment** restricted to the segment with the lowest variance once identified.
+
+**Note:** Ensure your client-side analytics capture device memory and connection type; if these fields are missing, the variance cannot be explained, only observed.
+**Note:** Do not cite external benchmarks for "acceptable" variance; compare only against your Delhi baseline as the internal control.

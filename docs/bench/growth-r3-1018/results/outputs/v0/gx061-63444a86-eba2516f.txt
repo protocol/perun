@@ -1,0 +1,33 @@
+**Executive Summary for Sarah Jenkins**
+
+**Verdict:** The experiment result is **UNVERIFIED**. Do not roll out the design, and do not kill it yet. The 12% conversion drop cannot be attributed to the design because a known infrastructure failure (450ms latency spike on 60% of variant traffic) invalidates the causal link. Treating this as a design failure is a false negative; treating it as a success based on assumption is a dangerous gamble.
+
+**Analysis of the Signal**
+The core failure here is a confounding variable that correlates perfectly with the treatment group during the critical measurement window. You have two overlapping effects:
+1.  **Design Effect:** Unknown (could be neutral, positive, or negative).
+2.  **Latency Effect:** Known negative impact (450ms spikes typically degrade conversion significantly, especially on mobile/older networks).
+
+Because the latency only affected the variant, the observed -12% is the sum of both effects. Your assumption that latency caused the *entire* dip is unproven. If the design itself was poor, the true drop could be -20% (masked slightly by the 40% of clean traffic). If the design was great, the latency might have dragged a +5% gain down to -12%. Without isolating these, any decision is guesswork.
+
+**Recommended Next Steps (Before Friday)**
+
+Do not extend the test for a month. Instead, perform a **post-hoc cohort segmentation** on the existing data to isolate the signal. This requires no new traffic, only re-querying your analytics.
+
+1.  **Segment by Latency Exposure (The Primary Isolation):**
+    *   Split the Variant group into two cohorts: `Variant_HighLatency` (the 60% with spikes) and `Variant_Clean` (the 40% without spikes).
+    *   Compare `Variant_Clean` vs. `Control`.
+    *   *Decision Logic:* If `Variant_Clean` shows conversion statistically equal to or higher than Control, the design is likely safe/positive, and the drop was purely infrastructure. If `Variant_Clean` still shows a significant drop, the design itself is flawed regardless of latency.
+
+2.  **Segment by Device/Network (The Secondary Check):**
+    *   Within the `Variant_HighLatency` cohort, break down conversion by Device Type (Mobile vs. Desktop) and Network Quality (if available).
+    *   *Why:* Latency impacts mobile/3G disproportionately. If the drop is concentrated entirely in mobile users within the high-latency group, it confirms the infrastructure hypothesis. If desktop users (less sensitive to 450ms) also dropped significantly, the design change is likely the culprit.
+
+3.  **The Call:**
+    *   **Ship:** Only if `Variant_Clean` ≥ Control AND the mobile/latency correlation is strong.
+    *   **Kill:** If `Variant_Clean` < Control (statistically significant).
+    *   **Re-run (Short Burst):** If `Variant_Clean` data is too noisy (small sample size) to conclude, run a targeted 3-day test *after* fixing the routing error, strictly monitoring latency as a guardrail metric.
+
+**Immediate Action:** Query the `Variant_Clean` vs. `Control` conversion rates today. That single number determines your Friday decision.
+
+*Note: Ensure the "Clean" cohort definition relies on actual logged latency per session, not just time-based assumptions, to avoid misclassification.*
+*Never attribute a win/loss to design when a guardrail metric (latency) was breached.*

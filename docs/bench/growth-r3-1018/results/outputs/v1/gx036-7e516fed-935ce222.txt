@@ -1,0 +1,37 @@
+**Decision Framework for Risk Director: Revert or Retain Algorithm Update**
+
+**1. The Economic Trade-off: Quantifying the Cost**
+To decide by end-of-day, compare the daily cost of friction against the daily value of fraud prevented. Do not use industry benchmarks; use your specific operational costs.
+
+*   **Cost of Friction (Daily):** Calculate `(300 tickets / 3 days) × Cost Per Ticket`.
+    *   *Action:* Multiply your average support handling cost (e.g., $15/ticket) by the daily volume (100 tickets/day). Add an estimate for customer churn if known; otherwise, flag this as a hidden risk.
+    *   *Current Estimate:* If support is $15/ticket, friction costs **$1,500/day** purely in labor, excluding reputational damage.
+*   **Value of Fraud Prevented (Daily):** The $50,000 saved occurred over 3 days.
+    *   *Current Rate:* **~$16,667/day**.
+*   **The Verdict Logic:** If the daily fraud prevention value ($16.6k) significantly exceeds the daily friction cost ($1.5k + churn risk), the model is economically viable *provided* the friction is fixable. If the friction causes high-value customer churn exceeding $15k/day, revert immediately.
+
+**2. Actionable Segmentation for Tuning**
+Your assumption regarding "unusual spending locations" must be verified before tuning. Segment the 100 daily false positives by these three dimensions to isolate the leak:
+
+*   **Segment A: Trigger Attribute:** Break down false positives by the specific rule fired (e.g., "Location Mismatch," "Velocity Check," "Merchant Category").
+    *   *Decision Rule:* If >60% of false positives stem from a single attribute (e.g., Location), tune only that threshold rather than reverting the whole model.
+*   **Segment B: Customer Tenure:** Split false positives between "New Users (<30 days)" and "Established Users."
+    *   *Decision Rule:* If established users are disproportionately flagged, the risk to retention is critical; consider a "whitelist" logic for long-tenure accounts immediately.
+*   **Segment C: Transaction Value:** Group false positives into buckets (<$50, $50–$200, >$200).
+    *   *Decision Rule:* If the model is flagging low-value transactions with high frequency, the cost of review outweighs the risk. Raise the threshold for low-value bands.
+
+**3. Visualization for Non-Technical Stakeholders**
+Present a **"Cost-Benefit Balance Scale"** chart rather than a confusion matrix.
+
+*   **Visual:** A simple bar chart with two bars.
+    *   *Bar 1 (Green):* "Daily Fraud Stopped" ($16,667).
+    *   *Bar 2 (Red):* "Daily Operational Friction Cost" (Calculated support cost + estimated churn impact).
+*   **Annotation:** Add a callout box on the Red bar listing the top 1 driver of false positives (e.g., "80% driven by Location Mismatch").
+*   **Narrative:** "We stop $16.6k/day but spend $X/day fixing errors. 80% of errors come from one rule. Recommendation: Keep model, patch specific rule."
+
+**This-Week Step:**
+1.  Query the last 72 hours of logs to count false positives by `trigger_rule_id` and `customer_tenure_bucket`.
+2.  If one rule accounts for >50% of the spike, deploy a hotfix to relax *only* that parameter by 10% and monitor for 24 hours.
+3.  If the distribution is uniform across all rules, revert to the previous baseline to stop the support bleed while a new model is trained.
+
+**Note:** The $50,000 fraud prevention figure is an estimate; ensure the actual confirmed fraud amount is validated before finalizing the ROI calculation. Without the specific `trigger_rule` breakdown, the recommendation to "tune" remains unverified.

@@ -1,0 +1,34 @@
+**To:** Chief Technology Officer, SkyDrop
+**From:** Head of Operations
+**Date:** May 24, 2024
+**Subject:** Event Prioritization for June 1st Fleet Expansion (50 Clinics)
+
+**Recommendation: Do not add mid-flight altitude adjustments or continuous battery temperature spikes to the telemetry stream at this stage.**
+
+Given the constraint of limited satellite bandwidth and the current 3% connection loss rate, adding high-frequency events increases the risk of transmission failure for critical delivery confirmation. The data suggests these events do not yet provide sufficient signal to justify the bandwidth cost.
+
+**Analysis of Proposed Events:**
+
+1.  **Mid-flight Altitude Adjustments:**
+    *   **Potential Insight:** Could identify turbulence patterns or inefficient routing.
+    *   **Decision:** **Reject.** This is operational noise, not a safety signal. With only 300 historical flights, route optimization is better handled via pre-flight planning. Logging every adjustment consumes bandwidth without answering a critical "safety or reliability" question for the June trial.
+
+2.  **Battery Temperature Spikes:**
+    *   **Potential Insight:** Predictive maintenance for battery failure in hot climates.
+    *   **Decision:** **Defer.** While theoretically valuable, the empirical baseline shows only two battery-related incidents in 300 flights (0.67% failure rate). The "signal" is currently too rare to validate the bandwidth cost. Prioritizing this risks crowding out the "package release" event, which is the core value metric.
+
+**Revised Instrumentation Strategy (June 1st Trial):**
+
+Instead of adding raw data streams, we will instrument **derived events** that answer specific safety questions without flooding the link:
+
+*   **Keep:** Takeoff, Landing, Package Release (Core Value/Safety).
+*   **Add (Only if threshold breached):** "Critical Battery Thermal Event" (logged only if temperature exceeds a hard safety limit defined by engineering, e.g., >60°C), rather than streaming all "spikes."
+*   **Add:** "Connection Loss Start/End" timestamps to precisely measure the 3% dropout window and correlate it with terrain, rather than guessing based on missing altitude data.
+
+**Next Actions for CTO Firmware Update:**
+1.  **Implement Threshold Logging:** Configure firmware to log battery temperature *only* when exceeding the critical safety threshold, not for minor fluctuations.
+2.  **Prioritize Payload:** Ensure "Package Release" and "Landing" confirmation have highest transmission priority over any diagnostic data.
+3.  **Baseline Retention:** Run the 50-clinic trial with current core events + critical thresholds only. Re-evaluate the need for granular altitude/battery data only if a new failure mode emerges that these specific logs would have prevented.
+
+*Note: This approach adheres to the principle of instrumenting only what answers a named question; currently, granular altitude data answers no immediate safety question given our incident history.*
+*Unknowns regarding specific temperature thresholds for "critical" status are UNVERIFIED and must be defined by your engineering team before firmware finalization.*

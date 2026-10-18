@@ -1,0 +1,22 @@
+### Recommendation: Do Not Roll Out Yet; Recompute with Corrected Variance
+
+**Decision:** Pause the immediate rollout. The result is **UNVERIFIED** for a binary ship/no-ship decision because the uneven split (80/20) invalidates standard power assumptions and likely inflates the false-positive risk if standard fixed-horizon tests were used without adjustment. The wide confidence intervals confirm high variance that the current analysis has not adequately resolved.
+
+**Risk Analysis & Required Adjustments**
+
+1.  **Power and Sensitivity Loss:** Your assumption is correct. An 80/20 split reduces statistical power compared to a 50/50 split for the same total sample size. You effectively wasted 60% of your potential sensitivity. While a significant result *can* occur with an uneven split, the threshold for significance is higher, and the estimate of the lift is less precise (wider intervals). If the test was stopped early because "p < 0.05" was hit on day 3 or 4, this is **peeking**, rendering the result noise regardless of the split.
+2.  **Variance Imbalance Check:** The wide confidence intervals suggest the variance in transaction volume differs between groups. Lower fees may induce erratic behavior (e.g., many small transactions vs. few large ones). Standard t-tests assume equal variance; if violated, p-values are unreliable. You must re-run the analysis using **Welch's t-test** (which does not assume equal variance) or a non-parametric bootstrap method to validate the significance claim.
+3.  **Guardrail Verification:** Before considering a rollout, you must verify the **guardrail metric**: *Revenue per User*. A rise in transaction volume with lower fees often results in net revenue loss. If volume increased by 10% but fees dropped by 20%, the business loses money. Calculate the net revenue impact immediately. If the guardrail is negative, the "win" on volume is a vanity metric.
+
+**Action Plan for the Executive Committee**
+
+Present the following three items to Ahmed and the committee:
+
+*   **Recomputed Significance:** State whether the result holds using Welch's t-test or a bootstrap method that accounts for the 80/20 split and unequal variance. If the p-value rises above 0.05 or the confidence interval crosses zero, the result is **UNVERIFIED**.
+*   **Net Revenue Impact:** Show the dollar value of the lift. Do not present volume percentages alone. If the lower fee structure reduces total revenue despite higher volume, the recommendation must be to stop.
+*   **The "This-Week" Step:** Propose a **follow-up test with a 50/50 split** running for a pre-committed duration (e.g., 2 weeks) to confirm the effect with proper power. If the business cannot wait for a proper test, calculate the **break-even lift**: the exact percentage increase in volume required to offset the fee reduction. If the lower bound of your current confidence interval is below this break-even point, the risk of financial loss is too high to proceed.
+
+**Final Call:** Unless the recomputed analysis confirms significance *and* the net revenue guardrail is positive with a safe margin, the only defensible action is to extend learning with a balanced test. Rolling out now based on an underpowered, unevenly split test with wide intervals is a gamble, not a data-driven decision.
+
+*Note: Ensure the user identifier used for this cohort analysis is pseudonymous and routed according to privacy compliance standards, not raw PII.*
+*No external benchmarks were used; all thresholds are derived from your stated break-even economics.*

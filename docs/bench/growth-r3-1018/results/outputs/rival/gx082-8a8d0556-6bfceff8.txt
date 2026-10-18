@@ -1,0 +1,69 @@
+# ShopLive India: Event Tracking Taxonomy
+
+## Overview
+This taxonomy prioritizes decision-ready data over vanity metrics, distinguishing between passive consumption, social engagement, and commercial intent. It uses an `object_action` naming convention (lowercase, underscores) compatible with GA4, Mixpanel, or Segment.
+
+**Implementation Deadline:** Before October Diwali Campaign
+**Owner:** Engineering Lead (Ravi)
+
+## 1. Core Event Structure
+
+Events are grouped by funnel stage. Do not track every button click; track only state changes or high-intent interactions.
+
+### Stage A: Stream Engagement (Awareness)
+*Captures entry and retention without noise.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `stream_viewed` | User loads live player (≥3 sec) | `stream_id`, `host_name`, `referrer_source` (e.g., `instagram`, `internal_feed`), `viewer_type` (new/returning) |
+| `stream_ended` | Stream closes or user leaves | `stream_id`, `watch_duration_sec`, `completion_rate` |
+
+### Stage B: Social Interaction (Engagement)
+*Distinguishes chatters from shoppers as requested.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `chat_message_sent` | User posts a comment | `stream_id`, `message_length`, `contains_question_mark` (boolean) |
+| `reaction_sent` | User clicks an emoji/reaction | `stream_id`, `reaction_type` |
+
+*Note: Do not track "typing..." events. Only track completed messages to measure active community participation.*
+
+### Stage C: Commercial Intent (Consideration)
+*The critical bridge between watching and buying.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `product_detail_viewed` | User clicks product card overlay | `stream_id`, `product_id`, `product_category`, `price_inr`, `time_since_stream_start` |
+| `cart_added` | User adds item from stream | `stream_id`, `product_id`, `quantity`, `cart_value_inr` |
+
+### Stage D: Conversion (Revenue)
+*Final transactional outcomes.*
+
+| Event Name | Trigger | Essential Properties |
+| :--- | :--- | :--- |
+| `checkout_initiated` | User enters payment flow | `stream_id`, `cart_value_inr`, `payment_method_selected` |
+| `purchase_completed` | Payment success confirmation | `stream_id`, `transaction_id`, `total_value_inr`, `currency` (`INR`) |
+| `purchase_failed` | Payment error/decline | `stream_id`, `error_code`, `payment_method` |
+
+## 2. Traffic Source Grouping Strategy
+
+To solve the confusion between social referrers and internal traffic, do not rely on event names. Instead, normalize the `referrer_source` property at the point of entry (`stream_viewed`).
+
+**Logic for Engineering:**
+1.  **Internal Traffic:** If the user navigates from within the app feed, set `referrer_source = "internal_feed"`.
+2.  **Third-Party Social:** If the user arrives via deep link from Instagram/WhatsApp/Facebook, map the domain to a standardized value:
+    *   `instagram.com` → `instagram`
+    *   `whatsapp.com` → `whatsapp`
+    *   `facebook.com` → `facebook`
+    *   *Do not pass raw URLs.*
+3.  **Direct/Unknown:** If no referrer header exists, set `referrer_source = "direct"`.
+
+**Analysis Benefit:** You can now filter any event (e.g., `purchase_completed`) by `referrer_source` to compare conversion rates between "users who came from Instagram" vs. "users browsing internally" without creating separate events.
+
+## 3. Implementation Notes for Ravi
+
+*   **Deprecate Old Events:** Immediately stop firing `click_buy` and `purchase_initiated`. Map existing historical data to the new schema if possible, but start fresh data collection immediately.
+*   **User Identity:** Ensure `user_id` is attached to all events for logged-in users. For guests, generate a temporary `session_id` that persists until purchase or session end.
+*   **Validation:** Before the Diwali scale-up, validate that `product_detail_viewed` fires *only* when the overlay is fully rendered, not on hover, to ensure accurate funnel drop-off analysis.
+
+This structure reduces event volume by ~60% compared to click-tracking while providing clear visibility into where users drop off between watching, chatting, and buying.

@@ -1,0 +1,53 @@
+### Minimum Viable Event Taxonomy for Heritage Bank Mobile App
+
+Do not instrument "every button click." That approach creates noise, inflates pipeline costs, and obscures the fraud patterns you need to see. Instead, implement a **question-driven taxonomy** focused on the core value loop and specific risk signals. The following prioritized list satisfies both product growth (retention/activation) and compliance (audit/fraud) without overwhelming your 5,000 TPS pipeline.
+
+#### Phase 1: Core Value & Retention (The "North Star" Inputs)
+*Instrument these first to ensure the business case holds. These answer: "Are users successfully completing high-value actions?"*
+
+1.  **`session_started`**
+    *   **Question:** Is the app launching reliably?
+    *   **Properties:** `user_id` (pseudonymous), `device_type`, `app_version`, `network_type`.
+    *   **Why:** Baseline for all subsequent funnel metrics.
+2.  **`login_completed`** (Replaces obsolete `flash_login_attempt`)
+    *   **Question:** Are users successfully authenticating?
+    *   **Properties:** `auth_method` (biometric/PIN/password), `duration_ms`, `failure_reason` (if applicable).
+    *   **Why:** Activation gate. High failure rates here indicate UX or integration breaks.
+3.  **`account_viewed`**
+    *   **Question:** Do users reach their data after login?
+    *   **Properties:** `account_type` (checking/savings), `load_time_ms`.
+    *   **Why:** Confirms the "aha" moment of seeing balances.
+4.  **`transfer_initiated`** & **`transfer_completed`**
+    *   **Question:** Is the core banking value being delivered?
+    *   **Properties:** `transfer_type` (internal/external), `amount_bucket` (e.g., <$100, >$1k), `completion_status`.
+    *   **Why:** This is your primary value metric. Drop-offs between "initiated" and "completed" reveal friction or fear.
+
+#### Phase 2: Risk, Fraud & Compliance (The Guardrails)
+*Instrument these to satisfy the Head of Risk. These are not for growth, but for safety and audit.*
+
+5.  **`high_risk_action_attempted`**
+    *   **Question:** Are unusual patterns emerging?
+    *   **Properties:** `action_type` (e.g., new_payee_add, large_transfer, password_reset), `risk_score` (from engine), `location_delta` (bool).
+    *   **Why:** Replaces blanket click-tracking. Only log actions that trigger risk logic or change security posture.
+6.  **`security_challenge_triggered`**
+    *   **Question:** Is the fraud system working?
+    *   **Properties:** `challenge_type` (2FA/knowledge), `outcome` (passed/failed/abandoned).
+    *   **Why:** Critical for audit trails and measuring friction introduced by security.
+7.  **`session_terminated`**
+    *   **Question:** Did the user logout or did the system timeout?
+    *   **Properties:** `reason` (user_initiated/auto_timeout/security_force).
+    *   **Why:** Compliance requirement for session management auditing.
+
+#### Implementation Rules for the CTO
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for cohort analysis (product), but ensure raw PII remains in the secure compliance store, linked only via a one-way hash if necessary for audit. Do not put PII in event properties.
+*   **Pipeline Protection:** Set a hard limit: if an event does not answer one of the seven questions above, it is **not** sent to the real-time pipeline. Archive raw clickstreams locally on-device for debug-only retrieval, not central processing.
+*   **Stage Awareness:** Since you are targeting a December 1st go-live, you are in the **MVP** stage. Do not build the full 500-event schema. Start with these 7. Add more only when a specific, named question arises that these cannot answer.
+
+#### Addressing the Open Question: Historical Data Backfill
+You cannot backfill behavioral event data (e.g., "how long did they spend on the screen") for a new architecture using old logs if the definitions have changed.
+*   **Action:** Define a "Migration Date" snapshot. For users migrating mid-cycle, treat pre-migration behavior as **aggregate baselines** (e.g., "User X had 10 logins last month") stored in a user profile attribute, not as re-playable events.
+*   **Decision:** Do not attempt to normalize old granular events into the new schema; the cost and error rate will be prohibitive. Compare new users against aggregated historical averages, not individual event streams.
+
+**This Week's Step:** Draft the JSON schema for these 7 events and run a load test simulating 5,000 TPS with 20% being `high_risk_action_attempted` to verify pipeline headroom before December 1st.
+
+*Note: This plan rejects vanity metrics (total clicks) in favor of actionable value and risk signals. All metrics must be validated against Heritage Bank's own baseline post-launch, not external benchmarks.*

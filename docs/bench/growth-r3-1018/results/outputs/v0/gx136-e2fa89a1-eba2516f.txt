@@ -1,0 +1,27 @@
+**Decision: Pause acceleration immediately. Do not rollback yet. Extend the 5% cohort duration to reach a pre-committed sample size before expanding traffic.**
+
+The current read is `UNVERIFIED` as a causal win because the test design violates experiment rigor. Observing a 15% CTR lift and 5% AOV drop on day X of a rolling rollout constitutes "peeking." Repeatedly checking significance inflates the false-positive rate; a result read before the pre-committed end date is noise, not signal. You cannot distinguish a temporary anomaly from a structural revenue leak without a fixed horizon or a valid sequential testing bound (e.g., mSPRT).
+
+**Recomputed Reality Check**
+Your assumption that niche items drive both engagement and revenue is currently contradicted by the data trend. A 15% increase in clicks paired with a 5% decrease in Average Order Value (AOV) creates an ambiguous revenue signal.
+*   If the niche items are simply cheaper, total revenue may remain flat or dip despite higher engagement.
+*   If the algorithm is surfacing irrelevant low-cost clutter, you are trading high-intent revenue for vanity clicks.
+
+Without the raw counts (sessions, orders, total revenue) for both the 5% test and 95% control groups, I cannot calculate the statistical power or the Minimum Detectable Effect (MDE) required to validate this trade-off. Any projection to 50% traffic based on current figures is a fabrication.
+
+**Confounding Factors in Gradual Rollouts**
+Your rollout design (5% → 50% over time) introduces "time" as a confounder. If overall site traffic or buyer intent shifts between October 1st and November 1st (seasonality, marketing campaigns), you cannot attribute changes solely to the algorithm. The "gradual" nature makes it impossible to isolate the algorithm's effect from temporal trends unless you hold the traffic split constant until statistical significance is reached.
+
+**Action Plan for the CEO**
+
+1.  **Freeze the Traffic Split:** Halt the schedule to increase traffic to 50%. Maintain the 5% test and 95% control split until you reach a pre-calculated sample size that ensures 80% power to detect a 1% change in total revenue.
+2.  **Define the Primary Metric & Guardrail:**
+    *   **Primary Metric:** Total Revenue Per Session (not CTR, not AOV alone). This captures the net effect of the trade-off.
+    *   **Guardrail Metric:** Return Rate or Customer Satisfaction (to ensure "niche" doesn't mean "misleading").
+3.  **Establish the Tripwire:**
+    *   **Stop Rule:** If Total Revenue Per Session drops by >2% with 95% confidence at the pre-committed end date, rollback immediately.
+    *   **Ship Rule:** If Total Revenue Per Session is neutral or positive, and CTR is up, proceed to 50%.
+4.  **Cohort Analysis:** Segment the 5% cohort by "New" vs. "Returning" users. Niche discovery often behaves differently for these groups; aggregating them may hide a severe leak in one segment masked by gains in another.
+
+**This Week's Step:**
+Pull the raw daily revenue and session counts for the 5% test and 95% control from Oct 1st to present. Calculate the cumulative revenue per session for both. If the test group's cumulative revenue per session is lower than the control's, the "engagement" gain is currently costing the business money. Present this single net-revenue figure to the CEO; do not present CTR or AOV in isolation.

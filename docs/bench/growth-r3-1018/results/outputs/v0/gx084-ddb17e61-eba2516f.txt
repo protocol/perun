@@ -1,0 +1,23 @@
+To diagnose the drop-off between ID upload and transfer confirmation in RemitFlow, you are currently missing **instrumented events that answer specific failure questions**. Your current logs capture success but not the *reason* for failure, making the root cause `UNVERIFIED`. Do not rely on session replay as a primary diagnostic; it is costly, privacy-sensitive for ID documents, and inefficient for quantifying specific error rates across 5,400 lost users.
+
+Prioritize instrumenting the following **three backend events** immediately. Each must include a `user_id` (pseudonymous), `session_id`, `timestamp`, and specific `error_code` or `failure_reason` properties:
+
+1.  **`verification_upload_failed`**: Fires when the third-party provider rejects the file.
+    *   **Properties to capture:** `error_code` (e.g., `TIMEOUT`, `FILE_TOO_LARGE`, `UNSUPPORTED_FORMAT`, `BLURRY_IMAGE`), `file_size_bytes`, `document_type_attempted`.
+    *   **Question answered:** Is the drop-off due to technical limits (size/timeout) or user confusion about acceptable formats?
+
+2.  **`verification_provider_error`**: Fires when the API returns a non-200 status or a specific compliance rejection.
+    *   **Properties to capture:** `provider_status_code`, `rejection_reason` (e.g., `ID_EXPIRED`, `NAME_MISMATCH`, `DOCUMENT_NOT_READABLE`), `retry_count`.
+    *   **Question answered:** Are users failing because their documents are genuinely invalid, or is the provider integration timing out?
+
+3.  **`verification_step_abandoned`**: Fires when a user leaves the screen after an upload attempt without completing the next step.
+    *   **Properties to capture:** `time_spent_on_step_seconds`, `last_action_taken` (e.g., `uploaded_then_exited`, `viewed_help_then_exited`), `has_previous_failure` (boolean).
+    *   **Question answered:** Are users giving up after a specific number of failed attempts, or are they confused immediately upon seeing the upload screen?
+
+**Immediate Action Plan for Sarah's Report:**
+Do not wait for a full month of data. Implement these events in the next patch. Once live, run a cohort analysis on users who triggered `verification_upload_failed` vs. those who completed the flow. Calculate the **failure rate by error code**. If `TIMEOUT` accounts for >40% of failures, the bottleneck is infrastructure. If `UNSUPPORTED_FORMAT` dominates, the issue is instructional clarity.
+
+**This-week step:** Define the schema for the three events above and deploy them to your staging environment for validation by tomorrow. The specific metric that will change your decision is the **conversion rate per error code**; if any single error code exceeds 15% of total drop-offs, prioritize fixing that specific constraint before optimizing general UI instructions.
+
+*Note: Ensure all `user_id` values are pseudonymous and route any raw document data handling to your privacy compliance protocol; do not log PII in these events.*
+*Do not fabricate a "good" conversion rate benchmark; compare your post-fix metrics only against your current baseline of 36% (3,100/8,500).*

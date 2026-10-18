@@ -1,0 +1,69 @@
+# Activation Definition Framework for CulinaLog
+
+## Proposed Alternative Activation Criteria
+
+Replace the rigid "3 ingredients in 7 days" rule with a tiered, behavior-based model that captures value realization at different depths:
+
+| Tier | Criteria | Rationale |
+|------|----------|-----------|
+| **Micro-Activation** | 1 ingredient logged + 1 premium content view within 3 days | Captures users who experience the core value loop (log → unlock) even once |
+| **Core-Activation** | 2 ingredients logged across 2 separate sessions within 5 days | Demonstrates repeat engagement and understanding of the logging mechanic |
+| **Deep-Activation** | 3+ ingredients logged OR 1 complete recipe logged within 7 days | Your current threshold, retained for users who show high-intent behavior |
+
+A user counts as "activated" if they hit **any** tier. This acknowledges that value realization varies by user intent and cooking frequency.
+
+## Frequency vs. Depth Weighting
+
+Do not treat frequency and depth as equal. Weight them based on **predictive power for Day-30 retention**:
+
+1. **Depth Signal (60% weight)**: Completing a full recipe or unlocking premium content indicates clearer value realization than logging isolated ingredients.
+2. **Frequency Signal (40% weight)**: Multiple sessions suggest habit formation, but only if paired with depth. Three isolated logs in one session may indicate confusion or testing, not activation.
+
+**Recommendation**: Prioritize users who log ingredients *and* consume unlocked content over those who log repeatedly without consumption. The act of unlocking and viewing premium content is your true "aha moment," not the logging itself.
+
+## Evaluation Framework for Data Science Lead
+
+Use your six months of historical data to validate which definition best predicts retention without relying on complex statistical naming. Follow this process:
+
+### Step 1: Cohort Segmentation
+Split users into groups based on each proposed activation criterion (Micro, Core, Deep, and Current). For each group, calculate:
+- Percentage of weekly signups hitting the criterion
+- Day-7, Day-14, and Day-30 retention rates for that group
+
+### Step 2: Retention Curve Comparison
+Plot retention curves for:
+- Users who met each activation tier
+- Users who did not meet any tier
+- Users who met only the current "3 in 7" rule
+
+Look for the criterion where the gap between "activated" and "not activated" retention curves is widest and sustains longest. The best definition creates the clearest separation between users who stay and users who churn.
+
+### Step 3: False Positive/Negative Audit
+Check for misclassification:
+- **False Negatives**: Users who didn't hit "3 in 7" but retained well (your support ticket hypothesis). If Micro-Activation captures these users, it validates lowering the threshold.
+- **False Positives**: Users who hit "3 in 7" but churned quickly. If Deep-Activation reduces this group, it validates adding quality signals.
+
+### Step 4: Stability Testing
+Verify the chosen definition works consistently across:
+- Signup weeks (no seasonal spikes skewing results)
+- Traffic sources (organic vs. paid users may behave differently)
+- Device types (mobile logging may differ from desktop)
+
+### Step 5: Decision Rule
+Select the activation definition that:
+1. Captures at least 20-25% of signups (vs. current 12%) without diluting retention quality
+2. Shows a retention rate at Day-30 that is at least 2x higher than non-activated users
+3. Remains stable across different user segments
+
+## Implementation Notes for Tracking Plan
+
+When building the tracking plan next week, ensure events capture:
+- `ingredient_logged` with timestamp and session ID (to measure frequency across sessions)
+- `premium_content_unlocked` and `premium_content_viewed` (to measure value consumption)
+- `recipe_completed` (to measure depth)
+
+Do not rely solely on event counts. Track the **sequence** (log → unlock → view) and **time between events** to distinguish genuine activation from accidental or test behavior.
+
+---
+
+*This framework prioritizes behavioral evidence over arbitrary thresholds. Validate with your historical data before locking the definition.*

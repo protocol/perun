@@ -1,0 +1,17 @@
+**Deliverable: Diagnostic Plan for RemitFlow Verification Funnel**
+
+To pinpoint the abandonment cause between ID upload and amount confirmation for your compliance report, you must instrument specific backend events and properties immediately. Do not rely on session replay alone; it captures symptoms, not root causes like API error codes. Prioritize these three data gaps:
+
+1.  **Verification Provider Response Codes:** Instrument a `verification_attempt_failed` event at the exact moment the third-party provider rejects the upload. You must capture the `error_code` (e.g., `TIMEOUT`, `FILE_TOO_LARGE`, `UNSUPPORTED_FORMAT`, `BLURRY_IMAGE`) and `error_message` returned by the provider. Without this, you cannot distinguish between technical failures (timeouts) and user errors (wrong file type).
+2.  **Upload Metadata:** Capture `file_size_kb`, `file_format` (jpg, png, pdf), and `upload_duration_seconds` on every `document_upload_started` and `document_upload_completed` event. This allows you to correlate drop-offs with specific file attributes (e.g., "90% of failures occur when file size > 5MB").
+3.  **Step-Level Funnel Events:** Break the "verification" black box into discrete steps: `id_upload_started`, `id_upload_completed`, `verification_processing_started`, `verification_result_received` (with success/fail status), and `amount_entry_started`. This isolates whether users quit *during* the upload, *while waiting* for processing, or *after* seeing a rejection.
+
+**Immediate Action for Sarah's Report:**
+Since current logs lack error codes, label the current 63% drop-off (5,400 users) as `UNVERIFIED` regarding root cause. You cannot yet claim it is "confusion" or "timeouts." Your report to regulators must state: "We have identified a friction point affecting 5,400 users in February; root cause analysis is pending instrumentation of provider error codes, scheduled for completion by [Date]."
+
+**This Week's Steps:**
+1.  **Instrument:** Add the `verification_attempt_failed` event with `error_code` and `file_size_kb` properties to the backend before the next release.
+2.  **Query:** Once live, run a cohort query grouping failures by `error_code` to identify the top blocker (e.g., if `TIMEOUT` is 60% of errors, the fix is infrastructure; if `UNSUPPORTED_FORMAT` is 60%, the fix is UI copy).
+3.  **Decide:** If `error_code` shows >50% are user-format errors, update the upload UI instructions; if >50% are technical timeouts, escalate to the provider.
+
+**Note:** Do not invent a benchmark for "good" conversion rates; compare your post-fix rate only to your current 36% baseline. Ensure any user identifiers used for this funnel analysis are pseudonymized and routed to your privacy compliance protocol.

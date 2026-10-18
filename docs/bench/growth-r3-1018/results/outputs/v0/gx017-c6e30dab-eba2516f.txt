@@ -1,0 +1,48 @@
+# RoboArm X Beta Instrumentation Specification
+
+**Objective:** Diagnose bottlenecks in task completion time (2–45 min variance) by distinguishing between user hesitation, network latency, and mechanical calibration errors.
+**North Star Metric:** Successful Tasks Per Hour (STPH) – defined as tasks completed within the expected quality tolerance, not just raw count.
+
+## 1. Event Taxonomy (Answering Named Questions)
+Instrument only the following events. Do not log continuous streams; log state transitions.
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `task_started` | Did the user initiate the action intentionally? | `task_id`, `user_id` (pseudonymous), `assembly_type` |
+| `user_input_received` | Is the delay caused by user hesitation? | `task_id`, `timestamp`, `input_type` (voice/touch) |
+| `command_sent_to_firmware` | Is there network/controller latency? | `task_id`, `payload_size`, `latency_ms` (time since input) |
+| `mechanical_phase_start` | Did the arm begin moving immediately? | `task_id`, `phase_name` (e.g., "grip", "lift") |
+| `calibration_check_triggered` | Is the system pausing for self-correction? | `task_id`, `trigger_reason` (drift, error_code), `duration_ms` |
+| `mechanical_phase_complete` | How long did the physical action take? | `task_id`, `phase_name`, `actual_duration_ms`, `error_flag` |
+| `task_completed` | Was the full cycle successful? | `task_id`, `total_duration_ms`, `success_boolean` |
+
+## 2. Implementation Guidelines
+
+### Firmware (Edge Device)
+- **Timestamping:** All events must use synchronized UTC timestamps.
+- **Local Buffering:** Store events locally if network is unavailable; batch-upload when reconnected to prevent data loss during high-latency periods.
+- **Calibration Logging:** Specifically instrument `calibration_check_triggered`. If `duration_ms` > 5000ms, flag as a potential mechanical bottleneck.
+
+### Controller App (Cloud/Gateway)
+- **Latency Measurement:** Calculate `network_latency` = (`command_sent_to_firmware` timestamp) - (`user_input_received` timestamp).
+- **User Hesitation:** Calculate `hesitation_time` = (`user_input_received` timestamp) - (`task_started` timestamp). High values indicate UX/training issues, not system faults.
+
+### Identifier Seam & Privacy
+- Use a **stable, pseudonymous `device_user_id`** to correlate sessions across the pilot period.
+- Do not log raw video feeds or PII in event properties. Route any necessary user identity mapping to the secure `privacy-compliance` system.
+
+## 3. Analysis Plan (Bottom-Up Funnel)
+Do not focus on total signups or raw task counts. Analyze in this order:
+1.  **Retention of Core Action:** Are pilot users returning to run `task_started` daily?
+2.  **Activation (Success Rate):** Of tasks started, what % reach `task_completed` with `success_boolean=true`?
+3.  **Bottleneck Diagnosis:**
+    - If `hesitation_time` is high → **Training/UX issue**.
+    - If `network_latency` is high → **Infrastructure issue**.
+    - If `calibration_check_triggered` frequency/duration is high → **Mechanical/Firmware issue**.
+
+## 4. This-Week Steps
+1.  **Engineering:** Implement the 7 events above in the beta build; verify `calibration_check_triggered` logs the specific error code causing delays.
+2.  **Customer Success:** Define the "expected duration" baseline for the standard assembly operation using internal trial medians (not averages) to set alert thresholds.
+3.  **Review:** Once the first 50 tasks are logged by pilot customers, plot the distribution of `total_duration_ms` segmented by the three delay types above to identify the primary leak.
+
+*Note: Variance in mechanical systems is often non-Gaussian; rely on percentiles (p95) rather than averages for reliability assessments. Ensure firmware batch uploads do not interfere with real-time control loops.*

@@ -1,0 +1,35 @@
+### Data Tracking Specification: VietPay Crypto Integration (Vietnam)
+
+**1. North Star Metric: "Weekly Active Crypto Users Completing a Settled Transaction"**
+*Definition:* Unique users who successfully complete at least one crypto buy, sell, or transfer that reaches final settlement within a 7-day window.
+*Rejection of Vanity:* Do not track "Crypto Feature Page Views" or "Wallet Enabled Count" as primary success metrics. These rise regardless of actual value delivery and mask low adoption.
+
+**2. Event Taxonomy: Answering Named Questions Only**
+Instrument only the following events. Each includes a stable, pseudonymous User ID (distinct from PII) to enable cohort analysis without exposing personal data.
+
+| Event Name | Question Answered | Properties (Non-PII) | Compliance Note |
+| :--- | :--- | :--- | : |
+| `crypto_onboarding_started` | Where do users drop off before enabling the wallet? | `entry_point`, `device_os` | Log timestamp for audit trail of consent initiation. |
+| `kyc_verification_attempt` | Is the identity check a barrier? | `method_type`, `failure_reason_code` | **Critical:** Log success/failure status and timestamp for regulatory reporting. Do not store ID images in analytics. |
+| `crypto_transaction_initiated` | Are users attempting to transact? | `asset_type`, `direction` (buy/sell/send), `estimated_fiat_value_bucket` | Capture intent. |
+| `crypto_transaction_settled` | **Core Value:** Did the user successfully move value? | `asset_type`, `direction`, `value_bucket` (<$10, $10-$50, >$50), `duration_ms` | **Critical:** Immutable log of final settlement for financial reconciliation. |
+| `compliance_block_triggered` | How often do regulations stop a valid user action? | `block_reason_code`, `asset_type` | **Critical:** Mandatory for legal audit; analyze friction points. |
+
+**3. The "Small Test" Hypothesis Validation**
+Your assumption regarding sub-$10 transactions is valid as a leading indicator.
+*   **Action:** Create a specific retention cohort: "Users whose first settled transaction was <$10."
+*   **Measurement:** Track the % of this cohort that performs a second transaction >$10 within 14 days.
+*   **Baseline Status:** `UNVERIFIED`. You currently have no crypto baseline. Do not estimate adoption rates. Compare Week 1 post-launch performance against Week 2 to establish your own trend line.
+
+**4. Privacy and Compliance Seam**
+*   **Identifier Strategy:** Use a stable, pseudonymous `user_cohort_id` for analytics to track behavior across sessions. This inverts standard ops logging (which avoids high cardinality) but is required for product funnel analysis.
+*   **PII Routing:** Never send names, phone numbers, wallet addresses, or full transaction hashes to the product analytics engine. Route these strictly to the secure compliance ledger governed by `privacy-compliance.md`.
+*   **Regulatory Logging:** The `compliance_block_triggered` and `kyc_verification_attempt` events must be mirrored to an immutable audit log accessible by legal counsel, separate from the product dashboard.
+
+**5. This-Week Steps (Before June 1st UAT)**
+1.  **Define Buckets:** Finalize the exact fiat value buckets (e.g., <$10, $10-$50) with Legal to ensure they align with reporting thresholds.
+2.  **Implement Pseudonymization:** Verify the engineering pipeline strips PII before data hits the analytics tool; run a dry-run test with dummy data.
+3.  **Pre-commit Experiment Design:** If testing two onboarding flows, define the sample size and primary metric (`crypto_transaction_settled`) now. Do not peek at results during UAT; read only after the pre-defined period to avoid false positives.
+
+**Note:** All benchmark comparisons must be made against VietPay's own post-launch baseline, not external market averages which are unavailable and potentially misleading in this specific regulatory context.
+**Note:** Any metric lacking the instrumentation defined above is `UNVERIFIED` and should not be cited in stakeholder updates.

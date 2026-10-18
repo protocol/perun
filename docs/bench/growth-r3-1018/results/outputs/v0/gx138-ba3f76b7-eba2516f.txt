@@ -1,0 +1,37 @@
+**Onboarding Velocity & Integrity Funnel for LuxVerify Pilot**
+
+To balance the 24-hour speed goal against the 0.5% fraud baseline, monitor these specific stages. Each stage pairs a velocity metric (time/conversion) with an integrity guardrail (fraud/quality). Do not instrument events that do not answer these specific questions.
+
+**1. Identity Verification (The Gate)**
+*   **Question:** Does instant ID scanning increase pass-through without letting bad actors in?
+*   **Velocity Metric:** % of sellers completing ID scan within 5 minutes of sign-up; Median time from Sign-up → ID Verified.
+*   **Integrity Guardrail:** % of ID scans later flagged as synthetic/fake during manual audit; Fraud rate at this specific stage vs. the 0.5% baseline.
+*   **Event to Instrument:** `id_scan_attempted` (property: `method`: instant_vs_manual), `id_scan_passed`, `id_scan_failed` (property: `failure_reason`).
+
+**2. Profile & Inventory Submission (The Core Action)**
+*   **Question:** Does faster ID verification lead to faster listing creation, or do sellers drop off at data entry?
+*   **Velocity Metric:** % of ID-verified sellers who submit a first draft listing within 1 hour; Median time from ID Verified → First Draft Saved.
+*   **Integrity Guardrail:** % of draft listings containing high-risk keywords or prohibited categories immediately upon submission.
+*   **Event to Instrument:** `listing_draft_created` (property: `time_since_signup`), `listing_submitted_for_review`.
+
+**3. Automated Triage & Decision (The Filter)**
+*   **Question:** Are we shifting the bottleneck from manual docs to automated analysis, and is the auto-decision safe?
+*   **Velocity Metric:** Median time from Submission → Auto-Decision; % of listings decided instantly (no human touch).
+*   **Integrity Guardrail:** False Negative Rate (items auto-approved that are later found counterfeit); False Positive Rate (legitimate items auto-rejected).
+*   **Event to Instrument:** `auto_decision_made` (property: `outcome`: approve/reject/flag, `confidence_score`), `manual_review_triggered`.
+
+**4. First Live Listing (The North Star Input)**
+*   **Question:** Did the seller successfully list an authentic item, and how fast?
+*   **Velocity Metric:** % of sign-ups achieving "First Live Listing" within 24 hours (Target: >X% based on current baseline); Median time Sign-up → First Live.
+*   **Integrity Guardrail:** **Post-Listing Fraud Discovery Rate:** % of "Live" listings from this cohort flagged as counterfeit within 7 days of sale. This is the critical lagging indicator for luxury markets.
+*   **Event to Instrument:** `listing_go_live`, `post_listing_fraud_flag` (property: `days_since_live`, `item_category`).
+
+**5. Cohort Retention (The Long-Term Integrity)**
+*   **Question:** Do fast-onboarded sellers remain compliant, or do they churn after one fraudulent sale?
+*   **Velocity Metric:** % of new sellers listing a second item within 14 days.
+*   **Integrity Guardrail:** Seller ban rate within 30 days for the "Instant ID" cohort vs. the "Manual Upload" cohort.
+*   **Event to Instrument:** `seller_banned` (property: `reason`, `cohort`), `second_listing_created`.
+
+**Implementation Notes for Jan 10th Pilot:**
+*   **Identifier Seam:** Ensure a stable, pseudonymous `seller_id` links the ID scan to the post-listing fraud flag to track the full lifecycle without exposing PII in analytics logs.
+*   **Experiment Design:** Pre-commit to a sample size before reading results. Do not declare the pilot a "win" on speed if the post-listing fraud rate exceeds 0.6% (a defined tripwire above your 0.5% baseline). Read the data once at the pre-determined end date.

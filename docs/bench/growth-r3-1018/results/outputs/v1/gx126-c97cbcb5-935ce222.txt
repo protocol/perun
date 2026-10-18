@@ -1,0 +1,44 @@
+### KPI Dashboard Proposal: European Expansion Unit Economics & Retention
+**Audience:** VP of Operations, CFO
+**Goal:** Immediate detection of margin erosion and retention leaks in DE/FR markets.
+
+#### 1. North Star Metric (Customer Value)
+**Metric:** **Weekly Active Subscribers Receiving On-Time Delivery**
+*Definition:* Count of unique subscribers who received their box within the promised window in the last 7 days.
+*Why:* Rising signups mean nothing if logistics fail to deliver the core value (the snack experience) reliably. This ties logistics directly to retention.
+
+#### 2. Unit Economics Guardrails (The "Margin Killers")
+*Monitor these daily. If any breach the tripwire, pause marketing spend in that region.*
+
+| Metric | Question Answered | Baseline (US) | EU Tripwire (Action Trigger) |
+| :--- | :--- | :--- | : |
+| **Fully Landed Cost per Box** | Are taxes/duties destroying margin? | $4.50 (shipping only) | **>$6.10** (Assumed $4.50 × 1.30 + variance). If exceeded, re-evaluate carrier contracts immediately. |
+| **Delivery Delay Variance** | Are local holidays/disruptions breaking SLAs? | US Baseline (e.g., +0 days) | **>48 hours** vs. promised date. Triggers immediate customer comms and credit issuance. |
+| **Return/Reship Rate** | Is cross-border friction causing loss? | <1% (Est.) | **>3%**. Indicates systemic customs or addressing failures. |
+
+#### 3. Retention Funnel (Read Bottom-Up)
+*Do not measure acquisition until retention is stable. A leaky bucket wastes expansion capital.*
+
+| Metric | Question Answered | Measurement Rule |
+| :--- | :--- | :--- |
+| **Month-1 Retention (Cohort)** | Do EU users stay after the first box? | Compare DE/FR Month-1 retention against the **US 5% churn baseline**. If EU churn > US churn by **2 percentage points**, investigate onboarding/delivery experience before scaling ads. |
+| **Support Ticket Volume per 1k Boxes** | Is operational friction spiking? | Track tickets tagged "Shipping," "Customs," or "Damaged." A spike correlates directly with future churn. |
+
+#### 4. Event Taxonomy (Instrument Only What Matters)
+*Every event below must have a stable, pseudonymous User ID to track cohorts across sessions. Do not instrument raw PII; route consent handling to privacy compliance protocols.*
+
+1.  `order_landed_customs` (Timestamp): *Question:* How long does customs clearance actually take vs. assumption?
+2.  `delivery_attempt_failed` (Reason Code): *Question:* Are address formats or local holiday closures causing failures?
+3.  `subscription_cancelled` (Reason + Cohort ID): *Question:* Is churn driven by price (margin) or delivery failure (logistics)?
+4.  `margin_calculation_realized` (Final Cost): *Question:* Did the actual landed cost match the 30% estimate?
+
+#### 5. Experiment & Adjustment Protocol
+*   **Holiday/Disruption Adjustment:** Do not set static targets for delivery time. Establish a **rolling 7-day baseline** for each country. If a local holiday occurs, compare performance against the *previous week's* trend, not the US static baseline.
+*   **The "Stop" Rule:** If **Fully Landed Cost** exceeds the tripwire for 5 consecutive days in a specific region, automatically flag for CFO review to halt fulfillment until unit economics are restored.
+
+#### This Week's Steps
+1.  **Define the Schema:** Finalize the four event names above with engineering; ensure `order_landed_customs` captures the exact timestamp to calculate clearance latency.
+2.  **Set the Alerts:** Configure the dashboard to trigger an email to Ops/Finance when *Fully Landed Cost* > $6.10 or *Delivery Delay* > 48 hours.
+3.  **Baseline Lock:** Export the current US churn (5%) and shipping cost ($4.50) as the immutable reference rows in the new dashboard.
+
+**Note:** The 30% cost increase is an assumption; the dashboard must capture *actual* realized costs to verify this immediately upon the first shipment. Unknown delivery impacts from local holidays are `UNVERIFIED` until the first `order_landed_customs` events flow in.

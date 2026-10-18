@@ -1,0 +1,29 @@
+**Decision: Defer high-frequency motion and sporadic environmental readings; prioritize core health validation events only.**
+
+Do not instrument "rich" data to answer questions you cannot yet name. Your constraint is not just battery or storage; it is the risk of filling your dashboard with vanity metrics while the core value proposition remains unverified. For the October 12th firmware freeze, adopt the **MVP stage** rule: instrument only the activation and retention of the core action.
+
+**1. Priority Events (Include in v1)**
+These events directly validate your health claims and the "seven-day battery" promise. They answer specific, named questions:
+*   `session_start` / `session_end`: Defines the user day. Question: "Do users wear the device long enough to capture sleep/wake cycles?"
+*   `hrv_sample_completed`: Triggered only when a valid 15-minute HRV window finishes. Question: "Is our 15-minute interval sufficient to show trend continuity without battery drain?" (Do not log raw waveforms; log the success/failure of the aggregation).
+*   `gps_path_segment_saved`: Log only when a run exceeds a threshold (e.g., 5 mins) and a segment is stored. Question: "Does reducing GPS frequency during night runs break the user's ability to see their route?"
+*   `battery_critical_threshold`: Triggered when projected bedtime battery < 40%. Question: "Does our current sampling strategy actually meet the 40% bedtime target in real-world usage?"
+*   `daily_sync_success`: Question: "Is the 2MB limit causing data loss before sync?"
+
+**2. Deferred Events (Move to v2)**
+Do not include these in the initial schema. They are "instrument-everything" noise that consumes memory and power without answering a current MVP question:
+*   High-frequency raw motion data (accelerometer/gyroscope streams).
+*   Sporadic environmental readings (temperature, altitude) unless tied to a specific, proven health claim.
+*   Continuous GPS pings during non-activity periods.
+
+**Trade-off Analysis for Engineering Lead Chen**
+*   **Battery vs. Resolution:** Your assumption that 15-minute HRV intervals are "sufficient" is **UNVERIFIED**. You cannot know this until you measure `hrv_sample_completed` against `battery_critical_threshold`. High-frequency motion data offers diminishing returns for trend analysis while linearly increasing power draw. Sacrifice granularity for reliability; a gapped trend is better than a dead device.
+*   **Storage vs. Insight:** With a 2MB daily limit, raw motion data will force aggressive compression or data dropping, corrupting the very trends you seek. By logging only *aggregated* events (e.g., "segment saved" vs. "every coordinate"), you ensure the 2MB buffer holds a full day of critical health validation data.
+*   **User Tolerance:** You asked if Taipei users will tolerate less frequent GPS updates. Do not guess. The `gps_path_segment_saved` event combined with a future retention cohort analysis will tell you if users churn because routes are jagged. Until then, default to the setting that guarantees the 7-day claim.
+
+**This Week's Step**
+1.  Define the schema for `hrv_sample_completed` and `battery_critical_threshold` immediately.
+2.  Reject any pull request adding raw motion streams until a specific hypothesis requires them.
+3.  Verify that the 2MB limit can hold 30 days of these four priority events plus overhead; if not, reduce property cardinality, not event frequency.
+
+*Note: No benchmark for "good" battery tolerance exists; you must compare Taipei user retention against your own baseline post-launch. Ensure user identifiers in these events are pseudonymous and routed to your privacy compliance review.*

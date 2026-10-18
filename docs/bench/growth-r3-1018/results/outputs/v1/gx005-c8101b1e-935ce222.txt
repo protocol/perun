@@ -1,0 +1,21 @@
+**Assessment: Do Not Ship. Re-run the test with balanced allocation.**
+
+The current results are **UNVERIFIED** for decision-making. While the 2.5% lift appears positive, the 85/15 traffic split fundamentally compromises the statistical validity required to approve a permanent roadmap change. Your assumption that volume compensates for imbalance is incorrect; the imbalance inflates the variance of the control group, rendering the confidence intervals too wide to distinguish signal from noise.
+
+**Why the current data fails:**
+1.  **Statistical Power Loss:** In A/B testing, power is maximized at a 50/50 split. An 85/15 distribution drastically reduces the effective sample size of the control group, which is the baseline for comparison. Even with 200,000 total visitors, the precision of your estimate is governed by the smaller group (30,000 users). The resulting wide confidence intervals confirm that the true lift could easily be zero or negative.
+2.  **Uncorrectable Bias:** You correctly identified the risk of confounding variables (device type, time-of-day). If the routing error correlated with specific traffic patterns (e.g., mobile users disproportionately routed to the variant during peak hours), the observed 2.5% lift may reflect these external factors rather than the checkout optimization. Without randomization assurance, post-hoc correction cannot guarantee the removal of this selection bias.
+3.  **Peeking Risk:** If the decision to analyze was triggered by seeing the 2.5% number mid-stream or after the error was discovered, this constitutes "peeking," which inflates the false-positive rate. A result derived from a flawed execution protocol cannot be treated as a pre-committed, valid experiment.
+
+**Required Action Plan:**
+*   **Stop:** Do not implement the variant based on this run. The risk of deploying a neutral or negative change under the guise of a "directional signal" outweighs the cost of a delay.
+*   **Re-run:** Execute a new test with a strict **50/50 split**.
+*   **Pre-commit:** Define the sample size and duration *before* launch based on the Minimum Detectable Effect (MDE) you need to resolve. Given your previous volume, a properly powered test should conclude quickly.
+*   **Guardrails:** Monitor a primary metric (conversion) and a guardrail (e.g., error rate or latency) to ensure the optimization does not degrade system stability.
+
+**This Week's Steps:**
+1.  **Reset the experiment configuration** to enforce a 50/50 traffic split and verify the randomization unit (user ID) ensures consistency across sessions.
+2.  **Calculate the required sample size** for the re-run using your baseline conversion rate and a target MDE of 1.0% (conservative estimate), then set a hard stop date based on that N.
+3.  **Communicate to the Head of Digital Experience** that the roadmap will reflect a "Validation" phase for this feature, pushing the final deployment decision by exactly the duration of the re-run (likely 7–10 days), ensuring the mobile app update rests on statistically sound evidence.
+
+*Note: The 85/15 split creates a variance problem that volume alone cannot fix; the control group is simply too small to serve as a reliable anchor. No benchmark for "acceptable imbalance" exists because valid causal inference requires balanced randomization.*

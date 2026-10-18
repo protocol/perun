@@ -1,0 +1,44 @@
+**Instrumentation Plan: LinkGear Japan Launch (Oct 15 – Jan)**
+
+**North Star Metric:** "Weekly Active Farms" defined as a sensor transmitting valid data for ≥4 days in a rolling 7-day window. This rejects vanity metrics like "units shipped" or "app downloads," which rise regardless of actual value delivery.
+
+**Event Taxonomy: The Unboxing & Pairing Funnel**
+Instrument only these five events to answer specific questions about setup friction versus defects. Each event must include a pseudonymous `device_id` (stable across sessions) and `region_code` (to isolate rural connectivity issues).
+
+1.  `box_opened_detected` (Hardware signal: accelerometer/magnetic switch)
+    *   *Question:* Did the user physically receive and open the unit?
+    *   *Properties:* `timestamp`, `firmware_version`.
+2.  `power_on_attempt` (Hardware signal: first voltage spike)
+    *   *Question:* Did the user attempt to activate the device?
+    *   *Properties:* `battery_level_initial`, `time_since_box_opened`.
+3.  `pairing_mode_entered` (Hardware/Software handshake)
+    *   *Question:* Did the device successfully enter discoverable mode?
+    *   *Properties:* `led_status_code`, `retry_count`.
+4.  `app_pairing_initiated` (Mobile app event)
+    *   *Question:* Did the user find the device in the app?
+    *   *Properties:* `os_version`, `app_version`, `signal_strength_at_scan`.
+5.  `first_successful_transmission` (Cloud ingestion)
+    *   *Question:* Did the device complete the loop and send data?
+    *   *Properties:* `latency_ms`, `payload_size`, `connection_type` (LTE/Wi-Fi/LoRa).
+
+**Diagnostic Logic: User Error vs. Product Defect**
+Use the drop-off points between these events to triage support volume without invasive monitoring:
+*   **Likely User Error:** High volume at `box_opened_detected` but low `power_on_attempt`. *Action:* Update unboxing guide visuals; clarify battery tab removal.
+*   **Likely Connectivity Issue (Rural):** High `pairing_mode_entered` but low `first_successful_transmission`, correlated with specific `region_code`. *Action:* Do not classify as hardware defect; deploy offline-mode firmware patch or adjust expected latency SLAs.
+*   **Likely Product Defect:** High `power_on_attempt` but immediate drop before `pairing_mode_entered`, consistent across regions. *Action:* Flag batch for quarantine; investigate firmware build or sensor hardware failure.
+
+**Experiment Rigor for Onboarding Iteration**
+Before the January shipment, you will run an A/B test on the onboarding guide (e.g., QR-code led vs. manual entry).
+*   **Pre-commitment:** Define the sample size (N) required to detect a 10% lift in `first_successful_transmission` before starting. Do not peek at results daily; reading a fixed-horizon test early inflates false positives.
+*   **Guardrail Metric:** Monitor `support_ticket_volume_per_100_units`. If the new guide increases activation but spikes support calls, the net value is negative.
+*   **Decision Rule:** If the variant shows a statistically significant lift in the North Star without breaching the guardrail by the pre-committed end date, ship the new guide with the January batch. Otherwise, retain the current guide.
+
+**Identifier Seam & Privacy**
+The `device_id` must be stable to track cohorts but must remain pseudonymous. Do not store farmer names or precise GPS coordinates in this analytics stream; route any PII collection to your privacy compliance protocol.
+
+**This Week's Steps**
+1.  **Engineering:** Implement the five-event schema above in the firmware and mobile SDK; verify that `region_code` is captured without GPS precision.
+2.  **Operations:** Establish the baseline "failure rate" from the first 500 units (Oct 15–25) to set the control group for the January A/B test.
+3.  **Support:** Create a triage script mapping the three drop-off patterns (User Error, Connectivity, Defect) to specific troubleshooting responses.
+
+*Note: Connectivity rates in rural Japan are `UNVERIFIED` until the first transmission events arrive; do not assume benchmarks. All retention analysis must compare against your own Oct/Nov baseline, not external industry averages.*
