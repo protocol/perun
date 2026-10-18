@@ -1,0 +1,41 @@
+### Funnel Leakage Analysis Plan: DubaiEstates
+
+To isolate the 18% drop in scheduled viewings and validate the hypothesis regarding the new phone verification step, execute the following data slices and comparisons immediately. Do not estimate values; pull these exact figures from your analytics platform.
+
+**1. Device-Specific Funnel Comparison (Mobile vs. Desktop)**
+Since mobile represents 60% of traffic, segment the entire funnel by device type to determine if the leakage is isolated.
+*   **Action:** Create two distinct funnel reports: one for Mobile and one for Desktop.
+*   **Metrics:** Compare the conversion rate from "Property Detail Page View" → "Contact Form Start" → "Phone Verification Entry" → "Verification Success" → "Viewing Scheduled" for the 4 weeks prior to the update vs. the 4 weeks post-update.
+*   **Decision Trigger:** If the drop is >15% on Mobile but flat on Desktop, the friction is likely UI-related on small screens (e.g., keyboard overlap, input field size). If both drop equally, the friction is likely the verification logic itself (e.g., SMS delivery latency, carrier blocking).
+
+**2. Step-Level Drop-Off Analysis (The "Leak" Location)**
+You hypothesize the phone verification is the cause, but you must verify *where* the user exits.
+*   **Action:** Instrument or query events for every micro-step in the new form flow. If not currently tracked, these are `UNVERIFIED` and must be added immediately:
+    *   `form_started`
+    *   `phone_number_submitted`
+    *   `otp_request_sent`
+    *   `otp_submitted`
+    *   `verification_failed` (capture error code: timeout, invalid code, network error)
+    *   `verification_success`
+    *   `viewing_confirmed`
+*   **Comparison:** Calculate the conversion rate between each adjacent step for the pre-update and post-update periods.
+*   **Decision Trigger:** A sharp increase in drop-off between `phone_number_submitted` and `otp_submitted` confirms the verification step is the blocker. A spike in `verification_failed` events indicates technical issues (SMS gateway) rather than UX friction.
+
+**3. Cohort Analysis: New vs. Returning Users**
+Determine if the friction disproportionately affects users unfamiliar with your process or trusted returning clients.
+*   **Action:** Segment the funnel by user cohort (First-time visitor vs. Returning user with prior saved searches).
+*   **Comparison:** Analyze the drop-off rates for both cohorts post-update.
+*   **Decision Trigger:** If new users abandon at a significantly higher rate than returning users, the verification step creates too much friction for low-intent traffic. If returning users also drop off, the change breaks trust or workflow for your core audience.
+
+**4. Time-to-Complete and Error Rate Correlation**
+Assess if the process is timing out or causing frustration.
+*   **Action:** Measure the average time elapsed between `form_started` and `viewing_confirmed`, and the rate of `verification_failed` events per 1,000 attempts.
+*   **Comparison:** Compare average completion time and error rates pre- and post-update.
+*   **Decision Trigger:** A significant increase in completion time (>30 seconds) suggests users are struggling to receive or enter codes. High error rates point to infrastructure failures (SMS provider) rather than design flaws.
+
+**This Week's Steps:**
+1.  **Engineering:** Implement missing event tracking for `otp_request_sent`, `otp_submitted`, and `verification_failed` with error properties if not already live; deploy within 24 hours.
+2.  **Analyst:** Run the device-segmented funnel report for the last 8 weeks to quantify the Mobile vs. Desktop divergence.
+3.  **Product:** If Mobile drop-off at the OTP step exceeds 20%, prepare an A/B test plan to revert to email-only verification for mobile users as a control variant.
+
+*Note: Do not attribute the drop to "user behavior changes" without ruling out technical SMS delivery failures first. All benchmarks must be derived from your pre-update baseline, not industry averages.*

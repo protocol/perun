@@ -1,0 +1,43 @@
+### VoiceHub Event Taxonomy Proposal
+
+To resolve the 20% inconsistency affecting 15,000 daily users, adopt a single canonical event for entry and distinct events for lifecycle states. Do not instrument "just in case"; every event below answers a specific funnel question.
+
+#### 1. Canonical Event Names
+Replace `join_room`, `enter_channel`, and `start_session` with one standardized entry event. Differentiate actions by state, not synonyms.
+
+| Event Name | Question Answered | When to Fire |
+| :--- | :--- | :--- |
+| `room_entry_attempt` | Are users trying to join but failing? (Activation leak) | Immediately when the user taps "Join" or the app initiates connection. |
+| `room_entry_success` | Did the user successfully enter the voice environment? (Core Activation) | Only after the audio stream is active and the UI is rendered. |
+| `room_exit` | Did the user leave voluntarily or via error? (Retention/Churn) | When the user leaves or the session terminates. |
+| `room_mute_toggle` | Are users engaging or passively listening? (Engagement depth) | On every mute/unmute action. |
+
+#### 2. Required Properties (Schema)
+Every event must include these properties to support both room-level and user-level duration analysis without ambiguity.
+
+*   **`user_id_pseudonymous`**: (String) A stable, pseudonymous ID for cohort tracking. *Do not use raw PII.* Route mapping to `privacy-compliance.md`.
+*   **`room_id`**: (String) Unique identifier for the specific room instance.
+*   **`room_type`**: (Enum) Values: `public`, `private`, `vip`. This answers your hierarchy question; do not create separate events for each type.
+*   **`entry_timestamp_ms`**: (Integer) Unix epoch milliseconds. Essential for calculating duration in post-processing.
+*   **`exit_timestamp_ms`**: (Integer) Unix epoch milliseconds. *Only on `room_exit`.*
+*   **`platform`**: (Enum) `ios`, `android`.
+*   **`app_version`**: (String) To isolate bugs in specific builds.
+*   **`exit_reason`**: (Enum) *Only on `room_exit`.* Values: `user_initiated`, `network_error`, `kicked`, `app_crash`.
+
+#### 3. Duration Strategy (Answering Your Unknown)
+Do not choose between room-level or user-level tracking in the instrumentation. **Track events, calculate duration in analysis.**
+*   **User-Level Duration:** Query `room_entry_success` to `room_exit` grouped by `user_id_pseudonymous`.
+*   **Room-Level Duration:** Query `room_entry_success` to `room_exit` grouped by `room_id`.
+*   **Why:** Instrumenting a "duration" integer in the app is fragile (clock skew, backgrounding issues). Deriving it from high-fidelity timestamps in your warehouse ensures accuracy for both perspectives.
+
+#### 4. Implementation Guardrails
+*   **Idempotency:** Ensure `room_entry_success` fires exactly once per successful join. Duplicate events will inflate acquisition metrics.
+*   **Failure Capture:** The `room_entry_attempt` without a corresponding `room_entry_success` within 5 seconds defines your **activation leak**. This is more valuable than success metrics alone.
+*   **Deprecation:** Explicitly remove `join_room`, `enter_channel`, and `start_session` from the codebase. Mixed logging renders cohort analysis `UNVERIFIED`.
+
+**This Week's Step:**
+1.  Define the JSON schema for the four events above in your central documentation.
+2.  Task the iOS and Android leads to replace the three legacy calls with `room_entry_attempt` and `room_entry_success` before the September 15 freeze.
+3.  Verify in a staging environment that `room_type` correctly distinguishes `public` vs `private` rooms.
+
+*Note: This schema addresses product behavior only. System health (latency, packet loss) remains in `observability.md`. Ensure `user_id_pseudonymous` complies with Manila data regulations via `privacy-compliance.md`.*

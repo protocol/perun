@@ -1,0 +1,43 @@
+### StorMix Growth Measurement Framework: Automation Efficiency & Trust
+
+**1. North Star Metric: Verified Cost Savings per Active Account**
+Reject "Total Data Stored" or "Raw Signups" as vanity metrics. The single metric that proves value is the **percentage of monthly storage costs saved by automation versus a manual baseline**. If this number does not rise, the product is not delivering its core promise, regardless of how much data is ingested.
+
+**2. Event Taxonomy: Answering Named Questions**
+Instrument only events that resolve the specific unknowns regarding trust versus unpredictability. Do not track "everything."
+*   **Event:** `automation_rule_triggered`
+    *   *Question:* Is the system correctly identifying cold data?
+    *   *Properties:* `data_age`, `predicted_access_frequency`, `target_tier`.
+*   **Event:** `manual_override_executed`
+    *   *Question:* Are users rejecting automation due to cost fear or pattern mismatch?
+    *   *Properties:* `override_direction` (hot-to-cold vs. cold-to-hot), `time_since_last_access`, `user_role`.
+*   **Event:** `data_re_accessed_post_move`
+    *   *Question:* Did the automation make a mistake (false positive)?
+    *   *Properties:* `time_to_re_access`, `retrieval_latency_impact`.
+
+**3. The Identifier Seam**
+To analyze cohorts (e.g., "users who override >5 times/week"), you must link events to a **stable, pseudonymous user ID**. This allows tracking behavior across sessions without exposing PII. Route all raw IP addresses and account details to your privacy compliance layer; the analytics engine receives only the hashed ID.
+
+**4. Diagnostic Funnel: Read Bottom-Up (Retention of Trust)**
+Do not focus on acquisition in Mumbai/Pune yet. Diagnose the leak in trust first:
+*   **Retention of Automation:** Of the files moved to cold storage automatically, what percentage remain there without manual override for 30 days?
+*   **Activation:** Do new accounts configure at least one rule and let it run for 7 days without intervention?
+*   **Acquisition:** Only analyze signups after the above two layers are stable. Pouring marketing spend into a product where users immediately disable the core feature is waste.
+
+**5. Segmentation for the Regional Directors**
+Your deck must segment users by **Override Intent**, not just geography:
+*   **The "Unpredictable" Cohort:** Users who override because data *was* actually accessed shortly after moving to cold storage. *Action:* Improve prediction algorithms.
+*   **The "Distrustful" Cohort:** Users who override despite no subsequent access (paying higher prices unnecessarily). *Action:* This is a trust/education failure. Show them a "Cost of Inaction" dashboard comparing their actual bill vs. the automated bill.
+
+**6. Experiment Rigor: Proving Cost Savings**
+To prove reliability to early adopters, run a controlled comparison, not a dashboard peek:
+*   **Design:** Pre-commit to a 4-week observation window. Define the primary metric as "Net Cost Delta" and the guardrail as "Data Retrieval Latency."
+*   **Analysis:** Compare the "Automated-Only" simulated cost against the "Actual Mixed" cost.
+*   **Warning:** Do not claim a win if you check the data daily and stop when the p-value dips below 0.05. This "peeking" inflates false positives. Read the result once at the end of the pre-committed period.
+
+**This Week's Steps:**
+1.  Instrument the `manual_override_executed` event with the `override_direction` property immediately; without this, the "trust vs. unpredictability" hypothesis is **UNVERIFIED**.
+2.  Build a single internal dashboard showing the "Cost of Inaction" curve for the pilot group to quantify the financial impact of the 30% override rate.
+3.  Draft the A/B test design to show a subset of "Distrustful" users a real-time savings counter, measuring if this reduces override frequency by week 4.
+
+*Note: All benchmark comparisons must be against your own pilot baseline trends, not external industry averages which are unavailable here. Any metric lacking the instrumentation above must be labeled UNVERIFIED in the deck.*

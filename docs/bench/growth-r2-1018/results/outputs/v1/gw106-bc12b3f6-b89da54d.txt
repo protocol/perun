@@ -1,0 +1,39 @@
+### Measurement Strategy: FitJourney Gamification Soft Launch
+
+**1. North Star & Input Metrics**
+*   **North Star:** Weekly Active Users completing ≥3 workouts (value = consistent habit, not just badge collection).
+*   **Input Metrics:** Badge earn rate, leaderboard view-to-interaction ratio, next-day workout retention (core activation).
+*   **Rejection of Vanity:** Do not track "total badges earned" or "leaderboard views" as success metrics; these rise regardless of value.
+
+**2. Event Taxonomy (Answering Named Questions)**
+Instrument only events that resolve your specific hypotheses. Every event must include a `user_segment` property (e.g., `beginner`, `intermediate`, `top_10%`) derived from historical workout frequency.
+
+| Event Name | Question Answered | Properties |
+| :--- | :--- | :--- |
+| `badge_earned` | Does earning a badge trigger immediate action? | `badge_type`, `user_segment`, `days_since_join` |
+| `workout_started` (within 24h of badge) | **Hypothesis Test:** Did the badge increase next-day likelihood? | `preceded_by_badge` (bool), `user_segment` |
+| `leaderboard_viewed` | Do users engage with competition? | `view_duration`, `scroll_depth`, `user_segment` |
+| `app_uninstall` / `subscription_cancel` | **Guardrail:** Is competition causing churn? | `last_seen_segment`, `days_since_leaderboard_view` |
+| `workout_abandoned` | Does seeing a low rank cause drop-off mid-session? | `leaderboard_rank_seen`, `step_of_abandon` |
+
+**3. Segmentation & The "Beginner Risk"**
+Your fear of demotivating beginners requires a split analysis. Do not aggregate data.
+*   **Cohort A (Beginners):** Bottom 50% by workout frequency. Measure if `leaderboard_viewed` correlates with a *decrease* in `workout_started` within 48 hours.
+*   **Cohort B (Top Performers):** Top 10%. Measure if `leaderboard_viewed` correlates with an *increase* in workout frequency or intensity.
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` to track users across sessions for cohort analysis. Do not use raw PII; route consent checks to your privacy compliance protocol.
+
+**4. Experiment Design (Soft Launch: June 1–10)**
+Treat the 10,000 users as a controlled test, not just a "soft launch."
+*   **Control Group (5,000 users):** No badges, no leaderboards.
+*   **Treatment Group (5,000 users):** Full gamification layer.
+*   **Pre-commitment:** Define your success criteria *before* June 1.
+    *   *Success:* Treatment group shows ≥5% lift in next-day retention vs. Control, with no statistically significant increase in churn for Beginners.
+    *   *Failure (Stop Tripwire):* If Beginner churn in Treatment exceeds Control by >2% for 3 consecutive days, disable leaderboards for that segment immediately.
+*   **No Peeking:** Do not stop the test early because "p < 0.05" on day 2. Read the results once on June 11 (fixed horizon) or use a sequential testing rule if monitoring daily. A day-2 read is `UNVERIFIED`.
+
+**5. This-Week Steps**
+1.  **Define Schema:** Finalize the event properties above, ensuring `user_segment` is calculated server-side based on pre-launch history.
+2.  **Build Guardrail Dashboard:** Create a real-time view comparing `app_uninstall` rates between Treatment and Control specifically for the "Beginner" segment.
+3.  **Set Tripwire:** Agree on the exact churn percentage (e.g., +2%) that triggers an automatic rollback of the leaderboard feature for beginners before coding begins.
+
+*Note: The 20% lift assumption is a hypothesis to be tested, not a baseline for calculation. Without the control group, any observed lift is `UNVERIFIED` due to seasonality or novelty effects.*

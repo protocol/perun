@@ -1,0 +1,26 @@
+**Decision: Do not build features to push contact exchange yet. The data shows correlation, not causation, and intervening now risks breaking retention further.**
+
+Your current retention curve (40% Week 2 → 15% Week 8) indicates a severe "leaky bucket." Pouring users into a funnel where 62.5% of your retained users disappear between week two and week eight is inefficient. Your assumption—that exchanging phone numbers *causes* retention—is unverified. It is equally likely that only users already highly motivated to date (high intent) exchange numbers early, while low-intent users drift away regardless of contact sharing. If you force early exchange on users not ready for it, you may increase churn by violating trust or creating pressure, accelerating the Week 2–8 drop-off.
+
+**Immediate Actions for Monday's Sprint:**
+
+1.  **Instrument the "Exchange" Event with Properties:**
+    *   **Action:** Define and track a specific event `contact_info_exchanged` with properties: `message_count_at_exchange`, `time_to_exchange`, and `exchange_method` (e.g., manual text vs. feature click).
+    *   **Question Answered:** "Does exchanging contact info *before* 5 messages predict Week 8 retention better than exchanging *after*, controlling for total message volume?"
+    *   **Why:** You cannot validate your hypothesis without isolating the timing of the exchange against the total conversation depth.
+
+2.  **Run a Retention Cohort Analysis (Not a Feature Build):**
+    *   **Action:** Query your existing data to compare Week 8 retention rates for three distinct cohorts: (A) Exchanged <5 messages, (B) Exchanged >5 messages, and (C) No exchange but >20 messages exchanged in-app.
+    *   **Question Answered:** "Do users who stay in-app longer (Cohort C) retain as well as those who leave early (Cohort A)?"
+    *   **Why:** If Cohort C retains well, your North Star should be "meaningful in-app conversation," not "early exit." If only Cohort A retains, then—and only then—is early exchange a driver.
+
+3.  **Design a Causal Test (Pre-commit Design):**
+    *   **Action:** Draft an A/B test plan where the treatment group receives a *nudge* (not a force) to share numbers after 5 messages, while the control gets no nudge.
+    *   **Constraints:** Pre-commit to a sample size and a 4-week readout. Define **Primary Metric**: Week 4 retention. Define **Guardrail Metric**: Report/Block rate (to ensure you aren't forcing uncomfortable interactions).
+    *   **Why:** Observational data cannot prove causation. Only a randomized test can tell you if *causing* the exchange changes the outcome. Do not peek at results before the pre-committed end date; early reads are `UNVERIFIED`.
+
+**Interpretation of Drop-off:**
+The steep decline from Week 2 to Week 8 suggests the "value moment" is not being sustained. In dating markets, if the app successfully facilitates a connection (phone exchange), the user often churns *because* they succeeded (found a date). However, if they churn because the conversation died *before* exchanging info, the problem is engagement quality, not the lack of a phone number feature. Focus engineering on understanding *why* conversations stall in Weeks 3–8 before building tools to accelerate exit.
+
+**Note:** The stable user identifier required for these cohorts must be pseudonymous; route any PII handling to your privacy compliance protocol.
+**Note:** Do not estimate the "lift" of a phone-number feature without the A/B test results; any projected number is currently `UNVERIFIED`.

@@ -1,0 +1,31 @@
+You cannot set specific numerical thresholds (e.g., "lag < 100ms") or satisfaction benchmarks yet because you have no baseline data for this net-new capability. Asserting a number now would be a fabricated benchmark, which violates the prime directive of growth analytics. Instead, your success criteria must be defined as **relative stability against your existing baseline** and **instrumentation readiness**.
+
+Here are the measurable outcomes and go-live gates for your Engineering Director:
+
+### 1. Technical Success: The "No Degradation" Gate
+Since you cannot define an absolute "good" latency without data, define failure as **deviation from the legacy baseline**.
+*   **Metric:** Concurrent user capacity and error rates of the *existing* video system.
+*   **Threshold:** The system must sustain 5,000 concurrent users with screen-sharing enabled without increasing the legacy system's current error rate or connection drop rate by more than **5%**.
+*   **Action:** If enabling screen-sharing causes the legacy drop rate to spike >5%, the feature is `UNVERIFIED` and must be rolled back. This protects the core business while you gather data on the new feature.
+
+### 2. Experiential Success: Instrumentation Before Measurement
+You asked how to measure satisfaction when "no news is good news." In analytics, "no news" often means "no instrumentation." You cannot measure what you do not track.
+*   **Event Taxonomy:** Instrument exactly three events before launch. Do not track everything.
+    1.  `screen_share_start_attempt`: (Property: `user_segment`, `client_version`). *Question: Can users initiate the feature?*
+    2.  `screen_share_session_quality`: (Property: `avg_latency_ms`, `frame_rate`, `duration_seconds`). *Question: What is the actual performance distribution?*
+    3.  `screen_share_early_terminate`: (Property: `reason_code`, `duration_before_drop`). *Question: Are users abandoning the feature due to poor quality?*
+*   **Success Criteria:** 100% of sessions must emit these events. If data is missing, the rollout is a failure regardless of perceived stability.
+
+### 3. User Satisfaction: The "Silent Signal" Proxy
+Do not wait for surveys. Use behavioral retention as your satisfaction proxy.
+*   **Metric:** **Week-1 Retention of the Core Action**.
+*   **Definition:** Of the users who successfully start a screen share in Week 1, what percentage start a screen share again in Week 2?
+*   **Gate:** Since you have no baseline, you cannot set a target % yet. The go-live condition is simply that the **data pipeline is live** to calculate this cohort immediately. If you cannot compute this number on December 2nd, the launch criteria are not met.
+
+### Immediate Next Steps (This Week)
+1.  **Define the Identifier Seam:** Ensure your analytics can link `screen_share` events to a stable, pseudonymous user ID to track retention across sessions, distinct from high-cardinality ops logs.
+2.  **Establish the Legacy Baseline:** Query your current analytics for the exact error rate and drop rate of the 5,000-user load *today*. Record this number; it is your only valid benchmark for the "no degradation" gate.
+3.  **Pre-commit the Review:** Schedule a review for December 8th to read the first retention cohort. Do not peek at daily fluctuations before then to avoid false positives.
+
+**Note:** Specific thresholds for lag and frame rate will emerge from the `screen_share_session_quality` data collected in the first 48 hours; do not guess them now.
+**Note:** Route any PII collected in event properties to your privacy compliance review before instrumentation.

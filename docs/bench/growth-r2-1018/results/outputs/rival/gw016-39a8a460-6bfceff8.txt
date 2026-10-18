@@ -1,0 +1,32 @@
+### Recommended Metrics for MedInsight ROI Demonstration
+
+To demonstrate value to hospital administrators without accessing protected health information (PHI) or Electronic Health Records (EHR), you must shift from tracking "usage" (logins/clicks) to tracking "workflow efficiency" and "decision velocity." These metrics act as high-correlation proxies for operational efficiency and patient outcomes.
+
+Here are four actionable metrics to instrument:
+
+**1. Time-to-Insight (Decision Velocity)**
+*   **Definition:** The elapsed time between a user opening a specific dashboard module and performing a "export," "share," or "alert acknowledgment" action.
+*   **Why it matters to a CMO:** Long deliberation times often indicate data fragmentation. A reduction in this time suggests your dashboard is consolidating information faster than manual chart reviews or legacy systems.
+*   **ROI Narrative:** "Our clients reduce the time required to identify at-risk patient cohorts by 40%, allowing care teams to intervene earlier in the shift."
+*   **Implementation:** Track `session_start` on specific modules vs. `action_completed` (export/share). Do not track *what* data they viewed, only the timestamp delta of the workflow.
+
+**2. Administrative Task Deflection Rate**
+*   **Definition:** The frequency of using built-in automation features (e.g., "auto-generate report," "one-click compliance export," "bulk status update") versus manual workarounds.
+*   **Why it matters to a CMO:** This directly proxies nurse burnout and administrative overhead. If nurses use your automation tools, they are not manually typing data into other systems.
+*   **ROI Narrative:** "Each 'auto-report' generation represents 15 minutes of saved nursing time. Across your network, this equals 200+ hours of recovered clinical time per month."
+*   **Implementation:** Create specific events for automation buttons. Compare the volume of these events against the number of active users to establish an adoption baseline.
+
+**3. Cross-Departmental Data Unification Score**
+*   **Definition:** The percentage of sessions where a single user accesses data modules from three or more distinct departments (e.g., ER, ICU, and Outpatient) in a single sitting.
+*   **Why it matters to a CMO:** Siloed data leads to fragmented care. High scores indicate your platform is successfully breaking down information barriers, a prerequisite for improving care coordination and reducing readmissions.
+*   **ROI Narrative:** "Users who unify data across three departments identify care gaps 2x faster than those working in silos, directly supporting readmission reduction goals."
+*   **Implementation:** Tag dashboard modules by department category. Count unique categories accessed per `user_id` per `session_id`.
+
+**4. Proactive Alert Engagement Ratio**
+*   **Definition:** The ratio of automated system alerts viewed to those where the user initiates a follow-up workflow (e.g., assigning a task, sending a message, drilling down).
+*   **Why it matters to a CMO:** High visibility but low engagement means alert fatigue; high engagement means the alerts are clinically relevant and driving action. This proxies the "quality" of the intelligence provided.
+*   **ROI Narrative:** "Our platform doesn't just show data; it drives action. A 60% engagement rate on our sepsis-risk alerts correlates with faster protocol initiation."
+*   **Implementation:** Track `alert_impression` and `alert_action_taken`. Ensure no patient IDs are passed in these events; use anonymous alert IDs.
+
+### Privacy & Implementation Note
+Ensure all event properties are stripped of PHI (no Patient IDs, Names, or specific timestamps that could identify a patient in a small cohort). Use hashed internal IDs for users and anonymous session tokens. Frame these metrics in sales conversations as "efficiency multipliers" that correlate with the hospital's own internal outcome data, which you ask *them* to validate during the renewal.

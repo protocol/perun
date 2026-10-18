@@ -1,0 +1,36 @@
+### Measurement Plan: Inferring Satisfaction via Behavioral Signals
+
+**1. Define the North Star: "Completed Cooking Sessions"**
+Reject "Weekly Active Users" (50k) and "Total Skills Enabled" as vanity metrics; they rise regardless of value. Your North Star must be **Weekly Users who complete a recipe end-to-end**. This only increases when a user successfully cooks a meal. Pair this with two input metrics: *Activation Rate* (users who start a recipe after opening the skill) and *Completion Rate* (users who reach the "finished" state).
+
+**2. Event Taxonomy: Instrument Only What Answers Specific Questions**
+Do not instrument "everything." Define these specific events to answer your friction questions. Every event must include a `session_id` and `recipe_id`.
+
+| Event Name | Question It Answers | Key Properties |
+| :--- | :--- | :--- |
+| `recipe_started` | Did the user commit to cooking? | `recipe_complexity`, `cuisine_type` |
+| `step_repeated` | **Friction Signal:** Was an instruction unclear? | `step_number`, `time_since_last_play` |
+| `pause_long_gap` | **Abandonment Signal:** Did the user walk away mid-recipe? | `step_number`, `gap_duration_seconds` |
+| `recipe_abandoned` | Did they quit before the end? | `completion_percentage`, `last_step_type` |
+| `recipe_completed` | Did they succeed? | `total_duration`, `steps_skipped` |
+| `help_triggered` | Did they get stuck needing clarification? | `help_category`, `step_number` |
+
+**3. The Identifier Seam**
+To track a user across a 30-minute cooking session, you need a **stable, pseudonymous session identifier**. This contrasts with system observability (which avoids high-cardinality user labels); here, linking steps to a single cook is mandatory. Ensure this ID is not PII; route any raw voice transcripts containing personal data to your privacy compliance review immediately.
+
+**4. Interpretation Logic: Reading the Signals**
+Analyze the data bottom-up (Retention/Completion first, Acquisition second).
+*   **High `step_repeated` on specific steps:** Indicates unclear phrasing or audio timing issues. If Step 3 of "Beef Stew" has a 40% repeat rate while the average is 5%, the script for Step 3 is flawed.
+*   **High `pause_long_gap` followed by `recipe_abandoned`:** Suggests the user got distracted or overwhelmed. If this clusters at 60% completion, the recipe might be too long for the average weeknight cook.
+*   **Low `recipe_completed` despite high `recipe_started`:** The core value leak. Users want to cook but fail. This invalidates the assumption that "no feedback = satisfaction." Silence here is likely failure, not contentment.
+*   **`help_triggered` spikes:** Correlate this with `recipe_abandoned`. If users ask for help and then quit, the help flow itself may be breaking the cooking rhythm.
+
+**5. Stage Awareness & Next Steps**
+You are in the **Growth** stage (50k WAUs). You have enough volume for cohort analysis. Stop guessing; instrument the events above.
+
+**This Week's Actions:**
+1.  **Instrument:** Deploy logging for `step_repeated` and `recipe_abandoned` with `step_number` properties. Do not wait for a full dashboard; dump raw logs to a queryable store.
+2.  **Query:** Run a cohort analysis on last week's data: "What are the top 3 recipes with the highest `step_repeated` rate at Step 2?"
+3.  **Decision Threshold:** If any single step has a repeat rate >20%, flag that recipe's script for immediate rewrite in the next update. If the global completion rate is <40%, prioritize fixing the "mid-recipe" flow over adding new recipes.
+
+*Note: Do not fabricate a "good" completion rate benchmark; compare your new baseline against itself week-over-week. If you cannot access the raw logs to verify these counts, the metric remains UNVERIFIED.*

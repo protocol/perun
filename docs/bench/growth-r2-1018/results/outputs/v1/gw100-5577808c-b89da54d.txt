@@ -1,0 +1,49 @@
+### Experimental Design Proposal: Last-Minute Discount Elasticity
+
+**Objective**
+Determine if a 20% discount on last-minute bookings (within 48 hours) generates sufficient incremental revenue to offset margin erosion, without cannibalizing full-price bookings made >14 days prior.
+
+**Methodology: Segmented Randomized Controlled Trial**
+Do not run a simple A/B test on price alone. To isolate business vs. leisure segments and measure cannibalization, implement a **2x2 factorial design** across the five domestic routes, randomized by **user session/device ID**:
+
+1.  **Control Group:** Standard pricing logic (e.g., current 10% or 0% discount rules).
+2.  **Treatment Group:** 20% discount applied strictly to inventory within the 48-hour window.
+
+**Crucial Isolation Mechanism:**
+To address the unknown elasticity between business and leisure travelers, you must tag sessions at entry based on **booking lead time intent** and **fare class flexibility**:
+*   *Proxy for Business:* Searching for flexible fares, refundable tickets, or specific weekday peaks.
+*   *Proxy for Leisure:* Searching for lowest fare, weekend stays, or advance purchase (>14 days).
+
+Randomize these segments independently. This prevents the "mix shift" confounder where a surge in leisure travelers masks the behavior of business travelers.
+
+**Data Points to Capture**
+Instrument only events that answer the specific hypothesis questions. Do not track generic pageviews.
+
+1.  **Primary Event: `booking_completed`**
+    *   *Properties:* `revenue_total`, `margin_contribution`, `discount_depth`, `booking_lead_time_hours`, `traveler_segment_proxy`, `route_id`, `experiment_variant`.
+    *   *Question Answered:* Did the discount drive net positive revenue?
+2.  **Guardrail Event: `full_price_booking_abandoned`**
+    *   *Properties:* `search_date_relative_to_departure`, `original_fare_quoted`, `user_id_hash`.
+    *   *Question Answered:* Did users who would have paid full price (booking >14 days out) delay their purchase to wait for the 48-hour window? (Detects cannibalization).
+3.  **Cohort Identifier: `stable_user_pseudonym`**
+    *   *Requirement:* A stable, pseudonymous ID to track if a user searches 2 weeks out, waits, and then books at 48 hours.
+    *   *Compliance Note:* Route raw PII to `privacy-compliance.md`; use only the hash here.
+
+**Criteria for Success**
+Success is **not** defined by booking volume. The North Star is **Net Incremental Revenue per Route**.
+
+*   **Win Condition:** `(Revenue_Treatment - Revenue_Control) > 0` AND `Margin_Treatment >= Margin_Control * 0.95` (or your defined floor).
+*   **Cannibalization Threshold:** If the rate of `full_price_booking_abandoned` increases by >5% in the treatment group, the test fails regardless of volume lift.
+*   **Segment Specifics:** The hypothesis holds only if the `traveler_segment_proxy` = "Leisure" shows positive elasticity, while "Business" shows neutral or negative impact on margin.
+
+**Risk Mitigation & Stopping Rules**
+*   **Pre-commit Sample Size:** Calculate the minimum detectable effect (MDE) on *revenue* (not clicks) before launch. Do not peek at results daily. Re-evaluate only once the pre-committed sample size is reached or the flight departure date passes.
+*   **Guardrail Tripwire:** If total route margin drops below the break-even point calculated from your historical 10% discount baseline, halt the experiment immediately for that route.
+*   **Time-Bound Exposure:** Limit the test to specific routes initially. If cannibalization is detected in the >14-day booking window, pause the test to prevent long-term revenue erosion.
+
+**This Week's Steps**
+1.  Define the SQL query to generate the `stable_user_pseudonym` and `traveler_segment_proxy` based on historical search patterns.
+2.  Set the pre-committed sample size calculation using your current average ticket margin and the 20% discount cost.
+3.  Instrument the `full_price_booking_abandoned` event to ensure cannibalization is visible before launch.
+
+*Note: Historical "15% volume increase" is a baseline trend, not a guarantee; rely on the controlled test readout. Ensure the identifier seam allows cross-session tracking without violating privacy constraints.*

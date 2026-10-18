@@ -1,0 +1,35 @@
+### Holdout Test Design & Evaluation Strategy
+
+**1. Group Integrity & Randomization**
+Do not randomize at the customer level if household sharing is common; randomize at the **household ID** to prevent treatment contamination (control members benefiting from a treated shopper's card). Lock the assignment list on January 31st. Any customer entering the eligible pool after February 1st must be randomly assigned immediately upon entry to avoid selection bias. Do not allow opt-outs to shift users from Treatment to Control; analyze them as "Treatment Assigned" (Intent-to-Treat) to preserve the validity of the lift calculation.
+
+**2. Addressing Seasonality & The Super Bowl**
+Your holdout design inherently controls for seasonality and the Super Bowl spike, provided both groups are exposed to the same external conditions. Since both Treatment and Control shoppers face the same January-to-April timeline and promotional calendar, the *difference* between their behaviors isolates the program effect.
+*   **Do not** compare February sales to January sales.
+*   **Do** compare Treatment vs. Control within the same time windows.
+The Super Bowl effect cancels out in the differential analysis unless your targeting algorithm accidentally excluded high-volume Super Bowl shoppers from one group. Verify pre-test balance on "Super Bowl category purchases" (e.g., snacks, beverages) using January historical data.
+
+**3. Covariates for Validity & Variance Reduction**
+To ensure statistical validity and increase sensitivity (detecting the $5 lift with fewer samples), monitor these covariates for balance between groups before the test starts:
+*   **Pre-period Basket Size:** Average spend per trip in Q4 prior to launch.
+*   **Purchase Frequency:** Visits per month in Q4.
+*   **Store Cluster:** Ensure both groups are equally represented across high-volume urban stores vs. rural locations.
+*   **Demographic Proxies:** If available, ensure balance on broad segments (e.g., family size proxy) without using PII.
+
+If imbalance exists, use **CUPED** (Controlled-Experiment Using Pre-Experiment Data) or stratification in your analysis to reduce variance. This adjusts the metric based on pre-test behavior, making it easier to detect the true $5 lift against the noise of seasonal fluctuations.
+
+**4. Primary Metric & Guardrails**
+*   **Primary Metric:** Average Basket Size per Transaction (or Revenue per User, if frequency is also a goal). Define the population strictly as "Active Shoppers" (e.g., made ≥1 purchase in the last 90 days) to avoid diluting results with inactive accounts.
+*   **Guardrail Metric:** Monitor **Margin %** and **Coupon Redemption Cost**. A $5 basket increase driven entirely by deep discounts may be revenue-positive but profit-negative.
+*   **Secondary Metric:** Retention rate (did they return in Month 2?).
+
+**5. Analysis Plan**
+Pre-commit to a single readout date at the end of the three-month period (May 1st). Do not peek at daily results; repeated checking inflates the false-positive rate. Calculate the lift as: `(Mean Treatment - Mean Control) / Mean Control`. If the confidence interval of the lift excludes 0 and the lower bound exceeds your minimum detectable effect threshold, the result is significant.
+
+**This Week's Steps:**
+1.  Query historical data to verify that Household ID captures >95% of shared shopping behavior; if not, refine the grouping logic.
+2.  Run a "fake" test on January data (splitting customers randomly) to confirm that your covariates (basket size, frequency) are balanced (p > 0.05) between simulated groups.
+3.  Document the exact SQL definition of "Active Shopper" and the primary metric calculation to prevent post-hoc definition shifting.
+
+*Note: Ensure all user identifiers used for grouping are pseudonymized before analysis to comply with privacy standards.*
+*Route any PII handling questions to your privacy compliance team before executing the data pull.*

@@ -1,0 +1,33 @@
+### Success Metrics for FinSecure Compliance Module Pilot
+
+**1. North Star Metric: Weekly Active Reporters (WAR)**
+Reject Daily Active Users (DAU) as a vanity metric; it penalizes your product for fitting the user's actual weekly compliance workflow. Instead, measure **Weekly Active Reporters**: the count of unique users who successfully generate and export at least one compliance report within a 7-day window. This rises only when users derive real value (compliance completion) and aligns with the observed weekly login pattern.
+
+**2. Primary Input Metric: Time-to-Export (TTE)**
+Since you lack a baseline for manual reporting times, do not invent a "good" threshold. Instrument **Time-to-Export**: the elapsed seconds from "Report Requested" to "File Downloaded."
+*   **Action:** Calculate the median TTE for your three pilot banks immediately.
+*   **Benchmark:** Your success criterion is not an industry average, but a **relative improvement** over the pilot's own baseline once you survey them for their previous manual duration. If they cannot quantify manual time, use the pilot's Month 1 median TTE as the baseline to measure optimization in Months 2–4.
+
+**3. Retention Cohort: Week-4 Return Rate**
+Read the funnel bottom-up. Acquisition (signed contracts) is done; activation is the next risk. Measure the **Week-4 Return Rate**: the percentage of users who generated a report in Week 1 and return to generate another in Week 4.
+*   **Why:** In B2B compliance, churn often happens after the first "fire drill." If users do not return for the second cycle, the implementation failed regardless of speed.
+
+**4. Event Taxonomy (Instrument Only These)**
+Do not track "everything." Instrument only these three events to answer specific questions:
+*   `report_generation_started` (Properties: `report_type`, `bank_id`) → *Question: Are users attempting the core action?*
+*   `report_export_completed` (Properties: `duration_seconds`, `file_size_mb`, `bank_id`) → *Question: Did they succeed, and how long did TTE take?*
+*   `login_session` (Properties: `user_id_pseudonymous`, `bank_id`) → *Question: Is the weekly cadence holding?*
+
+**5. Experiment & Evaluation Design**
+You cannot run A/B tests on three pilots. Treat the 4-month timeline as a single longitudinal cohort.
+*   **Pre-commitment:** Define success before the month ends. Example: "Pilot succeeds if Week-4 Return Rate > 60% AND median TTE decreases by 10% month-over-month."
+*   **Guardrail:** Monitor `implementation_blocker_tickets` per bank. If speed increases but support tickets spike, the "win" is false.
+
+**6. This-Week Steps**
+1.  **Instrument:** Deploy the `report_export_completed` event with a high-resolution timer immediately. Without this, TTE is `UNVERIFIED`.
+2.  **Baseline Survey:** Send a one-question survey to the three pilot contacts: "Approximately how many minutes did your last manual compliance report take?" Record this as your qualitative baseline.
+3.  **Dashboard Build:** Create a single view showing WAR and median TTE per bank. Do not include DAU or cumulative signups.
+
+**Note on Data Privacy:** Ensure the `user_id` used for cohorting is pseudonymous and stable across sessions; route all PII handling and consent logic to your privacy compliance protocol (`privacy-compliance.md`). Do not use raw employee names or emails in analytics storage.
+
+**Note on Leadership Presentation:** When presenting to German leadership, explicitly state that benchmarks are derived from the pilot's own trajectory, not external market data, to maintain analytical integrity.

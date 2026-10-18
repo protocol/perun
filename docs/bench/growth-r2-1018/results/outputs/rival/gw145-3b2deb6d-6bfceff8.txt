@@ -1,0 +1,46 @@
+### SkyDrop Customer-Facing Telemetry Plan
+
+**Objective:** Provide transparency during the delivery window while minimizing cognitive load and server strain.
+**Assumption Challenge:** While the "final approach" is critical operationally, customers primarily care about *arrival certainty* and *accessibility*, not flight mechanics. Displaying raw telemetry (e.g., "adjusting altitude," "wind compensation") creates noise and anxiety.
+
+#### 1. Prioritized Event List (Frontend Display)
+
+Only these events should trigger a user-facing status update or push notification. All other telemetry should remain internal.
+
+| Priority | Event Name (Internal) | Customer-Facing Status | Trigger Logic | Value Provided |
+| :--- | :--- | :--- | :--- :--- |
+| **P0** | `delivery_started` | **Drone Dispatched** | Drone leaves hub geofence. | Confirms the process has begun; sets expectation. |
+| **P0** | `eta_calculated` | **Arriving by [Time]** | Initial route calculation complete. | Allows user to plan immediate availability. |
+| **P1** | `approaching_zone` | **Drone Nearby (2 mins)** | Enters 1km geofence around drop-off. | Prompts user to clear the landing area/watch sky. |
+| **P2** | `final_approach_active` | **Descending for Landing** | Enters 200m radius; descent initiated. | Reassures user that landing is imminent (the "3-minute" window). |
+| **P3** | `payload_released` | **Package Dropped** | Winch release confirmed + weight sensor change. | Definitive proof of delivery completion. |
+| **P4** | `departure_confirmed` | **Drone Departed** | Drone ascends past safety altitude post-drop. | Signals the interaction is fully complete; user can retrieve package. |
+| **P5** | `exception_hold` | **Delivery Paused** | Unexpected hover >30s due to obstacle/weather. | Manages expectations during delays; prevents "is it stuck?" anxiety. |
+| **P6** | `delivery_failed_return` | **Returning to Hub** | Abort trigger pulled; returning to base. | Critical failure transparency; initiates support workflow. |
+
+**Excluded (Internal Noise):** Battery percentage fluctuations (unless critical), minor route corrections, wind speed adjustments, sensor calibration checks, "hovering" (unless prolonged).
+
+#### 2. Determining Anxiety vs. Reassurance
+
+To validate if an update causes anxiety, implement the following measurement framework before the Seattle pilot scales:
+
+**A. The "Silence is Golden" Metric**
+*   **Hypothesis:** More updates ≠ better experience.
+*   **Measurement:** Track **Support Ticket Correlation**. If a specific status update (e.g., `exception_hold`) is followed by a support ticket or app crash report within 2 minutes at a rate >5%, the messaging is causing panic rather than reassurance.
+*   **Action:** If correlation is high, suppress the specific technical detail and replace with a generic "Delayed slightly" or remove the update entirely if the drone self-corrects quickly.
+
+**B. Session Dwell Time & Refresh Rate**
+*   **Hypothesis:** Anxious users refresh constantly or stare at the screen without leaving.
+*   **Measurement:** Monitor **API Call Frequency** per user session during the `final_approach` phase.
+    *   *Healthy:* User opens app, sees "Descending," closes app to go outside.
+    *   *Anxious:* User refreshes the status feed >3 times in 1 minute.
+*   **Action:** High refresh rates indicate the current status text is ambiguous or frightening. A/B test softer language (e.g., change "Obstacle Detected" to "Navigating around temporary obstacle").
+
+**C. Post-Delivery Sentiment Pulse**
+*   **Implementation:** Add a single-tap survey immediately after `departure_confirmed`: "How clear was the delivery status?" (Clear / Confusing).
+*   **Analysis:** Cross-reference "Confusing" votes with the specific sequence of events that user received. If users who saw `exception_hold` vote "Confusing" 40% more often than those who didn't, the event logic needs tuning (e.g., only show if delay >60 seconds).
+
+**Recommendation for Dev Team:** Build the frontend to consume a "Customer Status" stream, not the raw telemetry stream. Create a middleware layer that filters internal noise and only pushes the P0-P6 events listed above to the client. This reduces server load and ensures a consistent, calm user narrative.
+
+*Note: Ensure all time estimates include a buffer; it is better to under-promise arrival time than to update a countdown timer repeatedly.*
+*For the Seattle pilot, log all internal telemetry but only display the P0-P4 events initially; introduce P5 (exceptions) only if operational data shows frequent unplanned hovers.*

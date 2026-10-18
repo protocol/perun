@@ -1,0 +1,25 @@
+**Strategy for Data Cleansing and Validation: DailyBrief News Outage**
+
+**1. Isolate and Quarantine Corrupted Records**
+Do not attempt to impute or "fix" the corrupted session data immediately. Imputation introduces statistical bias that will obscure true user behavior, violating the requirement for accurate editorial reporting. Instead, execute a hard filter to identify all user sessions overlapping the outage window (Thursday, 02:00–06:00 UTC). Tag these records as `OUTAGE_AFFECTED` and exclude them entirely from the primary weekly engagement and retention calculations. This creates a "clean" dataset representing verified user behavior, even if the total volume is lower.
+
+**2. Segment Impact by Time Zone and Cohort**
+To confirm the demographic hypothesis without relying on corrupted data, analyze the `OUTAGE_AFFECTED` user IDs against their static profile attributes (e.g., registered time zone, primary language) which remain intact. Calculate the percentage of affected users falling into the European time zone versus other regions. Report this as a separate "Impact Scope" metric (e.g., "30% of active users were affected; 85% of those are EU-based"). This validates the editorial team's assumption about the geographic concentration of the error without contaminating the performance metrics with guessed data.
+
+**3. Recalculate Core Metrics with Explicit Exclusions**
+Generate the weekly report using only the clean dataset. Clearly label the metrics as "Excluding Outage Window Artifacts."
+*   **Retention:** Calculate retention based solely on users with valid pre- and post-outage activity. Do not count users with corrupted sessions as "churned."
+*   **Session Duration:** Compute averages excluding the corrupted sessions.
+*   **Contextual Footnote:** Append a specific variance note stating: "Metrics exclude ~30% of active users due to data corruption between 02:00–06:00 UTC Thursday. True values are likely higher by a factor proportional to the excluded EU morning cohort."
+
+**4. Sensitivity Analysis (The "Bounds" Approach)**
+Instead of inventing missing values, provide a range for the Editor-in-Chief. Calculate the "Best Case" scenario by assuming the excluded users behaved exactly like the average of their specific time-zone cohort in the clean data. Calculate the "Worst Case" by assuming they had zero engagement. Present the final performance review as a range (e.g., "Retention is between X% and Y%") rather than a single fabricated number. This maintains integrity while showing the potential magnitude of the loss.
+
+**5. Validation Gate for Engineering**
+Before finalizing the report, the data engineering team must verify that the `OUTAGE_AFFECTED` flag captures 100% of the corrupted sessions by spot-checking a random sample of IDs known to have logged in during the outage. Ensure no "ghost sessions" (zero-duration or impossible timestamps) remain in the clean dataset.
+
+**Deliverable for Leadership:**
+Present the "Clean Baseline" metrics alongside the "Impact Scope" and "Sensitivity Range." Explicitly state that no imputation was performed to avoid misleading content performance analysis. The decision to exclude rather than estimate ensures the monthly review reflects *verified* behavior, protecting editorial strategy from technical artifacts.
+
+Note: This approach prioritizes data integrity over completeness, preventing false negatives in retention analysis.
+Future instrumentation should include real-time data quality alerts to flag session corruption immediately upon occurrence.

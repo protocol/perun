@@ -1,0 +1,40 @@
+### Diagnostic Plan: Contact Form Funnel Leakage
+
+To isolate the 18% drop in scheduled viewings, instrument and query the following specific data slices. Do not rely on aggregate conversion rates; the leakage is hidden in the step-by-step drop-off.
+
+**1. Define the Micro-Funnel Events**
+Ensure your analytics track these four distinct events with timestamps and `user_id` (pseudonymous):
+*   `contact_form_started`: User clicks "Schedule Viewing."
+*   `phone_number_entered`: User submits the phone field.
+*   `verification_code_requested`: User clicks "Send Code" (post-update step).
+*   `verification_success`: User enters valid code.
+*   `viewing_scheduled`: Final submission success.
+
+**2. Primary Comparison: Pre- vs. Post-Update Cohorts**
+Compare the conversion rate of each step above for two time-bound cohorts:
+*   **Baseline Cohort:** 4 weeks prior to the update.
+*   **Current Cohort:** The 4 weeks since the update.
+*   *Action:* Calculate the % drop-off between *each* consecutive step for both cohorts. The step with the statistically significant increase in drop-off in the Current Cohort is your friction point. If the drop spikes specifically at `verification_code_requested` → `verification_success`, the hypothesis is confirmed.
+
+**3. Device Segmentation (Mobile vs. Desktop)**
+Slice the data from step #2 by `device_type`.
+*   Since mobile is 60% of traffic, compare the drop-off rates for Mobile vs. Desktop in the Current Cohort.
+*   *Hypothesis Check:* If mobile drop-off at the verification step is >2x higher than desktop, the UI implementation of the verification input on small screens is the primary culprit.
+
+**4. Error Rate Analysis**
+Query the `verification_failure` event (or form validation errors) grouped by:
+*   **Error Type:** "Invalid format," "Code expired," "SMS not delivered," or "Network timeout."
+*   **Carrier/Region:** If possible, slice by mobile carrier to rule out SMS delivery failures specific to certain providers in Dubai.
+*   *Action:* A spike in "SMS not delivered" or "Code expired" indicates a backend or vendor issue, not a UX design issue.
+
+**5. Time-to-Complete Latency**
+Measure the average time delta between `verification_code_requested` and `verification_success`.
+*   *Comparison:* Compare this latency pre- and post-update, split by device.
+*   *Signal:* A significant increase in time-to-complete on mobile suggests users are struggling to switch apps to read the SMS or the input field is difficult to interact with, leading to abandonment before failure even occurs.
+
+**Immediate Next Steps for Sprint Planning:**
+1.  **Engineering:** Verify logs for SMS delivery success rates from the vendor for the last 4 weeks to rule out external outages.
+2.  **Product/Design:** If mobile drop-off is confirmed at the code entry step, prototype a "click-to-call" verification or auto-fill optimization for the next sprint.
+3.  **Analytics:** Build a real-time dashboard for the five events listed above to monitor the fix immediately upon deployment.
+
+*Note: Do not assume the drop is uniform; the data will likely show the leak is concentrated entirely on mobile at the code-entry step. Avoid adding more fields until this specific friction is resolved.*

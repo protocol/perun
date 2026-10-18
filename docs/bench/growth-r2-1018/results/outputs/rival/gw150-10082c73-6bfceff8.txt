@@ -1,0 +1,50 @@
+# NeonQuest Analytics Funnel Design
+
+## Core Engagement & Monetization Funnel
+
+Track these sequential events to measure drop-off before first purchase:
+
+| Step | Event Name | Critical Properties | Trigger Condition |
+|------|------------|---------------------|-------------------|
+| 1 | `app_opened` | session_id, network_status (online/offline), install_date | App foregrounded |
+| 2 | `tutorial_started` | level_id, device_model | First game action after open |
+| 3 | `tutorial_completed` | duration_seconds, deaths_count | Tutorial end screen reached |
+| 4 | `core_loop_entered` | game_mode, energy_remaining | First match/puzzle started |
+| 5 | `level_completed` | level_id, stars_earned, duration_seconds, share_prompt_shown | Level success screen |
+| 6 | `social_share_attempted` | platform (Line/Twitter), share_type, network_status | Share button tapped |
+| 7 | `social_share_completed` | platform, share_type | OS share callback confirmed |
+| 8 | `shop_viewed` | items_displayed, currency_balance | Store screen opened |
+| 9 | `purchase_initiated` | item_id, price_jpy, currency_type | Checkout button tapped |
+| 10 | `purchase_completed` | item_id, price_jpy, transaction_id, receipt_validated | Payment confirmed |
+
+## Handling Data Gaps & Session Volatility
+
+**1. Redefine "Session" for Intermittent Play**
+Do not rely on time-based session windows (e.g., 30-minute gaps). Instead:
+- Use `app_opened` as the anchor event for every foregrounding, regardless of duration.
+- Tag each event with a `session_id` generated on open. If the app closes and reopens within 5 minutes, retain the same `session_id` to stitch short bursts together.
+- For offline play: Queue events locally with a `network_status: offline` property. Flush to analytics when connectivity returns, preserving original timestamps.
+
+**2. Distinguish Churn from Paused Play**
+- **False Churn Risk:** A user playing 2-minute bursts hourly looks like churn if you only track daily active users (DAU).
+- **Solution:** Create a "Heartbeat" metric. Track `core_loop_entered` frequency per user over 7-day rolling windows. If a user triggers this event at least once every 48 hours, classify as "Active Burst Player," not churned.
+- **Offline Attribution:** If a user completes levels offline, attribute the `level_completed` event to the last known `app_opened` source. Do not create a new acquisition source upon reconnection.
+
+**3. Social Sharing as Primary Growth Driver**
+Since you assume social drives organic growth more than ads:
+- Make `social_share_completed` a primary conversion event in GA4/Mixpanel, equal weight to `purchase_completed`.
+- Track the **viral coefficient**: Count how many new `app_opened` events occur within 24 hours of a `social_share_completed` event from the same device ID (using deep link attribution).
+- Segment users by "Sharers" vs. "Non-Sharers" immediately after `tutorial_completed`. Compare their Day-1 and Day-7 retention rates to validate your assumption.
+
+## Critical Metrics for Tokyo Team
+
+1.  **Tutorial Drop-off Rate:** (% who start `tutorial_started` but never trigger `tutorial_completed`).
+2.  **Burst Engagement Score:** Average `core_loop_entered` events per user per day (captures short sessions).
+3.  **Share-to-Install Ratio:** New users attributed to `social_share_completed` events / Total shares.
+4.  **First Purchase Latency:** Time between `app_opened` (first ever) and `purchase_completed`.
+5.  **Offline Play Volume:** % of `level_completed` events with `network_status: offline`.
+
+## Implementation Note
+Ensure your SDK (Firebase/GTM) is configured for "offline persistence" to automatically queue events. Test the `session_id` stitching logic specifically on unstable networks (simulate 3G/flight mode) before June 1st to ensure short bursts do not fragment the user journey.
+
+*Data gaps from offline play must be treated as delayed reporting, not missing data. Validate that timestamps remain accurate after local queue flushing.*

@@ -1,0 +1,58 @@
+# GreenFlow Beta Tracking Plan
+
+**Objective:** Distinguish between technical connectivity failures and UI usability friction during the automated schedule setup flow to validate the core retention hypothesis.
+
+**Implementation Window:** Immediate (Target Launch: June 10th)
+**Tools:** GA4 or Mixpanel (Engineering to confirm specific SDK)
+
+## 1. Critical Funnel Events
+Track these sequentially to identify exact drop-off points.
+
+| Event Name | Trigger Point | Essential Properties |
+| :--- | :--- | :--- |
+| `onboarding_started` | User lands on first setup screen. | `user_type` (new/returning), `device_model`, `app_version`, `os_version` |
+| `hardware_pairing_initiated` | User taps "Connect Controller". | `connection_method` (bluetooth/wifi), `hardware_serial_prefix` |
+| `hardware_pairing_failed` | Connection times out or errors. | `error_code`, `failure_stage` (discovery/auth/connect), `signal_strength`, `retry_count` |
+| `hardware_pairing_success` | Controller confirmed connected. | `connection_duration_ms`, `firmware_version` |
+| `schedule_setup_started` | User enters the schedule creation screen. | `entry_point` (onboarding/home), `zones_detected_count` |
+| `schedule_step_viewed` | User views a specific step in the wizard. | `step_name` (e.g., "water_frequency", "duration", "start_time"), `step_number` |
+| `schedule_step_abandoned` | User exits or backs out of a specific step. | `step_name`, `time_spent_on_step_sec`, `last_interaction_element` |
+| `schedule_validation_error` | User submits invalid data. | `field_name`, `error_message`, `input_value_type` |
+| `schedule_created` | **Core Conversion:** Schedule saved successfully. | `schedule_type` (automated/manual), `zones_configured_count`, `total_setup_time_sec`, `is_automated` (boolean) |
+| `first_watering_executed` | Controller actually runs water. | `execution_source` (auto/manual), `completion_status` (success/partial/failed) |
+
+## 2. Diagnostic Properties (Global Context)
+Attach these to *every* event above to enable segmentation between technical and usability issues.
+
+*   **Connectivity Context:** `network_type` (wifi/cellular/offline), `signal_strength_dbm`, `bluetooth_enabled` (boolean).
+*   **User Context:** `user_id` (hashed), `account_creation_date`, `is_beta_tester` (boolean).
+*   **Device Context:** `phone_model`, `os_version`, `app_build_number`.
+*   **Session Context:** `session_id`, `time_since_install_hours`.
+
+## 3. Specific Implementation Logic for Engineering
+
+### Distinguishing Failure Types
+To answer your specific question about **Connectivity vs. Usability**, engineers must implement the following logic:
+
+1.  **Technical Failure Signal:** High volume of `hardware_pairing_failed` with `failure_stage` = "discovery" or "auth" + low `signal_strength_dbm`.
+    *   *Action:* Customer Success proactively contacts users with these error codes to troubleshoot hardware placement or router settings.
+2.  **Usability Friction Signal:** High volume of `schedule_step_abandoned` at a specific `step_name` (e.g., "water_frequency") + high `time_spent_on_step_sec` + no `schedule_validation_error`.
+    *   *Action:* Product team reviews UI copy and complexity for that specific step; assumes the tech works but the user is confused.
+3.  **Validation Friction Signal:** High volume of `schedule_validation_error` on specific `field_name`.
+    *   *Action:* Indicates unclear input requirements or buggy form validation.
+
+### The "48-Hour" Hypothesis Tracking
+To measure your core assumption, create a derived metric in your analytics dashboard:
+*   **Cohort A (Automated):** Users where `schedule_created` (with `is_automated`=true) occurs within 48 hours of `onboarding_started`.
+*   **Cohort B (Manual/None):** Users who do not meet Cohort A criteria.
+*   **Retention Metric:** % of Cohort A vs. Cohort B triggering `app_open` or `first_watering_executed` at Day 30.
+
+## 4. Privacy & Compliance Note
+*   Do **not** send raw email addresses, names, or exact GPS coordinates in event properties.
+*   Hash `user_id` and `hardware_serial` before sending to analytics platforms.
+*   Ensure `error_message` properties do not accidentally capture PII if users type it into free-text fields (none expected in this flow, but verify).
+
+This plan provides the granularity needed to separate "my controller won't connect" (Technical) from "I don't understand how to set the timer" (Usability), allowing targeted interventions before general launch.
+
+*Note: Ensure engineering implements "batching" for offline events so data syncs once connectivity is restored, preventing data loss during the pairing phase.*
+*Review this list with the CTO specifically regarding the `hardware_serial_prefix` property to ensure it aligns with existing device management logs.*

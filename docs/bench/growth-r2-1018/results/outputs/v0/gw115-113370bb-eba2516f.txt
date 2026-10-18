@@ -1,0 +1,32 @@
+### Growth Metrics Strategy for EcoMarket: Distinguishing Signal from Seasonal Noise
+
+To separate genuine growth from seasonal anomalies and diagnose the conversion drop during traffic spikes, you must shift from absolute metrics to **normalized, behavior-based indicators**. Do not rely on raw conversion rates or total traffic as your primary success signals during peak events; these are vanity metrics in this context because they are inherently distorted by the influx of low-intent browsers.
+
+**1. The North Star: "Completed Sustainable Purchases per Active Shopper"**
+Replace "Total Conversion Rate" with **Completed Purchases per Active Shopper** (users who performed a core value action, such as adding an item to the cart or viewing product details). This normalizes for traffic volume. If traffic spikes 400% but this metric remains stable, your platform is handling the load, and the drop in overall conversion is due to user hesitation (browsers vs. buyers). If this metric *also* drops significantly during the spike, you have evidence of a friction point (technical or UX) affecting committed users.
+
+**2. The Diagnostic Funnel: Read Bottom-Up (Retention & Activation First)**
+Do not start by analyzing acquisition traffic. Diagnose the leak in this order:
+*   **Activation (The "Aha" Moment):** Track the % of new visitors who view a product detail page within 2 minutes. If this holds steady during spikes, users are engaging; the drop is later in the funnel.
+*   **Retention of Intent:** Track **Cart-to-Checkout Completion Rate** specifically for users who added items *before* the traffic peak versus those who added *during* the peak.
+    *   *Hypothesis A (Technical):* If the completion rate drops sharply *only* for users acting during the peak latency window, and error logs (from your ops team) correlate with this drop, the cause is likely performance.
+    *   *Hypothesis B (Hesitation):* If the completion rate drops for *both* groups, or if "Time to Checkout" increases without corresponding error spikes, the cause is likely user hesitation or decision paralysis due to perceived scarcity/complexity.
+
+**3. Event Taxonomy: Instrument Only What Answers a Question**
+Stop instrumenting "pageviews." Implement these specific events with pseudonymous user IDs to track sessions across the spike:
+*   `checkout_initiated` (timestamp, latency_ms, user_cohort: pre-peak vs. peak)
+*   `error_encountered` (type: timeout, 5xx, frontend_render)
+*   `cart_abandonment_reason` (if detectable, e.g., exit on shipping page vs. payment page)
+
+**4. Normalization Method: Cohort-Based Baselines**
+Do not compare December 1st directly to November 30th. Compare **Peak Event Cohorts** against **Previous Peak Event Cohorts** (e.g., Earth Day 2024 vs. Earth Day 2023).
+*   Create a "Spike Normalized Score": `(Current Peak Metric / Previous Peak Metric) / (Current Traffic / Previous Traffic)`.
+*   A score near 1.0 indicates performance scaled linearly with traffic (good). A score < 0.8 indicates degradation disproportionate to traffic (bad).
+
+**This Week's Actions:**
+1.  **Define the Core Action:** Agree with Marketing that "Active Shopper" = `product_view` + `add_to_cart`. Update dashboards to show "Conversion per Active Shopper" instead of global conversion.
+2.  **Pre-Commit the Experiment Design:** For the December 1st launch, set a **guardrail metric** of `checkout_error_rate < 2%`. If this trips, infrastructure pauses marketing spend immediately. Do not peek at daily conversion rates; analyze the full event cohort 48 hours post-spike to avoid false positives from early-bird bias.
+3.  **Data Request:** Pull the `cart_to_checkout` completion rate for Earth Day 2024, segmented by users who experienced >2s page load vs. <2s. If the difference is negligible, the issue is user hesitation, not server latency.
+
+*Note: Ensure user IDs used for cohort tracking are pseudonymous and routed to your privacy compliance protocol; do not use raw PII for analytics.*
+*Note: Infrastructure and Marketing must share a single definition of "Peak Window" to align the data slices.*

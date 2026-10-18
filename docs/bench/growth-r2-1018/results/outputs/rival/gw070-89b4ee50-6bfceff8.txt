@@ -1,0 +1,42 @@
+# VoiceHub Voice Interaction Tracking Schema
+
+## Naming Convention Standard
+Adopt the **Object-Action** format using lowercase letters and underscores. All voice room interactions must use the root object `room` to eliminate the current inconsistency between `join_room`, `enter_channel`, and `start_session`.
+
+**Rule:** `room_[action]`
+
+## Core Event List
+
+Implement these four events to cover the full lifecycle of a voice interaction. This structure supports both room-level aggregation (total room activity) and user-level analysis (individual session duration) via properties.
+
+| Event Name | Trigger Description | Required Properties |
+| :--- | :--- | :--- |
+| **`room_viewed`** | User lands on the room details page or preview screen but has not yet joined audio. | `room_id`, `room_type` (public/private), `host_user_id`, `participant_count`, `is_featured` (boolean) |
+| **`room_joined`** | User successfully connects to the voice audio stream. Replaces `enter_channel` and `start_session`. | `room_id`, `room_type`, `join_method` (direct/link/search), `user_role` (host/speaker/listener), `device_os`, `app_version` |
+| **`room_action`** | User performs a significant interaction *while* inside the room. Use the `action_type` property to specify. | `room_id`, `action_type` (mute/unmute/speak/raise_hand/send_gift), `target_user_id` (if applicable), `duration_in_room_sec` (cumulative time since join) |
+| **`room_left`** | User disconnects from the voice stream or closes the app while in the room. | `room_id`, `room_type`, `total_duration_sec` (session length), `leave_reason` (manual/disconnect/kicked), `connection_quality_score` (1-5) |
+
+## Property Definitions & Hierarchy
+
+To address your hierarchy concerns regarding public vs. private rooms and duration tracking, apply the following logic to the properties above:
+
+### 1. Room Hierarchy (`room_type`)
+Do not create separate events for public and private rooms. Instead, use the `room_type` property on every event.
+*   **Values:** `public`, `private`, `vip_only`
+*   **Benefit:** Allows you to filter funnel accuracy by room type in your analytics tool without duplicating event definitions.
+
+### 2. Duration Tracking Strategy
+To satisfy both "room level" and "user level" needs without conflicting data:
+*   **User Level (Session Duration):** Calculate this in your analytics platform by subtracting the timestamp of `room_joined` from `room_left` for a specific `user_id` + `room_id` pair.
+*   **Room Level (Total Traffic):** Sum the `total_duration_sec` property sent in the `room_left` event across all users for a specific `room_id`.
+*   **In-Stream Context:** The `room_action` event includes `duration_in_room_sec`. This allows you to analyze *when* users interact (e.g., "Do users send gifts only after being in the room for >2 minutes?") without waiting for the session to end.
+
+## Implementation Notes for Mobile Squads
+1.  **Deprecation:** Immediately flag `enter_channel`, `start_session`, and any variation of `join` not matching `room_joined` as deprecated in the codebase.
+2.  **Consistency:** Ensure `room_id` is a persistent string identifier generated at room creation, not a transient session ID.
+3.  **Timing:** The `room_left` event must fire before the app terminates or the view controller is dismissed to ensure duration accuracy.
+
+This schema unifies your iOS and Android logs, ensuring that the 20% of users currently affected by inconsistent naming will be correctly attributed in your September 15 launch funnels.
+
+*Ensure your data pipeline validates that `room_joined` always precedes `room_left` for a valid session ID to prevent orphaned start events.*
+*Coordinate with the backend team to ensure `connection_quality_score` is calculated client-side before the `room_left` event fires.*

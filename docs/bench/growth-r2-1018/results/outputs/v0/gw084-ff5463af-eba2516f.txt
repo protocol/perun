@@ -1,0 +1,39 @@
+# Measurement Plan: HomeVoice Kitchen Command Beta
+
+**North Star Metric:** Weekly Active Users (WAU) completing a kitchen task via voice without a manual override within 24 hours.
+*Why:* This measures realized value (task completion) rather than vanity metrics like total commands issued, which rise even when the feature fails and users retry repeatedly.
+
+### 1. Event Taxonomy (Answering Named Questions)
+Instrument only the following events. Each includes a `session_id` and a `pseudonymous_user_id` (stable per device, not linked to personal identity).
+
+| Event Name | Question Answered | Properties to Capture |
+| :--- | :--- | :--- |
+| `voice_command_attempted` | Are users trying to use the feature? | `intent_type` (timer/temp/mode), `appliance_type`, `timestamp` |
+| `voice_command_success` | Did the system understand and execute immediately? | `latency_ms`, `confidence_score` (internal model score) |
+| `voice_command_retry` | **Failure Mode:** Is the user frustrated/retrying? | `previous_intent_type`, `time_since_last_attempt`, `retry_count_in_session` |
+| `manual_override_detected` | **Silent Failure:** Did the user give up and use the button? | `time_since_last_voice_attempt`, `action_type` (e.g., manual timer set) |
+| `session_abandonment` | Did the user stop trying entirely? | `last_intent_type`, `duration_since_last_success` |
+
+**The Identifier Seam:** Use a device-generated UUID for the `pseudonymous_user_id` to track cohorts across sessions. Do not log voice audio transcripts or PII. Route all data retention limits and consent checks to `privacy-compliance.md`.
+
+### 2. Reading the Funnel (Bottom-Up)
+Do not prioritize acquisition (number of beta signups). Diagnose in this order:
+1.  **Retention/Utility:** Of users who attempted a command, how many returned to use it successfully in Week 2? If low, the core value proposition is missing.
+2.  **Activation:** What percentage of first-time attempts result in `voice_command_success`? If low, the "aha" moment is blocked.
+3.  **Failure Analysis:** Calculate the **Retry Rate** (`retries / attempts`) and **Fallback Rate** (`manual_overrides / attempts`). A high fallback rate indicates silent failures where logs currently show nothing.
+
+### 3. Stage Awareness (MVP)
+Since this is an MVP beta (5,000 users), do not instrument "everything." Focus strictly on the **core action** (kitchen control) and the **primary failure mode** (silent fallback to manual). Avoid measuring peripheral features until the core loop is stable.
+
+### 4. Privacy & Compliance Guardrails
+*   **No Audio Storage:** Logs must contain only metadata (intent, timing, status), never raw audio or transcribed text.
+*   **Pseudonymity:** The `pseudonymous_user_id` must be rotatable by the user via a factory reset or settings toggle.
+*   **Data Minimization:** Events are dropped if they do not map to the five defined events above.
+
+### This-Week Steps
+1.  **Engineering:** Implement the `manual_override_detected` event immediately; this is the critical signal for "silent failure" currently missing from logs.
+2.  **Privacy Officer:** Review the `pseudonymous_user_id` generation logic to ensure it cannot be reverse-engineered to a specific household address or account email.
+3.  **Product:** Define the baseline "Fallback Rate" from the first 48 hours of beta; if >15%, halt further rollout expansion until latency or recognition accuracy is improved.
+
+*Note: No benchmarks for "good" retry rates are asserted here; success is defined by improvement against your own Day 1 baseline.*
+*All metric values will remain `UNVERIFIED` until the firmware update ships and real data flows into your analytics pipeline.*

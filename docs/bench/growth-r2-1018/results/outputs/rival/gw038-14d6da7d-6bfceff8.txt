@@ -1,0 +1,48 @@
+# Measurement Plan: Bill Split Feature Pilot (Limited Tracking)
+
+Given the constraint of tracking only the final confirmation screen, we must shift from **funnel analysis** to **proxy inference** and **qualitative triangulation**. We cannot measure *where* users drop off, but we can infer *if* they are struggling and *why* through indirect signals.
+
+### 1. Define Success via Proxy Metrics
+Since we cannot track intermediate steps, calculate these rates using the available entry/exit data and external proxies:
+
+*   **Completion Rate (Macro):** 300 completions / 5,000 exposed users = **6%**.
+    *   *Action:* Benchmark this against similar legacy feature adoption rates. If historical averages are 2-4%, the feature is likely succeeding despite friction. If averages are 15%+, significant friction exists.
+*   **Support Ticket Ratio (Friction Proxy):**
+    *   Tag all support tickets containing "split bill," "select transactions," or "friend payment."
+    *   *Metric:* `(Tickets related to Split Bill) / 300 Completers` and `(Tickets) / 4,700 Non-Completers`.
+    *   *Insight:* A high ratio among non-completers suggests blocking friction. A high ratio among completers suggests the flow is usable but confusing (high cognitive load).
+*   **Time-to-Complete (If available in logs):**
+    *   If the core system logs session start/end times even without custom events, calculate the average duration for the 300 successful users.
+    *   *Insight:* Outliers (extremely long durations) indicate users struggling with the untracked selection step before finally succeeding.
+
+### 2. Qualitative Triangulation (The "Why")
+To satisfy the risk team's need for confidence regarding intuitiveness, deploy these immediate low-code interventions:
+
+*   **Exit-Intent/Post-Attempt Survey (High Priority):**
+    *   Trigger a one-question survey *only* on the confirmation screen for the 300 completers: *"How easy was it to select the transactions you wanted to split?"* (Scale 1-5).
+    *   *Crucial Add-on:* If technically feasible, trigger a passive survey on the *previous* page if the user idles for >30 seconds (indicating selection struggle), or capture a "cancel" click if that basic navigation is trackable.
+    *   *Alternative:* Email a 3-question survey to a random sample of the 4,700 non-completers 24 hours after exposure: *"Did you attempt to use the new Split Bill feature? If yes, what stopped you?"*
+*   **Session Recordings (Targeted Sampling):**
+    *   Do not rely on users to report issues. Configure your session recording tool (e.g., FullStory, Hotjar) to capture **100% of sessions** where the user lands on the transaction history page during the pilot window.
+    *   *Analysis Strategy:* Manually review 50 recordings of completers and 50 of non-completers (identified by lack of confirmation page view). Look specifically for "rage clicks" or rapid back-and-forth navigation during the selection phase. This provides visual proof of friction without needing code injection.
+*   **Customer Support Scripting:**
+    *   Immediately update support scripts to ask: *"At what specific step did you stop trying to split the bill?"* for any related call. Log this structured data daily.
+
+### 3. Risk Assessment & Recommendation Framework
+Present findings to the risk team using this structure:
+
+| Signal | Green Light (Rollout) | Yellow Light (Iterate) | Red Light (Pause) |
+| :--- | :--- | :--- | :--- |
+| **Completion Rate** | > Historical Benchmark | Within 10% of Benchmark | < 50% of Benchmark |
+| **Support Volume** | < 1% of users | 1-3% of users | > 3% of users |
+| **Survey Score** | > 4.0/5.0 ease | 3.0 - 4.0/5.0 | < 3.0/5.0 |
+| **Session Evidence** | Smooth selection flows | Minor hesitation | Rage clicks/Abandonment |
+
+**Immediate Next Steps:**
+1.  **Today:** Configure session recording filters for the transaction history URL.
+2.  **Tomorrow:** Draft and approve the post-completion micro-survey and the email survey for non-completers.
+3.  **Daily:** Aggregate support ticket tags and calculate the daily completion run-rate.
+
+By combining the hard 6% completion number with qualitative evidence from recordings and targeted surveys, you can confidently argue whether the drop-off is due to lack of interest or unintuitive design, satisfying the risk team's requirement for behavioral assessment.
+
+*Note: Ensure all survey and recording practices comply with SecureBank's existing privacy consent frameworks before deployment.*

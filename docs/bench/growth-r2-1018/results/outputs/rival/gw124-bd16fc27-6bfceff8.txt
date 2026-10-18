@@ -1,0 +1,47 @@
+# Data Integrity Validation & Cleanup Plan
+
+### 1. Scope Assessment & Baseline Metrics
+Before applying any cleaning logic, quantify the corruption to establish a baseline.
+*   **Conflict Rate:** Calculate the percentage of trips where `user_id` differs between driver/rider tables but `phone_number` or `device_id` matches. Target: Confirm the ~8% flag.
+*   **Ambiguity Rate:** Measure instances where one `device_id` or `phone_number` maps to >2 distinct `user_ids`. High ambiguity indicates shared devices (e.g., family plans) rather than data errors.
+*   **Trip Context Loss:** Identify trips where merging would orphan a record (e.g., a rider trip linked to a deleted duplicate ID with no valid foreign key).
+
+### 2. Matching Algorithm Validation Strategy
+Do not run cleaning logic on the full dataset until validated on a gold-standard sample.
+
+**Step A: Create a Ground Truth Sample**
+*   Manually review a stratified random sample of 500 conflicting records (covering high-frequency users, new signups, and old accounts).
+*   Label each pair as "True Match" (same human), "False Match" (shared device/family), or "Unresolvable."
+
+**Step B: Define Accuracy Metrics**
+Evaluate your matching algorithm (e.g., Phone + Device + Email fuzzy match) against the Ground Truth using:
+*   **Precision (Critical):** Of all records the algorithm marks as "Same User," what % are actually the same human?
+    *   *Threshold:* Must exceed **99.5%**. False positives merge distinct humans, corrupting lifetime value (LTV) and loyalty eligibility.
+*   **Recall:** Of all actual duplicate humans, what % did the algorithm catch?
+    *   *Threshold:* Aim for >90%, but prioritize Precision. Missed duplicates are less dangerous than merged strangers.
+*   **F1 Score:** Harmonic mean of Precision and Recall. Use this to tune weighting between phone vs. device signals.
+
+**Step C: Shadow Run**
+*   Run the algorithm on 10% of historical data without applying changes.
+*   Compare aggregate metrics (total trips, unique users, average trip length) between the "cleaned" view and raw view. Deviations >1% require logic review.
+
+### 3. Safe Cleanup Execution
+*   **Soft Merge Strategy:** Do not overwrite or delete `user_ids`. Create a `canonical_user_id` table mapping old IDs to new master IDs. Keep original records intact for auditability.
+*   **Context Preservation:** Ensure trip tables reference the `canonical_user_id` while retaining the original `user_id` in a `source_user_id` column.
+*   **Rollback Capability:** The mapping table must allow instant reversion to the pre-clean state if downstream metrics break.
+
+### 4. Post-Cleanup Monitoring Metrics
+Monitor these daily for 14 days post-launch to detect introduced biases:
+*   **Cohort Stability:** Compare Week-over-Week retention rates for cohorts created before vs. after cleanup. Sudden jumps indicate artificial inflation.
+*   **Duplicate Trip Rate:** Monitor for trips appearing multiple times in aggregated views due to mapping errors. Target: 0%.
+*   **Loyalty Eligibility Drift:** Track the % of users qualifying for the loyalty program. If this shifts >2% without organic growth, the merge logic likely altered tenure or ride-count calculations.
+*   **Device/Phone Collision Rate:** Post-cleanup, the ratio of Users to Devices/Phones should normalize. A spike suggests over-aggressive merging.
+
+### 5. Risk Assessment Summary for CTO
+*   **Primary Risk:** Merging distinct users (False Positives) inflates LTV and grants undeserved loyalty rewards.
+*   **Mitigation:** Enforce a 99.5% Precision threshold on the validation sample before full execution.
+*   **Acceptable Error Rate:** <0.5% false merge rate; <5% missed duplicate rate.
+*   **Go/No-Go Criteria:** Proceed only if the Ground Truth sample validation meets precision thresholds and the Shadow Run shows <1% variance in aggregate trip volumes.
+
+*Note: Delay the loyalty launch if the Ground Truth sample reveals >1% false positive rates, as financial liability outweighs schedule pressure.*
+*Ensure the data engineering team documents the specific weighting logic used for device vs. phone matching for future audit.*

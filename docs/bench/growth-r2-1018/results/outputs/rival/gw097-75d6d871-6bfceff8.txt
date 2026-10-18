@@ -1,0 +1,64 @@
+# DriveSafe Voice Command Tracking Specification
+
+## 1. Core Events & Properties
+
+Log the following events to the data layer. Do **not** record audio content, transcriptions, or PII.
+
+### Event: `voice_session_started`
+*Triggered when the user activates the voice interface (button press or wake word).*
+*   `session_id`: Unique UUID for the interaction sequence
+*   `trigger_method`: `button` | `wake_word`
+*   `vehicle_speed_kph`: Numeric (context for noise/safety)
+*   `ambient_noise_level`: Decibel estimate (if available from mic metadata)
+*   `connection_quality`: `strong` | `weak` | `offline`
+
+### Event: `voice_attempt_made`
+*Triggered when the user speaks a command after activation.*
+*   `session_id`: Links to `voice_session_started`
+*   `attempt_number`: Integer (1, 2, 3...) within the session
+*   `command_category`: `navigation` | `media` | `climate` | `phone` (Classified locally, no text stored)
+*   `duration_seconds`: Length of speech input
+
+### Event: `voice_result_received`
+*Triggered immediately after the system processes the attempt.*
+*   `session_id`: Links to session
+*   `attempt_number`: Matches the attempt
+*   `execution_status`: `success` | `failure_no_match` | `failure_timeout` | `failure_system_error`
+*   `confidence_score`: 0.0–1.0 (System confidence in the match)
+*   `latency_ms`: Time from speech end to action start
+
+### Event: `voice_session_ended`
+*Triggered when the user dismisses the interface or 30s of inactivity passes.*
+*   `session_id`: Links to session
+*   `total_attempts`: Integer count of attempts in this session
+*   `final_outcome`: `completed_success` | `abandoned_by_user` | `system_error_stop`
+*   `fallback_action_taken`: `manual_touch_used` | `none` (Did they touch the screen immediately after?)
+
+## 2. Derived Metrics & Analysis Structure
+
+Compute these metrics daily. Do not calculate rates by dividing full-period totals by partial windows; ensure numerators and denominators cover identical closed timeframes.
+
+### A. Accuracy Metrics
+*   **First-Attempt Success Rate**: % of sessions where `attempt_number` = 1 and `execution_status` = `success`.
+    *   *Target*: >95% (Based on your <5% failure threshold).
+*   **Session Success Rate**: % of sessions where `final_outcome` = `completed_success`.
+    *   *Insight*: Measures if users eventually get what they want, even if it takes retries.
+
+### B. Frustration Proxies
+*   **Retry Rate**: Average `total_attempts` per session for failed first attempts.
+    *   *Threshold*: >2.5 attempts indicates high friction.
+*   **Abandonment Rate**: % of sessions where `final_outcome` = `abandoned_by_user`.
+*   **Fallback Ratio**: % of voice sessions followed immediately by a `manual_touch` event (<5 seconds).
+    *   *Insight*: High ratios suggest users lose trust and revert to dangerous manual inputs.
+
+### C. Environmental Impact
+*   **Failure by Noise/Speed**: Cross-tabulate `execution_status` against `ambient_noise_level` and `vehicle_speed_kph`.
+    *   *Goal*: Identify specific real-world conditions where performance drops below the 5% threshold.
+
+## 3. Implementation Rules
+1.  **Privacy**: Strictly forbid logging raw audio, text transcripts, or user IDs. Use hashed device IDs only.
+2.  **Naming**: Use lowercase with underscores for all event names and properties.
+3.  **Validation**: Before March release, validate that `session_id` correctly links attempts to outcomes in 100% of test cases.
+4.  **Consent**: Ensure events only fire if the user has opted into "Product Improvement" data collection.
+
+This structure isolates accuracy from persistence, allowing you to distinguish between a system that never works and one that works but requires too many tries.

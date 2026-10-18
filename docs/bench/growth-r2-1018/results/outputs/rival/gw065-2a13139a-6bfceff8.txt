@@ -1,0 +1,56 @@
+# BazaarLink Marketplace Health Tracking Plan
+
+## Overview
+To move beyond "bookings" as a vanity metric, this plan tracks the full lifecycle of a transaction to identify friction, predict disputes, and measure trust. The goal is to distinguish between **high-quality matches** (completed, undisputed) and **low-quality matches** (cancelled, disputed, or off-platform).
+
+## Core Events & Properties
+
+### 1. Search & Discovery (Provider Side Visibility)
+*Track if users are finding relevant providers or struggling.*
+| Event Name | Trigger | Key Properties |
+| :--- | :--- | :--- |
+| `search_performed` | User submits search query | `query_text`, `location`, `category`, `results_count` |
+| `provider_viewed` | User clicks a provider profile | `provider_id`, `provider_verification_status`, `rating`, `distance` |
+| `contact_button_clicked` | User clicks "Contact" or "Message" | `provider_id`, `location` (funnel drop-off point) |
+
+### 2. Communication & Intent (The "Black Box")
+*Crucial for detecting off-platform leakage and pre-booking friction.*
+| Event Name | Trigger | Key Properties |
+| :--- | :--- | :--- |
+| `message_sent` | User sends a message in-app | `provider_id`, `message_length`, `contains_phone_number` (boolean) |
+| `phone_number_revealed` | User clicks to reveal contact info | `provider_id`, `time_since_view` |
+| `booking_request_sent` | User submits a booking request | `provider_id`, `requested_date`, `service_type`, `price_quoted` |
+
+### 3. Booking Lifecycle (Status Changes)
+*Replace the single "booking" event with a state machine to track quality.*
+| Event Name | Trigger | Key Properties |
+| :--- | :--- | :--- |
+| `booking_confirmed` | Provider accepts request | `booking_id`, `time_to_confirm`, `price_final` |
+| `booking_cancelled` | Either party cancels | `booking_id`, `cancelled_by` (customer/provider), `cancellation_reason`, `time_since_confirm` |
+| `service_started` | Provider marks job as started | `booking_id`, `actual_start_time` |
+| `service_completed` | Customer confirms completion | `booking_id`, `actual_duration`, `final_price_paid` |
+
+### 4. Trust & Quality Signals
+*Direct indicators of marketplace health and dispute risk.*
+| Event Name | Trigger | Key Properties |
+| :--- | :--- | :--- |
+| `dispute_raised` | User flags an issue | `booking_id`, `dispute_type` (no-show, quality, pricing), `raised_by` |
+| `review_submitted` | User leaves a rating | `booking_id`, `rating_score`, `review_text_length`, `mentions_off_platform` (boolean) |
+| `provider_blocked` | User blocks a provider | `provider_id`, `reason` |
+
+## Critical Derived Metrics for Operations
+
+Do not just count events; calculate these rates to inform your verification process:
+
+1.  **Off-Platform Leakage Rate**: `(Users who revealed phone numbers OR sent messages containing phone patterns) / (Total Booking Requests)`. High rates here suggest users are bypassing safeguards, correlating with your 30% dispute rate.
+2.  **Early Cancellation Rate**: `Bookings cancelled within 24 hours / Total Confirmed Bookings`. Segment this by `provider_verification_status` to see if unverified providers drive disputes.
+3.  **Response Latency**: Average `time_to_confirm`. Long delays often precede cancellations.
+4.  **Dispute Density by Category**: `Disputes / Completed Services` per service category. Identify high-risk verticals (e.g., plumbing vs. cleaning).
+5.  **Search-to-Booking Conversion**: `Bookings / Searches`. Low conversion indicates poor matching or pricing transparency issues.
+
+## Implementation Notes for Verification Refinement
+*   **Flag High-Risk Providers**: If a provider has a high `booking_cancelled` rate (specifically `cancelled_by=customer`) or high `dispute_raised` count, automatically flag them for manual re-verification.
+*   **Monitor "Phone Reveal" Clusters**: If a specific provider causes a spike in `phone_number_revealed` events without subsequent `booking_confirmed` events, they may be soliciting off-platform deals that lead to untracked disputes.
+*   **Pre-Booking Chat Analysis**: Track the time delta between `message_sent` and `booking_request_sent`. Extremely short deltas with immediate cancellations may indicate bot activity or spam.
+
+By tracking status changes rather than just completions, you can isolate exactly where trust breaks down—whether it's during the search, the negotiation, or the service execution.

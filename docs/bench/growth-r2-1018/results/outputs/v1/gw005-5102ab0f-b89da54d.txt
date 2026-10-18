@@ -1,0 +1,38 @@
+### Core Metrics for Operational Health: Vietnam Expansion
+
+To distinguish between supply-side inefficiencies (driver allocation) and demand-side bottlenecks (merchant preparation), you must instrument a **time-segmented event taxonomy** around the order lifecycle. Do not track aggregate "on-time" rates alone; they hide the specific leak. Track these four timestamped events for every order:
+
+1.  **`order_confirmed`**: The moment the customer completes checkout.
+2.  **`merchant_accepted`**: The moment the merchant acknowledges the order.
+3.  **`order_ready_for_pickup`**: The moment the merchant marks the order as ready.
+4.  **`driver_assigned`**: The moment your algorithm links a driver to the order.
+5.  **`driver_arrived_at_merchant`**: The moment the driver checks in at the location.
+6.  **`order_picked_up`**: The moment the driver confirms possession.
+7.  **`order_delivered`**: The moment the customer receives the goods.
+
+**Derived Metrics for Decision Making**
+
+Calculate the following durations from the events above to isolate the root cause:
+
+*   **Merchant Preparation Time** = (`order_ready_for_pickup` timestamp) minus (`order_accepted` timestamp).
+    *   *Diagnostic:* If this median time exceeds your home market baseline by >20%, the bottleneck is **merchant onboarding/process**, not driver supply. Hiring more drivers will not fix this.
+*   **Assignment Latency** = (`driver_assigned` timestamp) minus (`order_ready_for_pickup` timestamp).
+    *   *Diagnostic:* If this is high, your **allocation algorithm** is failing to match supply to demand in real-time, or there is a genuine shortage of idle drivers nearby.
+*   **Pickup Lag** = (`driver_arrived_at_merchant` timestamp) minus (`driver_assigned` timestamp).
+    *   *Diagnostic:* High values here indicate **traffic congestion** or driver scarcity relative to merchant density.
+*   **Transit Time** = (`order_delivered` timestamp) minus (`order_picked_up` timestamp).
+    *   *Diagnostic:* Isolates pure last-mile travel performance independent of merchant delays.
+
+**Operational Verdict Framework**
+
+Present these metrics as cohort averages per hour-of-day and day-of-week to separate "rush hour" traffic effects from systemic process failures.
+
+*   **Hire More Drivers If:** *Assignment Latency* and *Pickup Lag* are rising while *Merchant Preparation Time* remains stable. This proves drivers are unavailable when needed.
+*   **Optimize Merchant Onboarding If:** *Merchant Preparation Time* is the dominant variable in the total delay, regardless of driver availability.
+*   **Adjust Algorithm If:** *Assignment Latency* is high despite a visible surplus of idle drivers in the zone (indicating a matching logic failure).
+
+**This Week's Step**
+Instrument the seven events listed above immediately. Run a query comparing the median *Merchant Preparation Time* in Ho Chi Minh City against your home market for the same order types. If the local median is >15 minutes while the home market is <8 minutes, pause driver hiring and initiate a merchant process audit. If preparation times are comparable but *Assignment Latency* exceeds 5 minutes during peak hours, proceed with driver recruitment.
+
+*Note: Ensure user identifiers used for cohorting are pseudonymous and routed to your privacy compliance protocol; do not use raw PII for operational analytics.*
+*Do not fabricate benchmarks for "good" preparation times; use your home market data as the sole baseline for comparison.*

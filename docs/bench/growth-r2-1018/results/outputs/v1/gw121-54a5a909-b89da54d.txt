@@ -1,0 +1,30 @@
+### This-Week Measurement Plan: Canada Activation Drop (Oct 4 Launch)
+
+**1. Isolate the Cause: Confusion vs. Latency**
+To distinguish between user confusion and technical performance, track these two specific metrics segmented by **Step 3 of the setup flow** for Canadian users only:
+*   **Time-on-Step-3 (Median & 90th Percentile):** A significant increase in time spent suggests **confusion** (users hesitating or trying to understand the new social button). A flat or decreased time coupled with a drop-off suggests a **technical block** or immediate frustration.
+*   **Step-3 Error Rate & Latency (p95):** Instrument a specific event `setup_step_3_load_error` and measure API response times for the social feature payload. If latency >2s or error rates spike >1% coinciding with the drop-off, the cause is **technical**. If performance is normal but drop-offs rise, the cause is **UX/Confusion**.
+
+**2. Segmentation Strategy**
+Run these cuts on your analytics platform immediately:
+*   **Cohort A (Pre-Launch):** Users who onboarded Sept 25–Oct 3 (Baseline).
+*   **Cohort B (Post-Launch):** Users who onboarded Oct 4–Present.
+*   **Segment C (The Leak):** Cohort B users who dropped at Step 3. Analyze their device types and network carriers to rule out specific client-side rendering issues on certain Canadian networks.
+*   **Control Check:** Compare activation rates for non-Canadian users post-launch. If global rates are stable while Canada drops, this confirms a region-specific infrastructure issue rather than a universal UX flaw.
+
+**3. The Decision Tripwire (For Friday's Go/No-Go)**
+Do not wait for statistical significance on a full funnel; use these immediate thresholds to decide:
+*   **Roll Back Immediately If:** Step-3 error rates exceed 2% OR p95 latency exceeds 3 seconds. This indicates a broken experience that no UX tweak can fix quickly.
+*   **Push Hotfix (Hide Feature) If:** Latency is normal (<1s) and errors are <0.5%, but Time-on-Step-3 has increased by >40% compared to baseline. This confirms the button causes confusion; hide it via feature flag without a full rollback.
+*   **Investigate Further If:** Metrics are ambiguous (e.g., slight latency increase but huge time increase). In this case, extend the analysis by 48 hours with session replay sampling for Step 3 drop-offs.
+
+**4. Required Event Taxonomy Updates**
+Ensure the following events are firing with these properties before analyzing:
+*   `onboarding_step_view`: {step_number, country, feature_flag_variant}
+*   `onboarding_step_error`: {step_number, error_code, latency_ms, country}
+*   `social_share_impression`: {location_in_flow, render_time_ms}
+
+**Summary for VP of Product:**
+The data currently points to a leak at Step 3. By comparing **Time-on-Step** against **Error/Latency logs** for the Canadian post-launch cohort, we will know by Wednesday if this is a server issue (Roll Back) or a confusing UI element (Hotfix/Hide). Do not rely on the aggregate 11% number alone; the segmentation above provides the causal link required for the Friday decision.
+
+*Note: All metrics must be compared against your own pre-Oct 4 baseline; no external benchmarks are used. If session replay data is available, sample 10 sessions from the "High Time-on-Step" segment for qualitative validation.*

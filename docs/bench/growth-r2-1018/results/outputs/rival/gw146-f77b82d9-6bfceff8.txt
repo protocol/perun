@@ -1,0 +1,38 @@
+### GlobalPay EMEA Currency Data Remediation Plan
+
+**1. Scope Identification & Segmentation**
+Immediately query the transaction database for the period (Jan 1 – Mar 31) to isolate the affected 15% (~300,000 records). Segment these records into three distinct buckets:
+*   **Typographical Errors:** Codes with minor deviations (e.g., 'EURR', 'EURO', 'E UR').
+*   **Null/Blank Fields:** Records where the currency column is empty.
+*   **Contextual Clues:** Group by `partner_bank_id`, `transaction_type`, and `settlement_status`.
+
+**2. Correlation Analysis (The "Unknown Variable")**
+Before fixing, determine if these errors caused financial loss. Run a correlation check between the malformed currency codes and `settlement_status`:
+*   **Scenario A (Cosmetic):** If 99%+ of malformed records show `status: settled` and the settled amount matches the expected EUR value, the error is likely a display/logging issue post-settlement.
+*   **Scenario B (Critical):** If malformed records correlate with `status: failed`, `pending_review`, or `reconciled_amount: 0`, the bad code prevented proper routing. These require immediate financial investigation, not just data cleaning.
+
+**3. Log Pattern Isolation**
+To confirm the legacy partner bank hypothesis, filter application and integration logs for the following patterns during the transaction creation window:
+*   **Source Identifier:** Look for `source_system` or `partner_id` matching the suspected legacy bank.
+*   **Error Codes:** Search for specific parsing exceptions like `INVALID_CURRENCY_FORMAT`, `NULL_POINTER_EXCEPTION` at the currency mapping layer, or `DEFAULT_VALUE_TRIGGERED`.
+*   **Payload Inspection:** Examine the raw incoming JSON/XML payloads from the partner. If the incoming data is correct ('EUR') but the database stores 'EURR', the corruption happens during your ingestion logic. If the incoming data is already 'EURR', the partner's update is the root cause.
+
+**4. Remediation Strategy for CFO**
+
+| Category | Action | Risk Level | Audit Trail Requirement |
+| :--- | :--- | :--- | :--- |
+| **Confirmed Typo + Settled** | **Auto-Correct.** Script to normalize 'EURR' → 'EUR' where `status = settled` and `amount` matches EUR expectations. | Low | Log the script run, count of records changed, and pre/post values for a sample set. |
+| **Blank + Settled** | **Contextual Inference.** Auto-fill 'EUR' only if `merchant_country` is in the Eurozone AND `settlement_currency_received` was EUR. | Medium | Flag these for secondary review; do not auto-correct if country is non-Eurozone. |
+| **Failed/Pending Status** | **Manual Review.** Do not auto-correct. Route to Finance Ops to verify actual funds movement with the bank. | High | Create a ticket for every record; resolution must be documented by a human. |
+| **Non-EUR Context** | **Manual Review.** If a blank/'EURR' code appears on a transaction logically meant for GBP or USD, this is a critical routing error. | Critical | Immediate escalation to Treasury. |
+
+**5. Execution Timeline**
+*   **Day 1-2:** Run scope queries and correlation analysis. Confirm if errors are cosmetic or functional.
+*   **Day 3:** Analyze logs to definitively prove the source (legacy partner vs. internal bug).
+*   **Day 4-5:** Execute auto-correction script on the "Safe" bucket (Settled + Typo). Generate "Before/After" report.
+*   **Day 6-10:** Manual review of high-risk buckets.
+*   **April 14:** Final sign-off and audit package preparation.
+
+**Recommendation:** Do not run a blanket update. The risk of overwriting legitimate non-EUR transactions that were mislabeled is too high. Proceed with the segmented approach above to ensure audit safety.
+
+*Note: Ensure all auto-correction scripts are run in a read-only mode first to generate a "dry run" report for the CFO before execution.*

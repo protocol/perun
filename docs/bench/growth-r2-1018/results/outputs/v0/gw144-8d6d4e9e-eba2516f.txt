@@ -1,0 +1,31 @@
+**Diagnosis Plan: Mobile Interface Friction Analysis**
+
+Your assumption that the mobile interface is the culprit is plausible given the timing, but without granular event tracking, you cannot pinpoint the specific "breaking point" screen. However, you can still derive a strong directional signal from existing logs to inform your March 20th review. Do not guess; aggregate what you have.
+
+**1. Segment Completion by Device Type (The Primary Signal)**
+Immediately split your completion data into **Desktop** vs. **Mobile**.
+*   **Hypothesis:** If the mobile interface is the issue, Desktop completion rates should remain stable near the December baseline (~85%), while Mobile rates should show a sharp drop coinciding with the February 1st release.
+*   **Action:** Query your access logs or LMS database for `user_agent` or `device_type` associated with incomplete sessions.
+*   **Decision Rule:** If Mobile completion dropped significantly (e.g., to <50%) while Desktop held steady, the interface is the likely cause. If *both* dropped, the issue is content fatigue or external business pressure, not the UI.
+
+**2. Analyze Session Duration vs. Content Length**
+Since you know the content is fixed at 45 minutes, session duration is a proxy for progress.
+*   **Hypothesis:** Users abandoning due to UI friction often quit early (within the first 5–10 minutes) upon encountering navigation issues. Users quitting due to content length tend to last longer before dropping off.
+*   **Action:** Calculate the **median session duration** for incomplete mobile sessions in February compared to December.
+*   **Decision Rule:** A shift toward *shorter* incomplete sessions in February suggests an immediate barrier to entry (UI bug/navigation failure). A unchanged duration distribution suggests the problem is engagement, not the interface.
+
+**3. Error Log Correlation (The "Silent" Killer)**
+Even without custom events, server logs capture HTTP errors.
+*   **Hypothesis:** The new mobile interface may be triggering 404s (missing assets), 500s (server crashes on specific interactions), or timeout errors on slower mobile networks.
+*   **Action:** Filter server logs for the period of Feb 1–Present, scoped to mobile user agents, looking for spikes in 4xx/5xx errors during typical training hours.
+*   **Decision Rule:** A correlation between error spikes and drop-off times confirms a technical breakage requiring an immediate hotfix rather than a redesign.
+
+**Recommendation for the CLO Review**
+Do not recommend a full revert or redesign yet. Your data is currently `UNVERIFIED` regarding the specific screen causing exit.
+*   **If Mobile stats are the outlier:** Propose a **targeted usability audit** of the first 3 screens on mobile only. Frame the recommendation as "Pause mobile rollout for new users while we fix navigation," rather than a full content redesign.
+*   **If stats are flat across devices:** The issue is likely motivation or timing. Recommend a survey intervention, not a code change.
+
+**Immediate Next Step:** Run the device-segmentation query today. If you cannot separate mobile vs. desktop completion rates with current logs, you must report to the CLO that the root cause is **unidentifiable** with existing instrumentation and request a temporary engineering sprint to install basic funnel tracking before making any structural changes.
+
+*Note: Avoid attributing the drop to "content length" without evidence; 45 minutes was acceptable in December. The variable is the interface or the environment.*
+*Do not fabricate a "good" retention benchmark; compare February only to your own December baseline.*

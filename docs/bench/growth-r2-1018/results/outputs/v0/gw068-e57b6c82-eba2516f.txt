@@ -1,0 +1,39 @@
+### North Star & Input Metrics
+**North Star:** Weekly Active Agencies generating a "Qualified Lead" (defined as a prospect contacted or saved) using Advanced Filters.
+*Reject vanity metrics:* Do not track "Filter Views" or "Total Searches." These rise regardless of value. Track only the core action where value is realized.
+
+**Input Metrics (The Levers):**
+1.  **Activation Rate:** % of new subscribers who use Advanced Filters within their first 3 sessions.
+2.  **Retention Cohort:** % of users who use Advanced Filters in Week 1 and return to use them in Week 2.
+3.  **Conversion to Expansion:** % of users in the "High Filter Usage" cohort who upgrade or add seats within 60 days, compared to the "Non-User" baseline.
+
+### The Funnel: Read Bottom-Up (Retention First)
+Do not pour more acquisition spend into this feature until retention is proven. Your flat expansion revenue suggests a leak in the bucket, not a lack of awareness.
+1.  **Retention Check:** Of the 40% who tried the feature, how many used it twice? If drop-off is high after the first use, the feature is likely too complex (time-to-value issue) or irrelevant (problem-fit issue).
+2.  **Activation Check:** Are users finding the feature early enough? If time-to-first-filter-use > 3 days, onboarding is the blocker.
+3.  **Revenue Link:** Only after confirming retention should you correlate usage volume to expansion.
+
+### Event Taxonomy: Answer Named Questions
+Instrument only these specific events to resolve your uncertainty. Do not instrument "just in case."
+
+| Event Name | Question It Answers | Properties to Capture |
+| :--- | :--- | :--- |
+| `filter_applied` | Are users actually refining searches? | `filter_type`, `search_session_id`, `results_count` |
+| `lead_qualified` | Did the filter lead to a usable outcome? | `source: filter_applied`, `lead_id`, `time_to_qualify` |
+| `upgrade_initiated` | Does usage precede spending? | `user_cohort: filter_power_user`, `days_since_first_use` |
+| `support_ticket_opened` | Is complexity causing friction? | `category: feature_complexity`, `feature_context: filters` |
+
+**The Identifier Seam:** To track a user from `filter_applied` to `upgrade_initiated`, you need a stable, pseudonymous User ID. Do not use raw emails or PII in analytics logs; route those to your privacy compliance system.
+
+### Experiment Rigor: Validate the Assumption
+Your assumption ("filters → better leads → higher spend") is currently **UNVERIFIED**. You cannot claim correlation without isolating the variable.
+*   **Do not peek:** Do not stop analysis because "p < 0.05" today.
+*   **Pre-commit:** Define a test group (e.g., new signups guided heavily to filters) vs. a control group. Pre-declare the sample size and duration (e.g., 4 weeks).
+*   **Guardrail:** Monitor "Time to First Qualified Lead." If filter users take *longer* to find a lead than non-users, the feature is increasing complexity without adding value, explaining the flat revenue.
+
+### This Week's Steps
+1.  **Query Retention:** Pull the Week 1-to-Week 2 retention curve specifically for the 40% who used filters. If retention < 20%, the problem is usability, not sales pitch.
+2.  **Define "Qualified":** Engineering must tag `lead_qualified` events with a boolean `used_advanced_filters` within the same session. Without this tag, revenue correlation is impossible.
+3.  **Set the Tripwire:** If "Time to First Qualified Lead" for filter users is >20% higher than non-users by next Friday, pause the sales pitch and initiate a usability review.
+
+*Note: All benchmarks must be calculated against your own 900-subscriber baseline; no external "good" rates exist for your specific context. If data for `lead_qualified` is missing, it is UNVERIFIED—instrument it before building the deck.*

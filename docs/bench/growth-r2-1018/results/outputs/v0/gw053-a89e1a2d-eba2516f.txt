@@ -1,0 +1,40 @@
+### Growth Measurement Plan: SecureCoin Soft Launch (Dec 5)
+
+**1. North Star Metric**
+**Weekly Active Funded Users (WAFU):** The count of unique users who have successfully funded their wallet and performed at least one on-chain transaction or swap within a 7-day window.
+*Why:* Raw signups and bank links are vanity metrics if they do not lead to actual wallet usage. This metric rises only when real customer value (secure asset management) is delivered.
+
+**2. Core Funnel & Event Taxonomy (Bottom-Up Diagnosis)**
+Do not instrument "everything." Track only these specific events to answer named questions about friction. Diagnose retention leaks before optimizing acquisition.
+
+| Stage | Event Name (Trigger) | Question Answered | Critical Properties |
+| :--- | :--- | :--- | : |
+| **Activation** | `signup_completed` | Did they finish identity verification (KYC)? | `kyc_provider`, `duration_seconds`, `failure_reason` |
+| **Activation** | `bank_link_initiated` | Did they attempt to link a funding source? | `bank_type`, `entry_point` |
+| **Activation** | `bank_link_success` | **Hypothesis Check:** Did they link within 10 mins? | `time_to_link_seconds`, `is_under_10_mins` (bool) |
+| **Retention** | `first_fund_success` | Did the money actually arrive? | `amount`, `currency`, `time_since_signup` |
+| **Retention** | `core_action_performed` | Did they use the wallet (swap/transfer)? | `action_type`, `gas_fee_paid` |
+| **Drop-off** | `flow_abandonment` | Where did they quit? | `step_name`, `error_code`, `session_duration` |
+
+**3. The Identifier Seam & Compliance**
+*   **Stable ID:** Assign a pseudonymous `user_cohort_id` at signup to track the user across sessions and devices for retention analysis.
+*   **Privacy Boundary:** Do **not** store raw bank account numbers, KYC document images, or PII in your analytics event stream. Route all sensitive data handling to `privacy-compliance.md` protocols. The analytics engine receives only the `user_cohort_id` and boolean/status flags.
+
+**4. Stage-Appropriate Instrumentation (MVP)**
+Since you are in the `mvp` stage (soft launch), ignore referral and broad acquisition metrics for now. Focus entirely on the **Activation → Retention** seam.
+*   **Primary Hypothesis to Validate:** Compare the 30-day retention of users with `is_under_10_mins: true` vs. `false`. If the delta is not statistically significant, the "10-minute rule" is a distraction; pivot to other friction points.
+*   **Friction Detection:** Calculate the conversion rate between `bank_link_initiated` and `bank_link_success`. A drop here indicates UI confusion or API failures with specific banks.
+
+**5. Experiment Rigor Warning**
+If you A/B test changes to the onboarding flow during the soft launch:
+*   **Pre-commit:** Define your sample size and primary metric (`first_fund_success`) before looking at data.
+*   **No Peeking:** Do not stop the test early because "p < 0.05" on Day 2. This inflates false positives. Read the result only at the pre-determined end date or use a valid sequential testing method.
+*   **Guardrail:** Monitor `kyc_failure_rate` as a guardrail to ensure speed improvements do not compromise compliance.
+
+**This Week's Steps**
+1.  **Engineering:** Implement the six events listed above with the specified properties; ensure PII is stripped before transmission.
+2.  **Analytics:** Build a cohort query comparing `time_to_link_seconds` against `first_fund_success` at Day 7 and Day 30.
+3.  **Decision Rule:** If users linking after 10 minutes show <5% lower retention than those linking within 10 minutes, deprioritize "speed" optimizations and focus on `kyc_failure_reason` analysis instead.
+
+*Note: All benchmark comparisons must be made against your own Day 1–7 soft launch data, not external industry averages which are unavailable and often misleading.*
+*Unknown conversion rates from the prototype are currently UNVERIFIED until the Dec 5th data stream is active.*

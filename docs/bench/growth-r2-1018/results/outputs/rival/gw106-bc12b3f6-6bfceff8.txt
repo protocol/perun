@@ -1,0 +1,77 @@
+# FitJourney Gamification Measurement Plan
+
+## Core Hypotheses to Validate
+1. **Positive:** Earning a badge increases next-day workout probability by 20%.
+2. **Negative:** Leaderboard visibility decreases retention for bottom 50% performers.
+3. **Neutral:** Top performers maintain engagement regardless of leaderboard status.
+
+## Essential Events to Instrument
+
+### Pre-Badge Events (Baseline Behavior)
+| Event | Properties | Purpose |
+|-------|------------|---------|
+| `workout_started` | user_id, workout_type, duration, user_tenure_days, historical_workout_count | Establish baseline activity patterns |
+| `leaderboard_viewed` | user_id, view_duration, scroll_depth, user_percentile_rank | Measure initial engagement with competition |
+| `badge_progress_viewed` | user_id, badge_name, progress_percentage | Track anticipation and goal-setting behavior |
+
+### Badge Earning Moments
+| Event | Properties | Purpose |
+|-------|------------|---------|
+| `badge_earned` | user_id, badge_name, badge_tier, days_to_earn, workouts_completed | Capture the reward moment precisely |
+| `badge_notification_shown` | user_id, badge_name, notification_type, time_since_earn | Measure immediate celebration impact |
+| `badge_shared` | user_id, badge_name, share_platform | Track social validation seeking |
+
+### Post-Badge Behavior (Critical Window)
+| Event | Properties | Purpose |
+|-------|------------|---------|
+| `workout_started` (next 48hrs) | user_id, hours_since_badge, workout_type | Measure the 20% lift hypothesis |
+| `app_opened_no_workout` | user_id, hours_since_badge, session_duration | Detect engagement without action |
+| `leaderboard_avoided` | user_id, leaderboard_clicked_then_exited_immediately | Identify competition aversion |
+
+### Leaderboard-Specific Events
+| Event | Properties | Purpose |
+|-------|------------|---------|
+| `leaderboard_filter_changed` | user_id, filter_type (global/friends/newcomers) | Understand how users self-segment |
+| `leaderboard_rank_checked` | user_id, current_rank, rank_change_from_last_view | Track status anxiety or motivation |
+| `user_profile_viewed_from_leaderboard` | user_id, viewed_user_rank_relative_to_viewer | Measure competitive curiosity |
+
+## Key Metrics & Segments
+
+### Primary Success Metrics
+- **Badge Lift Rate:** % of users working out within 24hrs of earning badge vs. matched control group
+- **Leaderboard Engagement Rate:** % of users viewing leaderboard ≥3 times/week
+- **Retention Delta:** Day-7 retention for badge earners vs. non-earners (segmented by tenure)
+
+### Critical Risk Metrics
+- **Churn Signal:** Users who view leaderboard then don't open app for 5+ days
+- **Avoidance Pattern:** Users who previously viewed leaderboard but stop after seeing their rank
+- **Beginner Drop-off:** Users with <10 workouts who earn first badge then become inactive
+
+### Essential User Segments
+1. **By Performance Tier:** Top 10%, Middle 40%, Bottom 50% (based on workout frequency)
+2. **By Tenure:** New (<30 days), Established (30-90 days), Veteran (>90 days)
+3. **By Badge Status:** Badge earners vs. matched non-earners (propensity score matching)
+4. **By Leaderboard Exposure:** High visibility vs. low visibility users
+
+## Soft Launch Analysis Framework (June 1-10)
+
+### Daily Monitoring Dashboard
+- Badge earn rate by user segment
+- Next-day workout rate for badge earners (rolling 24hr window)
+- Leaderboard view-to-churn correlation by percentile rank
+- Uninstall rate spike detection within 48hrs of leaderboard first view
+
+### Early Warning Triggers
+- **Stop Launch If:** Bottom 50% users show >15% higher churn rate vs. control
+- **Pause Feature If:** Leaderboard viewers in bottom quartile have 25%+ lower next-day workout rate
+- **Investigate If:** Badge earners show no lift in next-day workouts after 3 days
+
+### Control Group Strategy
+Hold back 20% of the 10,000 users from seeing leaderboards entirely. Compare their behavior to exposed users with similar historical patterns to isolate leaderboard impact from general gamification effects.
+
+## Recommended Implementation Timeline
+- **Week 1 (Pre-launch):** Instrument all events, validate data quality, establish baselines
+- **Week 2 (Launch):** Monitor daily, ready to segment users or hide leaderboards for at-risk groups
+- **Week 3 (Analysis):** Calculate lift rates, identify segment-specific impacts, recommend mechanic adjustments
+
+This approach detects whether badges motivate without assuming leaderboards help everyone. The segmentation by performance tier is critical—what motivates veterans may demoralize beginners.

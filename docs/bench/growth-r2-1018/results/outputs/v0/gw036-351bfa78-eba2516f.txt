@@ -1,0 +1,35 @@
+**Instrumentation Strategy & Experiment Design for VitalBand Stress Feature**
+
+**1. North Star Metric**
+Define **"Weekly Active Stress Insights"** as the North Star: the count of unique users who view a stress summary or alert at least once per week. This measures realized value, not just data collection. Reject "total data points collected" as a vanity metric; it rises while battery life falls, misleading the team.
+
+**2. Event Taxonomy (Answer Named Questions Only)**
+Instrument only events that answer specific hypotheses. Do not log every sample.
+*   `stress_viewed`: (Question) Do users actually consume the new data?
+*   `charging_cycle_start`: (Question) Does the new feature increase charging frequency beyond the 7-day baseline?
+*   `feature_disabled`: (Question) Do users turn the feature off due to battery drain?
+*   `battery_level_at_sync`: (Question) What is the remaining battery after 3, 5, and 7 days?
+
+**3. The Experiment: Segmented Sampling (A/B Test)**
+Do not roll out aggressive sampling to all 200 beta users. Use a **pre-committed, segmented A/B test** over 14 days (two full battery cycles) to validate the "work hours only" assumption.
+
+*   **Control Group (33%):** Current 5-minute sampling (Baseline).
+*   **Variant A (33%):** Aggressive 5-second sampling **only** during detected activity windows (08:00–20:00). Standard sampling overnight.
+*   **Variant B (33%):** User-configurable sampling (High/Low/Off).
+
+**Pre-commitment Rules:**
+*   **Primary Metric:** Retention of `stress_viewed` in Week 2 vs. Week 1.
+*   **Guardrail Metric:** Average days between `charging_cycle_start`. If this drops below 5 days, the variant fails regardless of engagement.
+*   **Stopping Rule:** Do not peek at results before Day 14. Analyze once at the end to avoid false positives from daily noise.
+
+**4. Recommended Strategy: Hybrid "Smart Sampling"**
+Based on your hypothesis, **Variant A (Activity-Window Sampling)** is the strongest candidate. It balances fidelity with constraints by assuming stress relevance correlates with activity.
+*   **Implementation:** Default to 5-minute sampling. Trigger 5-second bursts only when heart rate variability or motion sensors detect "active" states.
+*   **User Control:** Offer a simple "Battery Saver" toggle that forces 5-minute sampling always, rather than complex configuration sliders which increase cognitive load.
+
+**5. This-Week Steps**
+1.  **Define the "Active" Trigger:** Engineering must specify the exact sensor threshold that switches sampling from 5m to 5s to ensure reproducibility.
+2.  **Instrument `charging_cycle_start`:** Ensure this event captures the timestamp and previous battery duration to calculate the new average cycle length.
+3.  **Launch the 14-day Test:** Assign the 200 beta users randomly to the three groups. Record the baseline battery life (7 days) before starting.
+
+**Note:** If Variant A shows `stress_viewed` rising but `charging_cycle_start` averaging <5 days, the feature is unsustainable; pivot to 30-second sampling intervals. Never assert a "good" retention rate; compare Variant A only against your Control group's baseline.

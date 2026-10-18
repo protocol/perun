@@ -1,0 +1,32 @@
+### North Star Metric: "Value-Weighted Migration Events"
+Reject "successful API calls per day" as your North Star; it is a vanity metric that penalizes your high-value enterprise users who process massive datasets in fewer, heavier batches. Instead, define your North Star as **Value-Weighted Migration Events**, calculated as `(Successful Batches) × (Complexity Factor)`. The Complexity Factor should be derived from `data_volume_processed` or `schema_object_count` per batch. This ensures a client running one critical 1TB migration registers higher value than a client running 1,000 trivial health checks, aligning the metric with actual business utility rather than raw throughput.
+
+### Balanced Scorecard for Enterprise Tier
+To satisfy the VP of Sales and reduce churn, structure your dashboard around **business outcomes**, not just system health. Uptime is a baseline requirement (a guardrail), not a value driver.
+
+**Primary Metrics (Customer Value & Retention)**
+1.  **Engineering Hours Saved (Estimated):** The direct ROI proxy. Calculate this as `(Avg. Manual Hours per GB/Object) × (Data Volume Processed)`. You must derive the "Manual Hours" coefficient from pilot interviews (see below). This answers the "reduction in manual engineering hours" question directly.
+2.  **Critical Path Success Rate:** Distinct from general uptime. Measure the % of *migration* jobs (not health checks) that complete without manual intervention. Enterprise churn happens when a migration fails mid-stream, not when an API blips.
+3.  **Time-to-First-Value (TTFV) for New Projects:** For enterprise, this is the time from project creation to the first successful large-scale migration. Long TTFV predicts churn before usage drops.
+
+**Secondary/Input Metrics (Drivers)**
+*   **Data Volume Processed:** The raw input for your value calculation.
+*   **Active Projects per Team:** Indicates expansion within the account.
+*   **Support Ticket Ratio:** Tickets opened per 1TB processed. A rising ratio here signals friction even if volume is high.
+
+**Guardrail Metric (System Health)**
+*   **P99 Latency for Large Payloads:** Do not use average uptime. Enterprise users care about tail latency on big jobs. If this breaches your SLA, the primary metrics are invalid.
+
+### Questions for Pilot Customers
+Do not ask generic satisfaction questions. Ask these specific questions to calibrate your "Engineering Hours Saved" coefficient and refine your event taxonomy:
+1.  "For your last major migration, how many engineer-hours would this have consumed using your previous manual process or legacy tooling?" (Use this average to build your ROI formula).
+2.  "What specific failure mode in a migration job forces you to pause and intervene manually?" (Use this to define your "Critical Path Success" event properties).
+3.  "At what data volume or complexity level does a job feel 'high risk' to your team?" (Use this to set your Complexity Factor thresholds).
+
+### This Week's Steps
+1.  **Instrument the "Complexity Factor":** Update your event taxonomy to log `data_volume` and `object_count` on every `migration_completed` event. Without these properties, your North Star remains `UNVERIFIED`.
+2.  **Run the Calibration Interview:** Interview 3 of your 120 active teams to get the "manual hours" baseline. Do not guess this number; without it, your ROI dashboard is fabricated.
+3.  **Draft the Guardrail Query:** Define the SQL/Query for "P99 Latency on jobs >100MB" to ensure your dashboard distinguishes between system health and customer value.
+
+*Note: Ensure user identifiers in these events are pseudonymous stable IDs to track cohorts across sessions, routing any PII collection to your privacy compliance review.*
+*Do not present "uptime percentage" as a primary success metric to enterprise prospects; it signals you view their success as server availability rather than business velocity.*

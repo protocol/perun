@@ -1,0 +1,20 @@
+To differentiate between a messaging mismatch and technical friction, you must instrument two specific data cuts immediately. Do not rely on the aggregate 75% bounce rate; it conflates distinct failure modes.
+
+**1. Isolate Technical Friction (The "Did It Load?" Cut)**
+Segment your analytics by **device type (mobile vs. desktop)** and **connection speed (4G/3G vs. WiFi)** for the period since November 5th.
+*   **The Signal:** If the bounce rate on mobile/3G is significantly higher (e.g., >85%) than on desktop/WiFi (e.g., <60%), and those mobile sessions have an average duration of <2 seconds, the cause is likely **page load latency**. Users are leaving before the content renders.
+*   **The Data Point Needed:** You stated load times are unmeasured. You must immediately enable **Real User Monitoring (RUM)** or check server logs for "Time to First Byte" and "First Contentful Paint" specifically for the `/webinar-landing` path on mobile user agents. Without this metric, the technical hypothesis remains `UNVERIFIED`.
+*   **The Decision Rule:** If mobile load time exceeds 3 seconds and correlates with the spike in bounces, the fix is asset optimization (image compression, script deferral), not copy rewriting.
+
+**2. Isolate Messaging Mismatch (The "Did They Read?" Cut)**
+Segment your analytics by **referrer source** (specifically the email campaign links) and measure **scroll depth** and **time-on-page** for users who successfully loaded the page (session duration >5 seconds).
+*   **The Signal:** If users on fast connections still leave without scrolling past the header (0% scroll depth) but stay on the page for 5–10 seconds, they are likely reading the headline, realizing it doesn't match the email promise, and then leaving. This confirms your **messaging mismatch** hypothesis.
+*   **The Data Point Needed:** Ensure your event taxonomy tracks `scroll_depth` with properties for `percentage_reached` (e.g., 25%, 50%) and `element_visible` (header vs. body).
+*   **The Decision Rule:** If scroll depth is near zero across *all* device types and connection speeds, the headline is the blocker. The email promised X, the headline says Y. The Content Director must rewrite the headline to align with the email invitation before Friday.
+
+**This Week's Step:**
+1.  **Query:** Run a cohort analysis comparing bounce rates and average session duration for `device=mobile` AND `connection=slow` vs. `device=desktop` AND `connection=fast` for Nov 5–today.
+2.  **Instrument:** If scroll depth events are missing, deploy a lightweight script today to track `scroll_25_percent` on the landing page.
+3.  **Decision Trigger:** If the mobile bounce rate is >20 percentage points higher than desktop, prioritize technical optimization. If bounce rates are consistent across devices but scroll depth is <5% for everyone, prioritize copy rewriting.
+
+Note: Do not attempt to A/B test new headlines before Friday; the sample size and duration would be insufficient to rule out peeking errors. Fix the single most likely cause based on this segmentation first.

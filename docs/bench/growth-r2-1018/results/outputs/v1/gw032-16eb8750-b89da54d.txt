@@ -1,0 +1,27 @@
+### SparkDate Event Re-instrumentation & Validation Plan
+
+**1. Immediate Triage: Restore the "Match-to-Chat" Core Loop**
+Do not attempt to restore all 160 lost events. Prioritize only events that answer specific, named questions about the current drop in match rates.
+*   **Re-instrument First:** `profile_viewed` (to validate if the match drop is a visibility issue vs. algorithm rejection), `swipe_action` (direction + timestamp), and `chat_initiated`.
+*   **Why:** You cannot distinguish between an algorithm change and a tracking gap without `profile_viewed`. If views are stable but matches dropped, the algorithm changed. If views dropped, the tracking or feed logic broke.
+*   **Status:** The "super like" hypothesis is currently **UNVERIFIED**. You cannot validate it as a predictor of conversion without the data. Do not prioritize this until the core loop (swipe → match → chat) is stable and measured.
+
+**2. Criteria for Retiring vs. Restoring Legacy Events**
+Adopt a strict "Question-First" rule. An event is only restored if it answers a specific hypothesis you are testing *this quarter*.
+*   **Retire Permanently:** Any legacy event that tracked "nice to know" information, cumulative counts (vanity metrics), or steps that do not directly influence the North Star Metric (e.g., "time spent on settings page" unless you are specifically testing settings friction).
+*   **Restore:** Only events that map to a stage in the AARRR funnel where you currently have a blind spot preventing a decision.
+*   **The Test:** For every proposed event, write down the exact SQL query or dashboard chart it enables. If you cannot name the chart, do not instrument the event.
+
+**3. Step-by-Step Taxonomy Validation (Before Scaling Acquisition)**
+Do not scale acquisition until you confirm the funnel is not leaking due to measurement errors.
+*   **Step A: Define the North Star.** Move away from "total matches" (vanity). Adopt "Weekly Active Users who initiate a conversation" as your primary value metric.
+*   **Step B: Bottom-Up Funnel Audit.** Verify retention before acquisition. Check: Do users who match today return to chat tomorrow? If retention is broken, new users from scaled acquisition will churn immediately.
+*   **Step C: The Identifier Seam.** Ensure your new 40-event taxonomy uses a stable, pseudonymous user ID that persists across app updates and sessions. This is critical for cohort analysis but must remain decoupled from PII (route PII handling to your privacy compliance protocol).
+*   **Step D: Shadow Validation.** Run the new 40-event stream parallel to a small sample of raw logs for 48 hours. Verify that `swipe` + `match` counts reconcile within a 1% margin of error before trusting the data for executive reporting.
+
+**This Week's Actions:**
+1.  **Engineers:** Re-deploy `profile_viewed` and `chat_initiated` events with stable user IDs by Tuesday EOD.
+2.  **Analysts:** Build a single "Match-to-Chat Conversion" cohort chart comparing Feb 1–13 vs. Feb 14–Present.
+3.  **Decision Gate:** If the conversion rate is stable despite the match drop, the issue is top-of-funnel visibility (fix feed). If conversion also dropped, the algorithm or chat UX is broken (fix product).
+
+**Note:** The 15% match rate drop is a symptom; do not treat it as the root cause until `profile_viewed` data confirms whether the denominator (potential matches) has changed. Avoid "peeking" at early results from the re-instrumented events; allow 3–5 days of data accumulation to smooth out weekend/weekday variance before presenting to the CTO.

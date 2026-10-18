@@ -1,0 +1,58 @@
+# Contract Review Platform Tracking Plan
+
+## Core Events to Capture
+
+### 1. Automation Exposure Events
+| Event Name | Properties | Purpose |
+|------------|------------|---------|
+| `suggestion_presented` | suggestion_id, suggestion_type (clause_addition, clause_removal, language_change), confidence_score, document_id, user_id | Track what the system recommends |
+| `suggestion_viewed` | suggestion_id, time_to_first_view, scroll_depth_into_suggestion | Measure if users actually look at recommendations |
+
+### 2. Decision Events (Critical for Your Hypothesis)
+| Event Name | Properties | Purpose |
+|------------|------------|---------|
+| `suggestion_accepted` | suggestion_id, acceptance_method (one_click, partial_edit_then_accept), time_from_presentation_to_acceptance | Your assumed north star metric |
+| `suggestion_rejected` | suggestion_id, rejection_method (dismiss, manual_override, edit_then_reject) | Understand what automation fails |
+| `suggestion_edited` | suggestion_id, edit_distance (character_count_changed), original_vs_final_text | Detect partial trust scenarios |
+
+### 3. Time & Effort Metrics
+| Event Name | Properties | Purpose |
+|------------|------------|---------|
+| `document_review_started` | document_id, document_length (word_count), complexity_score | Baseline for time calculations |
+| `document_review_completed` | document_id, total_review_duration, suggestions_count, acceptance_rate, manual_changes_count | End-state measurement |
+| `redline_section_interaction` | section_id, interaction_type (hover, expand, compare_view_toggle), dwell_time_seconds | Your specific question about review time |
+
+### 4. Trust & Confidence Signals
+| Event Name | Properties | Purpose |
+|------------|------------|---------|
+| `comparison_view_toggled` | toggle_count, sections_compared | Users manually verifying suggestions |
+| `export_without_changes` | document_id, suggestions_ignored_count | High trust signal |
+| `manual_clause_added` | clause_type, location, after_suggestion_presented (boolean) | Workload shifting indicator |
+
+## Critical Properties for All Events
+- `user_id` (law firm identifier + individual user)
+- `document_id`
+- `session_id`
+- `user_role` (partner, associate, paralegal)
+- `document_type` (NDA, employment agreement, vendor contract)
+- `client_industry` (if available)
+
+## Key Metrics to Derive
+
+**Automation Success Rate**: `suggestion_accepted` / `suggestion_presented`
+
+**Time Savings Indicator**: Compare `total_review_duration` for documents with high acceptance rates (>80%) vs. low acceptance rates (<20%), controlling for document length.
+
+**Trust Correlation**: Analyze whether `dwell_time_seconds` on redlined sections correlates with `acceptance_method`. Hypothesis: Shorter dwell + one-click accept = high trust; longer dwell + edit_then_accept = verification behavior; very long dwell + reject = confusion or low trust.
+
+**Workload Shift Detection**: Track `manual_changes_count` post-suggestion. If this increases after automation launch, you're shifting work, not reducing it.
+
+## Implementation Priority
+
+**Phase 1 (Before December release)**: `suggestion_presented`, `suggestion_accepted`, `suggestion_rejected`, `document_review_started`, `document_review_completed`
+
+**Phase 2 (Post-launch optimization)**: `redline_section_interaction`, `comparison_view_toggled`, `suggestion_edited`
+
+Your assumption about acceptance being the primary signal is correct, but without tracking rejection patterns and time-to-decision, you cannot distinguish between "automation works perfectly" and "users are blindly accepting." The dwell time on redlined sections will likely show a U-curve: very short (trust), medium (verification), very long (confusion). Segment by user role to see if partners behave differently than associates.
+
+Track this schema starting immediately with your five beta firms to establish baseline behavior before December scaling.

@@ -1,0 +1,58 @@
+# ReWear Referral Program: Tracking & Measurement Plan
+
+**Objective:** Isolate referral-driven growth from organic holiday spikes and calculate true program ROI by tracking the full funnel from invite to verified resale.
+
+## 1. Critical Events to Instrument (Pre-Launch)
+
+Implement these events with the specified properties to enable granular analysis. All timestamps must be UTC.
+
+| Event Name | Trigger Point | Required Properties |
+| :--- | :--- | :--- |
+| `referral_invite_sent` | User clicks "Send Invite" | `referrer_id`, `invite_channel` (SMS, Email, Social), `invite_batch_id` |
+| `referral_link_clicked` | Referee clicks unique link | `referrer_id`, `referee_device_id`, `utm_source`, `utm_medium`, `utm_content` |
+| `referral_signup_started` | Referee lands on signup page | `referrer_id`, `session_id` |
+| `referral_signup_completed` | Referee verifies account | `referrer_id`, `referee_id`, `signup_method` |
+| `referral_first_transaction` | Referee completes first resale | `referrer_id`, `referee_id`, `transaction_value`, `discount_applied` (boolean), `order_id` |
+| `referral_reward_claimed` | Referrer uses their reward | `referrer_id`, `reward_type` (15% discount), `order_id` |
+
+**Technical Note:** Ensure `referrer_id` persists in the referee's session storage/local storage upon click and passes through to the signup and transaction events even if the app is closed/reopened.
+
+## 2. Core Metrics for ROI & Performance
+
+Calculate these metrics weekly. Do not mix partial-period numerators with full-period denominators.
+
+### Acquisition Efficiency
+*   **Invite-to-Signup Rate:** `(referral_signup_completed) / (referral_invite_sent)`
+    *   *Purpose:* Measures invite quality and landing page friction.
+*   **Signup-to-Transaction Rate:** `(referral_first_transaction) / (referral_signup_completed)`
+    *   *Purpose:* Validates if referred users are high-quality buyers/sellers vs. discount hunters.
+*   **Cost Per Acquired Transactor (CPAT):** `(Total Discount Value Given) / (Count of Unique Referees who Transacted)`
+    *   *Purpose:* True cost of acquisition compared to paid channels.
+
+### Financial Impact (ROI)
+*   **Incremental Revenue:** `Sum(Transaction Value of Referred Users) - Sum(Discounts Given)`
+    *   *Crucial:* Only count revenue from users who would *not* have transacted without the referral (estimated via holdout group or baseline conversion rate).
+*   **Referral ROI:** `(Incremental Revenue - Program Ops Costs) / Program Ops Costs`
+*   **Average Order Value (AOV) Delta:** `AOV(Referred Users) vs. AOV(Organic Users)`
+    *   *Purpose:* Determines if referrals drive higher or lower value transactions.
+
+### Viral Coefficient
+*   **K-Factor:** `(Invites Sent per User) × (Conversion Rate of Invites)`
+    *   *Target:* >1.0 indicates viral growth; <1.0 indicates paid growth via discounts.
+
+## 3. Distinguishing Organic vs. Referral During Holiday Rush
+
+To isolate signal from noise in December:
+
+1.  **Strict Attribution Window:** Attribute a transaction to the referral program *only* if `referral_link_clicked` occurred within 14 days prior to `referral_signup_completed`. Any signup without a clicked link in this window is **Organic**.
+2.  **Holdout Group (Essential):** Randomly suppress the referral offer for 5-10% of eligible users. Compare the transaction rate of this "no-offer" group against the "offer" group. The difference is your true **Incremental Lift**. Without this, you cannot claim credit for users who would have joined anyway during the holiday spike.
+3.  **Cohort Analysis:** Group users by `signup_week`. Compare the Week 1, Week 2, and Week 4 retention/transaction rates of the "Referral Cohort" vs. the "Organic Holiday Cohort." If referral users churn faster or have lower LTV, the discount is attracting low-quality traffic.
+
+## 4. Implementation Checklist for Data Engineering
+
+*   [ ] **Unique Link Generation:** Ensure every invite generates a unique, trackable URL with embedded `referrer_id`.
+*   [ ] **Deep Linking:** Verify links open the app directly to the signup screen, preserving the ID through the app store redirect if necessary.
+*   [ ] **Deduplication:** Logic to prevent double-counting if a user clicks multiple invites; attribute to the *first* click or *last* click (define policy now; recommend **first touch** for referrer credit).
+*   [ ] **Fraud Detection:** Flag accounts where `referrer_id` == `referee_id` (self-referral) or multiple signups from same device ID/IP.
+
+**Note:** Launch the holdout group immediately on Nov 10th; you cannot create a valid control group retroactively once the program is live. Ensure UTM parameters on social shares match the `invite_channel` property for cross-platform validation.

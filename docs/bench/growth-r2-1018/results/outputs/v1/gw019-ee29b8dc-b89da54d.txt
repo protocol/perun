@@ -1,0 +1,38 @@
+### Tracking Specification for NexusRealms Staging (Deadline: Aug 15)
+
+**North Star Metric:** Weekly Active Users (WAU) completing **Value-Generating Actions** (e.g., crafting, quest completion, PVP matches), *not* raw token volume. Token velocity is a lagging indicator of speculation; genuine engagement drives long-term economy health.
+
+**Event Taxonomy & Properties**
+Instrument only events that answer specific questions about bot vs. human behavior and earner vs. buyer retention. Do not track "everything."
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `session_start` | Is this a persistent human or a script? | `wallet_id` (pseudonymous), `client_fingerprint` (hash of UA/screen res), `time_since_last_action` |
+| `core_action_complete` | Did the user derive value? (North Star input) | `wallet_id`, `action_type` (craft/quest/pvp), `duration_seconds`, `token_cost`, `token_reward` |
+| `token_acquire` | What is the source of funds? | `wallet_id`, `source_type` (**enum**: `earned_gameplay`, `bought_exchange`, `bridged_external`), `amount`, `tx_hash` |
+| `token_spend` | Is circulation speculative or functional? | `wallet_id`, `sink_type` (**enum**: `gameplay_fee`, `marketplace_buy`, `liquidity_pool`), `amount`, `counterparty_wallet_id` |
+| `item_trade` | Is trading organic or wash-trading? | `wallet_id`, `item_id`, `price_token`, `counterparty_wallet_id`, `time_held_before_trade` |
+
+**Differentiating Bots from Humans**
+To detect speculation/bots without PII, engineer these derived metrics in your analytics layer:
+1.  **Action Regularity:** Humans have variable intervals; bots often act at fixed intervals. Track `time_since_last_action` variance per wallet.
+2.  **Session Depth:** Bots often perform one action (trade) and leave. Humans engage in sessions with multiple `core_action_complete` events.
+3.  **Wash-Trade Detection:** Flag trades where `wallet_id` and `counterparty_wallet_id` share the same `client_fingerprint` or IP subnet (if available legally), or where `time_held_before_trade` is near zero repeatedly.
+
+**Cohort Strategy: Earners vs. Buyers**
+You cannot distinguish these groups without tagging the *source* of the token at the moment of acquisition.
+*   **Cohort A (Earners):** Users whose first `token_acquire` event has `source_type: earned_gameplay`.
+*   **Cohort B (Buyers):** Users whose first `token_acquire` event has `source_type: bought_exchange`.
+*   **Retention Query:** Compare the % of Cohort A vs. Cohort B returning to perform a `core_action_complete` in Week 1, Week 2, and Week 4.
+
+**Identifier Seam & Privacy**
+*   **Stable ID:** Use the `wallet_id` as the primary key for cross-session tracking. This is stable but pseudonymous.
+*   **PII Routing:** Do not store IP addresses or raw device fingerprints in the product analytics database. Hash them immediately upon ingestion. Route any linkage keys to your privacy compliance store (`privacy-compliance.md`), not the growth dashboard.
+*   **Bot Logic:** Do not attempt to block bots in tracking; instrument the *signals* so the data team can filter them post-hoc.
+
+**This-Week Steps**
+1.  **Engineering:** Implement `token_acquire` with the strict `source_type` enum before August 15; without this, the earner/buyer retention question is `UNVERIFIED`.
+2.  **Data:** Define the SQL/logic for "Wash Trade Flag" based on `counterparty_wallet_id` and `time_held_before_trade` to run on Day 1 data.
+3.  **Product:** Reject "Total Token Volume" as a success metric for the launch deck; replace it with "WAU completing Core Actions" to avoid vanity inflation by bots.
+
+*Note: Do not assert benchmark retention rates for "good" economies; compare Day 30 results strictly against your Day 7 baseline. Any metric without the `source_type` property implemented by code freeze will be unusable for your primary hypothesis.*

@@ -1,0 +1,52 @@
+# Diagnostic Strategy: Paywall Retention Drop-Off
+
+To isolate whether the retention drop (42% → 28%) stems from price sensitivity, value perception, or friction, execute this three-phase diagnostic before considering a revert to a soft paywall.
+
+### Phase 1: Behavioral Micro-Metrics (The "Where")
+Implement immediate event tracking on the paywall interface to measure specific friction points. Do not rely on aggregate conversion rates alone.
+
+**Track these specific events:**
+1.  **`paywall_viewed`**: Triggered immediately upon load.
+2.  **`paywall_scroll_depth`**: Fire at 25%, 50%, 75%, and 100% of the pricing content. Low scroll depth suggests immediate price shock or lack of interest; high scroll depth with no conversion suggests friction or specific plan confusion.
+3.  **`payment_button_clicked`**: Distinct from purchase completion. A high click-to-view ratio but low purchase completion indicates **friction** (payment errors, complex forms). A low click-to-view ratio indicates **value/price mismatch**.
+4.  **`time_on_paywall`**: Measure duration between view and exit.
+    *   *Short duration (<5s)*: Immediate rejection (Price/Value).
+    *   *Long duration (>30s) with no click*: Confusion or hesitation (Value proposition unclear).
+5.  **`error_encountered`**: Track any failed payment API calls or form validation errors.
+
+### Phase 2: Segmentation Analysis (The "Who")
+Analyze the drop-off by user cohorts to identify resilience patterns. Cross-reference `paywall_viewed` against these segments:
+
+*   **Engagement Intensity:** Compare users with >10 sessions vs. <3 sessions prior to Day 30. High-engagement users leaving immediately signals a critical value disconnect.
+*   **Content Consumption:** Did they consume "premium" teasers during the trial? Users who engaged deeply with locked content previews should have higher willingness to pay.
+*   **Device/Platform:** Is the drop-off higher on mobile (potential UI friction) vs. desktop?
+*   **Acquisition Source:** Do organic users behave differently than paid ad users? Paid users may have lower intent retention once costs increase.
+
+**Hypothesis Validation Matrix:**
+| Symptom | Likely Cause | Primary Metric to Watch |
+| :--- | :--- | :--- |
+| High exit before scroll | **Price Shock** | Bounce rate on paywall load |
+| High scroll, low click | **Value Gap** | Scroll depth % vs. Click-through rate |
+| High click, low purchase | **Friction** | `payment_button_clicked` vs. `purchase_completed` |
+| Uniform drop across all segments | **Structural Issue** | Aggregate conversion rate |
+
+### Phase 3: Rapid A/B Testing (The "Why")
+Before reverting to a soft paywall, run two targeted A/B tests on 10% of traffic each to validate solutions:
+
+**Test A: Value Reinforcement (Addressing Value Perception)**
+*   **Variant:** Modify the paywall copy to explicitly recap the user's specific usage stats (e.g., "You've meditated 12 times this month. Continue your streak for $X").
+*   **Goal:** Increase `payment_button_clicked` by reinforcing sunk cost and habit.
+
+**Test B: Friction Reduction (Addressing Flow Issues)**
+*   **Variant:** Simplify the checkout to a single-step Apple Pay/Google Pay button, removing email entry fields if possible.
+*   **Goal:** Increase `purchase_completed` rate relative to clicks.
+
+**Test C: The "Soft" Hybrid (Addressing Price Sensitivity)**
+*   **Variant:** Instead of a hard block, allow 3 more sessions post-trial but restrict *new* content.
+*   **Goal:** Measure if extended habit formation increases Day-35 conversion compared to the hard stop.
+
+### Recommendation for Head of Monetization
+Do not revert to a soft paywall globally yet. The data suggests a specific breakdown in the conversion funnel rather than a total rejection of the monetization model. Use the micro-metrics to identify the bottleneck. If `payment_button_clicked` is low, the issue is value/price (run Test A). If clicks are high but purchases low, it is friction (run Test B). Only if both metrics are strong yet retention remains low should you consider the structural change to a soft paywall.
+
+*Ensure all new events are validated in GA4 DebugView before full rollout to avoid data gaps.*
+*Run tests for a minimum of 14 days to capture full weekly usage cycles.*

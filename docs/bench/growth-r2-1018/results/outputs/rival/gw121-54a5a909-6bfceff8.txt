@@ -1,0 +1,61 @@
+### Measurement Plan: Canada Activation Drop Investigation
+
+**Objective:** Isolate whether the activation drop (18% → 11%) is caused by UX confusion or technical latency to inform the Friday rollback/hotfix decision.
+
+#### 1. Immediate Diagnostic Metrics (Track Daily)
+
+| Metric | Purpose | Threshold for Concern |
+|--------|---------|-----------------------|
+| **Step 3 Load Time (P95)** | Detect server latency | >2.0s indicates performance bug |
+| **Step 3 Error Rate** | Catch technical failures | >1% indicates broken functionality |
+| **"Share" Button Click-Through** | Measure feature engagement | <5% suggests users ignore/confused by UI |
+| **Step 3 → Step 4 Conversion** | Isolate drop-off point | Significant gap vs. pre-Oct 4 baseline confirms friction |
+| **Time-on-Step 3** | Identify confusion vs. speed bumps | Increased time + drop-off = confusion; Instant drop-off = error/latency |
+
+#### 2. Critical Data Segments
+
+To distinguish between confusion and bugs, slice all metrics above by:
+
+*   **Device/OS:** iOS vs. Android vs. Web (isolates client-side rendering issues).
+*   **Network Type:** WiFi vs. Cellular (identifies payload size/latency sensitivity).
+*   **User Cohort:**
+    *   *Control:* Users who missed the feature flag (if available).
+    *   *Exposed:* Users who saw the new button.
+*   **Geographic Micro-Segments:** Toronto/Vancouver vs. Rural Canada (isolates regional server routing issues).
+*   **Interaction Path:**
+    *   Users who clicked "Share" vs. Users who ignored it.
+    *   *Hypothesis:* If converters drop only among those who *clicked*, it's a post-click technical failure. If they drop among those who *saw but didn't click*, it's UI confusion or distraction.
+
+#### 3. Qualitative Validation (48-Hour Turnaround)
+
+*   **Session Replay Sampling:** Watch 20 random recordings of Canadian users dropping off at Step 3. Look specifically for "rage clicks" on the share button or frozen screens.
+*   **Support Ticket Tagging:** Filter tickets from Oct 4–present containing "slow," "stuck," or "share" from Canadian IP addresses.
+
+#### 4. Decision Framework for VP of Product
+
+Use this logic tree based on the data collected by Thursday EOD:
+
+*   **Rollback Immediately If:**
+    *   Step 3 Error Rate > 5% OR P95 Load Time > 4s.
+    *   Drop-off is uniform across all devices (suggests systemic backend failure).
+    *   Session replays show frozen screens or infinite loaders.
+
+*   **Push Hotfix If:**
+    *   Load times are normal (<1.5s) but "Share" click-through is near zero.
+    *   Drop-off is isolated to specific OS versions (client-side bug).
+    *   Users are clicking "Share" but failing to complete the invite flow (fixable API/handling error).
+
+*   **Monitor (No Action) If:**
+    *   Metrics match pre-launch baselines except for a slight, non-significant dip (may be noise or external factor).
+    *   Drop-off is concentrated entirely among users who successfully shared (potential viral loop friction, not onboarding breakage).
+
+#### 5. Implementation Checklist
+
+1.  **Verify Tracking:** Confirm `step_view`, `button_click`, and `error_throw` events are firing correctly in GA4/Mixpanel for Canadian users specifically.
+2.  **Set Alerts:** Create slack alerts for Step 3 conversion rate dropping below 12% for any 4-hour window.
+3.  **Dashboard:** Build a temporary "Canada Launch Watch" dashboard comparing Oct 1–3 (baseline) vs. Oct 4–Today side-by-side.
+
+Focus collection efforts on the next 72 hours to ensure data maturity before the Friday deadline.
+
+*Note: Ensure all data windows compare full days to avoid time-zone skew between your analytics tool and Canadian local time.*
+*Do not aggregate "Share" clickers with non-clickers in the primary conversion metric; keep them separate to diagnose intent vs. failure.*

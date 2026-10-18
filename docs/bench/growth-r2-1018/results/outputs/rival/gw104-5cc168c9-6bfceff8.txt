@@ -1,0 +1,26 @@
+### Diagnostic Plan: Isolating Signal from Noise in AgriGrow Usage Data
+
+To determine whether the volatility between April 5th and April 25th stems from data collection errors or genuine external factors, execute the following three-step isolation protocol immediately. Do not attempt to forecast server capacity until this diagnosis is complete, as basing infrastructure decisions on corrupted data risks severe under- or over-provisioning for the June harvest.
+
+**1. Segment by User Identity vs. Device ID**
+The hypothesis of "farmers sharing devices" is the most likely cause of artificial spikes if your current metric counts *devices* rather than *unique users*.
+*   **Action:** Re-query your data for the volatile period separating "Daily Active Devices" from "Daily Active Users" (if user IDs exist).
+*   **Interpretation:** If device counts spike while unique user counts remain stable, the noise is behavioral (sharing), not technical. If both metrics fluctuate identically, the issue is likely network-related or a logging bug.
+*   **Decision Point:** If sharing is confirmed, adjust your capacity model to reflect "users per device" ratios rather than raw device hits.
+
+**2. Correlate with Network Infrastructure Logs, Not Just Weather**
+Since weather logs did not match usage spikes, the correlation likely lies with network availability rather than agricultural conditions. In regions with intermittent connectivity, users often accumulate requests locally and sync in bursts when connectivity is restored.
+*   **Action:** Overlay your usage timestamps with local ISP outage reports or network latency logs for the specific regions in Ethiopia you serve. Look for "storm patterns" in data transmission—large clusters of requests arriving simultaneously after a gap.
+*   **Interpretation:** If usage spikes consistently follow periods of known network downtime, the "spike" is actually pent-up demand from previous days. This is real usage, just delayed.
+*   **Decision Point:** If confirmed, smooth your data by re-allocating burst traffic back to the likely time of origin (e.g., divide the spike volume across the preceding outage days) for accurate capacity planning.
+
+**3. Audit Client-Side Logging Logic**
+If neither sharing nor network bursts explain the variance, suspect a client-side bug causing duplicate event firing.
+*   **Action:** Inspect the raw event logs for the spike days. Check for identical timestamps, identical user/device IDs, and identical payload hashes occurring in rapid succession (milliseconds apart).
+*   **Interpretation:** A bug in the offline-sync logic could cause the app to re-send historical data multiple times upon reconnection, or a loop could be firing the "app open" event repeatedly.
+*   **Decision Point:** If duplicate payloads are found, your data collection is broken. You must deduplicate the historical dataset before any analysis and deploy a code fix to prevent recurrence.
+
+**Recommendation for Head of Operations**
+Pause all server capacity forecasting based on the April 5–25 dataset. Proceed with the segmentation and log audit above. If the noise is due to **device sharing**, your current server load is accurate, but your user growth metrics are inflated. If the noise is **network bursting**, your peak load requirements are real but timing is unpredictable; plan for burst capacity. If the noise is a **logging bug**, discard the three-week window entirely and extrapolate capacity needs from the stable periods prior to April 5th, applying a conservative 20% buffer for the harvest season.
+
+Only after categorizing the noise source should you finalize the June infrastructure budget.

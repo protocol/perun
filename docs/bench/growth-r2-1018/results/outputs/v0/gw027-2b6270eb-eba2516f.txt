@@ -1,0 +1,33 @@
+### Critical Event Taxonomy for Legal Tech Beta
+
+To distinguish between successful automation and workload shifting, instrument only the following four events. Each answers a specific question about value delivery. Do not instrument "time spent" as a standalone metric yet; it is a derived property of the sequence below.
+
+**1. `suggestion_presented`**
+*   **Question:** What is the total surface area of automation offered?
+*   **Properties:** `contract_id`, `suggestion_type` (e.g., liability cap, termination clause), `risk_level_auto_assigned`, `session_id`.
+*   **Why:** This is your denominator. Without knowing how many suggestions were made, you cannot calculate acceptance rates.
+
+**2. `suggestion_action_taken`**
+*   **Question:** Do users trust the automation enough to accept it without manual rewrite?
+*   **Properties:** `contract_id`, `suggestion_id`, `action` (enum: `accepted`, `rejected`, `edited`, `ignored`), `time_to_decision_seconds`.
+*   **Why:** This is your core value signal.
+    *   `accepted`: True automation success.
+    *   `edited`: Partial success (the tool found the issue, but the fix wasn't perfect).
+    *   `rejected/ignored`: Potential false positives or trust gaps.
+    *   *Note on Time:* Capture `time_to_decision_seconds` here. If a user spends 20 minutes before `accepted`, that is deep review. If they spend 20 minutes before `rejected`, that is confusion or disagreement. Aggregating this later will tell you if time correlates with trust or friction.
+
+**3. `manual_override_performed`**
+*   **Question:** Is the tool shifting workload by forcing users to fix its mistakes?
+*   **Properties:** `contract_id`, `section_id`, `override_reason_code` (if available via UI dropdown), `characters_changed`.
+*   **Why:** High volumes of `suggestion_presented` followed by `manual_override_performed` (without an intermediate `accepted`) indicates the tool is creating noise, not saving time. This distinguishes "automation" from "additional review burden."
+
+**4. `contract_finalized`**
+*   **Question:** Did the tool accelerate the end-to-end workflow?
+*   **Properties:** `contract_id`, `total_duration_seconds` (upload to finalize), `version_count`, `user_id` (pseudonymous).
+*   **Why:** This is your North Star input. If `suggestion_action_taken` is high but `total_duration_seconds` does not decrease compared to manual baselines, the tool is not delivering efficiency.
+
+### Implementation Notes for Data Engineering
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for cohort analysis across sessions. Do not log raw email addresses or firm names in event properties; route PII to your privacy compliance layer.
+*   **Stage Awareness:** You are in `mvp` stage with 5 firms. Do not instrument "clicks," "scrolls," or "hover states." Only instrument the four events above. If you cannot name the question an event answers, do not track it.
+
+**This Week's Step:** Implement the schema for these four events only. Once live, query the ratio of `accepted` vs. `edited` + `manual_override_performed`. If `edited` + `override` exceeds 40% of `suggestion_presented`, the model is shifting workload, not saving it.

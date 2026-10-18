@@ -1,0 +1,41 @@
+### SwiftWing Oakhaven Trial: Measurement Plan
+
+**North Star Metric:** Percentage of scheduled deliveries completed within the target time window without triggering a community disturbance event. This rejects vanity metrics like "total flights flown," which rise even if abort rates or complaints increase.
+
+**1. Operational Viability (The Core Action)**
+Measure the retention of the delivery attempt, not just the average speed.
+*   **Event:** `delivery_attempt_outcome`
+    *   **Properties:** `status` (success, aborted_wind, aborted_technical, aborted_other), `duration_seconds`, `weather_condition_code`.
+    *   **Question Answered:** Does wind variability make the service unreliable enough to cancel scaling?
+    *   **Threshold for Failure:** If the `aborted_wind` rate exceeds 15% over any 3-day rolling window, the operational model is not robust enough for scale. The 10% pilot rate is your baseline; a rise indicates the Oakhaven micro-climate or flight paths are problematic.
+*   **Event:** `delivery_latency_bucket`
+    *   **Properties:** `bucket` (<10m, 10-15m, >15m), `vehicle_type` (drone vs. van benchmark).
+    *   **Question Answered:** Are we actually faster than vans consistently, or just on average?
+    *   **Threshold for Success:** >80% of successful deliveries must fall in the `<15m` bucket. If the median drifts >15m, the "faster than van" hypothesis fails regardless of the average.
+
+**2. Community Acceptance (Observable Behaviors Only)**
+Since surveys are excluded, infer acceptance from passive signals and operational friction.
+*   **Event:** `community_disturbance_signal`
+    *   **Properties:** `source` (noise_complaint_call, local_authority_notice, social_media_mention_geo_tagged), `severity` (low, medium, high).
+    *   **Question Answered:** Is the noise profile generating active friction?
+    *   **Threshold for Failure:** >2 verified noise complaints per 100 successful deliveries. This is a hard guardrail; exceeding it risks regulatory shutdown.
+*   **Event:** `customer_repeat_request`
+    *   **Properties:** `user_id` (pseudonymous), `days_since_first_delivery`.
+    *   **Question Answered:** Do customers choose us again without prompting? (Behavioral proxy for satisfaction).
+    *   **Threshold for Success:** >25% of unique users request a second delivery within 14 days. If speed is high but repeat usage is low, the "noise" or "perception" factor is suppressing value.
+
+**3. Experiment Rigor & Decision Logic**
+Do not peek at daily averages to declare victory. Pre-commit to the four-week duration.
+*   **Primary Metric:** Completion Rate (Success / Total Attempts).
+*   **Guardrail Metric:** Disturbance Signals per 100 Deliveries.
+*   **Decision Rule:**
+    *   **Scale:** Completion Rate ≥ 90% AND Disturbance Rate < 2%.
+    *   **Stop:** Disturbance Rate ≥ 2% (immediate halt regardless of speed).
+    *   **Iterate:** Completion Rate < 90% but Disturbance Rate < 2%. Analyze `weather_condition_code` to determine if wind aborts are predictable enough to build scheduling guards.
+
+**This Week's Steps:**
+1.  Instrument the `delivery_attempt_outcome` event with specific `aborted_wind` tagging before April 5th; without this, the 10% baseline cannot be compared.
+2.  Establish a feed for `community_disturbance_signal` by linking local authority logs or a dedicated hotline tag to the analytics pipeline; do not wait for manual reports.
+3.  Define the pseudonymous `user_id` generation method now to ensure repeat requests can be tracked without violating privacy compliance.
+
+*Note: All thresholds above are derived from your pilot baseline and operational constraints, not external benchmarks. Weather data must be logged locally to correlate with aborts.*

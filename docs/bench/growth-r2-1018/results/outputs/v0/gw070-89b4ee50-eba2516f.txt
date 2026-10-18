@@ -1,0 +1,45 @@
+### VoiceHub Event Taxonomy Proposal
+
+**Core Principle:** Instrument only events that answer a named business question. Do not log "just in case." The following schema resolves the `join_room`/`enter_channel` inconsistency by mapping all entry points to a single semantic action: **`room_enter`**.
+
+#### 1. Standardized Event Names
+Replace all variants (`join_room`, `enter_channel`, `start_session`) with these four canonical events:
+
+*   **`room_enter`**: Fired when a user successfully joins a voice session. (Replaces all legacy entry logs).
+*   **`room_exit`**: Fired when a user leaves a voice session (voluntarily or via disconnect).
+*   **`room_mute_toggle`**: Fired when a user mutes or unmutes their microphone.
+*   **`room_type_view`**: Fired when a user views a list or detail of a specific room type *before* entering (critical for funneling public vs. private discovery).
+
+#### 2. Required Properties (Schema)
+Every event must include these core properties to support both user-level and room-level duration analysis without ambiguity:
+
+| Property Key | Type | Description | Example |
+| :--- | :--- | :--- | : |
+| `event_id` | String | Unique UUID for this specific event instance. | `evt_9f8a...` |
+| `user_pseudonymous_id` | String | **Stable, pseudonymous ID** for the user. Do not use raw PII. | `usr_7721...` |
+| `room_id` | String | Unique identifier for the specific room instance. | `rm_5590...` |
+| `room_type` | Enum | Distinguishes logic for public vs. private spaces. | `public`, `private`, `vip` |
+| `platform` | Enum | Source client. | `ios`, `android` |
+| `app_version` | String | Build version string. | `2.4.1` |
+| `timestamp_ms` | Integer | Unix epoch milliseconds. | `1694764800123` |
+
+**Context-Specific Properties:**
+*   For **`room_enter`**: Add `entry_source` (e.g., `search`, `invite_link`, `home_feed`) to diagnose acquisition leaks.
+*   For **`room_exit`**: Add `exit_reason` (e.g., `user_initiated`, `network_error`, `kicked`) to separate churn from technical failure.
+*   For **`room_mute_toggle`**: Add `state` (`muted`, `unmuted`).
+
+#### 3. Duration Strategy (Answering Your Question)
+Do not track duration as a property on a single event. Instead, derive duration in your analytics warehouse by pairing **`room_enter`** and **`room_exit`** using the `user_pseudonymous_id` and `room_id`.
+
+*   **User-Level Duration:** Sum time between enter/exit pairs for a specific `user_pseudonymous_id` across all rooms in a session.
+*   **Room-Level Duration:** Aggregate time between enter/exit pairs for a specific `room_id` to measure room liveliness.
+
+This approach prevents data loss if a crash prevents a "duration calculated" event from firing; you still have the start and stop markers to compute the delta later.
+
+#### 4. Implementation Guardrails
+*   **Identifier Seam:** Ensure `user_pseudonymous_id` persists across app reinstalls where possible, but strictly route any mapping to real identity (PII) to your privacy compliance system (`privacy-compliance.md`). Do not log emails or phone numbers in these events.
+*   **Validation:** Before the September 15 code freeze, verify that 100% of `room_enter` events have a matching `room_type`. Any event missing this property is `UNVERIFIED` and breaks your public/private funnel analysis.
+
+**This Week's Step:** Draft the JSON schema for `room_enter` and `room_exit` with the properties above and circulate it to the iOS and Android leads for explicit sign-off by Wednesday. Reject any PR that introduces new event names outside this list.
+
+*Note: This schema assumes your analytics pipeline can handle join operations on `room_id` for duration calculation. If not, prioritize implementing that capability before finalizing the mobile SDK update.*

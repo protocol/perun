@@ -1,0 +1,41 @@
+### Tracking Plan for BazaarLink: From Vanity to Value
+
+**1. Redefine the North Star**
+Reject "Total Booked Appointments" as your primary metric; with a 30% dispute/cancellation rate, this is a vanity metric that rises while trust erodes.
+*   **New North Star:** **Weekly Successful Completions** (bookings that pass the 24-hour mark without dispute or cancellation).
+*   **Why:** This only rises when real value is delivered to both the customer and the provider.
+
+**2. Event Taxonomy: Answering Named Questions**
+Do not instrument "everything." Track only these specific events to diagnose the 30% leak and the off-platform risk:
+
+| Event Name | Question It Answers | Key Properties |
+| :--- | :--- | :--- |
+| `search_performed` | Is demand finding supply? | `search_query`, `location`, `result_count` |
+| `provider_profile_viewed` | Does the listing build trust? | `provider_id`, `verification_status`, `time_on_page` |
+| `chat_initiated` | Are users moving off-platform? | `session_id`, `time_to_booking` (Short time suggests off-platform collusion) |
+| `booking_requested` | Is the intent clear? | `provider_id`, `service_type`, `price_quoted` |
+| `booking_confirmed` | Did the provider accept? | `response_time`, `provider_tenure` |
+| `service_started` | Did the interaction actually happen? | `timestamp`, `geolocation_match` (optional) |
+| `completion_verified` | **The North Star Component** | `status` (completed/disputed/cancelled), `dispute_reason` |
+| `off_platform_signal` | **Critical Risk Indicator** | `contains_phone_number` (in chat), `external_link_clicked` |
+
+**3. The Identifier Seam**
+To track the full journey from search to completion, you must link events to a **stable, pseudonymous User ID** and **Provider ID**.
+*   *Note:* Do not use raw emails or phone numbers as primary keys in analytics. Route PII handling and consent logic to your privacy compliance framework. This stable ID allows you to see if a specific provider correlates with high dispute rates, regardless of how many accounts a bad actor creates.
+
+**4. Diagnostic Funnel (Bottom-Up)**
+Analyze your data in this order to stop wasting acquisition spend on a leaky bucket:
+1.  **Retention/Quality:** Of the bookings made, what % reach `completion_verified`? Segment this by `provider_verification_status`. If unverified providers have a 50% fail rate vs. 10% for verified, your verification process is the bottleneck.
+2.  **Activation:** Of those who view a profile, how many initiate a `chat` or `booking_requested`?
+3.  **Acquisition:** Only after fixing the above, look at `search_performed` volume.
+
+**5. Immediate Actions for Operations**
+*   **Correlate Chat-to-Book Time:** Query the time delta between `chat_initiated` and `booking_requested`. If bookings happen instantly (<1 min) or after very short chats, flag these as high-risk for off-platform deals or fraud.
+*   **Dispute Reason Tagging:** Ensure `completion_verified` includes a mandatory `dispute_reason` enum (e.g., "no-show", "price_change", "poor_quality"). You cannot fix what you do not categorize.
+*   **Provider Cohort Analysis:** Group new providers by their first 10 bookings. If the "first 10" cohort has a significantly higher dispute rate than established providers, your onboarding verification is failing to filter bad actors early.
+
+**This Week's Step:**
+Run a cohort query comparing `completion_verified` rates for providers with `verification_status: pending` vs. `verified`. If the gap is >15%, halt new bookings from pending providers until manual review is completed. If the gap is negligible, the issue lies in the platform mechanics (e.g., pricing transparency), not provider identity.
+
+*Note: All metrics above are currently `UNVERIFIED` until the events are instrumented in your pipeline. Do not estimate values; implement the tracking first.*
+*Avoid "peeking" at early results; define your sample size for any A/B test on verification flows before launching.*

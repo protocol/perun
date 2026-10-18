@@ -1,0 +1,46 @@
+# Welcome Email Sequence Experiment: KPI Dashboard Specifications
+
+**Experiment Context:** Control (Immediate Send) vs. Variant (24-Hour Delay)
+**Sample Size:** 10,000 subscribers (5,000 per variant)
+**Start Date:** November 1st
+
+## Primary Decision Metrics
+These metrics will determine the winner of the experiment based on the hypothesis that delayed contact increases engagement.
+
+1.  **7-Day Cumulative Click-Through Rate (CTR)**
+    *   *Definition:* Unique users who clicked at least one link in any welcome email within 7 days of signup / Total users in variant.
+    *   *Why:* Directly measures the hypothesis goal of increasing engagement beyond the current 4% baseline.
+
+2.  **Day 1 Unsubscribe Rate (Critical Guardrail)**
+    *   *Definition:* Unique users who unsubscribed within 24 hours of signup / Total users in variant.
+    *   *Why:* Specifically monitors the "silence risk." A statistically significant increase here indicates the delay causes immediate attrition before value is delivered.
+
+3.  **Email List Churn Rate (Net)**
+    *   *Definition:* (Unsubscribes + Hard Bounces) / Total users in variant over 7 days.
+    *   *Why:* Captures total list health impact, ensuring increased clicks don't come at the cost of overall list degradation.
+
+## Secondary Behavioral Metrics
+These metrics explain *how* the user behavior changed and validate the mechanism of the hypothesis.
+
+4.  **Dashboard Activation Rate (Pre-Email)**
+    *   *Definition:* % of users who performed a "core action" (e.g., read an article, customized settings) *before* receiving the first email.
+    *   *Why:* Validates the assumption that users actually explore the dashboard during the 24-hour silence. If this remains low, the delay strategy is flawed.
+
+5.  **Time-to-First-Click (Median)**
+    *   *Definition:* Median time elapsed from signup to first email click.
+    *   *Why:* Determines if the delay shifts engagement timing or simply suppresses it.
+
+6.  **Sequence Completion Rate**
+    *   *Definition:* % of users who open/click the *final* email in the welcome sequence.
+    *   *Why:* Measures if the delay improves long-term sequence retention or causes users to disengage from the flow entirely.
+
+7.  **Spam Complaint Rate**
+    *   *Definition:* % of users marking the first email as spam.
+    *   *Why:* Delayed emails may feel irrelevant or unexpected if the user has already formed an opinion of the product; this monitors deliverability risk.
+
+## Implementation Notes for Data Science
+*   **Cohort Window:** Strictly enforce a 7-day observation window for all metrics starting from the `signup_timestamp`, not the `email_send_timestamp`.
+*   **Segmentation:** Break down all metrics by `signup_source` and `device_type` to ensure the delay doesn't negatively impact specific high-value segments.
+*   **Statistical Significance:** Calculate confidence intervals for the difference in proportions between Control and Variant for all primary metrics before declaring a winner.
+
+*Ensure the dashboard flags any guardrail metric (Unsubscribe/Churn) that exceeds the control group by >10% relative difference immediately, regardless of sample size completion.*

@@ -1,0 +1,55 @@
+# HomeVoice Kitchen Command Measurement Plan (Beta)
+
+## Objective
+Quantify feature utility and user frustration for the new kitchen voice command feature while adhering to strict privacy constraints (no audio recording, no PII).
+
+## Core Measurement Principles
+1.  **No Audio Content:** We capture metadata about the *interaction*, never the spoken words.
+2.  **No PII:** User IDs are hashed; no location data finer than "US Beta Group."
+3.  **Failure Visibility:** Explicitly track silent failures and retries, which are currently invisible.
+
+## Proposed Event Schema
+
+All events include: `timestamp`, `session_id` (rotating daily), `device_model`, `firmware_version`.
+
+### 1. Interaction Lifecycle Events
+
+| Event Name | Trigger | Properties | Purpose |
+| :--- | :--- | :--- | : |
+| `voice_intent_detected` | Device wakes up and detects speech pattern. | `intent_category` (timer, temp, mode, unknown), `confidence_score` (0-1) | Measures if the system correctly identifies the *type* of request without knowing the specific time/temp requested. |
+| `command_execution_started` | System attempts to send command to appliance. | `appliance_type` (oven, microwave, etc.), `intent_category` | Tracks attempted utility. |
+| `command_execution_success` | Appliance confirms action received. | `latency_ms` (time from wake to confirm) | Current success metric. |
+| `command_execution_failed` | Appliance rejects or times out. | `error_code` (network, unsupported, timeout), `silent_failure_flag` (bool) | **Critical:** Captures silent failures where the device heard but couldn't act. |
+| `voice_retry_attempt` | User speaks again within 10s of a failure/timeout. | `previous_event_id`, `retry_count` (1, 2, 3+) | **Proxy for Frustration:** Multiple retries indicate the system isn't understanding or acting. |
+| `voice_abandonment` | User walks away or manually cancels after a failed attempt. | `steps_before_abandon` | Indicates severe friction. |
+
+### 2. Derived Metrics for Stakeholders
+
+**For Hardware Engineering Lead (Utility & Performance):**
+*   **Intent Recognition Rate:** `% of voice_intent_detected` where `intent_category` != `unknown`.
+    *   *Goal:* Validate assumption that "timer" is the dominant category.
+*   **Execution Success Rate:** `(command_execution_success) / (command_execution_started)`.
+*   **Silent Failure Rate:** `% of commands` where `silent_failure_flag` is true.
+    *   *Action:* High rates here indicate firmware logic errors, not user error.
+*   **Average Latency:** Time from `voice_intent_detected` to `command_execution_success`.
+
+**For Privacy Compliance Officer (Privacy & Frustration):**
+*   **Frustration Index:** A composite score calculated as:
+    `(Avg Retries per Session * 0.6) + (Abandonment Rate * 0.4)`.
+    *   *Privacy Safe:* Uses only counts and flags, no audio or text.
+*   **Data Minimization Audit:** Verification that `intent_category` is an enum (e.g., "timer") and never contains raw strings (e.g., "5 minutes").
+
+## Implementation Constraints
+*   **Confidence Scores:** If `confidence_score` < 0.7, log as `intent_category: low_confidence` rather than guessing. This helps distinguish between "user spoke unclearly" and "system misheard."
+*   **Retry Window:** A retry is only counted if it occurs within 10 seconds of a failure event. This prevents counting distinct, unrelated commands as retries.
+*   **Local Processing:** Ensure `intent_category` classification happens on-device where possible; only the category label is transmitted.
+
+## Validation Plan
+Before Jan 5th rollout, validate on 50 internal devices:
+1.  Simulate network loss to verify `silent_failure_flag` triggers.
+2.  Speak gibberish to ensure `intent_category` returns `unknown` and not raw audio snippets.
+3.  Confirm no PII or location data appears in the debug logs.
+
+This plan provides the necessary visibility into failure modes and user frustration without compromising user privacy or capturing sensitive audio data.
+
+*Note: This plan assumes the device firmware can distinguish between a network timeout and a command rejection locally. If not, the `error_code` property will need adjustment.*

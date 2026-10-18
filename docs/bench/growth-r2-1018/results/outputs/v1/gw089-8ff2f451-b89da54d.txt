@@ -1,0 +1,30 @@
+### Technical Requirement: Cross-Device Journey Instrumentation for GlobalStage Summit
+
+**Objective:** Enable reconstruction of user journeys across desktop and mobile to validate the hypothesis that visiting ≥3 session rooms correlates with next-year ticket purchase.
+
+**1. The Identifier Seam (Critical Prerequisite)**
+To unify desktop and mobile views, every event must include a `stable_user_id`.
+*   **Requirement:** Generate a persistent, pseudonymous UUID upon account creation or first anonymous session. This ID must be stored in a first-party cookie (web) and secure local storage (mobile), surviving logout/login cycles.
+*   **Constraint:** Do not use raw PII (email, name) as the identifier. Route any PII linkage to the privacy compliance protocol (`privacy-compliance.md`). This ID is the *only* way to correlate the "three room" hypothesis across devices.
+
+**2. Event Taxonomy (Instrument Only What Answers the Hypothesis)**
+Do not instrument "everything." Capture only these specific events with the listed properties. Every event must include: `timestamp`, `stable_user_id`, `device_type`, `app_version`, and `session_id`.
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `session_room_entered` | Did the user visit distinct rooms? | `room_id`, `room_name`, `track_name`, `entry_source` (e.g., agenda, notification) |
+| `networking_interaction_started` | Did the user engage in networking? | `interaction_type` (chat, video, 1:1), `target_user_id` (pseudonymous) |
+| `booth_visited` | Did the user visit a sponsor booth? | `booth_id`, `booth_name`, `dwell_time_seconds` (calculated on exit) |
+| `ticket_purchase_completed` | Did the user convert for next year? | `ticket_type`, `price`, `currency`, `payment_method` |
+
+**3. Implementation Rules for Engineering**
+*   **Deduplication:** Ensure `session_room_entered` fires only once per unique room per user per event. Re-entries do not count toward the "three different rooms" metric unless the hypothesis specifically requires repeat visits (currently assumed distinct).
+*   **Latency:** Events must be batched locally if offline but flushed immediately upon reconnection. Loss of `session_room_entered` events invalidates the core hypothesis test.
+*   **Validation:** Before December 5th, run a smoke test verifying that a single `stable_user_id` appearing on two different `device_type` values correctly aggregates room counts in the data warehouse.
+
+**4. Immediate Next Steps (This Week)**
+1.  **Define the Schema:** Finalize the JSON schema for the four events above and share with the backend lead for approval by [Date].
+2.  **Verify ID Stability:** Confirm the `stable_user_id` generation logic handles the transition from anonymous guest to registered attendee without breaking the chain.
+3.  **Dry Run:** Instrument a staging environment and verify that a test user visiting three rooms on mobile and two on desktop appears as a single user with five distinct room entries in the analytics preview.
+
+*Note: Do not estimate current conversion rates or set "good" thresholds for the 3-room metric; these must be derived from the event data post-summit. If the `stable_user_id` cannot be implemented before Dec 5th, the cross-device hypothesis is UNVERIFIED.*

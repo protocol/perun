@@ -1,0 +1,22 @@
+**Decision: Do not roll out. Extend the experiment with a pre-committed design to isolate retention impact.**
+
+The current result is `UNVERIFIED` as a win because the guardrail metric (Daily Active Users) regressed. A 20% lift in profile completion is a secondary "activation" metric; if it costs a 5% drop in engagement, the net value to the business is negative until proven otherwise. The drop may be noise, novelty shock, or genuine harassment, but you cannot distinguish these without a rigorous read.
+
+**Immediate Actions (This Week):**
+
+1.  **Re-run with Pre-committed Stopping Rule:** Restart the A/B test (or extend the current one if randomization holds) with a fixed sample size calculated to detect a **1% minimum detectable effect (MDE)** on **Week-2 Retention** as your *primary* metric. Do not peek at p-values daily. If you must monitor continuously, switch to an **always-valid (sequential)** testing framework. Reading a fixed-horizon test early inflates false positives; the current "20% lift" may be statistical noise if the test wasn't sized for it.
+2.  **Define the Guardrail Tripwire:** Set a hard stop if **Day-7 Retention** in the treatment group drops more than **2%** relative to control. This is your break-even point: if the prompt drives completions but kills return visits by >2%, the long-term Lifetime Value (LTV) loss outweighs the profile data gain.
+3.  **Instrument the "Harassment" Signal:** You cannot measure "feeling harassed" directly. Instead, instrument a specific event: `profile_prompt_dismissed` vs. `profile_prompt_completed`. Calculate the completion rate *conditional* on the prompt being shown. If dismissal rates are high (>80%) and followed by immediate session abandonment, the prompt is friction. If users complete the profile but never return, the value proposition of the completed profile is broken.
+
+**Metrics to Report to the VP:**
+
+*   **Primary:** Week-2 Retention Cohort (users who signed up March 1–15, returned in Week 2). Compare Treatment vs. Control.
+*   **Guardrail:** Day-1 and Day-7 Retention. If either dips below the tripwire, the feature fails regardless of completion rates.
+*   **Input Metric:** `profile_completion_rate` (only for users who saw the prompt).
+*   **North Star Check:** Does `weekly_active_users_with_completed_profile` actually correlate with higher long-term retention in your historical data? If completed profiles don't predict retention historically, optimizing for them is vanity.
+
+**The Call:**
+If the extended test shows a statistically significant lift in profile completion *without* breaching the Day-7 retention tripwire, ship to 10% of traffic for a global canary. If the retention drop persists or widens, kill the feature. The 5% drop observed in the initial window is a sufficient warning to halt a global rollout of 2 million users; scaling a engagement-killing feature would be catastrophic.
+
+*Note: Ensure user identifiers used for these cohorts are pseudonymous and routed to your privacy compliance protocol; do not use raw PII for analytics segmentation.*
+*Do not estimate "good" retention benchmarks; compare these results strictly against your own pre-test baseline.*

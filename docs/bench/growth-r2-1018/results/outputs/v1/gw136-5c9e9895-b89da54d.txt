@@ -1,0 +1,27 @@
+**Strategy: Isolate, Exclude, and Annotate (Do Not Impute)**
+
+**Step 1: Immediate Isolation and Tagging**
+Do not attempt to impute (fill in) the missing session data for the affected 30%. Imputing behavioral metrics like session duration or retention based on averages will introduce artificial bias, smoothing over the very volatility your editorial team needs to understand. Instead, query your raw logs to identify every user ID with activity timestamps falling strictly between 02:00 and 06:00 UTC last Thursday. Tag these records with a specific flag (e.g., `data_quality_incident_20231026`). This creates a definitive "exclusion list" rather than a guessed dataset.
+
+**Step 2: Segmented Reporting (The "Clean" vs. "Total" View)**
+Generate two distinct views for your weekly report:
+1.  **The Clean Cohort:** Calculate retention and session duration excluding all flagged users. This represents the true behavioral signal of the platform during stable operations.
+2.  **The Impact Scope:** Report the *count* of affected users and their percentage of the total active base. Explicitly state: "30% of potential sessions were lost due to infrastructure failure; metrics below exclude this cohort to prevent distortion."
+This approach prevents the "artificially low" retention numbers from polluting your trend lines while transparently acknowledging the scale of the outage.
+
+**Step 3: Demographic Validation (Confirming the EU Hypothesis)**
+To verify your assumption about European users without relying on the corrupted session data, join the excluded User IDs against your static user profile table (which remains intact). Aggregate the excluded users by their registered `timezone` or `country_code`.
+*   **If >80% match EU timezones:** Your hypothesis is confirmed. Present this as a localized impact.
+*   **If the spread is global:** The impact is broader than assumed.
+Present this demographic breakdown as a separate chart titled "Outage Demographic Impact." This answers the "who" without needing the corrupted behavioral "what."
+
+**Step 4: Guardrail Definition for Future Alerts**
+Define a data quality guardrail: If the volume of sessions in any 4-hour window drops >3 standard deviations below the 4-week rolling average for that specific window, automatically flag the dataset as `UNVERIFIED` before it reaches the dashboard. This prevents future corrupted data from being analyzed as real user behavior.
+
+**Step 5: Executive Narrative for the Review**
+For the Editor-in-Chief and Head of Analytics, frame the narrative as follows:
+*   **Headline:** "Core engagement remains stable; reported dip is a data artifact."
+*   **Evidence:** Show the "Clean Cohort" trend line alongside the "Total" line. The divergence visually proves the outage's effect.
+*   **Conclusion:** "Content performance did not degrade; our ability to measure 30% of users was temporarily blinded. No editorial strategy changes are required based on this week's skewed data."
+
+**Note:** Never fabricate a "recovered" number for the missing 30%; present the gap as a known unknown. Ensure the static profile data used for demographic validation is accessed read-only to prevent accidental overwrites during the join operation.

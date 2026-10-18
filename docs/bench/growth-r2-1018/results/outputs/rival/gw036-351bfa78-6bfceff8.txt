@@ -1,0 +1,37 @@
+### Proposed Instrumentation Strategy: Adaptive Sampling A/B Test
+
+To balance data fidelity with your 7-day battery constraint, do not roll out a global setting or rely solely on user configuration. Instead, implement an **Adaptive Sampling A/B Test** restricted to a small cohort. This approach validates your hypothesis that users prioritize work-hour accuracy over overnight continuity without risking the battery life of your entire beta group.
+
+**1. Experimental Design**
+Randomly assign **10% of your beta users (20 users)** into three distinct groups for a 14-day trial. The remaining 90% continue on the standard 5-minute interval to serve as a control baseline for battery expectations.
+
+*   **Group A (Activity-Triggered):** The device samples every 5 seconds *only* when elevated heart rate or movement is detected (proxy for "activity/work"). It reverts to 5-minute sampling during sedentary periods and sleep.
+*   **Group B (Time-Windowed):** The device samples every 5 seconds strictly between 08:00 and 18:00 local time, regardless of activity, and reverts to 5-minute sampling overnight.
+*   **Group C (User-Configured):** Users receive a toggle in the app to enable "High-Fidelity Stress Mode." Track adoption rates and how many users disable it after seeing the battery impact.
+
+**2. Essential Metrics to Track**
+To measure impact on engagement and charging frequency, instrument the following specific events and properties:
+
+*   **Battery Drain Rate (Primary Guardrail):**
+    *   *Metric:* `battery_depletion_percent_per_day`
+    *   *Goal:* Ensure Group A and B average <14% daily drain (supporting 7-day life). If >20%, the feature fails the constraint.
+*   **Charging Frequency:**
+    *   *Metric:* `charging_events_per_week`
+    *   *Comparison:* Compare against the control group baseline. An increase from 1x/week to 2.5x/week indicates friction.
+*   **Data Fidelity Yield:**
+    *   *Metric:* `stress_data_points_captured` vs. `battery_cost_per_point`
+    *   *Analysis:* Calculate the efficiency ratio. Does Group A capture 80% of the stress events of continuous sampling while using only 50% of the extra battery?
+*   **Engagement & Retention:**
+    *   *Metric:* `stress_dashboard_views_per_week`
+    *   *Metric:* `feature_abandonment_rate` (Users who stop opening the stress tab).
+    *   *Survey Trigger:* If battery drops below 20% before day 5, trigger a micro-survey: "Did battery concerns affect your usage today?"
+
+**3. Implementation Safeguards**
+*   **Hard Stop Logic:** Program the firmware to automatically revert to 5-minute sampling if the battery drops below 30% before day 5 of the cycle. This prevents user frustration from a dead device.
+*   **Cohort Limit:** Do not expand beyond the initial 10% until the 14-day data confirms the battery drain is within acceptable limits.
+
+**Recommendation:**
+Prioritize **Group A (Activity-Triggered)**. It aligns best with your assumption that stress data matters most during activity, minimizing waste during sleep. If Group A maintains >6 days of battery life while capturing >90% of peak stress events, it is the superior strategy over user-configured rates, which often lead to confusion or suboptimal settings.
+
+*Note: Ensure all battery metrics are timestamped to correlate drain specifically with high-frequency sampling windows.*
+*Final decision on rollout should require Group A's average battery life to remain above 5.5 days to provide a safety buffer for older batteries.*

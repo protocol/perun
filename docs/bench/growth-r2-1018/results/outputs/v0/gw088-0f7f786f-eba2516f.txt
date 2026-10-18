@@ -1,0 +1,33 @@
+### Proxy Metrics and Success Criteria for Search Ranking Launch (ClassiRu)
+
+**North Star Proxy: Qualified Click-Through Rate (qCTR)**
+Since "successful hire" is uninstrumented, reject raw CTR as a vanity metric; it rewards clickbait titles rather than relevance. Instead, define **qCTR** as the primary success metric. A "Qualified Click" is a session where a user clicks a job listing AND performs a high-intent micro-action within 5 minutes (e.g., scrolls >50% of the job description, clicks "Show Phone Number," or clicks "Save Job"). This proxies that the user found the listing relevant enough to investigate further, filtering out accidental or misleading clicks.
+
+**Input Metrics (The Funnel)**
+1.  **Activation Depth:** Percentage of search sessions resulting in ≥1 Qualified Click.
+2.  **Return Rate (7-Day):** Percentage of users who perform a new search and generate a Qualified Click within 7 days of their first search. This proxies retention and long-term value without needing employer data.
+3.  **Zero-Result Refinement Rate:** The frequency with which users modify their query immediately after a results page load. A decrease indicates better initial relevance.
+
+**Success Criteria (First Two Weeks)**
+Do not compare against industry benchmarks (which are unavailable and likely irrelevant to the Russian classifieds market). Compare strictly against your **pre-launch baseline (Sept 1–29)**.
+*   **Ship Condition:** qCTR increases by ≥2% relative to baseline AND 7-Day Return Rate does not decrease by >0.5%.
+*   **Stop/Rollback Condition:** qCTR decreases OR 7-Day Return Rate drops by >0.5% (indicating the algorithm is surfacing clickable but unsatisfying results that drive users away).
+*   **Inconclusive:** qCTR rises but Return Rate falls significantly. This signals a "clickbait" effect where short-term engagement harms long-term retention.
+
+**Instrumentation Requirements (Immediate Action)**
+You cannot evaluate what you do not measure. Before September 30th, the engineering team must instrument the following events with a stable, pseudonymous user ID:
+*   `job_viewed` (with property: `scroll_depth_percent`)
+*   `contact_info_revealed`
+*   `job_saved`
+*   `search_refined` (with property: `time_since_previous_search`)
+
+**Experiment Rigor**
+Treat the September 30th launch as a controlled experiment, not a hard cutover if traffic allows. If a hard cutover is mandatory, you must pre-commit to the **14-day evaluation window**. Do not peek at daily data to declare victory early; daily volatility in search traffic will inflate false positives. Analyze the aggregate data only after the 14-day period concludes. If a guardrail metric (Return Rate) trips, the "win" on CTR is invalid.
+
+**This Week's Steps**
+1.  **Engineering:** Implement event tracking for `scroll_depth` and `contact_info_revealed` by September 27th; verify data flow in a staging environment.
+2.  **Analytics:** Compute the baseline qCTR and 7-Day Return Rate for the period of September 1–29 to establish the denominator for the success criteria.
+3.  **Stakeholders:** Sign off on the "Stop Condition" specifically regarding the Return Rate drop, agreeing that short-term CTR gains do not justify long-term user churn.
+
+*Note: All metrics must use pseudonymous IDs to comply with local data privacy regulations; do not store raw PII in analytics events.*
+*Without the baseline calculation completed by Sept 29, the launch evaluation is UNVERIFIED.*

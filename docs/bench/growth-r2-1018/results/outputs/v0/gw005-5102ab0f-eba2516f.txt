@@ -1,0 +1,38 @@
+### Core Metrics for Operational Health: Vietnam Expansion
+
+To distinguish between supply-side inefficiencies (driver allocation) and demand-side bottlenecks (merchant preparation), you must instrument a **segmented time-to-event funnel**. Do not track aggregate "on-time rate" alone, as it masks the specific failure point. Instead, decompose the delivery lifecycle into three distinct, measurable intervals for every order:
+
+**1. Merchant Preparation Time (Order Placed → Order Ready)**
+*   **Definition:** The delta between the user confirming the order and the merchant marking it "ready for pickup."
+*   **Diagnostic Value:** If this interval spikes in Ho Chi Minh City compared to your home market baseline, the bottleneck is **merchant onboarding** or local workflow friction, not driver allocation.
+*   **Actionable Threshold:** Establish a local baseline (e.g., median 8 minutes). If the 90th percentile exceeds 15 minutes consistently, prioritize merchant training over hiring drivers.
+
+**2. Driver Assignment Latency (Order Ready → Driver Accepted)**
+*   **Definition:** The time an order sits in "ready" status before a driver accepts the dispatch.
+*   **Diagnostic Value:** This is your primary **supply-side signal**. High latency here indicates insufficient driver density or a flawed allocation algorithm that fails to match nearby drivers.
+*   **Actionable Threshold:** If median latency exceeds 3 minutes during peak hours, the issue is supply scarcity or algorithmic inefficiency.
+
+**3. Transit Efficiency (Driver Accepted → Delivered)**
+*   **Definition:** The actual travel time from merchant to customer.
+*   **Diagnostic Value:** Compare *actual* transit time against the *estimated* transit time provided by your mapping engine.
+*   **Diagnostic Value:** If actual time consistently exceeds estimates by >20%, traffic congestion or routing logic is the culprit. If actual matches estimates but the total order time is still high, the delay lies upstream (steps 1 or 2).
+
+**The North Star Metric: "Reliable Deliveries"**
+Reject "Total Orders" or "Raw On-Time Percentage" as your primary success metric. Instead, adopt **Reliable Deliveries**: the percentage of orders where *all three* intervals remain within their locally defined SLAs. This metric only rises when the entire chain functions correctly, preventing vanity growth from masking operational decay.
+
+**Event Taxonomy Requirements**
+Instrument only these specific events to answer the named questions above. Do not log generic "status updates."
+*   `order_placed`: Timestamp + `merchant_id` + `zone_id`.
+*   `merchant_marked_ready`: Timestamp + `order_id`. (Answers: Is preparation the leak?)
+*   `driver_assigned`: Timestamp + `driver_id` + `distance_to_merchant`. (Answers: Is allocation failing?)
+*   `order_delivered`: Timestamp + `actual_duration` vs `predicted_duration`. (Answers: Is traffic the variable?)
+
+**Analysis Strategy: Retention of Reliability**
+Read these metrics by **cohort**, not just aggregate. Segment by `zone_id` (specific neighborhoods in Ho Chi Minh City) and `time_of_day`. If "Reliable Deliveries" drops only in District 1 during rush hour but remains stable in District 3, the issue is localized traffic or zone-specific driver supply, not a systemic algorithm failure. If the drop is uniform across all zones during lunch peaks, the issue is likely merchant preparation capacity.
+
+**This Week's Step**
+1.  **Query:** Calculate the median and 90th percentile for "Merchant Preparation Time" and "Driver Assignment Latency" separately for the last 7 days, segmented by peak vs. off-peak hours.
+2.  **Decision Rule:** If "Driver Assignment Latency" accounts for >40% of the total delay variance, proceed with hiring drivers or tuning the allocation algorithm. If "Merchant Preparation Time" accounts for >40%, pause hiring and initiate a merchant workflow audit.
+3.  **Stop Condition:** Do not expand to Thailand until the "Reliable Deliveries" rate stabilizes within a 5% variance band for 14 consecutive days.
+
+*Note: Ensure user and driver identifiers are pseudonymous in these events; route any PII handling to your privacy compliance protocol. Do not invent industry benchmarks for "good" latency; use your home market data as the sole initial baseline.*

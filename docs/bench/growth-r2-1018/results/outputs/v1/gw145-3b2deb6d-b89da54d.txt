@@ -1,0 +1,42 @@
+### Prioritized Telemetry Events for SkyDrop Customer Interface
+
+To ensure transparency without clutter, instrument only events that answer the specific question: **"Has the delivery status materially changed for the recipient?"** Avoid raw telemetry streams; instead, derive the following four customer-facing states from your internal data.
+
+**1. "Out for Delivery" (Activation)**
+*   **Trigger:** Drone departs the local distribution hub with the specific package loaded.
+*   **Value:** Confirms the process has started. This replaces vague "processing" statuses.
+*   **Instrumentation Question:** "Did the package leave the ground toward the user?"
+
+**2. "Approaching Neighborhood" (Contextual Awareness)**
+*   **Trigger:** Drone enters a geofence ~1km from the drop zone.
+*   **Value:** Provides a meaningful time horizon (approx. 2–3 minutes) for the user to prepare, without exposing noisy intermediate waypoints.
+*   **Instrumentation Question:** "Is the drone close enough that the user should look up?"
+
+**3. "Final Approach Initiated" (The Core Value Moment)**
+*   **Trigger:** Drone begins the specific 3-minute descent sequence identified in your hypothesis.
+*   **Value:** Validates your assumption that this phase matters. It signals imminent arrival.
+*   **Instrumentation Question:** "Is the drone executing the final landing protocol?"
+
+**4. "Package Secured on Ground" (Completion)**
+*   **Trigger:** Weight sensors confirm release and stability on the ground.
+*   **Value:** Definitive proof of delivery completion. Do not show "Landing" as a final state; show "Delivered."
+*   **Instrumentation Question:** "Is the package safely out of the drone's possession?"
+
+### Determining Anxiety vs. Reassurance
+
+You cannot guess which updates cause anxiety; you must measure user behavior against your own baseline once the pilot launches.
+
+*   **Define the Metric:** Track **"Session Churn During Final Approach."** If a user opens the tracker during the 3-minute final approach and immediately closes it (or refreshes repeatedly within 5 seconds), flag this as a potential anxiety signal.
+*   **The Test:** For the Seattle pilot, run a simple A/B test on the *frequency* of location updates during the "Final Approach" phase.
+    *   *Group A:* Updates every 10 seconds.
+    *   *Group B:* Updates only on significant altitude changes (e.g., every 15 meters).
+*   **The Readout:** Compare the churn rate and support ticket volume between groups. If Group A has higher churn, the high-frequency updates are creating noise/anxiety. If Group B users refresh manually more often, they lack reassurance.
+*   **Constraint:** Do not declare a winner until the pre-committed pilot volume (500 daily deliveries) is reached. Peeking at results after day 2 of the April 12th launch will yield false positives.
+
+### This Week's Steps
+1.  **Define the Schema:** Create exactly four event names in your analytics tool corresponding to the states above; reject any request to stream raw GPS coordinates to the frontend.
+2.  **Instrument the "Churn" Signal:** Ensure your frontend logs a `tracker_closed` event with a timestamp relative to the `final_approach_initiated` event.
+3.  **Pre-commit the Pilot Analysis:** Document that you will compare update frequencies only after the first 5,000 deliveries (10 days) are complete, using "tracker churn" as the primary metric and "support tickets" as the guardrail.
+
+*Note: Ensure the user identifier used for these cohorts is pseudonymous; route any PII handling to your privacy compliance protocol.*
+*Do not invent a "good" churn rate; compare the April 12th baseline against subsequent weeks.*

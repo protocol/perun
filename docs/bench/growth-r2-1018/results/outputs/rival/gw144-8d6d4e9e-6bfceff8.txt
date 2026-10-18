@@ -1,0 +1,32 @@
+To diagnose the drop-off without new code, you must reconstruct the user journey using your existing server logs or database records. Focus on these four specific data slices to isolate the mobile interface as the culprit:
+
+**1. Device-Specific Completion Funnel**
+Segment your completion data by device type (Mobile vs. Desktop) for January and February.
+*   **The Signal:** If desktop completion remains stable (~85%) while mobile plummeted, your hypothesis is confirmed. If both dropped, the issue is likely content fatigue or an external factor, not the UI.
+*   **Calculation:** `(Mobile Completions / Mobile Starts)` vs. `(Desktop Completions / Desktop Starts)`.
+
+**2. The "Last Screen" Heatmap**
+Since you cannot track clicks, use the "last recorded progress" field in your logs. Most LMS databases store the `last_module_id` or `timestamp_of_last_heartbeat` for incomplete sessions.
+*   **The Action:** Aggregate the exit points for all incomplete mobile sessions in February.
+*   **The Signal:** Look for a statistical spike where users stop. If 40% of drop-offs occur at the exact same timestamp (e.g., minute 12) or module transition, that specific screen is likely breaking on the new mobile layout (e.g., a broken "Next" button or unclickable video overlay).
+
+**3. Session Duration vs. Content Length**
+Analyze the `session_duration` for incomplete mobile courses.
+*   **The Signal:**
+    *   **Short Duration (<5 mins):** Indicates immediate friction (login issues, page crash, UI confusion).
+    *   **Mid-Course Drop (15–30 mins):** Suggests engagement loss or a specific interactive element failing.
+    *   **Near-End Drop (40+ mins):** Suggests the final submission mechanism is broken on mobile.
+*   **Comparison:** Compare the average duration of incomplete sessions in February against December. A sharp decrease suggests early abandonment due to the new interface.
+
+**4. Error Log Correlation**
+Query your server error logs (HTTP 4xx/5xx) filtered by the mobile user-agent string during the training window.
+*   **The Signal:** A spike in 404 (missing asset) or 500 (server error) responses coinciding with the "Last Screen" spike identified in step 2 confirms a technical break rather than a design flaw.
+
+**Immediate Next Steps for Your Review:**
+1.  **Run the Device Split:** Confirm the drop is isolated to mobile.
+2.  **Map the Exit Points:** Identify the top 3 modules where mobile users quit.
+3.  **Manual Audit:** Have a team member attempt the course on a mobile device, specifically stopping at those three identified modules to see if buttons are unclickable or text is obscured.
+
+This approach uses existing data to pinpoint the friction point, allowing you to recommend a targeted fix (e.g., "Patch Module 4's mobile CSS") rather than a costly full revert or content redesign.
+
+*Note: Ensure your logs retain user-agent strings; if they are stripped, you may need to infer device type from screen-resolution metadata often saved in session start records.*

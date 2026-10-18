@@ -1,0 +1,29 @@
+### Strategy to Resolve TuneStream Play Count Duplication
+
+**Phase 1: Immediate Mitigation (Reporting Layer)**
+Since royalty payments are due next month, do not wait for a pipeline code fix to present corrected data. Implement a temporary deduplication logic directly in your reporting queries (SQL/dbt) to generate the accurate dataset for the licensing team.
+
+1.  **Define Deduplication Keys:** Construct a unique identifier for every play event using the combination of `user_id`, `track_id`, and `start_timestamp` (rounded to the nearest second or 100ms). Legitimate rapid replays by users will typically have distinct start times or different track IDs.
+2.  **Apply Windowing Logic:** Use a `ROW_NUMBER()` window function partitioned by your deduplication key. Filter the result to keep only `row_number = 1`.
+    *   *Logic:* `QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id, track_id, start_time ORDER BY event_ingestion_time ASC) = 1`
+3.  **Validate Against Baseline:** Run this query on pre-August 12th data to ensure it returns the original 2.0M count without dropping legitimate data. Then apply it to the inflated period. If the result stabilizes near 2.0M, you have isolated the duplicate pattern.
+4.  **Deliver Corrected Dataset:** Export the results of this query as the "Verified Play Count" for the royalty calculation. Clearly document that this dataset applies a temporary deduplication filter to address a known ingestion artifact.
+
+**Phase 2: Root Cause Confirmation**
+Before altering the ingestion pipeline, confirm the Wi-Fi/Cellular handover hypothesis to prevent over-correction.
+
+1.  **Segment by Connection Type:** Query the raw events filtering for users who switched `connection_type` within 5 seconds of the duplicate event. If the duplication rate is significantly higher in this segment than in stable connections, your hypothesis is correct.
+2.  **Analyze Event IDs:** Check if the app generates a client-side `event_uuid`. If duplicates share the same `event_uuid`, the issue is definitely client-side retry logic. If they have different UUIDs but identical content/timestamps, the client is regenerating IDs on retry.
+
+**Phase 3: Permanent Resolution (Ingestion Layer)**
+Adjusting reporting queries is a stopgap; fixing the source prevents storage bloat and downstream confusion.
+
+1.  **Implement Idempotency in Ingestion:** Modify the ingestion service (e.g., Kafka consumer, Kinesis Firehose transformation) to maintain a short-term state store (like Redis) of recently processed `event_uuids` or deduplication keys.
+2.  **Drop Duplicates Early:** Configure the pipeline to discard events where the key exists in the state store within a specific time window (e.g., 30 seconds). This stops bad data from entering your data lake/warehouse.
+3.  **Client-Side Fix (Long-term):** Update the mobile app to persist event IDs in local storage until server acknowledgment is received, ensuring retries send the exact same ID rather than generating a new one.
+
+**Recommendation:**
+Proceed with **Phase 1 immediately** to meet the licensing deadline. Do not alter historical data in storage; instead, provide the licensing team with a view or extracted table generated via the deduplication query. Once the immediate pressure is relieved, prioritize the ingestion layer fix to stop accumulating technical debt.
+
+*Note: Ensure your deduplication window accounts for legitimate "loop" listening behavior by verifying that users rarely restart the exact same millisecond of a track intentionally.*
+*Always retain the raw, unfiltered data in a separate archive for audit purposes before applying any destructive pipeline filters.*

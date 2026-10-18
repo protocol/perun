@@ -1,0 +1,62 @@
+### Event Taxonomy Specification: Collaboration-to-Conversion Validation
+
+**North Star Metric:** Weekly Active Users completing a "Confirmed Group Itinerary" (not just viewing pages).
+
+**Core Hypothesis:** Group plans (2+ users) have higher booking conversion than solo plans.
+**Current Gap:** Tracking vanity metrics (page views, session duration) without linking planning to execution.
+
+Implement the following four events. Do not instrument anything else until these answer the named questions below.
+
+#### 1. `itinerary_collaboration_started`
+*   **Question Answered:** Did the user attempt to collaborate, and did the invitee accept?
+*   **Trigger:** When a second unique user accepts an invite and joins the itinerary workspace.
+*   **Properties:**
+    *   `itinerary_id` (stable string)
+    *   `initiator_user_id` (pseudonymous)
+    *   `collaborator_user_id` (pseudonymous)
+    *   `invite_channel` (email, link, social)
+    *   `timestamp`
+*   **Why:** Distinguishes between a solo plan and a true group plan. A sent invite is noise; an accepted join is the start of value.
+
+#### 2. `itinerary_finalized`
+*   **Question Answered:** Did the group move from browsing to serious preparation?
+*   **Trigger:** When the itinerary status changes from "Draft" to "Finalized" (or when the user clicks "Lock Plan"/"Ready to Book").
+*   **Properties:**
+    *   `itinerary_id`
+    *   `user_count` (integer, derived from active collaborators)
+    *   `destination_count` (integer)
+    *   `planning_duration_days` (calculated: finalized timestamp minus created timestamp)
+    *   `is_group_plan` (boolean: true if `user_count` ≥ 2)
+*   **Why:** This is your activation event. It filters out casual browsing. Only finalized plans should be measured for conversion.
+
+#### 3. `booking_action_clicked`
+*   **Question Answered:** Did the plan lead to a commercial intent?
+*   **Trigger:** When a user clicks a "Book Hotel," "Book Flight," or third-party affiliate link generated from the itinerary.
+*   **Properties:**
+    *   `itinerary_id`
+    *   `is_group_plan` (boolean)
+    *   `booking_type` (flight, hotel, activity)
+    *   `provider_name`
+    *   `user_id` (pseudonymous)
+*   **Why:** This is the leading indicator of revenue. It connects the specific itinerary to the monetization attempt.
+
+#### 4. `trip_execution_verified`
+*   **Question Answered:** Did the plan turn into a real-world trip?
+*   **Trigger:** User returns to the app post-travel dates and marks the trip as "Completed" OR uploads a photo/review tied to the specific itinerary dates.
+*   **Properties:**
+    *   `itinerary_id`
+    *   `is_group_plan` (boolean)
+    *   `completion_status` (completed, partially_completed, cancelled)
+    *   `days_since_finalization`
+*   **Why:** This validates the "real-world outcome." Without this, you only measure booking intent, not actual travel.
+
+---
+
+### Implementation Rules for Developers
+1.  **Identifier Seam:** Use a stable, pseudonymous `user_id` for all events to track users across sessions and devices. Do not log PII (names, emails) in these events; route those to your privacy-compliance store.
+2.  **No Vanity:** Do not log `page_view` or `session_duration` for this analysis. They do not prove value.
+3.  **Cohort Logic:** To validate your hypothesis, query the conversion rate (`booking_action_clicked` / `itinerary_finalized`) segmented by `is_group_plan = true` vs `false`.
+
+**This Week's Step:** Instrument these four events immediately. Once live, run a cohort analysis comparing the `booking_action_clicked` rate of group vs. solo finalized itineraries for the period since Feb 20th. If the group rate is not statistically higher after 500 finalized group plans, the hypothesis is unproven regardless of page views.
+
+*Note: Retention of the "finalized" state is the leak point to watch; if users finalize but never click book, the recommendation engine is failing at the decision stage, not the planning stage.*

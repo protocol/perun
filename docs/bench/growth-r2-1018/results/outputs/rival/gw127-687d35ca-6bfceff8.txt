@@ -1,0 +1,37 @@
+### Immediate Diagnostic Queries & Validation Plan
+
+**1. Retroactive Data Cleaning (Past 3 Weeks)**
+Execute these segmentation queries in your analytics platform (GA4, Mixpanel, SQL) to isolate bot traffic. Do not delete raw data; create an excluded segment for reporting.
+
+*   **Time-to-Complete Analysis:** Calculate the duration between `signup_start` and `onboarding_complete`.
+    *   *Threshold:* Flag sessions completing the full flow in <45 seconds as suspicious. Humans require reading time; bots executing scripts do not.
+    *   *Action:* Exclude these sessions from conversion rate calculations.
+*   **Event Velocity & Cadence:** Analyze the timestamp delta between consecutive events (e.g., `form_filled` → `email_verified` → `dashboard_viewed`).
+    *   *Pattern:* Bots often have uniform intervals (e.g., exactly 2.0s between steps) or instant transitions. Humans exhibit variable, "noisy" timing.
+    *   *Action:* Filter out users with zero variance in step timing.
+*   **Referral Link Clustering:** Group signups by `referral_code` and `timestamp`.
+    *   *Pattern:* Look for bursts of >10 signups from the same code within 60 seconds.
+    *   *Action:* Temporarily discount conversion credit for codes exhibiting burst patterns until verified.
+*   **Technical Fingerprinting:** Filter by missing or suspicious properties.
+    *   *Checks:* Missing `referrer` domain, generic User-Agents (e.g., "Linux headless"), or identical screen resolutions across hundreds of "unique" users.
+    *   *Action:* Create a "Bot Likely" segment based on these static properties.
+
+**2. Real-Time Detection Strategy**
+Implement these logic checks in your data pipeline or tag manager immediately:
+
+*   **Honeypot Fields:** Add a hidden form field invisible to humans (via CSS). If this field is populated upon submission, flag the user as a bot instantly.
+*   **Interaction Entropy:** Track mouse movement coordinates or touch events during form filling.
+    *   *Logic:* Bots often jump directly to input fields without cursor travel. Require a minimum number of distinct mouse events before accepting a `form_submitted` event as valid.
+*   **Challenge-Response for High Velocity:** If a single IP or Referral ID generates >5 signups/hour, trigger a lightweight JS challenge (e.g., compute a simple hash) before firing the conversion pixel. Legitimate browsers solve this; simple scripts often fail or timeout.
+
+**3. Attribution Model Adjustment**
+To prevent crediting marketing spend to fake accounts for the board meeting:
+
+*   **Exclude "Bot Likely" Segment:** Apply the filters above to your attribution reports. Recalculate ROI excluding any user flagged by the Time-to-Complete or Velocity checks.
+*   **Delay Conversion Window:** Shift your attribution reporting to a "7-day retained user" model rather than "instant signup." Only count a conversion if the user returns or performs a core value action (e.g., `feature_used`) after 24 hours. Bots rarely persist.
+*   **Reconcile Spend:** Divide total campaign spend by the *cleaned* conversion count, not the raw inflated number. Explicitly note in the board deck: "Reported CPA adjusted for identified bot traffic (27% raw vs. ~4% cleaned)."
+
+**Validation Technique:**
+Manually review 20 random sessions from the "suspicious" segment using session replay tools (if available) or server logs. Confirm the absence of human hesitation (scrolling, typing pauses). If 18/20 show robotic behavior, your filters are valid for the board presentation.
+
+*Note: Implement the "Honeypot" field immediately as it requires no historical data. Ensure your Growth Director labels the cleaned data as "Verified Human Traffic" to distinguish from raw logs.*

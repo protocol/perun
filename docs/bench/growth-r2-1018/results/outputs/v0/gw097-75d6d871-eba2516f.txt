@@ -1,0 +1,52 @@
+# Technical Specification: Voice Interaction Analytics for DriveSafe
+
+## 1. North Star Metric
+**Weekly Active Users (WAU) completing a voice command on the first attempt.**
+*Why:* This measures real value (distraction reduction) rather than vanity (total commands issued). High total commands with low first-attempt success indicates frustration, not engagement.
+
+## 2. Event Taxonomy (Instrument only what answers a named question)
+Do not record audio content. Log only metadata and outcomes. Every event must include a **pseudonymous stable user ID** (for cohort analysis) and a **session ID**.
+
+### Event A: `voice_attempt_started`
+*   **Question:** How often do drivers choose voice over touch?
+*   **Properties:** `trigger_method` (button press vs. wake word), `vehicle_speed`, `ambient_noise_level_db` (aggregate only, no audio), `location_type` (highway/urban/rural).
+
+### Event B: `voice_attempt_ended`
+*   **Question:** Did the system understand the intent, and how many tries did it take?
+*   **Properties:**
+    *   `attempt_number_in_session` (1, 2, 3...)
+    *   `outcome`: `success` | `failure_no_match` | `failure_timeout` | `user_abandoned`
+    *   `latency_ms` (time from start to response)
+    *   `fallback_to_manual` (boolean: did the user touch the screen within 5 seconds of failure?)
+
+### Event C: `frustration_signal` (Derived or Explicit)
+*   **Question:** When do users give up?
+*   **Definition:** A sequence where `attempt_number_in_session` > 2 followed by `user_abandoned` OR immediate `fallback_to_manual`.
+*   **Properties:** `commands_before_abandon`, `total_session_duration`.
+
+## 3. Analysis Strategy: Read Bottom-Up (Retention First)
+Do not focus on acquisition (how many try voice). Focus on whether they *keep* using it successfully.
+
+1.  **First-Attempt Success Rate (FASR):** Calculate `(Count of attempt_ended where outcome=success AND attempt_number=1) / (Total voice_attempt_started)`.
+    *   *Baseline:* Compare your internal beta (12% failure) against real-world segments (e.g., highway vs. city). If FASR drops below 85% (failure >15%) in specific conditions, those are your leak points.
+    *   *Note:* The "5% failure" target is an assumption. Validate it by correlating FASR with `fallback_to_manual` rates. If users tolerate 8% failure but abandon at 10%, your threshold is 90% success, not 95%.
+
+2.  **Retry Cohort Analysis:** Group users by their first week's FASR.
+    *   *Hypothesis:* Users with FASR < 80% in Week 1 will have 0% voice usage in Week 4.
+    *   *Action:* If this correlation holds, prioritize noise cancellation for the environments causing that initial failure.
+
+3.  **The "Give Up" Curve:** Plot the distribution of `attempt_number_in_session` before `user_abandoned`.
+    *   If the median user tries 3 times before quitting, the friction is too high. The goal is to shift the curve so 90% of successful interactions happen on Attempt 1.
+
+## 4. Implementation Constraints & Privacy
+*   **Identifier Seam:** Use a pseudonymous ID for linking sessions across days. Do not use raw VINs or PII in the analytics stream. Route any mapping keys to the secure `privacy-compliance` store.
+*   **Noise Measurement:** Log `ambient_noise_level_db` as an integer bucket (e.g., 40-50dB), never raw audio streams.
+*   **Stage Appropriateness:** Since you are pre-launch (MVP stage), do not instrument "nice-to-have" metrics like sentiment analysis or command variety. Stick strictly to Success/Failure/Retry/Abandon.
+
+## 5. This-Week Steps
+1.  **Define the Schema:** Finalize the JSON schema for `voice_attempt_ended` ensuring `attempt_number` and `outcome` are mandatory fields.
+2.  **Baseline Query:** Run a query on the current beta data to calculate the FASR split by `ambient_noise_level_db` to identify the specific noise threshold where failure spikes.
+3.  **Guardrail Setup:** Establish an alert that triggers if `fallback_to_manual` rate exceeds 20% for any new build, preventing a regression in user trust before the March release.
+
+*Note: Do not assert that 5% failure is "critical" without correlating it to actual abandonment in your data; let the user's baseline define the threshold.*
+*Note: Ensure the data engineering team implements the pseudonymous ID rotation policy before ingesting production traffic.*

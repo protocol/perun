@@ -1,0 +1,30 @@
+### Measurement Plan: Bill Split Pilot (SecureBank)
+
+**1. Define the North Star & Current Baseline**
+*   **North Star:** Weekly Active Splitters (users completing ≥1 split/week).
+*   **Current Status:** 300 completions / 5,000 exposed = **6% conversion**.
+*   **Verdict:** This is an `UNVERIFIED` success rate. Without a baseline for similar legacy features or industry benchmarks (which we do not fabricate), we cannot judge "good" vs. "bad." We must compare this 6% against SecureBank's own historical conversion for new payment features.
+
+**2. Proxy Metrics for Untracked Friction (The "Black Box" Step)**
+Since you cannot instrument the selection step, infer friction using these **input metrics** derived from the confirmation screen and downstream data:
+*   **Time-to-Confirm:** Calculate the delta between `session_start` (inferred from server logs or initial page load) and `confirmation_timestamp`. A significantly longer median time for non-completers vs. completers suggests selection struggle.
+*   **Abandonment Rate by Entry Point:** Group users by the transaction type they entered from (e.g., "Restaurant" vs. "Utility"). If entry from "Restaurant" has a 2% completion rate vs. 15% for "Utility," the selection UI likely fails for multi-item scenarios common in dining.
+*   **Post-Confirmation Support Volume:** Tag support tickets with "Bill Split" starting May 1st. A spike in "how to add friends" or "transaction missing" tickets directly correlates to selection friction.
+
+**3. Immediate Data Collection (Low-Tech/High-Value)**
+Do not wait for engineering to inject new code. Deploy these immediately:
+*   **Exit-Intent Survey (Compliance-Safe):** Trigger a single-question modal *only* on the confirmation screen if the user hesitates (>30s) or attempts to navigate away. Question: "What stopped you from splitting this bill?" (Options: Couldn't find transaction, Too complex, Privacy concern, Other). *Note: Ensure pseudonymous IDs are used; route PII handling to privacy-compliance.md.*
+*   **Session Recordings (Sampled):** Record 100% of sessions that reach the confirmation screen but do not convert within 2 minutes. Manually review 20 recordings daily to identify specific UI breakpoints in the selection flow.
+*   **Customer Support Loop:** Create a macro for agents to tag bill-split issues. Review these daily for qualitative patterns (e.g., "Users can't select transactions older than 90 days").
+
+**4. Experiment Rigor for Rollout Decision**
+*   **Avoid Peeking:** Do not declare success because "300 users converted." You must pre-commit to a sample size or duration.
+*   **Decision Rule:** Set a **guardrail metric** (e.g., "Support ticket volume per 1,000 users must not exceed current baseline by 20%"). If the guardrail trips, halt rollout regardless of conversion counts.
+*   **The Call:** If the Time-to-Confirm for non-completers is >2x that of completers, **do not rollout**. The friction is in the untracked step. Extend the pilot with session recordings until the specific blocker is identified and fixed.
+
+**This Week's Steps:**
+1.  **Query:** Extract `confirmation_timestamp` and entry-point data for the 4,700 non-completers to calculate median Time-to-Confirm.
+2.  **Deploy:** Launch the single-question exit survey on the confirmation screen (max 10% traffic cap to reduce noise).
+3.  **Review:** Manually analyze 20 session recordings of users who hovered on the confirmation screen >30s without clicking.
+
+*Note: All user identifiers in recordings/surveys must be pseudonymized; route raw data handling to your privacy compliance protocol. Do not invent a "target" conversion rate; compare the 6% only to SecureBank's internal historical data.*

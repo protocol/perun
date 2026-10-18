@@ -1,0 +1,27 @@
+### Growth Metrics Strategy for EcoMarket
+
+**North Star Metric:** Weekly Active Users completing a **Successful Checkout** (not pageviews or cart adds). This isolates realized value from traffic noise. Vanity metrics like "Total Sessions" must be rejected; they rose 400% while your business value (conversion) collapsed.
+
+**Diagnostic Approach: Read Bottom-Up**
+Do not analyze acquisition first. Your leak is at **Retention/Conversion**. The drop from 3.5% to 1.2% during the spike indicates a failure in the core action, rendering the acquisition surge wasteful. You must distinguish between **Technical Friction** (latency/timeouts) and **Demand Hesitation** (users browsing but not buying due to crowd psychology or stock anxiety).
+
+**Event Taxonomy & Normalization**
+Instrument only events that answer specific questions. Do not track "everything."
+1.  **The Latency Question:** Track `checkout_initiated` → `checkout_completed` segmented by **Page Load Time buckets** (<1s, 1-3s, >3s). If conversion drops disproportionately in the >3s bucket during spikes, the cause is technical.
+2.  **The Hesitation Question:** Track `product_view` → `cart_add` → `checkout_initiated`. If users drop off *before* the checkout phase (at cart add) despite fast load times, the cause is demand hesitation or inventory uncertainty.
+3.  **Normalization Method:** Do not compare raw numbers across months. Compare **Conversion Rate Cohorts** by traffic source and device type during "Peak" vs. "Quiet" periods. Create a **Baseline Efficiency Ratio**: (Peak Conversion Rate / Quiet Period Conversion Rate). If this ratio stays near 1.0, growth is genuine. If it dips below 0.5 (as seen in April), you have a structural leak.
+
+**Experiment Rigor for December**
+Do not run A/B tests *during* the Black Friday spike using standard fixed-horizon rules; the traffic volatility will cause false positives via "peeking."
+*   **Pre-commit:** Define your sample size and duration *before* December 1st based on quiet-period variance, or use a **sequential testing** design (always-valid p-values) that allows monitoring without inflating error rates.
+*   **Guardrails:** Any experiment optimizing for conversion must have a **Latency Guardrail**. If a feature increases conversion but pushes p95 latency above 2s, it is a fail, regardless of revenue lift.
+
+**Identifier Seam**
+Ensure your analytics use a **stable, pseudonymous user ID** to track individuals across the spike. Ops observability (logs) avoids high-cardinality user labels, but product analytics *requires* them to measure retention. Route any PII handling to your privacy compliance protocol; do not store raw emails in analytics events.
+
+**This Week's Steps**
+1.  **Query:** Pull `checkout_initiated` to `checkout_completed` conversion rates segmented by page load time for last April's peak week vs. the prior quiet month.
+2.  **Define:** Establish the "Baseline Efficiency Ratio" target for December (e.g., maintain >80% of quiet-period conversion efficiency).
+3.  **Instrument:** Add a `server_response_time` property to the `checkout_initiated` event if not already present to verify the latency hypothesis.
+
+*Note: All benchmark comparisons must use your own historical data; no external "good conversion" figures are valid here. If data is missing for the above queries, the metric status is UNVERIFIED until instrumented.*

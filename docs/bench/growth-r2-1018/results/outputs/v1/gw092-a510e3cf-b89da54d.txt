@@ -1,0 +1,33 @@
+**To:** VP of Engineering, CodeFlow
+**From:** Growth Analytics
+**Subject:** Measurement Plan: Dark Mode Rollout Validation (Dec 1 – Dec 28)
+
+**North Star Metric**
+We will measure **Weekly Active Users (WAU) completing a code commit** within the target cohort (users active after 8 PM). This rejects vanity metrics like "theme toggles" or raw "session duration," which can rise due to confusion or idle time without delivering value. The North Star only rises if users successfully deliver code.
+
+**Success Definition & Input Metrics**
+Success is defined as a statistically significant increase in the North Star for the treatment group compared to baseline, without degrading guardrails. We will track three input metrics:
+1.  **Intentional Adoption:** Percentage of users who toggle dark mode and *remain* in that mode for three consecutive sessions (filters accidental toggling).
+2.  **Core Action Retention:** Day-7 retention of the "code commit" action for users exposed to dark mode vs. light mode.
+3.  **Friction Signal:** Rate of support tickets tagged "UI/Theme" per 1,000 active users.
+
+**Event Taxonomy (Instrument Only What Answers a Question)**
+We will instrument exactly three events to answer specific hypotheses, avoiding noise:
+*   `theme_changed`: Records `user_id` (pseudonymous), `timestamp`, `previous_value`, and `new_value`. *Question: Do users stick with the change?*
+*   `session_ended`: Records `user_id`, `duration`, and `active_theme`. *Question: Does the theme correlate with longer productive sessions?*
+*   `commit_successful`: Records `user_id`, `timestamp`, and `active_theme`. *Question: Are users actually shipping more code?*
+
+**Experiment Design: Pre-Committed Rigor**
+We will run an A/B test starting December 1st for a fixed duration of four weeks.
+*   **Population:** New accounts receive Dark Mode by default (Treatment); existing accounts retain Light Mode unless they manually switch (Control/Observational). *Correction:* To isolate causality for existing users, we will randomly assign 10% of existing after-8-PM users to a "Dark Mode Default" treatment while holding 10% as "Light Mode Default" control.
+*   **Primary Metric:** Change in weekly commit frequency per user.
+*   **Guardrail Metric:** Support ticket volume regarding UI confusion. If tickets rise >5% above baseline, the rollout pauses immediately.
+*   **Analysis Rule:** We will **not** peek at results before December 29th. Reading significance mid-test inflates false positives. We will compare the four-week aggregate against the pre-rollout baseline. Your assumption of "+15 minutes session duration" is currently **UNVERIFIED**; we will calculate the actual delta from the data.
+
+**This Week's Actions**
+1.  **Implement Taxonomy:** Engineer the `theme_changed` and `commit_successful` events with pseudonymous IDs by Nov 29. Do not instrument "hover" or "view" events yet.
+2.  **Define Cohorts:** Query the database to isolate the specific population of users active after 8 PM to ensure the randomization bucket is accurate.
+3.  **Set Guardrail Tripwire:** Calculate the current weekly average of "UI/Theme" support tickets; set the automated alert threshold at 105% of this number.
+
+**Note:** Historical theme data is nonexistent, so we cannot benchmark against past behavior; all comparisons must be against the concurrent control group.
+**Note:** User identifiers must be pseudonymized before entering the analytics pipeline to comply with privacy standards.

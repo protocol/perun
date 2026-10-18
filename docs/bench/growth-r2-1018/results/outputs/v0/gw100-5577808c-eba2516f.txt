@@ -1,0 +1,37 @@
+### Experimental Design Proposal: Last-Minute Discount Elasticity
+
+**Objective**
+Determine if a 20% discount on last-minute bookings (within 48 hours of departure) generates sufficient incremental revenue to offset margin erosion and cannibalization of earlier full-price bookings, specifically isolating business versus leisure traveler segments.
+
+**Methodology: Randomized Controlled Trial (RCT)**
+*   **Unit of Randomization:** Randomize at the **user-session level** (not route-level) to control for route-specific demand shocks. Assign users to Control (10% discount) or Treatment (20% discount) upon entering the booking flow within the 48-hour window.
+*   **Duration:** Pre-commit to a fixed duration (e.g., 4 weeks) or a pre-calculated sample size based on Minimum Detectable Effect (MDE) for *revenue*, not volume. Do not stop early based on interim significance ("peeking").
+*   **Segmentation Strategy:** Since traveler type is not always explicitly known, use proxy variables for isolation:
+    *   *Business Proxy:* Booking window <7 days, weekday travel, no Saturday night stay, corporate domain email.
+    *   *Leisure Proxy:* Booking window >14 days (for cannibalization check), weekend travel, Saturday night stay.
+
+**Required Data Points (Event Taxonomy)**
+Instrument only events that answer specific causal questions. Do not track "everything."
+1.  `experiment_exposure`: User ID (pseudonymous), variant assigned, timestamp, route.
+2.  `booking_initiated`: Variant, time-to-departure, traveler proxy flags.
+3.  `booking_completed`: Final price, discount applied, revenue, traveler proxy flags.
+4.  `cannibalization_check`: Link current booking to user history. Did this user previously search for this route >14 days out without booking? (Indicates delayed purchase rather than new demand).
+5.  `guardrail_metric`: Full-price booking volume on the same routes for departures >48 hours out (to detect systemic demand shifting).
+
+**Criteria for Success**
+*   **Primary Metric:** **Incremental Total Revenue per Session** (not booking count). Success is defined as: *(Revenue_Treatment - Revenue_Control) > 0* with statistical significance.
+*   **Secondary Metric:** Segment-specific elasticity. Does the revenue lift hold for the "Business Proxy" segment, or is the lift driven entirely by leisure travelers?
+*   **Guardrail:** No statistically significant decrease in full-price bookings made >48 hours in advance on test routes compared to non-test routes.
+
+**Risk Mitigation Strategies**
+1.  **Cannibalization Risk:** If the "cannibalization_check" shows >20% of Treatment bookings are from users who previously searched in the full-price window, the net revenue gain is likely illusory. **Tripwire:** Halt the experiment if incremental revenue is positive but full-price forward bookings drop by >5% week-over-week.
+2.  **Margin Erosion:** Calculate the break-even volume increase required for the 20% discount. If the observed lift is below this threshold at the interim check (without stopping the test), flag for immediate review upon completion.
+3.  **Confounding Variables:** Monitor for concurrent marketing campaigns or competitor price changes on the five test routes. If a major external event occurs, mark the data period as `UNVERIFIED` for causal claims.
+
+**Next Steps**
+1.  Define the pseudonymous user identifier strategy to link sessions while complying with privacy standards (route PII handling to compliance protocols).
+2.  Calculate the required sample size (N) to detect a 2% lift in revenue per session with 80% power; set the end date based on this N.
+3.  Pre-register the primary metric (Revenue per Session) and guardrail (Full-price forward bookings) before launching on February 1st.
+
+*Note: Historical 10% vs 15% volume data is a baseline trend, not a causal guarantee for the 20% scenario; rely strictly on the RCT results for the final decision.*
+*Do not estimate elasticity for business vs. leisure without the proxy data instrumentation; such figures are currently UNVERIFIED.*

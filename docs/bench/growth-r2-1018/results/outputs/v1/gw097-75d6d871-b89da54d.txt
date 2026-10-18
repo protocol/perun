@@ -1,0 +1,41 @@
+### Technical Specification: Voice Interaction Analytics for DriveSafe
+
+**1. North Star Metric**
+**Weekly Active Drivers with Successful Voice Completion Rate.**
+*Definition:* The percentage of unique drivers in a week who complete at least one voice command sequence without falling back to manual touch input within the same task context.
+*Rejection of Vanity:* Do not track "Total Voice Commands Issued." High volume with high failure indicates frustration, not value.
+
+**2. Event Taxonomy (Instrument only what answers a named question)**
+Log the following events with pseudonymous `driver_id` (stable across sessions) and `session_id`. Do not log audio content or transcripts to satisfy privacy constraints.
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `voice_attempt_start` | How often do drivers try voice vs. touch? | `trigger_method` (button/hotword), `ambient_noise_level` (dB range, not audio), `vehicle_speed_bucket`. |
+| `voice_execution_result` | What is the raw accuracy rate? | `outcome` (success/failure/timeout), `failure_reason_code` (e.g., `NOISE`, `UNKNOWN_INTENT`, `SYSTEM_ERROR`). |
+| `voice_retry` | Are users frustrated/repeating? | `attempt_number` (sequence count within 30s), `previous_outcome`. |
+| `task_abandonment` | Did the user give up on voice? | `fallback_action` (e.g., `touchscreen_press`, `physical_button`), `time_to_fallback_ms`. |
+| `manual_alternative` | What is the baseline manual rate? | `action_type`, `context` (e.g., "navigation_set_destination"). |
+
+**3. Analysis Strategy: Bottom-Up Funnel (Retention First)**
+Do not analyze acquisition of the feature until retention of the *successful* action is verified.
+*   **Step 1 (Accuracy vs. Reality):** Compare `voice_execution_result` success rates across `ambient_noise_level` and `vehicle_speed_bucket`. Your 12% beta failure rate is `UNVERIFIED` for highway conditions until mapped against real-world noise/speed cohorts.
+*   **Step 2 (Frustration Proxy):** Define a "Frustrated Session" as any `session_id` with >2 `voice_retry` events ending in `task_abandonment`. Track the trend of this metric weekly.
+*   **Step 3 (The "Success" Definition):** A "Successful Interaction" is not a single 200ms API response. It is defined analytically as: `voice_execution_result` = success OR (`voice_retry` count ≤ 2 AND final outcome = success). Anything requiring >2 attempts counts as a functional failure for the North Star.
+
+**4. Privacy & Identifier Seam**
+*   **Identifier:** Use a stable, pseudonymous `driver_id` to link retries and fallbacks across a session. This inverts the ops observability rule (which avoids high cardinality) but is required for product cohort analysis.
+*   **Compliance:** Route all PII mapping and consent logic to `privacy-compliance.md`. Ensure `ambient_noise_level` is an engineered integer bucket, not raw audio data.
+
+**5. Experiment Rigor (Pre-Commitment)**
+Do not declare the "5% failure rate" threshold met based on early peeking.
+*   **Design:** Pre-commit to a sample size of N=10,000 voice attempts or a 4-week duration, whichever comes first.
+*   **Guardrail:** Monitor `task_abandonment` rate. If voice failure causes manual touch usage to rise >10% above baseline, halt the rollout regardless of the "5%" accuracy metric.
+*   **Verification:** The 5% target is `UNVERIFIED` until the pre-committed period ends. A day-3 read showing 4.8% is noise if the confidence interval is wide.
+
+**This Week's Steps**
+1.  **Implement:** Deploy the five events above with the specified properties; ensure `ambient_noise_level` is calculated locally on-device before logging.
+2.  **Query:** Run a cohort analysis on the beta data grouping `voice_execution_result` by `vehicle_speed_bucket` to estimate the highway degradation factor.
+3.  **Decide:** If highway speed correlates with >8% failure in beta, delay the March public release to retrain noise cancellation models; do not rely on the aggregate 12% figure.
+
+*Note: The 5% threshold is an internal hypothesis, not an industry benchmark. Validate it against your own `task_abandonment` trend.*
+*No audio content is to be stored or transmitted; only metadata and outcome codes.*

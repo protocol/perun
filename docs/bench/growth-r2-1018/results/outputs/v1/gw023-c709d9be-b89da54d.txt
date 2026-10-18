@@ -1,0 +1,23 @@
+**Decision Call:** Do not roll out to 100%. Treat the mobile 15% drop as a critical regression until proven otherwise. A 20% desktop gain does not offset a mobile loss when mobile represents your primary quick-check context.
+
+**Immediate Data Slices (Execute Today):**
+To separate rendering/usability issues from content relevance without a new full-scale test, query your existing analytics for these four specific cuts comparing the week prior to Nov 3rd vs. Nov 3rd–today:
+
+1.  **Core Action Completion Rate by Device:** Filter for the single "North Star" action (e.g., "data exported," "alert acknowledged," or "report saved").
+    *   *Hypothesis Check:* If desktop completion rose but mobile completion fell, the layout is blocking utility (usability). If both rose but mobile session time fell, users are frustrated and quitting early (rendering/usability). If completion is flat on mobile while time dropped, they may be finding data faster (unlikely given the drop magnitude, but possible).
+2.  **Error Rate & Crash-Free Sessions by App Version:** Slice by the specific mobile app version containing the new dashboard.
+    *   *Hypothesis Check:* A spike in JavaScript errors, layout shift metrics (CLS), or crash rates on mobile confirms a technical rendering failure rather than a preference issue.
+3.  **Scroll Depth and "Time-to-First-Interaction" on Mobile:** Measure how far users scroll before tapping anything and the latency between load and first tap.
+    *   *Hypothesis Check:* If scroll depth is shallow and time-to-interaction is high, the "cramped" layout is hiding primary controls, forcing hunting behavior. This validates the "frustration" hypothesis.
+4.  **Retention Cohort (Day-1 Return) for Mobile Users Exposed to Variant:** Compare the return rate of mobile users who saw the new dashboard on Nov 3rd against those who did not (the other 50%).
+    *   *Hypothesis Check:* If the exposed cohort's Day-1 return rate dips below the control group's baseline, the feature is driving churn, not just reducing session length.
+
+**Required Instrumentation Verification:**
+Ensure your event taxonomy distinguishes between `session_start`, `view_dashboard`, and `core_action_complete`. If you are only measuring "session duration," the data is `UNVERIFIED` for intent; a short session could mean efficiency or failure. You must correlate duration with the *outcome* of the session.
+
+**This-Week Step:**
+1.  **Query** the four slices above immediately. If Core Action Completion on mobile is down >5% or Error Rates are elevated, **revert** the mobile rollout tonight.
+2.  **If** completion is stable but duration is down, run a **targeted intercept survey** (n=200) on the mobile app asking specifically: "Did you find what you needed?" to distinguish speed vs. frustration.
+3.  **Decision Deadline:** Set a hard tripwire for Tuesday AM: If mobile Core Action Completion is not within 2% of the pre-Nov 3rd baseline, ship the hotfix reverting the mobile layout. Do not wait for statistical significance on secondary metrics; the primary value metric is the guardrail.
+
+**Note:** Do not average desktop and mobile metrics; they represent distinct usage contexts. The "cramped" hypothesis is a usability failure, not a content relevance issue, and requires layout remediation, not content changes.

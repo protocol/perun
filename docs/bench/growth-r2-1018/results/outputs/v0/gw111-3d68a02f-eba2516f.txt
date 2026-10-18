@@ -1,0 +1,39 @@
+**Directive: Instrumentation Plan for API Rate Limiting Launch**
+
+Do not select between "rejected requests" or "latency" as a standalone primary metric. Both are system health indicators (vanity in isolation) that rise regardless of user value. Instead, instrument a **North Star of "Successful Core Actions per Active Free-Tier User"** (requests that complete within SLA). Pair this with two specific input metrics to diagnose the mechanism: **Rate Limit Hit Rate** (rejected/total) and **P95 Latency for Valid Requests**.
+
+**Event Taxonomy & Data Points (Instrument by Friday)**
+Instrument only these three events to answer named questions. Do not log "everything."
+
+1.  **Event: `api_request_completed`**
+    *   **Question Answered:** Are users still deriving value (core action) after the limit is applied?
+    *   **Properties:** `user_id` (pseudonymous/stable cohort ID), `tier` (free/paid), `status_code` (200 vs 429), `latency_ms`, `endpoint`.
+    *   **Why:** This calculates the North Star. If this drops while rejections rise, the limit is too aggressive. If this stays flat while rejections rise, the limit is working as intended (blocking waste, not value).
+
+2.  **Event: `rate_limit_triggered`**
+    *   **Question Answered:** Is the throttle actually firing, and on whom?
+    *   **Properties:** `user_id`, `requests_in_window`, `limit_threshold`, `timestamp`.
+    *   **Why:** Isolates the volume of blocked traffic. High volume here with stable `api_request_completed` confirms stability without conversion harm.
+
+3.  **Event: `support_ticket_created`** (Source: CRM/Helpdesk)
+    *   **Question Answered:** Is user sentiment degrading despite system stability?
+    *   **Properties:** `user_id`, `category` (e.g., "rate_limit_confusion", "performance"), `tier`.
+    *   **Why:** System logs cannot measure frustration. A spike in "performance" tickets alongside low latency indicates a communication failure, not a code failure.
+
+**Analysis Protocol: Read Bottom-Up**
+Do not judge success by total request volume (vanity). Diagnose in this order:
+1.  **Retention of Value:** Did the "Successful Core Actions" metric drop for free-tier users compared to last week's baseline? If yes, the limit is breaking the product.
+2.  **Activation Leak:** Are new free users hitting the limit before completing their first "aha" moment? If yes, the 100/min threshold is too low for onboarding.
+3.  **System Stability:** Only after confirming value retention, check if `rate_limit_triggered` correlates with reduced outage frequency.
+
+**Critical Constraints**
+*   **No Benchmarks:** Do not expect a specific "good" rejection rate. Compare October 15–22 data strictly against the September baseline. Any claim of "normal" rejection rates without this comparison is `UNVERIFIED`.
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` to track cohorts across sessions. Do not log raw PII in application logs; route identity mapping to the privacy-compliance system.
+*   **Stage Awareness:** As this is an `mvp` of a constraint feature, ignore broad funnel metrics. Focus entirely on the core action retention and the specific leak point (the limit).
+
+**This-Week Steps**
+1.  **Define the Query:** Write the exact SQL/Log query today that calculates "Successful Core Actions per Free User" using the properties above. Verify it returns data from the staging environment.
+2.  **Set the Tripwire:** Agree on a hard stop condition: If "Successful Core Actions" drops >15% vs. baseline within 48 hours of launch, automatically revert the limit to 200/min.
+3.  **Draft the Comms:** Prepare the customer success template explaining *why* a user was limited, linking to the `rate_limit_triggered` count for that specific user to speed up ticket resolution.
+
+*Note: Latency is a guardrail, not a goal; optimize for value delivery, not just speed. Ensure the pseudonymous ID strategy is reviewed by security before Friday.*

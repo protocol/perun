@@ -1,0 +1,25 @@
+**Recommendation: Prioritize These Two Events**
+
+Given your constraint of two developers and the need to validate your retention hypothesis by October 15th, instrument **only** the following two events. Do not track deep sleep duration yet; it is a secondary variable that cannot be analyzed until the primary retention loop is proven.
+
+**1. `sleep_score_viewed`**
+*   **Definition:** Fired when a user opens the sleep report and the score is successfully rendered.
+*   **Why this event:** This directly tests your core hypothesis: "users who check their sleep score... are more likely to retain." If users do not trigger this event within three days of waking, the specific content of the report (deep sleep vs. total time) is irrelevant because the retention hook never engaged. This is your **Activation** metric.
+*   **Required Properties:** `user_id` (pseudonymous), `days_since_wake` (calculated at ingestion or client-side), `session_id`.
+
+**2. `app_retained_weekly`**
+*   **Definition:** A derived cohort metric indicating the user opened the app and performed *any* meaningful action in Week 2, Week 3, and Week 4 after their first `sleep_score_viewed`.
+*   **Why this event:** You stated retention is the goal. Without measuring whether the user returns after the initial view, you cannot correlate the view to long-term value. This is your **Retention** metric.
+*   **Required Properties:** `user_id`, `cohort_week` (based on first view date).
+
+**Decision Logic for Your Team**
+*   **If `sleep_score_viewed` is low:** The feature placement or notification strategy is failing. Fix discovery before worrying about sleep metrics.
+*   **If `sleep_score_viewed` is high but `app_retained_weekly` is flat:** Viewing the score is not driving value. Only *then* should you consider instrumenting specific metrics like "deep sleep duration" in a future sprint to see if specific data points drive the stickiness.
+*   **Resource Rationale:** Tracking "deep sleep" vs. "total time" requires schema changes and complex aggregation logic. Tracking *whether* the score was viewed is a simple boolean flag. With only two developers, you must validate the behavior (viewing) before optimizing the content (metrics).
+
+**Immediate Next Step**
+Instruct engineering to implement `sleep_score_viewed` with the `days_since_wake` property immediately. Define the "retained" query in your analytics tool using existing session data; do not build a new event for retention if your current logs already capture app opens.
+
+**Notes**
+*   Ensure `user_id` is pseudonymous and routed to your privacy compliance review; do not use raw PII for cohorting.
+*   Do not attempt A/B testing on "deep sleep" visibility until you have 4 weeks of baseline data on the primary view event.

@@ -1,0 +1,36 @@
+### Experimental Design: Pricing Transparency vs. Lead Quality
+
+**Objective**
+Determine if displaying pricing earlier increases total qualified incorporations without degrading lead quality to a point where legal team costs outweigh revenue gains.
+
+**1. Metrics Definition**
+*   **Primary Metric (North Star Input):** *Qualified Incorporation Rate* (Users who complete incorporation / Total Visitors). This isolates volume from quality. A rise in signups with a flat or rising qualified rate is a win; a rise in signups with a collapsing qualified rate is a loss.
+*   **Guardrail Metric:** *Legal Review Time per Qualified Lead* (Average minutes spent by legal team verifying documents for users who passed the initial filter). If this spikes, "low-intent" users are slipping through.
+*   **Secondary Metric (Lead Quality Proxy):** *Document Completeness Score* at upload. Track the percentage of users who upload all three correct documents on the first try. Low-intent users often guess or upload junk when friction is low.
+
+**2. Event Taxonomy (Instrument Only These)**
+Do not instrument "everything." Track only events that answer specific questions:
+*   `viewed_pricing`: Did the user see the price? (Answers: Did exposure change?)
+*   `started_upload`: Did the user attempt the document step? (Answers: Did friction drop?)
+*   `upload_completed`: Did they finish the upload? (Answers: Activation)
+*   `incorporation_submitted`: Did they pay and submit? (Answers: Revenue intent)
+*   `legal_review_duration`: Time spent by staff on the file. (Answers: Cost impact)
+
+**3. Test Design & Rigor**
+*   **Design:** A/B Test (50/50 split).
+    *   *Control:* Price shown after upload (Current).
+    *   *Treatment:* Price shown before upload.
+*   **Pre-commitment:** Do not peek at results daily. Peeking inflates false positives.
+    *   **Duration:** Run for **14 full business days** (Jan 10 – Jan 26) to capture a full two-week cycle of freelancer behavior and legal team capacity.
+    *   **Sample Size:** Calculate the minimum detectable effect (MDE) based on your current baseline conversion rate. If you cannot calculate this now, commit to the 14-day fixed horizon and analyze **once** at the end.
+*   **Success Criteria:**
+    *   *Ship:* Qualified Incorporation Rate increases by ≥10% AND Legal Review Time per Lead does not increase by >5%.
+    *   *Stop:* Qualified Incorporation Rate is flat/negative OR Legal Review Time spikes >10% (indicating junk leads).
+    *   *Extend:* Results are inconclusive (confidence intervals overlap) after 14 days.
+
+**4. This-Week Steps**
+1.  **Define the "Qualified" Flag:** Agree with the legal team on the exact definition of a "waste of time" (e.g., incomplete docs, ineligible business type) to tag leads in the database before Jan 10.
+2.  **Implement Event Tracking:** Instrument the five events listed above. Ensure `user_id` is pseudonymous for cohorting but linkable to legal records for the guardrail metric.
+3.  **Set the Stop Date:** Calendar the analysis meeting for **January 27th**. Do not review the dashboard before then.
+
+**Note:** Without a pre-defined "junk lead" definition, the guardrail metric cannot be calculated. The 15% signup increase assumption is vanity if those signups do not convert to qualified incorporations.

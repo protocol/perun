@@ -1,0 +1,48 @@
+### Behavioral Metrics for Habit Formation (Teen Demographic)
+
+To distinguish passive viewing from active habit formation, instrument the following specific event properties. These metrics focus on **completion**, **return triggers**, and **value realization** rather than mere exposure.
+
+#### 1. Core Loop Completion Metrics
+Track these as distinct events with a `completion_status` property (started, abandoned, completed).
+*   **`habit_check_in_completed`**: Requires a timestamp and `streak_count`. Differentiates between opening the app and actually logging the behavior.
+*   **`challenge_acceptance_to_action_ratio`**: Measure the time delta between `challenge_accepted` (social) and `habit_check_in_completed`. If users accept challenges but don't act, the social pressure is vanity, not utility.
+*   **`solo_session_depth`**: Count of distinct actions (e.g., `log_mood`, `view_stats`, `set_goal`) within a single session. Passive viewers trigger only `app_open`; habit formers trigger 3+ distinct functional events.
+
+#### 2. Return Trigger Attribution
+Identify *why* they returned by tagging the `session_start` event with a `trigger_source` property:
+*   `push_notification_clicked` (External prompt)
+*   `streak_maintenance` (Internal motivation/fear of loss)
+*   `peer_challenge_notification` (Social obligation)
+*   `organic_open` (Unprompted habit)
+
+*Success Indicator:* A shift over 14 days from `push_notification_clicked` dominance to `streak_maintenance` or `organic_open` dominance.
+
+#### 3. The "Aha" Moment Correlation
+Calculate the correlation coefficient between specific early actions and Day-7 retention.
+*   **Metric:** `time_to_first_value` (Minutes from install to first `habit_check_in_completed`).
+*   **Metric:** `social_graph_density` (Number of active reciprocal connections vs. total connections). High connection counts with low reciprocity often correlate with churn in teen demographics due to social anxiety.
+
+### Segmentation Strategy for UK Teens
+
+Do not segment solely by exact age (13–19), as developmental stages vary wildly. Instead, create behavioral cohorts based on school stages and digital maturity:
+
+1.  **Early Teens (13–14 / KS3):**
+    *   *Hypothesis:* Highly susceptible to peer validation but easily discouraged by public failure.
+    *   *Segment Filter:* Users who joined via a referral code vs. organic search.
+    *   *Key Metric:* `private_vs_public_completion_rate`. Do they complete habits more often when the activity is hidden from peers?
+
+2.  **Mid Teens (15–16 / GCSE Stress):**
+    *   *Hypothesis:* Utility-driven; retention correlates with academic or exam-related stress management.
+    *   *Segment Filter:* Users who set goals tagged "study," "exam," or "sleep" vs. "fitness" or "social."
+    *   *Key Metric:* `weekday_vs_weekend_retention_gap`. High weekday usage with weekend drop-off suggests the app is viewed as a school tool, not a lifestyle habit.
+
+3.  **Late Teens (17–19 / A-Level & Independence):**
+    *   *Hypothesis:* Autonomy-driven; social accountability may feel controlling.
+    *   *Segment Filter:* Users who customize their dashboard vs. default settings.
+    *   *Key Metric:* `feature_customization_rate`. Higher customization often predicts long-term retention in this group as they tailor the tool to their independent routines.
+
+### Recommended Analysis for Q1 Roadmap
+Run a **cohort retention curve** comparing users who performed a "Solo Tracking" action within 24 hours of install versus those who only engaged with "Peer Challenges." If the solo cohort shows higher Day-7 retention despite lower overall frequency, your roadmap should prioritize frictionless solo logging first, using social features as a secondary retention layer rather than the primary hook.
+
+*Note: Ensure all data collection complies with UK Age Appropriate Design Code (Children's Code), specifically minimizing data collection for the youngest segment.*
+*Avoid measuring "time in app"; for habit apps, efficiency (quick completion) is a stronger signal of habit formation than prolonged engagement.*

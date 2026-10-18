@@ -1,0 +1,28 @@
+**Risk Brief: Gamification Feature (Badges) – Decision Required**
+
+**Status:** `UNVERIFIED` (Causal link between badges and learning quality); **Critical Risk** (Technical instability).
+
+**Recomputed Facts & Confounders**
+The stated 22% lift in completion rates exceeds the 20% hypothesis, but this result is **`UNVERIFIED`** as a valid win due to two fatal flaws in the read-out:
+1.  **Guardrail Failure:** A 45% spike in bug reports (profile syncing, leaderboard errors) indicates a severe regression in system stability. In a rigorous experiment, a breach of this magnitude on a core guardrail (system reliability/user trust) typically vetoes a primary metric win.
+2.  **Quality Confounder:** The surge in completions may reflect "gaming the system" (clicking through for badges) rather than genuine learning. Without a quality metric (e.g., assessment scores, time-on-task depth), the 22% lift is a vanity metric that may correlate with *lower* actual value delivery.
+
+**Risk Assessment**
+*   **Technical Risk (High):** Scalability issues exposed under load threaten the June 1st enterprise onboarding. Enterprise clients demand 99.9%+ reliability; profile syncing errors are a contract-level failure.
+*   **Product Risk (Medium-High):** If users are rushing modules solely for badges, the platform's core value proposition (corporate training efficacy) is eroding. High completion with low retention of knowledge is a "false positive" growth signal.
+*   **Reputation Risk:** Rolling out known bugs to enterprise clients on June 1st risks immediate churn and brand damage.
+
+**Recommendation: Do Not Roll Out Broadly. Limit Availability & Patch.**
+**Decision:** **Limit Availability** (Canary/Enterprise-Off) + **Rush Patch**.
+Do not roll back entirely (preserves data for analysis), but **disable the feature for all enterprise-facing accounts and new users** immediately. Keep it active only for a small, internal or non-critical cohort to monitor the bug fix.
+
+**Tripwire & Action Plan**
+*   **Stop Tripwire:** If bug reports exceed 5% of active users or if average assessment scores drop by >5% in the limited cohort, **disable the feature completely** until Q3.
+*   **Immediate Actions (This Week):**
+    1.  **Engineering:** Deploy a hotfix to disable leaderboard writes and async badge awarding to stop the syncing bleed. Verify error rates return to baseline before June 1st.
+    2.  **Product/Data:** Instrument a "Quality Score" event (e.g., `module_assessment_passed_first_try`) to distinguish genuine learning from badge-clicking. Recompute the completion lift *only* for users who also pass the quality threshold.
+    3.  **Governance:** Declare the current test inconclusive (`UNVERIFIED`) due to the guardrail breach. Re-run the test post-patch with a pre-committed sample size and a strict "no degradation in error rate" guardrail.
+
+**Verdict:** The technical debt and unknown quality impact outweigh the unverified completion lift. Stabilize first, measure quality second, scale third.
+
+*Note: The 22% lift is treated as noise until quality metrics are added. The June 1st deadline mandates a conservative "safety first" posture.*

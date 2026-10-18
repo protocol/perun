@@ -1,0 +1,46 @@
+### NeonQuest Analytics Funnel Design (Soft Launch)
+
+**1. North Star Metric**
+**Weekly Active Players completing the Core Loop.**
+*Definition:* Unique users who complete at least three full game levels or matches within a 7-day window.
+*Rejection of Vanity:* Do not use "Total Downloads" or "Raw Session Starts." These rise regardless of value and mislead on engagement.
+
+**2. The Funnel (Bottom-Up Diagnosis)**
+Diagnose retention before acquisition. If users do not return to the core loop, acquisition spend is wasted.
+*   **Retention (The Foundation):** % of users returning to complete the Core Loop in Week 1 and Week 2.
+*   **Activation:** % of new installs who complete the "Aha!" moment (e.g., first successful level + first social share attempt) within 24 hours.
+*   **Acquisition:** Source breakdown (Organic Social vs. Ads) *only* for users who reached Activation.
+*   **Revenue:** % of activated users making a first In-App Purchase (IAP).
+
+**3. Event Taxonomy & The "Short Burst" Seam**
+Instrument only events that answer specific questions. Do not track "everything."
+*   **Event:** `level_complete` (Properties: `level_id`, `duration_ms`, `offline_flag`).
+    *   *Question:* Are users progressing through content regardless of session length?
+*   **Event:** `social_share_attempt` (Properties: `platform`, `success_bool`).
+    *   *Question:* Is social sharing actually driving the hypothesized organic growth?
+*   **Event:** `iap_initiated` → `iap_completed`.
+    *   *Question:* Where is the drop-off before monetization?
+
+**Handling Intermittent Connectivity & Short Bursts:**
+Do not rely on formal "Session Start/End" events as your primary unit of analysis, as 2-minute bursts and offline play will break this model.
+*   **Strategy:** Shift the atomic unit from "Session" to "Action." Aggregate engagement based on `level_complete` timestamps.
+*   **Offline Logic:** Tag events with `offline_flag: true` when detected locally. Queue these events and transmit with a `delay_ms` property upon reconnection.
+*   **Churn Definition:** A user is churned only if they fail to complete *any* core action for 14 days, not merely if they stop starting formal sessions. This prevents misinterpreting intermittent play as loss.
+
+**4. Identifier Seam & Privacy**
+*   **Stable ID:** You must generate a stable, pseudonymous `user_cohort_id` stored locally to link actions across offline/online states and device restarts.
+*   **Compliance:** Do not store raw device IDs or PII in analytics events. Route all consent management and PII handling to your privacy compliance protocol (`privacy-compliance.md`). The analytics system receives only the pseudonymous token.
+
+**5. Experiment Rigor (Pre-Launch Prep)**
+When testing the "Social Sharing" hypothesis post-launch:
+*   **Pre-commit:** Define the sample size and duration *before* looking at data.
+*   **Guardrails:** If testing a new share incentive, the primary metric is `social_share_attempt`, but the guardrail must be `retention_day_7`. Do not ship a feature that increases shares but crashes retention.
+*   **No Peeking:** A result observed on Day 2 of a 14-day test is `UNVERIFIED`. Do not treat it as a win.
+
+**This Week's Steps**
+1.  **Define the Schema:** Finalize the JSON schema for `level_complete` and `social_share_attempt` ensuring the `offline_flag` and `pseudonymous_id` are mandatory fields.
+2.  **Build the Cohort Query:** Write the specific SQL/analysis query that calculates "Weekly Active Players completing Core Loop" ignoring session boundaries, to be ready for June 1st data.
+3.  **Validate Offline Queue:** Verify in the staging environment that events generated in airplane mode are correctly tagged and transmitted upon reconnection without duplicating counts.
+
+*Note: All baseline benchmarks (e.g., "good" retention rates) must be derived from your own June 1st soft launch data; no external market averages will be provided or used.*
+*Ensure your engineering team implements the local event queue before the June 1st build freeze.*

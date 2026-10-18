@@ -1,0 +1,38 @@
+### Tracking Specification for NexusRealms Staging (Deadline: Aug 15)
+
+**North Star Metric:** Weekly Active Players completing **Core Gameplay Loops** (e.g., quests, battles, crafting), *not* token volume or trade count. Token velocity is a secondary economic health indicator; high velocity driven solely by bots trading with no gameplay is a failure state, not success.
+
+**Event Taxonomy & Properties**
+Instrument only events that answer specific questions about bot vs. human behavior and earner vs. buyer retention. Do not track "everything."
+
+| Event Name | Question Answered | Required Properties (Pseudonymous) |
+| :--- | :--- | :--- |
+| `session_start` | Is this a persistent user or a ephemeral script? | `wallet_id_hash`, `session_id`, `client_fingerprint` (browser/device hash), `time_of_day` |
+| `game_action_complete` | **Core Value:** Is real gameplay happening? | `wallet_id_hash`, `action_type` (quest/combat/craft), `duration_seconds`, `outcome_success` |
+| `token_earn_event` | Source of funds: Did they play to earn? | `wallet_id_hash`, `amount`, `source_action_id` (link to `game_action_complete`), `token_type` |
+| `token_purchase_event` | Source of funds: Did they buy in? | `wallet_id_hash`, `amount`, `exchange_source` (DEX/bridge), `tx_hash` |
+| `trade_initiated` | Economic activity: Who is trading? | `wallet_id_hash`, `item_id`, `price`, `counterparty_wallet_hash`, `time_since_last_game_action` |
+| `session_end` | Session depth for cohort analysis. | `wallet_id_hash`, `total_game_actions`, `total_duration` |
+
+**Differentiating Bots from Humans**
+To detect speculation vs. engagement, your analytics must correlate **time-between-actions** and **action-diversity**.
+*   **Bot Signal:** High frequency of `trade_initiated` with zero intervening `game_action_complete`; uniform `duration_seconds` across sessions; identical `client_fingerprint` across multiple `wallet_id_hash` values.
+*   **Human Signal:** Variable session lengths, diverse `action_type` sequences, and `time_since_last_game_action` showing natural pauses.
+
+**Cohort Strategy: Earners vs. Buyers**
+You cannot distinguish these groups without linking token source to the wallet identity at the moment of entry.
+1.  **Tagging Logic:** Upon first observed `token_earn_event` or `token_purchase_event`, assign a static cohort property to that `wallet_id_hash`: `initial_capital_source` = "earned" | "bought" | "unknown".
+2.  **Retention Query:** Measure retention as the % of wallets in each cohort performing a `game_action_complete` in Week 1, Week 2, etc.
+    *   *Hypothesis to test:* Do "earned" players retain longer than "bought" players?
+    *   *Failure Mode:* If "bought" players show high trade velocity but zero `game_action_complete`, they are speculators, not players.
+
+**Identifier Seam & Privacy**
+*   **Stable ID:** Use a salted hash of the `wallet_address` as your primary `wallet_id_hash`. This allows cross-session tracking without exposing raw PII.
+*   **Privacy Compliance:** Do not store raw wallet addresses, IP addresses, or private keys in your analytics database. Route any raw data handling to your privacy compliance protocol (`privacy-compliance.md`). The analytics system only sees the pseudonymous hash.
+
+**This Week's Steps**
+1.  **Define Core Action:** Engineering must finalize the exact list of `action_type` values that constitute "real gameplay" for the `game_action_complete` event.
+2.  **Implement Hashing:** Deploy the salting mechanism for `wallet_address` to generate `wallet_id_hash` in the staging environment.
+3.  **Draft Cohort Query:** Write the SQL/analytic query that groups users by `initial_capital_source` and calculates Week-1 retention on `game_action_complete` to verify the schema works before code freeze.
+
+*Note: Do not set benchmarks for "good" retention yet; establish your baseline from Day 1 data. Avoid peeking at early A/B results without a pre-committed sample size.*

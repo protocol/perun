@@ -1,0 +1,42 @@
+### North Star Metric
+**Weekly Active Users completing a "Verified Review"**: A user is counted only when they upload a contract, receive at least one automated suggestion, and either **accept a suggestion** or **explicitly reject/modify a suggestion with a final save**. This rejects vanity metrics like "total contracts uploaded" or "pageviews," which rise regardless of whether the automation provides value.
+
+### Event Taxonomy (Answering Named Questions)
+Instrument only these four events to distinguish between time saved and workload shifted. Do not track "time spent" as a raw duration yet; it is ambiguous without context.
+
+1.  **`suggestion_presented`**
+    *   **Question:** How many opportunities for automation did we create?
+    *   **Properties:** `contract_id`, `suggestion_type` (e.g., clause rewrite, risk flag), `confidence_score`.
+    *   **Why:** Establishes the denominator for acceptance rates.
+
+2.  **`suggestion_accepted`**
+    *   **Question:** Is the automation accurate enough to be trusted immediately?
+    *   **Properties:** `contract_id`, `suggestion_id`, `time_to_decision_seconds` (time from presentation to click).
+    *   **Why:** High acceptance + low time-to-decision = **Time Saved**. This validates your assumption.
+
+3.  **`suggestion_rejected_or_modified`**
+    *   **Question:** Is the automation creating extra work (false positives)?
+    *   **Properties:** `contract_id`, `suggestion_id`, `modification_type` (deleted, edited, ignored), `time_to_decision_seconds`.
+    *   **Why:** High rejection + high time-to-decision = **Workload Shifted**. This identifies where the tool confuses users or requires manual override.
+
+4.  **`review_session_completed`**
+    *   **Question:** Did the user finish the job, or abandon it due to friction?
+    *   **Properties:** `contract_id`, `total_suggestions_presented`, `total_suggestions_accepted`, `final_status` (signed, saved, abandoned).
+    *   **Why:** Correlates suggestion volume with completion rates.
+
+### Addressing the "Time Spent" Ambiguity
+Do not track total session duration as a primary metric yet. A 2-hour session could mean deep trust (careful review) or deep confusion (fixing errors). Instead, rely on **`time_to_decision_seconds`** per suggestion (captured in events 2 and 3).
+*   **Signal:** If `time_to_decision` is low and `accepted` is high, the tool saves time.
+*   **Signal:** If `time_to_decision` is high and `rejected/modified` is high, the tool is shifting workload.
+*   **Action:** Aggregate this data weekly to see if the average time-per-suggestion trends down as the model improves.
+
+### Implementation Constraints & Privacy
+*   **Identifier Seam:** Use a **pseudonymous user ID** for cohort analysis (to track if specific firms trust the tool more over time). Do not use raw emails or names in event properties. Route any PII mapping to your privacy compliance protocol.
+*   **Stage Appropriateness:** Since you are in **MVP/Beta** (5 firms, 300 contracts), do not instrument granular mouse movements or scroll depth. These are "noise" at this stage. Focus strictly on the decision loop: Suggest → Decide → Complete.
+
+### This Week's Steps
+1.  **Define Schema:** Finalize the JSON schema for the four events above, ensuring `time_to_decision_seconds` is calculated client-side before the event fires.
+2.  **Baseline Query:** Run a one-time query on existing logs (if available) or plan a manual audit of the 300 existing contracts to estimate the current ratio of `accepted` vs. `rejected` suggestions.
+3.  **Guardrail Definition:** Set a tripwire for the December launch: If `suggestion_rejected_or_modified` exceeds 40% of `suggestion_presented` for two consecutive weeks, delay the wider release to retrain the model.
+
+*Note: Do not invent benchmarks for "good" acceptance rates; compare your December performance strictly against your November baseline. Any metric without an instrumentation plan is UNVERIFIED.*

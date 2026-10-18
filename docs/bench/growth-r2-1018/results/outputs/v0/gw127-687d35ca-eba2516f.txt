@@ -1,0 +1,26 @@
+### Immediate Diagnostic Queries & Validation Plan
+
+**1. Retroactive Data Cleaning (Past 3 Weeks)**
+Do not attempt to "guess" bot rows in your existing database; this risks deleting power users. Instead, create a **filtered view** for reporting by excluding sessions matching these high-confidence bot signatures:
+*   **Time-to-Complete Distribution:** Calculate the percentile distribution of time from "Landing Page Load" to "Onboarding Complete." Humans exhibit a long-tail distribution (minutes to hours). Bots completing the full flow often cluster in an impossible narrow band (e.g., <15 seconds consistently). Exclude any session falling below the 1st percentile of your historical human baseline (pre-Oct 12).
+*   **Event Sequence Rigidity:** Query for users who triggered every single onboarding event with identical millisecond gaps between steps. Human interaction has variance (jitter); bots often have deterministic timing or zero variance.
+*   **Referral Chain Depth:** Isolate accounts where the referrer and referee share identical IP subnets, User-Agent strings, or device fingerprints, specifically within the first 5 minutes of the referrer's own signup. This indicates self-referral loops.
+*   **Actionless Retention:** Filter for users who completed signup but triggered **zero** core value events (e.g., no file upload, no search, no dashboard view) within 48 hours. Real power users, even fast ones, perform a value action.
+
+**2. Real-Time Detection Strategy (Non-Blocking)**
+Implement a "Shadow Mode" scoring system rather than hard blocking to avoid false positives on legitimate power users:
+*   **Velocity vs. Variance Score:** Track the coefficient of variation in mouse movements or API call intervals. High velocity with low variance (robotic smoothness) flags a bot. High velocity with high variance (frantic but human-like clicking) flags a power user.
+*   **Honeypot Events:** Inject invisible, non-rendered form fields or API endpoints that only automated scripts filling forms sequentially would trigger. Legitimate users never touch these.
+*   **Device/Network Reputation:** Cross-reference IPs against known datacenter ranges (AWS, Azure, etc.) which rarely host individual consumer referrals, unlike residential ISPs.
+
+**3. Attribution Model Adjustment**
+*   **Deferred Attribution:** Do not credit marketing spend until a user passes a "Human Verification Window" (e.g., 24 hours) and completes one **Core Value Event**. If an account remains "Signup Only" with no value action, its acquisition cost is written off as fraud, not marketing spend.
+*   **Cohort-Level Correction:** For the board meeting, present two numbers: "Raw Signup Volume" and "Verified Active Cohort." Explicitly state that ROI is calculated only on the Verified Active Cohort. This isolates the fraud impact without needing to delete raw rows.
+
+**This Week's Execution Steps:**
+1.  **Run the "Time-to-Complete" query** on the last 21 days of data to identify the specific timestamp threshold where the distribution breaks from human norms.
+2.  **Tag, do not delete:** Apply a `is_verified_human = false` flag to records matching the rigid timing and zero-retention criteria for your board report.
+3.  **Implement the "Core Value" gate** in your attribution dashboard immediately, ensuring no spend is credited until that second event occurs.
+
+**Note:** Do not rely on IP blocking alone, as sophisticated bots rotate residential proxies; behavioral timing is your only reliable differentiator here.
+**Note:** Present the "Verified Active Cohort" metric as your new North Star for this campaign to the board, rendering the inflated 27% conversion rate irrelevant.

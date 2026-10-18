@@ -1,0 +1,35 @@
+# Data Cleansing and Validation Strategy for DailyBrief News
+
+## Phase 1: Identification and Isolation
+1.  **Define the Contamination Window:** Isolate all user sessions with timestamps between 2:00 AM and 6:00 AM UTC last Thursday. Flag any session extending into or originating from this window as "potentially corrupted."
+2.  **Segment by Symptom:** Separate records into two distinct groups:
+    *   **Group A (Truncated Sessions):** Sessions ending abruptly within the outage window with duration < 30 seconds.
+    *   **Group B (Ghost Sessions):** Users with activity immediately prior to 2:00 AM but no corresponding logout or subsequent activity for 24+ hours, despite historical patterns suggesting otherwise.
+3.  **Geographic Tagging:** Map affected User IDs to their primary geographic region using IP history or account settings to confirm the European time zone hypothesis. Do not assume; validate the concentration of affected IDs against the total active user base in that region.
+
+## Phase 2: Handling Strategy (No Imputation of Behavior)
+**Critical Directive:** Do not impute (fabricate) specific page views, session durations, or content interactions. Imputing behavioral data introduces unquantifiable bias that will mislead editorial decisions regarding content performance. Instead, use exclusion and statistical adjustment.
+
+1.  **Exclude Corrupted Transactions:** Remove Group A (truncated sessions) entirely from calculations of *Average Session Duration* and *Pages Per Session*. Including partial data artificially lowers these averages.
+2.  **Adjust Retention Calculations:**
+    *   Calculate retention rates using two denominators:
+        *   **Raw Retention:** Includes all users (will show the artificial dip).
+        *   **Adjusted Retention:** Excludes the specific cohort of users whose *only* activity during the analysis week falls within the corrupted window or immediately precedes it without resolution.
+    *   Label the affected cohort as "Data Loss - Infrastructure Outage" in all reports. Do not count them as "churned" users.
+3.  **Statistical Estimation for High-Level Reporting:**
+    *   If a single "total engagement" number is required for the Editor-in-Chief, calculate the average engagement metrics for the *uncorrupted* European morning cohort (e.g., the same time window from the previous three Thursdays).
+    *   Apply this historical average *only* to the count of affected users to generate an "Estimated True Engagement" figure.
+    *   **Constraint:** Present this only as a range (e.g., "Estimated loss of 15k–18k session minutes") alongside the raw data, never as a definitive replacement.
+
+## Phase 3: Validation and Documentation
+1.  **Pre/Post Consistency Check:** Compare engagement trends for the European cohort from Monday–Wednesday and Friday–Sunday. These days should show normal continuity. If the drop-off appears outside the outage window, the corruption may be wider than assumed.
+2.  **Control Group Comparison:** Compare the behavior of non-European users during the same UTC window. Their metrics should remain stable. If they also show a dip, the issue may be global or related to a different factor.
+3.  **Audit Trail:** Create a permanent log of the specific User IDs and Session IDs excluded or flagged. This allows for re-calculation if better data recovery methods become available later.
+
+## Phase 4: Reporting Protocol
+Prepare the monthly review with three distinct data views:
+1.  **Reported Metrics:** The raw numbers as they currently stand in the database (showing the dip).
+2.  **Cleaned Metrics:** The numbers with corrupted sessions excluded.
+3.  **Impact Statement:** A qualitative summary stating: "A server outage on [Date] invalidated data for ~30% of early-morning EU users. Retention figures excluding this cohort reflect true user behavior. No content-specific performance data can be recovered for this window."
+
+**Note:** This approach prioritizes data integrity over completeness; it is safer to report a known gap than a fabricated trend. Ensure the Head of Analytics signs off on the exclusion list before finalizing the report.

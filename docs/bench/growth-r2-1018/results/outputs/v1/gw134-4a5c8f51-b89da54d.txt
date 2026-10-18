@@ -1,0 +1,51 @@
+# LogiTrack Pilot Success Metrics (April 5 – June 4)
+
+## 1. North Star Metric: Verified Delay Detection Time
+**Definition:** The median time elapsed between a real-world shipment deviation occurring and the system generating a verified alert to the logistics manager.
+**Target:** < 6 hours (Baseline: 48 hours).
+**Why:** This directly measures the core value promise. Unlike "alerts sent" (vanity), this only rises when the system correctly identifies a problem faster than the status quo.
+**Input Metrics:**
+*   *Data Ingestion Latency:* Time from carrier update to LogiTrack ingestion.
+*   *False Positive Rate:* % of alerts flagged as delays that were not actual delays (critical for trust).
+
+## 2. The Funnel (Read Bottom-Up: Retention First)
+Do not measure "number of factories onboarded" yet. Measure if they *stay* and *act*.
+*   **Retention (Core Action):** % of logistics managers who log in or acknowledge an alert within 24 hours of receipt, weekly.
+    *   *Question:* Are they relying on us, or reverting to phone calls/emails?
+*   **Activation:** % of pilot factories that execute a documented operational change (e.g., rerouting, expediting) based *specifically* on a LogiTrack alert within the first 30 days.
+*   **Acquisition:** N/A for this pilot (factories are pre-selected).
+
+## 3. Qualitative Indicator: The "Trust Proxy"
+You cannot instrument "trust" directly. Instrument the *behavior* that proves it.
+*   **Metric:** **Manual Override Rate**.
+*   **Definition:** The frequency with which a logistics manager ignores a LogiTrack alert to make a decision based on external info, vs. the frequency they escalate an issue *without* an alert.
+*   **Method:** Weekly 15-minute structured interviews with the 5 factory leads. Ask: "Did you act on an alert this week? Did you miss an issue we didn't catch?"
+*   **Success Signal:** Managers cite LogiTrack data in their internal reports to leadership. (Collect 3 distinct examples by Day 45).
+
+## 4. Resolution to Your Trade-off: Speed vs. Frequency
+**Decision:** Prioritize **Speed of Detection Accuracy** over Frequency.
+*   **Reasoning:** In electronics manufacturing, alert fatigue causes managers to ignore the system. A high frequency of low-confidence alerts destroys the "Trust Proxy."
+*   **Rule:** Do not instrument "Total Alerts Sent" as a success metric. Instrument "Actionable Alerts" (alerts that led to a verified operational change). If speed drops but accuracy rises, trust holds. If speed rises but false positives spike, trust collapses.
+
+## 5. Event Taxonomy (Instrument Only These)
+Every event below must answer a named question. Do not log "page views."
+| Event Name | Question Answered | Properties |
+| :--- | :--- | :--- |
+| `delay_detected` | Did we find the delay faster than 48h? | `shipment_id`, `detection_latency_minutes`, `confidence_score` |
+| `alert_acknowledged` | Did the human see and accept the risk? | `user_id` (pseudonymous), `time_to_acknowledge` |
+| `action_taken` | Did the alert drive real value? | `action_type` (reroute/expedite), `estimated_cost_saved` |
+| `false_positive_flag` | Are we crying wolf? | `reason_code`, `user_id` |
+
+## 6. Verification & Constraints
+*   **Inventory Cost Claim:** The "15% reduction in holding costs" is **UNVERIFIED** at this stage. You cannot measure this in 60 days without baseline cost data from the factories.
+    *   *Action:* Add a field to the `action_taken` event for the manager to estimate "Hours of delay prevented." Use this as a leading indicator for cost savings; do not promise the 15% figure until post-pilot analysis.
+*   **Identifier Seam:** Use a stable, pseudonymous `factory_unit_id` to track cohorts across sessions. Do not use personal emails or names in analytics logs; route PII to your privacy compliance protocol.
+*   **No Benchmarks:** Do not compare your detection time to global averages. Compare April's median time to May's median time for *these specific five factories*.
+
+## This Week's Steps
+1.  **Define the "Verified" State:** Agree with the 5 factory leads on what constitutes a "confirmed delay" so your `delay_detected` event can be validated against ground truth.
+2.  **Build the "Action" Loop:** Ensure the `action_taken` event is triggered only when a user marks an alert as "Resolved via LogiTrack," not just when they click a link.
+3.  **Schedule the Trust Audit:** Set recurring calendar invites for Day 14, 30, and 45 to collect the qualitative "Trust Proxy" data; do not wait until Day 60.
+
+*Note: If detection latency hits <6 hours but `false_positive_flag` exceeds 10%, pause feature expansion immediately to recalibrate thresholds.*
+*Do not instrument "login frequency" unless it correlates to `alert_acknowledged`; otherwise, it is vanity.*

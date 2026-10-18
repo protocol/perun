@@ -1,0 +1,28 @@
+### Immediate Analysis Plan for Friday Stakeholder Meeting
+
+**1. Validate the Baseline (Stop the Comparison Noise)**
+Do not present the "30% beta vs. current" comparison as a definitive failure yet. Beta cohorts are often self-selected and technically savvy, making them a poor benchmark for general traffic.
+*   **Action:** Request a **Day-over-Day completion rate trend** starting from last Tuesday.
+*   **What to look for:** Did the completion rate drop sharply *only* on the launch day and stay flat? Or is it degrading daily? If it is stable but lower than beta, the issue is likely design friction, not a breaking bug. If it is degrading, you may have a performance issue or a confusing error state accumulating over time.
+
+**2. Isolate the Hypothesis: The Identity Verification Step**
+Your hypothesis is that users without local bank accounts are failing at the new verification step. You cannot validate this without granular exit data.
+*   **Action:** Request a **Step-Level Funnel Breakdown** specifically for the "Identity Verification" section. Do not ask for the whole flow; ask for every micro-step within that section (e.g., "Clicked Verify," "Uploaded Doc," "Selected Bank," "Submission Error").
+*   **What to look for:** A massive drop between "Selected Bank" and "Submission Success" confirms the friction point. If the drop happens at "Clicked Verify," the UI itself is the barrier.
+*   **Crucial Slice:** Ask for this funnel **sliced by "Bank Country" or "IBAN Prefix"** if captured, or alternatively, slice by **Error Code** returned at that step. If you cannot slice by bank yet, look for a spike in specific error messages (e.g., "Unsupported Institution") in your logs for that timestamp.
+
+**3. Check for Device/Platform Concentration**
+You asked if the drop-off is uniform. It rarely is. Identity verification often relies on camera uploads or specific browser permissions that fail disproportionately on certain devices.
+*   **Action:** Request the completion rate **sliced by Device Type (Mobile Web vs. Desktop vs. Native App)** and **Browser**.
+*   **What to look for:** If Mobile Web completion is 10% while Desktop is 25%, the friction is likely technical (camera permissions, small UI for document upload) rather than purely about bank accounts. This changes the fix from "add more bank partners" to "fix the mobile upload flow."
+
+**4. The "This Week" Decision Metric**
+For the executive meeting, do not present raw counts. Present the **Relative Drop-off Rate** at the specific suspected step compared to the step prior.
+*   **The Metric:** `(Users entering Verification Step - Users exiting Verification Step) / Users entering Verification Step`.
+*   **The Call:**
+    *   If the drop is >80% on Mobile but <40% on Desktop: **Priority Fix = Mobile UX.**
+    *   If the drop is uniform across devices but correlated with non-local IBANs (or specific error codes): **Priority Fix = Bank Partner Integration.**
+    *   If the drop is uniform and high across all segments with no specific error spike: **Priority Fix = Process Simplification (remove the step or delay it).**
+
+**Note:** Do not ask the data team for "average time on page" yet; it adds noise. Focus strictly on exit counts and error codes.
+**Note:** If the data team cannot slice by bank country immediately, use "Error Message Frequency" as your proxy variable for the Friday meeting.

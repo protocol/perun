@@ -1,0 +1,36 @@
+**Briefing: Enterprise Churn vs. SMB Uplift Post-Pricing Change**
+
+**Current Status: UNVERIFIED Root Cause**
+The divergent behavior (SMB upgrades +25%, Enterprise churn +10%) indicates a segmentation mismatch in the new value proposition, but the cause is currently **UNVERIFIED**. We cannot confirm if this is temporary announcement shock or a fundamental pricing mismatch without comparing the specific usage patterns of churned vs. retained enterprise accounts against their own pre-change baselines. No external benchmark can determine "normal" churn for your specific context.
+
+**Diagnosis Strategy: Retention First**
+Do not increase acquisition spend to offset the 10% enterprise loss; this pours water into a leaky bucket. Diagnose the retention leak before optimizing the top of the funnel. The hypothesis that "enterprise is sensitive to per-seat pricing" must be tested against actual user behavior, not internal value modeling.
+
+**Required Data Collection (Event Taxonomy)**
+Instrument only the events that answer these specific questions. Do not track "everything."
+
+1.  **Question:** Did churned enterprises stop using the core value driver before cancelling, or immediately after the price announcement?
+    *   **Event:** `core_action_completed` (e.g., report generated, deployment run).
+    *   **Properties:** `account_tier` (Enterprise), `seat_count`, `days_since_price_announcement`.
+    *   **Analysis:** Compare the week-over-week trend of this event for churned accounts vs. retained accounts. A drop *before* cancellation suggests value mismatch; a drop *after* suggests price shock.
+
+2.  **Question:** Is the churn concentrated in accounts exceeding a specific seat-count threshold?
+    *   **Event:** `subscription_viewed` or `invoice_downloaded`.
+    *   **Properties:** `total_seats`, `price_per_seat`, `account_id` (pseudonymous).
+    *   **Analysis:** Cohort analysis by seat count. If churn spikes only above X seats, the per-seat model is the friction point.
+
+3.  **Question:** Are retained enterprises changing their usage behavior to avoid costs?
+    *   **Event:** `seat_deactivated` or `feature_downgrade`.
+    *   **Properties:** `reason_code` (if available), `user_role`.
+    *   **Analysis:** If retained accounts are actively reducing seats, the 10% churn is likely the leading edge of a broader contraction risk.
+
+**Identifier Seam & Privacy**
+To track these cohorts, you need a **stable, pseudonymous account identifier** to follow usage across sessions and users within an enterprise. Do not use raw PII. Route all consent and data retention policies to your privacy compliance framework. This differs from system observability, which avoids high-cardinality user labels; here, the user identity is the primary key for analysis.
+
+**Immediate Next Steps (This Week)**
+1.  **Pull the Cohort Query:** Extract `core_action_completed` frequency for the 10% churned enterprise accounts vs. a control group of retained enterprises for the 4 weeks pre-change and 3 weeks post-change.
+2.  **Define the Tripwire:** If the core action frequency for *retained* enterprises drops by >15% in the next 14 days, treat the pricing change as a critical failure and prepare a rollback or concession plan.
+3.  **Interview Leavers:** Conduct exit interviews with 5 churned enterprise contacts specifically asking about the "per-seat" vs. "feature limit" perception to validate the quantitative data.
+
+**Note:** Do not declare the pricing change a success based on SMB upgrades; enterprise LTV likely outweighs SMB volume.
+**Note:** Any claim of "recovery" requires a pre-committed observation window (e.g., 90 days), not a peek at next week's numbers.

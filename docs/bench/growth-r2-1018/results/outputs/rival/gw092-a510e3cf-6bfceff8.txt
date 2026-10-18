@@ -1,0 +1,66 @@
+# Dark Mode Impact Validation Brief
+
+**To:** VP of Engineering, CodeFlow
+**From:** Product Analytics
+**Date:** November 15, 2023
+**Subject:** Measurement Plan for Dark Mode Rollout (Dec 1 – Dec 28)
+
+### Executive Summary
+We will validate the Dark Mode rollout not by adoption volume, but by its correlation with **retention** and **code commit frequency**. To distinguish genuine satisfaction from accidental toggling, we will track "persistence" (staying in dark mode for >3 sessions) as our primary filter for satisfied users. We will run a phased rollout starting Dec 1st, treating new accounts as the test group while monitoring existing user support tickets as a guardrail metric.
+
+### Hypothesis
+Because late-night developers experience eye strain in light mode, enabling dark mode by default for new accounts will increase session duration by 15+ minutes and improve Day-7 retention by 5% among users active after 8 PM, without increasing support ticket volume related to UI confusion.
+
+### Success Metrics & Definitions
+
+**1. Primary Outcome Metrics (The "North Stars")**
+*   **Commit Frequency:** Average number of git commits per user per week.
+    *   *Target:* +10% increase in the "Late Night" segment (activity >8 PM).
+*   **Session Duration:** Average time spent in the editor per session.
+    *   *Target:* +15 minutes increase for users who persist in dark mode.
+*   **Retention Rate:** Day-7 retention for new accounts created during the test window.
+    *   *Target:* +5% improvement vs. historical baseline.
+
+**2. Behavior Classification (Satisfaction vs. Accidental)**
+To filter noise, we will segment users into three distinct cohorts based on theme interaction:
+*   **Accidental Toggling:** Users who switch to dark mode but revert to light mode within the same session or before their next login. *Action: Exclude from success metrics.*
+*   **Trial Users:** Users who use dark mode for 1–2 sessions then revert. *Action: Monitor for friction points.*
+*   **Adopters (Satisfied):** Users who enable dark mode and remain in it for **3+ consecutive sessions** or **48+ hours**. *Action: This is the cohort used for calculating the primary outcome metrics.*
+
+**3. Guardrail Metrics (Risk Monitoring)**
+*   **Support Ticket Volume:** Count of tickets tagged "UI Confusion," "Theme Bug," or "Display Issue."
+    *   *Threshold:* If tickets increase by >15% week-over-week, pause rollout.
+*   **Churn Rate:** Immediate uninstallation or account deactivation within 24 hours of signup.
+    *   *Threshold:* No statistically significant increase vs. control group.
+
+### Implementation Plan (4-Week Window)
+
+**Week 1 (Dec 1–7): Phased Rollout & Baseline**
+*   Enable dark mode by default for **10% of new accounts**.
+*   Existing users remain on current settings (no forced changes).
+*   **Data Check:** Verify event tracking for `theme_changed`, `session_start`, and `commit_made`. Ensure "Late Night" flag is correctly identifying post-8 PM activity.
+
+**Week 2–3 (Dec 8–21): Expansion & Observation**
+*   Increase default dark mode to **50% of new accounts**.
+*   Monitor "Adopter" cohort behavior.
+*   Compare commit frequency and session duration between "Adopters" and "Light Mode" users, controlling for time-of-day.
+
+**Week 4 (Dec 22–28): Analysis & Decision**
+*   Freeze rollout changes.
+*   Calculate statistical significance of retention and commit metrics.
+*   Review support ticket sentiment analysis.
+
+### Data Requirements
+Engineering must ensure the following events are logged with user ID and timestamp:
+1.  `theme_changed` (properties: `previous_theme`, `new_theme`, `trigger_source`)
+2.  `session_start` (properties: `theme_active`, `time_of_day`)
+3.  `code_commit` (properties: `lines_changed`, `file_type`)
+4.  `support_ticket_created` (properties: `category`, `tags`)
+
+### Decision Framework
+*   **Go (Full Rollout):** If "Adopters" show +10% commit frequency AND support tickets remain stable.
+*   **Iterate:** If session duration increases but commit frequency stays flat (users are comfortable but not more productive). Investigate workflow bottlenecks.
+*   **No-Go:** If support tickets spike >15% or Day-7 retention drops for the test group. Revert default to light mode and make dark mode an opt-in setting only.
+
+---
+*Note: Historical baseline for "Late Night" users must be established using Week 1 data before full expansion. Ensure no PII is captured in theme event properties.*

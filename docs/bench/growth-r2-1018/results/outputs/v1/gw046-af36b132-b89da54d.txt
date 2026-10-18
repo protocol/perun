@@ -1,0 +1,27 @@
+### Growth Analysis: AmorLink Retention & Intervention Strategy
+
+**Status of Hypothesis:** `UNVERIFIED`. The assumption that exchanging phone numbers *causes* retention is currently a correlation. Users who exchange numbers early may simply be those with higher initial intent to date, meaning they would have retained regardless of the feature. Pushing contact sharing prematurely could degrade user experience or violate safety norms in the Buenos Aires market without moving the needle on long-term retention.
+
+**Diagnosis (Bottom-Up):**
+Your funnel shows a classic "leaky bucket." While Week 2 retention (40%) indicates successful initial activation, the drop to 15% by Week 8 reveals a failure in **sustained value delivery**. If users leave after exchanging numbers, it suggests the app successfully facilitates the match but fails to provide value *after* the conversation moves off-platform. Conversely, if they leave *before* exchanging numbers, the friction to connect is too high.
+
+**Recommended Intervention Strategy:**
+Do not yet prioritize features to force earlier number sharing. Instead, prioritize **instrumentation and segmentation** to isolate causality before changing the product flow.
+
+1.  **Define the North Star:** Shift focus from "Matches Made" (vanity) to **"Weekly Active Users having a meaningful in-app conversation"** (customer value). This captures users getting value regardless of whether they move off-app immediately.
+2.  **Event Taxonomy (Sprint Priority):** Instrument only these specific events to answer named questions:
+    *   `phone_number_exchanged`: *Question:* Does this event precede retention, or just correlate with high-intent users?
+    *   `message_count_session`: *Question:* Is there a "magic number" of messages (e.g., 10 msgs) that predicts Week 8 retention better than phone sharing?
+    *   `return_after_offboard`: *Question:* Do users who share numbers return to the app to manage matches, or is churn immediate?
+3.  **Experiment Design (Next Step):** Before building "push to share" features, run a **retrospective cohort analysis** (no new code required yet). Segment your existing Dec 1–Jan 15 cohort into:
+    *   Group A: Exchanged numbers < 5 messages.
+    *   Group B: Exchanged numbers > 5 messages.
+    *   Group C: Never exchanged numbers but retained > 4 weeks.
+    *   *Decision Rule:* If Group C has higher Week 8 retention than Group A, forcing early number sharing is a mistake. Focus on deepening in-app engagement first.
+
+**This Week's Steps for Engineering:**
+1.  **Query:** Run the segmented retention query above (A vs. B vs. C) using existing logs.
+2.  **Instrument:** Add the `message_count_session` and `phone_number_exchanged` properties to the analytics pipeline with a stable, pseudonymous user ID (ensure PII routing complies with privacy standards).
+3.  **Decision Trigger:** If Group C (deep in-app chat, no number) shows >20% Week 8 retention, pivot sprint goals to **in-app engagement features** (e.g., conversation prompts, video dates) rather than contact sharing acceleration.
+
+**Note:** Do not fabricate a "good" retention benchmark; compare only against your own Week 2 baseline. Ensure user IDs used for this cohort analysis are pseudonymous and routed to privacy compliance checks before engineering implementation.

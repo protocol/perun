@@ -1,0 +1,46 @@
+# Funnel Leakage Analysis Plan: DubaiEstates Viewing Drop
+
+To isolate the 18% drop in scheduled viewings, execute the following data slices and comparisons immediately. Do not rely on aggregate weekly totals; break down the data by the specific dimensions below to pinpoint friction.
+
+### 1. Step-by-Step Funnel Conversion Rates
+Compare the conversion rate between each consecutive step for the **4 weeks prior** to the update vs. the **4 weeks post-update**. Do not just look at the final completion rate.
+
+*   **Step A:** Property Detail Page View → "Schedule Viewing" Button Click
+*   **Step B:** Button Click → Form Load (Initial Page Load)
+*   **Step C:** Form Load → Phone Number Entry
+*   **Step D:** Phone Number Entry → Verification Code Request Fired
+*   **Step E:** Verification Code Request → Code Entry Start
+*   **Step F:** Code Entry Start → Form Submission Success
+
+**Action:** Identify the single step with the largest percentage point drop in conversion rate post-update. If the drop occurs between Step D and E, the friction is the verification delivery or input UI. If it occurs between C and D, users are abandoning before committing to verification.
+
+### 2. Device-Specific Segmentation
+Since mobile represents 60% of traffic, segment the entire funnel above by **Device Category** (Mobile, Tablet, Desktop) and **Operating System** (iOS, Android).
+
+*   **Comparison:** Calculate the % change in conversion rates for Mobile vs. Desktop separately.
+*   **Hypothesis Check:** If the mobile drop is >25% while desktop is stable or down only <5%, the issue is likely mobile-specific UI (e.g., keyboard overlap, input field size, SMS delay perception on mobile networks).
+*   **Deep Dive:** If mobile is the culprit, further slice by browser (Chrome Mobile, Safari iOS) to rule out specific rendering bugs.
+
+### 3. Verification Failure vs. Abandonment
+Distinguish between users who *cannot* verify and users who *choose not* to.
+
+*   **Metric 1: Technical Failure Rate.** Percentage of users who requested a code but never entered one (potential SMS delivery failure or timeout). Compare pre- and post-update.
+*   **Metric 2: Abandonment Rate.** Percentage of users who entered a code but submitted an incorrect one multiple times vs. those who left the field blank.
+*   **Metric 3: Time-to-Complete.** Average time spent on the verification step. A significant increase suggests confusion or technical latency.
+
+### 4. Property Type & Price Tier Control
+Ensure the drop isn't due to a shift in traffic quality (e.g., more users viewing low-intent rental listings vs. high-intent sales).
+
+*   **Comparison:** Filter the funnel by Property Type (Sale vs. Rent) and Price Tier.
+*   **Goal:** Confirm the 18% drop is consistent across all segments. If the drop is isolated to "Rentals," the friction might be perceived differently by that audience than by buyers.
+
+### 5. Error Message Tracking
+Query your event logs for specific error events tied to the new verification step.
+
+*   **Events to Track:** `verification_sms_failed`, `verification_code_invalid`, `verification_timeout`, `form_validation_error`.
+*   **Action:** Correlate spikes in these error events with the timeline of the drop. High `verification_sms_failed` rates indicate a vendor integration issue, not a UX issue.
+
+### Required Output Format for Engineering
+Present findings in a table showing the **Pre-Update Conversion Rate**, **Post-Update Conversion Rate**, **% Change**, and **Primary Device Affected** for each funnel step. Highlight the single step with the highest negative delta as the primary target for the next sprint.
+
+*Note: Ensure your analytics window matches exactly (e.g., same 28-day duration) to avoid seasonality skew. If using GA4, verify that the new verification events are marked as conversions and firing correctly in DebugView.*

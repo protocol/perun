@@ -1,0 +1,31 @@
+**Recommendation: Do not roll back yet; iterate with a targeted mobile fix.**
+
+The current data presents a classic case of aggregate masking: the treatment harms mobile (-15%) while helping desktop (+5%). A full rollback discards the desktop gain, while a full rollout degrades the mobile experience. The correct path is to segment the rollout or hold the mobile variant until the root cause is isolated.
+
+**1. Immediate Action: Segment the Rollout**
+Disable the new one-page design for mobile traffic immediately while keeping it active for desktop. This stops the bleeding on mobile (protecting the -15% loss) while preserving the +5% revenue lift on desktop. This is your "guardrail" action.
+
+**2. Diagnostic Analysis (The "Why")**
+You hypothesized two causes: interface clutter vs. slow load times. You cannot decide between them without the missing segmentation. Since you cannot re-run the test instantly, perform a retroactive cohort analysis on the existing logs for the mobile treatment group only:
+*   **Correlate Completion with Load Time:** Plot checkout completion rate against page load duration for mobile users. If completion drops sharply after a specific threshold (e.g., >3 seconds), the issue is **performance** (older devices/network).
+*   **Correlate Completion with Scroll Depth/Interaction:** If load times are consistent but users drop off at specific form fields or buttons, the issue is **interface clutter** (UX friction).
+*   **Device Model Proxy:** If direct model data is missing, use User-Agent strings to bucket users into "High-end" vs. "Low-end" device categories based on OS version and model identifiers. Compare completion rates between these buckets.
+
+**3. Decision Matrix**
+*   **If Performance is the driver:** The one-page design likely bundles too much JavaScript/CSS for older mobile parsers. *Fix:* Optimize asset loading (lazy load non-critical elements) specifically for mobile, then re-test.
+*   **If Clutter is the driver:** The single-page layout may overwhelm small screens. *Fix:* Revert to a multi-step flow for mobile only, or simplify the single page (remove non-essential fields), then re-test.
+
+**4. Required Experiment Design for Re-test**
+Do not rely on this observational drill-down for a final verdict. Launch a follow-up A/B test strictly for mobile users:
+*   **Variant A:** Original flow (Control).
+*   **Variant B:** Optimized one-page flow (addressing the specific finding above).
+*   **Pre-commitment:** Define the sample size required to detect a 5% lift with 95% confidence. Do not peek at results before reaching this N.
+*   **Primary Metric:** Mobile Checkout Completion Rate.
+*   **Guardrail Metric:** Page Load Time (ensure the fix doesn't introduce new latency).
+
+**This Week's Steps:**
+1.  **Query:** Run the retroactive correlation of mobile completion vs. load time/device tier on the Sept 5–20 dataset.
+2.  **Deploy:** Switch mobile traffic to the control group (original flow) while retaining the new design for desktop.
+3.  **Design:** Draft the hypothesis and variant for the mobile-specific re-test based on the query result.
+
+**Note:** The divergent results confirm that "one-size-fits-all" UI changes often fail across device classes; device-specific heuristics are required. Ensure any user identifiers used for this retro-analysis are pseudonymized per privacy standards.

@@ -1,0 +1,33 @@
+### Measurement Strategy: FitJourney Gamification Soft Launch
+
+**1. North Star & Input Metrics**
+*   **North Star:** Weekly Active Users completing ≥3 workouts (value = consistent exercise, not badge collection).
+*   **Input Metrics:** Badge earn rate, leaderboard view-to-interaction ratio, next-day workout retention.
+*   **Rejection of Vanity:** Do not track "total badges earned" or "leaderboard views" as success metrics; these rise regardless of user value.
+
+**2. Event Taxonomy (Answering Named Questions)**
+Instrument only events that answer specific psychological hypotheses. Every event must include a `user_segment` property (e.g., `beginner`, `intermediate`, `top_10%`) derived from historical workout frequency.
+
+| Event Name | Question Answered | Key Properties |
+| :--- | :--- | :--- |
+| `badge_earned` | Does receiving a reward trigger immediate action? | `badge_type`, `user_segment`, `days_since_signup` |
+| `workout_started` (24h post-badge) | **Hypothesis Test:** Did the badge increase next-day likelihood by 20%? | `triggered_by_badge` (bool), `user_segment` |
+| `leaderboard_viewed` | Do users engage with competition or avoid it? | `user_segment`, `time_on_screen` |
+| `app_uninstall` / `subscription_cancel` | **Guardrail:** Is gamification causing churn among beginners? | `last_seen_segment`, `days_since_last_badge` |
+| `workout_abandoned` | Does seeing a low leaderboard rank cause mid-workout quit? | `leaderboard_rank_shown`, `user_segment` |
+
+**3. Experiment Design: Soft Launch (June 1–10)**
+*   **Structure:** A/B Test. Control (No Gamification) vs. Treatment (Badges + Leaderboards).
+*   **Pre-commitment:** Define the primary metric as *Next-Day Workout Retention* for the `beginner` segment. Define the guardrail as *Churn Rate* for the bottom 50%.
+*   **Stopping Rule:** Do not peek at significance daily. Run for the full 10 days or until the pre-calculated sample size (based on your 20% MDE assumption) is reached. If the guardrail (churn) spikes >5% relative to control, stop immediately.
+*   **Segmentation Analysis:** You must analyze results separately for `top_10%` vs. `bottom_50%`. A global average win could hide severe damage to beginners.
+
+**4. Identifier Seam & Privacy**
+*   Use a stable, pseudonymous `user_id` to track cohorts across sessions. Do not use raw PII in analytics events. Route any consent management logic to your privacy compliance protocol.
+
+**5. This-Week Steps**
+1.  **Define the "Beginner" Segment:** Query your database to finalize the logic for `user_segment` (e.g., <4 workouts in first 14 days) before instrumenting events.
+2.  **Implement Guardrail Tracking:** Ensure `app_uninstall` and `subscription_cancel` events fire with the `user_segment` property before June 1st; without this, you cannot detect alienation.
+3.  **Calculate Sample Size:** Compute the required N to detect a 20% lift with 80% power; if 10,000 users is insufficient, extend the soft launch duration rather than peeking early.
+
+*Note: The 20% lift assumption is unverified until the test runs; treat it as a hypothesis, not a baseline. If the control group's retention fluctuates due to seasonality, the relative lift calculation must account for this trend.*

@@ -1,0 +1,48 @@
+### Proposed Activation Event Taxonomy for TaskFlow Solutions
+
+Your current activation metric (creating a single project) is a vanity metric; it measures setup, not value. The 12% retention rate confirms that creating a project does not correlate with long-term usage. To fix this, we must instrument events that prove the user has experienced the "aha" moment—where the tool solves a real problem.
+
+Since you are unsure whether value comes from collaboration or individual tracking, instrument the following specific events. Each event includes a precise definition for your engineering team to implement without ambiguity.
+
+#### 1. Collaboration Hypothesis Events
+*These events test if value is derived from team interaction.*
+
+*   **`team_member_invited`**
+    *   **Definition:** Fired when a user successfully sends an invitation email to a new member within a project.
+    *   **Properties:** `project_id`, `inviter_role`, `invitee_email_domain` (to distinguish internal vs. external), `timestamp`.
+    *   **Question Answered:** Does bringing others into the workspace predict retention better than solo usage?
+
+*   **`task_assigned_to_peer`**
+    *   **Definition:** Fired when a user assigns a specific task to a user other than themselves.
+    *   **Properties:** `project_id`, `assigner_id`, `assignee_id`, `task_type`.
+    *   **Question Answered:** Is the core value the delegation of work rather than just list creation?
+
+*   **`collaborative_comment_added`**
+    *   **Definition:** Fired when a comment is posted on a task or project by a user who is not the task creator.
+    *   **Properties:** `project_id`, `task_id`, `commenter_id`, `is_creator` (boolean).
+    *   **Question Answered:** Does active discussion correlate with weekly return rates?
+
+#### 2. Individual Workflow Hypothesis Events
+*These events test if value is derived from personal organization and workflow completion.*
+
+*   **`workflow_step_completed`**
+    *   **Definition:** Fired when a task moves from a "To Do" state to a "Done" (or equivalent final) state.
+    *   **Properties:** `project_id`, `task_id`, `time_to_complete_seconds`, `user_id`.
+    *   **Question Answered:** Is the value in closing loops and finishing tasks, regardless of who does them?
+
+*   **`recurring_task_created`**
+    *   **Definition:** Fired when a user sets a task to repeat on a schedule (daily, weekly, etc.).
+    *   **Properties:** `project_id`, `frequency_type`, `task_category`.
+    *   **Question Answered:** Does setting up a sustainable system (rather than a one-off list) predict retention?
+
+*   **`multi_step_workflow_initiated`**
+    *   **Definition:** Fired when a user creates a project containing at least three tasks with dependencies linked within the first session.
+    *   **Properties:** `project_id`, `task_count`, `dependency_count`.
+    *   **Question Answered:** Is deep setup (complexity) a better predictor of value than simple setup?
+
+#### Implementation Guidance
+*   **Identifier Seam:** Ensure every event includes a stable, pseudonymous `user_id` and `team_id` to allow cohort analysis across sessions. Do not use raw PII (emails/names) in the event payload; route those to your privacy compliance layer.
+*   **Instrumentation Rule:** Do not track "page views" or "button clicks" unless they map directly to one of the questions above. Unused events create noise.
+*   **Next Step:** Once instrumented, recalculate activation using these events. The new activation threshold is the specific event (or combination) where the retention curve flattens highest for users who complete it compared to those who do not.
+
+**Note:** Compare the retention of users who trigger these events against your current 12% baseline; do not rely on industry benchmarks. If data is missing for any property, mark it as `UNVERIFIED` until the engineering team confirms the schema.

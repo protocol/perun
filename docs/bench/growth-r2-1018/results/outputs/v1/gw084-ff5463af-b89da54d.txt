@@ -1,0 +1,40 @@
+### Measurement Plan: HomeVoice Kitchen Command Beta
+
+**1. North Star Metric**
+**Weekly Active Users (WAU) completing a kitchen task via voice without a fallback.**
+*Definition:* Unique users who successfully execute at least one voice command in the kitchen domain per week, where "success" is defined as a single-shot execution (no retry) followed by confirmed device state change.
+*Why:* This rejects vanity metrics like "total commands spoken" (which rises with frustration/retries) and focuses on delivered value (task completion).
+
+**2. Event Taxonomy (Answering Named Questions)**
+Instrument only the following events. Do not record audio content or transcriptions to satisfy privacy constraints.
+
+| Event Name | Question Answered | Properties (Pseudonymous) |
+| :--- | :--- | :--- |
+| `voice_attempt_started` | How many users are trying to use the feature? | `session_id`, `appliance_type` (e.g., oven, timer), `intent_category` (timer vs. temp) |
+| `voice_execution_success` | Did the command work on the first try? | `attempt_count` (1 = success, >1 = friction), `latency_ms` |
+| `voice_execution_failure` | Where does the system break silently? | `failure_code` (e.g., `NOISE_INTERFERENCE`, `COMMAND_UNRECOGNIZED`, `DEVICE_OFFLINE`), `attempt_count` |
+| `fallback_action_taken` | Did the user give up on voice and use manual controls? | `manual_action_type`, `time_since_last_voice_attempt` |
+
+**3. The Identifier Seam & Privacy Compliance**
+*   **Stable ID:** Use a rotating, pseudonymous `device_session_token` to link attempts within a session and across days for cohort analysis. Do not use raw MAC addresses or user names in analytics streams.
+*   **PII Routing:** Audio streams remain on-device or in encrypted ephemeral buffers for processing only; no raw audio or text transcripts are persisted to the analytics warehouse. All `failure_code` generation happens locally before transmission.
+*   **Compliance Reference:** This design adheres to `privacy-compliance.md` (Domain Q) by minimizing data cardinality and excluding PII.
+
+**4. Reading the Funnel (Bottom-Up)**
+Diagnose in this order before scaling acquisition:
+1.  **Retention:** Are users who tried the feature in Week 1 still using it in Week 2? If not, the "silent failures" are driving churn.
+2.  **Activation:** What percentage of `voice_attempt_started` events result in `voice_execution_success` with `attempt_count` = 1?
+3.  **Acquisition:** Only analyze how many users are trying the feature once retention and activation are stable.
+
+**5. Success Thresholds (User Baseline Only)**
+Do not compare against industry benchmarks. Establish a baseline during the first 48 hours of the beta:
+*   **Frustration Signal:** If `voice_execution_failure` rate > 15% of attempts, or if average `attempt_count` > 1.5, the feature is causing net negative value.
+*   **Utility Signal:** If `fallback_action_taken` occurs within 10 seconds of a `voice_execution_failure` > 40% of the time, users are abandoning the voice interface entirely.
+
+**6. This-Week Steps**
+1.  **Engineering:** Implement local generation of `failure_code` and `attempt_count` properties; verify no audio payloads leave the device.
+2.  **Analytics:** Build a dashboard showing the ratio of `voice_execution_success` (single attempt) vs. `fallback_action_taken` by `appliance_type`.
+3.  **Decision Gate:** If the "Frustration Signal" triggers by Jan 7th, halt the broader rollout and prioritize noise-cancellation firmware patches over new features.
+
+*Note: This plan assumes the firmware can locally distinguish between "unrecognized command" and "network timeout" to populate `failure_code` accurately.*
+*All metric values must be pulled from the live beta dashboard; no estimates are provided here.*

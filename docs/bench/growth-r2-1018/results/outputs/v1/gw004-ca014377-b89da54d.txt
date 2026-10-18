@@ -1,0 +1,33 @@
+**Diagnosis: The "Curiosity Leak" Hypothesis**
+Your data indicates a classic funnel decoupling: the redesign successfully optimized for **Acquisition** (clicks up 12%) but degraded **Activation/Conversion** (enrollment down 15.5% relative). The 12% lift in clicks is a vanity metric in isolation; because final conversions dropped, the new layout is attracting low-intent traffic or creating a "price shock" at the decision point. Do not revert yet. The priority is to determine if the drop is caused by *who* is clicking (traffic quality) or *what* they see after clicking (pricing friction).
+
+**Segmentation Strategy to Isolate Intent**
+To distinguish between "low-quality traffic" and "pricing hesitation," segment your existing data by these three dimensions before collecting new events:
+
+1.  **Source/Medium Cohorts:** Break down the conversion drop by traffic source (e.g., Organic Search vs. Paid Social vs. Email).
+    *   *Logic:* If the conversion drop is isolated to Paid Social, the new prominent premium plan may be attracting curious scrollers from social feeds who never intended to buy. If the drop is universal across high-intent channels (like Email or Direct), the issue is likely the pricing details themselves causing hesitation for qualified leads.
+2.  **Plan Selection Path:** Segment users by which plan they viewed or selected before dropping off.
+    *   *Logic:* If users click the premium plan but abandon at checkout, the friction is specific to the premium price point or value proposition. If they click premium but switch to basic (or vice versa) and then abandon, the comparison logic is confusing.
+3.  **Time-on-Page & Scroll Depth (if available):** Correlate engagement on the pricing page with conversion.
+    *   *Logic:* A spike in clicks with *low* time-on-page suggests "misleading" design (users realize immediately it's not for them). High time-on-page with no conversion suggests "hesitation" (they are reading but not convinced).
+
+**Required Context & Data Collection**
+You currently lack the "why" behind the abandonment. Instrument these specific events to answer named questions:
+*   **Event:** `pricing_plan_selected` (Property: `plan_type`).
+    *   *Question:* Are users committing to a plan before hitting the checkout wall?
+*   **Event:** `checkout_abandonment_stage` (Property: `step_name`, e.g., "email_entry", "payment_info").
+    *   *Question:* Is the friction at the top of the funnel (hesitation to commit email) or the bottom (payment shock)?
+*   **Event:** `pricing_page_exit_click` (Property: `destination_url`).
+    *   *Question:* Where do they go when they leave? If they hit the "Contact Us" or "Curriculum" page, they are researching. If they bounce to external sites, they are price-shopping.
+
+**Decision Framework for the Marketing Director**
+Do not judge success on the 12% click lift. Judge it on **Revenue Per Visitor (RPV)**.
+*   **Scenario A (Traffic Quality Issue):** If Paid Social RPV dropped significantly while Organic remained stable, the design is too "click-baity" for paid audiences. *Action:* Iterate ad creative to match the new page's seriousness, or restrict the new layout to organic traffic.
+*   **Scenario B (Pricing Friction Issue):** If RPV dropped across all channels and drop-offs occur at the payment step, the prominent premium plan is causing sticker shock. *Action:* Iterate copy to reinforce value *before* the price is shown, or add a comparison anchor.
+
+**This Week's Step:**
+1.  Pull the conversion rate breakdown by `traffic_source` for Feb 20–Present vs. Jan 20–Feb 19.
+2.  Identify the single channel with the largest relative conversion drop.
+3.  If the drop is >20% in paid channels, pause scaling ad spend on the new design until copy iterations address the intent mismatch.
+
+*Note: All metrics above must be compared to your own pre-Feb 20 baseline; no external benchmarks are applied. Ensure user identifiers remain pseudonymous when segmenting.*

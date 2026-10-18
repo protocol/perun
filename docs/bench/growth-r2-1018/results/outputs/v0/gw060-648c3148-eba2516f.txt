@@ -1,0 +1,42 @@
+### Event Specification: `ai_background_removed`
+
+**Purpose:** To determine if specific editing behaviors (e.g., high-resolution usage) correlate with upgrading to the paid plan, validating or refuting the hypothesis that high-res users convert better.
+
+**Implementation Deadline:** Before December 1st release.
+**Scope:** MVP Stage (Instrument only what answers the named question; do not log "everything").
+
+#### 1. Core Event Definition
+*   **Event Name:** `ai_background_removed`
+*   **Trigger:** Fired immediately upon successful completion of the background removal process (image rendered/downloaded).
+*   **Question Answered:** "Do users who process high-resolution images or spend specific amounts of time editing convert to paid at a higher rate than those who do not?"
+
+#### 2. Required Event Properties (Payload)
+Log these exact properties. Do not add extraneous data "just in case."
+
+| Property Key | Type | Description & Rationale |
+| :--- | :--- | :--- |
+| `user_id_pseudonymous` | String | **Stable, pseudonymous ID.** Required to link this event to the `subscription_upgraded` event later. **Do not** send raw PII (email/name); route PII handling to privacy compliance protocols. |
+| `image_resolution_px` | Integer | Total pixels (width × height) or separate width/height. **Critical** to test the hypothesis that high-res users convert more. |
+| `edit_duration_ms` | Integer | Time elapsed between tool open and export. Determines if "struggle" or "deep engagement" predicts conversion. |
+| `export_action` | String | Enum: `saved_to_gallery`, `shared`, `discarded`. Distinguishes between a successful value delivery vs. a failed attempt. |
+| `is_first_use` | Boolean | True if this is the user's first ever use of the AI tool. Helps separate novelty effects from habitual value. |
+| `app_version` | String | Standard context for debugging anomalies. |
+| `platform_os` | String | iOS/Android version. |
+
+#### 3. Metrics to Derive (North Star & Inputs)
+*   **North Star Candidate:** Weekly Active Users completing `ai_background_removed` with `export_action = saved_to_gallery`. (Value delivered, not just clicked).
+*   **Input Metric for Hypothesis:** Conversion rate to paid, segmented by `image_resolution_px` quartiles.
+*   **Guardrail:** Crash rate or error rate during the AI process (route to system observability, not product analytics).
+
+#### 4. Critical Constraints & Warnings
+*   **No Fabricated Benchmarks:** The expectation that "40% will try it" and "high-res users convert more" are **unverified hypotheses**. Do not build dashboards assuming these are true. The data collected above will prove or disprove them.
+*   **Vanity Metric Rejection:** Do not track "Total AI Tools Opened" as a success metric. Only count completed exports (`export_action`) as value.
+*   **Identifier Seam:** Ensure the `user_id_pseudonymous` remains consistent across sessions to enable cohort analysis (Retention), but strip all direct PII before logging.
+
+#### 5. This-Week Step
+1.  **Engineering:** Implement the `ai_background_removed` event with the six properties listed above by Nov 25th.
+2.  **Analytics:** Define the SQL/query logic now to segment `subscription_upgraded` events by `image_resolution_px` quartiles for the week of Dec 1–7.
+3.  **Decision Rule:** If the conversion rate for the top quartile of resolution is not statistically higher than the bottom quartile after 14 days, reject the "high-res drives conversion" hypothesis and pivot messaging.
+
+*Note: Do not instrument "time spent editing" unless you define a clear start/stop trigger; ambiguous timers create noisy data.*
+*Ensure the pseudonymous ID matches the ID used in your existing subscription events to enable join analysis.*

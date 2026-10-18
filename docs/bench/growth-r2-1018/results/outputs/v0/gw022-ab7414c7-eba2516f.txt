@@ -1,0 +1,25 @@
+Do not select 'time saved' or 'fuel reduced' as your primary success metric yet; both are vanity metrics in isolation because they measure output, not the customer's realized value. Your single North Star Metric for this beta must be **Weekly Active Fleets Completing Optimized Dispatches**, paired with the specific input metric that correlates to **contract renewal intent**.
+
+In B2B logistics, "value" is not a theoretical saving; it is the repeated behavior of trusting your tool to run the business. If managers see time savings but do not assign the optimized routes, the metric is meaningless. If they see fuel potential but lack data to verify it, they cannot act. You are currently in the `mvp` stage; instrument only what answers the question: "Does the customer derive enough value to return next week?"
+
+**Immediate Evaluation Structure:**
+
+1.  **Reject the Binary Choice:** Do not force a choice between time and fuel today. Your fuel data is `UNVERIFIED` due to spotty ingestion. You cannot optimize for a number you cannot reliably measure. Asserting a benchmark for "good" fuel reduction without your own baseline is prohibited.
+2.  **Define the Core Action:** The core action is not "processing a route"; it is a fleet manager **accepting and dispatching** an optimized plan. Track the **Activation Rate**: % of pilot companies that dispatch at least one optimized route per day.
+3.  **Measure Retention First (Bottom-Up):** Before analyzing acquisition or total volume, diagnose retention. Are the three pilot companies still using the tool daily?
+    *   *Event to Instrument:* `dispatch_accepted` (Properties: `route_id`, `estimated_time_saved`, `estimated_fuel_saved`, `manager_id`).
+    *   *Question Answered:* "Do managers trust the optimization enough to execute it?"
+    *   If retention of this action is low, neither time nor fuel matters; the product fails.
+4.  **Correlate to Outcome:** To determine which driver influences renewal, you must link the `dispatch_accepted` event to a proxy for satisfaction. Since you cannot wait for contract renewal dates:
+    *   *Event to Instrument:* `manual_override_rejected` (when a manager edits your optimization) vs. `plan_exported`.
+    *   *Analysis:* Run a cohort analysis comparing weeks where `estimated_fuel_saved` was high vs. weeks where `time_saved` was high. Which cohort shows higher `dispatch_accepted` frequency in Week 2?
+5.  **The Identifier Seam:** Ensure you track a stable, pseudonymous `fleet_id` to follow behavior across sessions. Do not use raw PII; route any direct manager identifiers to your privacy compliance protocol.
+
+**This Week's Steps:**
+1.  **Instrument `dispatch_accepted` immediately.** Stop counting "processed routes" if they are not dispatched by a human. This is your only valid activation signal.
+2.  **Audit fuel data ingestion.** Mark any route lacking fuel data as `UNVERIFIED` in your analytics; do not average it into a "fuel reduction" claim.
+3.  **Interview the three pilots.** Ask specifically: "Did the last optimized dispatch you accepted save you money or time that you can quantify?" Use their qualitative answer to weight your quantitative correlation next month.
+
+Your investor deck must state that you are validating the *driver* of retention, not claiming a specific savings percentage yet. Any claim of "X% fuel saved" without complete data is a hallucination that will destroy credibility.
+
+*Note: Do not peek at early trends to declare a winner; wait for at least two full weekly retention cycles before correlating specific savings to usage frequency.*

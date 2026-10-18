@@ -1,0 +1,28 @@
+**Recommended Primary Success Metric: "Day-7 Retention of Users Who Completed API Integration Within 24 Hours"**
+
+Do not track raw API calls, project counts, or time spent as your primary success metric. These are vanity or intermediate metrics that can rise while the business fails. Instead, define your North Star as the **retention of users who successfully hit your hypothesized "aha moment" (API integration within 24 hours).**
+
+**Reasoning for Developer Tools:**
+Software engineers are pragmatic; they do not "spend time" in dashboards for enjoyment, nor do they generate API calls out of curiosity. They integrate tools to solve specific workflow problems.
+1.  **API Calls are Noisy:** A script can generate thousands of calls without delivering human value. High call volume can mask a broken developer experience.
+2.  **Project Counts are Binary:** Creating a project is a one-time event. A user can create ten projects and never return, or create one and build a career on it. It does not measure ongoing value.
+3.  **Time Spent is Misleading:** For developers, low time-to-solution is often the goal. High time-in-dashboard may indicate confusion or documentation failures, not engagement.
+
+Your core assumption is that *integration leads to power usage*. Therefore, the only metric that validates this assumption is whether those who integrated actually **returned** to use the tool a week later. If developers integrate but do not return by Day 7, the integration was likely a failed experiment or a "toy" project, not a adopted workflow.
+
+**Instrumentation Plan (MVP Phase):**
+Given your limited bandwidth, instrument only the events required to answer this single question:
+*   **Event A:** `user_signed_up` (with a stable, pseudonymous user ID).
+*   **Event B:** `api_integration_completed` (timestamped).
+*   **Event C:** `active_session` (any meaningful interaction, e.g., viewing docs, running a build, or making a call) occurring 7 days after Event A.
+
+**The Query to Run:**
+Calculate the percentage of users who triggered Event B within 24 hours of Event A and also triggered Event C in the subsequent week.
+*   If this rate is high: Your assumption holds; double down on onboarding flows that speed up integration.
+*   If this rate is low: The integration is not delivering value, or the "24-hour" window is wrong. Do not pour acquisition spend into the waitlist until this leak is fixed.
+
+**This Week's Step:**
+Define the exact technical signature of `api_integration_completed` (e.g., first successful 200 OK response from a specific endpoint) and ensure your analytics pipeline can link this event to the same user ID seven days later. Do not instrument "time spent" or "project created" until this retention loop is measured.
+
+*Note: Ensure the user ID used for cohorting is pseudonymous and routed to your privacy compliance review; do not use raw emails or IPs for long-term tracking.*
+*This recommendation assumes you have the capability to track user identity across sessions; if not, that infrastructure is a prerequisite before launch.*

@@ -1,0 +1,28 @@
+**Proposed North Star Metric: Weekly Active Teams Completing a "Successful Connection"**
+
+Reject "meeting duration" as your core metric; as you suspected, it measures inefficiency (long, stuck meetings) just as easily as engagement. Similarly, reject raw Daily Active Users (DAU) or cumulative signups; these are vanity metrics that rise even if the product fails to deliver value.
+
+For an enterprise video add-on serving financial institutions, value is not individual usage but **team connectivity**. A single user logging in creates no value; value exists only when a team connects successfully. Therefore, your North Star is: **The count of unique teams (defined by organization ID) that complete at least one "Successful Connection" per week.**
+
+**Definition of a "Successful Connection"**
+To remain robust regardless of whether users prioritize screen sharing or audio, define success by **completion and multi-party participation**, not specific feature flags or duration thresholds.
+*   **Criteria:** A session is "Successful" if it includes **≥2 distinct participants** and reaches a **minimum duration of 3 minutes** (filtering out accidental clicks or immediate drops) before ending normally (user hangup) or lasting beyond a reasonable upper bound (e.g., 4 hours).
+*   **Why this works:** It captures the core job-to-be-done (connecting people) without biasing toward specific features you haven't validated yet. It ignores "zombie" meetings (high duration, 1 participant) and failed attempts (high drops, <2 participants).
+
+**Calculation from Existing Event Logs**
+You do not need new instrumentation if your logs capture session start, end, participant joins/leaves, and organization IDs.
+1.  **Identify Sessions:** Group events by `session_id`.
+2.  **Filter Participants:** Count distinct `user_id`s per session. Keep only sessions where `count(user_id) ≥ 2`.
+3.  **Filter Duration:** Calculate `end_time - start_time`. Keep only sessions where `3 mins ≤ duration ≤ 4 hours`.
+4.  **Group by Team & Week:** Aggregate by `organization_id` and ISO week.
+5.  **Count:** Count the number of unique `organization_id`s that have at least one qualifying session in that week.
+
+**Board Presentation (July 20)**
+Present this as: *"Our growth is measured by how many client teams successfully connect weekly, not how many minutes they spend stuck."* This aligns directly with enterprise retention: if teams connect weekly, they renew.
+
+**Immediate Next Steps**
+1.  **Verify Data:** Run the query above on your beta data (March 5–present). If the trend of "Successful Teams" diverges from your rising DAU, you have identified a retention leak (users logging in but failing to connect).
+2.  **Instrument Gap:** If you cannot currently link `user_id` to a stable `organization_id`, this is a critical data debt. Prioritize engineering work to ensure every event carries a pseudonymous, stable team identifier.
+
+*Note: Do not set a target benchmark (e.g., "500 teams") based on external data; compare your current baseline only to your future weekly performance.*
+*Note: This metric complements system health (latency, error rates) but measures product behavior, not infrastructure status.*

@@ -1,0 +1,28 @@
+**Diagnosis: Your data collection is likely intact; the "noise" is a signal of shared-device usage patterns and network intermittency, not a bug.**
+
+The fluctuation you describe (60% drops, 200% spikes) uncorrelated with weather forecasts strongly suggests your current **North Star metric (Daily Active Users)** is a vanity metric in this specific context. In rural Ethiopia, "Daily Active Users" often measures "devices connected," not "farmers served." When one farmer shares a phone with five neighbors, your DAU drops by 80% while your actual value delivered remains constant. Conversely, a spike may represent a single community leader downloading forecasts for a whole village, not organic growth.
+
+**Immediate Actions to Isolate Signal:**
+
+1.  **Redefine the Metric (Stop counting devices):**
+    Stop optimizing for DAU immediately. Switch your primary measurement to **"Weekly Active Households"** or **"Forecast Requests per Village Cluster."**
+    *   *Action:* Group events by a stable, pseudonymous identifier (e.g., a hashed SIM card ID or a generated household ID if login exists) rather than session IDs. If you lack this, instrument a "Household ID" prompt at the next app open.
+    *   *Why:* This smooths out the "shared device" noise. One device used by five people on different days should count as one consistent unit of value, not five erratic spikes.
+
+2.  **Segment by Network Quality (The "Offline" Factor):**
+    The 60% drops likely correlate with local network tower outages or electricity failures, not app bugs.
+    *   *Action:* Instrument an event called `connection_attempt_result` with properties `network_type` (2G/3G/4G/Offline) and `error_code`. Cross-reference your usage drops with local telecom outage reports or electricity grid schedules, not just weather.
+    *   *Why:* If usage drops when the network is down but users return immediately when it's up, your retention is fine; your infrastructure dependency is the variable.
+
+3.  **Validate the "Core Action" Retention:**
+    Ignore the spikes. Focus strictly on **Retention of the Core Action**: Did the user who requested a forecast on April 5th return to check the outcome or request a new one within 7 days?
+    *   *Action:* Run a cohort analysis on users who performed `forecast_request` between April 5–10. Measure how many performed `forecast_request` again in the following 7 days.
+    *   *Why:* If retention is stable despite the DAU volatility, your product value is secure, and the server capacity planning should be based on *peak concurrent household load*, not average DAU.
+
+**Verdict for Server Capacity Planning:**
+Do not size servers based on the April 5–25 average or peak DAU. Size them based on the **maximum concurrent "Forecast Requests" per minute** observed during the spikes, assuming those spikes represent legitimate community aggregation. The "noise" is actually your system handling bursty, communal usage correctly.
+
+**This Week's Step:**
+Query your logs to calculate the ratio of `forecast_request` events to unique `device_id`s per day. If this ratio is >1.5 on spike days and <0.5 on drop days, you have confirmed the shared-device hypothesis. Present this "Requests per Device" trend to Operations instead of raw DAU.
+
+*Note: Ensure any new identifier used for households is pseudonymous and routed to your privacy compliance protocol before storage. Do not attempt to fix "bugs" until the shared-device hypothesis is ruled out by this ratio.*

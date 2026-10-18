@@ -1,0 +1,29 @@
+**Decision: Do not roll out globally yet. The result is `UNVERIFIED` due to missing pre-committed design details and a conflicting guardrail metric.**
+
+The 20% lift in profile completion is a secondary metric; the 5% drop in Daily Active Users (DAU) is a critical guardrail failure. A win on a secondary metric that regresses a primary engagement guardrail is not a shipable result. The drop could be noise, but it could also indicate users feeling harassed and churning, which would destroy long-term value despite higher profile completion.
+
+**Immediate Measurement Plan (This Week):**
+
+1.  **Recompute with Cohort Retention, Not Aggregate DAU:**
+    *   **Action:** Segment the DAU drop by cohort (Test vs. Control) specifically for *new* users signed up during March 1–15. Aggregate DAU includes legacy users and dilutes the signal.
+    *   **Question:** Did the *new* users in the test group return on Day 2, Day 7, and Day 14 at a lower rate than the control group?
+    *   **Threshold:** If Day-7 retention for the test cohort is statistically lower than control by >1%, the prompt is causing churn.
+
+2.  **Analyze the "Harassment" Signal (Event Taxonomy):**
+    *   **Action:** Instrument or query the specific event `profile_prompt_dismissed` vs. `profile_prompt_completed`.
+    *   **Question:** What percentage of users dismissed the prompt immediately without interaction? Did dismissal correlate with immediate session end (bounce)?
+    *   **Metric:** Compare the "Session Depth" (pages viewed per session) of users who saw the prompt vs. those who didn't. A drop in depth suggests friction.
+
+3.  **Validate the Experiment Design (Peeking Check):**
+    *   **Action:** Confirm if the sample size and duration were pre-committed based on a Minimum Detectable Effect (MDE) for the *primary* metric (Retention), not just profile completion.
+    *   **Constraint:** If you checked the DAU drop mid-test and decided to stop or analyze based on that look, the p-values are inflated. Treat the current significance as `UNVERIFIED` until a fixed-horizon or sequential testing rule is applied.
+
+**The Call Logic:**
+*   **Ship:** Only if Day-7 retention of the test cohort is equal to or higher than control, proving the DAU drop was noise from legacy users or external factors.
+*   **Stop:** If Day-7 retention is lower. A 20% increase in profile completion is worthless if it costs you 5% of your new user base permanently.
+*   **Extend:** If the confidence interval on retention overlaps zero (inconclusive), extend the test to the pre-committed sample size required to detect a 1% change in retention, ignoring the profile completion metric for the decision.
+
+**Tripwire for the VP:**
+If the Day-7 retention gap between Test and Control exceeds -0.5% (even if not yet "significant"), halt the global rollout plan. The risk of churning 10,000+ new users globally outweighs the benefit of incomplete profiles.
+
+**Note:** Do not compare these rates to industry benchmarks; compare Test vs. Control only. Ensure the user identifier used for cohorting is pseudonymous and routed to privacy compliance protocols.

@@ -1,0 +1,26 @@
+### Validation Plan for User ID Resolution
+
+**1. Measure Matching Accuracy Before Full Execution**
+Do not run the algorithm on the full dataset yet. Create a **golden sample** of 500–1,000 manually verified user records covering edge cases (multiple accounts, shared devices, phone number changes).
+*   **Precision Test:** Run your matching logic on this sample. Calculate the percentage of matched pairs that are *actually* the same person. If precision is below 99%, the risk of merging distinct users (false positives) is too high for financial/loyalty data.
+*   **Recall Test:** Calculate the percentage of known duplicates your logic successfully found. Low recall leaves data fragmented but is safer than false merges; aim for >90% but prioritize precision.
+*   **Shadow Run:** Execute the logic on 1% of production data (post-August 1st). Compare the distribution of trip counts and revenue per user before and after the merge. If the average trips per user spikes unnaturally or the long-tail distribution collapses, the algorithm is over-aggressive.
+
+**2. Acceptable Error Rate Thresholds**
+*   **False Positive Rate (Merging distinct users):** Must be **< 0.5%**. Merging two different people corrupts loyalty balances and creates unfixable audit trails. If the rate exceeds this, revert to manual review for ambiguous clusters rather than forcing an automated merge.
+*   **False Negative Rate (Missing duplicates):** Acceptable up to **5–8%** initially. Unmerged duplicates fragment history but preserve data integrity. These can be resolved iteratively.
+*   **Context Loss:** **0%**. No trip record should be deleted. If a match cannot be made with high confidence, tag the record as `UNVERIFIED_ID` and exclude it from the initial loyalty cohort calculation rather than guessing.
+
+**3. Post-Cleanup Monitoring Metrics**
+Once the cleanup runs, monitor these specific metrics to detect introduced bias:
+*   **Cohort Stability:** Compare the size and average ride frequency of the "August Pre-Launch" cohort calculated yesterday vs. today. A shift of >2% indicates the merge altered historical behavior patterns.
+*   **Device-to-User Ratio:** Track the average number of user IDs per Device ID. If this drops from >1.0 to exactly 1.0 instantly, you have likely over-merged users sharing family devices.
+*   **Loyalty Eligibility Volatility:** Measure the count of users qualifying for the loyalty tier. If this number fluctuates by >1% between daily recalculations, the ID resolution is non-deterministic.
+*   **Null/Unverified Rate:** Monitor the percentage of trips falling into the `UNVERIFIED_ID` bucket. If this exceeds the original 8% corruption flag significantly, the cleaning logic is rejecting valid data.
+
+**4. Immediate Next Steps for the Lead Analyst**
+*   **Freeze the August 1st Baseline:** Snapshot the current state of the rider/driver tables. All validation must compare against this immutable baseline.
+*   **Define the "Safe" Fallback:** Explicitly document that any user cluster with a confidence score below the 99% precision threshold will be excluded from the December 10th launch cohort, not merged. This protects the CTO from liability regarding incorrect loyalty awards.
+*   **Audit Trail:** Ensure every merged ID pair is logged with the matching rule used (e.g., "Matched via Phone + Device ID") to allow for rapid rollback if a specific rule proves faulty post-launch.
+
+**Note:** Do not use phone numbers as a primary key if multiple accounts share a device; this is the root cause of your current duplicates. Prioritize device fingerprints combined with payment method hashes for higher precision.

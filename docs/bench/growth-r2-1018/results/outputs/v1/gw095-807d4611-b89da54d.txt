@@ -1,0 +1,42 @@
+### Experimental Design: Price Transparency vs. Lead Quality
+
+**Objective**
+Isolate the causal impact of early price disclosure on signup volume and lead qualification rates to determine if increased traffic offsets potential decreases in lead quality.
+
+**Hypotheses**
+*   **Primary:** Showing pricing early increases total completed signups by ≥15%.
+*   **Guardrail:** Showing pricing early does not decrease the "Partner Acceptance Rate" (leads accepted by legal team) by more than 5 percentage points.
+
+**Metrics Definition**
+1.  **Primary Metric (Volume):** *Funnel Completion Rate* (Users who reach the "Documents Uploaded" step / Total Users entering the flow). This isolates the friction point directly.
+2.  **Guardrail Metric (Quality):** *Partner Acceptance Rate* (Leeds marked "Ready for Review" or "Accepted" by legal team / Total Completed Signups).
+    *   *Rationale:* This is the only true proxy for "wasting legal team time." Do not use proxy events like "time on page" or "scroll depth"; they do not answer the specific question of lead viability.
+3.  **Secondary Metric (Efficiency):** *Cost Per Qualified Lead* (Total Ad Spend / Accepted Leads). This combines volume and quality into a business outcome.
+
+**Instrumentation Requirements**
+Ensure your analytics pipeline captures a stable, pseudonymous User ID across sessions to link the initial landing page view to the final legal team decision, which may happen days later.
+*   **Event A:** `pricing_viewed` (Triggered immediately upon entry for Treatment; post-upload for Control).
+*   **Event B:** `documents_uploaded` (The current drop-off point).
+*   **Event C:** `lead_status_updated` (Properties: `status` = ["accepted", "rejected", "pending"]). *Note: This event likely lives in your internal CRM; it must be exported to your analytics tool to close the loop.*
+
+**Test Design & Rigor**
+*   **Allocation:** 50/50 split (Control: Price Late vs. Treatment: Price Early).
+*   **Duration:** Run for **14 full business days** starting January 10th.
+    *   *Reasoning:* Legal incorporation decisions often span weekends. A 7-day test would miss users who start Friday and convert Monday.
+*   **Stopping Rule:** **Fixed Horizon.** Do not check significance daily. Peeking at a 50/50 split on Day 3 and stopping because $p < 0.05$ inflates your false-positive rate. You must pre-commit to reading the results only once on January 24th.
+*   **Sample Size:** If your current baseline is ~100 entrants/day, a 14-day test yields ~1,400 users per arm. This provides sufficient power to detect a 15% lift in conversion and a 5-point drop in quality. If traffic is lower, extend the duration rather than relaxing the significance threshold.
+
+**Decision Framework (Pre-committed)**
+On January 24th, apply this logic:
+1.  **Ship:** If Completion Rate ↑ ≥15% **AND** Partner Acceptance Rate drops <5 points.
+2.  **Stop:** If Completion Rate ↑ <15% **OR** Partner Acceptance Rate drops ≥5 points (the cost of bad leads outweighs volume).
+3.  **Extend:** If results are statistically inconclusive (confidence intervals overlap zero) but trends align with hypotheses. Extend for 7 more days; do not ship on noise.
+
+**Confounding Factors to Monitor**
+*   **Seasonality:** January 10th follows the holiday season; ensure the control group experiences the same post-holiday traffic patterns.
+*   **Legal Team Capacity:** Ensure the legal team's review speed does not vary during the test, which could artificially depress the "Accepted" count if they are backlogged.
+
+**This Week's Actions**
+1.  Verify that `lead_status_updated` events from your internal legal dashboard are being exported to your analytics platform with a joinable User ID.
+2.  Lock the test configuration in your experimentation tool with a hard stop date of January 24th and disable early stopping rules.
+3.  Document the baseline "Partner Acceptance Rate" from the last 30 days to serve as your sanity check against the Control group.

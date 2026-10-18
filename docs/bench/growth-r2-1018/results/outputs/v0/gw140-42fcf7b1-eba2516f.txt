@@ -1,0 +1,29 @@
+# Findings Report: SwiftRide Referral Program Test (April 10–24)
+
+**Status:** `UNVERIFIED` – Causal impact on genuine growth cannot be determined from provided data.
+
+The reported "150% increase in referrals" is a vanity metric in this context because 35% of the associated accounts are flagged as potentially synthetic. Without separating the flagged cohort from the clean cohort, we cannot calculate the true lift in organic user acquisition or the net revenue impact. The current data conflates fraud volume with program success.
+
+**Recomputed Reality**
+We cannot validate the assumption that the double-sided incentive drove organic growth. If the fraud detection system has a false positive rate unknown to us, we may be penalizing legitimate family/roommate clusters. Conversely, if the flags are accurate, the program is currently subsidizing bad actors rather than acquiring valuable users. A "win" claimed on the aggregate 150% rise is `UNVERIFIED` and likely false.
+
+**Confounding Factors**
+1.  **Incentive Structure:** The $10/$10 symmetric credit creates an immediate arbitrage opportunity for synthetic accounts if the cost to create an account is less than $10.
+2.  **Verification Gaps:** The inability to distinguish between device-sharing households and self-referring bots suggests the current identity graph relies too heavily on device IDs or weak signals.
+3.  **Timing:** Running the test for only 14 days prevents observation of retention. Fraudulent accounts typically churn immediately after credit consumption, whereas genuine users exhibit retention curves.
+
+**Decision & Tripwire**
+**Call:** Do not expand city-wide. **Pause** the double-sided $10 offer immediately for new referrals until segmentation is complete. Continuing at scale risks burning budget on non-retaining users.
+
+**Tripwire:** Calculate the **Break-Even Fraud Rate**. If the cost of fraud (credits redeemed by flagged users) exceeds the Lifetime Value (LTV) of the *verified* genuine referrals multiplied by their count, the program destroys value.
+*Action:* If `(Flagged Accounts × $10) > (Clean Accounts × Estimated LTV)`, the program is net negative. Given a 35% flag rate, this threshold is likely already breached unless the LTV of a genuine SwiftRide user is exceptionally high and immediate.
+
+**This-Week Steps**
+1.  **Cohort Segmentation:** Query the analytics platform to split the "referral" cohort into two distinct groups: `Flagged_Potential_Fraud` and `Clean_Verified`. Do not analyze them together.
+2.  **Retention Check:** Compare Day-1 and Day-7 retention rates between these two cohorts. If `Flagged` retention is near zero while `Clean` retention matches your organic baseline, the fraud hypothesis is confirmed.
+3.  **Verification Pilot:** Implement a step-up verification for the referral claim (e.g., requiring the referee to complete a paid ride before the referrer receives credit, or adding phone/SMS validation beyond email). Re-run the math on the `Clean` cohort only to determine if the remaining organic lift justifies the operational cost.
+
+The expansion decision must rest solely on the performance of the `Clean_Verified` cohort, not the inflated aggregate numbers.
+
+---
+*Note: No benchmark for "acceptable fraud rates" is asserted; this must be compared against SwiftRide's own unit economics. The identifier seam requires pseudonymous user IDs to track households without violating privacy compliance.*

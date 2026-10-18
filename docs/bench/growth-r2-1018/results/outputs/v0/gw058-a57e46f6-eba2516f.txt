@@ -1,0 +1,32 @@
+### Recommended Measurement Framework for GoRide Driver Incentives
+
+**1. Define the North Star: Net Driver Profit per Active Hour**
+Reject "Trip Acceptance Rate" as your primary metric; it is a vanity metric in this context because it rose while driver welfare fell. Your North Star must be **Net Driver Profit per Active Hour**. This measures real value to the partner, not just platform activity.
+*   **Formula:** (Total Trip Earnings + Incentives) − (Verified Fuel Cost + Estimated Vehicle Wear) divided by (Time from Acceptance to Next Acceptance).
+*   **Why:** This captures the "empty return" leak you suspect. If acceptance goes up but this metric goes down, the incentive is destructive.
+
+**2. Instrument the "Empty Return" Leak (Event Taxonomy)**
+You currently lack data on idle time. You must instrument specific events to answer the question: *"How much unpaid time and cost does a long trip generate?"*
+*   **Event A: `trip_drop_off_complete`** (Timestamp, Location, Trip Distance).
+*   **Event B: `next_trip_accept`** (Timestamp, Location).
+*   **Derived Metric: `deadhead_time_ratio`**: The time between Event A and Event B for trips >10km.
+*   **Derived Metric: `deadhead_distance_ratio`**: Distance driven without a passenger relative to paid distance.
+*   **Action:** Do not track "everything." Only track these intervals for the pilot cohort to validate the empty-return hypothesis.
+
+**3. Read the Funnel Bottom-Up (Retention First)**
+Do not focus on acquiring more long-distance trips (Acquisition) until you fix the profitability leak (Retention).
+*   **Diagnosis:** If `deadhead_time_ratio` is high, drivers are effectively paying to work. No amount of upfront incentive bonus will sustain retention if the core unit economics are negative.
+*   **Cohort Analysis:** Segment drivers by their `net_profit_per_hour` in the pilot. Did the drivers with the highest acceptance rates also have the highest churn risk or lowest satisfaction scores? If yes, you are incentivizing behavior that drives partners away.
+
+**4. Experiment Rigor for the City-Wide Rollout**
+Before adjusting the payout formula, treat the city-wide rollout as an A/B test, not a mandate.
+*   **Pre-commit Design:** Define a **primary metric** (Net Driver Profit per Active Hour) and a **guardrail metric** (Platform Cost per Trip).
+*   **Stop Rule:** If the guardrail (platform cost) spikes without a corresponding lift in the primary metric (driver profit), the experiment fails.
+*   **No Peeking:** Do not adjust the formula daily based on preliminary acceptance rates. Run the test for a fixed duration (e.g., 2 weeks) to capture full weekly cycles of driver behavior.
+
+**5. This Week's Steps**
+1.  **Query Existing Logs:** Calculate the average time gap between `trip_end` and `next_trip_start` for the 1,200 pilot drivers vs. a control group of non-pilot drivers. This is your proxy for "empty return" time.
+2.  **Define the Break-Even Threshold:** Calculate the exact incentive amount required to offset the average fuel cost of a 10km+ return trip. Any incentive below this number is mathematically guaranteed to reduce hourly earnings.
+3.  **Draft the Instrumentation Spec:** Require the engineering team to tag `trip_distance` and `idle_time` on the driver app before the city-wide rollout. Without this, the rollout is `UNVERIFIED`.
+
+**Note:** Do not fabricate a "good" profit margin; compare the pilot group's earnings strictly against their own pre-pilot baseline. Ensure all driver location data used for these calculations is pseudonymized before reaching the policy team.

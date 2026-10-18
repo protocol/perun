@@ -1,0 +1,40 @@
+**Metric Framework: CapitalFlow (Pre-Launch)**
+
+**1. North Star Metric: Weekly Active Funding Volume (WAFV)**
+*Definition:* The total value of invoices successfully funded per week for businesses that have completed at least one prior cycle.
+*Rationale:* Rejects "Total Funded Volume" (vanity; ignores retention) and "Average Invoice Size" (ignores frequency). WAFV only rises when customers return to use the core service, balancing growth with the reality of repeat usage in B2B financing.
+
+**2. Input Metrics (The Levers)**
+*   **Speed-to-Cash (Core Hypothesis):** Median time from invoice upload to funds disbursed.
+    *   *Target:* < 4 hours.
+    *   *Measurement:* Timestamp event `invoice_uploaded` to `funds_disbursed`.
+*   **Activation Rate:** % of approved businesses that fund a second invoice within 30 days.
+    *   *Relevance:* Validates the assumption that speed drives the projected 50% repeat usage increase.
+*   **Approval Friction:** % of applications stalled at "Manual Review" > 2 hours.
+    *   *Relevance:* Identifies where incomplete credit data is blocking the automated flow.
+
+**3. Risk & Guardrail Metrics (Non-Negotiable)**
+*   **Early Default Rate (EDR):** % of funded invoices unpaid 15 days past due date.
+    *   *Context:* In markets with delayed bureau data, behavior *after* funding is the leading indicator. Do not wait for bureau updates.
+*   **Concentration Risk:** % of total exposure held by the top 10% of clients.
+    *   *Context:* Critical for LATAM SMEs where single-client failure can cascade.
+*   **Data Completeness Score:** % of applications submitted with < 3 required verification documents.
+    *   *Action:* If this rises, speed improvements are likely due to lowered underwriting standards, not efficiency.
+
+**4. Event Taxonomy (Instrument Only These)**
+Do not instrument "everything." Implement only these events to answer specific questions:
+*   `invoice_uploaded` (Properties: amount, currency, client_tenure) → *Answers: What is the raw demand?*
+*   `decision_rendered` (Properties: method [auto/manual], time_elapsed, risk_score) → *Answers: Is the 4-hour target met? Where is the friction?*
+*   `funds_disbursed` (Properties: amount, time_since_upload) → *Answers: Did the money move?*
+*   `repayment_missed` (Properties: days_overdue, amount) → *Answers: Real-time risk exposure independent of bureau lag.*
+
+**5. Regional Risk Adaptation (Mexico & Colombia)**
+*   **The Bureau Gap:** Since external credit data is delayed, treat "Time to First Repayment" as your primary credit score. A customer who pays the first invoice on time is low risk; one who delays the first payment is high risk, regardless of bureau history.
+*   **Cohort Analysis:** Segment retention and default rates by country immediately. Regulatory or banking infrastructure differences between Mexico and Colombia will likely create divergent baselines. Do not aggregate them into a single "LATAM" number.
+
+**6. This-Week Steps**
+1.  **Define the "Start" and "End" Triggers:** Engineering must hard-code the exact system timestamps for `invoice_uploaded` and `funds_disbursed` to ensure the "Speed-to-Cash" metric cannot be manipulated by manual overrides.
+2.  **Set the Risk Tripwire:** Establish a hard halt rule: If `Early Default Rate` exceeds 2% for any weekly cohort, automatic approvals pause regardless of speed metrics.
+3.  **Validate the Identifier:** Ensure a stable, pseudonymous Client ID links uploads, disbursements, and repayments across sessions to calculate true retention, while routing PII to compliance storage.
+
+*Note: No benchmark values (e.g., "good default rate") are asserted here; compare all early results strictly against your own Week 1 baseline. Any metric without the events above implemented is UNVERIFIED.*

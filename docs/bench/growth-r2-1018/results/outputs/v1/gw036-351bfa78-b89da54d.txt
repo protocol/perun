@@ -1,0 +1,33 @@
+### Instrumentation Strategy & Experiment Design for VitalBand
+
+**North Star Metric:** Weekly Active Users (WAU) completing ≥5 days of valid stress tracking *without* an unplanned mid-week charge. This rejects vanity metrics like "total data points collected," which rise even as battery frustration drives churn.
+
+**Event Taxonomy (Answering Named Questions)**
+Instrument only these three events to validate your assumption about work-hour priority vs. overnight tracking:
+1.  `stress_feature_engagement`: (Question: Do users actually view stress data outside work hours?) Properties: `timestamp`, `user_configured_mode` (auto/manual), `battery_level`.
+2.  `unexpected_charge_event`: (Question: Did the new sampling force a charge before the 7-day cycle?) Properties: `days_since_last_charge`, `sampling_mode_active`, `user_reported_frustration_flag` (if available via app prompt).
+3.  `sampling_mode_change`: (Question: Do users manually override aggressive sampling?) Properties: `from_mode`, `to_mode`, `time_of_day`.
+
+**Diagnosis: Retention Before Acquisition**
+Do not roll out aggressive sampling to all 200 beta users. If battery life drops to 3 days, you will leak retention immediately, making any acquisition of new features pointless. Validate the "work hours only" hypothesis first.
+
+**Experiment Design: A/B Test with Guardrails**
+Split your 200 beta users into three cohorts. Pre-commit to a **14-day duration** or until 80% of users complete two full charge cycles. Do not peek at day 2; early reads are `UNVERIFIED` due to noise in individual usage patterns.
+
+*   **Control (Group A, 33%):** Current 5-minute sampling (Baseline).
+*   **Treatment 1 (Group B, 33%):** Aggressive 5-second sampling *only* during detected activity windows (engineered heuristic).
+*   **Treatment 2 (Group C, 34%):** User-configurable sampling (default: 5-min; option to toggle "High Fidelity Mode").
+
+**Primary Metric:** Retention of `stress_feature_engagement` in Week 2 compared to Week 1.
+**Guardrail Metric:** Average `days_since_last_charge`. If this drops below 5 days in any treatment group, the test triggers an automatic stop tripwire to prevent widespread user frustration.
+
+**Analysis Plan**
+Recompute the lift in engagement against the drop in battery life. If Group B shows higher engagement but the guardrail trips (battery < 5 days), the "activity window" heuristic is insufficient. If Group C shows low uptake of "High Fidelity Mode," your assumption that users prioritize accuracy over battery is false.
+
+**This Week's Steps**
+1.  **Define the "Activity Window" Heuristic:** Document the exact sensor thresholds that trigger 5-second sampling for Group B to ensure engineering builds the correct logic.
+2.  **Implement Pseudonymous ID Seam:** Ensure `unexpected_charge_event` links to a stable, pseudonymous user ID to track cohorts across charges, routing any raw PII to your privacy compliance protocol.
+3.  **Launch Control Group Only:** Deploy the instrumentation to Group A first for 48 hours to establish a baseline `unexpected_charge_event` rate before exposing anyone to the battery-draining treatments.
+
+*Note: No benchmark for "good" battery retention is asserted here; success is defined strictly by improvement over your own Control Group baseline.*
+*If users in Group C do not toggle the high-fidelity switch, the product decision is to default to battery saving, regardless of engineering capability.*

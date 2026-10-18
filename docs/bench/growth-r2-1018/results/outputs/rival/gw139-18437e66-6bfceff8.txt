@@ -1,0 +1,66 @@
+# HomeVoice Beta Event Specification
+
+## Core Interaction Events
+
+### 1. `voice_command_received`
+**Trigger:** Device detects wake word and begins listening.
+**Properties:**
+- `session_id`: Unique identifier for the cooking session
+- `timestamp_utc`: ISO 8601 format
+- `device_id`: Unique hardware identifier
+- `ambient_noise_db`: Decibel level at wake word detection
+- `noise_floor_variance`: Standard deviation of noise in preceding 5s
+- `speaker_distance_estimate`: Estimated distance in meters (if available via array)
+- `wake_word_confidence`: 0.0–1.0 score
+
+### 2. `command_processing_attempt`
+**Trigger:** User stops speaking; device begins NLP processing.
+**Properties:**
+- `session_id`: Links to `voice_command_received`
+- `command_sequence_number`: Integer (1, 2, 3...) within session
+- `audio_duration_ms`: Length of user speech
+- `silence_gap_prev_command_ms`: Time since last command ended (null if first)
+- `speech_to_text_raw`: The transcribed text string
+- `speech_to_text_confidence`: 0.0–1.0 score
+- `intent_classification`: Primary detected intent (e.g., `timer_set`, `conversion_query`)
+- `intent_confidence`: 0.0–1.0 score
+- `entity_extraction`: JSON object of extracted parameters (e.g., `{"time": "10min", "food": "chicken"}`)
+
+### 3. `command_execution_result`
+**Trigger:** Device attempts to fulfill the intent.
+**Properties:**
+- `session_id`: Links to previous events
+- `command_sequence_number`: Matches processing attempt
+- `outcome_status`: Enum [`success`, `failure_clarification_needed`, `failure_unknown_intent`, `failure_hardware_error`, `failure_timeout`]
+- `failure_reason_code`: Specific error code (e.g., `AMBIGUOUS_ENTITY`, `NOISE_INTERFERENCE`, `LOW_CONFIDENCE`)
+- `clarification_prompt_used`: Text of prompt if clarification was requested
+- `user_follow_up_action`: Enum [`rephrased`, `abandoned`, `manual_override`]
+- `total_latency_ms`: Time from speech end to action start
+
+### 4. `session_ended`
+**Trigger:** Device returns to idle state after timeout or manual stop.
+**Properties:**
+- `session_id`: Unique identifier
+- `session_duration_total_ms`: Total time from first wake word to idle
+- `commands_attempted_count`: Total integer count
+- `commands_successful_count`: Total integer count
+- `distinct_intents_used`: Count of unique intent types triggered
+- `abandonment_flag`: Boolean (true if session ended mid-task or after failure)
+
+## Critical Metadata Context
+
+To address your concern regarding lost context in failures, the following global context properties must be appended to **every** event payload:
+
+- `kitchen_profile_id`: Hashed identifier for the specific kitchen environment (to track acoustic consistency)
+- `firmware_version`: Current build number
+- `network_latency_ms`: Round trip time to cloud services (to distinguish local vs. network failures)
+- `multi_speaker_detected`: Boolean (indicates overlapping voices which may cause ambiguity)
+- `background_noise_category`: Enum [`quiet`, `running_water`, `blender_high`, `tv_radio`, `conversation`] (classified via on-device pre-processing)
+
+## Data Science Implementation Notes
+
+1.  **Predictive Intervals:** The `silence_gap_prev_command_ms` and `total_latency_ms` fields are critical for determining if friction is caused by system lag or user hesitation.
+2.  **Noise Modeling:** Correlate `ambient_noise_db` and `background_noise_category` directly against `speech_to_text_confidence` to train noise-cancellation models for specific kitchen appliances.
+3.  **Adoption Threshold:** To validate your "3 distinct commands" hypothesis, filter sessions where `commands_successful_count` ≥ 3 and `distinct_intents_used` ≥ 3, then track the `device_id` against daily active usage logs post-beta.
+
+Ensure firmware engineers implement local buffering to guarantee event delivery even if Wi-Fi drops during a cooking session, syncing once connectivity is restored.

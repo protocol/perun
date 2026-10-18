@@ -1,0 +1,39 @@
+**Metric Framework: CapitalFlow (Pre-Launch)**
+
+**1. North Star Metric: Weekly Active Funding Volume (WAFV)**
+*Definition:* The total value of invoices successfully funded per week for businesses that have completed at least one prior cycle.
+*Rationale:* Rejects "cumulative signups" and raw "volume of funded invoices" as vanity metrics; a high volume of one-off transactions with no return indicates product-market fit failure or excessive risk taking. WAFV rises only when customers derive value (speed/capital) and trust the platform enough to return. It balances growth (volume) with retention (repeat usage).
+
+**2. Primary Input Metric: Median Time-to-Cash (TTC)**
+*Definition:* The elapsed time from invoice upload to funds disbursal for the 50th percentile of approved invoices.
+*Target:* Reduce from 3 days to 4 hours.
+*Role:* This is the primary driver of your North Star. Do not track "average" time alone, as outliers skew it; median reflects the typical user experience. Instrument this event pair immediately: `invoice_uploaded` and `funds_disbursed`.
+
+**3. Risk Guardrails (The "Stop" Metrics)**
+Given incomplete credit bureau data in Mexico and Colombia, do not rely on external benchmarks for "good" default rates. Establish internal baselines:
+*   **Early Delinquency Rate (EDR):** Percentage of funded invoices past due by >15 days within the first 90 days of the platform's life.
+*   **Concentration Risk:** Maximum % of total exposure held by any single industry vertical or geographic region (e.g., >20% in one Mexican state triggers a review).
+*   **Approval-to-Default Lag:** Time between policy changes and the emergence of bad debt.
+*Action:* If EDR exceeds the pre-committed threshold (derived from your capital reserve limits, not an industry average), automatic pausing of new approvals in the affected segment is required.
+
+**4. Event Taxonomy (Instrument Only What Answers a Question)**
+Do not instrument "everything." Implement only these core events before July 15th:
+*   `invoice_uploaded`: Properties: `business_id` (pseudonymous), `invoice_amount`, `sector`, `region`. *Question: What is the incoming demand profile?*
+*   `risk_decision_made`: Properties: `decision` (approve/deny/review), `reason_code`, `data_completeness_score`. *Question: Are we rejecting due to lack of data or actual risk?*
+*   `funds_disbursed`: Properties: `time_since_upload`. *Question: Are we hitting the 4-hour TTC target?*
+*   `repayment_received`: Properties: `days_past_due`, `partial_flag`. *Question: Is the EDR rising?*
+
+**5. Measurement Stage: MVP**
+You are in the `mvp` stage. Focus strictly on Activation (first successful funding) and Retention (second funding). Ignore Acquisition metrics (clicks, signups) until the TTC and EDR baselines are stable.
+
+**6. Experiment Rigor**
+Your assumption (4-hour TTC drives 50% repeat usage) is a hypothesis, not a fact. Do not claim causality without a controlled comparison.
+*   *Design:* If you cannot A/B test speed (unethical to slow down some users intentionally), use a **pre-post cohort analysis** with strict controls for seasonality and mix shift.
+*   *Requirement:* Pre-commit to a sample size (number of funded invoices) needed to detect the lift. Reading the data after 10 invoices and declaring a win is `UNVERIFIED`.
+
+**This-Week Steps:**
+1.  Define the pseudonymous `business_id` schema to ensure stable cohort tracking across sessions while routing PII to compliance protocols.
+2.  Set the specific numerical tripwire for the Early Delinquency Rate (EDR) based on your current capital reserves; document this as the "hard stop" for the Risk Officer.
+3.  Build the dashboard query for Median Time-to-Cash, ensuring it excludes outliers >48 hours initially to validate the core flow.
+
+*Note: No external benchmarks for Latin American default rates are asserted here; all thresholds must be derived from your pilot data. Real-time monitoring must distinguish between system latency (ops) and process latency (product).*
