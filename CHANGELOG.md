@@ -3,6 +3,20 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.594.0] — 2026-10-18
+
+### Changed
+- `docs/bench/bizops-shipped-1018/`: preregistered descriptive bench (n=150, GLM-5.1 judge v2, PCSS only, $0) of the business-ops `SKILL.md` as shipped, which differs from the benched text e by 16 lines. On the same 150 scenarios it scores 0.580 [0.507, 0.650] against the rival; paired against e +0.017 [-0.037, 0.073] and against the earlier v0 +0.107 [0.040, 0.173]. `docs/perun-vs-rivals.md` now cites the shipped text's own value and says it differs from e. No `SKILL.md` change. Synthetic, single-generator evidence.
+
+### Changed
+- `docs/bench/bizops-sup-1018/`: preregistered superiority test (n=200 fresh held-out scenarios disjoint from every earlier bench set, GLM-5.1 judge v2, PCSS only, $0) of the shipped business-ops `SKILL.md` against its rival, rule fixed in advance: win-rate 95% CI lower bound above 0.5. Result 0.463 [0.403, 0.522] (72 wins / 41 ties / 87 losses): not a win. `docs/perun-vs-rivals.md` business-ops row records it. No `SKILL.md` change. Synthetic, single-generator evidence.
+
+### Added
+- `docs/bench/contribution-r3-1018/`: a preregistered round 3 for the `contribution` skill against github-contributor (fresh held-out n = 90 written after the freeze, tune n = 30 logged in `ledger-tune.jsonl`, judge protocol v2 with GLM-5.1 in both orders, PCSS only, $0). One frozen Answer shape edit scored 0.472 [0.383, 0.567] against 0.522 [0.439, 0.606] for the current text; paired difference -0.050 [-0.156, +0.056]. The keep rule (paired lower bound above 0) fails and superiority over the rival is not shown, so `SKILL.md` is unchanged. Synthetic, single-generator evidence.
+
+### Added
+- `docs/bench/delivery-sup-1018/`: preregistered n=150 forward test (fresh held-out tickets, PCSS only, $0, three judges, both orders, strict agreement then majority) of the shipped, unedited `agentic-delivery/SKILL.md` against Superpowers. Win rate 0.550 [0.507, 0.593] (31 W / 103 T / 16 L), so the preregistered rule (CI lower bound above 0.5) passes and the `docs/perun-vs-rivals.md` row is now a win. The margin is narrow (lower bound 0.507), it is the fourth look at one claim after non-wins at n=40 (0.562 [0.487, 0.637]) and n=60 (0.517 [0.450, 0.583]), and the evidence is synthetic, single-generator and judge-panel based. One amendment (ticket redraw cap 6 to 30) was logged before any plan existed.
+
 ## [1.593.0] — 2026-10-18
 
 ### Added

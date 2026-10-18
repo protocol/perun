@@ -1,2 +1,0 @@
-### Changed
-- `docs/bench/bizops-shipped-1018/`: preregistered descriptive bench (n=150, GLM-5.1 judge v2, PCSS only, $0) of the business-ops `SKILL.md` as shipped, which differs from the benched text e by 16 lines. On the same 150 scenarios it scores 0.580 [0.507, 0.650] against the rival; paired against e +0.017 [-0.037, 0.073] and against the earlier v0 +0.107 [0.040, 0.173]. `docs/perun-vs-rivals.md` now cites the shipped text's own value and says it differs from e. No `SKILL.md` change. Synthetic, single-generator evidence.
