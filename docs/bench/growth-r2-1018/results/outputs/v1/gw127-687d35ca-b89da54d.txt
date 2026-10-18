@@ -1,0 +1,25 @@
+### Immediate Diagnostic Queries & Validation Plan
+
+**1. Retroactive Data Cleaning (Past 3 Weeks)**
+Do not attempt to "guess" the real conversion rate; the current 27% figure is `UNVERIFIED` and unusable for ROI. Instead, segment your data to isolate the noise using these specific behavioral patterns:
+*   **Time-to-Complete Distribution:** Plot the histogram of time elapsed between "Landing Page View" and "Onboarding Complete." Humans exhibit a bell curve (e.g., 2–10 minutes). Bots completing the full flow often cluster at extreme lows (<30 seconds) or show impossible consistency (exact same duration). Isolate the cohort outside the 3-sigma range of your pre-October 12th baseline.
+*   **Event Sequence Rigidity:** Analyze the order of events. Humans hesitate, scroll, or misclick. Bots often fire events in a perfect, linear sequence with zero variance in inter-event timing. Filter for sessions with <5% variance in step-to-step timing compared to your historical human average.
+*   **Referral Graph Topology:** Map the referring user to the new signups. Power users might refer 5–10 people over weeks. Bots often originate from a single seed account triggering hundreds of signups in hours, or form "circular" referral chains (A refers B, B refers A). Flag any referrer exceeding the 99th percentile of your historical referral velocity *and* having a downstream retention rate of 0%.
+
+**2. Real-Time Detection Strategy**
+Stop relying solely on IP-based firewall rules. Implement a scoring model based on **behavioral biometrics** rather than blocklists:
+*   **Input Dynamics:** Track keystroke dynamics and mouse movement entropy during form fill. Bots typing into fields often have uniform millisecond intervals between characters or no mouse movement at all. Legitimate high-velocity users still exhibit human irregularity in input.
+*   **The "Honeypot" Field:** Add a hidden form field (invisible to humans via CSS) that bots scraping the DOM will fill. Any submission with this field populated is automatically flagged as bot traffic before it enters your main analytics warehouse.
+*   **Device Fingerprint Consistency:** Check for mismatches between User-Agent strings and rendered screen properties (e.g., a "Mobile iPhone" user agent reporting a 1920x1080 desktop resolution).
+
+**3. Attribution Model Adjustment**
+For the board meeting, **exclude** any cohort identified by the patterns above from your ROI calculation. Do not re-allocate this spend to "organic" or "paid"; classify it as **Invalid Traffic (IVT)** and report it as a loss prevention metric.
+*   **Attribution Rule:** Credit is only awarded if the referred user completes a **retention event** (e.g., "Core Action Completed" in Week 1). If the signup converts but never returns, the attribution value is $0. This automatically nullifies bot farms that cannot sustain engagement.
+
+**This-Week Steps:**
+1.  Run the **Time-to-Complete** query on the Oct 12–present dataset to define the "bot cluster" bounds; export this ID list to your analytics tool to exclude them from the board deck.
+2.  Implement the **hidden honeypot field** in the signup form immediately to stop future contamination.
+3.  Recalculate the referral ROI using **Week-1 Retention** as the conversion gate, not signup completion.
+
+**Note:** The 27% rate is a measurement artifact, not growth; comparing it to your pre-campaign 4% baseline is invalid until the bot segment is surgically removed.
+**Note:** Ensure all device fingerprinting adheres to your privacy compliance guidelines regarding user identifiers.

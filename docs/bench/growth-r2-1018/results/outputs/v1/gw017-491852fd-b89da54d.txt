@@ -1,0 +1,25 @@
+To isolate the true cost of latency from demand saturation for the StarGazer tour, you must shift from aggregate averages to a **cohort-based causal analysis** comparing user behavior under different load conditions during the same 8-minute window. Do not compare this event to your baseline (1.2s load time); that compares apples to oranges due to differing demand levels. Instead, segment the 50,000 users by their **experienced latency** (e.g., <2s, 2–4s, >4s) at the payment step.
+
+**1. Define the North Star & Input Metrics**
+*   **North Star:** Payment Completion Rate per Latency Cohort (not total revenue, which is capped by inventory).
+*   **Input Metrics:** Time-to-Interactive at checkout, drop-off rate at payment gateway, support ticket volume tagged "payment delay."
+*   **Reject Vanity:** Total tickets sold (50k) is a vanity metric here; it tells you nothing about lost demand.
+
+**2. The Analysis Method: Retention/Conversion First**
+Diagnose the funnel bottom-up. The 15% drop-off is your leak. To determine if latency caused it:
+*   **Segment by Experience:** Plot conversion rate against experienced latency buckets. If conversion drops linearly or exponentially as latency increases *within* the StarGazer window, you have evidence of friction. If conversion remains flat across latency buckets until a hard timeout, the drop-off may be due to scarcity (users giving up because tickets are gone) rather than speed.
+*   **Control for Scarcity:** Analyze the **time-to-failure**. Did users in high-latency cohorts abandon *after* the "Sold Out" signal appeared, or *before*? If they abandoned before seeing inventory status, latency is the likely culprit. If they abandoned after, it's saturation.
+*   **Support Correlation:** Join the session logs with support tickets using a **pseudonymous stable user ID**. Calculate the support contact rate for the >4s cohort vs. the <2s cohort. A statistically significant lift in support contacts for the slow cohort confirms friction, even if the sale was lost to scarcity.
+
+**3. Experiment Rigor & Verification**
+*   **No Fabricated Benchmarks:** Do not assert "3.5s is bad." Assert only: "Users experiencing >3s converted X% less than those experiencing <2s during the same inventory window."
+*   **Confounding Variables:** Acknowledge that "scarcity" is a confounder. Your analysis must explicitly show whether drop-offs occurred *prior* to inventory depletion. If inventory hit zero at minute 6, drop-offs at minute 7 are saturation, not latency.
+*   **Unverified Data:** The correlation between delay and support contacts is currently `UNVERIFIED`. You must run the join on your analytics platform to produce the number.
+
+**4. This-Week Step**
+1.  **Query:** Run a cohort analysis grouping checkout sessions by deciles of page load time (only for the StarGazer 8-minute window) and plot conversion rate per decile.
+2.  **Join:** Correlate high-latency session IDs with support ticket timestamps to calculate the lift in contact rate.
+3.  **Decision Tripwire:** If the conversion rate for the slowest cohort is >5% lower than the fastest cohort *before* the sell-out timestamp, the cost of latency is proven; use this delta to model revenue loss for November's projected traffic. If the rates are identical, the drop-off is purely demand saturation, and server capacity will not recover those sales.
+
+*Note: Ensure user IDs used for cohorting are pseudonymized and routed to privacy compliance checks before sharing with infrastructure teams.*
+*Do not extrapolate these findings to low-traffic periods; this analysis is specific to peak-load contention.*

@@ -1,0 +1,40 @@
+### Measurement Plan: ReWear Referral Program (Launch Nov 10)
+
+**1. North Star Metric**
+Define **Weekly Active Resellers via Referral** as the primary success metric. Do not use "Invites Sent" or "Signups" as your North Star; these are vanity metrics that rise regardless of value delivery. The program only succeeds if referred users complete a **first successful resale**, not just a purchase or signup.
+
+**2. Event Taxonomy (Instrument Only These)**
+Every event below must include a `stable_pseudonymous_user_id` (to track across sessions without exposing PII) and a `referral_campaign_id`. Do not instrument "clicks" unless they answer a specific funnel question.
+
+| Event Name | Question It Answers | Critical Properties |
+| :--- | :--- | :--- |
+| `referral_invite_sent` | How many users attempt to invite? | `channel` (SMS, social, link), `referrer_id` |
+| `referral_link_clicked` | Does the message drive traffic? | `referrer_id`, `device_type` |
+| `referral_signup_completed` | Is the landing page converting? | `referrer_id`, `time_to_signup` |
+| `referral_first_purchase` | Did they buy? (Activation) | `referrer_id`, `order_value`, `discount_applied` |
+| `referral_first_resale_listed` | **Core Value:** Did they sell? | `referrer_id`, `category`, `price_point` |
+| `referral_reward_claimed` | Did the referrer get value? | `referrer_id`, `reward_type` (15% off) |
+
+**3. Attribution & Lifecycle Logic**
+Attribute value **only at `referral_first_resale_listed`**.
+*   **Why:** A signup or purchase without a subsequent resale indicates a "discount hunter," not a sustainable two-sided marketplace participant.
+*   **Attribution Window:** Set a fixed window (e.g., 30 days from click to resale). Any resale after this window is `UNVERIFIED` as referral-driven for immediate ROI calculations.
+*   **Organic vs. Referral:** Tag all transactions with `acquisition_source`. If `acquisition_source` is missing or "direct" during the campaign, treat as organic. Do not guess; if the ID is missing, the data point is `UNVERIFIED`.
+
+**4. Distinguishing Holiday Noise (December)**
+To separate the referral program impact from the general holiday rush:
+*   **Cohort Analysis:** Compare the retention and resale rate of the **November Referral Cohort** against the **November Organic Cohort**. If both rise equally in December, the lift is seasonal, not program-driven.
+*   **Baseline Comparison:** Measure the week-over-week growth of referral-driven resales. If organic growth spikes but referral growth flatlines, the program is leaking.
+
+**5. Experiment Rigor (Symmetric Incentive)**
+You are assuming a 15% symmetric incentive is optimal. This is an unproven hypothesis.
+*   **Guardrail Metric:** Monitor **Margin per Transaction**. If the 15% discount drives volume but pushes net margin below zero for specific categories, the "win" is illusory.
+*   **Future Test:** Do not claim the 15% symmetric model is "best" without an A/B test against an asymmetric model (e.g., 20% for referee, 10% for referrer) in Q1. For now, treat the current launch as a single-arm measurement.
+
+**This Week's Steps**
+1.  **Engineering:** Implement the `referral_first_resale_listed` event with `referrer_id` propagation before Nov 10. Without this, ROI is `UNVERIFIED`.
+2.  **Analytics:** Build a dashboard showing the funnel drop-off from `invite_sent` to `first_resale_listed` segmented by `acquisition_source`.
+3.  **Decision Rule:** If `referral_first_resale_listed` is <10% of `referral_signup_completed` by Dec 15, pause spend and investigate the "purchase-to-resale" leak before scaling.
+
+*Note: Ensure `stable_pseudonymous_user_id` generation complies with `privacy-compliance.md`; do not pass raw PII in event properties.*
+*Note: Do not fabricate benchmark conversion rates; compare all results strictly against your own November baseline.*

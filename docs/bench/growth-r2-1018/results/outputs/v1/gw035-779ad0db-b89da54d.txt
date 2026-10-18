@@ -1,0 +1,23 @@
+**Decision: Do not recommend global launch yet. Extend the test or run a targeted validation.**
+
+The current result is **UNVERIFIED** as a net win because the $4.50 drop in Average Order Value (AOV) likely negates the 2.3% conversion lift, and the cause (behavioral vs. tracking error) is unknown. A 2.3% lift on 500k users is statistically significant only if the test was pre-committed to that sample size; if you peeked at the dashboard daily, the false-positive rate is inflated. Furthermore, a "win" on conversion that regresses the revenue guardrail (AOV) is not a shipable outcome.
+
+**Immediate Segmentation Analysis (Run These Queries Today)**
+To isolate the mobile effect and validate the data, execute these three cuts on your existing dataset:
+1.  **Platform-Specific Revenue Per Visitor (RPV):** Do not look at conversion or AOV in isolation. Calculate `(Conversion Rate × AOV)` for Mobile vs. Desktop separately. If Mobile RPV is flat or up while Desktop RPV is down, the friction hypothesis holds. If both are down, the survey removal is destroying value globally.
+2.  **Item Count & Category Mix:** Compare the average number of items per order and the category distribution between Control and Variant. If item count dropped proportionally with AOV, users are buying less (impulse loss). If item count is stable but AOV dropped, you likely have a **tracking error** where the new layout fails to record specific line items or discounts.
+3.  **Survey Completion Correlation:** In the Control group, correlate survey completion with AOV. If users who skipped the survey already had lower AOVs, removing the step merely shifted low-value users into the funnel faster without changing their spend behavior.
+
+**Validation Steps Before Recommendation**
+*   **Data Integrity Audit:** Verify the tracking pipeline for the Variant. The $4.50 drop is suspiciously precise; ensure the new layout isn't failing to fire "purchase" events for high-value add-ons or coupons.
+*   **Power Analysis for AOV:** You powered the test for conversion. Recalculate the Minimum Detectable Effect (MDE) for AOV. If the test was underpowered for AOV, the $4.50 drop might be noise, but you cannot assume that without the math.
+*   **CUPED Adjustment:** If you have pre-test purchase history, apply CUPED variance reduction to see if the AOV drop persists after controlling for user baseline spending.
+
+**Stakeholder Presentation Strategy**
+Present this not as indecision, but as **risk-managed rigor**. Use this narrative:
+*"The test successfully reduced friction (conversion +2.3%), but introduced a revenue risk (AOV -$4.50). Because the net impact on total revenue is currently negative or neutral depending on the segment, a global rollout risks eroding margins. We are not 'unsure'; we are identifying a specific data anomaly vs. behavioral shift. The recommendation is to hold global launch and run a 7-day targeted validation on mobile only to confirm if the AOV drop is a tracking bug or a real loss of impulse buys."*
+
+**This Week's Step:**
+Run the **RPV by Platform** and **Item Count** queries above. If Mobile RPV is positive and Item Count is stable, propose a **Mobile-Only rollout** with a strict guardrail: auto-revert if global AOV drops >1% post-launch. If Mobile RPV is negative, kill the variant.
+
+*Note: The $200k projection is invalid until the AOV leak is plugged; do not present it as a guaranteed outcome. Ensure user identifiers in these cohorts are pseudonymous and routed per privacy compliance standards.*

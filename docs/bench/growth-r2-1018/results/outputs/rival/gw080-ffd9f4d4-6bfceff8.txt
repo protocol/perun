@@ -1,0 +1,50 @@
+# Diagnostic Plan: CloudSecure Onboarding Drop-Off
+
+To isolate whether the drop-off stems from the new Two-Factor Authentication (2FA) step or subsequent data import errors, execute the following segmentation and behavioral analysis using your existing analytics platform.
+
+### 1. Funnel Step Segmentation
+Break the onboarding flow into discrete steps to pinpoint the exact exit location. Do not analyze "onboarding" as a single block.
+*   **Step A:** Account Creation
+*   **Step B:** 2FA Configuration (New Step)
+*   **Step C:** Data Import Preparation
+*   **Step D:** Data Import Execution
+*   **Step E:** Completion
+
+**Action:** Calculate the conversion rate between each adjacent step (A→B, B→C, C→D, D→E) for the period before March 1st and after.
+*   **Indicator for 2FA Friction:** A sharp increase in drop-off specifically between Step A and Step B, or Step B and Step C, compared to historical baselines.
+*   **Indicator for Data Import Friction:** If Step B→C remains stable but Step C→D or D→E shows a massive spike in exits, the issue lies downstream of authentication.
+
+### 2. Cohort Analysis by Completion Status
+Create two distinct user cohorts based on their last recorded action post-March 1st:
+*   **Cohort 1 (Auth Stalled):** Users who triggered the "2FA Setup Started" event but never triggered "2FA Setup Completed."
+*   **Cohort 2 (Import Stalled):** Users who triggered "2FA Setup Completed" but never triggered "Data Import Success."
+
+**Action:** Compare the volume and percentage of total drop-offs attributed to each cohort.
+*   If Cohort 1 represents >60% of total churn, 2FA is the primary blocker.
+*   If Cohort 2 represents the majority, users are passing 2FA but failing later, validating the data import hypothesis.
+
+### 3. Error Event Correlation
+Since support tickets mention data import errors, verify if these are systemic failures or user confusion.
+*   **Action:** Filter for users in Cohort 2 who triggered any "Error" or "Warning" events during Step C or D.
+*   **Metric:** Calculate the % of Cohort 2 that encountered a technical error event before dropping off.
+*   **Interpretation:** A high correlation confirms technical friction. A low correlation suggests the UI or instructions for data formatting are unclear, causing users to abandon voluntarily rather than being forced out by a crash.
+
+### 4. Segment by Client Maturity
+Your 200 major clients likely have different behaviors than smaller trials.
+*   **Action:** Segment the funnel analysis by `account_tier` (Enterprise vs. SMB) or `user_role` (IT Admin vs. General User).
+*   **Hypothesis:** If Enterprise IT Admins drop off at 2FA at higher rates than other segments, the new security step may conflict with their internal firewall policies or SSO expectations, creating specific friction for your core revenue base.
+
+### 5. Time-to-Drop Analysis
+*   **Action:** Measure the average time spent on the 2FA step versus the Data Import step before abandonment.
+*   **Interpretation:**
+    *   **Short duration (<30s) on 2FA:** Immediate rejection or confusion (friction).
+    *   **Long duration on Data Import followed by exit:** Users are struggling to format data, realizing the effort required, and quitting (realization of effort/error).
+
+### Summary for Customer Success Director
+Present the findings as a split diagnosis:
+1.  **Primary Blocker:** Identify which step accounts for the largest percentage of the 25% total decline.
+2.  **Secondary Factor:** Note if the secondary issue (e.g., data errors) is a result of the first (rushing through 2FA leads to bad data) or an independent failure.
+3.  **Revenue Impact:** Map the drop-off volume directly to the specific client tiers affected to quantify the revenue recognition delay.
+
+*Ensure all date ranges compare identical day-of-week patterns (e.g., March 1–14 vs. Feb 1–14) to eliminate weekly seasonality bias.*
+*Exclude any test accounts or internal IP traffic from these datasets to prevent skewing the completion rates.*

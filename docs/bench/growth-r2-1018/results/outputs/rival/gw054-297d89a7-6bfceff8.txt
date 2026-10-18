@@ -1,0 +1,25 @@
+# QuickCart Fresh Produce Tracking Plan
+
+To determine whether delivery time or product quality drives churn for your new fresh produce category, you must instrument events that capture the specific hand-offs between logistics and customer perception. The following events map the journey from selection to post-delivery feedback, enabling you to correlate operational metrics (time) with satisfaction signals (quality).
+
+## Core Events to Instrument
+
+| Event Name | Trigger Point | Essential Properties | Decision Value |
+| :--- | :--- | :--- | : |
+| `fresh_category_viewed` | User enters "Fresh Produce" section | `session_id`, `device_type`, `time_of_day` | Measures initial interest and discovery friction. |
+| `fresh_item_added` | User adds a fresh SKU to cart | `product_id`, `product_category` (e.g., leafy, fruit), `unit_price`, `stock_status` | Identifies high-demand items and potential stock-out churn. |
+| `checkout_started_fresh` | User initiates checkout with ≥1 fresh item | `cart_value`, `fresh_item_count`, `delivery_slot_selected` | Tracks drop-off before payment specifically for fresh orders. |
+| `order_placed_fresh` | Payment successful for fresh order | `order_id`, `estimated_delivery_time`, `delivery_zone_cairo`, `promise_window_minutes` | Baseline for calculating actual vs. promised delivery performance. |
+| `order_dispatched` | Driver assigned and order leaves hub | `order_id`, `actual_dispatch_time`, `driver_id`, `traffic_condition_code` | Marks the start of the transit timer; critical for logistics auditing. |
+| `order_delivered` | Driver marks order complete | `order_id`, `actual_delivery_time`, `delivery_delay_minutes` (calculated), `handoff_success` (bool) | **Primary Logistics Metric:** Enables calculation of exact delivery latency against the promise. |
+| `fresh_quality_feedback` | User rates fresh items post-delivery | `order_id`, `quality_score` (1-5), `spoiled_item_flags`, `feedback_text_category` | **Primary Quality Metric:** Directly isolates product quality issues from delivery speed. |
+| `support_ticket_fresh` | User contacts support re: fresh order | `order_id`, `issue_type` (late, damaged, missing, wrong), `resolution_time` | Captures negative sentiment that doesn't result in a rating but indicates churn risk. |
+| `fresh_reorder_7d` | User places a second fresh order within 7 days | `original_order_id`, `days_since_first_order`, `repeat_item_overlap` | **Success Metric:** Validates your hypothesis that 7-day repeat = satisfaction. |
+
+## Implementation Notes for Operations Alignment
+
+1.  **Correlate Delay vs. Damage:** By tagging every `fresh_quality_feedback` and `support_ticket_fresh` with the `delivery_delay_minutes` from the corresponding `order_delivered` event, you can run a regression analysis to see if late deliveries statistically predict low quality scores, or if they are independent variables.
+2.  **Zone-Specific Analysis:** Ensure `delivery_zone_cairo` is granular (e.g., Maadi vs. Nasr City) to identify if specific logistics routes are causing the churn, allowing the operations manager to target driver training or route optimization rather than blaming product sourcing.
+
+*Note: Ensure all timestamps are recorded in UTC but converted to Cairo Local Time (EET/EEST) for reporting to align with shift patterns.*
+*Do not record specific customer addresses in event properties; use zone IDs to maintain privacy compliance.*

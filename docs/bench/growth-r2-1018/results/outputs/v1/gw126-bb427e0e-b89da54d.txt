@@ -1,0 +1,38 @@
+### North Star & Core Loop Definition
+**North Star:** Weekly Active Users completing 3+ consecutive days of *active* tracking (not viewing).
+**Rejection of Vanity:** Total downloads and "peer challenge invites sent" are rejected; they rise without proving value. The 9% Week-1 retention confirms a leak in the core loop, not an acquisition failure.
+
+### Instrumentation Plan: Active Habit vs. Passive View
+Instrument only events that answer: "Did the user perform the habit, or just watch someone else?"
+
+| Event Name | Question Answered | Properties to Capture |
+| :--- | :--- | :--- |
+| `habit_log_submitted` | Did the user actively record a behavior? (Core Action) | `habit_type`, `duration_seconds`, `is_solo` (bool), `is_challenge_linked` (bool) |
+| `habit_view_only` | Did the user passively consume content without acting? | `source_page` (feed/challenge), `time_spent_seconds` |
+| `accountability_check_in` | Did the user engage socially *after* acting? | `action_taken_first` (bool), `peer_id_count` |
+| `return_day_N` | Did the user return specifically to repeat the core action? | `days_since_last_log`, `streak_count` |
+
+**Critical Distinction:** Your logs suggest solo tracking is frequent but doesn't retain. Instrument `action_taken_first` on social events. If users view challenges *before* logging solo, social is a distractor. If they log solo *then* share, social is the reinforcement. Do not instrument "page views" unless tied to a subsequent `habit_log_submitted`.
+
+### Segmentation Strategy (UK Teen Demographic)
+Do not segment by exact age (privacy risk); use broad developmental cohorts to find pattern shifts without violating consent norms. Route exact DOB handling to `privacy-compliance.md`.
+
+1.  **Early Teens (13–14):** Hypothesis: Need external scaffolding.
+    *   *Metric to watch:* Ratio of `accountability_check_in` to `habit_log_submitted`. If low, the social feature is too complex or irrelevant.
+2.  **Mid Teens (15–16):** Hypothesis: Peer comparison drives action.
+    *   *Metric to watch:* Conversion from `habit_view_only` (on peer stats) to `habit_log_submitted` within 24 hours.
+3.  **Late Teens (17–19):** Hypothesis: Intrinsic goal alignment matters more than peers.
+    *   *Metric to watch:* Retention of users who set custom goals vs. those who join default challenges.
+
+### Diagnosis of Current 9% Retention
+The data suggests a "Passive Trap": users view solo tracks or challenges but fail to cross the threshold to *active* logging.
+*   **Hypothesis Refutation:** If `habit_log_submitted` (solo) is high but retention is low, solo tracking is not forming habits.
+*   **New Hypothesis:** Social accountability only works *after* the first successful solo log. Users may be overwhelmed by challenges before establishing the base habit.
+*   **Action:** Compare retention of users who log solo *before* seeing a challenge vs. those who see a challenge first.
+
+### This-Week Steps
+1.  **Query:** Pull a cohort report for Sept 5–12 users comparing `habit_log_submitted` frequency (1x vs 3+ times) against Day-7 return. Identify the "magic number" of logs needed for retention.
+2.  **Instrument:** Add `action_taken_first` boolean to all social interaction events to verify if social features precede or follow action.
+3.  **Decision Rule:** If users who log solo 3 times have >40% retention regardless of social features, prioritize stabilizing the solo loop in Q1. If social-first users retain better, simplify the challenge onboarding.
+
+*Note: All user identifiers must be pseudonymous; do not use raw IDs for cohorting. The 9% figure is your baseline; do not compare to industry "benchmarks" which are often fabricated or irrelevant to your specific demographic.*

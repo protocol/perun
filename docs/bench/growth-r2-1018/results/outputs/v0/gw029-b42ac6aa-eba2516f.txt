@@ -1,0 +1,29 @@
+To differentiate between a messaging mismatch and technical friction, you must instrument two distinct data streams immediately. Do not rely on aggregate bounce rates; they conceal the cause.
+
+**1. Diagnose Technical Friction (Performance)**
+If users leave because the page is slow, they never generate interaction events. You need to correlate exit timing with load metrics.
+*   **Data Points to Gather:**
+    *   **Core Web Vitals by Device:** Specifically *Largest Contentful Paint (LCP)* and *First Input Delay (FID)* segmented by "Mobile" vs. "Desktop." If mobile LCP exceeds 2.5 seconds while desktop is under 1.5, friction is the likely culprit.
+    *   **Time-to-Unload Distribution:** Plot a histogram of session durations for users who did not scroll. If 40%+ of exits occur within the first 1–3 seconds (the typical load window), this indicates impatience due to latency.
+    *   **Resource Load Errors:** Check console logs for failed asset loads (images, scripts) specific to mobile user agents.
+*   **The Verdict:** If high bounce rates correlate strongly with slow LCP on mobile, but desktop users (with fast LCP) scroll normally, the issue is **technical friction**.
+
+**2. Diagnose Messaging Mismatch (Relevance)**
+If the page loads instantly but the headline contradicts the email promise, users will leave after consuming the content but finding no value.
+*   **Data Points to Gather:**
+    *   **Scroll Depth Heatmaps:** Segment by traffic source (Email Campaign). If users on fast connections scroll 0–10% (reading only the header) and then exit, the headline failed to validate the email's promise.
+    *   **Click-Through Rate (CTR) on Primary CTA:** Measure clicks on the "Register" button relative to impressions. A high load speed but near-zero CTR suggests the value proposition is unclear or misaligned.
+    *   **Session Replay Sampling:** Watch 20–30 recordings of mobile sessions with fast load times. Look for "rage clicks" on the header or immediate mouse movement toward the "back" button after the headline renders.
+*   **The Verdict:** If load times are healthy (<2s) yet users consistently exit immediately after the header renders without scrolling, the issue is **messaging mismatch**.
+
+**Immediate Action Plan for Friday Deadline**
+1.  **Segment Your Analytics:** Create a view filtering for `Source = Email Campaign` AND `Device = Mobile`.
+2.  **Run the Correlation:** Compare the average session duration of non-scrollers against the average LCP for that same segment.
+    *   *Scenario A:* High correlation between slow LCP and immediate exit → **Optimize assets/compress images.**
+    *   *Scenario B:* Fast LCP but immediate exit → **Rewrite the headline to mirror the email subject line exactly.**
+3.  **Validate with a Micro-Test:** If time permits, deploy a variant where the H1 headline matches the email subject line verbatim for 10% of traffic. If scroll depth increases, the hypothesis is confirmed.
+
+Do not guess; the timestamp of the exit relative to the page load completion is your definitive signal.
+
+*Note: Ensure your analytics tool captures "Time to Interactive" specifically for mobile networks (3G/4G), as Wi-Fi tests in the office will mask real-world friction.*
+*If data collection takes too long, manually test the page on a throttled mobile connection immediately to rule out obvious loading failures.*

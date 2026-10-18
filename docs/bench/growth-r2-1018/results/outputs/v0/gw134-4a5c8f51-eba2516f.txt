@@ -1,0 +1,49 @@
+# LogiTrack Pilot Success Metrics (April 5 – June 4)
+
+**Context:** This document defines the measurement framework for the 5-factory pilot in Ho Chi Minh City. It prioritizes **retention of the core action** (acting on alerts) over vanity volume, adhering to the principle that acquisition (sending more alerts) is wasted if retention (trust/utility) leaks.
+
+## 1. The North Star Metric
+**Metric:** *Weekly Active Resolutions per Factory*
+**Definition:** The count of unique shipment delays detected by LogiTrack where a logistics manager confirms an action (e.g., rerouting, inventory adjustment) within 24 hours of the alert.
+**Rationale:** Raw "alerts sent" is a vanity metric; it rises regardless of value. "Time to detect" is an input, not an outcome. Value is only realized when a human trusts the data enough to act. If this number does not rise, the business has not delivered value, regardless of detection speed.
+
+## 2. Input Metrics (The Funnel)
+Measure these to diagnose why the North Star might stall. Read them bottom-up (Retention → Activation → Acquisition).
+
+*   **Retention (The Trust Proxy):** *Week-over-Week Return Rate of Acting Users.*
+    *   *Question:* Do managers who acted on an alert in Week 1 return to act on an alert in Week 2?
+    *   *Target:* Trend must be flat or positive. A decline indicates the "trust" hypothesis is failing.
+*   **Activation (The Core Value):** *Mean Time to Acknowledge (MTTA).*
+    *   *Question:* Once an alert is received, how long until a human acknowledges it?
+    *   *Baseline:* Measure the current baseline in Week 1. Do not assert the "6-hour" target as a pass/fail yet; compare against the user's own prior manual process.
+*   **Acquisition (Volume):** *Valid Alert Rate.*
+    *   *Question:* What percentage of triggered alerts correspond to an actual physical delay?
+    *   *Constraint:* High frequency of false positives destroys trust. Prioritize **accuracy** over frequency. An unused accurate alert is better than a ignored noisy one.
+
+## 3. Qualitative Indicators (Operationalizing "Trust")
+Do not measure "trust" abstractly. Instrument specific behaviors that correlate to the account managers' claims.
+
+*   **Indicator A: The "Override" Rate.**
+    *   *Event:* User manually marks a LogiTrack alert as "False Positive" or ignores a high-severity alert without comment.
+    *   *Interpretation:* High override rates = Low trust.
+*   **Indicator B: The "Proactive Share" Event.**
+    *   *Event:* User exports a LogiTrack report or forwards an alert to a superior/external partner.
+    *   *Interpretation:* Users only stake their reputation on data they trust. This is the behavioral proxy for reliability.
+*   **Indicator C: Structured Feedback Loop.**
+    *   *Action:* Mandatory 15-minute structured interview at Day 30 and Day 60 with the primary logistics contact at each of the 5 factories.
+    *   *Question:* "Describe one decision you made this month that you would not have made without LogiTrack." (Binary: Yes/No + Context).
+
+## 4. Instrumentation Rules & Privacy Seam
+*   **Event Taxonomy:** Instrument only the events listed above. Do not log every page view or click. Every event must answer a named question from Section 2 or 3.
+*   **Identifier Seam:** To track "Weekly Active Resolutions," you require a **stable, pseudonymous user ID** per logistics manager to follow them across sessions.
+    *   *Constraint:* Do not use raw emails or names in analytics logs. Hash these identifiers.
+    *   *Compliance:* Route all PII handling, consent management, and data retention limits to the `privacy-compliance.md` protocol. This analytics plan assumes pseudonymity is enforced at ingestion.
+*   **Stage Awareness:** As this is an `mvp` pilot, do not build a complex dashboard. Collect raw event streams for the 5 factories only.
+
+## 5. This-Week Steps
+1.  **Define the "Action" Event:** Finalize the exact database trigger that counts as a "Resolution" (e.g., button click vs. status change) and ensure it is logged with a pseudonymous user ID.
+2.  **Baseline the Manual Process:** Before April 5th, record the current average time-to-detect and false-positive rate for these 5 factories using their existing methods. Without this baseline, the "15% reduction" claim is `UNVERIFIED`.
+3.  **Schedule the Day-30 Interviews:** Book the structured feedback sessions now. If the quantitative "Proactive Share" event is zero by Day 30, the qualitative interview is the only source of truth for the "trust" hypothesis.
+
+*Note: Do not attempt to validate the "15% cost reduction" claim during this 60-day pilot unless you have direct access to client inventory ledgers; treat it as a long-term hypothesis dependent on the short-term adoption metrics defined above.*
+*All metric thresholds must be derived from the Week 1 baseline data, not external benchmarks.*

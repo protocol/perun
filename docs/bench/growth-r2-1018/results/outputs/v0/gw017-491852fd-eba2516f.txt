@@ -1,0 +1,30 @@
+To isolate the true cost of latency from demand saturation for the StarGazer tour, you must shift your analysis from aggregate averages to **cohort-based retention and conversion comparisons** tied directly to user experience metrics. Do not attempt to estimate "lost sales" using industry benchmarks; instead, compare the behavior of users who experienced high latency against those who did not, using your own data as the sole baseline.
+
+**1. Define the North Star and Input Metrics**
+Your North Star for this analysis is **Successful Checkout Completion Rate** during the sale window, not total tickets sold (which was capped by inventory). The input metrics to measure are:
+*   **Page Load Time (PLT)** per user session (continuous variable).
+*   **Payment Screen Drop-off Rate** (binary: completed vs. abandoned).
+*   **Support Contact Rate** post-session (binary: contacted vs. did not).
+
+**2. Segment by Experience, Not Just Time**
+Avoid comparing the entire "StarGazer sale" block against a "normal day" baseline, as demand saturation confounds this. Instead, segment your 50,000 users into cohorts based on their *actual* experienced latency:
+*   **Cohort A (Fast):** PLT < 2.0s (likely early arrivals or lucky routing).
+*   **Cohort B (Slow):** PLT > 3.0s (the affected group).
+*   **Cohort C (Very Slow):** PLT > 5.0s (extreme friction).
+
+Compare the **Payment Screen Drop-off Rate** of Cohort B and C directly against Cohort A. If Cohort A maintained your baseline 5% drop-off while Cohort B spiked to 15%, you have isolated the latency impact. If Cohort A *also* showed elevated drop-off (e.g., 12%), the cause is likely demand saturation (users realizing tickets are gone) rather than technical friction.
+
+**3. Correlate Support Contacts with Latency**
+To answer your open question, join your session logs with support ticket timestamps. Calculate the **Support Contact Rate** for each latency cohort. A statistically significant higher contact rate in Cohort B/C specifically citing "checkout errors" or "slow loading" confirms the friction hypothesis. If contact rates are flat across cohorts but mention "sold out," the issue was scarcity, not performance.
+
+**4. Instrumentation & Event Taxonomy**
+Ensure your events answer specific questions. Do not instrument "page load" generically; instrument `checkout_step_load_time` with properties: `user_id` (pseudonymous), `event_timestamp`, `ticket_remaining_count` (crucial for controlling scarcity), and `error_code`.
+*   *Question:* "Does latency cause drop-off independent of inventory status?"
+*   *Required Data:* You must correlate `load_time` with `tickets_remaining` at the exact moment of the user's attempt. A user hitting the payment screen when 0 tickets remain will drop off regardless of speed. Filter your analysis to users who arrived while `tickets_remaining > 0`.
+
+**5. This Week's Steps**
+1.  **Query:** Run a cohort analysis grouping users by deciles of `checkout_step_load_time`, filtering strictly for sessions where `tickets_remaining > 0` at the moment of page entry. Plot drop-off rate vs. load time.
+2.  **Correlate:** Join session IDs with support tickets from the sale window; calculate the lift in support contacts for the slowest latency decile compared to the fastest.
+3.  **Decision Tripwire:** If the drop-off rate for the slowest cohort (controlling for inventory) exceeds the fastest cohort by >5 percentage points, the latency cost is verified. Use this delta multiplied by the average ticket value to quantify the revenue at risk for November.
+
+*Note: Ensure user IDs used for cohort joining are pseudonymous and routed to your privacy compliance protocols before sharing with infrastructure teams. Do not use raw PII.*

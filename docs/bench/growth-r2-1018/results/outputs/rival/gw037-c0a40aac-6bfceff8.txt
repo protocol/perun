@@ -1,0 +1,54 @@
+# Diagnostic Hypothesis Testing Plan: StreamLine DAU Drop
+
+## Primary Hypotheses
+1.  **H1 (Authentication Failure):** The migration introduced a silent failure in login token validation for specific user segments, preventing session initiation despite successful credential entry.
+2.  **H2 (Geographic/Network Routing):** The new server cluster has suboptimal routing or firewall rules for specific geographic regions or ISPs, causing connection timeouts that users perceive as app failure.
+3.  **H3 (Device/Client Compatibility):** The new database schema or API response format breaks compatibility with older client versions or specific devices (e.g., older iOS/Android versions), causing crashes on launch.
+4.  **H4 (Behavioral/Enterprise Shift):** A coincidental event (e.g., major enterprise contract expiration, holiday, competitor launch) caused the drop, unrelated to the migration.
+
+## Investigative Sequence
+
+### Step 1: Segment the DAU Drop (Immediate)
+Break down the 7,000 user loss by:
+*   **Geography:** Compare DAU drop % by country/region. Look for clusters >20% drop.
+*   **Device/OS:** Segment by iOS version, Android version, Desktop (Win/Mac), and Browser.
+*   **User Type:** Enterprise vs. SMB vs. Free. Check if the drop is concentrated in large accounts.
+*   **Client Version:** Are users on the latest app version, or did the drop happen among those who haven't updated in 30+ days?
+
+**Action:** If the drop is isolated to one region, device, or old client version, H2 or H3 is likely. If it's uniform across all segments, proceed to Step 2.
+
+### Step 2: Analyze Authentication Logs (Critical for H1)
+Query logs from April 10th onward for:
+*   **Token Validation Errors:** Search for increased rates of `401 Unauthorized`, `403 Forbidden`, or specific token expiration errors *after* the user entered credentials.
+*   **Silent Failures:** Look for sessions where the user initiated login but no "session_start" event was logged within 5 seconds. Compare this rate pre- and post-migration.
+*   **Retry Patterns:** Identify users attempting to log in multiple times within a short window (indicates perceived failure).
+
+**Action:** If token errors or silent login failures spiked post-migration, H1 is confirmed. Rollback or patch the auth service immediately.
+
+### Step 3: Analyze Connection & Call Quality Logs (For H2/H3)
+If auth is clean, examine:
+*   **Connection Timeouts:** Filter for `connection_timeout` or `handshake_failed` errors. Segment by region and ISP.
+*   **Call Abandonment Rate:** Measure the % of calls that end within 10 seconds of joining. Did this spike post-migration?
+*   **Error Codes:** Look for new or increased error codes related to media server connectivity or database lookup during call setup.
+
+**Action:** If timeouts or early abandonments correlate with specific regions or devices, H2 or H3 is likely.
+
+### Step 4: Validate Behavioral Hypothesis (H4)
+*   **Enterprise Churn:** Check if any top 10 enterprise accounts reduced seat counts or cancelled around April 10th.
+*   **External Factors:** Verify no major holidays, industry events, or competitor announcements coincided with the drop.
+*   **Cohort Analysis:** Compare retention of users who signed up *before* vs. *after* April 10th. If new users are also dropping off, it's likely technical. If only old users are leaving, it could be behavioral or a compatibility issue.
+
+## Recommended Log Patterns to Query First
+1.  `WHERE event = 'login_attempt' AND status != 'success' GROUP BY region, device_type` (Last 14 days vs. prior 14 days)
+2.  `WHERE event = 'session_start' AND time_since_login > 5s COUNT()` (Silent failure indicator)
+3.  `WHERE event = 'call_ended' AND duration < 10s GROUP BY error_code` (Early abandonment)
+4.  `WHERE user_id IN (top_100_enterprise_accounts) AND event = 'logout' OR 'account_deactivated'`
+
+## Decision Matrix
+*   **If Auth Errors Spiked:** Rollback auth service or hotfix token validation.
+*   **If Regional/Device Spikes:** Investigate network routing or client compatibility; consider targeted communication or forced updates.
+*   **If Uniform Drop + No Tech Errors:** Investigate enterprise churn or external factors; prepare comms plan.
+
+Do not rollback the entire migration until you isolate the fault domain. A targeted fix is faster and less risky than a full reversal.
+
+*Note: Prioritize Step 1 and 2 immediately; they will eliminate 80% of likely causes within 2 hours. Ensure logs from the old and new clusters are queryable in a unified format for accurate comparison.*

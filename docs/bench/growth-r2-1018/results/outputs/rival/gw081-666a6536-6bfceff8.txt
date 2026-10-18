@@ -1,0 +1,19 @@
+**Recommendation: Prioritize These Two Events**
+
+Given your engineering constraints and the specific hypothesis regarding retention, you should instrument only the following two events for the sprint ending October 15th:
+
+1.  **`sleep_score_viewed`**
+    *   **Trigger:** Fires when a user opens the detailed sleep score screen.
+    *   **Essential Property:** `days_since_sleep_session` (integer).
+    *   **Why:** This directly validates your core assumption. By capturing the time delta between the sleep session and the view, you can segment users who viewed within 3 days versus those who didn't. You do not need to track every click on the dashboard; only the entry into the detailed analysis confirms the "checking" behavior linked to retention.
+
+2.  **`sleep_detail_tab_selected`**
+    *   **Trigger:** Fires when a user toggles between or selects specific data views within the sleep report.
+    *   **Essential Property:** `metric_type` (string: e.g., "total_duration", "deep_sleep_duration", "rem_duration").
+    *   **Why:** This resolves your uncertainty about *what* matters without requiring complex custom logic for every metric. If users who retain long-term consistently fire this event with `metric_type: "deep_sleep_duration"` but ignore `"total_duration"`, you have your answer. If they only view the summary (total time) and never toggle to deep sleep specifics, you save future engineering cycles by not prioritizing deep sleep data prominence.
+
+**Implementation Notes for Engineering:**
+*   **Do not** instrument granular interactions like "swiping to previous nights" or "sharing results" yet; these are vanity metrics relative to your current hypothesis.
+*   Ensure `days_since_sleep_session` is calculated client-side at the moment of the view to avoid backend latency or data pipeline dependencies during this constrained sprint.
+
+These two events provide the minimum viable data to prove whether early engagement drives retention and which specific sleep metric drives that engagement.

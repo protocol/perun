@@ -1,0 +1,35 @@
+### Growth Diagnostic Brief: SwiftLend Application Leakage
+
+**North Star Metric:** Weekly Completed Loan Applications (not "Applications Started," which is a vanity metric that rises regardless of value delivery).
+
+**Diagnosis Strategy: Read Bottom-Up**
+Do not increase acquisition spend to fix this. With a 23% completion rate (980/4,200), pouring more users into the top of the funnel wastes capital. The leakage is in **Activation** and **Retention** of the application flow. We must distinguish between *User Abandonment* (friction/time) and *System Rejection* (silent failure) before designing solutions.
+
+**Required Event Taxonomy**
+Instrument only the following events to answer specific questions. Do not track "everything."
+
+| Event Name | Question It Answers | Required Properties |
+| :--- | :--- | :--- |
+| `application_step_viewed` | Where do users enter the flow? | `step_name` (e.g., "income_verify"), `session_id` |
+| `document_upload_started` | Do users attempt the hard part? | `step_name`, `document_type` |
+| `document_upload_completed` | Is the upload mechanism working? | `step_name`, `duration_seconds`, `file_count` |
+| `identity_verification_check` | **The Seam:** Did the system process the user? | `step_name`, `check_id` |
+| `identity_verification_result` | **The Seam:** Was it a pass, fail, or error? | `result` (pass/fail/error), `error_code` (if any) |
+| `application_submitted` | Did the user reach the goal? | `total_duration_seconds`, `steps_completed_count` |
+| `application_abandoned` | Did the user leave voluntarily? | `last_step_seen`, `time_on_step_seconds` |
+
+**The Identifier Seam**
+To track a single user across these steps, engineering must implement a **stable, pseudonymous user ID** attached to every event. This differs from system logs (which avoid high-cardinality user labels); here, the user journey *requires* linking events to a specific cohort. Ensure this ID is not raw PII; route any consent or data retention limits to the privacy compliance protocol.
+
+**Analysis Logic for the CRO**
+Once instrumented, segment the 3,220 drop-offs into two buckets:
+1.  **Silent Rejections:** Users who triggered `identity_verification_result: fail` or `error` but did not see an explicit rejection screen. If this number is high, the "friction" is actually a broken feedback loop or overly aggressive risk rules.
+2.  **Voluntary Abandonment:** Users who triggered `application_abandoned` specifically at `document_upload_started` with high `time_on_step_seconds`. This confirms the manual upload hypothesis.
+
+**This Week's Steps**
+1.  **Engineering:** Implement the six events above with the specified properties, ensuring the pseudonymous user ID persists across the session.
+2.  **Analytics:** Run a cohort query on the next 500 applicants to calculate the conversion rate between `document_upload_completed` and `identity_verification_result`.
+3.  **Decision Trigger:** If >40% of drop-offs occur after a `fail` result without a subsequent `abandoned` event, the priority is fixing the rejection UI/message. If >40% occur during `document_upload_started` with long durations, the priority is simplifying the upload interface.
+
+*Note: No benchmark for "good" completion rates is asserted here; we will compare future performance solely against SwiftLend's current 23% baseline.*
+*All metrics remain `UNVERIFIED` until the events above are live in your analytics platform.*

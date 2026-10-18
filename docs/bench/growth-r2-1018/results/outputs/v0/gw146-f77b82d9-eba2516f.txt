@@ -1,0 +1,37 @@
+**Strategy: EMEA Currency Data Remediation Plan**
+
+**1. Scope Identification & Segmentation**
+Immediately query the transaction database to segment the 300,000 affected records (15% of 2M) by three dimensions:
+*   **Error Type:** Distinct counts of specific malformed codes (e.g., 'EURR', 'EURO', blank) vs. valid codes.
+*   **Source Attribution:** Filter by the suspected legacy partner bank ID versus all other ingestion sources to confirm the correlation hypothesis.
+*   **Settlement Status:** Cross-reference each malformed record against the settlement ledger. Tag records as `Settlement_Failed`, `Settlement_Success_Mismatch`, or `Settlement_Success_Match` (where the system implicitly treated the bad code as valid).
+
+**2. Pattern Analysis for Source Isolation**
+To isolate the corruption source in the logs without guessing, filter for these specific patterns between Jan 1 and Mar 31:
+*   **Ingestion Payload vs. Stored Value:** Compare the raw incoming API payload from the partner bank against the value written to the database. If the payload contains 'EUR' but the DB has 'EURR', the bug is in your transformation layer. If the payload itself contains 'EURR', the bug is upstream at the partner.
+*   **Timestamp Clustering:** Plot error frequency by hour/day. A steady drip suggests a persistent mapping error; sharp spikes may correlate with specific batch jobs or network retries.
+*   **Transaction Type Correlation:** Check if errors are isolated to specific transaction types (e.g., only "Refunds" or only "High-Value Transfers") which might trigger different legacy code paths.
+
+**3. Remediation Protocol (Auto-Correct vs. Manual Review)**
+Do not auto-correct any record until the settlement impact is verified. Apply the following decision matrix:
+
+*   **Category A: Safe Auto-Correction**
+    *   *Criteria:* The malformed code is a obvious typo (e.g., 'EURR' -> 'EUR'), the transaction status is `Pending` or `Unsettled`, AND the settlement engine has not yet attempted processing.
+    *   *Action:* Script a one-time update to normalize the code. Log the change with a `data_remediation` audit tag.
+
+*   **Category B: Mandatory Manual Review**
+    *   *Criteria:* The transaction shows `Settlement_Failed` OR `Settlement_Success_Mismatch` (e.g., code was 'EURR' but funds settled as 'USD' or a generic bucket).
+    *   *Action:* Freeze these records. Finance must manually verify the intended currency against the partner bank's original advice files. Do not touch these via script.
+
+*   **Category C: Cosmetic Only (Low Risk)**
+    *   *Criteria:* The transaction settled successfully, and the internal ledger holds the correct numeric value, with the error existing only in the display string.
+    *   *Action:* Queue for auto-correction but prioritize after Category B is resolved.
+
+**4. Audit Preparation Deliverable**
+By April 10th, produce a reconciliation report containing:
+*   Total count of records corrected via script (Category A & C).
+*   Total count and value of transactions manually reviewed (Category B).
+*   Confirmation that the General Ledger balances match the corrected transaction list.
+*   A root-cause statement confirming whether the issue was upstream (partner) or downstream (integration), including the specific log evidence.
+
+**Note:** Do not run correction scripts on the production database without a full backup and a dry-run on a staging clone first. If the "legacy integration" writes directly to the ledger, involve the engineering lead before altering any settled rows.

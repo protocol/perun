@@ -1,0 +1,78 @@
+# NexusRealms Pre-Launch Tracking Specification
+
+**Target Environment:** Staging (Immediate Implementation)
+**Deadline:** August 15th Code Freeze
+**Goal:** Distinguish organic player engagement from speculative bot activity and measure retention by token acquisition source.
+
+## 1. Core Event Schema
+
+Implement the following events with strict property enforcement. All timestamps must be server-side verified to prevent client manipulation.
+
+### A. Wallet & Session Context (Triggered on Connection)
+*Event Name:* `wallet_connected`
+*Purpose:* Establish the baseline identity and entry point.
+*Properties:*
+- `wallet_address_hash`: (SHA-256 hash of the public address, never store raw address)
+- `connection_source`: (e.g., "meta_mask", "wallet_connect", "embedded_custody")
+- `referrer_url`: Full URL including UTM parameters
+- `device_fingerprint_hash`: Browser/Device ID to detect multi-accounting
+- `is_returning_user`: Boolean
+
+### B. Token Acquisition (The Critical Split)
+*Event Name:* `tokens_acquired`
+*Purpose:* Segment users by "Earned" vs. "Bought" for retention analysis.
+*Properties:*
+- `wallet_address_hash`
+- `acquisition_type`: Enum [`earned_reward`, `market_purchase`, `airdrop`, `faucet`]
+- `token_amount`: Numeric value
+- `transaction_hash`: Blockchain TX ID for verification
+- `counterparty_address_hash`: (If purchased, who did they buy from? Helps identify wash trading loops)
+- `usd_value_at_transaction`: Snapshot price
+
+### C. Economic Action (Velocity & Utility)
+*Event Name:* `economic_action_performed`
+*Purpose:* Measure if tokens are being used for gameplay (organic) or just flipped (speculative).
+*Properties:*
+- `wallet_address_hash`
+- `action_category`: Enum [`item_purchase`, `crafting_fee`, `staking`, `market_listing`, `market_buy`]
+- `item_id`: Specific asset involved
+- `token_cost`: Amount spent
+- `transaction_hash`: Blockchain TX ID
+- `session_duration_at_action`: Seconds since `wallet_connected`
+
+### D. Gameplay Engagement (Bot Detection Signal)
+*Event Name:* `game_session_heartbeat`
+*Purpose:* Detect non-human patterns. Bots often trade instantly or run 24/7 without variance.
+*Properties:*
+- `wallet_address_hash`
+- `session_id`: Unique session identifier
+- `elapsed_time_seconds`: Time since session start
+- `actions_performed_count`: Number of in-game clicks/interactions in this interval
+- `location_zone_id`: Where in the game world the player is
+
+## 2. Critical Implementation Logic for Bot Detection
+
+To distinguish bots from players, your engineering team must calculate these derived metrics downstream, but the raw data must be captured now:
+
+1.  **Time-to-Trade Latency:** Capture the delta between `wallet_connected` and the first `economic_action_performed`. Bots often trade within seconds; humans require onboarding time.
+2.  **Action Variance:** Use `game_session_heartbeat` to calculate the standard deviation of time between actions. Bots exhibit near-perfect regularity; humans are erratic.
+3.  **Circular Trading Flags:** Log `counterparty_address_hash` on trades. If Wallet A sells to Wallet B, and Wallet B sells back to Wallet A within a short window, flag as potential wash trading.
+
+## 3. Retention Analysis Strategy
+
+Since wallets are anonymous, you cannot use email-based cohorts. You must define cohorts based on the `tokens_acquired` event:
+
+*   **Cohort A (Earners):** Users whose first `acquisition_type` is `earned_reward`.
+*   **Cohort B (Buyers):** Users whose first `acquisition_type` is `market_purchase`.
+
+**Retention Query Logic:**
+Calculate Day-1, Day-3, and Day-7 retention by counting distinct `wallet_address_hash` values in Cohort A vs. Cohort B that fire a `game_session_heartbeat` event on the respective days.
+
+## 4. Immediate Next Steps for Engineering
+
+1.  **Hashing Protocol:** Confirm the salted hashing algorithm for wallet addresses to ensure privacy while allowing cross-session identification.
+2.  **Server-Side Validation:** Ensure `tokens_acquired` events are only fired after blockchain confirmation, not just UI initiation.
+3.  **Staging Data Stream:** Verify these events are flowing to your analytics platform (GA4/Mixpanel/Segment) in the staging environment by August 10th to allow 5 days for QA.
+
+*Note: Do not track raw PII or unhashed wallet addresses in analytics tools to comply with privacy standards.*
+*Ensure UTM parameters are stripped of any user-specific identifiers before ingestion.*

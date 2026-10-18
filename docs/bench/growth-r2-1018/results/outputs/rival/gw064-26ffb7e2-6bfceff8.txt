@@ -1,0 +1,58 @@
+# TaskFlow Solutions: Proposed Activation Event Tracking Plan
+
+To address the 12% retention rate, we must shift from measuring "setup" (creating a project) to measuring "value realization." The following events cover both collaboration and individual productivity hypotheses. Each event includes the specific trigger and properties required for unambiguous engineering implementation.
+
+## Core Activation Events
+
+### 1. `team_member_invited`
+*Hypothesis: Value is driven by collaboration. A project is only valuable when others contribute.*
+- **Trigger:** Fires immediately after a user successfully sends an email invitation to a new team member from within a project workspace.
+- **Properties:**
+  - `project_id`: (string) The ID of the project where the invite occurred.
+  - `invite_count`: (integer) Total number of users invited in this specific action (batch invites).
+  - `user_role`: (string) The role assigned to the invitee (e.g., "admin", "member", "viewer").
+
+### 2. `task_completed_by_other`
+*Hypothesis: The "aha" moment is seeing someone else make progress on your board.*
+- **Trigger:** Fires when the current user views a task status change (e.g., to "Done") performed by a *different* user ID within their project.
+- **Properties:**
+  - `project_id`: (string)
+  - `task_id`: (string)
+  - `actor_user_id`: (string) The ID of the user who completed the task (must differ from current viewer).
+  - `time_to_complete`: (integer) Seconds elapsed between task creation and completion (if available).
+
+### 3. `workflow_step_created`
+*Hypothesis: Value comes from customizing the tool to fit a specific process, not just using defaults.*
+- **Trigger:** Fires when a user adds a new custom status column, stage, or automation rule to a project board (beyond the default "To Do/Doing/Done").
+- **Properties:**
+  - `project_id`: (string)
+  - `step_type`: (string) Type of customization (e.g., "custom_status", "automation_rule", "custom_field").
+  - `step_name`: (string) The name given to the new step.
+
+### 4. `recurring_task_configured`
+*Hypothesis: Users who set up recurring workflows intend to make the tool a long-term habit.*
+- **Trigger:** Fires when a user saves a task with a recurrence pattern (daily, weekly, monthly).
+- **Properties:**
+  - `project_id`: (string)
+  - `task_id`: (string)
+  - `frequency`: (string) The recurrence interval (e.g., "weekly", "monthly").
+  - `is_template`: (boolean) Whether this was applied to a task template.
+
+### 5. `integration_connected`
+*Hypothesis: Stickiness increases when TaskFlow becomes part of the existing tech stack.*
+- **Trigger:** Fires upon successful OAuth connection or API key validation with a third-party service (e.g., Slack, GitHub, Google Drive).
+- **Properties:**
+  - `integration_name`: (string) The name of the service (e.g., "slack", "github").
+  - `project_id`: (string) Optional, if connected to a specific project; otherwise null.
+
+### 6. `multi_task_session`
+*Hypothesis: Individual power users realize value through bulk management.*
+- **Trigger:** Fires when a single user completes, edits, or moves 5+ distinct tasks within a 10-minute window.
+- **Properties:**
+  - `project_id`: (string)
+  - `action_count`: (integer) Number of actions in the session.
+  - `session_duration`: (integer) Duration in seconds.
+
+## Implementation Notes for Engineering
+- **Consistency:** All event names must be lowercase with underscores. Ensure `user_id` and `project_id` are attached to every event as global context properties.
+- **Deduplication:** Ensure `team_member_invited` fires once per send action, not once per email address if batched, unless individual tracking is explicitly required for funnel analysis.

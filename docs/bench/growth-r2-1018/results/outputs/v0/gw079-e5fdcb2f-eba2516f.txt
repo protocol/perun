@@ -1,0 +1,29 @@
+Do not choose between "average total delivery time" and "percentage of orders delivered hot" as your single North Star yet. Both are currently `UNVERIFIED` because you lack the instrumentation to define "hot" and have not validated the 35-minute threshold against actual customer retention in Guadalajara.
+
+Instead, adopt a two-step measurement strategy for the launch phase:
+
+**1. Define the North Star: "Weekly Active Users Completing a Repeat Order"**
+Reject "average time" and "% hot" as your primary metric. Time and temperature are input metrics; they only matter if they drive the business outcome: retention. If users get 30-minute deliveries but never order again, speed is a vanity metric. Your North Star must be the count of unique users who place a second order within 14 days of their first. This rises only when the service delivers real value.
+
+**2. Instrument the Diagnostic Funnel (Bottom-Up)**
+To solve the "speed vs. temperature" unknown without fabricating benchmarks, instrument three specific events that answer named questions:
+*   **Event A (Activation):** `order_completed` with properties `{total_duration_minutes}`, `{food_temp_feedback}` (simple binary: Hot/Not Hot), and `{first_order_flag}`.
+    *   *Question:* Does the 35-minute threshold actually correlate with the "Hot" feedback in this specific traffic context?
+*   **Event B (Retention):** `second_order_placed` linked to the user's first order properties.
+    *   *Question:* Do users who received "Not Hot" food but fast delivery return? Do users with "Hot" food but slow delivery return?
+*   **Event C (Bottleneck ID):** `restaurant_handoff_timestamp` and `driver_pickup_timestamp`.
+    *   *Question:* Is the variance in total time driven by preparation (restaurant) or transit (traffic)?
+
+**Practical Implications for Operations**
+*   **If you track only "Average Time":** You risk optimizing for speed at the expense of quality. Drivers may rush, leading to spills or cold food if the packaging isn't ready, hurting retention while the dashboard looks green. You cannot distinguish if a delay was the restaurant's fault or the driver's.
+*   **If you track only "% Hot":** You lack a definition. Without asking the user (via a post-order prompt or driver check), this metric is invented noise. Even if defined, it ignores the friction of long waits that frustrate users regardless of temperature.
+*   **The Recommended Approach:** By correlating `total_duration` and `temp_feedback` against `second_order_placed`, the Regional Operations Manager can make evidence-based hiring decisions.
+    *   *Scenario A:* If data shows retention drops sharply when food is "Not Hot" regardless of speed, train drivers on handling and equip restaurants with better bags.
+    *   *Scenario B:* If retention drops when `total_duration` > 35 mins even when food is "Hot," the bottleneck is transit time; hire more drivers or optimize routing zones.
+    *   *Scenario C:* If `restaurant_handoff` times vary wildly, the bottleneck is preparation; focus training on restaurant onboarding, not drivers.
+
+**This Week's Step:**
+Add a mandatory one-tap "Food Temperature?" prompt (Hot/Cold) to the post-order screen for the first 1,000 Guadalajara users. Log this alongside the exact timestamps of order placement, restaurant handoff, and delivery. Do not set a target percentage yet; wait for the baseline data to reveal the local definition of value.
+
+*Note: Ensure user identifiers used for linking orders are pseudonymous to comply with privacy standards; route PII handling to your compliance protocol.*
+*Do not attempt to calculate a "good" retention rate; compare your Week 2 cohort only against your Week 1 baseline.*

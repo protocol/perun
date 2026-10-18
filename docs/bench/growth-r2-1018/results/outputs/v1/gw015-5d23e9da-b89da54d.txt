@@ -1,0 +1,40 @@
+### Diagnostic Approach: Funnel Leakage & Cohort Integrity
+
+Your flat revenue despite a 35% spend increase indicates a breakdown in **Retention** or **Activation**, rendering the additional **Acquisition** spend inefficient. Per the bottom-up diagnostic rule, we must verify if the core action (purchase) is being retained before analyzing traffic sources. Do not assume the new creatives are "working" until retention is proven stable.
+
+Here are the specific hypotheses and data cuts to request from engineering immediately for Thursday's sync:
+
+#### 1. Hypothesis: The "Leaky Bucket" (Retention Collapse)
+**Premise:** Increased spend acquired low-intent users who churned immediately, masking the performance of high-value segments. The flat revenue suggests the *volume* of buyers hasn't changed, only the cost to acquire them.
+*   **Data Cut A (Cohort Retention):** Request a weekly retention cohort table for the last 6 months.
+    *   *Rows:* Week of First Purchase (Jan–Present).
+    *   *Columns:* % of that cohort making a 2nd purchase in Week 2, Week 4, and Week 8.
+    *   *Goal:* Identify if the Q2 cohorts (post-spend increase) have a statistically lower repeat purchase rate than Q1.
+*   **Data Cut B (Returning vs. New Revenue Split):**
+    *   *Metric:* Monthly Revenue split by "First-time Buyer" vs. "Returning Customer."
+    *   *Goal:* If total revenue is flat but "New Buyer" revenue rose while "Returning" revenue fell, your new traffic is cannibalizing loyalists or failing to convert them again.
+
+#### 2. Hypothesis: Activation Friction (The "Almost" Buyer)
+**Premise:** Traffic is arriving (high intent or not), but the site experience or pricing is blocking the conversion *after* the click.
+*   **Data Cut C (Funnel Drop-off by Source):**
+    *   *Metrics:* Session → Product View → Add to Cart → Checkout Initiated → Purchase.
+    *   *Segmentation:* Break down by "New Campaign Traffic" vs. "Organic/Existing Traffic."
+    *   *Goal:* Pinpoint the exact step where the new traffic diverges. If they drop at "Add to Cart," it's likely pricing/shipping shock. If they drop at "Product View," the creative promised something the landing page didn't deliver.
+
+#### 3. Hypothesis: Low-Intent Traffic (Acquisition Quality)
+**Premise:** The new creatives are optimizing for clicks, not buyers, inflating top-of-funnel metrics while delivering empty sessions.
+*   **Data Cut D (Session Quality Metrics):**
+    *   *Metrics:* Bounce Rate, Average Session Duration, and Pages Per Session.
+    *   *Segmentation:* Compare "New Ad Creative" traffic vs. "Control/Old Creative" traffic.
+    *   *Goal:* If the new traffic has significantly lower engagement depth, the audience targeting is misaligned regardless of the landing page quality.
+
+#### Required Event Taxonomy Check
+Ensure your data team confirms these events are instrumented with a **stable, pseudonymous user ID** to link sessions across devices. Without a stable ID, you cannot accurately measure the "Returning Customer Rate" or attribute multi-session journeys. If this ID is missing or inconsistent, mark the retention analysis as `UNVERIFIED` until fixed.
+
+### This Week's Step
+1.  **Request:** The 6-month weekly retention cohort table and the New vs. Returning revenue split for Jan–Present.
+2.  **Query:** Run the funnel drop-off analysis segmented by the new campaign source ID.
+3.  **Decision Trigger:** If the Q2 cohort retention is >10% lower than Q1, the diagnosis is a **Retention/Quality leak** (stop scaling spend). If retention is flat but funnel drop-off is high at "Checkout," the diagnosis is **Experience/Pricing friction**.
+
+*Note: Do not present "Signups" or "Site Visits" to the CEO; these are vanity metrics that rise with spend regardless of business health. Only present conversion and retention rates.*
+*All benchmarks must be derived from your own Q1 baseline; do not compare against industry averages.*

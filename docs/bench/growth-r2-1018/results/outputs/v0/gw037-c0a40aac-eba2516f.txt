@@ -1,0 +1,33 @@
+### Diagnostic Hypothesis & Investigation Plan
+
+**Primary Hypothesis:** The 15% drop in Daily Active Users (DAU) is likely caused by a **silent authentication failure** (e.g., token validation errors post-migration) or a **specific client-version incompatibility**, rather than general call quality latency, given that server response times improved.
+
+**Immediate Investigative Sequence:**
+
+1.  **Segment by Login Success vs. Call Start (The "Silent Failure" Check)**
+    *   **Action:** Query logs to separate "Login Attempts" from "Successful Call Starts."
+    *   **Pattern to Find:** If *Login Attempts* remain stable near 45,000 but *Successful Call Starts* dropped to 38,000, the issue is a silent failure in token validation or session handoff. If *Login Attempts* themselves dropped, the issue is pre-auth (DNS, load balancer, or client connectivity).
+    *   **Metric:** Calculate the **Login Success Rate** (% of attempts resulting in a valid session) for April 1–9 vs. April 10–24. A drop here confirms the authentication hypothesis.
+
+2.  **Isolate by Client Version and Device Type**
+    *   **Action:** Group the missing 7,000 users by `client_version` and `device_os`.
+    *   **Pattern to Find:** Did the migration invalidate tokens for a specific older client version that hasn't been forced to update? Look for a spike in 401/403 errors or specific handshake failures concentrated in one OS (e.g., iOS 14 or an older Electron wrapper).
+    *   **Metric:** Error rate per client version. If one version accounts for >50% of the drop, the root cause is a compatibility bug, not general latency.
+
+3.  **Geographic & Network Edge Analysis**
+    *   **Action:** Map the missing users against the new server cluster's geographic routing rules.
+    *   **Pattern to Find:** Did the migration shift traffic for a specific region (e.g., APAC or EU) to a new edge node with a misconfigured firewall or SSL certificate issue?
+    *   **Metric:** DAU drop % by region. If the drop is uniform globally, it is likely a core auth logic error. If concentrated in one region, it is an infrastructure routing issue.
+
+4.  **Enterprise vs. SMB Segmentation**
+    *   **Action:** Filter logs by account type (Enterprise SSO vs. Standard Email/Password).
+    *   **Pattern to Find:** Enterprise customers often use stricter firewall rules or specific SSO providers (Okta, Azure AD). If the drop is skewed toward Enterprise accounts, the migration may have altered IP allow-lists or SAML callback URLs.
+    *   **Metric:** Retention rate by account tier. A disproportionate drop in Enterprise users suggests an SSO or network policy conflict.
+
+**Decision Criteria for Rollback:**
+*   **Rollback Immediately If:** Login Success Rate has dropped >5% globally, or if a specific critical client version (used by >20% of the base) is failing >50% of handshakes. These indicate a hard block preventing usage.
+*   **Do Not Rollback (Fix Forward) If:** The drop is isolated to a single geographic region (route traffic away temporarily) or a negligible client version (<2% of base). If login success rates are stable but call duration is down, investigate behavioral factors or specific media server handoffs rather than the database migration itself.
+
+**Next Step:** Run the **Login Success Rate** query segmented by `client_version` immediately. This single view will confirm or refute the silent authentication failure hypothesis within minutes.
+
+*Note: Do not rely on average latency metrics; they mask tail-latency spikes or specific error codes that block users entirely. Focus on error rates and success funnels.*

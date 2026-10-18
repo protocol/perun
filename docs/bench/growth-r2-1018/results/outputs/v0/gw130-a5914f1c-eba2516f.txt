@@ -1,0 +1,26 @@
+You cannot set specific numeric thresholds for lag, frame rate, or connection drops yet because you have no baseline data for this net-new capability. Any specific number (e.g., "latency must be under 200ms") asserted now would be a fabricated benchmark, which violates the prime directive of using only your own data. Instead, your success criteria for the December 1st launch must be defined as **relative stability** and **instrumented verification**.
+
+**1. Technical Success Criteria (Stability & Load)**
+Since you cannot define "good" performance without data, define "failure" as **regression against your existing legacy baseline**.
+*   **Concurrency Guardrail:** The system must sustain 5,000 concurrent users with screen-sharing enabled without degrading the core video/audio metrics of the legacy system. If error rates or latency on *existing* calls rise above the current 99th percentile, the rollout fails.
+*   **Connection Integrity:** Instrument a `screen_share_session_start` and `screen_share_session_end` event. A "failure condition" is any session that terminates abnormally (no explicit user "stop" event) or fails to initiate within a reasonable timeout (e.g., 10 seconds). The threshold is **0% abnormal termination** for the initial canary group; any spike triggers a rollback.
+*   **Latency & Frame Rate (Instrumentation Only):** Do not set a pass/fail number yet. Instead, instrument `frame_rate_delivered` and `end_to_end_latency_ms` properties on every screen-sharing packet. The success criterion is simply **data completeness**: "We must capture these metrics for 100% of sessions." You will analyze the distribution (p50, p95, p99) *after* launch to establish your true baseline.
+
+**2. Experiential Metrics (Measuring "No News")**
+"No news is good news" is dangerous for a new feature because users may silently fail or revert to workarounds. You must invert this by measuring **adoption** and **explicit friction**.
+*   **Adoption Rate:** Measure the percentage of meetings where `screen_share_started` occurs. If this is near zero despite marketing the feature, users are unable to find or trust it.
+*   **Fallback Behavior:** Track events where a user attempts to share, fails, and then immediately switches to a legacy method (e.g., uploading a file instead). A high ratio of `share_attempt_failed` to `file_upload` indicates broken UX.
+*   **Satisfaction Signal:** Since you lack a baseline, do not rely on NPS trends yet. Implement a micro-survey triggered only after a screen-sharing session ends: "How was the quality?" with binary options (Good/Bad). The success criterion is a **<5% negative response rate** in the first week. This gives you an immediate, self-reported baseline.
+
+**3. Go-Live Gates for the Engineering Director**
+*   **Gate 1 (Pre-Launch):** Event taxonomy verified. Every proposed event (`screen_share_start`, `frame_rate`, `abnormal_end`) names the specific question it answers. No events are instrumented "just in case."
+*   **Gate 2 (Canary Launch):** Deploy to 5% of users. Success = Legacy system metrics remain within historical norms; abnormal termination rate is 0%.
+*   **Gate 3 (Full Launch):** Success = Data completeness >99% for new metrics; negative micro-survey rate <5%.
+
+**This Week's Steps:**
+1.  Define the event taxonomy: List the exact event names and properties (e.g., `session_id`, `resolution`, `failure_code`) required to answer "Did the session complete successfully?"
+2.  Establish the pseudonymous user identifier seam to track sessions across the legacy and new systems without violating privacy compliance.
+3.  Set up the dashboard to display the *distribution* of latency and frame rates, not a single average, so you can spot outliers immediately upon launch.
+
+*Note: Do not attempt to guess industry standards for "acceptable" lag; your enterprise clients' tolerance is unique to your network topology and will only be revealed by your own instrumented data.*
+*Remember: A metric without instrumentation behind it is UNVERIFIED. Focus on building the collection pipeline first.*

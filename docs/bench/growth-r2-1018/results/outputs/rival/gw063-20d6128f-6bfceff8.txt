@@ -1,0 +1,37 @@
+**Proposed Core Metric: Qualified Connection Minutes (QCM)**
+
+**Definition**
+Qualified Connection Minutes represent the total duration of video meetings that meet a minimum threshold of active collaboration, filtering out passive attendance, technical failures, and inefficient "zombie" calls. Unlike raw meeting duration, QCM validates that a successful connection actually occurred by requiring simultaneous presence and interaction.
+
+**Why This Metric**
+For enterprise financial clients, value is not derived from time spent in a room, but from the successful exchange of information.
+*   **Filters Inefficiency:** A 60-minute meeting with one person talking while others are muted and inactive counts less than a 15-minute high-engagement decision session.
+*   **Feature Agnostic:** It does not privilege screen sharing over audio clarity; it simply requires that *some* interaction occurs, making it robust regardless of which specific feature drives the value.
+*   **Board Ready:** It translates technical events into a business concept: "Time spent in productive collaboration."
+
+**Calculation Logic**
+To calculate QCM using your existing event logs, apply the following filter to every meeting session recorded since March 5:
+
+1.  **Identify Session:** Group events by unique `meeting_id`.
+2.  **Verify Minimum Viability:** The session must have ≥ 2 participants with status `joined` overlapping for at least 3 minutes. (Single-user sessions or drop-ins under 3 minutes are excluded as non-connections).
+3.  **Confirm Interaction:** The session must contain at least one of the following interaction events during the overlap period:
+    *   `audio_unmuted` (by any participant other than the host, or host if solo presenter)
+    *   `screen_share_started`
+    *   `chat_message_sent`
+    *   `reaction_used`
+4.  **Sum Duration:** If the session passes steps 2 and 3, sum the total minutes of overlap where ≥ 2 participants were present. If the session fails, the QCM contribution is 0.
+
+*Formula:*
+`QCM = SUM(Meeting Duration)` WHERE `(Participants ≥ 2)` AND `(Duration ≥ 3 mins)` AND `(Interaction Events ≥ 1)`
+
+**Implementation for Q3 Roadmap**
+Use QCM as your primary north star for prioritization:
+*   **If QCM < Total Duration by >40%:** Prioritize features that drive interaction (e.g., easier unmute, better screen share prompts) rather than capacity.
+*   **If QCM is growing slower than DAU:** Your new users are not finding value; prioritize onboarding flows that demonstrate collaborative features early.
+*   **Segment by Client:** Calculate QCM per financial institution. Low QCM for a specific bank indicates adoption friction or poor audio/video quality specific to their infrastructure, guiding targeted enterprise support.
+
+**Reporting to the Board (July 20)**
+Present the metric as: *"In Q2, SwissConnect facilitated 45,000 Qualified Connection Minutes. This represents time our clients spent in verified, collaborative decision-making, excluding passive or failed sessions."* This frames the product not as a utility measuring uptime, but as an engine for productive work.
+
+Note: Ensure your event logs capture participant join/leave timestamps with second-level precision to accurately calculate overlap.
+Note: Baseline this metric against March–June data before setting Q3 targets to account for beta-stage volatility.

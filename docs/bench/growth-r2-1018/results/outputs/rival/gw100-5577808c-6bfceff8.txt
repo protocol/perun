@@ -1,0 +1,54 @@
+# Experimental Design: Last-Minute Discount Elasticity Test
+
+## Objective
+Determine the optimal discount depth (10% vs. 20%) for bookings made within 48 hours of departure that maximizes total net revenue without significantly cannibalizing full-price bookings made >14 days prior.
+
+## Methodology
+**Design:** A/B/n Split-URL or Server-Side Experiment
+**Duration:** February 1 – March 31 (8 weeks)
+**Scope:** Five major domestic routes; traffic split randomly at the user session level.
+
+### Test Variants
+*   **Control (A):** Current standard 10% discount for <48h bookings.
+*   **Variant (B):** Increased 20% discount for <48h bookings.
+*   **Holdout (C):** No discount offered (5% of traffic) to measure true incremental lift vs. organic demand.
+
+### Segmentation Strategy
+To isolate business vs. leisure elasticity, we will stratify randomization and analyze results by:
+1.  **Booking Window:** <48 hours (Target) vs. >14 days (Cannibalization Check).
+2.  **Traveler Type:** Proxy identified via purchase attributes (e.g., Saturday night stay = Leisure; One-way/Weekday = Business; Corporate domain email = Business).
+3.  **Route Density:** High-frequency business routes vs. leisure-heavy routes.
+
+## Required Data Points
+Capture the following at the transaction and session level:
+
+**Primary Metrics (Revenue Impact)**
+*   **Net Revenue Per Session (NRPS):** Total ticket value minus discount cost, divided by total sessions in variant.
+*   **Incremental Bookings:** Bookings in the <48h window attributed to the test vs. holdout baseline.
+*   **Margin Contribution:** (Ticket Price - Discount - Variable Costs) per booking.
+
+**Secondary Metrics (Cannibalization & Behavior)**
+*   **Cannibalization Rate:** % change in full-price (>14 days) bookings on test routes compared to non-test control routes.
+*   **Pull-Forward Rate:** % of bookings shifted from the 3–14 day window into the <48h window.
+*   **Segment Mix:** Ratio of Business vs. Leisure profiles in the <48h bucket.
+
+**Guardrail Metrics**
+*   **Load Factor:** Ensure we do not sell out too early, blocking higher-yield last-minute business demand.
+*   **Customer Support Tickets:** Spike in inquiries regarding pricing discrepancies.
+
+## Criteria for Success
+The 20% discount (Variant B) is declared the winner **only if**:
+1.  **Net Revenue Lift:** NRPS increases by ≥2% compared to Control (statistically significant at 95% confidence).
+2.  **Cannibalization Limit:** Full-price bookings (>14 days) do not decrease by more than 3% relative to the Holdout group.
+3.  **Segment Validation:** The lift is driven primarily by the identified "Leisure" or "Price-Sensitive" segment, not by shifting existing Business travelers to a lower fare.
+
+If Variant B increases volume but fails the Net Revenue test, the 10% discount (Control) remains optimal.
+
+## Risk Mitigation Strategies
+1.  **Dynamic Stop-Loss:** Implement an automated kill-switch if net revenue per route drops >5% below the 7-day rolling average for two consecutive days.
+2.  **Capacity Caps:** Limit the number of discounted seats available per flight to prevent premature sell-outs that block high-yield business bookings closer to departure.
+3.  **Route Isolation:** Run the test on specific routes only; keep comparable routes as pure controls to account for external factors (e.g., holidays, competitor sales).
+4.  **Blind Pricing:** Ensure discount visibility is restricted to the test group to prevent PR backlash or brand devaluation among full-price payers.
+
+*Note: Ensure tracking tags distinguish between "new demand" and "shifted demand" by analyzing user cookies for prior price checks.*
+*Analysis must use intention-to-treat (ITT) principles to avoid bias from users switching devices before booking.*

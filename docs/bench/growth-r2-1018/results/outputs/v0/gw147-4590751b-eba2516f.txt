@@ -1,0 +1,27 @@
+**Post-Mortem Guidance: DailyBrief Dark Mode Experiment**
+
+**Verdict: Do not invest in further theme customization based on current data.** The primary metric (Day-30 retention) showed no lift (0.5% difference is statistically negligible). Your hypothesis that content relevance drives loyalty over visual preference is supported by the aggregate data. However, before dropping the feature entirely, execute the following three steps to rule out hidden segment benefits without over-engineering.
+
+**1. Slice by "Time-of-First-Session" Cohort (Not just time-of-day)**
+Aggregate "late night" usage often dilutes signal because day-users also read at night. Instead, create a cohort of users whose *first* session in the experiment occurred between 8 PM and 4 AM.
+*   **Question:** Do users who *start* their day in dark mode have higher Day-7 retention or session duration than those who start in light mode?
+*   **Action:** Query your analytics for `activation_rate` and `avg_session_duration` filtered by `first_session_hour IN (20, 21, 22, 23, 0, 1, 2, 3, 4)`.
+*   **Decision Trigger:** If this specific cohort shows >2% higher retention, dark mode is an *acquisition/activation* lever for night-owls, not a retention lever for everyone. Keep the toggle; do not build more themes.
+
+**2. Analyze "Reading Depth" via Scroll Events, Not Just Duration**
+Session duration is a vanity metric for news; a user might leave a tab open. You need to know if dark mode reduces eye strain enough to increase *content consumed*.
+*   **Question:** Does the mandatory dark mode group scroll deeper into articles (e.g., 75% scroll depth) compared to the light mode group?
+*   **Action:** Compare the % of sessions reaching `scroll_depth_75` or `article_completion` events between variants.
+*   **Decision Trigger:** If scroll depth is significantly higher in dark mode but retention is flat, the feature improves immediate comfort but doesn't change long-term habit. This justifies keeping the option as a hygiene factor, but provides zero evidence to invest in *further* customization (sepia, high contrast, etc.).
+
+**3. Check for Negative Guardrails (The "Mandatory" Risk)**
+You tested a *mandatory* dark mode option against standard light. Did forcing the choice cause friction?
+*   **Question:** Did the variant group have a higher uninstall rate or lower Day-1 return rate?
+*   **Action:** Review `uninstall_event` and `day_1_retention` specifically for the first 48 hours of the test.
+*   **Decision Trigger:** If the variant group churned faster early on, the "mandatory" aspect (or a bug in the toggle) caused harm. This confirms you should drop the feature development immediately to avoid alienating users who prefer light mode.
+
+**Final Recommendation for Head of Product:**
+Present the null result on retention as a success in learning: **Visual theme is not a primary driver of long-term loyalty for DailyBrief.** Recommend maintaining the current simple toggle (if engineering cost is near zero) as a basic accessibility expectation, but explicitly **stop all investment** in expanded theme customization. Resources should remain focused on content relevance algorithms, which your data suggests is the true North Star.
+
+*Note: Ensure your event taxonomy distinguishes between "user preference setting" and "actual UI rendered" to avoid misattributing data if users switched settings mid-test.*
+*Do not fabricate segment numbers; run these specific queries on your existing dataset before the meeting.*

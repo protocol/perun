@@ -1,0 +1,32 @@
+### Strategy to Resolve Duplicate Play Events
+
+**1. Immediate Mitigation: Adjust Reporting Queries (Short-Term)**
+Do not alter the raw ingestion layer yet. Modifying ingestion risks dropping legitimate events from users with genuinely unstable connections, which would underpay royalties and create a new data integrity issue. Instead, implement a deduplication logic directly in the reporting queries used by the content licensing team.
+
+*   **Action:** Create a temporary view or query layer that filters duplicates based on a composite key of `user_id`, `track_id`, and `event_timestamp` (rounded to the nearest second or minute).
+*   **Logic:** If multiple "play_start" or "play_complete" events exist for the same user and track within a tight time window (e.g., < 5 seconds), count only one.
+*   **Outcome:** This provides the licensing team with a corrected dataset for next month's payments without risking permanent data loss in the raw store.
+
+**2. Root Cause Verification: Isolate the Trigger**
+Your hypothesis regarding Wi-Fi/cellular switching is plausible but unverified. Before engineering a permanent fix, confirm the pattern.
+
+*   **Action:** Run an analysis on the raw logs for the period post-August 12th. Group duplicate events by `session_id` and `network_type_change` flags (if available) or time-delta between events.
+*   **Verification:** Check if duplicates correlate strictly with network handovers or if they appear during standard playback. Look for specific client versions introduced in the August 12th update that might have altered the retry logic for buffered events.
+*   **Deliverable:** A report confirming whether >90% of duplicates occur within X seconds of a network status change.
+
+**3. Permanent Fix: Idempotency in Ingestion (Long-Term)**
+Once the pattern is confirmed, move the deduplication logic to the ingestion layer to reduce storage costs and simplify downstream queries.
+
+*   **Action:** Implement an idempotency key mechanism. The client app must generate a unique UUID for each play event attempt. If the server receives an event with a UUID it has already processed within a specific time window, it discards the duplicate.
+*   **Fallback:** If client-side changes are too slow to deploy, configure the stream processor (e.g., Kafka Streams, Flink, or Spark Structured Streaming) to deduplicate based on the composite key (`user_id`, `track_id`, `timestamp`) before writing to the data lake.
+*   **Guardrail:** Set up an alert for "deduplication rate." If the rate of dropped events suddenly spikes or drops to zero, it indicates a bug in the deduplication logic itself.
+
+**4. Validation and Handover**
+*   **Reconciliation:** Compare the corrected query results against the expected baseline (2.0 million plays). The variance should drop to negligible levels (<1%).
+*   **Documentation:** Document the deduplication rules clearly for the licensing team, noting that figures are now "deduplicated at query time" until the ingestion fix is deployed.
+*   **Timeline:** Deploy the query fix immediately for the royalty calculation. Schedule the ingestion layer update for the next sprint once the root cause is verified.
+
+This approach prioritizes data accuracy for immediate financial obligations while systematically addressing the technical debt in the pipeline.
+
+*Note: Ensure the rounding window for timestamp deduplication is validated against actual user behavior to avoid merging distinct short plays.*
+*Do not delete raw data; always archive duplicates separately for audit purposes.*

@@ -1,0 +1,36 @@
+**Status: UNVERIFIED / ACTION REQUIRED**
+
+The request asks for a "comprehensive list" of events to refine NLP models and identify predictive acoustic properties. This violates the prime directive: **instrument only what answers a named question.** You stated you "do not know" which properties are predictive; therefore, capturing them all is "instrument-everything" noise, not growth analytics. Furthermore, the "60% more likely" figure is an internal hypothesis, not a verified benchmark; do not treat it as a source of truth for setting thresholds.
+
+For the **MVP/Beta stage**, your measurement must focus strictly on validating the core value hypothesis (the "3-command activation") and diagnosing retention leaks, not on gathering data for future model training.
+
+**1. The North Star & Input Metrics**
+*   **North Star:** Weekly Active Users (WAU) completing ≥3 distinct commands in a single session. (Rejects vanity metrics like total commands issued or session length).
+*   **Input Metric:** Activation Rate (% of new users hitting the "3-command" threshold in Session 1).
+
+**2. Event Taxonomy (Answering Named Questions Only)**
+Do not log raw acoustic properties or timing intervals yet. Instrument these three events to answer specific retention questions:
+
+*   **Event: `session_start`**
+    *   *Question:* Do users return to the device after day 1?
+    *   *Properties:* `user_id` (pseudonymous), `session_count`, `time_since_last_session`.
+*   **Event: `command_attempt`**
+    *   *Question:* Where exactly does the "3-command" flow break? Is it recognition or ambiguity?
+    *   *Properties:* `command_intent` (e.g., "timer", "conversion"), `attempt_number_in_session` (1, 2, 3...), `failure_reason` (categorized: `noise`, `ambiguous_phrase`, `unknown_intent`, `timeout`). *Note: Categorize the failure at the edge; do not stream raw audio features.*
+*   **Event: `activation_milestone`**
+    *   *Question:* Does hitting 3 commands actually correlate to Day-7 retention?
+    *   *Properties:* `commands_completed_in_session`, `total_session_duration`.
+
+**3. The Identifier Seam**
+*   Use a **stable, pseudonymous user_id** to track cohorts across sessions. Do not use raw device MAC addresses or PII in analytics logs. Route any consent/PII handling to `privacy-compliance.md`.
+
+**4. Experiment Rigor Warning**
+*   Do not analyze the "60% lift" claim by peeking at daily data. Pre-commit to a sample size (e.g., 200 units) and a readout date (e.g., 14 days post-ship). If you check retention on Day 3 and declare victory, the result is `UNVERIFIED` due to peeking inflation.
+
+**This-Week Step:**
+1.  **Cut the scope:** Remove all "acoustic property" and "timing interval" fields from the spec. They answer no named question today.
+2.  **Define the failure enum:** Finalize the `failure_reason` categories (noise vs. ambiguity) with the NLP lead so engineers can log the *category*, not the raw signal.
+3.  **Validate the hypothesis:** Plan to compare Day-7 retention of users who hit `activation_milestone` vs. those who didn't *after* the 14-day period ends.
+
+*Note: If you cannot categorize failure reasons on-device, log the raw error code only; do not invent a "noise" flag without a detector.*
+*Note: The 200-unit sample may be too small for high-variance acoustic analysis; prioritize the binary "did they activate" metric first.*

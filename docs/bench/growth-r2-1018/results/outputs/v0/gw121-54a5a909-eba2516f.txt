@@ -1,0 +1,31 @@
+### This-Week Measurement Plan: Canada Activation Drop (Oct 4 Launch)
+
+**1. Isolate the Cause: Confusion vs. Latency**
+To distinguish between user confusion and technical performance, track these two specific metrics segmented by **Step 3 (Social Share Prompt)** for Canadian users only:
+*   **Interaction Rate vs. Time-to-Interactive:** Measure the percentage of users who *click* the new social button versus those who abandon the step immediately.
+    *   *Diagnosis:* If click-through is near zero but load times are normal, users are confused or rejecting the value prop. If load times exceed 2 seconds and abandonment spikes correlatively, it is a latency bug.
+*   **Error Rate by Event:** Instrument a specific `setup_step_3_error` event capturing client-side timeouts or API failures for the sharing module.
+    *   *Diagnosis:* A rise in this error count confirms a technical block; flat errors with high drop-offs confirm UX friction.
+
+**2. Segmentation Strategy**
+Slice all data by the following dimensions to rule out confounders:
+*   **Device/OS:** Is the drop isolated to iOS or Android? (Indicates a client-side rendering bug).
+*   **Network Type:** Compare Wi-Fi vs. Cellular activation. (If cellular drops disproportionately, suspect payload size or latency).
+*   **Cohort:** Compare users exposed to the feature (Post-Oct 4) against a holdout group (if available) or pre-launch baseline (Sept 20–Oct 3) strictly within the Canada region.
+
+**3. The Decision Tripwire (Rollback vs. Hotfix)**
+Recompute the impact using the current 11% rate against the 18% baseline.
+*   **Rollback Immediately If:** The `setup_step_3_error` rate exceeds 5% OR if the median time-to-interactive on Step 3 is >3s for Canadian IPs. This confirms a broken experience that cannot be fixed by copy changes.
+*   **Push Hotfix If:** Errors are <1% and latency is normal, but interaction rate is low. This indicates the *placement* or *copy* is confusing. The hotfix should be removing the mandatory nature of the step or clarifying the value proposition, not a code rollback.
+
+**4. Required Instrumentation (Verify Existence)**
+Ensure these events are firing now; if any are missing, label the corresponding insight as `UNVERIFIED`:
+*   `onboarding_step_view` (with `step_id=3`)
+*   `onboarding_step_complete` (with `step_id=3`)
+*   `social_share_button_click`
+*   `social_share_api_latency_ms` (tagged by region=CA)
+*   `client_side_error` (tagged by component=social_share)
+
+**Immediate Action:** Run the segmentation query on today's data. If the drop is uniform across all devices and networks with no error spike, the feature is likely introducing cognitive load. If the drop is isolated to specific networks or devices with high latency, prioritize the engineering hotfix. Do not wait for a full week; the sample size from Oct 4 to present is sufficient for a directional verdict given the magnitude of the drop (39% relative decrease).
+
+*Note: Do not compare these figures to global benchmarks; the 18% pre-launch Canadian baseline is the only valid comparator. Ensure user identifiers in these logs are pseudonymous per privacy compliance.*

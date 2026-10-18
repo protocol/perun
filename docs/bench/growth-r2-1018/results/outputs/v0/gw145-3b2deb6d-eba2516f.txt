@@ -1,0 +1,38 @@
+### Prioritized Telemetry Events for SkyDrop Customer Interface
+
+To balance transparency with clarity, instrument only events that answer the specific customer question: *"Where is my package, and when will it arrive?"* Avoid raw telemetry streams; instead, map internal data to these four customer-facing status changes:
+
+1.  **"Approaching Zone" (Trigger: 5 minutes out)**
+    *   **Value:** Sets expectation. Unlike the raw "final approach" (3 mins), this gives the user a buffer to prepare without staring at the screen.
+    *   **Data Source:** Geofence entry into the immediate delivery neighborhood.
+
+2.  **"Final Descent Initiated" (Trigger: Entry to 3-min final approach)**
+    *   **Value:** Confirms the critical phase you identified. This replaces continuous location polling with a single, high-confidence state change.
+    *   **Data Source:** Transition from horizontal transit to vertical descent profile.
+
+3.  **"Package Secured/Landed" (Trigger: Weight sensor + GPS lock)**
+    *   **Value:** The definitive completion signal. Users need certainty that the drone has stopped moving and the payload is safe.
+    *   **Data Source:** Combined telemetry of rotor stop, weight release confirmation, and stationary GPS.
+
+4.  **"Departure Confirmed" (Trigger: Takeoff + Payload Lock)**
+    *   **Value:** Validates the start of the specific delivery window.
+    *   **Data Source:** Lift-off detection coupled with payload engagement status.
+
+**Events to Exclude (Internal Noise):**
+Do not display continuous altitude updates, battery percentage fluctuations (unless critical), wind speed adjustments, or intermediate waypoint crossings. These answer engineering questions, not customer ones, and induce "dashboard fatigue."
+
+### Determining Anxiety vs. Reassurance
+
+You cannot guess which updates cause anxiety; you must measure user behavior against your own baseline. Implement the following measurement plan:
+
+*   **Define the North Star:** "Successful Delivery Confidence." Measure this not by pageviews, but by the **absence** of support tickets or "Where is my drone?" clicks during the active delivery window.
+*   **The Anxiety Signal:** Instrument a specific event: `user_refreshes_status_page`.
+    *   **Hypothesis:** If a user refreshes the page more than 3 times during the "Final Descent" phase, the current information density is causing anxiety, not reassurance.
+    *   **Action:** If this rate exceeds your baseline from the first week of the pilot, simplify the view further (e.g., hide the map, show only a progress bar).
+*   **Retention Check:** Track if users return to the app for *subsequent* deliveries. High initial engagement followed by churn suggests the tracking experience was stressful.
+
+**Immediate Next Step for Frontend Team:**
+Build the interface to display only the four states above. Instrument the `user_refreshes_status_page` event immediately for the April 12th pilot. Do not add more fields until you have analyzed the refresh rate data from the first 50 deliveries.
+
+*Note: Ensure user identifiers in these events are pseudonymous to comply with privacy standards; route raw PII handling to your compliance protocol.*
+*This plan assumes the pilot is in the "MVP" stage; focus strictly on activation and retention of the core tracking action.*

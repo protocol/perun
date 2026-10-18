@@ -1,0 +1,34 @@
+# StarGazer Tour: Latency Impact Analysis Plan
+
+To isolate the true cost of latency from demand saturation for the CTO and infrastructure team, execute the following four-step analysis using your existing transaction logs, server metrics, and support tickets.
+
+### 1. Define Cohorts by Latency Exposure
+Do not compare the entire high-load window against a normal baseline, as ticket scarcity invalidates that comparison. Instead, segment users *within* the StarGazer sale window based on their actual experienced performance:
+*   **High-Latency Cohort:** Users with page load times >2.5s (top 25% of observed times).
+*   **Low-Latency Cohort:** Users with page load times <1.5s (users who got through despite the load).
+*   **Baseline Cohort:** Users from a recent normal-sale event with <1.5s load times.
+
+Since inventory was finite, the "Low-Latency Cohort" during the sale serves as your control group for demand saturation. If both cohorts faced the same scarcity but only the High-Latency group dropped off, the loss is attributable to performance, not lack of tickets.
+
+### 2. Calculate the "Latency Tax" on Conversion
+Compare the payment screen drop-off rates between your internal High and Low-Latency cohorts.
+*   **Metric:** `(Drop-off Rate High-Latency) - (Drop-off Rate Low-Latency)`
+*   **Interpretation:** If the Low-Latency group maintained the 5% baseline drop-off while the High-Latency group hit 15%, the **10% difference** is the direct friction cost of latency.
+*   **Revenue Impact:** Multiply this percentage difference by the number of users who reached the payment screen in the High-Latency cohort and the average ticket value. This yields the specific revenue lost to server slowness, independent of sell-out speed.
+
+### 3. Correlate Latency with Support Volume
+To answer the open question regarding support friction:
+*   Join support ticket timestamps and user session IDs with server response logs.
+*   Tag tickets as "Performance-Related" (keywords: "slow," "loading," "timeout," "error").
+*   **Analysis:** Calculate the rate of performance-related tickets per 1,000 sessions for the High-Latency vs. Low-Latency cohorts.
+*   **Expected Outcome:** A statistically significant higher rate in the High-Latency group confirms that latency drives operational costs, not just lost sales. Include the cost of these support interactions in your budget justification.
+
+### 4. Model the November Scenario
+Project these findings to the November tour using a sensitivity analysis:
+*   **Scenario A (Status Quo):** Assume similar traffic spikes result in 3.5s load times. Apply the calculated "Latency Tax" to projected ticket volume to show expected revenue leakage.
+*   **Scenario B (Upgraded Capacity):** Model performance stabilizing at 1.2s. Show the recovery of the lost conversion rate and reduced support costs.
+*   **Recommendation:** Present the budget increase as the cost to capture the recovered revenue identified in Scenario B.
+
+**Key Distinction:** This approach proves that users *abandoned* due to speed, rather than failing to buy because tickets were gone, by comparing users who faced the same scarcity but different technical experiences.
+
+*Ensure you exclude any users who entered the funnel after the "Sold Out" signal was triggered to prevent skewing the drop-off data with inevitable failures.*

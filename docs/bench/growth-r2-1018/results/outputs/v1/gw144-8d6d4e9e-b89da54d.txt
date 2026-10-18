@@ -1,0 +1,23 @@
+**Diagnosis Plan: Mobile Interface Friction Analysis (No New Code)**
+
+Since you cannot instrument new events, you must treat your existing server logs and database records as a coarse-grained funnel. Your hypothesis (mobile interface causing mid-course abandonment) is plausible, but "completion rate" alone is a vanity metric that hides *where* the leak occurs. You need to reconstruct a proxy funnel using only timestamped access records and user-agent strings already present in your system.
+
+**1. Reconstruct the Funnel via Access Logs**
+Do not look at "completed" vs. "not completed." Instead, query your existing access logs or database `session` tables for these three specific cuts, filtered by `user_agent` (Mobile vs. Desktop) and `date` (Pre-Feb 1 vs. Post-Feb 1):
+*   **The Start Rate:** Count distinct users who hit the module's landing page URL. If this is stable, acquisition isn't the issue.
+*   **The 15-Minute Survival Rate:** Identify users with log entries spanning at least 15 minutes of activity. A sharp drop here on mobile post-Feb 1 indicates early UI friction (e.g., navigation confusion or immediate crash).
+*   **The 40-Minute Survival Rate:** Identify users active near the end of the 45-minute duration. If mobile users drop between minute 15 and 40 while desktop users remain stable, the content length or mid-module interaction on the new interface is the culprit.
+
+**2. Analyze "Zombie" Sessions**
+Look for sessions with a start timestamp but no subsequent heartbeats or page-turn events for >5 minutes before a hard disconnect. On mobile, a frozen UI often results in a single long-duration session that never sends a "complete" event. Compare the average session duration of *incomplete* mobile sessions pre- and post-update. A shift from varied durations to a clustered duration (e.g., everyone stopping at exactly 12 minutes) points to a specific broken screen.
+
+**3. The Decision Matrix for the CLO**
+Present the data to the Chief Learning Officer using this logic, avoiding fabricated benchmarks:
+*   **Scenario A (Revert):** If mobile survival rates at 15/40 minutes dropped >20% relative to desktop (which serves as your control group), the interface is the blocker. Recommendation: Revert the mobile update immediately.
+*   **Scenario B (Redesign):** If drop-off is gradual and consistent across both mobile and desktop, or if mobile start rates plummeted (users refusing to start), the issue is likely perceived difficulty or motivation, not a UI bug. Recommendation: Redesign content into micro-modules; do not revert the UI.
+*   **Scenario C (UNVERIFIED):** If logs lack user-agent differentiation or timestamp granularity, state clearly: "We cannot isolate mobile behavior with current logs." Do not guess. Recommendation: Prioritize the engineering ticket for granular event tracking as the only path to a valid decision.
+
+**This Week's Step:** Run the three cuts above (Start, 15-min, 40-min) segmented by device type for January vs. February. If the mobile 15-minute survival rate is the only metric collapsing, prepare the revert plan. If the data is indistinguishable between devices, prepare the case for content modularization.
+
+*Note: Ensure user IDs in logs are pseudonymized before analysis to comply with privacy standards; route any PII handling to your privacy compliance protocol.*
+*Do not attribute the drop to "seasonality" without comparing against a non-mobile control group first.*

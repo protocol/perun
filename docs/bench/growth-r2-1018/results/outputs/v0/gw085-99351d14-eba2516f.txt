@@ -1,0 +1,25 @@
+**Holdout Test Design & Evaluation Strategy: FreshMart Loyalty Program (Texas)**
+
+**1. Structural Integrity: Randomization Unit & Contamination Control**
+Do not randomize at the customer level if households share accounts or payment methods, as this causes "contamination" (control users benefiting from treated household members). Randomize at the **Household ID** level. Ensure the 10% holdout is stratified by store region and historical spend decile to guarantee the control group mirrors the treatment group's baseline behavior before February 1st. Once assigned, lock these groups for the entire three-month window; do not swap users in or out based on early activity.
+
+**2. Addressing Seasonality & External Shocks (Super Bowl)**
+You cannot simply compare January (pre) vs. April (post) totals because seasonality and the Super Bowl will confound the results. Instead, rely on the **concurrent control group**. Since both Treatment and Control groups experience the exact same weather, holidays, and Super Bowl promotions simultaneously, the *difference* between their performance isolates the loyalty program's effect.
+*   **Primary Metric:** Measure the *difference-in-differences* of average basket size between Treatment and Control, not the absolute lift over January.
+*   **Covariates to Monitor:** Track "Promotional Exposure" (did the user see a Super Bowl ad?) and "Store Traffic" as guardrails. If the Control group's basket size spikes due to the Super Bowl while the Treatment group spikes *more*, the delta is your true lift. Do not adjust for seasonality using historical January-to-April ratios; use the live Control group as your baseline.
+
+**3. Statistical Validity & The $5 Assumption**
+Your assumption of a "$5 increase" is a hypothesis, not a fact. To validate this:
+*   **Pre-commit Sample Size:** Calculate the required number of households needed to detect a $5 lift with 80% power *before* launch, based on the standard deviation of current basket sizes. Do not peek at results daily to check if significance is reached; this inflates false positives.
+*   **Analysis Window:** Define the evaluation period strictly (e.g., Feb 1 – Apr 30). Analyze the data once at the end of this period.
+*   **Guardrail Metrics:** Monitor visit frequency. If basket size rises by $5 but visit frequency drops by 20%, the program is cannibalizing traffic, resulting in no net revenue gain.
+
+**4. Maintaining Group Integrity**
+*   **Invitation Logic:** Ensure the invitation mechanism excludes the holdout list at the database query level, not just the email send level.
+*   **Attrition Handling:** If a user closes their account, exclude them from the analysis entirely (per-protocol analysis) rather than imputing zero spend, which biases the result.
+*   **Blinding:** Store staff should not know which customers are in the holdout group to prevent unconscious bias in service or manual discounting.
+
+**Deliverable for Approval:** A fixed-duration (Feb 1–Apr 30), household-level randomized holdout test analyzing the *delta* in basket size between concurrent groups, with a pre-calculated sample size sufficient to detect a $5 lift, ignoring absolute month-over-month seasonal shifts.
+
+*Note: Ensure all user identifiers used for cohort tracking are pseudonymized and routed to your privacy compliance protocol before analysis.*
+*Do not attempt to statistically "correct" for the Super Bowl using external data; the concurrent control group handles this naturally.*

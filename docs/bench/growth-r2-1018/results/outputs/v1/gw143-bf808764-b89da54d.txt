@@ -1,0 +1,34 @@
+### Critical Funnel Stages for SafeHome Quotes Onboarding
+
+To diagnose the drop-off between address entry and coverage selection, you must split your current "Quote Start to Quote Complete" phase into intent-based micro-steps. Page URLs are insufficient because a single URL often hosts multiple distinct user decisions. Define the following five stages to align with user intent and enable precise session recording triggers:
+
+1.  **Intent Declaration (Address Entry)**
+    *   **User Intent:** "I am ready to see if I can get insured."
+    *   **Event Trigger:** `address_submitted` (Validated address returned by API).
+    *   **Why this matters:** This confirms the user has passed the initial friction of providing PII. Your hypothesis regarding early address entry should be measured as the conversion rate from *Landing Page* to this specific event, compared against users who drop off before it.
+
+2.  **Risk Assessment Loading (The "Black Box" Gap)**
+    *   **User Intent:** "I am waiting for you to tell me if I'm eligible."
+    *   **Event Trigger:** `risk_calculation_started` (Frontend initiates API call) AND `risk_calculation_completed` (API returns risk score/eligibility).
+    *   **Why this matters:** This is likely where your "massive drop-off" hides. If the time between `started` and `completed` exceeds 3 seconds, or if the API returns an error/non-eligible status silently, users abandon. Splitting this reveals if the leak is technical (latency) or product-led (ineligibility).
+
+3.  **Eligibility Revelation (The Decision Point)**
+    *   **User Intent:** "Okay, you say I'm eligible. Do I trust this enough to continue?"
+    *   **Event Trigger:** `eligibility_viewed` (User scrolls to or interacts with the "You're Eligible" state).
+    *   **Why this matters:** If users trigger `risk_calculation_completed` but never `eligibility_viewed`, your UI fails to communicate success. If they view it but don't proceed, your value proposition or trust signals are insufficient.
+
+4.  **Coverage Configuration (The Complex Task)**
+    *   **User Intent:** "I am customizing the product to fit my needs."
+    *   **Event Trigger:** `coverage_limits_modified` (Any slider/dropdown interaction) OR `coverage_defaults_accepted` (User clicks "Next" without changing defaults).
+    *   **Why this matters:** Your current funnel lumps "Selecting Coverage" into one step. You need to know if users get stuck *trying* to configure (high interaction, no completion) or if they refuse to engage with the configuration at all (no interaction). This dictates whether the UX issue is complexity or confusion.
+
+5.  **Quote Commitment (The Conversion)**
+    *   **User Intent:** "I accept this price and terms."
+    *   **Event Trigger:** `quote_generated_final` (Final premium displayed with "Buy" or "Save" CTA).
+    *   **Why this matters:** This is your true "Quote Complete." Anything before this is exploration.
+
+**Implementation for UX Research:**
+Configure session recording tools to trigger specifically on the transition failure between **Stage 2 (Risk Assessment)** and **Stage 3 (Eligibility Revelation)**. This isolates whether the drop-off occurs during the system processing time or immediately after the result is shown. Do not record every click; focus only on sessions that fire `risk_calculation_started` but fail to fire `eligibility_viewed` within 10 seconds.
+
+**Note:** Your 40% hypothesis regarding early address entry is `UNVERIFIED` until you instrument the `address_submitted` event and compare its cohort retention against those who enter address later in the flow.
+**Note:** Ensure the identifier used to track these stages is a stable, pseudonymous session ID, not raw PII, to comply with privacy standards for insurance data.

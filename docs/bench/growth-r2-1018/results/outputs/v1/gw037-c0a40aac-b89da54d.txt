@@ -1,0 +1,28 @@
+### Diagnostic Hypothesis & Investigation Plan
+
+**Primary Hypothesis:** The 15% drop in Daily Active Users (DAU) is caused by a **silent authentication failure** (token validation) or **regional connectivity loss** post-migration, rather than call quality latency. The improved server response times likely reflect only successful requests, masking failures that occur *before* the call logic executes.
+
+**Immediate Investigative Sequence (Execute in Order):**
+
+1.  **Isolate the Failure Point (Login vs. Call):**
+    *   **Query:** Compare "App Launch" events vs. "Session Start" (successful login) events from April 10 to present.
+    *   **Pattern to Find:** If launches are stable but session starts dropped 15%, the block is at **authentication**. If both dropped equally, users aren't opening the app (possible regional DNS/CDN issue).
+    *   **Segment:** Break down by **Geographic Region** and **Device OS**. A spike in 401/403 errors or timeout codes in one region confirms a migration routing error.
+
+2.  **Validate the "Silent Token" Theory:**
+    *   **Query:** Filter logs for `token_validation` events immediately post-migration. Look for increased rates of `expired_token` retries or `invalid_signature` errors that do not return a visible UI error to the user.
+    *   **Pattern to Find:** A correlation between the drop in DAU and a rise in silent auth failures without corresponding client-side error reports. Check if specific identity provider (IdP) integrations (e.g., SSO for enterprise clients) are failing.
+
+3.  **Differentiate Technical Bug vs. Behavioral Shift:**
+    *   **Query:** Analyze **Retention Cohorts**. Compare the Day-1 retention of users active *before* April 10 against those who joined *after*.
+    *   **Pattern to Find:** If pre-migration users stopped returning entirely on April 10, it is a **technical block** (bug). If new user acquisition also dropped simultaneously, it may be a broader access issue. If only *enterprise* segments dropped, investigate SSO migration logs specifically.
+    *   **Control Check:** Verify if the 38,000 remaining users have stable session durations. If their behavior is unchanged, the issue is purely access-related, not call quality.
+
+**Decision Criteria for Rollback:**
+*   **Rollback Immediately If:** You identify a >10% failure rate in `token_validation` or `session_start` for any major region or device type that correlates exactly with the April 10 timestamp.
+*   **Do Not Rollback (Investigate Further) If:** Auth logs are clean, and the drop is isolated to a specific behavioral cohort (e.g., free-tier users in a specific country) where no technical errors are logged.
+
+**This Week's Step:** Run the "App Launch vs. Session Start" funnel breakdown by region and OS for April 9 vs. April 11. The specific metric that changes the decision is the **percentage drop in successful logins relative to app launches**. If this ratio holds steady, the issue is not login; if it diverges, the root cause is the authentication pipeline.
+
+*Note: Server response times improving by 20ms is a leading indicator that the drop is happening *before* the core call logic is reached, reinforcing the authentication hypothesis.*
+*Ensure all user identifiers used in these logs are pseudonymized before analysis to maintain privacy compliance.*

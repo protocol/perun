@@ -1,0 +1,34 @@
+Your current insight (two skips = 85% churn) is a lagging indicator; by the second skip, retention is already failing. To find the *earliest* warning signs and validate your "save half" assumption, you must shift from analyzing static states to analyzing the **sequence of events** leading to the first skip.
+
+**1. Define the North Star and Input Metrics**
+Stop measuring "total subscribers" (vanity). Your North Star is **Weekly Active Cooks** (users who log in and confirm/modify a box before the cutoff). The input metric driving this is **Pre-Cutoff Engagement Rate**. If this drops, churn rises regardless of acquisition.
+
+**2. Event Taxonomy: Instrument the "Why" Before the Skip**
+Your current logs likely record *that* a user skipped, but not *why*. You cannot distinguish between menu variety, timing, or price without specific events. Instrument these three questions immediately:
+*   **Menu Fatigue:** Track `menu_view_count` and `recipe_click_depth` in the 48 hours before the weekly cutoff. *Hypothesis:* A drop in click depth precedes a skip.
+*   **Timing Friction:** Track `login_time_relative_to_cutoff`. *Hypothesis:* Users who consistently login <24 hours before the deadline are higher risk than those who plan ahead.
+*   **Price Sensitivity:** Track `cart_abandonment_after_price_display` or `pause_vs_skip_ratio`. *Hypothesis:* Price-sensitive users "pause" more often; variety-seekers "skip" outright.
+
+**3. The Analysis: Read Bottom-Up (Retention First)**
+Do not analyze acquisition until you fix the leak. Segment your "first skip" cohort by the events above:
+*   **The "Bored" Segment:** High login frequency, low recipe clicks, then skip. *Signal:* They want to cook but hate the menu.
+*   **The "Busy" Segment:** Late logins, rushed decisions, then skip. *Signal:* Delivery timing or life chaos, not product fit.
+*   **The "Sticker Shock" Segment:** Views pricing page, abandons cart, then skips. *Signal:* Price sensitivity.
+
+**4. Intervention Strategy for the Email Sequence**
+Your Customer Success Manager should not send a generic "Come back" email. Trigger messages based on the **pre-skip behavior** identified above:
+*   **Trigger A (Bored):** If `recipe_click_depth` < 2 in the week prior to skip.
+    *   *Content:* "New chef specials added just for you" or "Vote on next week's menu."
+    *   *Timing:* Send 3 days *before* the cutoff, not after the skip.
+*   **Trigger B (Busy):** If `login_time` is consistently <24h before cutoff.
+    *   *Content:* "Set up auto-pilot: Never miss a deadline again."
+    *   *Timing:* Send 5 days before the cutoff.
+*   **Trigger C (Uncertain):** First-time skip with no prior negative signals.
+    *   *Content:* "Pause instead of skip? Keep your account active without charge."
+
+**5. This Week's Steps**
+1.  **Query:** Run a cohort analysis on last summer's joiners correlating `recipe_click_depth` (7 days pre-cutoff) with `first_skip_event`. Identify the threshold where clicks drop off.
+2.  **Instrument:** Add `reason_code` capture (even a simple one-click survey) to the skip confirmation modal: "Too expensive," "Don't like recipes," or "Too busy."
+3.  **Test:** Launch a micro-A/B test on the "Bored" segment only. Group A gets the generic email; Group B gets the "Vote on menu" email. Measure **reactivation rate** (not open rate) after 14 days.
+
+*Note: Your assumption that outreach saves 50% is `UNVERIFIED` until tested; treat it as a hypothesis, not a baseline. Ensure all user identifiers in these events are pseudonymous and routed to your privacy compliance protocol.*

@@ -1,0 +1,34 @@
+# Findings Report: SwiftRide Referral Program Test (April 10–24)
+
+**Status:** `UNVERIFIED` – Causal impact on genuine growth cannot be determined from stated figures alone.
+
+### 1. Recomputed Metrics & Reconciliation
+The reported "150% increase in referrals" is a vanity metric in its current state because the denominator includes unverified accounts.
+*   **Gross Lift:** +150% referral volume.
+*   **Flagged Volume:** 35% of new accounts flagged.
+*   **Net Verified Lift:** Unknown. If the 35% flag rate applies uniformly to the *incremental* referrals, the genuine lift is significantly lower than 150%. If the fraud is concentrated in the new cohort, the net genuine growth could be near zero or negative (due to payout costs on fake accounts).
+*   **Reconciliation Failure:** We cannot separate "likely fraud" from "genuine growth" without the raw counts of *verified* referrers vs. *flagged* referrers. The 35% figure is a system output, not a ground truth.
+
+### 2. Confounders & Risk Analysis
+*   **Incentive Structure Flaw:** The double-sided $10 credit creates an immediate arbitrage loop. A bad actor needs only one synthetic identity to generate $20 in value (two $10 credits) for near-zero cost if verification is weak. This explains why bad actors exploited the loophole faster than anticipated.
+*   **False Positive Risk:** High fraud flags (35%) in an urban mobility context often correlate with shared devices (family plans, roommates, shared tablets in households). Penalizing these users without secondary verification risks churning legitimate high-LTV (Lifetime Value) cohorts.
+*   **Seasonality/Novelty:** The 2-week window captures initial novelty spikes. Without a pre-period baseline of *organic* (non-incentivized) referrals, we cannot attribute the entire 150% rise to the incentive structure versus normal variance.
+
+### 3. Decision Call: PAUSE & PIVOT
+**Do not expand city-wide yet.** Expanding a double-sided cash incentive with a 35% unverified fraud rate will burn budget on synthetic users while alienating genuine users via aggressive fraud blocking.
+
+**Immediate Action:**
+1.  **Pause new payouts** for the double-sided $10 credit immediately. Honor credits for accounts that pass a manual or enhanced automated review to maintain trust.
+2.  **Shift to a "Reward-on-Completion" model.** Change the trigger from "Sign-up" to "First Completed Ride > $X." This eliminates the value of self-referring synthetic accounts that never intend to ride.
+3.  **Implement Device Fingerprinting + Phone Verification.** Require SMS OTP for the referee *and* check for device ID collisions among referrers before releasing credits.
+
+**Tripwire for Resumption:**
+Resume the program only when the **Cost Per Acquired Genuine Rider (CPAGR)** falls below 50% of the expected LTV of a new rider. Currently, CPAGR is `UNVERIFIED` because the "Genuine" count is unknown.
+
+### 4. This-Week Steps
+1.  **Query:** Pull the cohort of "Flagged" accounts and manually audit 50 random samples against ride completion data. *Result that changes decision:* If >20% of flagged accounts completed a paid ride, the fraud model has too many false positives; tighten rules before pausing.
+2.  **Experiment Design:** A/B test the new "Reward-on-Completion" trigger against a control group (no referral) for 14 days. Pre-commit to a sample size based on detecting a 5% lift in *verified* first rides, not raw sign-ups.
+3.  **Guardrail:** Monitor "Credit Payout per 100 Sign-ups." If this ratio does not drop by at least 40% under the new rules, the incentive is still being gamed.
+
+**Note:** The 35% flag rate is a system heuristic, not a verified fraud count; treat it as a risk indicator, not a final verdict.
+**Note:** Do not calculate ROI until the "Genuine Rider" count is isolated from the synthetic noise.

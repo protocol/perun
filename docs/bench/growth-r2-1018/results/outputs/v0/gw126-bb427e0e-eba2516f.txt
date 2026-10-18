@@ -1,0 +1,32 @@
+### North Star & Core Loop Definition
+**North Star:** Weekly Active Users completing 3+ consecutive days of *active* tracking (not viewing).
+**Rejection of Vanity:** Total downloads and "peer challenge invites sent" are rejected; they rise without proving value. Your 9% Week-1 retention confirms the core loop is leaking before social features can matter.
+
+### Instrumentation Plan: Active Habit vs. Passive Viewing
+Instrument only events that answer: "Did the user perform the habit, or just watch someone else?"
+
+| Event Name | Question Answered | Properties to Capture |
+| :--- | :--- | :--- |
+| `habit_log_submitted` | Did the user actively record a behavior? | `habit_type`, `duration_seconds`, `is_solo` (bool), `streak_count` |
+| `habit_view_only` | Did the user passively consume content? | `view_duration_seconds`, `content_type` (challenge/feed) |
+| `accountability_check_in` | Did social pressure trigger an action? | `trigger_source` (peer_nudge vs. self_reminder), `action_taken` (bool) |
+| `streak_maintained` | Did the user return within 24h of last log? | `days_since_last_log`, `current_streak_length` |
+
+**The Identifier Seam:** Use a stable, pseudonymous `user_id` to track cohorts across sessions. Do not use raw PII here; route consent and data retention limits to your privacy compliance review.
+
+### Segmentation Strategy
+Do not segment by arbitrary age bins yet. Segment by **behavioral maturity** to find the "aha" moment:
+1.  **The "Solo Sustainers":** Users with >3 `habit_log_submitted` events in Week 1, zero social interactions. (Your logs suggest this group exists; analyze their retention curve).
+2.  **The "Social Tourists":** Users who sent/received challenges but have <2 `habit_log_submitted` events. (Likely your churn source).
+3.  **Age Cohort (Secondary):** Only after behavioral segmentation, split by age (13–15 vs. 16–19) to see if "Solo Sustainers" skew older or younger.
+
+### Diagnosis of Current Data
+Your 9% retention is a **activation/retention leak**, not an acquisition problem. The fact that solo tracking is used more frequently but doesn't retain implies the *value* of solo tracking isn't being realized or reinforced. Social accountability cannot fix a broken core loop; it adds friction to a product users aren't finding valuable yet. Fix the solo loop first.
+
+### This Week's Steps
+1.  **Query:** Pull a retention cohort curve for users who hit `habit_log_submitted` ≥3 times in their first 3 days vs. those who did not. If the former retains >40%, your "aha" moment is 3 logs, not social challenges.
+2.  **Instrument:** Add the `is_solo` property to your logging immediately. Without this boolean, you cannot prove your hypothesis wrong.
+3.  **Decision Rule:** If "Solo Sustainers" retain 2x better than "Social Tourists," pause Q1 gamification investment. Double down on simplifying the solo logging flow.
+
+*Note: All metrics above are `UNVERIFIED` until the specific events are instrumented in your analytics pipeline. Do not estimate values.*
+*Comparison is strictly against your September 5th baseline; no external teen-app benchmarks are applied.*

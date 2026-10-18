@@ -1,0 +1,31 @@
+### Event Specification: `ai_background_removed`
+
+To determine what drives upgrades without historical data, instrument only properties that answer specific hypotheses about value delivery. Do not log "everything"; every property must map to a question you can name.
+
+**Event Name:** `ai_background_removed`
+**Trigger:** Fired immediately upon successful completion of the background removal action (image saved or applied).
+
+**Required Properties (The "Who" and "When"):**
+1.  `user_id` (String, Pseudonymous): Stable identifier to track the same user across sessions for retention and conversion cohorts. *Note: Do not send raw PII; ensure this aligns with your privacy compliance routing.*
+2.  `session_id` (String): To distinguish multiple attempts within a single sitting.
+3.  `timestamp` (ISO 8601): For time-series analysis and cohort grouping.
+4.  `is_paid_user` (Boolean): Snapshot of subscription status at the moment of the event to separate new conversion drivers from existing payer behavior.
+
+**Hypothesis-Driven Properties (The "What" and "How"):**
+These properties directly test your assumption that high-resolution editing predicts conversion and identify friction points.
+5.  `image_resolution_px` (Integer): Total pixel count (width × height). *Question answered:* "Does editing higher resolution images correlate with a higher upgrade rate?"
+6.  `edit_duration_ms` (Integer): Time elapsed between tool open and successful removal. *Question answered:* "Does faster completion (ease of use) or longer engagement (careful refinement) predict conversion?"
+7.  `export_format` (String): e.g., "PNG", "JPG". *Question answered:* "Do users needing transparent backgrounds (PNG) convert more often?"
+8.  `retry_count` (Integer): Number of failed attempts before success. *Question answered:* "Does tool friction (multiple tries) kill conversion intent?"
+9.  `source_context` (String): e.g., "home_screen", "editor_toolbar". *Question answered:* "Where in the app are high-intent users discovering this feature?"
+
+**Implementation Constraints for Engineering:**
+*   **Stage Appropriateness:** Since this is an MVP launch, do not instrument granular mouse movements or intermediate states. Only log the completed action and the variables listed above.
+*   **Verification:** If any of these properties are missing from the payload post-launch, any analysis regarding that specific driver is `UNVERIFIED`.
+*   **Baseline:** You currently have no benchmark for "good" conversion rates on this feature. Do not set thresholds yet. Establish a baseline in Week 1, then compare Week 2 against Week 1.
+
+**This Week's Step:**
+Hand this schema to engineering immediately with a requirement to validate the payload in a staging environment by November 25th. The specific result that changes your decision is a correlation coefficient > 0.3 between `image_resolution_px` and `upgrade_event` within the first 14 days; if absent, pivot your upgrade paywall messaging away from "high-res" benefits.
+
+*Note: Ensure `user_id` generation follows your pseudonymity standards before reaching analytics storage.*
+*Do not estimate expected conversion rates; wait for the first week's actual data to establish your own baseline.*

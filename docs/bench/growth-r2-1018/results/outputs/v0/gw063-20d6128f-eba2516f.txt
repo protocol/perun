@@ -1,0 +1,35 @@
+**Proposed North Star Metric: Weekly Active Teams Completing Core Collaborative Actions**
+
+Do not use "meeting duration" as your North Star; it is a vanity metric that rises with inefficiency just as easily as engagement. For SwissConnect, serving large financial institutions where security and reliability are paramount, value is not time spent, but **successful collaboration completed**.
+
+Define your North Star as: **The number of unique Teams (organized by enterprise client) per week that complete at least one "Core Collaborative Action."**
+
+A "Core Collaborative Action" is defined as a meeting session where:
+1.  **Participant Count ≥ 2** (Filter out solo tests/dial-ins).
+2.  **Duration ≥ 3 minutes** (Filters out accidental drops or failed connections).
+3.  **At least one interactive feature event occurred** (e.g., `screen_share_started`, `chat_message_sent`, or `participant_video_enabled`).
+
+This metric satisfies your constraints:
+*   **Robustness:** It does not bias toward screen sharing vs. audio clarity. Whether a bank uses your tool for a quick audio-only compliance check or a long screen-sharing review, both count as one unit of value if they cross the interaction threshold.
+*   **Enterprise Alignment:** By aggregating by "Team" (client organization) rather than individual users, you measure account health, which matters more to your board than raw user counts.
+*   **Anti-Vanity:** It ignores the 1,200 DAU if they are merely logging in and dropping off. It only rises when actual work happens.
+
+**Calculation Logic for Existing Logs**
+Assuming your event logs contain `user_id`, `organization_id`, `session_id`, `timestamp`, and `event_type`:
+
+1.  **Filter Sessions:** Select all `session_start` events from the last 7 days.
+2.  **Join Events:** For each session, check for associated events within that `session_id`:
+    *   Count distinct `user_id`s participating. Keep only if count ≥ 2.
+    *   Calculate `session_end_time` - `session_start_time`. Keep only if ≥ 180 seconds.
+    *   Check existence of any event in set `{screen_share_started, chat_message_sent, participant_video_enabled}`.
+3.  **Aggregate:** Count the number of unique `organization_id`s that had at least one qualifying session in that 7-day window.
+
+**Why this guides your Q3 Roadmap**
+If this metric stalls, you do not need to guess whether to build better audio or faster screen sharing. You simply drill down into the funnel:
+*   Are teams starting meetings but failing the 3-minute threshold? → **Fix connection stability/audio clarity.**
+*   Are meetings lasting long but lacking interactive events? → **Improve screen share UX or prompt collaboration features.**
+
+This provides a single, board-ready number for July 20 that represents *value delivered*, not just *time consumed*.
+
+*Note: Ensure your `organization_id` is stable and pseudonymous to comply with Swiss financial data regulations; route raw PII handling to your privacy compliance protocol.*
+*Since you lack data on feature preference, this metric treats all interactive features equally until A/B testing proves otherwise.*

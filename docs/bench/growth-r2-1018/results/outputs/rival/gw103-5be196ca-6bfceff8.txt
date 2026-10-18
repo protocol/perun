@@ -1,0 +1,42 @@
+# HomeStyle Brazil: Photo Upload Flow Tracking Plan
+
+To determine if the lack of purchases stems from poor recommendations, pricing, or "inspiration-only" intent, you must move beyond binary "upload vs. no upload" tracking. You need to instrument the **interaction depth** between the user and the AI suggestions. The following events will reveal where value is created or lost.
+
+### 1. Core Funnel Events (The "Where")
+Track these sequential steps to identify drop-off points within the flow itself.
+
+| Event Name | Trigger | Key Properties | Decision Insight |
+| :--- | :--- | :--- | : |
+| `photo_upload_started` | User clicks "Upload Photo" button | `entry_point` (home, catalog, ad) | Measures initial intent strength. |
+| `photo_upload_completed` | AI confirms image receipt & starts processing | `file_size`, `image_quality_score` (if available) | Validates technical success; filters out failed uploads. |
+| `ai_suggestions_viewed` | First AI design card renders on screen | `load_time_ms`, `num_suggestions_shown` | Confirms the user actually saw the value prop. |
+| `suggestion_interacted` | User clicks, expands, or rotates a specific AI item | `item_id`, `item_category`, `interaction_type` (click, rotate, zoom) | **Critical:** Distinguishes passive viewing from active interest. |
+| `catalog_item_viewed` | User clicks an AI suggestion to see real product details | `item_id`, `price`, `availability_status` | Measures transition from "inspiration" to "shopping." |
+| `add_to_cart_from_ai` | User adds a suggested item to cart | `item_id`, `price`, `time_since_upload` | The strongest leading indicator of purchase intent. |
+
+### 2. Intent & Quality Signals (The "Why")
+These properties and events help diagnose *why* users aren't converting after uploading.
+
+*   **`suggestion_rejected`**: Triggered when a user clicks "Regenerate" or swipes away a design.
+    *   *Property:* `rejection_reason` (if prompted) or `style_mismatch`.
+    *   *Insight:* High rejection rates indicate poor AI recommendation quality, not pricing issues.
+*   **`price_filter_applied`**: Triggered within the AI results view.
+    *   *Property:* `max_price_selected`.
+    *   *Insight:* If users immediately filter by low price, the baseline recommendations are too expensive for the Brazilian market.
+*   **`session_duration_post_upload`**: Time spent interacting with results vs. baseline browsing.
+    *   *Insight:* High duration with zero clicks suggests "inspiration-only" behavior (window shopping).
+
+### 3. Derived Metrics for the Country Manager
+Do not report raw event counts. Present these computed rates to justify Q2 spend:
+
+1.  **AI Engagement Rate**: `(Users who interacted with ≥1 suggestion) / (Users who completed upload)`
+    *   *Benchmark:* If this is <20%, the AI output is irrelevant or the UX is confusing.
+2.  **Recommendation-to-Cart Conversion**: `(Add to cart from AI) / (Suggestion Interacted)`
+    *   *Benchmark:* If engagement is high but cart rate is low, the issue is **pricing** or **product availability**, not the AI logic.
+3.  **Inspiration Index**: `(Users who viewed suggestions but had 0 interactions) / (Total Uploaders)`
+    *   *Benchmark:* A high index confirms the "inspiration only" hypothesis; these users need a different nurture track (e.g., email follow-up) rather than immediate sales pressure.
+
+### Implementation Note
+Ensure `item_id` and `price` are passed consistently from the AI engine to your analytics tool (GA4/Mixpanel) to enable revenue attribution per specific design style.
+
+**Next Step:** Once these events are live for 7 days, segment your purchase conversion by "High Engagers" (interacted with >3 items) vs. "Passive Viewers." Your hypothesis likely holds true only for the "High Engager" segment; the aggregate 2% is being diluted by passive users.

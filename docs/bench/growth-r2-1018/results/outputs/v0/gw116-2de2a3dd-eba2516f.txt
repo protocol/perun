@@ -1,0 +1,24 @@
+### Recommendation: Do Not Roll Back Yet; Isolate the Cause First
+
+**Decision:** **Extend the analysis, do not roll back or ship globally.** A rollback based on aggregate mobile data without isolating the cause (clutter vs. performance) risks discarding a win for modern devices or solving the wrong problem. The current result is **`UNVERIFIED`** as a causal claim for "design failure" because the confounder (device capability/load time) is unmeasured.
+
+**Structured Analysis Plan for Tomorrow's Presentation:**
+
+1.  **Re-segment the Mobile Cohort (The "What"):**
+    *   Immediately query your analytics for mobile completion rates segmented by **device model** (or OS version) and **connection type** (4G/5G/Wi-Fi).
+    *   *Hypothesis A (Performance):* If the drop is concentrated in older devices or slow connections, the issue is load time, not interface clutter. The one-page design likely bundles too much JavaScript/CSS for legacy parsers.
+    *   *Hypothesis B (UX/Clutter):* If the drop is consistent across high-end devices (e.g., latest iOS/Android) and fast networks, the issue is interface clutter or touch-target sizing.
+
+2.  **Validate the Guardrail (The "Risk"):**
+    *   Check **page load time (P95)** and **Time to Interactive** for the treatment group vs. control on mobile. If the treatment increased load time by >1 second on older devices, this confirms a performance regression.
+    *   Check **error rates** (client-side JS errors) on mobile checkout steps. A spike here indicates broken rendering on specific models.
+
+3.  **The Decision Matrix (The "Call"):**
+    *   **If Performance-Limited:** Do not roll back the design. Instead, implement **code splitting** or lazy-loading for the checkout bundle to support older devices, then re-test. The design logic holds; the execution needs optimization.
+    *   **If UX-Limited (High-End Devices):** The design itself is flawed for small screens. **Roll back for mobile only** immediately to stop revenue leakage, while keeping the desktop win. Initiate a new discovery sprint for a mobile-specific layout.
+    *   **If Mixed/Inconclusive:** Run a **targeted A/B test** for 7 days solely on older mobile devices with a simplified variant (fewer assets) to isolate the variable.
+
+**This Week's Step:**
+Run the device-model segmentation query today. Present the head of product with a split recommendation: "Keep desktop live; pause mobile global rollout until we confirm if the leak is performance (fixable via engineering optimization) or UX (requires design iteration)." Do not present a binary "ship/kill" choice until the device segment data is reviewed.
+
+**Note:** The 5% desktop win validates the core concept; the mobile loss is likely an implementation constraint, not a fundamental flaw in the one-page approach. Ensure your event taxonomy captures `device_model` and `network_type` as standard properties for all future checkout events to prevent this blind spot.

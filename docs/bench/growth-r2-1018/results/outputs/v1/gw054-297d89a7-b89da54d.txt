@@ -1,0 +1,36 @@
+To align logistics with customer feedback for your fresh produce launch, instrument only the events that answer your specific uncertainty: whether delivery time or product quality drives churn. Do not track "everything"; track the causal links between the promise, the fulfillment, and the return.
+
+**1. The Core Value Event (North Star Input)**
+*   **Event Name:** `fresh_produce_order_completed`
+*   **Question Answered:** Did the user successfully receive the core value (fresh goods)?
+*   **Properties:** `order_id`, `user_id` (pseudonymous), `item_count`, `contains_fresh_only` (boolean), `order_timestamp`.
+*   **Why:** This is your baseline. Without this, you cannot calculate retention.
+
+**2. The Logistics Exposure (Testing the "Delivery Time" Hypothesis)**
+*   **Event Name:** `order_fulfilled_duration_calculated` (Triggered when status moves to "Delivered")
+*   **Question Answered:** What was the actual time elapsed between order placement and fulfillment for fresh items?
+*   **Properties:** `order_id`, `promised_delivery_window_minutes`, `actual_delivery_minutes`, `delay_reason_code` (e.g., traffic, warehouse_pick_delay), `driver_id` (hashed).
+*   **Why:** You suspect delivery time drives churn. You cannot correlate churn to time unless you record the *actual* duration per order, not just an average. This allows you to segment users who waited >X minutes vs. <Y minutes.
+
+**3. The Quality Signal (Testing the "Product Quality" Hypothesis)**
+*   **Event Name:** `fresh_quality_issue_reported`
+*   **Question Answered:** Did the user explicitly reject the quality of the fresh goods?
+*   **Properties:** `order_id`, `issue_type` (e.g., spoiled, bruised, wrong_item, missing_item), `refund_amount`, `resolution_time_minutes`.
+*   **Why:** This isolates "quality" from "logistics." If churn is high but this event is low, the problem is likely speed, not spoilage.
+
+**4. The Retention Verdict (The Outcome)**
+*   **Event Name:** `fresh_produce_repeat_purchase`
+*   **Question Answered:** Did the user return within 7 days to buy fresh goods again?
+*   **Properties:** `user_id`, `days_since_first_fresh_order`, `previous_order_had_issue` (boolean).
+*   **Why:** This validates your assumption that 7-day repeat is the satisfaction indicator. By linking this back to the `previous_order_had_issue` flag, you directly measure the churn impact of quality vs. speed.
+
+**Implementation Constraints & Seam**
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` to link these events across sessions. Do not use raw PII (names, phone numbers) in analytics logs; route those to your secure customer support database per privacy compliance.
+*   **Stage Appropriateness:** Since you are in the `mvp` phase for fresh produce, do not instrument generic page views or "add_to_cart" for non-fresh items yet. Focus strictly on the fresh journey to answer the specific hypothesis.
+
+**This Week's Step**
+1.  Define the schema for `fresh_quality_issue_reported` and `order_fulfilled_duration_calculated` in your tracking plan today.
+2.  Run a cohort query next Monday comparing the 7-day retention rate of users with `actual_delivery_minutes` > 60 versus those < 60. If the difference is negligible, shift focus entirely to quality complaints as the primary churn driver.
+
+*Note: Do not assert a "good" retention rate; compare your post-launch cohort only against your pre-launch baseline or the first week of October data.*
+*Note: If an order has no `fresh_quality_issue_reported` event, do not assume quality was perfect; absence of evidence is not evidence of absence.*

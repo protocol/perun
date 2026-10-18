@@ -1,0 +1,32 @@
+### Growth Diagnostic Brief: SwiftLend Application Leakage
+
+**Diagnosis Strategy: Bottom-Up Funnel Analysis**
+Do not assume the drop-off is due to manual friction. The 23% completion rate indicates a critical leak that could be either user abandonment (friction) or silent system rejection (risk rules). To distinguish these, we must instrument the "black box" between income verification and final submission. We will treat retention of the core action (loan submission) as the priority over acquisition metrics.
+
+**Required Event Taxonomy**
+Instrument only the following events to answer specific questions. Do not track generic page views.
+
+| Event Name | Question Answered | Required Properties |
+| :--- | :--- | :--- |
+| `application_step_viewed` | Did the user reach the specific step? | `step_name` (e.g., "income_verify", "doc_upload"), `session_id` |
+| `verification_initiated` | Did the user attempt the action? | `step_name`, `method` (e.g., "manual_upload", "auto_fetch") |
+| `verification_result_received` | **Crucial:** Did the system reject them silently? | `step_name`, `result` ("success", "fail", "timeout"), `failure_code` (e.g., "doc_unreadable", "risk_flag") |
+| `application_abandoned` | Did the user leave voluntarily? | `last_step_seen`, `time_on_step`, `exit_intent` (if detectable) |
+| `application_submitted` | Did the user complete the core value action? | `total_duration`, `steps_completed_count` |
+
+**The Identifier Seam**
+To track a user across these steps, engineering must attach a **stable, pseudonymous user ID** to every event. This allows us to follow a single user's journey from start to finish. Do not use raw PII (names, SSNs) in these analytics events; route any sensitive data handling to the privacy compliance protocol. This ID is distinct from operational log traces used for server health.
+
+**Analysis Logic for the CRO**
+Once instrumented, classify the leakage using this logic:
+1.  **Silent Rejection:** If `verification_result_received` shows a high volume of "fail" or "timeout" events where no `application_abandoned` event follows immediately, the system is rejecting users before they know it. *Action: Fix risk engine feedback loops.*
+2.  **Friction Abandonment:** If users trigger `verification_initiated` but fire `application_abandoned` after a long `time_on_step` without a `verification_result_received`, the friction is manual effort. *Action: Optimize UI or document upload flow.*
+3.  **Confusion Drop-off:** If `application_step_viewed` fires but `verification_initiated` never fires, users are confused by the requirement itself. *Action: Clarify copy or requirements.*
+
+**This Week's Steps**
+1.  **Engineering:** Implement the five events above with the specified properties, ensuring the pseudonymous user ID is consistent across the session.
+2.  **Analytics:** Build a cohort query comparing `verification_initiated` vs. `verification_result_received` to calculate the "Silent Rejection Rate."
+3.  **Decision Trigger:** If the Silent Rejection Rate exceeds 15% of total drop-offs, pause all UI redesign work and prioritize fixing the verification API response times and error messaging. If abandonment due to `time_on_step` is the dominant factor, proceed with UX friction reduction.
+
+*Note: No benchmarks for "good" completion rates are asserted here; we will compare future performance solely against this newly established 23% baseline.*
+*Ensure the `failure_code` property is standardized with the Risk team before deployment to avoid ambiguous "unknown" errors.*

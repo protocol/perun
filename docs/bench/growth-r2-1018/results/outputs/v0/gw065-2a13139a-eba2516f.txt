@@ -1,0 +1,39 @@
+### Tracking Plan for BazaarLink: From Vanity to Value
+
+**1. Redefine the North Star**
+Reject "Total Booked Appointments" as your primary metric; it is a vanity metric that rises even when trust erodes (evidenced by your 30% dispute/cancellation rate).
+**New North Star:** **Weekly Completed Services Without Dispute.**
+This metric only rises when a customer receives value and the provider delivers successfully. It aligns incentives for both sides of the marketplace.
+
+**2. Input Metrics & Event Taxonomy**
+Instrument only the events that answer specific questions about friction and trust. Do not track "everything."
+
+| Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- |
+| `search_performed` | Is demand finding supply? | `query_text`, `location`, `results_count` |
+| `provider_profile_viewed` | Is the listing convincing? | `provider_id`, `verification_status`, `time_on_page` |
+| `off_platform_signal` | **Are users bypassing safety?** | `click_to_reveal_phone`, `copy_phone_number`, `chat_contains_phone_regex` |
+| `booking_requested` | Is intent converting? | `provider_id`, `service_category`, `price_estimate` |
+| `booking_confirmed` | Did the provider accept? | `time_to_confirm`, `provider_response_rate` |
+| `service_completed` | Did the job happen? | `actual_price`, `duration`, `no_show_flag` |
+| `dispute_raised` / `cancelled` | **Where did trust break?** | `reason_code`, `time_since_booking`, `initiator_side` |
+
+**3. The Identifier Seam**
+To analyze retention and repeat bookings, you must link sessions to a **stable, pseudonymous User ID** and **Provider ID**. Do not use raw emails or phone numbers in analytics logs. Route any PII handling to your privacy compliance protocol. This stable ID is the only way to calculate if a user returns after a bad experience.
+
+**4. Diagnostic Funnel (Bottom-Up)**
+Do not pour marketing spend into acquisition until you fix the leak at the bottom. Analyze in this order:
+1.  **Retention/Quality:** Of the bookings made, what % complete without dispute? (Current baseline: ~70%).
+2.  **Activation:** Of those who view a profile, how many book?
+3.  **Acquisition:** How many searches occur?
+
+**5. Immediate Actions for Operations**
+*   **Track Off-Platform Leakage:** Implement event tracking on "Reveal Phone Number" buttons and scan chat logs for phone number patterns. Correlate `off_platform_signal` with subsequent `dispute_raised` events. If users who exchange numbers have a 50% higher dispute rate, your verification process must intervene *before* the number is revealed.
+*   **Cohort by Verification Status:** Segment your completion rate by `provider_verification_level`. If unverified providers drive the 30% failure rate, tighten the onboarding gate.
+*   **Measure Time-to-Dispute:** Track the delta between `booking_confirmed` and `cancelled`. A spike in cancellations within 1 hour suggests pricing friction; spikes at 24 hours suggest service quality issues.
+
+**This Week's Step:**
+Implement the `off_platform_signal` and `dispute_raised` events with the properties listed above. Run a query comparing the dispute rate of sessions with an off-platform signal versus those without. If the rate is significantly higher for the former, update the provider verification flow to require ID validation before allowing phone number visibility.
+
+*Note: All baseline comparisons must use your internal historical data; do not compare against external industry benchmarks which may not reflect Istanbul's local service dynamics.*
+*Any metric without an instrumentation plan is currently UNVERIFIED; do not estimate values.*

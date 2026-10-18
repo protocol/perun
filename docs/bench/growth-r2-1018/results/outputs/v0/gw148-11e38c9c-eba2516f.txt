@@ -1,0 +1,30 @@
+**Recommendation: Do not remove options yet; treat this as an unverified hypothesis requiring immediate, low-cost validation before a redesign decision.**
+
+The 3% overall lift is real, but the 20% drop for users 65+ is a critical guardrail failure. Your assumption that "visual confusion" caused the drop is plausible but **unverified**; the data provided (aggregate conversion vs. segment completion) cannot distinguish between a **layout issue** (placement) and a **trust issue** (unfamiliar branding). Acting on this assumption alone risks either alienating older users permanently (if you remove options they might actually prefer once understood) or wasting engineering cycles on a redesign that misses the real friction point.
+
+To differentiate layout vs. trust without a new multivariate test, execute these three steps this week:
+
+1.  **Analyze the "Click-Through" vs. "Abandonment" Seam:**
+    Pull event data for the 65+ cohort specifically on the *interaction* with the new buttons.
+    *   **Signal for Layout Issue:** If users in this segment rarely *click* the new payment buttons compared to younger cohorts, but also show higher abandonment on the main "Pay" button, the new options are likely creating visual noise or obscuring the primary path.
+    *   **Signal for Trust Issue:** If users *click* the new buttons at similar rates to other groups but abandon *after* seeing the provider's logo or redirect screen, the friction is trust/branding, not placement.
+    *   *Action:* Query your analytics for `payment_method_selected` and `checkout_abandonment_step` filtered by age > 65. If the click rate on new methods is near zero, it's visibility/placement. If clicks occur but completion fails, it's trust.
+
+2.  **Session Replay Sampling (Qualitative Signal):**
+    Since you cannot run a new test immediately, watch 20–30 session recordings of users aged 65+ who abandoned during the test window.
+    *   **Look for:** "Rage clicks" around the button area (layout confusion), or long pauses/hovers over the new logos before closing the tab (trust hesitation).
+    *   *Action:* Use your session replay tool to filter by age and abandonment. This provides direct evidence of *behavior* that aggregate numbers hide.
+
+3.  **Targeted Micro-Survey (Low-Cost Validation):**
+    Deploy a one-question exit survey triggered *only* for users 65+ who abandon at the payment step.
+    *   **Question:** "What stopped you from completing your purchase today?" with options: "I couldn't find the credit card option," "I didn't recognize the payment methods," or "Other."
+    *   *Action:* This directly asks the user to distinguish between finding the button (layout) and trusting the method (branding).
+
+**Decision Framework for the UX Director:**
+*   **If data shows low clicks + high rage clicks:** The issue is **layout**. *Interim fix:* Adjust CSS to increase contrast/size of the primary credit card button for this segment only; do not remove options.
+*   **If data shows clicks + high drop-off after logo reveal:** The issue is **trust**. *Interim fix:* Add trust badges or brief explanatory text ("Secure payment via [Provider]") near the buttons; do not remove options.
+*   **If data is inconclusive:** Do not redesign yet. Run a cheap, targeted A/B test *only* on the 65+ segment comparing "Current Layout" vs. "Simplified Layout" (hiding new methods) to measure the net impact on revenue before making a permanent removal decision.
+
+**This Week's Step:** Pull the `payment_method_selected` click-through rate for age 65+ and watch 20 session replays. If clicks are <5% of the control group's rate, recommend a layout tweak; if clicks are normal but drop-off is high, recommend a trust-building copy test. Do not remove features until you confirm the root cause.
+
+*Note: The 20% drop is a severe regression for this cohort; treating it as a "trade-off" for overall growth violates the retention-first principle. The baseline for this segment must be restored before optimizing further.*

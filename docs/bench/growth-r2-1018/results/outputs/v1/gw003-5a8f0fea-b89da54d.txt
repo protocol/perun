@@ -1,0 +1,32 @@
+### Measurement Plan: Inferring Satisfaction via Behavioral Signals
+
+**1. North Star Metric: Weekly Completed Recipes**
+Reject "Weekly Active Users" (50k) as a vanity metric; it rises even if users fail. Adopt **Weekly Completed Recipes** as your North Star. A recipe is "completed" only when the user reaches the final step and triggers the end-state (e.g., says "done" or the skill times out naturally at the end). This metric rises only when users derive real value (a cooked meal).
+
+**2. Event Taxonomy: Answering Named Questions**
+Instrument only these events to answer specific friction questions. Do not track "everything."
+
+| Event Name | Question It Answers | Key Properties |
+| :--- | :--- | :--- |
+| `recipe_step_started` | Did the user attempt the step? | `recipe_id`, `step_number`, `estimated_duration` |
+| `recipe_step_repeated` | Was the instruction unclear? | `recipe_id`, `step_number`, `time_since_last_play` |
+| `recipe_abandoned_midway` | Did the user quit before finishing? | `recipe_id`, `last_step_reached`, `session_duration` |
+| `recipe_completed` | Did the user succeed? | `recipe_id`, `total_steps`, `total_time` |
+| `help_triggered` | Did the user get stuck? | `recipe_id`, `step_number`, `help_type` (e.g., "repeat", "convert units") |
+
+**3. The Identifier Seam**
+To analyze retention and abandonment cohorts, you must link sessions to a **stable, pseudonymous user ID**. This allows you to see if a specific user returns to cook again (retention) or abandons a recipe and never returns. Do not use raw PII; route identity management to your privacy compliance protocols.
+
+**4. Interpreting the Signals (The "Silent" Feedback)**
+Since explicit feedback is low, interpret these behavioral patterns as your satisfaction proxy:
+
+*   **The "Repeat" Signal (Clarity Friction):** If `recipe_step_repeated` spikes on specific steps (e.g., Step 4 of "Beef Stew"), the instruction is likely too long, complex, or ambiguous for a hands-free environment. High repeat rates without abandonment suggest confusion; high repeat rates *followed* by abandonment suggest frustration.
+*   **The "Midway Drop" Signal (Content/Flow Friction):** Calculate the **Completion Rate** (`recipe_completed` / `recipe_started`). If users consistently drop off at the same percentage of completion (e.g., 60% through), the recipe length or complexity may exceed the "hands-free" tolerance window.
+*   **The "Silent Success" Signal:** A session with zero `help_triggered` events, zero `repeated` steps, and a `recipe_completed` event is your strongest proxy for satisfaction. Users who successfully cook do not need to tell you; their completion is the testimonial.
+
+**5. This Week's Steps**
+1.  **Instrument `recipe_step_repeated` and `recipe_abandoned_midway`** immediately. Query the top 5 recipes with the highest repeat-to-start ratio.
+2.  **Run a cohort analysis** on users who abandoned vs. completed in Week 1 vs. Week 2. If retention of *completers* is high but *abandoners* never return, your friction point is the initial recipe flow, not the content library.
+3.  **Define a "Friction Threshold":** Flag any recipe step where >15% of users repeat the instruction or trigger help. This is your actionable trigger to rewrite that specific step in the next update.
+
+*Note: All benchmarks (e.g., the 15% threshold) must be validated against your own baseline data after one week of collection; do not treat them as universal truths. Explicit feedback channels should remain available but are no longer the primary success indicator.*

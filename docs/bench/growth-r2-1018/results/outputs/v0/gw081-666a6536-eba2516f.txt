@@ -1,0 +1,26 @@
+**Recommendation: Prioritize These Two Events**
+
+Given your capacity constraints (two developers until Oct 15) and the specific hypothesis to validate, instrument **only** the following two events. Do not track deep sleep duration yet; it is a secondary variable that cannot be analyzed until the primary retention loop is proven.
+
+1.  **`sleep_score_viewed`**
+    *   **Definition:** Fired when a user opens the sleep report and the score is rendered on screen.
+    *   **Question Answered:** Did the user complete the "Activation" step of your hypothesis (checking the score within 3 days)?
+    *   **Required Properties:** `user_id` (pseudonymous), `timestamp`, `days_since_sleep_session` (calculated at event time).
+    *   **Why this first:** Your hypothesis relies entirely on this action. If users do not view the score, the content of the score (deep vs. total) is irrelevant. This is your binary pass/fail for the "checking" behavior.
+
+2.  **`core_retention_action`** (Rename to your specific app's core value, e.g., `app_opened_day_7` or `weekly_goal_set`)
+    *   **Definition:** Fired when a user returns to the app 7+ days after their initial sleep session, performing the primary value-driving action.
+    *   **Question Answered:** Did the user actually retain?
+    *   **Required Properties:** `user_id`, `timestamp`, `cohort_id` (e.g., "early_access").
+    *   **Why this second:** You must measure the *outcome* (retention) to correlate it against the *input* (viewing the score). Without this, you have activity data but no validation of long-term value.
+
+**Execution Logic for the Sprint**
+To validate your assumption without over-engineering:
+*   **Ignore "Deep Sleep" for now:** Tracking specific sleep stages adds schema complexity and analysis noise before you know if *any* score viewing drives retention. Once the correlation between `sleep_score_viewed` and `core_retention_action` is confirmed, *then* A/B test whether showing "deep sleep" vs. "total time" increases the view rate.
+*   **The Analysis Query:** In week 3, segment users who triggered `sleep_score_viewed` within 3 days vs. those who did not. Compare the retention rate of these two cohorts. If the "viewers" retain significantly higher, your hypothesis holds. If not, the score view is a vanity metric, and you must pivot before adding more tracking.
+*   **Privacy Seam:** Ensure `user_id` is stable across sessions for cohorting but remains pseudonymous. Route any raw PII handling to your privacy compliance protocol; do not store raw identifiers in these analytics events.
+
+**Verdict:** Ship `sleep_score_viewed` and `core_retention_action` only. Anything else is premature optimization that risks missing the October 15th deadline.
+
+*Note: If the correlation is weak after launch, the issue is likely the value proposition of the score itself, not the granularity of sleep data.*
+*Do not attempt to calculate "significance" until you have at least 100 users in the "viewer" cohort to avoid false positives from small sample noise.*

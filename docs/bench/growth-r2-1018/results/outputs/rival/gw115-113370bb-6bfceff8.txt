@@ -1,0 +1,35 @@
+### Recommended Growth Metrics for Seasonal Normalization
+
+To distinguish between genuine growth and seasonal anomalies during EcoMarket's peak events (Earth Day, Black Friday), you must shift from absolute volume metrics to **efficiency ratios** and **latency-correlated cohorts**. Absolute numbers will always skew during spikes; ratios reveal the health of the conversion funnel independent of traffic volume.
+
+Track these four specific indicators:
+
+**1. Latency-Stratified Conversion Rate (The Diagnostic Metric)**
+Do not report a single site-wide conversion rate. Instead, segment conversion rate by page load time buckets (e.g., <1s, 1–3s, >3s).
+*   **Why:** If conversion drops only in the ">3s" bucket while the "<1s" bucket remains stable at ~3.5%, the issue is confirmed as technical latency. If conversion drops across *all* speed buckets, the issue is user hesitation or offer friction.
+*   **Action:** Correlate server response logs with analytics events to assign every session a latency tag.
+
+**2. Cart Abandonment Rate by Exit Point (The Friction Metric)**
+Track abandonment specifically at the "Payment Info Entry" step versus the "Shipping Calculation" step, segmented by traffic source.
+*   **Why:** Technical latency often causes abandonment *before* the user can input data (timeout errors). User hesitation due to "high demand" messaging often occurs *after* seeing final costs or delivery estimates.
+*   **Normalization:** Compare the *ratio* of "Payment Entry Abandonment" to "Total Cart Adds" rather than raw abandonment counts. This ratio should remain relatively stable regardless of traffic volume if the experience is consistent.
+
+**3. Revenue Per Session (RPS) by Device Type (The Value Metric)**
+Replace "Total Revenue" with "Revenue Per Session" broken down by Mobile vs. Desktop.
+*   **Why:** Traffic spikes often disproportionately affect mobile users on slower connections. If Mobile RPS plummets while Desktop RPS holds steady, your infrastructure is failing mobile specifically.
+*   **Normalization:** RPS naturally normalizes for traffic volume. A 400% traffic spike with stable RPS indicates healthy scaling; a dropping RPS indicates degradation.
+
+**4. The "Quiet Period" Baseline Delta**
+Establish a rolling 4-week baseline for the metrics above during non-peak times (e.g., mid-February to mid-March).
+*   **Calculation:** `(Peak Metric Value - Quiet Baseline) / Quiet Baseline`.
+*   **Usage:** Report the *percentage delta* from baseline rather than raw peak numbers. For example: "Black Friday Conversion Rate was -15% vs. Quiet Baseline," is more actionable than "Conversion Rate was 1.2%."
+
+**Implementation Strategy for December 1st Launch:**
+*   **Infrastructure Team:** Monitor server latency percentiles (p95 and p99), not just averages. Set alerts when p95 latency exceeds 2 seconds, as this is likely your conversion cliff.
+*   **Marketing Team:** Pause high-volume top-of-funnel campaigns automatically if p95 latency breaches the threshold. Protect the conversion rate of existing high-intent users before acquiring new ones.
+*   **Joint Review:** Hold daily stand-ups during peak weeks reviewing the *Latency-Stratified Conversion Rate* only. This single view aligns both teams on whether to spend more on servers (if tech is the bottleneck) or optimize the offer (if user hesitation is the bottleneck).
+
+By focusing on these normalized ratios, you isolate performance degradation from volume noise, enabling precise budget allocation between infrastructure hardening and marketing spend.
+
+*Note: Ensure your analytics tool (e.g., GA4, Mixpanel) is configured to capture custom dimensions for page load time to enable the latency segmentation.*
+*Recommendation: Run a load test simulating 400% traffic two weeks before December 1st to validate your latency tracking implementation.*

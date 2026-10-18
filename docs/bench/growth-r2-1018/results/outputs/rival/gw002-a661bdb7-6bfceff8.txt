@@ -1,0 +1,52 @@
+# SwiftLend Application Leakage Diagnostic Brief
+
+**Objective:** Isolate whether application drop-off between income verification and submission is caused by user abandonment (friction/time) or system rejection (silent failures).
+
+**Current State:** 4,200 applications started; 980 completed (23% rate). Assumed cause: manual document upload friction. Unverified hypothesis: Silent system rejections or identity verification timeouts.
+
+## Required Event Instrumentation
+
+To distinguish between abandonment and rejection, engineering must implement the following specific tracking events within the application flow. Each event must include a `user_id`, `session_id`, `timestamp`, and `step_name`.
+
+### 1. Step Entry & Exit Events
+Track when a user enters and leaves each specific step to calculate time-on-step.
+*   `application_step_viewed`: Fires when the income verification screen loads.
+*   `application_step_abandoned`: Fires if a user navigates away or closes the app *before* completing the step action.
+    *   *Property:* `exit_method` (e.g., "back_button", "home_nav", "app_close").
+    *   *Property:* `time_on_step_seconds`.
+
+### 2. Action-Specific Events (The "What")
+Track the specific interaction with the upload/verification mechanism.
+*   `document_upload_started`: User clicks "Upload" or opens file picker.
+*   `document_upload_completed`: File successfully transferred to server.
+    *   *Property:* `file_count`.
+    *   *Property:* `total_upload_time_seconds`.
+*   `identity_verification_submitted`: User clicks "Verify" or "Submit" to trigger the background check.
+
+### 3. System Response Events (The "Why")
+**Critical:** These events must fire immediately upon receiving the backend response, regardless of success or failure. This isolates silent rejections.
+*   `identity_verification_result`: Fires when the system returns a decision.
+    *   *Property:* `result_status` (Values: "approved", "rejected", "manual_review", "error_timeout").
+    *   *Property:* `rejection_reason_code` (e.g., "doc_unreadable", "mismatch_data", "system_error"). *If null, treat as approved.*
+    *   *Property:* `processing_time_seconds`.
+*   `application_final_submission`: Fires only when the final "Submit Application" button is clicked.
+
+## Diagnostic Logic for Analysis
+
+Once implemented, use this logic to categorize drop-offs:
+
+1.  **Friction/Abandonment:** High count of `application_step_abandoned` with high `time_on_step_seconds` indicates the process is too tedious or confusing. High `time_on_step` with low abandonment suggests users are trying but struggling with the UI.
+2.  **Silent Rejection:** A spike in `identity_verification_result` with `result_status` = "rejected" or "error_timeout" where the user *does not* subsequently trigger `application_final_submission`. If users receive a rejection but the UI does not clearly inform them, they will drop off silently.
+3.  **Technical Failure:** `identity_verification_result` with `result_status` = "error_timeout" indicates backend latency causing users to give up waiting.
+
+## Success Metric
+The primary metric for this diagnostic phase is **Step Completion Rate by Cause**:
+*   % dropping off due to Abandonment (User action)
+*   % dropping off due to Rejection (System action)
+*   % dropping off due to Error (System failure)
+
+This data will determine whether the solution requires UX design changes (reducing friction) or Risk/Engineering changes (fixing rejection logic or speed).
+
+---
+*Note: Ensure no PII (personally identifiable information) is captured in event properties, specifically within `rejection_reason_code`.
+Engineering should prioritize logging `identity_verification_result` first, as this currently represents the largest blind spot.*

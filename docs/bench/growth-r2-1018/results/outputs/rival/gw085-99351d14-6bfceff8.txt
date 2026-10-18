@@ -1,0 +1,39 @@
+# FreshMart Loyalty Program Holdout Test Design
+
+## Executive Summary
+To measure the true lift of the new loyalty program launching February 1st in Texas, we will execute a randomized controlled trial (RCT) with a 90/10 split. This design isolates program impact from external factors like Super Bowl promotions and seasonal shifts by ensuring both test and control groups experience identical market conditions.
+
+## 1. Group Structure & Randomization
+*   **Unit of Randomization:** Randomize at the **customer/household ID level**, not the store level. This prevents store-specific variables (e.g., local demographics, staffing) from skewing results.
+*   **Allocation:**
+    *   **Test Group (90%):** Receives loyalty program invitation and full benefits.
+    *   **Control Group (10%):** Does not receive the invitation. They continue shopping under standard pricing/promotions.
+*   **Stratification:** Before random assignment, stratify customers by **historical average basket size** and **purchase frequency** (based on Jan 2023–Jan 2024 data). This ensures both groups have identical pre-test spending profiles, reducing variance and increasing statistical power.
+*   **Exclusion Criteria:** Exclude customers with <2 visits in the past 6 months to focus on active shoppers where the "$5 lift" hypothesis is relevant.
+
+## 2. Addressing Seasonality & External Events
+Since we cannot change the calendar, we rely on the **parallel trends assumption**: if the program did not exist, the Test and Control groups would have moved in lockstep from January through April.
+*   **Super Bowl & Seasonality:** Because both groups shop in the same Texas stores during the same weeks, the "Super Bowl bump" and seasonal shifts affect both equally. The *difference* in performance between the groups isolates the program's effect.
+*   **Baseline Correction:** Use January 2024 data (pre-launch) as a covariate. If the Control group's basket size naturally rises 8% in February due to seasonality, we expect the Test group to rise 8% *plus* the program lift.
+
+## 3. Key Covariates to Monitor
+To ensure statistical validity and adjust for any minor randomization imbalances, track these covariates in your regression model:
+*   **Pre-test Basket Size:** Average spend per trip (Jan 1–31).
+*   **Purchase Frequency:** Visits per month (last 90 days).
+*   **Store Location:** Fixed effects for specific Texas regions to account for local economic variations.
+*   **Day-of-Week/Time:** To control for shopping pattern shifts.
+*   **Promotion Exposure:** Flag transactions occurring during major circular drops or Super Bowl weeks to test for interaction effects (e.g., does the program amplify promo response?).
+
+## 4. Maintaining Group Integrity
+*   **Contamination Prevention:** Ensure POS systems strictly enforce the 10% block. Control customers must *never* accidentally receive loyalty pricing or points. If a control customer calls support, scripts must prevent manual enrollment.
+*   **Consistent Communication:** Do not send "You were not selected" messaging to the control group. They should simply experience business-as-usual. Any awareness of exclusion could alter behavior (resentment bias).
+*   **Duration:** Run the test for a full 12 weeks (Feb 1 – Apr 24). This covers the Super Bowl, post-holiday lull, and early spring, capturing a full cycle of shopping behaviors.
+*   **Stopping Rules:** Do not peek at results before the 4-week mark to avoid false positives from early volatility. Monitor only for technical failures (e.g., control group accidentally getting points).
+
+## 5. Success Metric Definition
+*   **Primary Metric:** Incremental Average Basket Size (Test Avg – Control Avg).
+*   **Statistical Threshold:** Detect a $5 lift with 95% confidence. Given typical grocery variance, ensure your sample size calculation accounts for a standard deviation of ~$15–$20 per basket.
+
+By holding the environment constant and varying only the program access, this design attributes any divergence in basket size directly to the loyalty initiative, satisfying the VP's need for causal proof.
+
+*Note: Ensure data engineering validates the 10% block logic in the staging environment before Feb 1st launch.*

@@ -1,0 +1,23 @@
+**Decision: Do not roll out any variant yet. The current read is `UNVERIFIED` due to missing pre-committed design details and uncorrected multiple comparisons.**
+
+You cannot make a go/no-go decision based on the summary provided because the analysis violates three core rigor rules required to trust these numbers:
+
+1.  **Peeking and Multiple Comparisons:** You tested three variants across two platforms (six distinct comparisons) without stating a correction method. Finding a "winner" in one slice (Android/B) and another in a different slice (iOS/C) is a classic false-positive pattern when no alpha-spending or Bonferroni-style correction was pre-committed. With 4,000 users per variant, the noise floor is high enough that a 12% lift in a sub-segment is likely random variance unless the p-value was adjusted for the six looks you effectively took.
+2.  **Conflicting Primary Metrics:** Variant B and C win on conversion (volume), but the Control wins on Average Order Value (value). Without a pre-declared **primary metric** (e.g., "Total Revenue per Visitor" vs. "Booking Rate"), you are cherry-picking the metric that favors each variant. A 12% lift in bookings means nothing if it comes from users buying cheaper tickets, lowering overall revenue.
+3.  **Missing Pre-commitment:** You did not state the pre-committed sample size or duration. If you stopped the test because "Variant B looked good on Android today," the result is statistically invalid (peeking bias).
+
+**Immediate Actions for Tomorrow's Decision:**
+
+*   **Recompute the Primary Metric:** Ignore the split conversion rates for now. Calculate **Total Revenue Per Visitor (RPV)** for each variant across *all* users combined. RPV = (Conversion Rate × Average Order Value). If the Control has the highest RPV, both B and C are losses, regardless of their conversion lifts. This is your single source of truth.
+*   **Apply a Guardrail Check:** If RPV is inconclusive, treat Average Order Value as a **guardrail metric**. If a variant increases conversion but significantly drops AOV (statistically significant via a t-test on revenue distribution, not just averages), it fails. Do not trade long-term value for short-term volume.
+*   **Validate the Device Split:** Run a chi-squared test on the device distribution across variants. If the randomization was uneven (e.g., Variant B accidentally got more high-intent Android users), the segment lift is a confounder, not a treatment effect. If you cannot verify the randomization balance, the segment data is `UNVERIFIED`.
+
+**The Call:**
+*   **Ship Control** if its Total RPV is higher than or statistically indistinguishable from B and C.
+*   **Extend the Test** only if you can pre-commit to a new sample size calculated to detect the specific lift you saw, using a sequential testing rule (like mSPRT) to avoid further peeking.
+*   **Stop Both Variants** if the AOV drop in B and C is statistically significant, as this indicates a fundamental value leak.
+
+Do not present the 12% and 8% figures as wins; present them as unverified signals until the RPV reconciliation is complete.
+
+*Note: Ensure user identifiers used for this cohort analysis are pseudonymous; route any PII handling to your privacy compliance protocol.*
+*This analysis assumes the 4,000 users per variant is the final count; if the test is still running, freeze data collection immediately before recomputing.*

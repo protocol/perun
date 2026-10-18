@@ -1,0 +1,55 @@
+### Instrumentation Plan: GreenFlow Beta (Pre-Launch)
+
+**North Star Metric:** Weekly Active Users with **Active Automated Schedules** (not just app opens or total signups). This measures delivered value (water saved automatically), not vanity activity.
+
+**Event Taxonomy: The "Why" Behind Abandonment**
+Do not instrument "everything." Implement only these specific events to distinguish technical failure from usability friction during the 48-hour activation window.
+
+#### 1. `schedule_setup_started`
+*   **Question:** Are users even attempting the core value action?
+*   **Properties:**
+    *   `user_segment`: (e.g., "technical", "non-technical" – based on onboarding survey if available).
+    *   `entry_point`: (e.g., "home_banner", "onboarding_wizard", "settings_menu").
+    *   `device_model`: (Critical for hardware-specific bugs).
+    *   `app_version`.
+
+#### 2. `device_connectivity_check` (Technical Seam)
+*   **Question:** Is the drop-off caused by hardware handshake failures?
+*   **Properties:**
+    *   `check_result`: (`success`, `timeout`, `device_not_found`, `auth_failed`).
+    *   `signal_strength`: (RSSI value at time of attempt).
+    *   `retry_count`: (Number of automatic retries before failure/success).
+    *   `error_code`: (Specific hardware SDK error).
+*   **Analysis Logic:** High drop-off after `schedule_setup_started` with `check_result` != `success` indicates **technical friction**.
+
+#### 3. `schedule_configuration_step_viewed`
+*   **Question:** Where in the UI flow do users hesitate or leave?
+*   **Properties:**
+    *   `step_name`: (e.g., "zone_selection", "frequency_setting", "duration_input", "review").
+    *   `time_spent_seconds`: (Time on this specific screen).
+    *   `help_icon_clicked`: (Boolean – indicates confusion).
+    *   `default_values_used`: (Boolean – did they accept defaults or customize?).
+*   **Analysis Logic:** High `time_spent_seconds` or frequent `help_icon_clicked` on a specific step indicates **usability friction**.
+
+#### 4. `schedule_setup_completed` (Activation Event)
+*   **Question:** Did they successfully create the automation?
+*   **Properties:**
+    *   `total_duration_seconds`: (Time from start to finish).
+    *   `zones_configured_count`: (Number of zones set).
+    *   `schedule_type`: (`fixed`, `weather_adjusted`, `soil_moisture_based`).
+    *   `is_automated`: (Boolean – must be true for North Star).
+
+#### 5. `schedule_execution_triggered` (Retention Validator)
+*   **Question:** Did the automation actually run without user intervention?
+*   **Properties:**
+    *   `trigger_source`: (`timer`, `weather_api`, `sensor_input`).
+    *   `water_volume_estimated`: (Derived metric).
+    *   `execution_status`: (`success`, `failed_no_water`, `failed_valve_error`).
+
+---
+
+### Implementation & Privacy Notes
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for cohort analysis (linking sessions across devices), but ensure no PII (names, exact addresses) is sent to the analytics engine. Route PII handling to your privacy compliance protocol.
+*   **Stage Awareness:** As this is an MVP/Beta, do not track granular button clicks outside this flow. If an event does not answer one of the questions above, do not instrument it yet.
+
+**This Week's Step:** Engineering to implement the `device_connectivity_check` and `schedule_configuration_step_viewed` events with the listed properties by June 5th. Verify data ingestion by simulating a "timeout" error and a "long dwell time" on the "frequency_setting" step to ensure distinct signals appear in the dashboard.

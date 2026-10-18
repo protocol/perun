@@ -1,0 +1,55 @@
+# WanderPlan Event Tracking Specification: Collaboration-to-Conversion
+
+**Objective:** Validate the hypothesis that collaborative itineraries (2+ users) drive higher booking conversion than solo plans by distinguishing casual browsing from serious trip execution.
+
+**Implementation Context:** Backend event logging update. Focus on state changes and actionable outcomes, not passive views.
+
+## 1. Core Entity Events (Itinerary Lifecycle)
+*Track state transitions of the itinerary object itself.*
+
+| Event Name | Trigger Condition | Required Properties |
+| :--- | :--- | :--- |
+| `itinerary_created` | User saves a new plan. | `itinerary_id`, `creator_user_id`, `destination_country`, `trip_start_date` |
+| `collaborator_invited` | User sends an invite link/email. | `itinerary_id`, `invite_method` (email/link), `recipient_email_hash` |
+| `collaborator_joined` | Recipient accepts invite and accesses plan. | `itinerary_id`, `join_user_id`, `time_since_invite` |
+| `itinerary_shared_publicly` | User toggles plan to "Public" or generates shareable view. | `itinerary_id`, `share_channel` (optional if known) |
+| `itinerary_finalized` | User marks plan as "Ready" or locks edits. | `itinerary_id`, `total_collaborators`, `total_items` |
+
+## 2. High-Intent Action Events (Serious Preparation)
+*Track specific actions that indicate a move from brainstorming to booking preparation. These distinguish "serious" users from browsers.*
+
+| Event Name | Trigger Condition | Required Properties |
+| :--- | :--- | :--- |
+| `itinerary_item_added` | User adds a specific bookable item (flight/hotel/activity). | `itinerary_id`, `item_type` (flight/hotel/activity), `item_provider`, `estimated_cost`, `currency` |
+| `booking_link_clicked` | User clicks an external affiliate/booking link within the plan. | `itinerary_id`, `item_type`, `provider_name`, `user_role` (owner/collaborator) |
+| `export_itinerary` | User exports plan to PDF, Calendar, or Email. | `itinerary_id`, `export_format` (pdf/calendar/email), `recipient_count` |
+| `budget_set` | User defines a total trip budget. | `itinerary_id`, `budget_amount`, `currency` |
+
+## 3. Conversion Validation Events (Outcome)
+*The definitive signals that a plan turned into a real trip.*
+
+| Event Name | Trigger Condition | Required Properties |
+| :--- | :--- | :--- |
+| `booking_confirmed` | User returns from provider or manually marks item as booked. | `itinerary_id`, `item_type`, `booking_value`, `provider`, `is_collaborative` (boolean) |
+| `trip_started` | Current date matches `trip_start_date` AND user opens app. | `itinerary_id`, `days_since_finalized`, `active_collaborators_count` |
+| `trip_completed` | User rates the trip or marks it as finished post-date. | `itinerary_id`, `user_rating`, `nps_score` |
+
+## Data Logic & Aggregation Rules for Developers
+
+1.  **Collaboration Flag:** Every event associated with an `itinerary_id` must be queryable by `collaborator_count`.
+    *   *Logic:* `collaborator_count` = 1 (Solo) vs. `collaborator_count` ≥ 2 (Collaborative).
+    *   *Requirement:* Update this count dynamically on `collaborator_joined` or `collaborator_left` events.
+2.  **Session Independence:** Do not rely on session IDs. All events must tie strictly to `user_id` and `itinerary_id` to track cross-device and multi-user behavior.
+3.  **Timestamp Precision:** All timestamps must be UTC to accurately calculate `time_to_convert` (duration between `itinerary_created` and `booking_confirmed`).
+4.  **No PII:** Do not log raw email addresses or names. Use hashed IDs for recipients.
+
+## Success Metric Definition
+To validate your hypothesis, the analytics team will calculate:
+*   **Collaborative Conversion Rate:** (% of itineraries with ≥2 users that trigger `booking_confirmed`)
+*   **Solo Conversion Rate:** (% of itineraries with 1 user that trigger `booking_confirmed`)
+*   **Depth of Preparation:** Average count of `itinerary_item_added` events per collaborative vs. solo plan.
+
+***
+
+*Ensure the `booking_link_clicked` event fires before the user leaves the domain to capture outbound intent accurately.*
+*The `trip_started` event serves as a secondary validation layer if affiliate tracking pixels fail to return conversion data.*

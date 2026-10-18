@@ -1,0 +1,37 @@
+### NeonQuest Analytics Funnel Design (Soft Launch)
+
+**1. North Star Metric**
+**Weekly Active Players completing the Core Loop.**
+*Definition:* Unique users who complete at least three full game levels (or equivalent core action) within a 7-day window.
+*Why:* Raw downloads and session counts are vanity metrics. Value is delivered only when the user engages with the core gameplay loop repeatedly. Session length volatility (2–45 mins) makes "time spent" a poor proxy for value.
+
+**2. The Funnel (Bottom-Up Diagnosis)**
+Diagnose retention before acquisition. If users do not return to the core loop, acquisition spend is wasted.
+*   **Retention (The Leak Check):** % of Day-1 and Day-7 users who complete the Core Loop again.
+*   **Activation:** % of new installs who complete the "Aha!" moment (e.g., first level completion + first social share attempt) within 24 hours.
+*   **Acquisition:** Installs by source (Organic Social vs. Ads). *Note: Do not optimize for installs until Activation and Retention are stable.*
+*   **Revenue:** % of activated users making first In-App Purchase (IAP).
+
+**3. Event Taxonomy & The "Offline/Short Burst" Seam**
+Do not instrument "session start/end" as the primary trigger, as intermittent connectivity and short bursts will create false churn signals. Instead, instrument **action-based events** that persist locally and sync when online.
+
+*   **`level_complete`** (Core Action): Triggered upon level finish. Properties: `level_id`, `duration_ms`, `offline_flag` (boolean).
+*   **`social_share_attempt`**: Triggered when the user clicks share. Properties: `platform`, `success_status` (sent/failed/queued).
+*   **`iap_initiated`** & **`iap_completed`**: Separate the intent from the transaction to catch drop-offs at the payment gateway.
+*   **`app_foreground`**: Use this only to calculate "time to first action," not as a hard session boundary.
+
+**Handling Data Gaps:**
+*   **Local Queue:** Store events locally if connectivity is lost. Tag them with `event_timestamp` (when it happened) vs `sync_timestamp` (when it arrived). Analyze based on `event_timestamp` to avoid skewing daily cohorts.
+*   **Churn Definition:** Do not mark a user as churned based on missing "session end" events. Define churn as **no `level_complete` events for 14 days**. This accommodates irregular play patterns without misinterpreting connectivity gaps as abandonment.
+
+**4. Experiment Rigor for Soft Launch**
+*   **Pre-commit:** Define the Minimum Detectable Effect (MDE) for your social sharing hypothesis before June 1st.
+*   **Guardrail:** Monitor crash-free sessions and latency. If social sharing increases latency >200ms, it may hurt retention despite higher organic reach.
+*   **No Peeking:** Do not stop the test early if social shares spike on Day 2. Read results only after the pre-committed sample size is reached or using a valid sequential testing bound.
+
+**This Week's Steps:**
+1.  **Instrument:** Implement local event queuing for `level_complete` and `social_share_attempt` with offline flags; verify sync logic in a disconnected test environment.
+2.  **Define Query:** Build the Day-1 Retention cohort query based on `level_complete` count ≥ 1, ignoring session boundaries.
+3.  **Baseline:** Establish the current "offline event ratio" during internal testing to set a noise threshold for production data.
+
+*Note: Ensure all user identifiers are pseudonymous and routed to privacy compliance checks before storage. Do not estimate conversion benchmarks; compare all soft launch data strictly against your own Day 1–7 internal baselines.*

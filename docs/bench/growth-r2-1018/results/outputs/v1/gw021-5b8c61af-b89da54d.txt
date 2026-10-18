@@ -1,0 +1,35 @@
+### Diagnosis Plan: Isolating the 'Pro Plus' Friction Point
+
+Your hypothesis that the $5 price gap causes hesitation is plausible, but the data must distinguish between **choice paralysis** (users seeing both plans and leaving) and **value mismatch** (users wanting 'Pro Plus' features but balking at the total price). Since sign-ups are up 15% while conversion dropped, the leak is almost certainly in the activation or decision layer, not acquisition quality.
+
+To decide by next Friday, isolate these three specific data cuts. Do not look at aggregate conversion yet; it hides the specific breakage.
+
+**1. The "Comparison Drop-off" Rate (Pricing Table Friction)**
+*   **Event to Isolate:** `pricing_page_view` → `pricing_plan_selected` → `exit_pricing_page`.
+*   **The Cut:** Compare the % of users who view the pricing table but select *neither* plan before exiting, segmented by:
+    *   Pre-launch (before Oct 15) vs. Post-launch.
+    *   Users who see 2 tiers (old) vs. Users who see 3 tiers (new).
+*   **What this tells you:** If this exit rate spiked post-launch, your assumption about **confusion** or **paralysis** is correct. Users are overwhelmed by the choice or the small price delta makes the decision feel high-stakes.
+*   **Decision Trigger:** If the "no selection" exit rate is >20% higher than baseline, the pricing table layout or the $5 delta is the blocker. **Action:** Simplify the table or increase the feature/price gap to force differentiation.
+
+**2. The "Plan Selection" Split (Cannibalization vs. Abandonment)**
+*   **Event to Isolate:** `pricing_plan_selected` (broken down by `plan_name`: 'Pro' vs. 'Pro Plus').
+*   **The Cut:** Of the users who *do* select a plan, what is the split between 'Pro' and 'Pro Plus'?
+*   **What this tells you:**
+    *   If 80%+ select 'Pro Plus' but then drop at payment: The issue is **price sensitivity** to the higher tier, not confusion. The new tier is attracting interest but failing at the wallet.
+    *   If the split is 50/50 or heavily skewed to 'Pro' despite marketing 'Pro Plus': The new tier is indeed **cannibalizing** without adding net value, or users don't understand the upgrade benefit.
+*   **Decision Trigger:** If 'Pro Plus' selection is high but payment completion is low, the features resonate but the price is wrong. **Action:** Adjust 'Pro Plus' pricing or bundle. If selection is low, the features aren't compelling enough to justify the switch.
+
+**3. The Payment Step Leakage (Final Friction)**
+*   **Event to Isolate:** `checkout_initiated` → `payment_failed` vs. `checkout_abandoned`.
+*   **The Cut:** Compare abandonment rates at the credit card entry step for 'Pro' vs. 'Pro Plus' post-launch.
+*   **What this tells you:** If 'Pro Plus' has a significantly higher abandonment rate at the *payment* step (after selection) compared to 'Pro', the friction is purely **financial**. If abandonment happens *before* payment (at the review screen), the friction is **value perception**.
+*   **Decision Trigger:** High payment-step abandonment on 'Pro Plus' confirms the $5 up-sell is too steep for the perceived value. **Action:** Sunset 'Pro Plus' or re-bundle features to justify the cost.
+
+**Immediate Next Steps (This Week):**
+1.  **Query:** Run the "Comparison Drop-off" cohort analysis for Oct 1–14 vs. Oct 15–Today.
+2.  **Verify:** Check if `pricing_plan_selected` events are firing correctly for the new 'Pro Plus' ID (ensure no instrumentation gaps).
+3.  **Decide:** If the drop-off is at the *view* stage, redesign the pricing table by Friday. If the drop-off is at the *payment* stage for 'Pro Plus', prepare a recommendation to adjust the price or features.
+
+*Note: Do not rely on the aggregate 2.8% figure; it averages two different user behaviors. The specific drop-off point dictates whether you fix the UI (confusion) or the Product/Price (value).*
+*Ensure your analytics tool distinguishes between 'Pro' and 'Pro Plus' IDs in the `plan_selected` event; if this tag is missing, the data is UNVERIFIED.*

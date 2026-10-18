@@ -1,0 +1,27 @@
+### Validation Plan for User ID Resolution
+
+**1. Measure Accuracy Before Full Execution**
+Do not run any matching algorithm on the full dataset until validated on a gold-standard sample.
+*   **Create a Ground Truth Sample:** Manually label 500–1,000 conflicting records (spanning the 8% error rate) where the correct user identity is known via support tickets or verified login sessions.
+*   **Calculate Precision and Recall:** Run your proposed algorithm (e.g., device ID + phone number logic) against this sample.
+    *   *Precision:* Of the records the algorithm merged, how many were actually the same user? (Target: >99% to prevent merging distinct users).
+    *   *Recall:* Of the actual duplicate users in the sample, how many did the algorithm catch? (Target: >95% to maximize data utility).
+*   **Define the Acceptance Threshold:** Reject any algorithm configuration where **Precision < 99.5%**. In ride-sharing, falsely merging two distinct users (false positive) corrupts revenue attribution and safety records, which is a higher risk than leaving some duplicates unresolved (false negative).
+
+**2. Systematic Evaluation of Corruption Extent**
+Before cleaning, quantify the blast radius to inform the CTO's risk assessment.
+*   **Segment the 8%:** Break down the inconsistent IDs by region, user tenure, and trip volume. Determine if the error is concentrated in high-value loyalty candidates or random noise.
+*   **Context Preservation Check:** Verify that merging records does not orphan trip metadata (e.g., GPS traces, payment tokens). Ensure the primary key swap maintains foreign key integrity in the `trips` fact table.
+
+**3. Post-Cleanup Monitoring Metrics**
+Once the cleanup script runs, monitor these specific metrics to detect introduced biases:
+*   **Trip Count Variance:** Compare total daily trip counts pre- and post-cleanup. A drop >0.5% indicates accidental record deletion rather than merging.
+*   **Revenue Per User Distribution:** Plot the histogram of revenue per user. If the tail becomes artificially heavy (super-users appearing out of nowhere), the algorithm is over-merging distinct accounts.
+*   **Cohort Stability:** Re-run the loyalty program eligibility query on a static date (e.g., August 1st) before and after cleanup. The variance in eligible user count should be <1%.
+*   **Device-to-User Ratio:** Monitor the average number of users per device ID. A sudden spike to 1.0 everywhere suggests over-aggressive collapsing; a stable curve suggests healthy resolution.
+
+**Risk Assessment Summary for CTO**
+The primary risk is not the remaining 8% inconsistency, but the introduction of **false positive merges** that conflate distinct riders and drivers. Proceed only if the validation sample proves a false positive rate below 0.5%. If the algorithm cannot meet this threshold, isolate the corrupted 8% into a separate "unverified" table for manual review rather than forcing an automated merge that compromises historical truth.
+
+Note: Do not use raw device IDs as the sole deterministic key; they are shared among family members and pool accounts.
+Ensure all merged identities remain pseudonymous and route any PII handling to the privacy compliance protocol.

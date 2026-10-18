@@ -1,0 +1,58 @@
+# SnapEdit AI Background Removal: Tracking Specification
+
+**Target Implementation Date:** Before December 1st
+**Stakeholders:** Product, Engineering, Data Analytics
+**Primary Goal:** Determine which user behaviors and image attributes predict conversion to the paid plan.
+
+## 1. Core Event Definition
+
+Log a single, consistent event when the AI background removal process completes (successfully or unsuccessfully). Do not log every intermediate step unless it represents a distinct failure point.
+
+**Event Name:** `ai_background_remove_completed`
+**Trigger:** Fires immediately after the AI processing finishes and the result is rendered to the user.
+
+## 2. Required Event Properties
+
+Include the following properties in the event payload. All property names should be lowercase with underscores.
+
+### A. User & Session Context (Critical for Conversion Analysis)
+*   `user_id`: (String) Unique identifier for the user.
+*   `account_status`: (String) Current plan type at time of event (e.g., `free`, `trial`, `paid`).
+*   `session_id`: (String) To group multiple edits within a single sitting.
+*   `days_since_install`: (Integer) To analyze if new vs. mature users behave differently.
+
+### B. Image & Technical Attributes (Testing the "High-Res" Hypothesis)
+*   `image_resolution_width`: (Integer) Width in pixels.
+*   `image_resolution_height`: (Integer) Height in pixels.
+*   `image_file_size_mb`: (Float) File size in megabytes.
+*   `image_format`: (String) e.g., `jpg`, `png`, `heic`.
+*   `is_batch_edit`: (Boolean) True if this was part of a multi-image selection.
+
+### C. Interaction & Performance Metrics
+*   `processing_time_ms`: (Integer) Time taken by the server/AI to complete the task.
+*   `time_in_editor_seconds`: (Integer) Time elapsed between opening the tool and completion.
+*   `edit_method`: (String) How the tool was accessed (e.g., `home_screen_cta`, `quick_action_widget`, `share_sheet_extension`).
+*   `undo_count`: (Integer) Number of times the user hit "undo" during this specific edit session (indicates difficulty or dissatisfaction).
+*   `export_action`: (String) What the user did immediately after: `saved`, `shared`, `discarded`, `export_failed`.
+
+### D. Outcome & Quality Signals
+*   `success_status`: (Boolean) Did the tool complete without error?
+*   `error_code`: (String, Optional) If failed, the specific error (e.g., `timeout`, `face_detection_fail`, `server_error`).
+*   `manual_refinement_used`: (Boolean) Did the user use the "brush/erase" tool to fix the AI result? (High refinement may indicate poor AI quality or high user intent).
+
+## 3. Conversion Attribution Setup
+
+To link this event to upgrades, ensure the following downstream events are also tracked if not already present:
+*   `paywall_viewed`: Triggered when the user hits a limit or clicks a premium feature.
+*   `subscription_started`: Triggered upon successful payment.
+
+**Analysis Logic:**
+You will correlate `ai_background_remove_completed` events with `subscription_started` events occurring within 24 hours. Specifically, you will segment conversion rates by `image_resolution_*` buckets and `manual_refinement_used` to validate your hypothesis that high-resolution editors convert better.
+
+## 4. Implementation Notes for Engineering
+
+1.  **Privacy Compliance:** Do **not** upload the actual image content or any metadata containing GPS coordinates (location) to the analytics platform. Only send the numerical dimensions and file size.
+2.  **Timing:** Ensure `processing_time_ms` is calculated server-side for accuracy, while `time_in_editor_seconds` is client-side.
+3.  **Validation:** Before the Dec 1st launch, verify in your debug mode that `user_id` persists correctly across sessions and that no null values are sent for critical properties like `image_resolution_width`.
+
+This specification provides the minimum viable data set to answer your core questions about conversion drivers without overwhelming your data pipeline.

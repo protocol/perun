@@ -1,0 +1,39 @@
+**Directive: Instrumentation Plan for API Rate Limiting Launch**
+
+Do not select between "rejected requests" or "latency" as a single primary metric; they answer different questions. To satisfy both the VP of Engineering (stability) and Customer Success (sentiment), you must instrument a **North Star of Value Preservation** paired with specific **Input Metrics**.
+
+**1. The North Star: Paid Conversion Retention (Free Tier)**
+*   **Definition:** The percentage of free-tier users who remain active (make at least one valid request) in Week 1 post-launch compared to their pre-launch baseline.
+*   **Why:** Your assumption is that limits won't hurt conversion. If this metric drops, the limit is too aggressive, regardless of system stability. Vanity metrics like "total requests blocked" are irrelevant if paying users leave.
+*   **Status:** `UNVERIFIED` until baseline data is pulled from current logs.
+
+**2. Input Metrics (The "What to Instrument" List)**
+Instrument these three specific events before Tuesday. Do not log everything; log only what answers these questions:
+
+*   **Event A: `rate_limit_triggered`**
+    *   **Question:** Are we blocking the right users?
+    *   **Properties:** `user_tier` (free/paid), `endpoint`, `requests_in_last_minute`, `timestamp`.
+    *   **Usage:** Engineering uses this to verify the 100 req/min threshold is firing correctly. Customer Success uses this to identify users hitting the wall immediately.
+*   **Event B: `request_latency_ms` (Valid Requests Only)**
+    *   **Question:** Is the enforcement logic adding unacceptable overhead?
+    *   **Properties:** `status_code` (200/201), `endpoint`, `latency_ms`, `is_rate_limited_logic_applied` (boolean).
+    *   **Usage:** Compare the median latency of valid requests pre- and post-launch. If latency increases by >20%, the implementation is degrading performance for everyone.
+*   **Event C: `user_session_continuation`**
+    *   **Question:** Do users quit after being rate-limited?
+    *   **Properties:** `user_id` (pseudonymous/stable), `was_rate_limited_in_session` (boolean), `subsequent_action` (retry/abandon/upgrade_page_view).
+    *   **Usage:** This connects the block to sentiment. If `was_rate_limited` is true and `subsequent_action` is "abandon," you have a churn risk.
+
+**3. The Identifier Seam**
+Ensure `user_id` is a **stable, pseudonymous identifier** to track a single user across sessions for retention analysis. Do not use high-cardinality request IDs for this. Route any PII associated with these IDs to your privacy compliance protocol; do not store raw emails in these event logs.
+
+**4. Experiment Rigor & Decision Rule**
+You are launching a feature, not running a randomized A/B test, so you cannot claim causal "lift" without a control group. However, you must avoid "peeking" at noise.
+*   **Pre-commit:** Define a "Stop/Tweak" tripwire before launch. Example: "If `user_session_continuation` shows >15% abandonment among rate-limited users within 48 hours, we raise the limit to 150 req/min."
+*   **Guardrail:** Monitor `error_rate_5xx`. If this spikes, the rate-limiting logic itself is crashing the system, not just rejecting users.
+
+**This Week's Steps:**
+1.  **Query:** Pull the baseline % of free users currently making >100 requests/minute to estimate the volume of `rate_limit_triggered` events.
+2.  **Instrument:** Add the three events above to the logging pipeline by Friday. Verify they appear in your dashboard with correct properties.
+3.  **Define:** Set the specific numerical tripwire for abandonment (e.g., 15%) with the Customer Success lead so they know exactly when to escalate.
+
+**Note:** Do not fabricate a "good" rejection rate; compare your post-launch data only to your own pre-launch baseline. If you lack a stable user ID to track retention, the North Star metric is currently `UNVERIFIED`.

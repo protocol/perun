@@ -1,0 +1,22 @@
+**Recommendation: Do not declare a winner yet; extend the test with a pre-committed design focused on net revenue, not gross sign-ups.**
+
+Your current read is `UNVERIFIED` because it relies on "peeking" at interim results without a pre-committed sample size or duration. Stopping now because Version A has more sign-ups or Version B has fewer early refunds inflates the risk of a false positive. The 10% lower refund rate on fewer sign-ups (290 vs. 340) creates an immediate ambiguity: Version A drove ~17% more volume, but if those extra users churn at double the rate, Version B is actually superior for Lifetime Value (LTV). You cannot resolve this with week-one data alone.
+
+**Recomputed Reality & Confounders**
+You have 340 vs. 290 conversions. Without knowing the total traffic split, we cannot calculate the true conversion rate lift. Furthermore, "refund rate in 14 days" is a lagging guardrail, not your primary metric. The confounder here is **time**: committed customers (annual framing) often have a different churn curve than impulse buyers (monthly framing). A 14-day window captures buyer's remorse but misses the "value realization" cliff that often happens at day 45 or month 3. If you ship Version A based on volume, you may be acquiring low-LTV users who cancel after month two, destroying the finance team's LTV goal.
+
+**The Decision Framework**
+To satisfy leadership's focus on LTV, you must shift the primary metric from **Sign-ups** to **Net Active Subscriptions at Day 30 (or Day 60)**.
+1.  **Primary Metric:** Net revenue retained after 30 days (Sign-ups minus cancellations/refunds).
+2.  **Guardrail:** Total sign-up volume (to ensure you don't starve the funnel).
+3.  **Design Rule:** Pre-commit to a sample size or a fixed duration (e.g., 4 weeks) to capture at least one full billing cycle or the typical churn inflection point. Do not check for significance daily.
+
+**This Week's Steps**
+1.  **Define the Tripwire:** Calculate the break-even churn rate. If Version A's 340 sign-ups churn at >16.7% higher than Version B's 290 over 30 days, Version B yields more net customers. Set this specific percentage as your decision threshold.
+2.  **Extend the Instrumentation:** Ensure your analytics track the `subscription_status` event at Day 30 and Day 60 for both cohorts, linked by a stable pseudonymous user ID. Do not rely on refund logs alone; track voluntary cancellations too.
+3.  **Wait for the Pre-committed End Date:** Run the test for the full duration required to reach statistical power on the *Day 30 retention* metric. Only then compare the net retained revenue.
+
+If Version B retains even 15% more users at Day 30, its lower top-of-funnel volume is irrelevant; it wins on LTV. If retention is equal, Version A wins on volume. Anything decided before Day 30 is speculation.
+
+*Note: Ensure user IDs used for cohorting are pseudonymous and routed to your privacy compliance protocol; do not use raw PII for analytics segmentation.*
+*Note: If traffic volume is low, consider a sequential testing design (e.g., SPRT) to monitor continuously without inflating false positives, rather than a fixed date.*

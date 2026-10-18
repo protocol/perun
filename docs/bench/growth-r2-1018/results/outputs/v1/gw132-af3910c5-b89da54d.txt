@@ -1,0 +1,47 @@
+### Instrumentation Plan: GreenFlow Beta (June 10)
+
+**North Star Metric:** Weekly Active Users with **Active Automated Schedules**.
+*Reject vanity metrics like total app opens or cumulative signups; value is delivered only when the system waters automatically.*
+
+**Event Taxonomy: The "Setup Flow" Funnel**
+Instrument only these events to answer the specific question: *Is abandonment caused by hardware connectivity or UI complexity?* Every event includes `user_id` (pseudonymous), `session_id`, and `timestamp`.
+
+1.  **`setup_flow_started`**
+    *   **Trigger:** User clicks "Create Automated Schedule."
+    *   **Properties:** `entry_point` (e.g., onboarding wizard, dashboard button), `device_model`.
+    *   **Answers:** How many users attempt the core action?
+
+2.  **`device_connectivity_check`**
+    *   **Trigger:** App attempts to handshake with the controller.
+    *   **Properties:** `connection_status` (success, timeout, auth_fail, firmware_mismatch), `signal_strength_dbm`, `retry_count`.
+    *   **Answers:** Is hardware connectivity the primary blocker? High `timeout` or `auth_fail` rates indicate technical failure, not UI issues.
+
+3.  **`schedule_configuration_step_viewed`**
+    *   **Trigger:** User lands on a specific configuration screen (e.g., "Select Days," "Set Duration," "Choose Zones").
+    *   **Properties:** `step_name`, `step_sequence_number`.
+    *   **Answers:** Where in the UI flow do users drop off? A drop-off after `step_name: "Choose Zones"` suggests complexity or confusion specific to zone mapping.
+
+4.  **`schedule_input_error`**
+    *   **Trigger:** User submits invalid data or hits a validation block.
+    *   **Properties:** `field_name`, `error_code`, `error_message_displayed`.
+    *   **Answers:** Are validation rules too strict or confusing?
+
+5.  **`setup_flow_abandoned`**
+    *   **Trigger:** User exits the flow without completion (detected via session end or backgrounding after `setup_flow_started` but before `setup_flow_completed`).
+    *   **Properties:** `last_step_visited`, `time_spent_seconds`, `has_connectivity_error` (boolean derived from event 2).
+    *   **Answers:** Correlates abandonment with specific steps or prior connectivity failures.
+
+6.  **`setup_flow_completed`**
+    *   **Trigger:** User saves the schedule and receives confirmation.
+    *   **Properties:** `schedule_type` (fully_automated, semi_automated), `total_steps_taken`, `total_duration_seconds`.
+    *   **Answers:** Measures activation. Compare retention of this cohort against manual-only users to validate your 30% hypothesis.
+
+**Implementation Constraints & Privacy**
+*   **Identifier Seam:** Use a stable, pseudonymous `user_id` for cohort analysis (retention). Do not log PII (email, name) in these events; route identity mapping to your secure auth service per privacy compliance.
+*   **Stage Appropriateness:** This is an MVP launch. Do not instrument "clicks" on static text or non-interactive elements. Only instrument steps that map to the funnel above.
+
+**This Week's Steps**
+1.  **Engineering:** Implement the six events above with the specified properties by June 5th; verify `connection_status` logs distinct error codes for hardware vs. auth failures.
+2.  **Product/CS:** Define the "abandonment" query: *Filter `setup_flow_abandoned` where `has_connectivity_error` is false* to isolate UI friction for the customer success team to address in onboarding copy.
+
+*Note: Retention rates will be calculated against your own baseline post-launch; no external benchmarks are applied. If `device_connectivity_check` shows >20% failure, pause UI experiments and fix infrastructure first.*

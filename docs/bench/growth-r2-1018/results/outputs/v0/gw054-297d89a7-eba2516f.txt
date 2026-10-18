@@ -1,0 +1,46 @@
+### Instrumentation Plan: Fresh Produce Customer Journey
+
+To determine whether delivery time or product quality drives churn for your new fresh produce category, you must instrument events that answer specific questions rather than tracking all activity. Based on your hypothesis that **7-day repeat purchase** is the North Star for satisfaction, here are the specific events and properties to record.
+
+**1. Core Value Events (The "What")**
+*   **`fresh_produce_viewed`**: Captures interest.
+    *   *Properties:* `category` (e.g., leafy greens, fruits), `stock_status` (in-stock/out-of-stock).
+    *   *Question:* Are users browsing but not buying due to availability?
+*   **`fresh_produce_added_to_cart`**: Captures intent.
+    *   *Properties:* `item_count`, `estimated_weight`, `price_per_kg`.
+    *   *Question:* Is the friction in selection or at checkout?
+*   **`fresh_produce_order_placed`**: The activation event.
+    *   *Properties:* `order_id`, `total_fresh_value`, `delivery_slot_selected`, `user_cohort` (new vs. returning).
+    *   *Question:* What is the conversion rate from view to order?
+
+**2. Operational Performance Events (The "How" – Logistics)**
+*   **`order_fulfilled_timestamp`**: System trigger when the order leaves the hub.
+    *   *Properties:* `promise_time`, `actual_dispatch_time`, `picker_id`.
+    *   *Question:* Are delays happening in the warehouse before dispatch?
+*   **`order_delivered_timestamp`**: System trigger upon handover.
+    *   *Properties:* `promise_time`, `actual_delivery_time`, `driver_id`, `geo_location`.
+    *   *Derived Metric:* **`delivery_variance_minutes`** (Actual minus Promise). This is your primary variable to test against churn.
+
+**3. Quality & Feedback Events (The "Why" – Product)**
+*   **`post_delivery_feedback_submitted`**: Explicit user signal.
+    *   *Properties:* `rating_score` (1-5), `complaint_type` (e.g., "spoiled", "wrong_item", "late", "damaged_packaging"), `free_text_flag` (boolean).
+    *   *Question:* Does a specific complaint type correlate with non-return?
+*   **`refund_or_credit_issued`**: Critical negative signal.
+    *   *Properties:* `reason_code`, `amount`, `item_sku`.
+    *   *Question:* What is the financial cost of quality failures?
+
+**4. Retention Signal (The Verdict)**
+*   **`fresh_produce_repurchase_7d`**: A derived cohort metric, not a raw click.
+    *   *Definition:* User who placed a `fresh_produce_order_placed` and returns to place another within 168 hours.
+    *   *Question:* This is your North Star. Segment this by `delivery_variance_minutes` and `complaint_type` to isolate the churn driver.
+
+**Implementation Rules for Your Operations Manager**
+*   **Stable Identifier:** Ensure all events carry a **pseudonymous user ID** to track the same customer across sessions without exposing PII. Route raw PII handling to your privacy compliance protocol.
+*   **No Vanity Metrics:** Do not instrument "page views" of the homepage unless tied to a fresh produce click. Rising traffic means nothing if the 7-day repurchase rate is flat.
+*   **Baseline Comparison:** Do not look for industry benchmarks for "good" delivery times. Compare your current `delivery_variance_minutes` against your own historical baseline from October 20th onward.
+
+**This Week's Step:**
+1.  Define the schema for `post_delivery_feedback_submitted` ensuring `complaint_type` is a controlled enum (not free text only) to allow quantitative analysis.
+2.  Run a cohort query comparing the 7-day repurchase rate of users with `delivery_variance_minutes` > 30 versus those < 15. If the difference is negligible, shift focus entirely to product quality complaints as the primary churn driver.
+
+*Note: Without the actual data from these events, any claim about which factor drives churn is UNVERIFIED. The instrumentation above is designed to make that data available.*

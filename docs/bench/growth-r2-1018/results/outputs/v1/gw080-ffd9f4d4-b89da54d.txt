@@ -1,0 +1,31 @@
+### Diagnostic Plan: Isolating Onboarding Drop-Off Root Cause
+
+**North Star Focus:** Weekly Active Administrators completing the full security configuration. The current 45% completion rate is a critical leak; fixing this takes precedence over acquiring new trials.
+
+**1. Event Taxonomy & Questions**
+Instrument or query only these specific events to answer named questions. Do not track "clicks" broadly.
+*   `onboarding_step_started` (Property: `step_name`): *Where exactly does the session end?*
+*   `onboarding_step_completed` (Property: `step_name`, `duration_seconds`): *Is the 2FA step taking significantly longer than pre-March 1st baselines?*
+*   `error_triggered` (Property: `error_code`, `step_name`): *Are data import errors occurring before the drop-off point?*
+*   `support_ticket_created` (Property: `category`, `user_id`): *Correlate ticket creation time with the last recorded event.*
+
+**2. Segmentation Strategy (The Identifier Seam)**
+Use a stable, pseudonymous `admin_user_id` to cohort users across sessions. Do not use raw PII. Segment the March 1st–present cohort by:
+*   **Client Tier:** Is the drop-off isolated to specific enterprise segments with complex data schemas?
+*   **Browser/Client Environment:** Are 2FA failures specific to certain corporate proxy configurations?
+*   **Time-to-Error:** Calculate the delta between `wizard_start` and `session_end`.
+    *   *Short delta (<2 mins)* suggests immediate friction (likely 2FA).
+    *   *Long delta (>5 mins)* suggests users are progressing but failing later (likely Data Import).
+
+**3. Hypothesis Isolation Logic**
+*   **Hypothesis A (2FA Friction):** If the drop-off occurs precisely at the `2FA_challenge` step with a high `error_triggered` count for `auth_timeout` or `auth_failed`, and the time-to-drop is short, the authentication step is the blocker.
+*   **Hypothesis B (Data Import Realization):** If users complete the 2FA step but drop off at `data_preview` or `import_validate`, and `support_ticket_created` correlates with `error_code: FORMAT_MISMATCH`, the issue is downstream. Users may be abandoning because they realize the fix requires leaving the flow to clean data.
+
+**4. This-Week Steps**
+1.  **Query the Funnel:** Run a cohort analysis for March 1st–today comparing step-by-step completion rates against the Jan–Feb baseline. Specifically, isolate the conversion rate from `2FA_completed` → `data_import_started`. If this specific link broke, 2FA is not the primary cause.
+2.  **Correlate Support Logs:** Join `support_ticket_created` (category: "Data Import") with `onboarding_step_started` for the same `admin_user_id` within a 24-hour window. If >60% of drop-offs have a matching ticket, the friction is data-related, not auth-related.
+3.  **Define the Tripwire:** If the `2FA_completed` → `data_import_started` rate is <80% of the baseline, prioritize UX fixes for the wizard. If the rate is stable but `data_import_started` → `wizard_completed` has collapsed, prioritize data validation tooling or pre-flight checks.
+
+**Status of Metrics:** The 70% → 45% drop is verified from your statement. Specific step-level conversion rates and error codes are `UNVERIFIED` until queried from your analytics platform using the events above.
+
+*Note: Ensure all `admin_user_id` usage complies with your EU data residency and pseudonymization standards (refer to privacy-compliance.md). Do not instrument new events until the existing logs confirm missing properties.*

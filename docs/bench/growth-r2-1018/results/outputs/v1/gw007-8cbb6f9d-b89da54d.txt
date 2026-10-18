@@ -1,0 +1,50 @@
+**Briefing: Monitoring Free-Tier Limit Adjustment Trial**
+
+**Objective**
+Observe user reactions to the reduced 5GB free-tier cap to validate conversion lift while detecting early signs of dissatisfaction or churn. Do not assume the 15% conversion target is achievable; measure actual behavior against our current baseline.
+
+**1. Specific User Actions to Monitor**
+Track these specific events to distinguish between value realization and frustration. Only instrument actions that answer a named question about user intent.
+
+*   **Storage Warning Interactions:**
+    *   *Event:* `storage_limit_warning_viewed`
+    *   *Question:* Do users see the constraint?
+    *   *Action:* Count views of the "90% full" and "Limit Reached" modals.
+*   **Response to Constraint (The Fork in the Road):**
+    *   *Event:* `upgrade_prompt_clicked` vs. `delete_files_initiated` vs. `export_data_started`
+    *   *Question:* When blocked, do they pay, clean up, or leave?
+    *   *Action:* Compare the ratio of clicks on "Upgrade" versus "Delete Files" or "Export Data." A spike in `export_data_started` immediately after hitting the limit is a critical warning sign of churn.
+*   **Core Value Retention:**
+    *   *Event:* `file_upload_success` (post-limit warning)
+    *   *Question:* Do they continue using the core product after hitting the cap?
+    *   *Action:* Measure if active users drop off completely after the first warning or find ways to stay within 5GB.
+*   **Support Engagement:**
+    *   *Event:* `support_ticket_created` (tagged: "storage_limit", "pricing")
+    *   *Question:* Is the friction generating excessive support load?
+    *   *Action:* Track volume of tickets mentioning "too small," "competitor," or "cancel."
+
+**2. Interpreting Early Warning Signs**
+Compare these metrics strictly against our own prior baseline (the 10GB era). Do not use industry averages.
+
+*   **Sign of Brand Damage/Churn Risk:**
+    *   If `export_data_started` increases by >20% compared to last month's baseline within the first week.
+    *   If `support_ticket_created` volume doubles, specifically with sentiment tags indicating "angry" or "misled."
+    *   If `file_upload_success` drops to near zero for users who hit the limit, indicating they stopped deriving value entirely rather than upgrading.
+*   **Sign of Successful Friction (Conversion):**
+    *   If `upgrade_prompt_clicked` leads to `payment_completed` without a corresponding spike in `export_data_started`.
+    *   If users who hit the limit continue to log in and manage files (even deleted ones), showing continued engagement.
+
+**3. Guidance for Customer Success Team**
+Your feedback categorization is our qualitative data source. Categorize inbound interactions into three buckets immediately:
+
+*   **Bucket A: Confusion:** "I didn't know my files would be locked." (Indicates poor UI communication, not necessarily product failure).
+*   **Bucket B: Value Mismatch:** "5GB is useless for my business; I need 50GB." (Indicates the free tier no longer serves the entry-level persona; risk of mass exodus).
+*   **Bucket C: Competitive Threat:** "I'm moving to [Competitor] because they offer more free space." (Critical brand damage signal).
+
+**Immediate Next Steps**
+1.  **Define the Baseline Today:** Pull last month's numbers for `export_data_started` and `support_ticket_created` to establish the "before" state. Without this, we cannot measure impact.
+2.  **Tagging Protocol:** Ensure all support tickets starting next month are tagged with "Free-Tier-Trial" to isolate this cohort.
+3.  **Stop-Loss Trigger:** If `export_data_started` rises by more than 15% in the first 7 days of the trial, pause the rollout for review. This is a derived tripwire based on the risk of mass exodus.
+
+*Note: All metrics listed above are currently UNVERIFIED until the instrumentation is confirmed in our analytics platform. Do not estimate values; query the live data.*
+*Remember: Rising signups or warning views are vanity if retention and core action usage fall. Focus on whether users stay and pay, not just how many see the limit.*

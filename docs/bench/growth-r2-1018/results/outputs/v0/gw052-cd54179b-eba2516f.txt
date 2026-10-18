@@ -1,0 +1,25 @@
+**North Star Metric: Weekly Active Learners Completing "Proficient Dialogues"**
+
+Reject "conversations initiated" and raw "conversation length" as primary metrics; these are vanity metrics that rise regardless of value and are easily gamed for points. Instead, define a **Proficient Dialogue** as a composite event: a session lasting ≥5 minutes **AND** containing ≥3 distinct vocabulary corrections or successful self-corrections. Track the weekly count of unique users completing at least one Proficient Dialogue. This shifts the focus from "time spent" (which can be faked by idling) to "struggle and resolution" (which indicates learning).
+
+**Input Metrics to Move the North Star**
+1.  **Correction Density:** The ratio of corrective feedback events to total utterances. Low density in long sessions suggests gaming; moderate density suggests engagement.
+2.  **Return Rate (Retention):** The percentage of users who initiate a second conversation within 48 hours. Mindless clicking usually drops off quickly once the novelty or point incentive fades; genuine learning drives return visits.
+3.  **Vocabulary Recurrence:** The frequency with which previously corrected words are used correctly in subsequent sessions. This is the only direct proxy for proficiency gain available in behavioral logs.
+
+**Event Taxonomy (Instrument Only These)**
+Do not instrument "everything." Define these three specific events to answer your core question:
+*   `dialogue_completed`: Properties: `duration_seconds`, `user_id`, `points_earned`. (Answers: Did they finish?)
+*   `correction_event`: Properties: `word_category`, `was_self_corrected` (boolean), `session_id`. (Answers: Was there cognitive effort?)
+*   `vocab_reuse`: Properties: `word_id`, `days_since_correction`, `context_match`. (Answers: Did they learn it?)
+
+**Analysis Strategy: Retention First**
+Do not analyze acquisition (how many started) until you verify retention. Pull a cohort of the 5,000 users from November 1st. Segment them into "High Volume/Low Correction" vs. "Moderate Volume/High Correction." Compare their 7-day retention rates. If the "High Volume/Low Correction" group has near-zero retention, your suspicion of gaming is confirmed, and doubling down on length will worsen the problem. If the "High Correction" group retains, prioritize vocabulary accuracy features in the next sprint.
+
+**This Week's Steps**
+1.  **Query:** Run a cohort analysis comparing 7-day retention between users with >5 min sessions but <2 corrections vs. users with >5 min sessions and >2 corrections.
+2.  **Instrument:** Add the `was_self_corrected` flag to the logging schema immediately; without this, you cannot distinguish guessing from learning.
+3.  **Decision Rule:** If the "High Correction" cohort retains 20% better than the "Low Correction" cohort, shift the sprint focus to vocabulary accuracy prompts. If retention is flat across both, the points system itself is the driver, and you must redesign the incentive model before adding features.
+
+*Note: No historical baseline exists for Mexico City; use the November 1st cohort as your own baseline for future comparisons. Do not compare against global averages or fabricated benchmarks.*
+*Ensure user IDs used for cohort tracking are pseudonymous and routed to your privacy compliance protocol.*

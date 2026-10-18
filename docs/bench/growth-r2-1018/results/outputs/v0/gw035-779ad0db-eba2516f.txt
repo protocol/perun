@@ -1,0 +1,23 @@
+**Decision: Do not recommend global launch yet. The result is UNVERIFIED due to conflicting primary and guardrail metrics and unisolated device effects.**
+
+Recompute the net impact immediately: A 2.3% conversion lift is meaningless without knowing the baseline volume to calculate total orders, but a $4.50 drop in Average Order Value (AOV) on a global scale likely erodes the projected $200k gain. If your baseline AOV is $50, a $4.50 drop is a 9% revenue loss per order; you would need a conversion lift significantly higher than 2.3% just to break even, let alone grow. The "win" on conversion is currently a loss on total revenue unless the volume surge is massive.
+
+**Segmentation Analysis to Run (This Week):**
+1.  **Device-Specific Cohorts:** Split the data strictly by Mobile vs. Desktop. Do not look at the aggregate. Calculate Conversion Rate (CVR) and AOV delta for each group separately.
+    *   *Hypothesis:* If mobile CVR spikes (+5% or more) with minimal AOV drop, while Desktop shows flat CVR and a sharp AOV drop, the change works for mobile but breaks desktop.
+    *   *Action:* If the drop is isolated to desktop, recommend a device-targeted rollout (mobile only) rather than global.
+2.  **Funnel Drop-off Location:** Verify if the AOV drop correlates with users skipping the survey *after* adding high-value items, or if the tracking error hypothesis holds. Check if the "Purchase" event fires correctly with the full cart value in the variant. If the tracking code failed to capture add-ons due to the layout shift, the AOV drop is artificial.
+3.  **New vs. Returning Users:** Impulse buys often differ by user type. Check if returning users (who know what they want) are affected differently than new users.
+
+**Validation Steps Before Launch:**
+*   **Data Integrity Check:** Before analyzing behavior, validate the instrumentation. Compare the sum of line-item values in the database against the reported AOV for the variant. If they match, the drop is real user behavior, not a tracking error.
+*   **Extend or Stratify:** If the mobile signal is strong but desktop is weak, do not roll out globally. Plan a follow-up test specifically for desktop or revert desktop to control while keeping the variant for mobile.
+*   **Guardrail Verification:** Your guardrail metric (AOV/Revenue per Visitor) failed. A test cannot be declared a "win" when the primary metric (conversion) rises but the business outcome (revenue) potentially falls.
+
+**Presenting to Stakeholders:**
+Do not say "we are unsure." Say: **"The test increased conversion but decreased revenue per user, resulting in a net negative or neutral outcome depending on the device. We have identified a critical segmentation split: the friction removal helps mobile users, but the layout change appears to suppress basket size on desktop (or contains a tracking artifact). Recommendation: Pause global rollout. Approve a targeted mobile launch immediately to capture the friction win, while we fix/validate the desktop experience over the next 7 days. This captures 60% of the projected upside without risking the 40% desktop revenue."**
+
+This approach transforms uncertainty into a phased execution plan. It acknowledges the risk without sounding indecisive by isolating the variable (device type) and proposing a concrete, lower-risk next step.
+
+*Note: Ensure your analytics tool uses a stable, pseudonymous user ID to track these cohorts accurately across sessions, adhering to privacy compliance standards.*
+*Do not rely on the projected $200k figure until the AOV bleed is quantified and stopped.*

@@ -1,0 +1,39 @@
+### Measurement Plan: Distinguishing Activity from Learning
+
+**1. Define the North Star: "Completed Learning Sessions"**
+Reject "conversations initiated" or "total minutes spoken" as vanity metrics; these rise even if users are gaming the system. Your North Star must be **Weekly Active Users completing a "Validated Session."**
+*   **Definition:** A session where the user completes a 5-minute dialogue **AND** demonstrates a specific learning signal (see below).
+*   **Why:** This metric only rises if users are both engaging with the length requirement and deriving value, aligning directly with your goal of proficiency over point-farming.
+
+**2. Instrument Specific Events to Answer Named Questions**
+Do not instrument "everything." Implement only these three events to resolve your current uncertainty:
+
+*   **Event:** `dialogue_completed`
+    *   **Properties:** `duration_seconds`, `topic_id`, `user_id` (pseudonymous).
+    *   **Question Answered:** "Are users actually finishing the 5-minute threshold, or dropping off early?"
+    *   **Action:** If this rate is high but proficiency is low, users are gaming the length requirement.
+
+*   **Event:** `proficiency_signal_detected`
+    *   **Properties:** `signal_type` (e.g., "new_vocabulary_used_correctly", "grammar_correction_accepted", "comprehension_quiz_passed"), `dialogue_id`.
+    *   **Question Answered:** "Did the long conversation result in a measurable learning outcome?"
+    *   **Implementation:** You must define one concrete signal for "learning." Since you lack a baseline, start with **behavioral proxies**: Did the user correctly use a word they previously failed? Did they accept a grammar correction mid-flow? Without a specific signal property, this metric is `UNVERIFIED`.
+
+*   **Event:** `retention_cohort_return`
+    *   **Properties:** `days_since_first_validated_session`, `user_id`.
+    *   **Question Answered:** "Do users who complete 'Validated Sessions' return next week more often than those who only initiate short chats?"
+    *   **Logic:** Real learning drives retention; gaming the system usually churns quickly once points are capped or boredom sets in.
+
+**3. Analysis Method: Bottom-Up Funnel & Cohorts**
+*   **Retention First:** Do not look at acquisition (total 5,000 users) yet. Segment your users into two cohorts: those who hit the 5-minute mark vs. those who don't. Compare their **Week-2 retention**. If the 5-minute group does not return at a higher rate than the short-chat group, length is not a proxy for value.
+*   **The "Gaming" Test:** Correlate `dialogue_completed` with `proficiency_signal_detected`. If you see high completion rates but near-zero proficiency signals, your assumption that "5 minutes = learning" is false, and users are likely scripting or clicking through to earn points.
+
+**4. Decision Framework for the Next Sprint**
+*   **Double Down on Length:** Only if the `proficiency_signal_detected` rate correlates strongly with `dialogue_completed` (e.g., longer sessions consistently yield more correct vocabulary usage).
+*   **Pivot to Accuracy:** If long sessions show low proficiency signals, shift the sprint focus to "accuracy gates"—requiring correct usage before points are awarded, rather than just time spent.
+
+**This Week's Steps:**
+1.  **Define the Signal:** Product team must agree on *one* concrete definition of `proficiency_signal_detected` (e.g., "correct reuse of a flagged word") by tomorrow. Without this, you cannot distinguish learning from noise.
+2.  **Instrument the Trio:** Deploy tracking for `dialogue_completed`, the agreed `proficiency_signal_detected`, and `retention_cohort_return`.
+3.  **Baseline Query:** Run a query on the Nov 1st–today data to calculate the % of 5-minute dialogues that currently contain your defined proficiency signal. This is your baseline; any improvement must beat this number.
+
+*Note: Ensure `user_id` is pseudonymous for cohort tracking; route any PII handling to your privacy compliance protocol. Do not invent a "good" conversion rate; compare future results strictly against the baseline you establish in step 3.*

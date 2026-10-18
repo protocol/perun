@@ -1,0 +1,37 @@
+### StorMix Growth Measurement Framework: Automation Trust & Cost Efficiency
+
+**1. North Star Metric: "Verified Cost Savings per Active Account"**
+Reject "Total Data Stored" or "Raw Signups" as vanity metrics. The only metric that matters is the net cost reduction a customer achieves compared to a static storage baseline. This rises only when the automation successfully moves cold data without triggering costly manual corrections.
+*   **Input Metrics:** Automation Success Rate (cold data moved without override), Manual Override Frequency, and Cost Delta (Projected Cost vs. Actual Cost post-override).
+
+**2. Funnel Diagnosis: Retention of Automation Rules (Bottom-Up)**
+Do not focus on acquisition yet. Diagnose why the core value (automated tiering) fails to stick.
+*   **The Leak:** The 30% manual override rate is your primary retention leak. If users revert to manual control, the product value proposition collapses.
+*   **The Question:** Are overrides driven by *unpredictable access patterns* (valid use case) or *algorithmic failure* (trust issue)?
+*   **Action:** Segment overrides by "Cost Impact."
+    *   *Segment A (High Cost):* Overrides that move data to expensive tiers unnecessarily. This indicates a trust deficit or poor algorithmic prediction.
+    *   *Segment B (Neutral/Low Cost):* Overrides that align with genuine sporadic access. This validates the need for hybrid flexibility, not a product failure.
+
+**3. Event Taxonomy: Instrument Only What Answers Named Questions**
+Do not instrument "everything." Define these specific events to resolve your critical unknowns:
+*   `automation_rule_triggered`: Fires when the system moves data. *Question:* How often does the engine act?
+*   `manual_override_executed`: Fires when a user reverses a move or changes a rule. *Properties:* `previous_tier`, `new_tier`, `time_since_last_access`, `estimated_cost_impact`. *Question:* Does this override increase customer cost?
+*   `cost_savings_realized`: Calculated daily per account. *Question:* Is the customer actually saving money compared to their baseline?
+*   `churn_signal`: Defined as >3 overrides in 48 hours or cost delta turning negative for 2 consecutive billing cycles.
+
+**4. Stage Appropriateness (MVP Launch)**
+Since you are launching in Mumbai/Pune next quarter (MVP stage), ignore broad referral metrics. Focus entirely on **Activation** (did they set a rule?) and **Retention** (did the rule hold for 30 days?).
+*   **Identifier Seam:** Use a stable, pseudonymous `account_id` to track behavior across sessions. Do not use raw PII. Route any personal data handling to your privacy compliance protocol.
+
+**5. Experiment Rigor: Proving Value to Early Adopters**
+To prove cost savings in your deck, you cannot rely on anecdotes.
+*   **Design:** Run a cohort analysis comparing "High Automation Adoption" vs. "High Manual Override" accounts over the first 60 days.
+*   **Guardrail:** Monitor support ticket volume related to "unexpected charges." A win in automation efficiency that spikes support tickets is a false positive.
+*   **Verification:** Do not claim "40% cold data" as a benchmark. State it as a hypothesis to be validated against the actual `automation_rule_triggered` data from the India pilot. If the pilot shows 20% cold data, that is your new baseline; do not invent a "good" number.
+
+**This Week's Steps:**
+1.  **Instrument:** Implement the `manual_override_executed` event with a calculated `estimated_cost_impact` property before the Mumbai launch. Without this, the "trust vs. unpredictability" question remains `UNVERIFIED`.
+2.  **Query:** Build a dashboard showing the correlation between override frequency and net cost savings for the pilot group. If overrides correlate with *higher* costs, the algorithm needs tuning; if costs remain low, the behavior is valid flexibility.
+3.  **Deck Prep:** Replace the "40% cold data" assumption in the director deck with "Target: Validate Cold Data % and Cost Delta via Pilot Instrumentation." Present the measurement plan, not fabricated results.
+
+*Note: All cost benchmarks must be derived from your pilot data, not external market averages. Do not present the 30% override rate as a failure until the cost impact is quantified.*

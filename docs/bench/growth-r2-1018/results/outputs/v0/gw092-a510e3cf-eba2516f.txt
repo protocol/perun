@@ -1,0 +1,37 @@
+**To:** VP of Engineering, CodeFlow
+**From:** Growth Analytics
+**Subject:** Measurement Plan: Dark Mode Rollout Validation (Dec 1 – Dec 28)
+
+**North Star Metric**
+We will measure **Weekly Active Users (WAU) completing a code commit** within the target cohort (users active after 8 PM). This rejects vanity metrics like "theme toggles" or raw "session duration," which can rise due to confusion or idle time without indicating value. The North Star only rises if users derive real value (coding) from the interface.
+
+**Funnel Diagnosis (Retention First)**
+We will read the AARRR funnel bottom-up. Before analyzing acquisition of the new default setting, we must verify **Retention**: Do users who see dark mode return to code in Week 2? If retention leaks, increasing adoption (acquisition) only wastes engineering effort. We will compare the retention curve of the treatment group against the historical baseline of the same time-of-day cohort, not an invented industry benchmark.
+
+**Event Taxonomy & Instrumentation**
+We will instrument only events that answer specific questions, avoiding "track everything" noise:
+1.  `theme_viewed`: Did the user see the dark mode interface? (Answers: Exposure)
+2.  `theme_changed_manual`: Did the user manually toggle back to light mode within the first session? (Answers: Immediate rejection/confusion)
+3.  `session_code_active`: Time spent with keystrokes or compiler activity, excluding idle time. (Answers: Genuine engagement vs. inflated duration)
+4.  `support_ticket_theme`: Tagged tickets related to UI visibility. (Answers: Guardrail for confusion)
+
+*Identifier Seam:* We will use a stable, pseudonymous user ID to track cohorts across sessions. No PII will be stored in the analytics stream; consent routing adheres to existing privacy compliance protocols.
+
+**Experiment Design & Rigor**
+The gradual rollout acts as a controlled experiment. We must avoid "peeking" at data daily to declare a win based on temporary noise.
+*   **Pre-commitment:** We define the test duration as 4 weeks. We will read the primary metric **once** at the end of the period.
+*   **Primary Metric:** Change in weekly commit frequency for the post-8 PM cohort.
+*   **Guardrail Metric:** Support ticket volume regarding UI visibility. If tickets rise by >5% relative to baseline, the rollout pauses regardless of engagement gains.
+*   **Variance Control:** We will use the pre-rollout period (Nov 1–30) as a covariate (CUPED approach) to reduce noise, given the lack of historical theme data.
+
+**Validation of Assumptions**
+Your assumption that dark mode adds 15 minutes to session duration is currently **UNVERIFIED**. We will not bake this into our success criteria. Instead, we will measure the *actual* delta in `session_code_active` time. If session duration rises but commit frequency stays flat, the hypothesis of "reduced eye strain leading to more work" is false; users may simply be staring at a screen longer without productivity.
+
+**This Week's Actions**
+1.  **Instrument:** Deploy `theme_changed_manual` and `session_code_active` events by Nov 28. Verify data flow in the staging environment.
+2.  **Define Cohorts:** Segment the user base into "Post-8 PM Active" and "Day-Only" to isolate the treatment effect.
+3.  **Baseline Query:** Run a query on the last 4 weeks of data to establish the current commit frequency and support ticket rate for the "Post-8 PM" group. This creates the comparison floor before December 1st.
+
+Success is defined as a statistically significant increase in commit frequency for the target cohort without breaching the support ticket guardrail. Any other outcome requires iteration, not celebration.
+
+*Note: Historical theme preference data is absent; do not attempt to backfill. All benchmarks must derive from the Nov 1–30 baseline.*

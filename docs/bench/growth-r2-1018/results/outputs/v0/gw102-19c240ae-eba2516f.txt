@@ -1,0 +1,37 @@
+### Success Framework: The "Secure Access Efficiency" Scorecard
+
+Do not expand to 50,000 users yet. Your current data shows a **false positive**: login speed improved by 45 seconds (exceeding the 30s goal), but the 7.5x spike in support tickets (2 → 15/week) indicates a critical failure in *successful* access. Speed is vanity if the user cannot enter the product.
+
+**1. Redefine the North Star**
+Reject "Login Time" as your primary metric. It rewards fast failures.
+**New North Star:** **Weekly Active Users completing a successful, unsupported login.**
+This metric only rises if the user gets in quickly *and* stays in without help. If speed goes up but this metric goes down, the feature is failing.
+
+**2. The Trade-Off Framework (The "Cost of Speed" Matrix)**
+Present this 2x2 logic to your CSO. You are currently in the **Bottom-Right quadrant** (Fast but Broken).
+*   **Ideal:** High Speed, Low Support (Expand).
+*   **Acceptable:** Moderate Speed, Low Support (Iterate).
+*   **Unacceptable:** High Speed, High Support (Current State – Stop).
+*   **Unacceptable:** Low Speed, High Support (Kill).
+
+**3. Immediate Signals to Track (Instrument These Now)**
+Stop guessing if tickets are "user error" or "sensor flaw." Instrument these three specific events to answer that question before next Tuesday:
+*   **Event A: `biometric_capture_failure`** (Properties: `error_code`, `sensor_type`).
+    *   *Question:* Is the hardware rejecting valid users? If this rate is high, it's a sensor flaw.
+*   **Event B: `fallback_to_password_triggered`**
+    *   *Question:* Are users giving up on biometrics? High rates here indicate poor UX, not necessarily sensor failure.
+*   **Event C: `support_ticket_category`** (Tagged to `biometric_rollout_cohort`).
+    *   *Question:* Quantify the "Operational Cost." Calculate the **Net Time Saved**: *(45s saved × successful logins) – (15 mins avg support time × tickets)*. If Net Time Saved is negative, the feature is costing the firm money.
+
+**4. The Decision Rule (Pre-commit this)**
+Do not expand unless the following conditions are met in a 7-day read:
+*   **Primary Guardrail:** Support ticket rate for the beta cohort drops to <5 per week (2.5x baseline, not 7.5x).
+*   **Secondary Guardrail:** `biometric_capture_failure` rate is <2% of attempts.
+*   **Tripwire:** If `fallback_to_password_triggered` > 20%, the "speed" gain is illusory because users are double-authenticating (trying biometric, failing, then typing password).
+
+**This Week's Step:**
+1.  Query your logs for `biometric_capture_failure` grouped by device model to isolate sensor compatibility issues vs. user error.
+2.  Calculate the **Net Time Saved** using the formula above; if the result is negative, recommend an immediate pause on expansion to the CSO.
+3.  Tag all incoming support tickets from the London office with `biometric_root_cause` (Sensor/UX/Training) to create a verified baseline.
+
+*Note: Do not cite industry benchmarks for "acceptable" failure rates; compare strictly against your pre-Jan 10th baseline. The identifier for this cohort must remain pseudonymous to comply with legal firm privacy standards.*

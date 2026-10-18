@@ -1,0 +1,44 @@
+# Analysis Plan: Divergent Mobile/Desktop Checkout Results
+
+## 1. Immediate Data Segmentation (Do Tonight)
+Since device model wasn't tracked, proxy this data immediately using existing logs:
+*   **User Agent Parsing:** Segment mobile traffic by OS version (iOS 14-16 vs. 17+) and browser (Safari vs. Chrome). Older OS versions often correlate with older hardware and slower JS execution.
+*   **Connection Type:** If available, segment by "4G/3G" vs. "WiFi." A drop concentrated on slower connections points to **load time/asset weight**, not UI clutter.
+*   **Drop-off Point Analysis:** Map exactly where mobile users abandon.
+    *   *Top of page:* Likely visual overload or render blocking (Clutter/Load).
+    *   *Mid-form:* Likely input difficulty or validation errors (Clutter/UX).
+    *   *Submit button:* Likely JS timeout or API latency (Performance).
+
+## 2. Hypothesis Validation Framework
+Test these two competing theories against your segmented data:
+
+| Hypothesis | Evidence to Seek | Interpretation |
+| :--- | :--- | :--- |
+| **Interface Clutter** | High drop-off at specific form fields; high rage-clicks on small inputs; consistent failure across all connection speeds. | The one-page layout compresses touch targets too tightly for smaller screens. |
+| **Performance Bottleneck** | Drop-off correlates with older OS/Slower networks; high "Time to Interactive" metrics; failures集中在 submit action. | The single-page script bundle is too heavy for older mobile processors. |
+
+## 3. Decision Matrix & Recommendation Path
+Present one of these three paths to leadership based on findings:
+
+### Path A: Rollback Mobile Only (If Clutter is Primary)
+*   **Trigger:** Drop-off is uniform across device ages but concentrated on complex input steps.
+*   **Action:** Revert mobile to the multi-step flow immediately while keeping desktop on the new design.
+*   **Rationale:** Preserves the 5% desktop gain while stopping the 15% mobile bleed. Technical debt is low; UX fix requires redesign.
+
+### Path B: Performance Optimization (If Load Time is Primary)
+*   **Trigger:** Drop-off strongly correlates with older devices/slower networks.
+*   **Action:** Do not rollback. Instead, implement code-splitting to load only essential checkout scripts on mobile, deferring non-critical assets.
+*   **Rationale:** The design logic is sound, but the implementation is too heavy. Engineering can fix this without altering the UX flow.
+
+### Path C: Hybrid Iteration (If Mixed Signals)
+*   **Trigger:** Significant drop-off in both areas, or data is inconclusive due to missing granularity.
+*   **Action:** Deploy a "Lite" mobile version immediately (simplified fields, stripped images) as a hotfix.
+*   **Rationale:** Mitigates risk while buying time for a proper A/B test segmented by device model next sprint.
+
+## 4. Presentation Structure for Tomorrow
+1.  **The Problem:** State the net negative impact clearly (e.g., "The 5% desktop gain is outweighed by the 15% mobile loss, resulting in a net revenue decline of X%").
+2.  **The Diagnosis:** Present the segmentation findings (e.g., "80% of the drop occurs on iOS 15 and below, indicating a performance bottleneck").
+3.  **The Recommendation:** Choose Path A, B, or C explicitly.
+4.  **The Ask:** Request approval for the immediate fix and resources for a follow-up test with proper device-level tracking.
+
+**Note:** Ensure your "net impact" calculation accounts for the traffic split between mobile and desktop; if mobile is 70% of traffic, the loss is critical. Do not recommend "waiting for more data" given the 15% drop severity.

@@ -1,0 +1,38 @@
+### Diagnostic Plan: Isolating Onboarding Drop-Off Root Cause
+
+To distinguish between authentication friction and data import failures as the primary driver of the 35% drop-off (70% → 45%), execute the following event-based analysis using your existing analytics stack. Do not rely on aggregate completion rates; isolate behavior by step and segment.
+
+**1. Define the Critical Events**
+Ensure your event taxonomy explicitly captures these four moments with user IDs and timestamps:
+*   `onboarding_step_view`: Name of the step viewed.
+*   `onboarding_step_complete`: Successful completion of a step.
+*   `auth_challenge_triggered`: Specifically for the new 2FA step.
+*   `data_import_attempt`: The action initiating the import two steps later.
+*   `data_import_error`: The specific failure event (if currently logged as a UI error state, ensure it fires an analytics event).
+
+**2. Segment Analysis: The "Auth Hypothesis"**
+Filter for users who initiated onboarding post-March 1st. Create a cohort analysis focused strictly on the transition into and out of the 2FA step.
+*   **Metric:** Calculate the drop-off rate specifically between `auth_challenge_triggered` and `onboarding_step_complete` for the 2FA step.
+*   **Segmentation:** Break this down by **Client Size** (number of admins) and **Region** (if 2FA policies vary by EU country). If the drop-off is uniform across all clients immediately at the 2FA prompt, friction is the likely cause.
+*   **Behavioral Signal:** Look for "rage clicks" or rapid back-and-forth navigation events immediately preceding the exit at this specific step.
+
+**3. Segment Analysis: The "Data Import Hypothesis"**
+Investigate the users who *successfully* passed the 2FA step but abandoned before final completion.
+*   **Metric:** Calculate the retention rate of users who completed the 2FA step but failed to trigger `data_import_attempt`.
+*   **Correlation:** Cross-reference the timing of the `support_ticket_created` event with the user's last recorded `onboarding_step_view`. If users are abandoning *after* seeing the data import screen but *before* attempting the import, the UI may be revealing complexity early. If they abandon *after* `data_import_error`, the technical failure is the blocker.
+*   **Segmentation:** Segment by **Data Volume** or **File Type** if available in event properties. Enterprise clients with complex legacy data formats should show a higher correlation with the import error spike than those with simple datasets.
+
+**4. The Decisive Cohort Comparison**
+Construct a funnel visualization with three distinct rows to present to the Customer Success Director:
+*   **Row A (Pre-March 1st):** Baseline funnel showing normal drop-off at the (then non-existent) 2FA step and historical import error rates.
+*   **Row B (Post-March 1st, Passed 2FA):** Users who cleared the new hurdle. Does their drop-off at the data import step match the support ticket spike? If Row B shows a massive new drop-off at the import step compared to Row A, the issue is data formatting, not 2FA.
+*   **Row C (Post-March 1st, Failed 2FA):** Users who exited at the 2FA step. If this number accounts for the majority of the total volume loss, 2FA is the primary blocker.
+
+**5. Immediate Validation Step**
+Since you have only 200 major clients, do not wait for statistical significance on low-traffic segments. Manually tag the last 50 support tickets related to onboarding as either "2FA Access Issue" or "Data Format Issue." Plot this qualitative ratio against the quantitative drop-off points. If 80% of tickets are data-related but the analytics show 80% of drop-offs happening at 2FA, you have a reporting gap where users quit before they can even encounter the data error.
+
+**Conclusion for Director:**
+Present the "Leak Location" metric: The specific step where the percentage loss exceeds the historical baseline by >10%. If the leak is at 2FA, the solution is UX friction reduction or alternative auth flows. If the leak is post-2FA at the import screen, the solution is fixing the parser or providing template files before the user attempts the upload.
+
+*Note: Ensure user identifiers in these queries are pseudonymous to comply with EU GDPR requirements before sharing with Customer Success. Do not include raw PII in the dashboard.*
+*This plan relies on existing event instrumentation; if `data_import_error` is not currently firing as an analytics event, instrument it immediately as an UNVERIFIED gap.*

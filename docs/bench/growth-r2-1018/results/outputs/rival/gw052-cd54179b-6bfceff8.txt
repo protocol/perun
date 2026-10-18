@@ -1,0 +1,40 @@
+# Recommended Metrics for LinguaFast Conversational Feature
+
+To distinguish between "gaming the system" and genuine language proficiency, you must shift from measuring **activity volume** (conversations started) to **learning quality** (skills demonstrated). Since you lack a historical baseline for Mexico City, you need to establish a "Quality Score" immediately using the following behavioral signals and outcome metrics.
+
+### 1. Primary Outcome Metric: The "Learning Efficiency Ratio"
+Stop tracking "conversations per week" as your success metric. Instead, track **Vocabulary Retention per Minute of Conversation**.
+*   **Definition:** The number of new words correctly used in subsequent sessions divided by the total time spent in conversation.
+*   **Why it matters:** If users are gaming the system for points, this ratio will be near zero. They will generate high duration/volume but low retention. If they are learning, this ratio will remain stable or increase even if conversation volume drops.
+
+### 2. Behavioral Signals to Track (Event Properties)
+You need to instrument specific events within the conversation flow to detect "mindless clicking." Implement tracking for these three specific signals:
+
+**A. Correction Acceptance Rate**
+*   **Event:** `correction_viewed` → `correction_applied`
+*   **Signal:** Users gaming the system will ignore corrections to maintain flow speed. Genuine learners will pause, view the correction, and apply it in the next turn.
+*   **Threshold:** Flag accounts with >80% conversation speed and <10% correction acceptance as potential "point farmers."
+
+**B. Turn-Taking Latency vs. Complexity**
+*   **Event:** `message_sent` (with property: `word_count` and `time_since_last_message`)
+*   **Signal:** Real language processing requires cognitive load. If a user consistently sends 50+ word messages in under 3 seconds, they are likely copying/pasting or using bots.
+*   **Metric:** Calculate the **Complexity-Latency Correlation**. Genuine engagement shows a positive correlation (longer sentences take longer to type/think). Gaming shows no correlation or negative correlation.
+
+**C. The "Five-Minute" Validation**
+*   **Event:** `session_duration` + `unique_vocabulary_count`
+*   **Signal:** Your assumption is that 5 minutes = success. Test this by binning sessions into 3-4 min, 5-6 min, and 7+ min buckets.
+*   **Analysis:** Plot `unique_vocabulary_count` against these buckets. If the 5-minute bucket does not show a statistically significant jump in unique vocabulary usage compared to the 3-minute bucket, your "five-minute" heuristic is flawed and rewards stalling tactics.
+
+### 3. The "Transfer Test" (Delayed Outcome)
+The ultimate proof of proficiency is transfer.
+*   **Metric:** **Cross-Context Usage Rate**.
+*   **Method:** Track if a word practiced in the conversational feature is correctly used in a *different* feature (e.g., a writing exercise or quiz) within 48 hours.
+*   **Decision Rule:** If high-volume conversationalists do not show higher cross-context usage than low-volume users, the feature is driving activity, not proficiency.
+
+### Recommendation for Next Sprint
+Do not double down on conversation length yet. Length is easily gamed.
+1.  **Immediate Action:** Implement the **Correction Acceptance Rate** and **Turn-Taking Latency** tracking. These are hard to fake and require minimal UI changes.
+2.  **Sprint Focus:** Shift the product goal from "Complete 5 minutes" to "Successfully incorporate 3 corrected terms." This aligns the point system with the learning outcome.
+3.  **Baseline Creation:** Run this tracking for 14 days on the current 5,000 users to establish the Mexico City baseline before changing the algorithm.
+
+**Note:** Ensure all event properties exclude PII (personally identifiable information) to comply with Mexican data privacy laws. Use these metrics to create a "Quality Segment" in your analytics tool to isolate genuine learners from point-seekers.

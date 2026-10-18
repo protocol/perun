@@ -1,0 +1,29 @@
+**Recommendation: Do not choose between "average time" or "% hot" as your single North Star yet.** Both are vanity metrics in your current context because the definition of "hot" is `UNVERIFIED` and the 35-minute threshold is an untested assumption. Tracking them now will optimize your logistics for a target that may not match customer value in Guadalajara.
+
+**Immediate Action Plan (First 30 Days):**
+
+1.  **Define the Core Value Event (The "Aha" Moment):**
+    Before selecting a KPI, instrument a binary event: **"Order Accepted as Satisfactory."**
+    *   *Question Answered:* Did the user actually derive value?
+    *   *Implementation:* Trigger a micro-survey on the receipt screen asking one question: "Was your order what you expected?" (Yes/No). Do not ask about "hot" or "fast" yet; let the user define satisfaction. Correlate "No" responses with your internal logs (time, temp, restaurant) later to find the *actual* bottleneck.
+
+2.  **Instrument the Diagnostic Split (Solve the Unknown):**
+    You stated you do not know if traffic or prep speed is the bottleneck. Instrument two distinct timestamps to answer this specific question:
+    *   `event: order_confirmed_to_restaurant_ready` (Measures restaurant prep speed).
+    *   `event: restaurant_ready_to_customer_delivered` (Measures traffic/driver speed).
+    *   *Why:* If the first interval spikes, hiring more drivers won't help; you need to onboard faster kitchens. If the second spikes, your routing is the issue. Without this split, "average total time" hides the root cause.
+
+3.  **Validate the "Hot" Hypothesis:**
+    Do not track "% delivered hot" until you define "hot" with local data.
+    *   *Action:* For the first 500 orders, manually tag 10% of deliveries for a follow-up call asking specifically: "At what minute mark did the food feel cold?"
+    *   *Result:* This establishes your *actual* market-specific threshold. It might be 25 minutes for tacos, not 35. Until you have this baseline, any "% hot" metric is `UNVERIFIED` noise.
+
+**Decision Framework for the Operations Manager:**
+*   **If `order_confirmed_to_restaurant_ready` > 15 mins:** Focus hiring/training on restaurant onboarding and kitchen workflow integration.
+*   **If `restaurant_ready_to_customer_delivered` > 20 mins:** Focus hiring/training on driver density and route optimization.
+*   **If "Order Accepted as Satisfactory" drops while "Average Time" stays under 35 mins:** Your 35-minute assumption is wrong; speed is not the primary driver of value in this neighborhood. Investigate food quality or accuracy instead.
+
+**This Week's Step:**
+Deploy the two-segment timing instrumentation and the single "Satisfactory?" prompt. Do not set a target for "average time" or "% hot" until you have 100 completed orders with correlated satisfaction data. The metric that moves *only* when customers are happy is your North Star; until then, optimizing for speed or temperature is guessing.
+
+*Note: Retention of the "Order Accepted" event is your true leading indicator of growth, not the volume of signups. Ensure user IDs are pseudonymous for cohort tracking.*

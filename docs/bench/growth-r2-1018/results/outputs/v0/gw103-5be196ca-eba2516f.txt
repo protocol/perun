@@ -1,0 +1,27 @@
+**North Star Metric:** Weekly Active Users who receive an AI suggestion *and* click "View Product Details" within the same session. This measures realized value (relevant inspiration) rather than vanity volume (raw uploads).
+
+**Diagnostic Funnel (Bottom-Up):**
+Do not optimize acquisition or upload rates yet. Diagnose retention of value first:
+1.  **Retention of Value:** Of users who uploaded last week, what % returned to view suggestions or products this week? If near zero, the feature is a novelty, not a utility.
+2.  **Activation (The "Aha" Moment):** Of users who upload, what % click "View Product Details" on *any* suggested item? This isolates whether the AI output is relevant. If uploads are high (40%) but detail views are low, the AI recommendations are failing, not the pricing.
+3.  **Conversion:** Of users who view product details, what % add to cart? If this matches your baseline, pricing is likely fine; the leak is upstream in relevance.
+
+**Event Taxonomy (Instrument Only These):**
+Stop instrumenting "just in case." Define these four events to answer specific questions:
+*   `ai_suggestion_viewed` (Question: Did the user actually look at the generated design, or just upload and leave?)
+*   `product_detail_clicked_from_ai` (Question: Did the AI suggest items the user cares about? *Primary input metric for North Star*)
+*   `ai_flow_abandonment_point` (Properties: `step_name` e.g., "uploading", "generating", "viewing_results". Question: Where is the technical or UX friction?)
+*   `search_performed_after_ai` (Question: Did the AI fail, causing the user to revert to manual search?)
+
+**Experiment Rigor & Baseline:**
+Your assumption ("2x likelihood to purchase") is currently `UNVERIFIED`. You cannot validate this without a pre-committed test design.
+*   **Do not peek:** You started Feb 20th. If you check significance daily, you will find false positives. Pre-commit to a sample size (e.g., 5,000 users) or a fixed duration (e.g., 4 weeks to capture a full purchase cycle) before analyzing.
+*   **Guardrail:** Track `support_ticket_volume` regarding AI accuracy. A "win" in engagement that floods support is a loss.
+*   **Identifier Seam:** Ensure you track these events with a stable, pseudonymous user ID to follow the user from upload to purchase across sessions. Do not use raw PII; route consent checks to your privacy compliance protocol.
+
+**This Week's Steps:**
+1.  **Query:** Run a cohort analysis for the Feb 20–27 group: Calculate the % who triggered `product_detail_clicked_from_ai`. If this is <10%, the issue is recommendation relevance, not pricing.
+2.  **Instrument:** Add the `ai_flow_abandonment_point` event immediately if missing, tagging the specific step where users drop off.
+3.  **Decision Rule:** If `product_detail_clicked_from_ai` is <5% by March 20th, recommend pausing further engineering spend on the flow to fix the AI model quality first. If >15% but purchase is still flat, investigate pricing or checkout friction.
+
+*Note: Do not fabricate a "good" conversion rate for Brazil; compare only against your own 2% baseline and the trend of the new cohort. Rising uploads with flat detail views is a retention leak, not growth.*

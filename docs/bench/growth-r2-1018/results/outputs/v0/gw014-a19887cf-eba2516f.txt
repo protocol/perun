@@ -1,0 +1,49 @@
+### SwiftWing Oakhaven Trial: Measurement Plan
+
+**North Star Metric:** Percentage of scheduled deliveries completed within the target time window without triggering a community disturbance event. This measures realized value (speed) constrained by viability (community impact), rejecting vanity metrics like "total flights launched" which rise even when flights abort.
+
+**Event Taxonomy & Data Collection**
+Instrument only events that answer specific go/no-go questions for scaling. Do not log "everything."
+
+1.  **Core Value Event:** `delivery_completed`
+    *   *Question:* Are we faster than vans reliably?
+    *   *Properties:* `scheduled_time`, `actual_completion_time`, `weather_condition` (wind speed, precipitation), `abort_reason` (if applicable).
+    *   *Baseline:* Compare against the 12-minute pilot average and local van benchmarks provided by your logistics partner.
+
+2.  **Viability Leak Event:** `flight_aborted`
+    *   *Question:* Is weather making the model unscalable?
+    *   *Properties:* `abort_trigger` (e.g., wind > threshold), `location_zone`, `time_of_day`.
+    *   *Analysis:* Track the abort rate daily. If the 10% pilot abort rate spikes above 15% in specific wind conditions, the operational model fails in those conditions.
+
+3.  **Community Acceptance Proxy:** `disturbance_signal` (Observable Behavior)
+    *   *Question:* Is the community tolerating us without surveys?
+    *   *Definition:* A composite event triggered by **observable logs**, not self-reported feelings.
+    *   *Inputs:*
+        *   `noise_complaint_call`: Timestamped match between flight path and incoming calls to the dedicated trial hotline or local non-emergency line (requires data share agreement).
+        *   `app_uninstall_or_disable`: Spike in users disabling location permissions or uninstalling the SwiftWing app within 1 hour of a flight overhead in their zone.
+        *   `delivery_refusal`: Customer explicitly marking "Do not leave package" or refusing handover upon arrival.
+    *   *Threshold:* >2 `disturbance_signal` events per 100 successful deliveries indicates failing community acceptance.
+
+**Funnel Diagnosis (Bottom-Up)**
+Do not celebrate high launch volumes if retention/completion is leaking.
+1.  **Retention/Viability:** Are flights completing without aborts or complaints? (If no, stop scaling).
+2.  **Activation:** Are customers accepting the delivery method? (Refusal rates).
+3.  **Acquisition:** Only analyze volume growth if the above two are stable.
+
+**Success/Failure Thresholds (Based on Your Baseline)**
+*   **Success (Scale to Next City):**
+    *   Average delivery time ≤ 12 minutes (matching pilot) with <5% variance.
+    *   Flight abort rate ≤ 10% (matching pilot) across varied weather.
+    *   `disturbance_signal` rate < 2% of total flights.
+*   **Failure (Stop/Pivot):**
+    *   Abort rate > 15% in moderate wind (indicates weather fragility).
+    *   `disturbance_signal` rate > 5% (indicates community rejection).
+    *   Average delivery time > 18 minutes (fails value prop vs. vans).
+
+**This Week's Steps**
+1.  **Define the Identifier Seam:** Ensure every `delivery_completed` and `disturbance_signal` links to a pseudonymous `flight_id` and `zone_id` to track patterns without storing personal addresses in analytics logs. Route raw address/PII to secure operational storage only.
+2.  **Pre-commit the Read:** Set the trial duration to exactly 28 days. Do not check the `disturbance_signal` rate daily to decide whether to stop early; "peeking" inflates false positives. Review the aggregate data only on May 3rd against the thresholds above.
+3.  **Instrument the Proxy:** Finalize the data feed for local call logs or app permission changes to automate the `disturbance_signal` event before April 5th. Without this, community acceptance remains `UNVERIFIED`.
+
+*Note: No external benchmarks for "good" noise levels are used; success is defined strictly by your operational tolerance and the absence of observable rejection behaviors.*
+*Weather data must be sourced from your onboard sensors or a local API; do not estimate wind speeds.*

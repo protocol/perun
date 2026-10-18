@@ -1,0 +1,39 @@
+**Diagnostic Approach: Isolate Friction vs. Value vs. Price**
+
+Do not instrument "hesitation time" or "scroll depth" yet; these are vanity proxies that do not answer your named question. Instead, instrument three specific events that directly map to your three hypotheses, ensuring every event answers a named question:
+
+1.  **Hypothesis: Payment Friction.**
+    *   **Event:** `payment_initiated` (user clicks "Subscribe") vs. `payment_completed`.
+    *   **Question:** "Do users attempt to pay but fail/abandon at the gateway?"
+    *   **Action:** If `payment_initiated` is high but `payment_completed` is low, the barrier is technical or UX friction in the flow. Fix the flow; do not change the paywall type.
+
+2.  **Hypothesis: Lack of Perceived Value.**
+    *   **Event:** `paywall_dismissed_without_attempt`.
+    *   **Question:** "Do users see the price and immediately leave without trying?"
+    *   **Action:** If this rate spikes, users do not see enough value to justify *any* effort. This requires content previews or value reinforcement, not necessarily a soft paywall.
+
+3.  **Hypothesis: Price Sensitivity.**
+    *   **Event:** `pricing_plan_viewed` (if multiple tiers exist) or `subscription_cancelled_immediately` (if a trial converts then cancels).
+    *   **Question:** "Is the specific price point the blocker?"
+    *   **Action:** Only if users engage with the flow but reject the specific cost is this a pure price issue.
+
+**Segmentation Strategy**
+Compare retention cohorts based on **pre-paywall engagement depth**, not just demographics. Segment users who completed >5 meditation sessions in their free trial vs. those who completed <2.
+*   If high-engagement users drop off at the same rate as low-engagement users, the barrier is likely **Price** or **Friction** (even committed users can't/won't pay).
+*   If only low-engagement users drop off, the barrier is **Perceived Value** (they didn't form a habit before hitting the wall).
+
+**Testing Strategy: Pre-committed A/B Test**
+Do not revert to a soft paywall globally based on this trend; that is a reaction to a leaky bucket. Run a controlled experiment to validate the root cause.
+
+*   **Design:** Split traffic 50/50 between "Hard Paywall" (Control) and "Soft Paywall" (Variant: e.g., 3 free premium sessions before blocking).
+*   **Primary Metric:** Day-30 Retention of *paid* subscribers (or Day-30 retention of the cohort if the goal is total active users).
+*   **Guardrail Metric:** Revenue per User (ARPU). A soft paywall might boost retention but crush revenue; you must know the trade-off.
+*   **Rigor:** Pre-commit to a sample size and duration (e.g., 14 days or N=5,000 users per variant). Do not peek at Day 2 results; a early "win" is statistically `UNVERIFIED` due to inflated false-positive rates. Read the results once at the end.
+*   **Decision Tripwire:** If the Soft Paywall increases Day-30 retention by >5% *without* decreasing ARPU by >10%, ship it. If retention rises but ARPU collapses, the hard paywall was correct for monetization, and you must fix the value proposition instead.
+
+**This Week's Steps**
+1.  Instrument `payment_initiated` and `paywall_dismissed_without_attempt` immediately to distinguish friction from value rejection.
+2.  Define the "High Engagement" cohort (e.g., >5 sessions in first 7 days) and calculate their specific drop-off rate at the paywall.
+3.  Draft the A/B test design document specifying the primary metric, guardrail, and fixed duration before engineering begins.
+
+The drop from 42% to 28% is your baseline; do not compare against industry benchmarks. Your own data will dictate the fix.

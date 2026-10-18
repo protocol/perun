@@ -1,0 +1,17 @@
+**Recommendation:** Adopt **"Time to First Successful API Call"** as your single North Star metric for the next quarter. Reject "Percentage of users who bookmark a page" as a primary success criterion.
+
+**Logical Connection to Business Goal:**
+Your stated business goal is increasing API consumption. "Time to First Successful API Call" measures the exact moment a user derives value from your product: executing code against your API. In a developer portal, value is not consumed by reading or saving documentation (bookmarking); it is consumed only when the integration works. Reducing the time to this event directly removes friction from the activation funnel, leading to higher immediate usage and, historically, higher long-term retention of active integrations.
+
+"Bookmarking" is a vanity metric in this context. A developer may bookmark a page because they are confused, blocked, or planning to read it later without ever implementing it. High bookmark rates can coexist with zero API consumption. Optimizing for bookmarks risks improving the "library" feel of your portal while failing to move the needle on actual API calls.
+
+**Trade-offs and Constraints:**
+1.  **Measurement Complexity vs. Signal Quality:** You noted a 15% server load increase complicating real-time tracking. "Time to First Successful API Call" requires correlating a frontend search event with a backend API gateway success event. This is harder to instrument than a simple frontend click (bookmark). However, the difficulty of measurement does not invalidate the metric's importance. If you cannot measure this reliably due to load, the solution is to sample the data or aggregate it asynchronously, not to switch to a weaker metric that is easier to count.
+2.  **Latency Risk:** Prioritizing speed to the first call might tempt engineering to simplify search results to return *something* fast, potentially lowering result relevance. You must guardrail this: the "Successful" part of the metric is critical. A fast call that returns a 400 error or wrong data is a failure, not a win.
+3.  **Enterprise Context:** Enterprise customers care about developer productivity and time-to-market. They do not care how many pages their teams saved. They care about how quickly their engineers can integrate your API. "Time to First Successful API Call" aligns directly with their ROI; bookmarking does not.
+
+**This Week's Step:**
+Define the exact event schema for "Search Initiated" and "API Call Success (200 OK)" linked by a pseudonymous user ID. Run a query on last week's data to establish the current baseline median time between these two events. If the data is missing due to the server load issues, task engineering with implementing a sampled log stream for this specific correlation before attempting any further optimization.
+
+*Note: Do not present bookmark rates to the board as a growth indicator; they are a leading indicator of confusion, not consumption.*
+*Ensure the user ID used for this correlation is pseudonymized to comply with privacy standards, separating it from PII.*

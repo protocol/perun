@@ -1,0 +1,38 @@
+**Diagnostic Report: Trial-to-Paid Conversion Decline**
+
+**Status:** `UNVERIFIED` – The projected 25% lift and "industry benchmarks" cited are external assertions not sourced from CloudBase's historical data. Analysis below relies strictly on the provided internal baseline (18% → 9% conversion) and the structural change (credit card removal).
+
+**Root Cause Analysis**
+The hypothesis that "removing friction brings more qualified leads" is contradicted by the data. When a payment barrier is removed, the denominator (sign-ups) inevitably expands to include low-intent users who were previously filtered out. This is not a failure of lead quality but a dilution effect. The 40% surge in sign-ups likely represents users who wanted to "look around" without commitment, not users who were "hesitant to pay." Consequently, the overall conversion rate dropping from 18% to 9% is the expected mathematical outcome of mixing high-intent and low-intent cohorts, not necessarily a sign that the product value has decreased.
+
+The critical unknown is whether the **absolute number** of paid conversions has increased or decreased.
+*   *Scenario A (Dilution):* If paid users remained flat or rose slightly while sign-ups exploded, the strategy is working for volume, but the *rate* is skewed.
+*   *Scenario B (Degradation):* If total paid users actually dropped, the new onboarding flow may be failing to demonstrate value before the trial expires.
+
+**Segmentation Framework**
+Do not instrument "everything." Define events that answer specific questions to separate intent from noise.
+
+1.  **Cohort Separation (The Identifier Seam):**
+    *   Split users into `Pre-Change` (CC required) and `Post-Change` (No CC) using a stable, pseudonymous user ID. Do not use raw PII; route identity management to privacy compliance protocols.
+    *   *Question:* Does the `Post-Change` cohort retain the core action at the same rate as `Pre-Change`?
+
+2.  **Activation vs. Acquisition:**
+    *   Define the "Aha Moment" (e.g., "Created first project" or "Invited teammate").
+    *   *Event:* `core_action_completed`.
+    *   *Question:* Of the new sign-ups, what % hit the core action? If this is low, the issue is onboarding clarity, not payment intent. If this is high but conversion is low, the issue is pricing friction or timing.
+
+3.  **Retention First (Bottom-Up Read):**
+    *   Ignore the top-of-funnel sign-up spike for now. Measure Day-3 and Day-7 retention of the *core action* for the new cohort.
+    *   *Hypothesis:* If new users do not return to the core action by Day 3, they are low-intent explorers. No email sequence will fix this; they are vanity metrics.
+
+**Decision Logic & This-Week Steps**
+Do not revert the change yet. Reverting eliminates the top-of-funnel volume that might yield higher *total* revenue even at a lower rate. Instead, execute these three steps by Friday:
+
+1.  **Calculate Absolute Revenue Impact:** Compare total paid conversions (count, not %) for the last 3 weeks vs. the prior 3 weeks. If absolute conversions are up, the "drop" is a vanity metric; do not revert.
+2.  **Run a Micro-Segment Query:** Filter the `Post-Change` cohort by those who completed the `core_action_completed` event. Calculate the conversion rate *only* for this subset. If this rate matches the historic 18%, the problem is activation, not payment willingness.
+3.  **Design a Guardrailed Test:** If step 2 shows potential, launch an A/B test on the new cohort only.
+    *   *Control:* Current flow.
+    *   *Variant:* New nurturing email sequence triggered *only* if `core_action_completed` is false by Day 2.
+    *   *Pre-commitment:* Run for 14 days (one full trial cycle). Do not peek at day 2 results. Primary metric: Trial-to-Paid conversion. Guardrail: Unsubscribe rate.
+
+**Call:** Extend the no-CC trial through the quarter *if* absolute paid conversions are neutral or positive. Implement the nurturing sequence only for users who fail to activate, not the entire pool. If absolute paid conversions have dropped, revert immediately.

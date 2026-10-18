@@ -1,0 +1,53 @@
+# SecureCoin Soft Launch Tracking Plan
+
+**Objective:** Monitor onboarding friction to achieve 15% waitlist-to-funded conversion by identifying drop-offs before the December 5th soft launch.
+
+## Core Funnel Events
+Track these sequential events with timestamps to calculate step-to-step conversion rates and time-in-step.
+
+| Event Name | Trigger Point | Critical Properties |
+| :--- | :--- | :--- |
+| `waitlist_claimed` | User clicks invite link & lands on signup | `invite_code`, `user_segment` |
+| `signup_started` | User enters email/password | `device_type`, `browser` |
+| `kyc_submitted` | User uploads ID documents | `document_type`, `attempt_number` |
+| `kyc_verified` | System confirms identity pass | `verification_time_sec`, `rejection_reason` |
+| `bank_link_started` | User clicks "Link Bank Account" | `bank_selector_used` (Y/N) |
+| `bank_link_completed` | Successful API handshake with bank | `bank_name`, `link_duration_sec` |
+| `account_funded` | First deposit clears | `deposit_amount`, `currency`, `time_to_fund_min` |
+
+## Critical Friction Metrics
+Compute these rates daily to spot bottlenecks immediately. Do not rely on aggregate totals alone.
+
+1.  **KYC Drop-off Rate:** `(kyc_submitted - kyc_verified) / kyc_submitted`
+    *   *Action:* If >20%, investigate document rejection reasons or upload UI errors.
+2.  **Bank Link Initiation Rate:** `bank_link_started / kyc_verified`
+    *   *Action:* Low rates indicate the CTA is hidden or value prop is unclear post-KYC.
+3.  **Bank Link Success Rate:** `bank_link_completed / bank_link_started`
+    *   *Action:* Low rates signal API failures or specific bank incompatibilities.
+4.  **10-Mminute Activation Rate:** % of users where (`bank_link_completed` timestamp - `signup_started` timestamp) ≤ 600 seconds.
+    *   *Action:* This is your leading indicator for long-term retention. Target >40% of funded users hitting this window.
+5.  **Time-to-Fund Median:** Median duration between `signup_started` and `account_funded`.
+    *   *Action:* Track by device; mobile often introduces specific friction in crypto flows.
+
+## Compliance & Error Tracking
+Essential for engineering and compliance teams to prioritize fixes.
+
+| Event Name | Properties | Purpose |
+| :--- | :--- | :--- |
+| `kyc_rejected` | `rejection_code`, `step_failed` | Monitor false positives vs. genuine fraud; required for regulatory reporting. |
+| `bank_link_error` | `error_code`, `bank_id`, `failure_stage` | Identify broken integrations with specific Singaporean banks (e.g., DBS, OCBC). |
+| `compliance_hold` | `hold_reason`, `duration_hours` | Track accounts paused for manual review; impacts speed-to-fund goals. |
+
+## Implementation Notes for Engineering
+*   **Naming Convention:** Use `snake_case` for all event names and properties to ensure compatibility with GA4 and data warehouses.
+*   **Timestamps:** Record server-side timestamps for all financial events (`bank_link_completed`, `account_funded`) to prevent client-side manipulation.
+*   **User ID:** Ensure a consistent `user_id` persists from `waitlist_claimed` through `account_funded` to enable cohort analysis.
+*   **PII Safety:** Do not send account numbers, NRIC, or full names in event properties. Send only hashed IDs or reference codes.
+
+## Immediate Action Thresholds
+If any metric breaches these limits during the soft launch, halt traffic and investigate:
+*   **Bank Link Error Rate** > 5% for any single major bank.
+*   **KYC Verification Time** median > 3 minutes (indicates system lag).
+*   **Drop-off between KYC and Bank Link** > 50%.
+
+This plan isolates the specific "link bank" friction point you hypothesized while ensuring compliance visibility. Focus engineering sprints on the step with the highest absolute drop-off volume, not just the lowest percentage rate.

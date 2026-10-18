@@ -1,0 +1,32 @@
+### Technical Requirement: Cross-Device User Journey Instrumentation
+
+**Objective:** Enable reconstruction of individual user journeys across desktop and mobile to validate the hypothesis that visiting ≥3 session rooms correlates with next-year ticket purchase.
+
+**1. The Identifier Seam (Critical Prerequisite)**
+To unify desktop and mobile views without violating privacy norms, engineering must implement a **stable, pseudonymous User ID** (`user_pseudo_id`).
+*   **Generation:** Create this ID upon the first anonymous interaction (e.g., landing page visit) and persist it in a first-party cookie (web) and secure local storage (mobile).
+*   **Linkage:** When a user logs in or registers, send an `identity_merge` event linking the anonymous `user_pseudo_id` to the authenticated `user_account_id`.
+*   **Constraint:** Do not use raw PII (email, name) as the analytics key. Route PII handling to the privacy compliance protocol; this system only tracks the pseudonymous token.
+
+**2. Core Event Taxonomy**
+Instrument only the following events. Each must include `timestamp`, `user_pseudo_id`, `device_type`, `app_version`, and `session_id`.
+
+| Event Name | Trigger Condition | Required Properties | Question Answered |
+| :--- | :--- | :--- | : |
+| `session_room_enter` | User joins a specific session room. | `room_id`, `room_topic`, `entry_source` (link, lobby, recommendation). | Did the user engage with content? |
+| `networking_interaction` | User initiates or accepts a 1:1 chat/video. | `interaction_type` (chat, video), `duration_sec`, `partner_anon_id` (hashed). | Did the user derive peer value? |
+| `booth_visit` | User lands on a sponsor/exhibitor booth. | `booth_id`, `dwell_time_sec`, `asset_downloaded` (boolean). | Did the user engage with sponsors? |
+| `identity_merge` | Anonymous user logs in/registers. | `previous_anon_id`, `new_account_id`. | Can we stitch pre-login behavior to the account? |
+| `next_year_intent` | User clicks "Buy Next Year" or similar CTA. | `price_tier`, `discount_code_used`. | Did the conversion happen? |
+
+**3. Implementation Rules for Engineering**
+*   **No "Track Everything":** Do not instrument mouse movements, scroll depth, or generic pageviews. These create noise and cost without answering the specific retention hypothesis.
+*   **Data Latency:** Events must be flushed to the warehouse within 5 minutes to allow for real-time operational dashboards during the summit.
+*   **Validation:** Before Dec 5th, run a backfill test on staging to verify that a single `user_pseudo_id` correctly aggregates events from two different device simulations.
+
+**4. Immediate Next Steps (This Week)**
+1.  **Backend:** Implement the `user_pseudo_id` generation and `identity_merge` logic in the auth service.
+2.  **Data Infra:** Define the schema for the five events above in the data warehouse; reject any incoming events that lack the `user_pseudo_id`.
+3.  **Product:** Verify in staging that a user moving from Mobile → Desktop retains a single journey view.
+
+*Note: We cannot validate the "3-room" hypothesis or set a retention benchmark until this data is live; any current estimates are UNVERIFIED. This plan focuses strictly on product behavior; system health (latency, error rates) remains under ops observability.*

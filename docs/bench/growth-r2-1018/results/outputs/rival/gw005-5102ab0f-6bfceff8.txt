@@ -1,0 +1,49 @@
+### Operational Health Dashboard: Vietnam Expansion
+
+To distinguish between supply-side inefficiencies (driver allocation) and demand-side bottlenecks (merchant preparation), you must track the following four core event categories. These metrics isolate the specific hand-offs where time is lost, enabling a data-driven decision on hiring versus process optimization.
+
+#### 1. Merchant Fulfillment Efficiency
+*Target Decision: Optimize Merchant Onboarding*
+Track the interval between order acceptance and driver availability. If this duration is high, the bottleneck is upstream of your logistics network.
+*   **Event:** `order_accepted_by_merchant`
+    *   *Properties:* `merchant_id`, `order_value`, `item_count`, `peak_hour_flag`
+*   **Event:** `order_ready_for_pickup`
+    *   *Properties:* `merchant_id`, `actual_ready_timestamp`
+*   **Derived Metric:** **Preparation Lag** = (`order_ready_for_pickup` timestamp) − (`order_accepted_by_merchant` timestamp).
+    *   *Insight:* If the 90th percentile of Preparation Lag exceeds your SLA promise minus travel time, the issue is merchant readiness, not driver allocation.
+
+#### 2. Driver Assignment & Acceptance
+*Target Decision: Hire More Drivers vs. Algorithm Tuning*
+Measure how quickly the system finds a driver and how often drivers reject assignments. High rejection rates indicate insufficient supply or poor incentive structures; long assignment times suggest algorithmic inefficiency.
+*   **Event:** `driver_assignment_attempted`
+    *   *Properties:* `algorithm_version`, `nearby_driver_count`, `distance_to_merchant`
+*   **Event:** `driver_assignment_accepted`
+    *   *Properties:* `driver_id`, `time_since_attempt`, `attempts_count`
+*   **Event:** `driver_assignment_rejected`
+    *   *Properties:* `driver_id`, `rejection_reason` (e.g., "too_far", "low_pay", "traffic")
+*   **Derived Metric:** **Assignment Friction** = Percentage of orders requiring >3 assignment attempts or taking >5 minutes to accept.
+    *   *Insight:* High friction with low `nearby_driver_count` confirms a need to hire. High friction with high `nearby_driver_count` indicates an algorithm or incentive problem.
+
+#### 3. Transit & Congestion Reality
+*Target Decision: Validate Traffic Assumptions*
+Separate actual traffic delays from estimated delays to calibrate your routing engine.
+*   **Event:** `pickup_confirmed`
+    *   *Properties:* `driver_id`, `gps_coordinates`, `timestamp`
+*   **Event:** `delivery_completed`
+    *   *Properties:* `driver_id`, `gps_coordinates`, `timestamp`, `customer_rating`
+*   **Derived Metric:** **Congestion Variance** = (`actual_transit_time`) − (`estimated_transit_time_at_dispatch`).
+    *   *Insight:* If variance is consistently positive during specific hours in Ho Chi Minh City, your algorithm underestimates local traffic patterns. If variance is near zero but total time is high, the issue is distance or routing logic, not unpredictable congestion.
+
+#### 4. Order Lifecycle Status
+*Target Decision: Overall Health & Churn*
+Capture negative outcomes to understand the cost of delays.
+*   **Event:** `order_cancelled`
+    *   *Properties:* `cancellation_stage` (pre-pickup, post-pickup), `reason_code` (merchant_delay, no_driver_found, customer_wait_too_long), `timestamp`
+*   **Derived Metric:** **Attrition by Stage**.
+    *   *Insight:* If cancellations cluster in the "pre-pickup" stage due to `no_driver_found`, you have a supply shortage. If they cluster due to `merchant_delay`, focus on onboarding.
+
+### Implementation Logic
+Do not rely on aggregate daily averages, which hide the volatility you described. Instead, segment these metrics by **hour of day** and **geo-zone**. Traffic congestion is rarely uniform; it likely spikes in specific corridors during rush hours. By mapping `Congestion Variance` and `Preparation Lag` against specific time blocks, you will see if the 70% on-time rate correlates with merchant lunch rushes (preparation issue) or evening gridlock (supply/traffic issue).
+
+**Note:** Ensure all timestamps are recorded in UTC locally converted to prevent daylight saving or timezone errors during analysis.
+**Note:** Define "On-Time" strictly as `delivery_completed` timestamp ≤ (`promised_delivery_time`) before calculating rates to ensure consistency.

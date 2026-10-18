@@ -1,0 +1,10 @@
+**Decision: Do not enforce high-definition images globally yet; the result is UNVERIFIED due to experimental design flaws and conflicting guardrail metrics.**
+
+The 18% increase in inquiries cannot be accepted as a causal win because the test duration (14 days) combined with daily monitoring likely introduced "peeking" bias, inflating the false-positive rate. Without a pre-committed sample size or a valid sequential testing rule, stopping exactly when significance appeared renders the primary metric unreliable. Furthermore, the experiment failed its guardrails: a 2.5-second load time increase and a 5% drop in mobile session duration indicate a degradation in core user experience. Since mobile constitutes 60% of traffic, the engagement loss likely offsets the inquiry gain. The hypothesis that users are bouncing before seeing images is plausible; slower loads often cause abandonment before content renders, meaning the "inquiry" lift may come from a smaller, highly motivated subset of users while the broader audience disengages.
+
+**This Week's Actions:**
+1.  **Recompute the baseline:** Isolate the mobile cohort's inquiry rate vs. session duration to calculate the net value per session, rather than looking at aggregate inquiries.
+2.  **Define the tripwire:** Establish a break-even point where the revenue from an additional inquiry equals the lifetime value lost from a 5% reduction in session duration; if the current data does not clear this bar, the feature fails.
+3.  **Instrument the specific leak:** Add an event tracking "time-to-first-image-rendered" correlated with "bounce" to verify if the load time is causing early exits before the HD benefit is realized.
+
+*Note: The identifier seam requires stable pseudonymous IDs to track these mobile cohorts across sessions without violating privacy compliance. Do not use raw PII for this analysis.*

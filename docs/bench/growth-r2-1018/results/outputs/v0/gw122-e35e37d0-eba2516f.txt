@@ -1,0 +1,48 @@
+### Measurement Framework: Carbon Tracker Beta (Nov 15 – Feb 15)
+
+**Status Warning:** You are currently in the `prototype` stage. Per growth analytics principles, instrumenting a full dashboard now is over-engineering. Your only goal for the 15-company beta is to validate the "core action" and the "weekly report vs. real-time" hypothesis. Do not fabricate benchmarks for "good" adoption; compare each company only to its own Week 1 baseline.
+
+#### 1. The North Star (Customer Value)
+**Metric:** *Weekly Active Data-Completeness Rate.*
+**Definition:** The percentage of beta companies where an admin uploads or connects at least one new data source (CSV, API, or manual entry) resulting in a calculated footprint reduction or insight *within 7 days*.
+**Why:** Raw logins are vanity. Value exists only when data flows and generates an insight. If this metric is zero, the product has no value regardless of dashboard fidelity.
+
+#### 2. Leading Indicators (Adoption Depth vs. Breadth)
+Since you cannot access internal energy grids yet, you must measure the *effort* users take to bridge that gap.
+
+*   **Adoption Breadth (Reach):** *Admin Activation Rate.*
+    *   **Event:** `report_generated` or `data_source_connected`.
+    *   **Question:** "Did the admin complete the setup flow to produce their first output?"
+    *   **Target:** 15/15 companies must trigger this once. If not, the onboarding is broken.
+*   **Adoption Depth (Stickiness):** *Weekly Data Refresh Ratio.*
+    *   **Event:** `data_upload_success` (count per week).
+    *   **Question:** "Are they returning to update data, or was it a one-off?"
+    *   **Calculation:** (Weeks with >0 uploads) / (Total weeks active).
+    *   **Hypothesis Test:** If admins value weekly reports, this event should cluster on Mondays/Tuesdays. If they value real-time, look for `dashboard_view` events with <24h latency between data change and view.
+
+#### 3. Lagging Indicators (Behavior Change Proxies)
+"Sustainability impact" is too vague for a 3-month pilot. Measure the *proxy* for impact: **Actionable Insight Consumption.**
+
+*   **Metric:** *Recommendation Acceptance Rate.*
+    *   **Event:** `recommendation_clicked` OR `export_shared_with_stakeholder`.
+    *   **Question:** "Did the data lead to a decision or a conversation?"
+    *   **Logic:** If the system suggests "Switch Provider X" or "Reduce HVAC in Zone Y," and the user clicks to export/share that specific finding, behavior change is initiating.
+*   **Metric:** *Report Distribution Count.*
+    *   **Event:** `report_emailed` or `pdf_downloaded`.
+    *   **Question:** "Is the weekly report actually leaving the admin's desk?"
+    *   **Validation:** If `report_downloaded` is high but `export_shared` is low, the report is being read but not acted upon.
+
+#### 4. Event Taxonomy (Instrument Only These)
+Do not track everything. Instrument only these four events to answer your specific questions:
+1.  `data_source_connected` (Answers: Can we get data?)
+2.  `report_viewed` (Answers: Do they care about the output?)
+3.  `insight_exported` (Answers: Is it driving internal comms?)
+4.  `feedback_submitted` (Qualitative: Why did they choose weekly vs. real-time?)
+
+#### 5. This-Week Steps
+1.  **Define the "Core Action" Schema:** Finalize the JSON schema for `data_source_connected` and `insight_exported` in your analytics tool today. Ensure you capture a pseudonymous `company_id` to track cohorts without exposing PII (route PII handling to your privacy compliance review).
+2.  **Set the Baseline Rule:** Instruct the sales team that success for Company A is *Company A's* Week 2 activity > Week 1 activity. Do not compare Company A to Company B yet.
+3.  **Prepare the "Stop" Criteria:** If fewer than 5 of the 15 companies trigger `data_source_connected` by Day 14, pause sales negotiations. The product is not ready for value demonstration.
+
+**Note:** Do not assert a "good" retention rate (e.g., "80% is good"); that number is fabricated without your data. Wait for the Nov 15 launch to establish your own baseline.
+**Note:** If admins request real-time data during the pilot, log this as a `feature_request` event, but do not build it until the weekly report hypothesis is falsified by low `report_viewed` rates.

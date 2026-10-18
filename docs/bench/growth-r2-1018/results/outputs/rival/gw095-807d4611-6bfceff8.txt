@@ -1,0 +1,49 @@
+# Experiment Plan: Early Price Display vs. Document-First Flow
+
+## Hypothesis
+Because 65% of users drop off at the document upload step due to price uncertainty, we believe showing pricing before document upload will increase total completed signups by 15%+ without significantly decreasing the lead qualification rate passed to legal partners. We will know this is true when the primary metric (completed signups) increases while the guardrail metric (lead qualification rate) remains within 5% of the control group.
+
+## Test Design
+- **Type:** A/B Test (Split URL or Server-Side)
+- **Traffic Split:** 50/50
+- **Start Date:** January 10th
+- **Variants:**
+  - **Control (A):** Current flow (Upload 3 docs → See Price → Complete Signup)
+  - **Variant (B):** New flow (See Price → Upload 3 docs → Complete Signup)
+
+## Metrics Framework
+
+### Primary Metric (Volume)
+**Completed Signup Rate:** Percentage of visitors who finish the entire onboarding flow.
+*Target:* +15% lift over control.
+
+### Guardrail Metric (Quality)
+**Lead Qualification Rate:** Percentage of completed signups that partners mark as "Qualified" or "Ready for Review."
+*Threshold:* If Variant B drops >5% below Control, the test fails regardless of volume gains.
+*Rationale:* This directly measures your concern about wasting legal team time. It requires no new tracking infrastructure if partners already tag leads; simply aggregate their existing status flags.
+
+### Secondary Metrics (Context)
+1. **Drop-off at Upload Step:** To confirm the friction point is resolved.
+2. **Time-to-Complete:** To ensure users aren't rushing through incorrectly.
+3. **Support Tickets:** Count of "pricing confusion" or "incorrect docs" tickets per 100 signups.
+
+## Sample Size & Duration
+Assuming a baseline signup rate of ~10% (estimated from 65% drop-off context) and seeking a 15% relative lift (to 11.5%):
+- **Required Sample:** ~24,000 visitors per variant (48,000 total) for 80% power at 95% confidence.
+- **Duration Calculation:** If you receive 1,000 visitors/day, run for **24 days** (ending ~Feb 3rd). If traffic is lower, extend proportionally. Do not stop early even if results look significant before Day 14 to avoid seasonal bias (e.g., weekend vs. weekday behavior).
+
+## Implementation Checklist
+1. **Tracking:** Ensure `signup_completed` and `lead_qualified` events fire identically in both flows.
+2. **Consistency:** Use cookies to ensure returning users see the same variant.
+3. **Partner Alignment:** Inform legal partners that lead quality *might* fluctuate; ask them to maintain consistent qualification criteria during the test window.
+
+## Decision Matrix
+| Outcome | Action |
+| :--- | :--- |
+| **Signups ↑, Quality Stable** | **Launch:** Roll out Variant B to 100%. |
+| **Signups ↑, Quality ↓ (>5%)** | **Iterate:** Consider a hybrid (price range teaser) or restrict to specific traffic sources. |
+| **Signups ↔, Quality ↔** | **Kill:** Keep Control; friction wasn't the primary blocker. |
+| **Signups ↑, Quality ↓ (<5%)** | **Calculate:** If net qualified leads (Volume × Rate) increase, launch despite slight quality dip. |
+
+*Note: If traffic is too low for statistical significance in 4 weeks, extend the test or switch to a "Pre-test" survey asking drop-offs "Would knowing the price help?" to validate the hypothesis qualitatively.*
+*Ensure your analytics tool excludes internal team IPs to prevent skewing the small sample size.*

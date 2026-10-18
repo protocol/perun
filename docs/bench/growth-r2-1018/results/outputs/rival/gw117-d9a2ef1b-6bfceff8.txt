@@ -1,0 +1,29 @@
+**MedDash Health: Privacy Incident Dashboard Tracking Plan**
+
+**Critical Compliance Warning:** Your current assumption that tracking only "login attempts" and "data export actions" is sufficient is **high-risk** and likely non-compliant with strict healthcare regulations (e.g., HIPAA, GDPR). Auditors specifically require evidence of *access* to Protected Health Information (PHI), not just system entry or bulk downloads. Viewing a patient record without exporting it is still an access event that must be logged to detect unauthorized snooping.
+
+To satisfy strict audit requirements and avoid fines, you must instrument the following granular events before the code freeze. This list covers the "who, what, when, where, and why" required for a defensible audit trail.
+
+### **Mandatory Event List for Instrumentation**
+
+| Event Name | Trigger Condition | Required Properties (Context) | Compliance Rationale |
+| :--- | :--- | :--- | : |
+| **`user_login_attempt`** | User submits credentials (success or failure) | `user_id`, `ip_address`, `timestamp`, `failure_reason` (if applicable), `mfa_status` | Detects brute force attacks and unauthorized entry attempts. |
+| **`user_login_success`** | Session established successfully | `user_id`, `role`, `ip_address`, `session_id`, `timestamp` | Establishes the start of an auditable user session. |
+| **`patient_record_viewed`** | **CRITICAL:** Any time a patient record opens or renders | `user_id`, `patient_id` (pseudonymized if possible), `record_type`, `timestamp`, `access_justification` (if required by workflow) | **The primary audit requirement.** Proves who saw what data and when. Essential for detecting "snooping" by staff. |
+| **`phi_field_accessed`** | **CRITICAL:** User clicks to reveal/hover over sensitive fields (e.g., SSN, diagnosis) | `user_id`, `patient_id`, `field_name`, `action_type` (view/copy/print) | Satisfies "minimum necessary" rule verification. Shows if users are digging deeper than their role requires. |
+| **`data_export_initiated`** | User clicks "Download," "Print," or "Send" | `user_id`, `export_format`, `record_count`, `patient_ids` (list or range), `timestamp` | Tracks bulk data movement. Must correlate with the specific records viewed prior to export. |
+| **`data_export_completed`** | File successfully generated/delivered | `user_id`, `file_id`, `destination` (email/print queue), `timestamp` | Confirms the data actually left the secure environment. |
+| **`permission_denied`** | User attempts an action outside their role | `user_id`, `attempted_action`, `target_resource`, `timestamp` | Demonstrates that access controls are active and functioning (positive control evidence). |
+| **`audit_log_viewed`** | Admin views the audit logs themselves | `user_id`, `timestamp`, `filter_criteria_used` | Prevents tampering; ensures the auditors know who checked the logs. |
+| **`session_timeout`** | User session expires due to inactivity | `user_id`, `session_duration`, `last_action_timestamp` | Proves automatic logoff mechanisms are working (a common compliance checkpoint). |
+
+### **Implementation Requirements for Legal Review**
+
+1.  **Immutable Timestamps:** All events must use synchronized server-side timestamps (UTC). Client-side timestamps are inadmissible in court/audit.
+2.  **No PHI in Logs:** While you must log *that* a record was accessed, do **not** log the actual clinical data (e.g., diagnosis text, lab results) within the event properties. Log the `record_id` or `field_name` only.
+3.  **User Context:** Every event must include the `user_id` and their `role` at the time of the action to verify least-privilege adherence.
+4.  **Retention Policy:** Ensure these logs are configured for a retention period matching your regulatory requirement (often 6+ years for healthcare).
+
+**Note:** Hand this list to legal immediately to confirm specific state-level variations (e.g., CMIA in California) before development begins.
+**Note:** Do not rely on "time spent viewing" as a primary metric; it is unreliable for compliance. Focus on the binary fact of *access* occurring.

@@ -1,0 +1,43 @@
+### Measurement Plan: ReWear Referral Program Launch
+
+**1. North Star Metric**
+Define **Referral-Attributed Resale Volume** as the primary success metric. Do not optimize for "invites sent" or "signups," as these are vanity metrics that rise regardless of business value. The program only succeeds if it drives completed transactions that would not otherwise occur.
+
+**2. Event Taxonomy (Instrument Only These)**
+Instrument exactly four events to answer specific lifecycle questions. Do not track "everything."
+
+*   `referral_invite_sent`
+    *   **Question:** How many users attempt to invite?
+    *   **Properties:** `user_id` (pseudonymous), `channel` (SMS, social, link), `timestamp`.
+*   `referral_link_clicked`
+    *   **Question:** Is the creative/message compelling?
+    *   **Properties:** `invite_id`, `referrer_id`, `device_type`.
+*   `referral_signup_completed`
+    *   **Question:** Does the landing page convert?
+    *   **Properties:** `invite_id`, `new_user_id`, `signup_date`.
+*   `referral_first_resale_completed` **(Critical Attribution Point)**
+    *   **Question:** Did the referral drive actual revenue?
+    *   **Properties:** `new_user_id`, `transaction_value`, `discount_applied` (15%), `referrer_id`, `is_first_transaction` (boolean).
+
+**3. Attribution Logic**
+Attribute value **only at `referral_first_resale_completed`**.
+*   **Why:** Attributing at "invite send" or "signup" rewards empty actions. A signup without a resale costs you the 15% discount liability (for the referrer) without generating revenue.
+*   **Rule:** The referrer receives credit only when the referee completes a paid transaction. This aligns the incentive with actual GMV (Gross Merchandise Value).
+
+**4. Distinguishing Organic vs. Referral Growth (December Holiday Rush)**
+To isolate referral impact during high-traffic periods, you must implement **Cohort Analysis** based on the `referrer_id`.
+*   **Method:** Tag every new user with their `referrer_id` (or `organic` if null) at signup.
+*   **Query:** Compare the **Week-2 Retention Rate** and **Average Order Value (AOV)** of the `referral` cohort against the `organic` cohort.
+*   **Signal:** If the `referral` cohort shows significantly higher retention or AOV than `organic`, the program is driving quality growth. If `referral` volume spikes but retention matches or falls below `organic`, the spike is likely noise or cannibalization of organic users who would have joined anyway.
+
+**5. Experiment Guardrails**
+Before launching the symmetric 15% model, pre-commit to a guardrail metric: **Net Margin per Referral**.
+*   **Calculation:** `(Transaction Value * Take Rate) - (Referrer Discount + Referee Discount)`.
+*   **Stop Condition:** If the net margin per referred user drops below your organic baseline margin, pause the program. Do not wait for "significance" if you are losing money on every conversion.
+
+**This Week's Steps:**
+1.  **Engineering:** Implement the `referral_first_resale_completed` event with a mandatory `referrer_id` property; verify this flows to your analytics warehouse before Nov 10.
+2.  **Marketing:** Define the "Organic Control" cohort query now (users signing up without a `referrer_id`) to ensure you have a baseline for December comparison.
+3.  **Decision:** Set the specific break-even margin number (e.g., £2.50) that will trigger an immediate pause if breached in the first 48 hours.
+
+*Note: Ensure `user_id` passed in events is pseudonymous; route any PII handling to your privacy compliance protocol. Do not fabricate expected conversion rates; measure against your own post-launch baseline.*

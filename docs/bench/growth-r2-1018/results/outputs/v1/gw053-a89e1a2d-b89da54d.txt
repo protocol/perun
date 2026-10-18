@@ -1,0 +1,35 @@
+### Growth Analytics Plan: SecureCoin Soft Launch (Dec 5)
+
+**1. North Star Metric**
+**Weekly Active Funded Users (WAFU).**
+Reject "Total Signups" or "App Downloads" as vanity metrics; they rise regardless of value delivery. For a crypto wallet, value is only realized when a user holds assets. Track the count of unique users who successfully fund their account and perform at least one on-chain or exchange action within a 7-day window. This aligns engineering effort directly with customer value.
+
+**2. Event Taxonomy: Answering Named Questions**
+Instrument only the following events to diagnose the specific friction points in your 10-minute hypothesis. Every event below maps to a specific question; do not instrument "just in case."
+
+| Event Name | Question Answered | Critical Properties |
+| :--- | :--- | :--- |
+| `signup_started` | How many waitlist users actually attempt onboarding? | `source_campaign`, `device_type` |
+| `kyc_submitted` | Where is the first major drop-off before funding? | `document_type`, `submission_duration_sec` |
+| `bank_link_initiated` | Do users attempt the critical 10-min action? | `time_since_signup_sec` |
+| `bank_link_failed` | **Primary Friction Point:** Is the integration breaking? | `error_code`, `provider_name`, `step_failed` |
+| `account_funded` | **Conversion Goal:** Did the user complete the core action? | `amount_usd`, `time_to_fund_sec` |
+| `first_trade_executed` | Does funding lead to actual product usage (retention signal)? | `asset_pair`, `trade_value` |
+
+**3. Funnel Diagnosis Strategy (Bottom-Up)**
+Do not optimize acquisition until retention is verified. Analyze the funnel in this specific order:
+1.  **Retention/Activation:** Of those who funded, what % executed a trade within 48 hours? If low, the product experience post-funding is broken.
+2.  **Conversion:** Of those who started KYC, what % funded? If low, the bank-link step is the blocker.
+3.  **Friction Analysis:** Calculate the median `time_since_signup_sec` for `bank_link_initiated`. Compare users who linked <10 mins vs. >10 mins. If the >10 min group has significantly lower `account_funded` rates, your hypothesis is validated, and the UI must force or guide this step earlier.
+4.  **Acquisition:** Only after the above are stable, analyze `signup_started` volume against the 20,000 waitlist.
+
+**4. Compliance & Identifier Seam**
+*   **Stable User ID:** Use a pseudonymous, stable UUID to track users across sessions for cohort analysis. Do not use raw emails or wallet addresses as analytics keys.
+*   **PII Routing:** All personally identifiable information (KYC docs, bank details) must be excluded from event properties. Route data handling to `privacy-compliance.md` standards. The analytics system sees only the UUID and event metadata.
+
+**5. This-Week Steps (Pre-Launch)**
+1.  **Implement Schema:** Define the six events above in your tracking plan. Reject any event that does not answer one of the named questions.
+2.  **Dashboard Setup:** Build a single view showing the conversion rate from `signup_started` → `account_funded` broken down by `time_since_signup_sec` buckets (0-10m, 10-30m, >30m).
+3.  **Alerting:** Set an alert for `bank_link_failed` rate > 5%. Any spike here indicates a critical integration failure blocking your 15% goal.
+
+*Note: The 15% conversion target is a business goal, not a benchmark for "good" industry performance; success is measured by trending toward this number from your own Day 1 baseline. No external benchmarks are applied.*

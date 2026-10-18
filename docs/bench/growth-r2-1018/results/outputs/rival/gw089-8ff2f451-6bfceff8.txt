@@ -1,0 +1,74 @@
+# Technical Requirement: Cross-Device User Journey Instrumentation
+**Target Event:** GlobalStage Summit (Dec 5)
+**Audience:** Backend Engineering & Data Infrastructure Teams
+
+## 1. Core Identity Strategy (Cross-Device Resolution)
+To unify desktop and mobile journeys, all events must include a stable `user_id` (internal database ID) and a `session_id` (unique per device/browser instance).
+*   **Requirement:** Users must be authenticated before accessing session rooms. Guest/anonymous access must be discouraged or mapped to a temporary ID that merges upon login.
+*   **Primary Key:** `user_id` (UUID).
+*   **Secondary Key:** `device_fingerprint` (for pre-login behavior, if applicable).
+
+## 2. Standard Event Properties (Global Context)
+Every event listed below must include these top-level properties to ensure context is preserved:
+*   `timestamp`: ISO 8601 format.
+*   `user_id`: Unique user identifier.
+*   `session_id`: Unique device-session identifier.
+*   `device_type`: `desktop_web`, `mobile_ios`, `mobile_android`.
+*   `connection_quality`: `low`, `medium`, `high` (derived from latency/packet loss).
+*   `referrer_context`: The previous room or action ID (to build the path).
+
+## 3. Required Event Schema
+
+### A. Session Navigation (The "Three Room" Hypothesis)
+*Trigger:* When a user enters or exits a virtual room.
+*   **Event Name:** `room_entered`
+    *   `room_id`: Unique identifier for the session.
+    *   `room_type`: `keynote`, `breakout`, `workshop`, `panel`.
+    *   `track_name`: Specific stream name (if multi-track).
+    *   `entry_point`: `lobby`, `direct_link`, `schedule_click`, `notification`.
+*   **Event Name:** `room_exited`
+    *   `room_id`: Matching enter event.
+    *   `duration_seconds`: Time spent in room.
+    *   `exit_action`: `voluntary`, `connection_lost`, `redirected`.
+
+### B. Networking Interactions
+*Trigger:* When a user initiates or engages in 1:1 or group networking.
+*   **Event Name:** `networking_started`
+    *   `match_type`: `random`, `interest_based`, `search_selected`.
+    *   `partner_user_id`: Anonymized or hashed ID of the other party.
+    *   `medium`: `video`, `audio_only`, `chat`.
+*   **Event Name:** `networking_ended`
+    *   `duration_seconds`: Total interaction time.
+    *   `exchange_made`: `boolean` (did they share contact info?).
+    *   `rating`: 1-5 star (if prompted).
+
+### C. Booth Visits & Engagement
+*Trigger:* When a user enters a sponsor area or interacts with assets.
+*   **Event Name:** `booth_visited`
+    *   `booth_id`: Sponsor identifier.
+    *   `booth_category`: e.g., `recruiting`, `tooling`, `services`.
+*   **Event Name:** `booth_asset_clicked`
+    *   `booth_id`: Sponsor identifier.
+    *   `asset_type`: `whitepaper`, `demo_request`, `video`, `coupon`.
+    *   `asset_id`: Specific content ID.
+
+### D. Conversion Proxy (Next Year Intent)
+*Trigger:* Explicit actions indicating retention interest.
+*   **Event Name:** `retention_signal`
+    *   `signal_type`: `early_bird_clicked`, `newsletter_signup`, `survey_completed`.
+    *   `context_room_id`: Where the signal occurred.
+
+## 4. Data Pipeline Requirements
+1.  **Ordering:** Events must be processed with strict timestamp ordering per `user_id` to reconstruct the sequence accurately.
+2.  **Deduplication:** Implement idempotency keys (`event_id`) to prevent double-counting due to network retries on mobile.
+3.  **Latency:** Data must be available in the warehouse/analytics tool within 5 minutes of occurrence for real-time monitoring during the summit.
+4.  **Privacy:** Ensure `partner_user_id` is hashed if exposed in raw logs to comply with GDPR/CCPA.
+
+## 5. Success Metric Definition
+To validate the hypothesis, the data team must be able to query:
+`COUNT(DISTINCT user_id) WHERE COUNT(room_entered) >= 3 AND retention_signal = true`
+compared against the baseline of users with `< 3` rooms.
+
+---
+*Ensure backend services emit these events synchronously to a message queue (e.g., Kafka/Kinesis) before acknowledging the action to the client to guarantee data durability.*
+*Coordinate with the mobile team to ensure background app transitions still fire `room_exited` events before the app suspends.*

@@ -1,0 +1,34 @@
+**North Star Metric:** Weekly Active Contributors completing a **Validated Core Edit**.
+
+This metric counts unique volunteers who, within a 7-day window, submit at least one map feature that passes your quality assurance (QA) checks. It rejects vanity metrics like "total signups" or "raw edits submitted," which rise even when quality drops or users quit. By requiring the edit to be *validated*, you simultaneously measure volume (the edit happened), accuracy (it passed QA), and retention (they returned or persisted long enough to finish).
+
+**Input Metrics to Move the North Star:**
+1.  **Activation Rate:** % of new signups who complete their first *validated* edit within 48 hours.
+2.  **Week-2 Retention:** % of first-time contributors who submit a second *validated* edit in the following week.
+3.  **Rejection Rate:** % of submitted edits failing QA (diagnoses technical friction vs. skill gaps).
+
+**Diagnosis Strategy (Bottom-Up):**
+Do not focus on recruiting more volunteers until you fix the leak. Your data shows a 75% drop-off between signup and first submission, and an 83% drop-off between first submission and regular contribution. Pouring resources into acquisition now is waste.
+*   If **Activation** is low: The barrier to the *first* edit is too high (technical friction).
+*   If **Week-2 Retention** is low: Users lack feedback or purpose after the first edit.
+*   If **Rejection Rate** is high: Instructions are unclear or the QA tool is broken.
+
+**Instrumentation Plan (MVP Stage):**
+Instrument only events that answer specific questions. Do not track everything.
+*   `edit_submitted`: Answers "Did they try?" (Properties: user_id, feature_type, timestamp).
+*   `edit_validated`: Answers "Did they succeed?" (Properties: user_id, edit_id, qa_score).
+*   `edit_rejected`: Answers "Why did they fail?" (Properties: user_id, rejection_reason).
+*   **Identifier Seam:** Use a stable, pseudonymous `volunteer_id` to track users across sessions for cohort analysis. Do not use raw PII here; route personal data handling to your privacy compliance protocol.
+
+**Experiment Design for "Lowering the Barrier":**
+To test your assumption that easing the first edit boosts long-term participation, run a controlled A/B test with pre-committed rigor.
+*   **Primary Metric:** Week-2 Retention of the treatment group vs. control.
+*   **Guardrail Metric:** Rejection Rate (ensure easier entry doesn't trash data quality).
+*   **Rule:** Pre-commit to a sample size or duration (e.g., 2 weeks or 500 new users). Do not peek at results on day 2 and declare a winner; this inflates false positives. If you must monitor continuously, use a sequential testing rule (always-valid p-values). Without a pre-committed design, any observed lift is `UNVERIFIED`.
+
+**This Week's Steps:**
+1.  **Define "Validated":** Explicitly document the QA criteria for a "Core Edit" so engineering can flag these events in the database.
+2.  **Query Baseline:** Run a cohort analysis on last year's data to calculate the exact `edit_validated` rate for Week 1 and Week 2. If this data is missing, the metric is `UNVERIFIED` until instrumented.
+3.  **Draft Test Protocol:** Write the one-page spec for the barrier-lowering experiment, defining the primary metric, guardrail, and stopping rule before writing code.
+
+*Note: No external benchmarks for "good" retention are provided; compare only against your own historical baseline. If QA data does not exist, you cannot measure the North Star yet—build the validation loop first.*

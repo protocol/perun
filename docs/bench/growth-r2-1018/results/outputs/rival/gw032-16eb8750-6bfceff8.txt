@@ -1,0 +1,44 @@
+# SparkDate Analytics Recovery & Prioritization Plan
+
+## Phase 1: Immediate Triage (Days 1-2)
+**Goal:** Restore visibility into the "Swipe-to-Chat" funnel to explain the 15% drop.
+
+1.  **Re-instrument Critical Funnel Events First:** Do not attempt to restore all 160 missing events. Prioritize only those required to calculate conversion rates between these four stages:
+    *   `profile_viewed` (Missing? Restore immediately)
+    *   `swipe_action` (Verify `direction` property: left/right/super)
+    *   `match_created` (Confirm firing on both user sides)
+    *   `chat_initiated` (First message sent)
+    *   `super_like_sent` (High priority given your hypothesis)
+
+2.  **Validate the "Super Like" Hypothesis:** Since you lack three weeks of data, you cannot prove the correlation yet.
+    *   **Action:** Implement `super_like_sent` and `subscription_started` with a shared `user_id` immediately.
+    *   **Interim Measure:** Use proxy metrics (e.g., `feature_tooltip_viewed` for Super Like) if available in the 40 core events to estimate interest until full tracking is live.
+
+## Phase 2: Event Taxonomy Criteria (Day 3)
+**Goal:** Define rules for restoring vs. retiring legacy events. Present this matrix to the CTO.
+
+| Criteria | Restore Event | Retire Event |
+| :--- | :--- | :--- |
+| **Decision Impact** | Directly informs a product or marketing decision (e.g., "Should we push Super Likes?") | Was purely vanity or never used in a report/dashboard |
+| **Funnel Integrity** | Required to calculate a step-to-step conversion rate in the core journey | Represents a dead-end or redundant UI interaction |
+| **Hypothesis Testing** | Essential for validating current Q2 growth hypotheses (e.g., Super Like → Conversion) | Related to deprecated features or old UI versions |
+| **Data Quality** | Has clear, consistent properties (e.g., `location`, `device_type`) | Historically suffered from high null rates or inconsistent firing |
+
+**Rule of Thumb:** If an event does not map to a specific question in your current growth backlog, it remains retired.
+
+## Phase 3: Validation Protocol (Day 4-5)
+**Goal:** Ensure data reliability before scaling acquisition spend.
+
+1.  **Define the "Golden Path":** Map the exact user flow for a free user becoming a subscriber. List the 5-7 events that *must* fire in order.
+2.  **Implement Staging QA:**
+    *   Create test accounts for each user type (Free, Subscriber, Churned).
+    *   Execute the Golden Path manually.
+    *   Verify events fire in the correct order with correct properties using GA4 DebugView or your analytics tool's real-time stream.
+3.  **Shadow Comparison:** If possible, run the new tracking alongside a small subset of traffic (5%) and compare aggregate counts against historical baselines (adjusted for seasonality) to spot massive deviations.
+4.  **Sign-off Gate:** Do not increase ad spend until the "Swipe-to-Chat" conversion rate stabilizes within a 5% variance of pre-refactor benchmarks for 48 hours.
+
+## Deliverable for Wednesday Meeting
+Present a **"Core 10" Restoration List**: The 10 specific events (including `super_like_sent` and `profile_viewed`) required to rebuild the primary funnel dashboard. Explicitly state that the remaining 150+ events are paused pending quarterly review to prevent technical debt accumulation.
+
+*Note: Ensure `super_like_sent` includes a `paywall_impressed` property if the action triggers an upsell, as this bridges your usage-to-revenue gap.*
+*Do not scale acquisition budgets until the validation gate in Phase 3 is passed.*

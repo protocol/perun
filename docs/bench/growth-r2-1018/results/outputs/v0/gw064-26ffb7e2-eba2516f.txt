@@ -1,0 +1,36 @@
+### Proposed Activation Event Taxonomy for TaskFlow Solutions
+
+Your current activation definition (creating a single project) is a vanity metric; it measures effort, not value. The 12% retention rate confirms that creating a project does not equate to realizing value. To fix this, instrument events that prove the core job-to-be-done is happening. Since you are unsure whether value lies in collaboration or individual tracking, track both hypotheses distinctly.
+
+Instrument only these specific events. Each includes the exact name, properties, and the question it answers.
+
+#### Hypothesis A: Value comes from Collaboration
+*If the product is sticky only when teams work together, solo usage is a dead end.*
+
+1.  **Event Name:** `team_member_invited`
+    *   **Properties:** `inviter_role` (admin/member), `invite_method` (email/link), `project_id`.
+    *   **Question Answered:** Does the user attempt to bring others into the workflow? (A leading indicator of network effects).
+2.  **Event Name:** `collaborative_action_completed`
+    *   **Properties:** `action_type` (comment_assigned, task_claimed, file_uploaded_by_other), `project_id`, `actors_count` (number of unique users interacting with this item).
+    *   **Question Answered:** Did at least two distinct users interact with the same project artifact within 48 hours? This proves the "multi-player" value loop is closed.
+
+#### Hypothesis B: Value comes from Individual Workflow Efficiency
+*If the product is a superior personal organizer, retention depends on habit formation, not teammates.*
+
+3.  **Event Name:** `core_workflow_cycle_completed`
+    *   **Properties:** `steps_completed` (e.g., created -> assigned -> moved_to_done), `duration_seconds`, `project_id`.
+    *   **Question Answered:** Did the user complete a full lifecycle of a task (not just create it)? Creating a task is easy; finishing one delivers value.
+4.  **Event Name:** `recurring_usage_session`
+    *   **Properties:** `days_since_first_project`, `session_actions_count`, `project_id`.
+    *   **Question Answered:** Is the user returning to the tool to manage existing work rather than just setting up new work?
+
+#### Implementation Rules for Engineering
+*   **Identifier Seam:** All events must include a `stable_user_pseudonym` (not raw PII) and a `team_id` to allow cohort analysis across sessions. Route any raw email/IP logging to your privacy compliance review before implementation.
+*   **Do Not Instrument:** Do not track page views, button hovers, or time-on-page. These are noise. Only log the events above.
+*   **Definition of Done:** An event is only valid if it can answer one of the four questions listed. If an event cannot determine whether the user found value, do not build it.
+
+### Next Steps
+1.  **Immediate Action:** Before June 1, update the instrumentation plan to capture `collaborative_action_completed` and `core_workflow_cycle_completed`.
+2.  **Analysis Plan:** Once data flows, segment your April cohort by those who triggered these new events vs. those who only created a project. Compare their Week-2 retention. The segment with the highest retention delta defines your new "Aha!" moment.
+
+**Note:** Do not set a benchmark for "good" retention yet; compare the new segments against your existing 12% baseline to find the relative lift. If engineering cannot implement the `actors_count` property reliably, prioritize `team_member_invited` as the primary collaboration proxy.

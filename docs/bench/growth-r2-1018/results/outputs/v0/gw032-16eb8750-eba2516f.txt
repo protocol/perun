@@ -1,0 +1,31 @@
+### SparkDate Event Re-instrumentation & Validation Plan
+
+**1. Define the North Star and Core Question**
+Reject "total swipes" or "cumulative matches" as vanity metrics. Your North Star must be **Weekly Active Users initiating a conversation**. This represents actual value delivery. The immediate core question to answer is: *Did the drop in match rates cause a drop in conversation initiation, or did users stop swiping entirely?* Without this distinction, acquisition spend is wasted.
+
+**2. Prioritize Re-instrumentation: The "Question-First" Filter**
+Do not restore events based on legacy habit. Restore an event only if it answers a specific, named business question required for your current stage (post-refactor stabilization).
+*   **Tier 1 (Critical - Restore Immediately):** Events that map directly to the funnel steps: `profile_viewed`, `swipe_right`, `match_created`, `chat_initiated`, `super_like_sent`.
+    *   *Reasoning:* You cannot diagnose the 15% drop without `profile_viewed` (was it a visibility bug?) or `super_like_sent` (your assumed conversion predictor).
+    *   *Action:* Instrument these 5 events with properties for `user_id` (pseudonymous), `session_id`, and `timestamp` by Wednesday.
+*   **Tier 2 (Contextual - Restore if Tier 1 shows anomalies):** `profile_edit_completed`, `photo_upload_count`, `filter_applied`.
+    *   *Reasoning:* Only needed if Tier 1 data suggests users are dropping off before swiping due to profile quality or filtering issues.
+*   **Tier 3 (Retire Permanently):** Any legacy event that does not map to Acquisition, Activation, Retention, Revenue, or Referral (AARRR). If you cannot name the decision this event informs, delete it. "Tracking everything just in case" creates noise and cost.
+
+**3. Validate the New Taxonomy (Step-by-Step)**
+Before scaling acquisition, verify the data integrity of the 40 core events:
+*   **Step A: Sanity Check Counts.** Compare raw counts of `swipe_right` and `match_created` against server logs for a 24-hour period. Discrepancies >2% indicate tracking loss.
+*   **Step B: Funnel Continuity.** Run a cohort query for users who `swipe_right`. Verify that 100% of subsequent `match_created` events have a preceding swipe from the same `user_id`. Gaps indicate broken session linking.
+*   **Step C: The "Super Like" Hypothesis Test.** Once `super_like_sent` is live, run a retrospective correlation (once 3 weeks of new data exist) between this event and `subscription_started`. Do not assume the predictor holds; validate it against the new codebase.
+
+**4. Address the Data Gap & Algorithm Confounder**
+You cannot retroactively fix the missing "Super Like" data for the past three weeks. Label this period **UNVERIFIED** for conversion analysis.
+*   **Immediate Action:** Isolate the Feb 14th drop by comparing `swipe_to_match` conversion rates *before* and *after* the refactor, excluding the "Super Like" variable. If the rate dropped uniformly across all user segments, the cause is likely the algorithm refactor, not missing tracking.
+*   **Guardrail:** Monitor `chat_initiated` daily. If this metric does not recover as you fix tracking, the issue is product behavior (algorithm), not instrumentation.
+
+**This Week's Steps:**
+1.  **Instrument** the 5 Tier 1 events with pseudonymous IDs by Tuesday EOD.
+2.  **Query** the `swipe_to_match` funnel for the week of Feb 14 vs. Feb 7 to isolate the algorithm impact.
+3.  **Define** the "Super Like" to "Subscription" conversion metric formally, but mark current data as `UNVERIFIED` until 3 weeks of new data accumulate.
+
+*Note: Ensure user IDs are pseudonymous and route PII handling to your privacy compliance protocol. Do not attempt to benchmark your retention rates against industry averages; compare only against your own pre-refactor baseline.*

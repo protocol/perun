@@ -1,0 +1,39 @@
+### Event Taxonomy: Validating Collaboration-to-Conversion
+
+To validate the hypothesis that collaborative planning drives higher booking conversion, instrument only the following events. Each event answers a specific question about the user journey from "casual browsing" to "executed trip." Do not track generic page views; track these specific state changes.
+
+#### 1. Core Value Events (The "North Star" Inputs)
+These events define whether a plan is "serious" or "casual."
+
+| Event Name | Trigger Condition | Question Answered | Required Properties |
+| :--- | :--- | :--- | : |
+| `plan_created` | User saves a new itinerary. | Is the user initiating a trip? | `plan_id`, `user_id` (pseudonymous), `destination`, `is_solo` (bool) |
+| `collaborator_invited` | User sends an invite link/email to another user. | Is the user attempting collaboration? | `plan_id`, `inviter_id`, `invite_method` (link/email) |
+| `collaborator_joined` | A second unique user opens and edits the plan. | **Did collaboration actually occur?** (Critical for hypothesis) | `plan_id`, `joiner_id`, `time_since_invite` |
+| `plan_locked` | User marks the itinerary as "Finalized" or "Ready to Book." | Did the planning phase conclude? | `plan_id`, `total_collaborators`, `days_to_lock` |
+
+#### 2. Outcome Events (The "Real-World" Proof)
+Since you lack visibility into offline execution, you must track the digital proxy of a booked trip. If bookings happen offline or via partners without API hooks, you must add a manual verification step.
+
+| Event Name | Trigger Condition | Question Answered | Required Properties |
+| :--- | :--- | :--- | :--- |
+| `booking_initiated` | User clicks "Book Now" or exports tickets. | Did the plan lead to a purchase intent? | `plan_id`, `vendor_type` (flight/hotel), `estimated_value` |
+| `booking_confirmed` | **Primary Success Metric.** Payment success or ticket download. | **Did the plan turn into a real trip?** | `plan_id`, `is_collaborative` (bool), `revenue` |
+| `plan_abandoned` | No activity on a `plan_created` event for 14 days. | Where is the leakage in the funnel? | `plan_id`, `last_action_type`, `had_collaborator` (bool) |
+
+#### Implementation Constraints for Developers
+1.  **Identifier Seam:** Use a stable, pseudonymous `user_id` to link sessions across devices. Do not log PII (names, emails) in these events; route those to your privacy-compliance store.
+2.  **No Vanity Metrics:** Do not log `page_view` or `session_duration` for this analysis. They do not prove intent.
+3.  **State Capture:** Every event must capture the state of the plan at that moment (specifically `is_collaborative`), as a plan might start solo and become collaborative later.
+
+#### Analysis Logic (How to Read the Data)
+To validate your hypothesis, compare the **Retention** and **Conversion** rates of two cohorts:
+*   **Cohort A:** Plans where `collaborator_joined` = true.
+*   **Cohort B:** Plans where `collaborator_joined` = false (or `is_solo` = true).
+
+**Success Criteria:** If `booking_confirmed` rate for Cohort A is statistically higher than Cohort B over a 30-day baseline, the hypothesis is validated. If `plan_locked` is high but `booking_confirmed` is low for both, the issue is not collaboration; it is the booking flow itself.
+
+**This Week's Step:** Implement `collaborator_joined` and `booking_confirmed` immediately. Without these two boolean flags, you cannot distinguish a collaborative win from a solo win. Run a query next Monday comparing the conversion rate of plans with ≥2 contributors vs. solo plans. If the difference is <5%, the feature is not driving revenue, regardless of usage volume.
+
+*Note: If bookings occur offline, add a "Mark as Traveled" button in the UI to trigger `booking_confirmed` manually, or the metric will remain UNVERIFIED.*
+*Ensure `user_id` consistency across the invite flow to prevent broken cohort attribution.*

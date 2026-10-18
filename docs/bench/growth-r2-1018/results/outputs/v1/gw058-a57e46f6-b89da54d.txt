@@ -1,0 +1,30 @@
+### Recommended Measurement Framework for GoRide Driver Incentives
+
+**1. North Star Metric: Net Driver Profit per Active Hour**
+Reject "Trip Acceptance Rate" or "Gross Earnings" as your primary success metric; these are vanity metrics in this context because they rose while driver welfare fell. Your North Star must be **Net Driver Profit per Active Hour** (Earnings minus Fuel and Opportunity Cost, divided by time spent with the app on). If this metric does not rise, the incentive program is unsustainable regardless of how many long trips are accepted.
+
+**2. Diagnostic Funnel (Bottom-Up: Retention & Profitability First)**
+Do not focus on acquiring more long-trip acceptances until the leakage in driver profitability is plugged. Diagnose in this order:
+*   **Profitability Retention:** Are drivers who accept long trips retaining their hourly profit margin compared to their baseline? Currently, your data shows a leak (−5,000 IDR/hr).
+*   **Activation of Efficient Returns:** What percentage of long-distance trips result in a paid return trip or a high-utilization loop versus an empty return?
+*   **Acquisition of Long Trips:** Only after profitability is secured should you measure the volume of long-trip acceptances.
+
+**3. Event Taxonomy: Instrument Only What Answers Named Questions**
+Stop guessing about idle time and fuel. Instrument specific events to answer these three questions:
+*   *Question:* "How much time and fuel is wasted on empty returns after a long trip?"
+    *   **Event:** `trip_completed_long_haul` (Properties: `drop_off_location`, `timestamp`, `trip_distance`).
+    *   **Event:** `driver_status_change` (Properties: `status` [idle/searching/online], `location`, `duration_since_last_trip`).
+    *   *Logic:* Correlate `trip_completed_long_haul` with the subsequent `driver_status_change` to "idle" and the duration until the next `trip_accepted`. This quantifies the "empty return" cost.
+*   *Question:* "Does the incentive cover the variable costs of distance?"
+    *   **Event:** `incentive_payout_applied` (Properties: `amount`, `trigger_condition`, `associated_trip_id`).
+    *   *Logic:* Join with fuel cost estimates (based on `trip_distance` and vehicle type) to calculate real-time net margin per trip.
+*   *Question:* "Are drivers churning or reducing hours due to low profitability?"
+    *   **Event:** `driver_session_end` (Properties: `session_duration`, `total_earnings`, `total_trips`, `reason_code` [if available]).
+    *   *Logic:* Track cohort retention of drivers exposed to the pilot vs. a control group.
+
+**4. Immediate Action Plan (This Week)**
+*   **Define the "Empty Return" Cost:** Query the correlation between `trip_completed_long_haul` and subsequent idle time >15 minutes outside the city center. Calculate the average revenue loss per kilometer of empty return.
+*   **Set a Guardrail Metric:** Establish **Minimum Net Profit per Hour** (e.g., baseline average + 10%) as a hard guardrail. If the incentive drives acceptance up but this guardrail dips below the baseline for two consecutive days, the rollout must pause.
+*   **Pilot a "Return Match" Variable:** Before city-wide rollout, test a variable incentive that pays a bonus *only* if a return trip is not accepted within 30 minutes of drop-off, directly offsetting the identified loss.
+
+**Note:** Do not assert a "good" profitability threshold; use last month's driver average earnings per hour as your sole baseline. Any metric without the `driver_status_change` instrumentation to verify idle time is `UNVERIFIED` and cannot be used for the final policy decision.

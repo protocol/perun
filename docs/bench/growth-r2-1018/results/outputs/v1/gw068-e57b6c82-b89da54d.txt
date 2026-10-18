@@ -1,0 +1,38 @@
+### North Star & Input Metrics
+**North Star:** Weekly Active Agencies generating a "Qualified Lead" (defined as a prospect contacted or saved) using Advanced Filters.
+*Reject vanity metrics:* Total filter clicks or cumulative signups do not equal value.
+
+**Input Metrics to Move the North Star:**
+1.  **Filter-to-Conversion Rate:** % of sessions using filters that result in a Qualified Lead within 24 hours.
+2.  **Retention Cohort by Feature Usage:** Week-4 retention of users who used filters >3 times in Week 1 vs. those who did not.
+3.  **Expansion Trigger Rate:** % of accounts upgrading their plan within 30 days of a "high-value filter session" (e.g., filtering by high-intent criteria).
+
+### Event Taxonomy (Answering Named Questions)
+Instrument only these events to resolve your specific unknowns:
+
+| Event Name | Question Answered | Properties Required |
+| :--- | :--- | :--- |
+| `filter_session_start` | Is the tool too complex? (Time-to-Value) | `user_id` (pseudonymous), `time_to_first_result`, `filters_applied_count` |
+| `lead_quality_signal` | Does the feature solve the right problem? | `user_id`, `lead_status` (contacted/saved/ignored), `filter_criteria_used` |
+| `billing_expansion_event` | Is there a revenue correlation? | `account_id`, `previous_plan`, `new_plan`, `days_since_last_filter_session` |
+
+**The Identifier Seam:** Use a stable, pseudonymous `account_id` to link filter usage to billing events across sessions. Do not use raw PII; route consent checks to your privacy compliance protocol.
+
+### Diagnostic Strategy: Read Bottom-Up
+Do not pour more acquisition spend until retention is proven.
+1.  **Retention First:** If users try the filter once and never return, the problem is complexity or lack of value, not awareness. Compare the retention curve of the 40% adopters vs. non-adopters.
+2.  **Activation Second:** If they return but don't generate "Qualified Leads," the filter logic may be flawed (solving the wrong problem).
+3.  **Revenue Last:** Only after confirming the feature drives qualified leads should you expect expansion revenue to move. Flat revenue despite 40% usage suggests the "Qualified Lead" step is broken.
+
+### Experiment Rigor & Investor Narrative
+**Warning:** Do not claim causality for the investor deck based on current correlations without controlling for confounders (e.g., larger agencies might both use filters more *and* spend more naturally).
+*   **Hypothesis Test:** Run a targeted holdout test. Force a random 10% of active users to *not* see the new filter for 30 days. Compare their expansion rate to the control group.
+*   **Pre-commitment:** Define the Minimum Detectable Effect (MDE) on expansion revenue before looking at the holdout data. Reading the data daily to stop when "significant" is peeking and invalidates the result.
+
+### This-Week Step
+1.  **Query:** Pull the Week-4 retention cohort for users who triggered `filter_session_start` ≥3 times in their first week vs. those who triggered it 0 times.
+2.  **Instrument:** Add `time_to_first_result` to the `filter_session_start` event to measure if complexity is spiking.
+3.  **Decision Rule:** If the high-usage cohort has lower retention than non-users, the feature is increasing friction; pause the sales pitch and simplify the UI. If retention is higher but revenue is flat, the monetization hook (upgrade prompt) is missing, not the feature value.
+
+UNVERIFIED: Specific correlation coefficient between filter usage and billing events (data not provided).
+NOTE: Ensure `account_id` remains pseudonymous in all analytics exports.

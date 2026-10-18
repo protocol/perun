@@ -1,0 +1,35 @@
+### Diagnosis & Immediate Action Plan for TeamSync
+
+**Current Status: UNVERIFIED Root Cause**
+The 18% rise in zero-active organizations and the 4-minute drop in session duration are critical signals, but they are **outcome metrics**, not root causes. Without instrumented event data, we cannot yet distinguish between a product failure, a pricing mismatch, or natural project completion. Do not attribute this to "market shift" or "competitors" without evidence; those are hypotheses, not facts.
+
+**Step 1: Isolate the Leak (Retention First)**
+Stop looking at acquisition or total signups. Focus entirely on the **retention of the core action** for existing enterprise cohorts.
+*   **Action:** Segment the "zero active users" metric by **customer cohort start date** and **account size**.
+*   **Question to Answer:** Is the churn concentrated in customers onboarded before March 1st (suggesting a change in value/pricing) or only in new March/April signups (suggesting a product regression or onboarding break)?
+*   **Hypothesis Check:** If old customers are churning, check for a **guardrail metric** spike in error rates or latency (ops observability) around March 1st. If new customers are churning, the "core action" may no longer be activating.
+
+**Step 2: Contextualize the Session Duration Drop**
+A 4-minute drop is significant but ambiguous. It could mean users are frustrated and leaving early, or they are completing tasks faster due to a UI change.
+*   **Action:** Correlate session duration with **completion rate of the core workflow** (e.g., "project created," "task assigned," "meeting scheduled").
+*   **Decision Rule:**
+    *   If duration ↓ AND completion rate ↓ → **Product Friction** (users can't finish).
+    *   If duration ↓ AND completion rate → (stable) → **Efficiency Gain** (not a churn driver).
+    *   If duration ↓ AND support tickets ↑ → **Usability Crisis**.
+
+**Step 3: Rule Out External Factors (The "Project Ending" Theory)**
+Before assuming a competitor win, validate the "natural lifecycle" hypothesis.
+*   **Action:** Query the **ratio of "project archived/completed" events** vs. "account abandoned" events for the churned accounts.
+*   **Data Needed:** You need an event `project_closed` with a reason property. If this event is not instrumented, you cannot distinguish between a successful project end and a churn. Mark this data gap as **UNVERIFIED** until tracked.
+
+**Step 4: The Identifier Seam & Privacy**
+To track these organizations across sessions, ensure you are using a **stable, pseudonymous organization ID**. Do not use raw user emails for this analysis. Route any PII handling required for direct customer outreach to your `privacy-compliance.md` protocol immediately.
+
+### This Week's Steps (Concrete Actions)
+
+1.  **Run the Cohort Query:** Generate a retention curve comparing Feb vs. March onboarded enterprises. Isolate if the 18% increase is driven by legacy accounts slipping or new accounts failing to stick. *Result that changes decision:* If legacy accounts are stable, stop panic-pricing; fix onboarding. If legacy accounts are fleeing, investigate March 1st release logs.
+2.  **Instrument the "Why":** If `project_closed_reason` or `cancel_feedback` events do not exist, deploy a lightweight intercept survey or manual outreach script to the top 20 churned accounts immediately. Do not wait for perfect data; talk to the humans.
+3.  **Check the Ops Seam:** Cross-reference the March 1st timeline with system error logs (domain M). If error rates for the core action spiked then, this is a technical outage, not a market shift.
+
+**Note:** Do not present a "win/loss" analysis to the CEO until you have segmented by cohort; aggregating all churn hides the true signal.
+**Note:** Any claim of "competitor switching" remains `UNVERIFIED` until a user explicitly states it in feedback or cancellation data.

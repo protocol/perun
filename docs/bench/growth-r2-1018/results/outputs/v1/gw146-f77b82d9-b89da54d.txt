@@ -1,0 +1,42 @@
+### Strategy for GlobalPay EMEA Currency Data Remediation
+
+**1. Scope Identification & Segmentation**
+Immediately segment the 300,000 affected transactions (15% of 2M) by the specific error pattern:
+*   **Typos:** Codes like 'EURR', 'USDD', 'GBPP'.
+*   **Nulls/Blanks:** Missing currency fields.
+*   **Unknowns:** Codes not in the ISO 4217 standard.
+
+Cross-reference these segments against settlement status. Query your database to determine the failure rate of malformed records versus valid ones. If the failure rate of malformed records matches the baseline failure rate of valid records, the issue is likely cosmetic. If the failure rate is significantly higher, these are blocking settlements.
+
+**2. Source Isolation (Log Patterns)**
+To confirm the legacy partner bank hypothesis, filter application and integration logs for the following patterns between Jan 1 and Mar 31:
+*   **Ingress Point:** Filter by the specific Partner Bank ID or IP range. Look for `payload_received` events where the `currency_code` field already contains the malformed value upon entry.
+*   **Transformation Logic:** Search for errors in the normalization service (e.g., `regex_match_failure`, `mapping_lookup_miss`) occurring immediately after ingestion from that partner.
+*   **Schema Validation:** Check for `schema_validation_warning` or `soft_fail` logs where the system accepted a non-standard code instead of rejecting the transaction.
+
+**3. Remediation Plan: Auto-Correct vs. Manual Review**
+Do not auto-correct all records. Apply a tiered approach to ensure audit safety:
+
+*   **Tier A: Safe Auto-Correction (High Confidence)**
+    *   *Criteria:* Single-character typos (e.g., 'EURR' → 'EUR') where the transaction amount and country code align with the expected currency (e.g., Country=DE, Amount=100, Code='EURR').
+    *   *Action:* Script a correction that logs the original value, the new value, and the rule applied. Flag these as "System Corrected" in the audit trail.
+
+*   **Tier B: Contextual Correction (Medium Confidence)**
+    *   *Criteria:* Blank fields where the counterparty's master data record has a defined currency, or the transaction country strictly implies one currency.
+    *   *Action:* Populate from master data, but flag for "Data Steward Review" rather than full automation.
+
+*   **Tier C: Manual Review (Low Confidence/High Risk)**
+    *   *Criteria:* Ambiguous codes, multiple potential matches, or records associated with failed settlements.
+    *   *Action:* Quarantine these records. Do not touch them until a human verifies the intended currency against the partner bank's original advice or communication.
+
+**4. Audit Preparation**
+For the April 15th audit, generate a "Data Integrity Report" containing:
+*   Total volume of affected records.
+*   Breakdown of corrections by tier (Auto vs. Manual).
+*   Evidence of the root cause (log excerpts showing the partner bank payload).
+*   A sample set of before/after records showing the logic applied.
+
+**Immediate Next Step:** Run the settlement correlation query today. If malformed codes correlate with failures, pause any auto-correction scripts until the financial impact is quantified.
+
+*Note: Ensure all corrections are immutable append-only logs to satisfy financial audit requirements; never overwrite raw ingestion data.*
+*Verify the specific Partner Bank ID in your configuration management database before filtering logs.*
