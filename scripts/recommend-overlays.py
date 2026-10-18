@@ -358,7 +358,7 @@ ADVISORY_OVERLAYS = (
     ("--with-positioning", "positioning",
      "value proposition, segment, message house — as a hypothesis to validate with buyers"),
     ("--with-business", "business-ops",
-     "Lane A pricing / unit-economics (apply) vs. Lane R legal / tax / securities (route)"),
+     "leads with the call on your pricing / unit-economics numbers; routes the binding legal / tax / securities part to a professional"),
     ("--with-output-safety", "product-output-safety",
      "govern harm from the product's own AI outputs; map/measure/manage; HITL on high-stakes actions"),
     ("--with-ceo", "agentic-ceo",

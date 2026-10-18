@@ -99,7 +99,7 @@ attribute or a demonstrated proxy in the feature set with no disaggregated evalu
 This is the **detection** lens for a default review; the output-harm guardrail — inventory the
 bias harm, never certify "unbiased", report residual risk — is the `product-output-safety`
 overlay, not restated here. Whether a demonstrated disparity is **unlawful
-discrimination** is a legal determination — route it to counsel (`business-ops` Lane R names the
+discrimination** is a legal determination — route it to counsel (`business-ops` names the
 regime); the code finding is the **missing measurement or unstated metric**, never a legal verdict.
 
 ## Notebook review — hidden state & committed outputs (data-science code)

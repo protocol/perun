@@ -27,7 +27,7 @@
 #   --with-ceo           also agentic-ceo (suite conductor: routing + effort-sizing + chaos playbook; not in --full)
 #   --with-growth        also growth-analytics (North Star + AARRR + event taxonomy; not in --full)
 #   --with-positioning   also positioning (value prop / message house; a hypothesis, never fabricated market facts; not in --full)
-#   --with-business      also business-ops (Lane A pricing/unit-economics apply vs Lane R legal/tax/securities route; not in --full)
+#   --with-business      also business-ops (leads with the call on your pricing/unit-economics numbers; routes the binding legal/tax/securities part to a professional; not in --full)
 #   --with-output-safety also product-output-safety (govern harm from the product's own AI outputs; HITL on high-stakes actions; not in --full)
 #   --full               review + delivery + critic + comms
 #   --recommend          inspect TARGET, print a pack, install nothing
@@ -88,7 +88,7 @@ on re-install). Overlay skills are opt-in.
   --with-ceo           Also install agentic-ceo (suite conductor: routing, effort-sizing, chaos playbook; default off, not in --full)
   --with-growth        Also install growth-analytics (North Star + AARRR + event taxonomy; default off, not in --full)
   --with-positioning   Also install positioning (value prop / message house; a hypothesis, never fabricated market facts; default off, not in --full)
-  --with-business      Also install business-ops (Lane A pricing/unit-economics apply vs Lane R legal/tax/securities route; default off, not in --full)
+  --with-business      Also install business-ops (leads with the call on your pricing/unit-economics numbers; routes the binding legal/tax/securities part to a professional; default off, not in --full)
   --tracker-project ID Write a <=12-line "Work tracking" block into AGENTS.md (idempotent; replayed by update-installed)
   --tracker NAME       Tracker for that block: linear (default), github or jira
   --with-output-safety Also install product-output-safety (govern harm from the product's own AI outputs; HITL on high-stakes actions; default off, not in --full)

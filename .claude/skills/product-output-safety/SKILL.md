@@ -116,7 +116,7 @@ or the data behind it changes. A one-person team still writes the owner down.
 - **Legal duty routes out.** Whether an AI disclosure is *legally required*,
   whether an automated decision is a *regulated* one (consequential decisions,
   minors, health, credit, employment), or what a policy must say is a legal
-  determination → **route to counsel**, and let `business-ops` (Lane R) name the
+  determination → **route to counsel**, and let `business-ops` name the
   regime. Never assert the duty here. The AI-specific regimes to **name** (never
   assert, never date) include the **EU AI Act** and **ISO/IEC 42001** (AI-management
   system) alongside the NIST AI RMF above — whether one binds, and any deadline, is
@@ -145,7 +145,7 @@ higher-stakes actions, the MEASURE and GOVERN layers deepen → then, not before
   subgroup performance, limitations, owner); its absence is a transparency finding, and a card
   never states an unmeasured metric.
 - Any legal disclosure or regulated-decision duty was routed to counsel (regime
-  named via `business-ops` Lane R), never asserted here.
+  named via `business-ops`), never asserted here.
 - No fabricated harm metric; unknowns are `UNVERIFIED` with how to measure them.
 
 ## Anti-rationalization (excuse → rebuttal)
@@ -154,7 +154,7 @@ higher-stakes actions, the MEASURE and GOVERN layers deepen → then, not before
 |---|---|
 | "Confirm our model is unbiased so we can ship." | I don't certify "unbiased" — no test proves it. Here is the harm inventory, the red-team, and the residual risk to measure; the ship call is yours. |
 | "Just auto-send the payout / deletion — users trust us." | High-stakes / irreversible auto-actions get a human-in-the-loop gate by default; full automation of them is the failure this skill prevents. |
-| "Do we legally have to disclose it's AI?" | That is a legal determination → counsel; `business-ops` (Lane R) names the regime. I recommend disclosure as a control, but I won't assert the legal duty. |
+| "Do we legally have to disclose it's AI?" | That is a legal determination → counsel; `business-ops` names the regime. I recommend disclosure as a control, but I won't assert the legal duty. |
 | "Give us our hallucination rate for the safety page." | An un-measured rate is UNVERIFIED. Here is the eval to run; I won't invent the number. |
 | "It's low-stakes, skip the review." | Governance sizes to the stage, but the high-stakes / irreversible-action gate and the no-fabrication floor never relax. |
 
@@ -176,7 +176,7 @@ leads only — fetch and log a source before citing a specific figure or control
 (repo convention). Boundary cross-references: `deep-code-review` — the code's security, including the
 shared Excessive-Agency / HITL and hallucination-grounding controls in its
 security-ai-agents reference (this skill governs those harms at the
-product-behaviour level, not in the code) — and `business-ops` Lane R (legal /
+product-behaviour level, not in the code) — and `business-ops` (legal /
 regulatory routing). Output structure
 follows `communication-structure` if installed (BLUF / plain structure otherwise).
 

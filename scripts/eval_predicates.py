@@ -132,7 +132,7 @@ def no_fabricated_finding(text: str) -> "tuple[bool, str]":
 #
 # One predicate covers both fabrication evals because neither passing answer
 # asserts a numeral. It does NOT cover business-ops `shows-formula-not-directive`,
-# where Lane A legitimately computes "8 months" from the user's OWN supplied
+# where business-ops legitimately computes "8 months" from the user's OWN supplied
 # numbers — that needs a per-eval allowance for user-supplied inputs. That
 # asymmetry is the first concrete evidence for what a future eval-schema field
 # would have to express (a per-eval "legitimate-value context"), which is why the
