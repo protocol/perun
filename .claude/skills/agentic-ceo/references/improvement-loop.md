@@ -38,7 +38,7 @@ Sources. An absent or unreadable one is listed as `none present` or `UNVERIFIED:
 |---|---|---|---|---|
 | CPO | what users need that the product lacks or does badly; the riskiest untested assumption | `product-discovery`, `growth-analytics` | feedback, issues, support, analytics, retention | no users and no stated user problem |
 | CTO | defects and debt that slow or endanger delivery; architecture limits | `deep-code-review` (health, architecture), `agentic-delivery` (speed) | review findings, test and CI health, hotspots | no code |
-| CFO | spend that buys no outcome: tokens, cloud, lane waste | `business-ops` Lane A, token reports | `token_report.py`, spend exports | no spend data |
+| CFO | spend that buys no outcome: tokens, cloud, lane waste | `business-ops`, token reports | `token_report.py`, spend exports | no spend data |
 | CMO | where rivals or the market moved; claims that outrun evidence; distribution gaps | `positioning`, `growth-analytics` | rival releases (live), the benchmark page, README claims | no external audience yet |
 | CISO | harm paths: secrets, host safety, unsafe AI outputs | `product-output-safety`, `deep-code-review` security | security findings, safety docs | nothing sensitive and no AI output reaches users |
 | COO | friction in shipping: merge train, CI and hook time, lane failures | `agentic-delivery` | CI timings, train logs, handbacks, peer reports | single-writer work with no gated delivery |

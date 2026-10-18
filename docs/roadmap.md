@@ -300,7 +300,7 @@ or drops a domain"):
 - **Keep ~10 skills; admit a new one only by the admission rule.** A new *skill* is
   justified only when it **cannot** be a lens or reference over an existing skill,
   **or** when a safety boundary requires its own home (the reason the suite is 10, not
-  8 — `business-ops` keeps Lane A arithmetic separate from Lane R professional-routing).
+  8 — `business-ops` keeps the call on your numbers separate from routing the binding part to a professional).
   Lenses and references are **not** skill rows; do not count them as such. `STAGE` and
   `AREA` are **lenses** that select and order existing content. The orchestrator routes
   `(stage, area) → (skill, lens)`.
@@ -339,7 +339,7 @@ roadmap). Every advisory skill keys to it.
 | product-strategy / PMF | ✅ folded into `product-discovery` (1.39.0) — PMF read + Non-goals lens; standalone skill dropped per carve | JTBD, PMF signals, what *not* to build |
 | growth / analytics | ✅ shipped in `growth-analytics` (1.38.0) | Retention-first; North Star; what to instrument per stage |
 | positioning / branding | ✅ shipped in `positioning` (1.41.0) | VPC → positioning → message house, as a hypothesis; thin guide; never fabricates TAM/competitor/quotes/clearance |
-| business / ops | ✅ shipped in `business-ops` (1.42.0) | Lane A pricing/unit-economics (apply) vs. Lane R legal/tax/securities (route); thin guide |
+| business / ops | ✅ shipped in `business-ops` (1.42.0) | leads with the call on pricing/unit-economics numbers; routes the binding legal/tax/securities part to a professional; thin guide |
 | CEO-under-pressure | Researched → `agentic-ceo` (#36) | Capture losslessly → reflect back → triage → one next action → tracked backlog → support by action (never "calm down") |
 | responsible-AI / output safety | Researched → **build first among gaps** (NEW skill) | Govern the harm the product's own outputs do to end-users (NIST AI RMF lens) |
 | further areas (gap-analysis) | Researched → *Further areas* + issues | regulated-triage, support-ops, op-readiness, privacy-by-design, decision-hygiene, billing — mostly lenses |
@@ -392,10 +392,10 @@ navigation end-to-end, then add the advisory skills with the tightest leash.
   matures — one-pager (persuade) → design-doc/RFC (decide) → spec (contract,
   CI-enforced); trigger, not calendar. Agent-legibility = a small always-loaded
   router + depth routed with "read this when…". Complements `docs-and-dx.md`.
-- **Business/ops (asymmetric boundary):** *Lane A — arithmetic* (pricing, unit
+- **Business/ops (asymmetric boundary):** *The call on your numbers* (pricing, unit
   economics): **apply** to the builder's own numbers with the formula and every
   assumption shown, flag thin data — but never turn arithmetic into a directive.
-  *Lane R — regulation-dependent* (legal, tax, securities, employment
+  *The binding, regulation-dependent part* (legal, tax, securities, employment
   classification, privacy compliance): **route to a licensed professional, never
   conclude**; fundraising (selling equity/SAFEs is a securities offering) *is* the
   boundary crossing. Standing disclaimer: educational information, not advice.

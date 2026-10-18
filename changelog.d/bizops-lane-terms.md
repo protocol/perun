@@ -1,0 +1,1 @@
+Reworded remaining mentions of business-ops "Lane A / Lane R" (install.sh, recommend-overlays, roadmap, agentic-ceo, product-output-safety, testing-ml) to the new framing: leads with the call on your numbers, routes the binding part to a professional.
