@@ -1,0 +1,44 @@
+### Safety Validation Framework for Smart Water Sensors
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly define the failure mode: A **False Negative** (sensor reports "Safe" when lead exceeds the action limit) is the critical harm.
+*   **Affected Parties:** Students, staff, and parents consuming contaminated water.
+*   **Worst Realistic Case:** Chronic lead exposure goes undetected due to reduced scan frequency or network latency, resulting in health damage before the next manual test.
+*   **Constraint Acknowledgement:** Limited battery life forces a trade-off between scan frequency and detection speed. The validation must prove that the *reduced* frequency still catches spikes within a safe time window.
+
+**2. Testing Protocol: Simulation & Edge Cases**
+Do not rely on aggregate accuracy. Construct a test matrix with one row per specific failure scenario. Each row must include a "known-bad" positive control (water with confirmed lead levels) and a "known-good" negative control (clean water).
+
+*   **Scenario A: The "Just-Below" Threshold Sweep**
+    *   *Probe:* Simulate lead concentrations ranging from 90% to 110% of the regulatory action limit.
+    *   *Goal:* Verify the sensor triggers an alert immediately when crossing the threshold, even if the previous scan was hours ago.
+    *   *Metric:* Zero tolerance for missed alerts in the >100% range. Any miss blocks deployment.
+
+*   **Scenario B: Battery-Constrained Frequency Stress**
+    *   *Probe:* Introduce a sudden contamination spike immediately *after* a scheduled scan.
+    *   *Goal:* Determine the maximum time-to-detection given the battery-limited scan interval.
+    *   *Stop Condition:* If the time-to-detection exceeds the window where health impacts could begin (based on medical counsel), the current battery profile is unsafe.
+
+*   **Scenario C: Network Outage & Local Buffering**
+    *   *Probe:* Simulate total network loss for 24–48 hours while introducing contamination.
+    *   *Goal:* Verify the device stores the alert locally and pushes it immediately upon reconnection, or triggers a local visual/audible alarm if equipped.
+    *   *Risk:* A "silent" device during an outage creates a false sense of security.
+
+*   **Scenario D: Sensor Drift & Environmental Noise**
+    *   *Probe:* Run continuous cycles with varying water temperatures and turbidity (cloudiness) alongside lead samples.
+    *   *Goal:* Ensure environmental factors do not mask lead readings (false negatives) or cause excessive battery drain via retry loops.
+
+**3. Managing Residual Risk (The Human Gate)**
+Because no test proves "zero false negatives," you must manage the residual risk:
+*   **Uncertainty Disclosure:** Do not present the system as infallible. Reports to administrators must state: "Last verified safe at [Time]. Next scan scheduled for [Time]."
+*   **Irreversible Action Gate:** The system should *alert*, but never automatically *shut off* water supplies without human confirmation, unless a secondary, independent mechanical fail-safe exists. Shutting off water to a school has its own safety implications.
+*   **Fallback Plan:** Define a mandatory manual testing schedule that acts as a backup if the digital system fails or reports "UNVERIFIED" status due to low battery/connectivity.
+
+**4. Transparency Artifact**
+Create a **Model/Data Card** for this deployment. It must list:
+*   Intended use (lead detection in school pipes).
+*   Limitations (scan frequency limits, battery dependencies, network requirements).
+*   Measured performance by subgroup (e.g., performance in cold vs. warm water).
+*   Owner contact for failure reporting.
+
+**Note:** Legal requirements for disclosing automated monitoring limitations to parents vary by jurisdiction; route this specific duty to counsel. Never certify the system as "safe"; only report the results of the above probes and the remaining residual risk.

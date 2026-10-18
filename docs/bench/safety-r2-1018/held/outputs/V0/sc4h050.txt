@@ -1,0 +1,28 @@
+### Safety Check Design: Equitable Access for Vaccine Appointments
+
+**1. Harm Inventory (Map)**
+*   **Harm Identified:** Bias/Unfair Outcomes (Digital Exclusion).
+*   **Affected Group:** Elderly residents in remote villages without smartphones or digital literacy.
+*   **Worst Realistic Case:** Automated logic fills 100% of slots via the app/SMS channel before community health workers can book on behalf of offline users, effectively banning the most vulnerable from the campaign.
+
+**2. Measurement Plan (Measure)**
+Execute the following test rows before expanding to the next district. Do not rely on code review alone; simulate the environment.
+
+| Harm Probe | Input / Scenario | Positive Control (Should Fail) | Negative Control (Should Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Slot Monopolization** | Simulate high-volume app traffic filling 90% of slots in a test batch. | System reserves remaining 10% for "offline" channel. | System allows app to take 100%, leaving 0 for offline. | **% Slots Reserved for Offline Channel.** Threshold: ≥10% hard reserve. | **Block Launch** if offline reserve < 10% or if app logic overrides the reserve. |
+| **Alternative Pathway Function** | Attempt booking via Community Health Worker (CHW) offline tablet during simulated internet outage. | Booking queues locally and syncs successfully when connectivity returns. | Booking fails permanently or duplicates upon sync. | **Success Rate of Synced Offline Bookings.** Threshold: 100% of attempted offline bookings must sync without data loss. | **Block Launch** if any offline booking is lost or duplicated. |
+| **Channel Fairness** | Run parallel booking streams: 50% App, 50% CHW-offline. | Slot distribution reflects intended policy (e.g., 50/50 or reserved quota). | App stream captures >90% of slots due to speed advantage. | **Disparity Ratio.** Threshold: App share must not exceed policy cap (e.g., 90% if 10% reserved). | **Block Launch** if disparity exceeds policy cap. |
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Implement a hard-coded "quota reserve" in the scheduling logic. A fixed percentage of slots (e.g., 20%) must remain invisible to the public app/SMS and accessible *only* via the CHW administrative interface. This is irreversible logic; do not rely on "soft" priorities.
+*   **Uncertainty & Override:** Since connectivity is intermittent, the system must display a clear status to CHWs: "Local Queue Active – X slots pending sync." If the sync fails after three attempts, the system must alert a human supervisor rather than silently dropping the appointment.
+*   **Disclosure:** Clearly inform app users that "A portion of slots is reserved for community assisted booking" to manage expectations and reduce perceived unfairness.
+
+**4. Governance (Govern)**
+*   **Owner:** Assign one specific public health expert as the "Equity Owner" responsible for reviewing the test results above.
+*   **Re-review Trigger:** Any change to the slot allocation algorithm or expansion to a new district requires re-running the "Slot Monopolization" probe.
+
+**Deliverable Status:** The testing approach above verifies alternative pathways and prevents total slot monopolization by digital channels.
+
+*Note: Legal requirements regarding equitable access in public health campaigns should be verified with local counsel. This plan measures technical enforcement of equity but does not certify legal compliance.*

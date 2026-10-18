@@ -1,0 +1,36 @@
+### Pre-Launch Audit Plan: Fairness & Transparency for Loan Restructuring
+
+**1. Harm Inventory (Map)**
+Before testing, explicitly record the specific risks identified in your simulation:
+*   **Deceptive Patterns:** Hidden fees or terms that nudge users against their financial interest.
+*   **Bias/Unfair Outcomes:** Systematic disadvantage to specific borrower segments (e.g., by income level, region, or loan history).
+*   **Unsafe Automation:** Irreversible financial commitments generated without human verification.
+*   **Over-reliance:** Terms presented with false certainty, ignoring the borrower's actual capacity to pay.
+
+**2. Targeted Evaluation Strategy (Measure)**
+Given limited compute, abandon broad Monte Carlo simulations. Instead, execute a **deterministic adversarial audit** focused on the "worst realistic cases" identified above. Run one test row per harm:
+
+*   **Probe Set A (Vulnerability Exploitation):** Construct 50 synthetic profiles representing extreme distress (e.g., zero disposable income, recent job loss).
+    *   *Positive Control:* Inputs known to trigger predatory terms in your simulation.
+    *   *Negative Control:* Stable profiles known to receive standard terms.
+    *   *Metric:* Percentage of distressed profiles offered terms with hidden fees or negative amortization.
+    *   *Stop Condition:* **Zero tolerance.** If >0% of distressed profiles receive predatory terms, launch is blocked.
+*   **Probe Set B (Segmented Fairness):** Slice outputs by protected attributes relevant to São Paulo demographics (e.g., ZIP code as a proxy for region, income brackets).
+    *   *Metric:* Disparity ratio in effective interest rates and fee structures between groups.
+    *   *Threshold:* Owner-defined (propose <5% variance); any unmeasured segment is marked `UNVERIFIED`.
+*   **Probe Set C (Transparency & Disclosure):** Verify every output includes a plain-language breakdown of fees and a clear statement that terms are AI-generated suggestions, not final binding offers.
+    *   *Metric:* Pass/Fail on presence and readability of disclosures.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Because loan restructuring is a high-stakes, irreversible financial action, **fully autonomous execution is prohibited.** The system must function as a decision *support* tool. Every generated term sheet requires explicit review and sign-off by a human analyst before being sent to a borrower.
+*   **Uncertainty Rendering:** Do not display raw confidence scores (e.g., "87% suitable"). Instead, use defined coarse tiers (e.g., "Verified Calculation," "Requires Review") based on deterministic rule checks, not model probability.
+*   **Transparency Artifact:** Draft a **Model Card** for internal and regulatory use. It must list: intended use (restructuring support), out-of-scope uses (initial loan approval), known limitations (potential bias in distress scenarios), and the results of Probe Sets A-C. Any metric not explicitly tested must be labeled `UNVERIFIED`.
+
+**4. Governance**
+*   **Owner:** Assign a specific product lead responsible for reviewing any failure in the stop conditions.
+*   **Regulatory Routing:** You mentioned a strict regulatory deadline for "fair lending." Whether this tool triggers specific automated decision-making regulations under Brazilian law or requires specific AI disclosures is a legal determination. **Route this immediately to legal counsel**; do not assert compliance based on this audit alone.
+
+**Definition of Done:**
+The audit is complete when the harm inventory is documented, the adversarial probes pass the zero-tolerance stop condition for predatory terms, a human gate is technically enforced for all outputs, and the Model Card accurately reflects measured results without fabricating clearance.
+
+*Note: This plan measures residual risk; it does not certify the system as "fair" or "compliant." The final ship decision rests with the product owner and legal counsel.*

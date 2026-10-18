@@ -1,0 +1,44 @@
+### Simulated Safety Evaluation Protocol: Gait Analysis Border Robot
+
+**1. Harm Inventory & Worst-Case Definition**
+Before simulation, explicitly record the primary harm: **Bias/Unfair Outcomes**. The robot may systematically flag innocent citizens from specific demographics (e.g., elderly, disabled, specific cultural gait patterns, or those carrying loads) as "suspicious."
+*   **Affected Group:** Innocent travelers, specifically those with non-standard gaits.
+*   **Worst Realistic Case:** Wrongful detention, physical injury during apprehension, and severe psychological trauma for innocent individuals, leading to legal liability and loss of public trust.
+
+**2. Simulation Design: The "Adversarial Gait" Test Bed**
+Since real-world testing is prohibited, construct a high-fidelity synthetic data environment. Do not rely on aggregate accuracy; test specifically for failure modes.
+
+*   **Probe Set Construction (One Row Per Harm):**
+    *   **Positive Controls (Known Bad):** Synthetic avatars exhibiting confirmed suspicious behaviors (e.g., limping due to injury vs. limping due to concealment).
+    *   **Negative Controls (Known Good):** Avatars with normal gaits across diverse body types.
+    *   **Bias Probes (The Critical Slice):** Generate thousands of variations focusing on:
+        *   **Physical Diversity:** Age extremes, temporary injuries (crutches, casts), permanent disabilities, pregnancy, obesity.
+        *   **Contextual Loads:** People carrying children, heavy luggage, or religious/cultural garments that alter movement.
+        *   **Environmental Stressors:** Simulated uneven terrain, rain, or low-light conditions that distort sensor input.
+    *   **Injection Probe:** Introduce "noise" or adversarial perturbations to sensor data to ensure the system degrades gracefully rather than hallucinating a threat.
+
+*   **Metrics & Thresholds:**
+    *   **Metric:** False Positive Rate (FPR) segmented by demographic slice.
+    *   **Threshold:** Set a **zero-tolerance threshold** for automated detention actions on any subgroup where FPR exceeds a minimal baseline (e.g., if the FPR for "elderly with canes" is 5x higher than "young adults," the system fails).
+    *   **Stop Condition:** If any subgroup triggers a "detain" command above the threshold, the launch is blocked immediately.
+
+**3. Managing Residual Risk: The Human Gate**
+*   **Irreversible Action Control:** Detention is a high-stakes, irreversible action. **Full autonomous execution is prohibited.**
+*   **Protocol:** The robot must never physically detain or restrict movement autonomously. It may only *flag* an individual for human review.
+*   **Uncertainty Rendering:** The system must output a **defined coarse tier** of confidence (e.g., "Corroborated," "Single-source," "Unverified") rather than a raw percentage (e.g., "87% suspicious"). Raw percentages imply a calibration the simulation cannot verify and invite over-reliance.
+*   **Override Mechanism:** Human operators must have an immediate, one-step override to dismiss any flag without penalty.
+
+**4. Transparency Artifact (Model Card)**
+Produce a versioned **Model Card** before deployment containing:
+*   **Intended Use:** Screening only; not for definitive identification.
+*   **Limitations:** Explicitly list demographics and conditions where performance is `UNVERIFIED` or known to be lower.
+*   **Data Provenance:** Source of synthetic training data and known gaps.
+*   **Owner:** Name the specific engineer responsible for this model version.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign a specific owner to re-review the model if the algorithm or sensor hardware changes.
+*   **Legal Determination:** The question of whether gait analysis constitutes a regulated automated decision requiring specific legal disclosures under government contracts is a **legal determination**. Route this immediately to counsel; do not assert compliance internally.
+
+**Deliverable Status:** This plan provides the evaluation structure. It does **not** certify the system as safe or unbiased. No simulation can prove zero bias; it can only reveal residual risk. The decision to ship rests with the project owner based on these findings.
+
+*Note: Ensure all synthetic data avoids reinforcing historical biases present in existing datasets. Do not fabricate a "safe" metric; report all unmeasured segments as UNVERIFIED.*

@@ -1,0 +1,39 @@
+### Pre-Launch Safety Strategy: Medical Appointment Scheduler
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe automation of high-stakes actions**.
+*   **Failure Mode:** Calendar sync errors (false positives) trigger the cancellation of critical cancer screenings.
+*   **Affected Group:** Patients with time-sensitive, life-critical appointments.
+*   **Worst Realistic Case:** A patient misses a scheduled screening due to an automated cancellation, leading to delayed diagnosis and severe health deterioration or death.
+*   **Status:** This is an irreversible, high-stakes action.
+
+**2. Measurement Plan (Simulated & Adversarial)**
+Since real patient data is restricted, you must build a synthetic evaluation suite immediately. Do not rely on aggregate "accuracy" metrics.
+*   **Synthetic Data Generation:** Create a dataset of 1,000+ simulated appointments. Tag 10% as "Critical Care" (e.g., oncology, cardiology) and 90% as "Routine." Inject specific "sync error" patterns (e.g., duplicate events, timezone shifts, malformed IDs) known to cause false cancellations.
+*   **Adversarial Probes:** Run tests where the input explicitly contradicts the cancellation trigger (e.g., a calendar update that looks like a conflict but has a "Do Not Cancel" flag).
+*   **Test Rows per Harm:**
+    *   *Probe:* Sync error on a "Critical Care" tagged appointment.
+    *   *Positive Control:* A known bad input that *should* be blocked.
+    *   *Negative Control:* A valid cancellation request for a routine visit.
+    *   *Metric:* Zero false cancellations on critical tags.
+    *   *Stop Condition:* **Any** single false cancellation of a critical appointment blocks launch.
+    *   *Threshold:* Owner-set to 0% tolerance for critical care errors.
+
+**3. Management Controls (The Human Gate)**
+You cannot certify the system as "safe" based on testing alone, especially with limited data. You must implement structural guards:
+*   **Human-in-the-Loop (HITL) Gate:** Disable fully autonomous cancellation for any appointment tagged "Critical," "Oncology," or "High-Stakes." These must route to a human administrator for explicit confirmation before execution. This is non-negotiable for irreversible medical actions.
+*   **Uncertainty & Override:** If the system's confidence in a sync match is not absolute (or if the data source is ambiguous), the system must default to "No Action" and alert a human, rather than guessing. Do not display raw confidence percentages (e.g., "87% sure") to users; use defined tiers like "Unverified – Requires Review."
+*   **Kill Switch:** Implement an immediate global toggle to disable all automated cancellations instantly if an anomaly is detected post-launch.
+
+**4. Transparency & Governance**
+*   **Model/Data Card:** Draft a document stating the system's intended use (routine scheduling), limitations (cannot verify medical criticality without tags), and the fact that critical cancellations are manually gated. Mark any unmeasured risk as `UNVERIFIED`.
+*   **Ownership:** Assign one specific owner responsible for reviewing any cancellation failures weekly.
+*   **Legal Routing:** Whether this automation triggers specific regulatory duties under health laws (e.g., HIPAA, EU AI Act high-risk classification) is a legal determination. Route this question to counsel immediately; do not assume compliance based on this technical review.
+
+**Execution Timeline (3 Weeks)**
+*   **Week 1:** Build synthetic dataset and define "Critical" tags. Implement HITL gate for critical appointments in code.
+*   **Week 2:** Run adversarial evals. Tune logic until zero critical false positives occur in simulation. Draft the Model Card.
+*   **Week 3:** Staged rollout to a non-critical pilot group only. Keep HITL active for all critical care. Verify kill switch functionality.
+
+**Note:** Never claim the system is "bias-free" or "safe"; report residual risk and maintain the human gate.
+**Note:** If the three-week deadline prevents building the synthetic eval suite or the HITL gate, the constraint must move; do not launch without them.

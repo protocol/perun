@@ -1,0 +1,31 @@
+### Mitigation Plan: Fairness Audit for Scholarship Allocation
+
+**1. Harm Inventory & Risk Definition**
+Before auditing code, explicitly record the primary risk: **Bias via Data Gaps**. The worst-case scenario is the systematic exclusion of first-generation students because the algorithm treats "missing parental education data" as "non-eligible" or assigns a low confidence score, rather than flagging it for human review. The affected group is explicitly first-generation applicants from incomplete databases.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert the system is fair; measure it using these specific test rows:
+*   **Probe Set A (Positive Control):** Create 50 synthetic profiles of clearly eligible first-generation students where the "parental education" field is explicitly marked as "First-Gen" or "Unknown/Missing."
+*   **Probe Set B (Negative Control):** Create 50 synthetic profiles of ineligible students (e.g., above income threshold) with similar missing data fields.
+*   **Metric:** Compare the selection rate of Probe Set A against a baseline group with complete data.
+*   **Stop Condition:** If the selection rate for eligible students with missing data drops more than 5% compared to those with complete data, the launch is blocked.
+*   **Injection Check:** Verify that manipulating other fields (e.g., school name) does not inadvertently fill or clear the missing parental data flag.
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **The "Missing Data" Gate:** Reconfigure the logic immediately. Any application where "parental education" is missing or formatted inconsistently must **not** be auto-rejected. Instead, route these specific cases to a "Manual Review Queue."
+*   **Uncertainty Disclosure:** Do not display a precise "eligibility score" (e.g., "87% eligible") to users when data is incomplete. Use defined coarse tiers: **"Verified Eligible," "Pending Review (Data Gap),"** or **"Not Eligible."** This prevents users from assuming a computer-generated rejection is final when it is actually a data artifact.
+*   **Fallback Mechanism:** Implement a simple rule-based override: If academic merit and financial need thresholds are met, but parental data is missing, default the status to "Pending Review" rather than "Reject."
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Assign one data analyst as the specific owner of the "Data Gap Bias" risk. They must sign off on the Manual Review Queue volume daily during the first month of launch.
+*   **Transparency Artifact:** Draft a one-page "System Limitation Note" for internal staff and applicants. It must state: *"Our matching algorithm relies on complete demographic data. Applications with missing parental education records are automatically flagged for human review to ensure no eligible first-generation student is overlooked."* Do not claim the algorithm is "unbiased"; state clearly how you manage the known bias of incomplete data.
+
+**5. Legal & Regulatory Routing**
+Since this involves automated decisions affecting educational access for minors and vulnerable groups, route the question of whether this constitutes a "regulated automated decision" under local Indian digital governance frameworks or international donor requirements to legal counsel. Do not assume the current logic satisfies all compliance duties without this verification.
+
+**Immediate Next Steps:**
+1.  Pause auto-rejection logic for any record with missing demographic fields.
+2.  Run the synthetic probe sets (A and B) above before ingesting real user data.
+3.  Document the "Pending Review" workflow as the primary safety control.
+
+*Note: This plan addresses product-output safety; it does not certify the system as legally compliant or mathematically fair. The "Pending Review" queue is the mandatory floor for high-stakes exclusion risks.*

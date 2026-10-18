@@ -1,0 +1,35 @@
+I cannot review your algorithm logic, access your database, or verify your code because I have no tools, network access, or files. I can only provide a theoretical checklist and architectural suggestions based on the scenario you described.
+
+### Testing Scenario Checklist
+
+To ensure safety credentials are not overlooked, manually test these specific logic paths:
+
+1.  **The "Missing Data" Gap**: Submit a worker profile where the certification field is null, empty, or explicitly marked "pending." Verify the matcher rejects the assignment rather than defaulting to "qualified" due to a missing false-negative check.
+2.  **The "Expired Credential" Gap**: Test with a valid certification ID that has an expiration date in the past. Ensure the system checks the current date against the expiry date before matching, not just the presence of the ID.
+3.  **The "Wrong Category" Gap**: Use a worker with a valid electrical certification applying for a roofing job (and vice versa). Confirm the system validates that the *specific* skill tag matches the job's risk category, not just that *any* certification exists.
+4.  **The "Override" Gap**: Attempt to force a match via a manual admin override or a high-priority job flag. Verify that safety blocks cannot be bypassed by urgency settings or user role privileges.
+5.  **The "Partial Match" Gap**: Test a job requiring two certifications (e.g., "Height Safety" AND "Electrical") against a worker who only has one. Ensure the logic requires ALL mandatory tags, not just ANY.
+6.  **The "Data Latency" Gap**: Update a worker's status to "revoked" in the database, then immediately trigger a match request. Verify the system reads the latest state and does not rely on a stale cache.
+
+### Implementation Strategy for a Hard Block
+
+Since you cannot hire external auditors, you must embed the safety check directly into the data flow where it cannot be ignored by the AI's probabilistic reasoning.
+
+**1. Database Schema Enforcement**
+Do not rely on the AI to "read" a text field labeled "certified." Add a dedicated boolean column to your workers table, such as `is_verified_for_high_risk`. This field should only be set to `true` by a trusted, non-AI process (e.g., a human admin click or a verified webhook from a credentialing authority) after strict validation.
+
+**2. Pre-Filtering Logic (The Hard Block)**
+Implement the safety check *before* the data ever reaches the AI matching algorithm.
+*   **Query Level**: When fetching candidates for a high-risk job, add a mandatory `WHERE` clause: `WHERE is_verified_for_high_risk = true`.
+*   **Result**: If no workers meet this criteria, the query returns an empty list. The AI then has zero options to choose from and cannot make an unsafe assignment. It can only report "no available workers."
+
+**3. Fail-Safe Default**
+Ensure your code defaults to "reject" if the verification check throws an error, times out, or encounters unexpected data formats. The system should never assume safety in the face of uncertainty.
+
+**4. Immutable Audit Log**
+Create a write-only log that records every match attempt for high-risk jobs, including the worker ID, the verification status at that exact millisecond, and the decision outcome. This provides traceability without requiring real-time human intervention.
+
+By moving the decision from the AI's "reasoning" layer to the database's "filtering" layer, you make it structurally impossible for the AI to assign an unqualified worker, regardless of how persuasive the rest of the profile looks.
+
+*Note: These suggestions are theoretical patterns; you must adapt them to your specific tech stack and validate them with your engineering team.*
+*Always prioritize deterministic code checks over probabilistic AI decisions for safety-critical constraints.*

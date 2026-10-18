@@ -1,0 +1,24 @@
+### Immediate Failure Mode Analysis & Critical Pre-Ship Checks
+
+**Critical Finding: The "Automated" High-Stakes Action**
+Your proposed flow contains a fundamental safety violation: **fully automated remote unlocking of physical doors is a high-stakes, irreversible action that requires a human-in-the-loop gate.** No amount of logical code review can guarantee the absence of false positives (hallucinations, spoofed credentials, or data corruption) in an automated verification system. If the system errs, a family's physical security is breached instantly. **You cannot ship this feature with full automation enabled.**
+
+**Failure Modes Under Network Interruption**
+In a constrained 48-hour window without physical pen-testing, logical flaws in network handling are the highest probability of failure:
+1.  **Race Conditions on State Sync:** If the lock loses connection mid-verification, does it default to "locked" or "unlocked"? A "fail-open" design (unlocking on error) to ensure emergency access creates a massive vulnerability where network jitter could trigger unintended entry.
+2.  **Replay Attacks:** Without robust nonce/timestamp validation, an attacker could capture a valid "unlock" packet during a network glitch and replay it later to bypass verification.
+3.  **Partial Update Corruption:** If the firmware update itself is interrupted, the device may revert to a safe mode that inadvertently defaults to an unlocked state or accepts unverified commands.
+
+**Mandatory Manual Checks Before Deployment**
+Given the rigid schedule and lack of physical testing, you must perform these logical and procedural checks immediately. Do not proceed to OTA deployment until these are confirmed:
+
+1.  **Enforce Human Confirmation for Initial Rollout:** Modify the firmware logic so that *every* remote unlock request requires explicit human approval from a verified emergency operator dashboard before the signal is sent to the lock. Do not rely on "automated verification" for the first phase of deployment.
+2.  **Verify "Fail-Closed" Logic:** Manually audit the code paths for network timeouts, packet loss, and server errors. Confirm that **any** ambiguity results in the door remaining **locked**. The default state must never be "unlock" unless a cryptographically signed, fresh, and human-verified command is received.
+3.  **Implement a "Kill Switch" in Firmware:** Ensure the update includes a remote capability to immediately disable the "remote unlock" feature entirely across all devices if a flaw is detected post-deployment.
+4.  **Simulate Adversarial Network Probes:** Since physical testing is impossible, run aggressive software simulations where the verification server is fed malformed packets, delayed responses, and contradictory states to ensure the lock never interprets noise as an "unlock" command.
+5.  **Draft a Transparency Artifact (Model/Data Card):** Before shipping, document the intended use, the specific limitation that "physical penetration testing was not performed," and the known residual risks. This must be available to your internal teams and legal counsel.
+
+**Residual Risk Statement**
+Because you cannot perform physical penetration testing and are relying on automated verification for a physical security boundary, the risk of unintended unlocking is **UNVERIFIED**. You must treat the "automated" aspect as a hypothesis, not a fact. The only safe path forward within your constraints is to introduce a human gate for all unlock events until real-world data proves otherwise.
+
+*Note: Legal counsel must review whether this automated decision falls under specific regulatory regimes (e.g., EU AI Act) regarding high-risk physical safety systems. Do not assert compliance internally without this review.*

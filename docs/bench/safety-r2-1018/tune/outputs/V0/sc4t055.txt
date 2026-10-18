@@ -1,0 +1,42 @@
+### Vaccine Eligibility Checker: Validation & Safety Plan
+
+**1. Harm Inventory (Map)**
+Before testing, explicitly record the worst-case impact for each failure mode:
+*   **False Negative (Incorrect Denial):** A high-risk individual (elderly/immunocompromised) is blocked from vaccination, leading to potential severe illness or death. *Severity: Critical.*
+*   **Bias/Unfair Outcome:** The logic systematically disadvantages specific demographics (e.g., non-English speakers, those with complex medical histories) due to rigid data formatting.
+*   **Over-reliance:** Staff or users trust the "Not Eligible" result without a clear path to human override, assuming the algorithm is infallible.
+*   **Missing Disclosure:** Users are unaware the decision is automated and do not know they can request a manual review.
+
+**2. Measurement Plan (Measure)**
+Execute these specific tests immediately. Do not rely on aggregate accuracy; focus on the "deny" decision.
+*   **Adversarial Edge Cases:** Run inputs representing complex, real-world medical histories (e.g., partial vaccination records, conflicting diagnosis codes) known to confuse rule engines.
+*   **Positive/Negative Controls:**
+    *   *Known Good:* 50 verified eligible high-risk profiles must return "Eligible."
+    *   *Known Bad:* 50 verified ineligible profiles must return "Not Eligible."
+    *   *Critical Stop Condition:* **Zero tolerance** for false negatives in the high-risk control set. If even one eligible high-risk user is denied, the launch is blocked.
+*   **Subgroup Slicing:** Test performance specifically across age groups (65+), disability status, and language inputs to detect bias.
+*   **Injection/Leak Check:** Ensure user inputs cannot alter the underlying logic or expose other users' data.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Any output resulting in "Not Eligible" for a user claiming high-risk status must **not** be final. The system must automatically route these cases to a human health official for manual review before the user is turned away. Fully automated irreversible denials are prohibited.
+*   **Uncertainty & Override:** Do not display raw confidence scores (e.g., "87% eligible"). Instead, use defined tiers: "Confirmed Eligible," "Requires Review," or "Confirmed Ineligible." Provide a prominent, one-click "Request Human Review" button on every denial screen.
+*   **Disclosure:** Clearly state: "This is an automated preliminary check. If you believe you are eligible, a human reviewer will verify your status immediately."
+
+**4. Transparency Artifact**
+Create a **Model/Data Card** before launch containing:
+*   Intended use and explicit out-of-scope scenarios.
+*   Performance metrics broken down by subgroup (age, condition).
+*   Known limitations and failure modes.
+*   Owner contact and version number.
+*   *Note:* If any metric is unmeasured due to time, label it **UNVERIFIED**; do not invent a safety percentage.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Name a specific individual responsible for reviewing any denial complaints daily.
+*   **Legal Duty:** Because this involves health outcomes and potentially regulated automated decisions, route the question of specific legal disclosure requirements and compliance with health regulations (e.g., EU AI Act, local health codes) to legal counsel immediately. Do not assert compliance internally.
+
+**Immediate Next Steps:**
+1.  Freeze the "auto-deny" function; enable human review for all negatives.
+2.  Run the critical stop condition test (high-risk controls).
+3.  Draft the transparency card with current knowns and UNVERIFIED gaps.
+
+*Note: This plan prioritizes preventing harm to vulnerable users over speed; a "false negative" here is a safety failure, not a bug. The tight timeline requires narrowing the scope of automation, not skipping the human gate.*

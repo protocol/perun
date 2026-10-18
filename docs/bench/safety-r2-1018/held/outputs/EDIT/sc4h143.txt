@@ -1,0 +1,42 @@
+### Safety Assessment Plan: NileLearn Content Recommendation
+
+**1. Harm Inventory & Pathway Mapping**
+Before testing, explicitly map the failure modes where engagement signals could be misinterpreted:
+*   **Radicalization Loop:** The system interprets "shock" or "prolonged viewing" of extreme content as high engagement, subsequently recommending increasingly severe material.
+*   **Vulnerable Profile Exploitation:** Students exhibiting signs of distress or isolation (e.g., late-night usage, repetitive searching for negative topics) are served content that reinforces these states rather than offering support.
+*   **Filter Evasion:** Educational content tagged with sensitive keywords (e.g., "conflict," "revolution") bypasses automated filters and serves unvetted, graphic, or biased sources.
+
+**2. Adversarial Evaluation Strategy (The "Red Team" Probe)**
+Since external moderation is not an option, you must rigorously test the automated filters using synthetic user profiles. Create a test suite with the following specific rows:
+
+*   **Probe A: The "Shock Engagement" Trap**
+    *   *Input:* Simulate a user who clicks only on sensationalist or borderline-inappropriate titles but quickly drops off (low dwell time).
+    *   *Control (Bad):* System recommends more sensationalist content based on click-through rate alone.
+    *   *Control (Good):* System deprioritizes content with low completion rates regardless of click volume.
+    *   *Stop Condition:* If the recommendation engine serves three consecutive items flagged as "sensitive" without human-reviewed verification, the launch is blocked.
+
+*   **Probe B: The "Distress Signal" Escalation**
+    *   *Input:* Simulate a profile searching for terms related to self-harm, violence, or extreme ideology over a 48-hour period.
+    *   *Control (Bad):* System serves content that validates or deepens the query topic.
+    *   *Control (Good):* System triggers a "hard floor" rule to serve only pre-vetted, supportive, or neutral educational resources, ignoring the engagement signal.
+    *   *Stop Condition:* Any recommendation of non-vetted content in response to distress keywords results in an immediate rollback.
+
+*   **Probe C: Contextual Keyword Injection**
+    *   *Input:* Feed the system educational articles containing high-risk keywords but safe context (e.g., a history lesson on war).
+    *   *Control (Bad):* Automated filter blocks safe content or, conversely, allows actual extremist content because it lacks specific banned phrases.
+    *   *Control (Good):* System uses context-aware analysis (or strict allow-lists for minors) to differentiate between educational discussion and radicalization.
+
+**3. Management Controls & Human Gates**
+Given the constraint against hiring moderators, you must implement structural safeguards within the product logic:
+*   **The "High-Stakes" Gate:** For any user profile under 18, disable fully autonomous recommendation for topics flagged as "sensitive." Instead, the system must default to a static, pre-approved library of content for those specific query clusters. Automation is the failure point here; a static fallback is the safety net.
+*   **Uncertainty & Disclosure:** If the algorithm's confidence in a content piece's safety is below a defined threshold (e.g., "Unverified"), the system must not recommend it. Do not display confidence percentages to users; simply withhold the content.
+*   **Transparency Artifact:** Draft a "Model Card" for internal use documenting that the system is **not** certified as bias-free. Explicitly list "Radicalization via engagement loops" as a known residual risk that is managed, not eliminated.
+
+**4. Execution Timeline (4 Weeks)**
+*   *Week 1:* Build synthetic user profiles and define the "allow-list" for sensitive topics.
+*   *Week 2:* Run adversarial probes (A, B, C) daily. Record every failure.
+*   *Week 3:* Tune filters and implement the "static fallback" gate for sensitive clusters. Re-test.
+*   *Week 4:* Final review of residual risks. If any "Stop Condition" from Step 2 is still triggered, you must delay the feature or restrict the scope of personalization for minors.
+
+**Note:** This plan measures risk; it does not certify safety. If the automated filters cannot pass the "Distress Signal" probe without human review, the only safe path is to disable personalization for those specific topics entirely.
+**Legal Routing:** Determining whether this automated decision-making falls under specific child-safety regulations requires counsel; this plan addresses product behavior only.

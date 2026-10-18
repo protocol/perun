@@ -1,0 +1,39 @@
+### Product Output Safety Review: Facial Recognition Attendance Tracker
+
+**Status: DO NOT SHIP FOR AUTOMATED WAGE DEDUCTION.**
+The proposed feature executes a high-stakes, irreversible action (wage deduction) based on an output (facial recognition) known to have variable reliability due to your stated constraints (varying camera resolution). Fully automating this without a human-in-the-loop gate constitutes a critical safety failure.
+
+#### 1. Harm Inventory (MAP)
+Before testing, we must name the specific harms this system introduces:
+*   **Bias/Unfair Outcomes:** The system may systematically fail to recognize employees with darker skin tones or specific facial features if the underlying model or training data is not representative, leading to disproportionate wage theft for specific groups.
+*   **Hallucination as Fact:** A "No Match" result is being treated as definitive proof of absence. In reality, it is often a failure of the sensor (low resolution) or the model, not evidence the employee was not there.
+*   **Unsafe Automation of High-Stakes Actions:** Deducting wages is a financial penalty. Automating this based on unverified biometric data, especially with known hardware limitations, creates a direct path to financial hardship for users.
+*   **Over-reliance:** HR staff may trust the "Absent" flag without manual verification, assuming the machine is infallible.
+
+#### 2. Measurement Plan (MEASURE)
+You requested a testing plan. Below is the mandatory evaluation framework. **Do not launch until these tests are run and pass your defined thresholds.**
+
+| Harm Category | Probe Set (Inputs) | Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Bias (Skin Tone)** | Images of employees across the Fitzpatrick scale (Types I-VI) captured via *existing* low-res cameras. | **Positive:** Known employee present.<br>**Negative:** Non-employee or empty frame. | False Negative Rate (FNR) per skin tone subgroup. | **Zero tolerance** for significant variance between groups. If FNR for darker skin > FNR for lighter skin by >1%, fail. | Block launch if subgroup disparity exists. |
+| **Environmental Failure** | Same employees under varying office lighting (morning glare, evening dim, fluorescent flicker) and angles. | **Positive:** Employee present in ideal light.<br>**Negative:** Employee absent. | FNR under sub-optimal lighting vs. ideal. | Must not exceed baseline error rate by >5%. | Block automated deductions; require manual review for low-light zones. |
+| **Accessory Occlusion** | Employees wearing common items: glasses, masks, scarves, hats (if culturally relevant). | **Positive:** Employee with accessories.<br>**Negative:** Employee without accessories (baseline). | Drop in recognition confidence/success rate. | System must flag "Low Confidence" rather than "Absent." | If system outputs "Absent" instead of "Unverified," fail. |
+| **Hardware Limitation** | Stress test using the lowest resolution feed in the network. | **Positive:** Clear ID badge scan (ground truth).<br>**Negative:** No person. | Correlation between camera resolution and FNR. | Identify specific cameras that are unsafe for biometric use. | Disable auto-deduction for any camera failing minimum clarity. |
+
+**Residual Risk Report:** Until these tests are run, your accuracy and bias rates are **UNVERIFIED**. Do not invent a "99% accurate" claim.
+
+#### 3. Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate (Mandatory):** You cannot automate wage deductions immediately. The system must operate in "Advisory Mode" for at least one pay cycle.
+    *   *Workflow:* Camera flags "Absent" → HR receives "Unverified/No Match" alert → HR manually verifies via badge log, manager confirmation, or secondary check → Only then is wage deducted.
+    *   *Rationale:* A false negative here is a direct financial loss to the worker. The cost of manual review is lower than the cost of wage theft lawsuits and reputational damage.
+*   **Uncertainty Disclosure:** The interface must never show "Absent" for a biometric failure. It must show "Verification Required" or "Could Not Verify Identity." Never display a raw confidence percentage (e.g., "87% match") to HR; use defined tiers: **Confirmed**, **Corroborated**, **Unverified**.
+*   **Transparency Artifact:** You must produce a **Model Card** before deployment. This document must list:
+    *   Intended Use: Attendance tracking only (not security/access control).
+    *   Limitations: Explicitly state which camera resolutions and lighting conditions are known to fail.
+    *   Subgroup Performance: Publish the FNR broken down by skin tone and accessory usage from the tests above.
+
+#### 4. Governance & Legal Routing
+*   **Legal Duty:** Whether automated biometric deduction complies with Indian labor laws or data privacy regulations (such as the Digital Personal Data Protection Act) is a legal determination. **Route immediately to counsel.** Do not assume compliance.
+*   **Ownership:** Assign a specific product owner responsible for reviewing every "Unverified" flag during the pilot phase.
+
+**Conclusion:** Your constraint (existing poor cameras) directly conflicts with the requirement for high-stakes automation. The only safe path is to decouple the *detection* from the *penalty*. Use the system to flag anomalies, but require human confirmation before any money changes hands.

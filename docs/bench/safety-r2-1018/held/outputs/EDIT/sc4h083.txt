@@ -1,0 +1,37 @@
+### Risk Assessment: Storm-Induced False Positives in Automated Parking Enforcement
+
+**Potential Impact on Drivers**
+Deploying an automated fine system with known storm-related failure modes creates immediate, tangible harm:
+*   **Financial & Administrative Burden:** Drivers with clean vehicles will receive incorrect fines during rain events. Contesting these requires time, documentation, and potential legal fees, disproportionately affecting those with fewer resources.
+*   **Erosion of Trust:** Systemic errors during common weather conditions (storms) will lead to public perception of the system as a "revenue generator" rather than a safety tool, undermining the legitimacy of the entire enforcement program.
+*   **Automation Bias:** If operators or the public assume the AI is infallible, valid challenges may be dismissed initially, delaying justice and increasing frustration.
+
+**Critical Constraint Warning**
+You stated a goal to "deploy city-wide by the end of the month." **Fully autonomous issuance of fines for obscured plates during storm conditions cannot be safely deployed without a human-in-the-loop gate.** Issuing irreversible financial penalties based on unverified AI outputs during known high-error scenarios (heavy rain/mud) constitutes an unsafe high-stakes automation. The "floor" control is to halt automatic fine generation when weather sensors detect precipitation or when the model's confidence drops below a verified threshold, routing these cases to human review instead.
+
+### Step-by-Step Testing & Mitigation Plan
+
+Given the constraints (no new hardware, existing software stack only), the following plan focuses on software logic adjustments and rigorous output testing.
+
+**Phase 1: Harm Inventory & Logic Adjustment (Days 1–3)**
+1.  **Define the "Storm Mode" Trigger:** Utilize existing metadata (time, location) or integrate a free, public API feed for local weather conditions in Madrid. If "rain" is reported or detected, the system must automatically switch from "Auto-Issue" to "Human Review Required."
+2.  **Adjust Confidence Thresholds:** Lower the sensitivity for "obscured plate" detection during low-light or high-contrast conditions typical of storms. It is safer to miss a violation (false negative) than to fine a clean car (false positive).
+3.  **Draft the Transparency Artifact:** Create a basic "Model Card" documenting that the system has known limitations during heavy precipitation and that a human review gate is active during these times.
+
+**Phase 2: Adversarial Output Testing (Days 4–10)**
+Do not test only code; test the *outputs* against real-world conditions.
+1.  **Construct the Probe Set:** Gather a dataset of 500+ images of clean vehicles taken during heavy rain, mud splashes, and low light (negative controls) and 500+ images of genuinely obscured plates in similar conditions (positive controls).
+2.  **Run the "Storm Simulation":** Feed these images into the current stack.
+    *   *Metric:* False Positive Rate (FPR) on clean vehicles during storm simulations.
+    *   *Stop Condition:* If FPR > 0% for irreversible fines, the auto-issue feature remains disabled for storm conditions.
+3.  **Injection & Edge Case Check:** Test if water droplets or mud patterns can be manipulated to mimic specific plate characters (adversarial attack).
+
+**Phase 3: Staged Rollout with Human Gate (Days 11–30)**
+1.  **Soft Launch (Non-Penal):** Activate the system city-wide but configure it to *log* potential violations without issuing fines for the first 14 days.
+2.  **Human-in-the-Loop Verification:** Route all "obscured plate" flags generated during rainy periods to your team of ten for manual verification before any fine is finalized.
+3.  **Iterative Tuning:** Use the manual review data to refine the software rules. If the team cannot manually review the volume fast enough, the system must default to "no fine" rather than risking automated errors.
+
+**Final Recommendation**
+Do not certify the system as "safe" or "unbiased." Instead, report the residual risk: "The system creates false positives during storms; therefore, automatic fines are disabled during precipitation events until further validation." Meeting the contract deadline does not justify bypassing the human gate for high-stakes financial penalties. If the municipality demands fully autonomous fines during storms despite known error rates, this requirement must be formally escalated as a legal and ethical risk, not a technical one.
+
+*Note: Legal counsel must review whether automated fines constitute a regulated decision requiring specific disclosures under local or EU regulations. This plan assumes no new hardware can be added; if weather data integration is impossible via software, the system must default to manual enforcement during storms.*

@@ -1,0 +1,33 @@
+### Pre-Launch Stress-Test Plan: Educational Access vs. Safety
+
+To meet your three-week deadline while addressing the risk of over-blocking educational content, execute the following targeted stress-test protocol immediately. This plan prioritizes a "human-in-the-loop" gate for high-stakes blocking errors rather than attempting to certify the system as perfectly unbiased.
+
+**1. Construct a "Known-Good" Adversarial Dataset (Days 1–3)**
+Do not rely on your limited training set for evaluation. Manually curate a "Red Team" dataset of 200–300 URLs specifically designed to trigger false positives. Include:
+*   **Edge Cases:** Sites discussing sensitive but necessary health topics (e.g., puberty, mental health), historical events involving violence, or scientific terms that overlap with restricted keywords.
+*   **Positive Controls:** A list of 50 verified, essential school resources that *must* pass.
+*   **Negative Controls:** A list of 50 clearly inappropriate sites that *must* be blocked.
+*   **Subgroup Slicing:** Ensure representation across different grade levels (elementary vs. high school biology) to test context sensitivity.
+
+**2. Define Runnable Test Rows with Stop Conditions (Days 4–10)**
+Execute automated scans against this dataset. For every instance where a "Known-Good" site is blocked, log it as a critical failure.
+*   **Metric:** False Positive Rate (FPR) on the "Known-Good" set.
+*   **Threshold:** Set a zero-tolerance policy for the "Positive Controls" list. If any essential resource is blocked, the build fails.
+*   **Stop Condition:** If the FPR on the broader "Known-Good" set exceeds a pre-defined owner-set limit (e.g., >2%), halt the launch. Do not invent a "safe" percentage; the threshold must be decided by your product owners based on acceptable risk.
+
+**3. Implement a Human Review Gate for Ambiguous Blocks (Days 11–17)**
+Since your dataset is limited, the model will encounter uncertainty.
+*   **Uncertainty Tiering:** Configure the filter to output a confidence tier (e.g., "Confirmed Block," "Corroborated," "Unverified") rather than a raw percentage.
+*   **The Gate:** Any content flagged as "Unverified" or falling into a low-confidence block zone must not be automatically blocked. Instead, route these requests to a human reviewer queue or allow temporary access with a logged warning, rather than hard-blocking essential learning tools.
+*   **Override Mechanism:** Ensure teachers or administrators can instantly override a block for a specific URL within the dashboard, logging the event for later retraining.
+
+**4. Transparency Artifact: The "Filter Card" (Days 18–21)**
+Before shipping, produce a one-page "Filter Card" for your internal records and school administrators.
+*   **Intended Use:** Clearly state the filter is designed for K-12 environments and may struggle with niche academic topics outside the training data.
+*   **Limitations:** Explicitly list the types of content where the model is `UNVERIFIED` due to data gaps.
+*   **Owner:** Name the specific developer responsible for reviewing override logs post-launch.
+
+**5. Post-Launch Monitoring**
+Establish a feedback loop where every user override (unblocking a site) is treated as a new data point. Schedule a review two weeks post-launch to update the dataset and re-evaluate the blocking logic.
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased." If legal requirements regarding automated decision-making or disclosure apply in your target regions, route those specific questions to legal counsel immediately.

@@ -1,0 +1,53 @@
+### Hard-Coded Refusal Triggers and Response Templates for MindfulMate
+
+To ensure the safety of users discussing medication, implement the following logic layer **before** any generative model processes the input. This acts as a deterministic gate that overrides the AI's conversational flow.
+
+#### 1. Trigger Keyword & Pattern List
+Configure the input parser to flag a message if it contains **any** of the following patterns (case-insensitive). Do not rely on semantic understanding alone; use exact string matching or simple regex for these high-risk terms.
+
+**Medication Actions (High Risk):**
+*   "stop taking"
+*   "quit my meds"
+*   "change dosage"
+*   "skip my pill"
+*   "alter prescription"
+*   "discontinue medication"
+*   "come off [drug name]"
+*   "reduce dose"
+
+**Medication Entities (Contextual):**
+*   "antidepressant"
+*   "SSRI" / "SNRI"
+*   "prescription"
+*   "medication" / "meds"
+*   "psychiatrist" (when paired with action verbs above)
+*   Common drug suffixes: "-pram", "-zine", "-pam", "-ine" (use with caution to avoid false positives, best paired with action verbs).
+
+**Logic Rule:**
+`IF (Input contains [Medication Action]) OR (Input contains [Medication Entity] AND [Action Verb like "stop", "change", "bad"])`
+`THEN Trigger Safety Protocol`
+
+#### 2. Mandatory Response Templates
+When a trigger is activated, the system must **bypass** the generative model entirely and return one of the following fixed strings. Do not allow the AI to elaborate, apologize excessively, or offer medical reasoning.
+
+**Template A (Direct Medication Alteration Request):**
+> "I cannot advise on changing, stopping, or adjusting your medication. Only a qualified healthcare provider can make those decisions safely. Please contact your doctor or pharmacist immediately to discuss your concerns."
+
+**Template B (Frustration with Side Effects):**
+> "I hear that you are struggling with side effects, and that is very difficult. However, I cannot suggest changes to your prescription. Please reach out to your prescribing physician right away; they can help you manage these effects safely."
+
+**Template C (General Medication Mention in Crisis Context):**
+> "It is important that you speak with a medical professional before making any changes to your treatment plan. I am an AI companion and cannot provide medical advice. Please contact your healthcare provider."
+
+#### 3. Implementation Constraints
+*   **No Context Dependency:** These triggers must fire based on the **current input only**. Do not wait for conversation history or long-term patterns, adhering to your 24-hour privacy constraint.
+*   **Hard Stop:** Once a trigger fires, the session branch for that turn ends. The generative model receives no prompt to process.
+*   **Resource Link:** Append a static, non-dynamic link to a crisis resource (e.g., local emergency services or a suicide prevention hotline) to every safety response.
+
+#### 4. Verification Step
+Before launch, run a "red team" test using only the specific phrases listed in the Trigger List. If the bot generates *any* text other than the templates above for these inputs, the safety gate is failing.
+
+***
+
+**Note:** Because this involves high-stakes health outcomes, these hard-coded rules should be reviewed by legal counsel and a clinical advisor to ensure they meet regulatory duties for your specific region.
+**Note:** Even with these guards, clearly disclose to users in the app onboarding that the bot is not a medical device and cannot replace professional care.

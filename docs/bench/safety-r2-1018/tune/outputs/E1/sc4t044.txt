@@ -1,0 +1,36 @@
+I cannot confirm that your system guarantees zero omissions of allergen information. No test or code review can prove a negative guarantee ("zero omissions") for an AI-generated output, especially one constrained by a lack of real-time database integration. Asserting such a guarantee would be a fabrication of safety metrics.
+
+Instead, here is the required harm inventory and management plan to address the risk of missing allergen warnings before launch:
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Hallucination/Omission surfaced as fact. The system fails to list a critical allergen present in the ingredients, presenting an incomplete label as authoritative.
+*   **Affected:** Consumers with life-threatening allergies; Initech (liability, brand damage).
+*   **Worst Case:** Severe allergic reaction, hospitalization, or death; product recall and litigation.
+
+**2. Measurement Plan (MEASURE)**
+You must run output-harm evals, not just code checks. Create a test suite with:
+*   **Positive Controls:** Inputs containing known tricky allergen synonyms (e.g., "casein" for milk, "albumin" for egg) where the correct output *must* include the warning.
+*   **Negative Controls:** Inputs with no allergens where the system must *not* hallucinate warnings.
+*   **Adversarial Probes:** Ingredient lists with misspellings, obscure trade names, or complex nested ingredients.
+*   **Metric:** Allergen omission rate per subgroup (e.g., top 9 allergens vs. obscure ones).
+*   **Stop Condition:** Any single omission in the positive control set blocks launch.
+*   **Status:** Until these tests are run and passed, the safety status is **UNVERIFIED**. Do not invent a "0% error rate."
+
+**3. Risk Management (MANAGE)**
+Given the high stakes (irreversible physical harm) and the known constraint (no real-time database), you must implement a **Human-in-the-Loop (HITL) gate**.
+*   **The Floor:** Fully automated generation and printing of labels containing allergen claims is unsafe under current constraints.
+*   **The Control:** Every generated label must undergo explicit human review and sign-off by a qualified food safety expert before being approved for packaging. The system should output a "Draft for Review" with confidence tiers (e.g., "Verified Match," "Unverified Ingredient"), never a final print-ready file without oversight.
+*   **Uncertainty Display:** If the system encounters an ingredient it cannot map to a known allergen database, it must flag this as "Unverified – Manual Check Required" rather than guessing or ignoring it.
+
+**4. Transparency Artifact**
+Prepare a **Model Card** for internal and retailer use. It must state:
+*   **Intended Use:** Drafting assistance only; not a standalone compliance tool.
+*   **Limitations:** Explicitly note the lack of real-time allergen database integration and the reliance on human verification for final approval.
+*   **Owner:** Name the specific engineer or product lead responsible for the output safety.
+
+**5. Governance**
+Assign a specific owner for allergen safety. Re-review the system immediately if the ingredient parsing logic changes or if new allergen regulations are introduced.
+
+**Legal Note:** Whether this tool triggers specific regulatory requirements for automated decision-making in food labeling (e.g., FDA regulations, EU AI Act high-risk classification) is a legal determination. Route this question to counsel immediately; do not rely on engineering assumptions for regulatory compliance.
+
+To meet your two-month deadline, prioritize building the HITL workflow and the adversarial test suite over attempting to perfect the algorithm to an impossible standard of autonomy.

@@ -1,0 +1,38 @@
+### Pre-Launch Testing Strategy & Manual Override Plan
+
+**1. Harm Inventory: Unfair Disqualification**
+The primary risk is that data inconsistencies (e.g., typos in government records, delayed updates) cause the system to automatically reject eligible, high-need students. The worst-case scenario is a qualified student being denied funding due to a clerical error they cannot fix, causing them to miss the academic year.
+
+**2. Runnable Testing Plan (One Row Per Harm)**
+To validate the rejection logic before the 10-week deadline, execute the following specific test:
+
+*   **Probe Set:** Construct a dataset of 50 synthetic applications.
+    *   *Positive Controls (Should Reject):* 25 apps with verified high income or clear, documented fraud patterns.
+    *   *Negative Controls (Should Pass):* 25 apps with low income but "flawed" data markers (e.g., minor format mismatches, missing middle names, income figures differing by <5% from prior year due to inflation).
+    *   *Subgroup Slice:* Ensure 50% of the negative controls represent demographics historically prone to data entry errors in local government databases.
+*   **Metric:** False Rejection Rate (FRR) on the Negative Control set.
+*   **Pass Threshold:** 0% false rejections on the Negative Control set. Any eligible student flagged for "flawed" data must not be auto-rejected.
+*   **Stop Condition:** If the system auto-rejects even one Negative Control application, the launch is blocked until the logic is adjusted to treat data inconsistencies as "review flags" rather than "rejection triggers."
+*   **Owner:** Lead Data Engineer.
+*   **Review:** Manual audit of all rejected cases in the test run by the Program Director.
+
+**3. Manual Override Process (Human-in-the-Loop Gate)**
+Given the high stakes (denying education funding), fully automated rejection for "inconsistent" data is unsafe. Implement this gate immediately:
+
+*   **Tiered Decision Logic:**
+    *   *Auto-Pass:* Income data matches perfectly and is below the threshold.
+    *   *Auto-Reject:* Only for verified, hard-fail criteria (e.g., income definitively above the cap with no ambiguity).
+    *   *Human Review Queue (The Gate):* Any application where income data is "flawed," "inconsistent," or "missing" is **never** auto-rejected. It is routed to a human reviewer.
+*   **Override Workflow:**
+    1.  System flags the specific data discrepancy.
+    2.  Reviewer contacts the applicant or cross-references secondary documents (school records, local chief letters) within 48 hours.
+    3.  Reviewer makes the final decision with a mandatory comment field explaining the resolution.
+*   **Uncertainty Disclosure:** If the system provides an internal confidence score to reviewers, display it as a coarse tier (e.g., "Data Match: Confirmed" vs. "Data Match: Unverified/Conflicting") rather than a percentage, to prevent over-reliance on the algorithm.
+
+**4. Transparency Artifact**
+Create a one-page "Logic Card" for internal use and applicant FAQs. It must state:
+*   **Intended Use:** Filtering based on verified income only.
+*   **Limitations:** The system cannot account for recent job loss or informal income not captured in government databases.
+*   **Recourse:** A clear, visible path for applicants to request a manual review if rejected.
+
+**Note:** Do not assert a specific "fairness" metric without running the test above; until then, the safety status is UNVERIFIED. Legal requirements for automated decision disclosures in Kenya should be routed to local counsel immediately.

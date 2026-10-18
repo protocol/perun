@@ -1,0 +1,36 @@
+### Verification Process for Acoustic Classification Model
+
+**1. Define the Harm Inventory**
+Before testing, explicitly record the primary risk: **Bias/Unfair Outcome** where quiet residential streets are misclassified as noisy industrial zones, leading to unjustified tax increases for homeowners and small businesses. The worst-case scenario is a family or small shop facing unaffordable taxes due to a data error.
+
+**2. Construct Targeted Probe Sets (Internal Cluster Optimized)**
+Since full-city simulation is impossible on your limited cluster, do not attempt it. Instead, build three specific, lightweight probe sets:
+*   **Positive Controls (Known Noisy):** Select 50 verified industrial/high-traffic segments. The model *must* label these as "Noisy." If it fails here, the model is broken.
+*   **Negative Controls (Known Quiet):** Select 50 verified residential/low-traffic segments. The model *must* label these as "Quiet." Any failure here is a direct false positive risking user harm.
+*   **Adversarial Edge Cases:** Select 20 ambiguous segments (e.g., a quiet street near a school during recess, or a residential area with occasional construction). These test if the model over-reacts to transient sounds.
+
+**3. Execute Staged Rollout Validation**
+Run the evaluation in batches corresponding to your cluster's capacity:
+*   **Batch A:** Run only the 50 Negative Controls. **Stop Condition:** If *any* quiet street is misclassified as industrial, halt the launch. This is a zero-tolerance gate for the highest user harm.
+*   **Batch B:** Run the Positive Controls to ensure basic functionality remains intact.
+*   **Batch C:** Run the Adversarial Edge Cases. Record the failure rate but do not block launch solely on these unless the rate exceeds a pre-defined threshold (e.g., >5%).
+
+**4. Implement Human-in-the-Loop (HITL) Gate**
+Because this feature triggers **irreversible financial actions** (tax reclassification), you cannot allow fully automated execution for any property flagged as "Industrial" during the beta.
+*   **Rule:** Any output changing a zone from Residential to Industrial must be routed to a human reviewer for confirmation before the tax assessment is generated.
+*   **Override:** Provide a clear mechanism for users to contest the classification with a "Request Human Review" button visible on their dashboard.
+
+**5. Generate Transparency Artifacts**
+Create a **Model Card** for this specific feature containing:
+*   **Intended Use:** Noise mapping for tax zoning assistance, not final determination.
+*   **Limitations:** Explicitly state the model has not been tested on full-city simulations and may struggle with transient noises.
+*   **Measured Performance:** Report the accuracy *only* on your Negative and Positive control sets. Do not invent a city-wide accuracy percentage. Label any untested scenarios as **UNVERIFIED**.
+*   **Disclosure:** Clearly inform users that the heatmap is AI-generated and subject to review.
+
+**6. Final Go/No-Go Decision**
+Proceed to limited beta only if Batch A (Negative Controls) has 0% false positives and the HITL gate is active. If the cluster cannot process the minimum control sets, the feature is not ready for validation.
+
+***
+
+**Note:** Do not claim a specific "false positive rate" for the whole city; report only the results from your specific probe sets.
+**Note:** Route any questions regarding legal requirements for tax automation disclosures to legal counsel immediately.

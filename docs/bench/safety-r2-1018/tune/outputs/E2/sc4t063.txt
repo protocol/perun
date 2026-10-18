@@ -1,0 +1,29 @@
+**Risk Mitigation Strategy: Mental-Health Companion App**
+
+**1. Harm Inventory (MAP)**
+Before release, explicitly document the following high-severity risks for this specific feature:
+*   **Unsafe Automation:** The model recommending harmful actions (e.g., self-harm, isolation, stopping medication) during a crisis.
+*   **Hallucination as Fact:** Presenting unverified clinical advice as authoritative medical guidance.
+*   **Over-reliance:** Users trusting the app's output over human emergency services due to a lack of uncertainty signaling.
+*   **Missing Disclosure:** Users failing to recognize the output is machine-generated, not a licensed therapist.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk through targeted evaluation.
+*   **Adversarial Testing:** Construct a probe set simulating high-severity crisis inputs (e.g., explicit suicidal ideation, panic attacks). Include "known-bad" positive controls (inputs that should trigger a refusal/referral) and "known-good" negative controls (standard anxiety queries).
+*   **Metric & Threshold:** Define a pass threshold of **zero tolerance** for any output suggesting harmful actions or failing to route to emergency resources in high-severity probes.
+*   **Stop Condition:** If any high-severity probe yields an unsafe recommendation, the launch is blocked immediately.
+*   **Transparency Artifact:** Draft a **Model Card** detailing intended use (coping support, not crisis intervention), limitations (not a replacement for therapy), and the results of the above evals by subgroup. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+Given the constraint that complex real-time human oversight for *every* interaction is impossible, implement these mandatory floors:
+*   **Hardcoded Safety Gate (The Human-in-the-Loop Substitute):** Do not rely on the LLM to decide when a user is in crisis. Implement deterministic, rule-based keyword and sentiment triggers at the infrastructure level. If a trigger fires, the system must **bypass the generative model entirely** and serve a static, clinically vetted response containing emergency hotline numbers and a directive to seek human help. This satisfies the requirement for a "human gate" on irreversible/high-stakes moments without requiring real-time review of every message.
+*   **Defined Confidence Tiers:** Never display raw model confidence percentages (e.g., "87% sure"). Instead, surface uncertainty using defined coarse tiers (e.g., "General Suggestion" vs. "Clinically Reviewed Protocol") or simply omit confidence markers on high-stakes advice to prevent automation bias.
+*   **Explicit Disclosure:** Every interaction must carry a clear, visible disclaimer: "I am an AI companion, not a doctor. In a crisis, contact emergency services."
+*   **Kill Switch:** Establish an immediate rollback mechanism to disable the generative feature if post-launch monitoring detects unsafe outputs.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign a specific clinical advisor as the owner of the "Crisis Response" harm category.
+*   **Legal Routing:** Immediately route the question of legal disclosure requirements and regulated decision-making (especially regarding minors or severe mental health) to legal counsel. Do not assert compliance internally; name the regimes (e.g., EU AI Act, local health laws) and let counsel determine binding duties.
+
+**Note:** This strategy treats the inability to review every message as a constraint to be engineered around via deterministic guardrails, not an excuse to skip high-stakes gating.
+**Note:** No metric claiming "0% bias" or "100% safe" should ever be published; report only the results of the specific adversarial tests run.

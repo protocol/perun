@@ -1,0 +1,26 @@
+**Validation Plan for CardiaCare Rhythm Detection Logic**
+
+Given the critical nature of your device and the 30-day regulatory deadline, the validation plan must prioritize high-specificity testing to prevent inappropriate shocks while maintaining sensitivity for life-threatening events. The following methods are recommended for your documentation:
+
+1.  **Curated Clinical Dataset Benchmarking**
+    Assemble a gold-standard validation dataset comprising annotated electrocardiogram (ECG) recordings from public repositories (e.g., MIT-BIH Arrhythmia Database, CUDB) and proprietary clinical trial data. This dataset must heavily weight "edge cases" that historically trigger false positives, such as supraventricular tachycardia (SVT), atrial fibrillation with rapid ventricular response, and T-wave oversensing. Run the detection logic against this static dataset to quantify specificity rates. The goal is to demonstrate >99% specificity in distinguishing non-shockable rhythms from ventricular fibrillation/tachycardia.
+
+2.  **Signal Artifact and Noise Stress Testing**
+    Simulate real-world environmental and physiological noise that users encounter daily. Inject synthetic artifacts into clean ECG signals, including:
+    *   **Motion Artifacts:** Simulating walking, running, or sleeping movements.
+    *   **Electromagnetic Interference (EMI):** Exposure to household appliances, mobile phones, and security systems.
+    *   **Lead Contact Issues:** Simulating loose electrodes or dry skin impedance changes.
+    Validate that the algorithm classifies these noisy signals as "unanalyzable" or "normal" rather than initiating a shock sequence. The system must fail safe by withholding therapy when signal quality is insufficient for a confident diagnosis.
+
+3.  **Boundary Value and Corner Case Analysis**
+    Systematically test the decision thresholds of your logic. Generate synthetic waveforms that sit precisely on the boundary between shockable and non-shockable classifications (e.g., heart rates just above/below the cutoff, morphologies with borderline complexity). Verify that the hysteresis and confirmation timers function correctly to prevent transient spikes from triggering therapy. This includes testing the "re-verification" logic where the device must confirm the arrhythmia persists for a set duration before charging.
+
+4.  **Hardware-in-the-Loop (HIL) Simulation**
+    Move beyond software-only testing by connecting the detection algorithm to an arrhythmia simulator that mimics the electrical characteristics of the human torso and the specific impedance of your wearable electrodes. This validates the entire signal chain, from analog front-end filtering to digital classification. Run continuous 24-hour simulated monitoring cycles with intermittent arrhythmia events to check for memory leaks, timing drifts, or cumulative errors that could degrade detection accuracy over time.
+
+5.  **Adjudication by Independent Clinical Panel**
+    For any ambiguous cases identified during automated testing, establish a blinded review process involving three independent cardiologists. Their consensus will serve as the ground truth for calculating final performance metrics. This step is crucial for regulatory submission to demonstrate clinical oversight and unbiased validation of the algorithm's decision-making in complex scenarios.
+
+**Documentation Strategy:** Compile results into a traceability matrix linking every requirement in your design specification to specific test cases and outcomes, highlighting the zero-tolerance policy for inappropriate shocks in the risk management file.
+
+*Note: Ensure all synthetic data generation parameters are locked and version-controlled prior to testing to satisfy audit trail requirements.*

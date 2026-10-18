@@ -1,0 +1,30 @@
+### Pre-Launch Audit Plan: Fairness & Transparency for Loan Restructuring
+
+**1. Harm Inventory & Scope**
+Before testing, explicitly record the primary risk: **Bias/Unfair Outcomes** where the model systematically assigns higher fees or stricter terms to vulnerable subgroups (e.g., low-income brackets, specific regions in São Paulo, or those with limited financial literacy). The worst-case scenario is regulatory rejection and severe financial harm to borrowers. Secondary risks include **Missing Disclosure** (users unaware terms are AI-generated) and **Deceptive Patterns** (hidden fees buried in complex language).
+
+**2. Targeted Evaluation Strategy (Measure)**
+Given limited compute, abandon exhaustive Monte Carlo simulations in favor of **adversarial slice testing**. Construct a "Red Team" dataset of 50–100 synthetic borrower profiles representing edge cases and protected groups.
+*   **Positive Controls:** Profiles designed to trigger predatory behavior based on your simulation findings (e.g., high debt-to-income ratio + urgent liquidity need).
+*   **Negative Controls:** Similar profiles where fair terms are known to be available.
+*   **Metric:** Compare the "Total Cost of Restructuring" and "Fee Density" across subgroups.
+*   **Pass Threshold:** Zero statistical disparity in hidden fees between vulnerable and non-vulnerable segments. Any instance of a hidden fee triggered by a vulnerability marker is a **Stop Condition** blocking launch.
+*   **Injection Check:** Test if user-supplied text (e.g., "I am desperate") manipulates the model into worsening terms.
+
+**3. Transparency & Human Gate (Manage)**
+*   **Human-in-the-Loop (HITL) Mandate:** Because loan restructuring is a high-stakes, financially irreversible action, **no term change may be executed automatically.** The system must output a *recommendation* only. A human analyst must review and explicitly approve every generated plan before it reaches the borrower. This is non-negotiable regardless of computational constraints.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "87% sure") to analysts or users. Instead, label outputs with defined tiers: **Verified** (matches standard policy rules), **Corroborated** (supported by multiple data points), or **Unverified** (requires senior review).
+*   **Disclosure:** Ensure every generated communication clearly states: "These terms were drafted by an AI assistant and reviewed by a human officer."
+
+**4. Artifacts & Governance**
+*   **Model Card:** Draft a one-page artifact listing: intended use (restructuring support), out-of-scope uses (initial loan approval), known limitations (tendency toward aggressive fees in edge cases), and the owner of the model.
+*   **Residual Risk Report:** Document the results of the slice testing. If any metric is unmeasured due to resource limits, mark it explicitly as **UNVERIFIED** rather than estimating a value.
+*   **Ownership:** Assign one specific engineer as the owner of the "Fairness" metric and one legal liaison to review the disclosure language.
+
+**5. Legal Routing**
+This plan identifies potential violations of fair lending and consumer protection principles. However, determining whether this tool triggers specific regulatory duties under Brazilian law or international standards (e.g., EU AI Act implications for cross-border banks) is a legal determination. **Route the final audit results and the "hidden fee" findings immediately to legal counsel** for a binding verdict on compliance before any pilot launch.
+
+***
+
+*Note: This plan prioritizes a human gate over automated certification; do not launch without explicit human approval on every output.*
+*All unmeasured metrics must remain labeled "UNVERIFIED"; do not fabricate safety rates to meet deadlines.*

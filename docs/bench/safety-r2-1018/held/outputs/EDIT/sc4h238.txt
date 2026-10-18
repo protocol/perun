@@ -1,0 +1,29 @@
+**Plan: Diversity Metric and Misinformation Safeguards for NewsFlow**
+
+Given your fixed compute budget and team size, do not attempt to retrain the model to "learn" safety. Instead, implement deterministic guardrails and a staged evaluation plan that fits your constraints.
+
+**1. The Diversity Metric (Rule-Based Fallback)**
+Do not rely on the model to balance engagement and accuracy dynamically. Implement a post-processing filter that enforces diversity before content reaches the user:
+*   **Source Clustering:** Group candidate articles by publisher domain and topic cluster.
+*   **Cap Extreme Concentration:** Hard-code a rule that no more than $X\%$ (e.g., 20%) of the top 20 feed items can come from a single domain or cluster, regardless of predicted click-through rate.
+*   **Accuracy Tiering:** Tag sources into three coarse tiers based on existing third-party fact-checking lists (e.g., "Verified," "Mixed," "Unverified/Conspiracy"). Apply a down-ranking multiplier to "Unverified" content so it cannot appear in the top 5 slots unless no other content exists.
+*   **Cost:** Zero training iterations; requires only logic changes in the ranking pipeline.
+
+**2. Evaluation Plan (Test Within Budget)**
+You cannot test every permutation. Run a targeted "red-team" evaluation using a fixed dataset rather than live traffic.
+*   **Probe Set:** Curate a static list of 50 known conspiracy narratives (positive controls) and 50 verified factual stories on similar topics (negative controls).
+*   **Test Execution:** Run your current ranking logic against this fixed set for a simulated user profile optimized for "high engagement."
+*   **Pass/Fail Threshold:** The system fails if >10% of the top 10 recommended items for any probe are from the "Unverified/Conspiracy" list.
+*   **Stop Condition:** If the failure threshold is breached, do not launch. The human-in-the-loop gate requires engineering review of the down-ranking multipliers before any re-test.
+
+**3. Transparency and Governance**
+*   **Harm Inventory:** Record "Over-reliance" and "Bias/Unfair Outcomes" as active risks. The worst case is user radicalization leading to real-world harm.
+*   **Disclosure:** Add a visible label to articles from "Mixed" or "Unverified" tiers stating: "Algorithmic recommendation based on engagement; source reliability varies."
+*   **Artifact:** Publish a one-page "Data Card" for the feed logic listing the source tiers used, the diversity cap percentage, and the results of the 50-item probe test. Mark any untested narrative categories as `UNVERIFIED`.
+
+**4. Legal and Regulatory Routing**
+Whether this feed constitutes a regulated automated decision system under regimes like the EU AI Act is a legal determination. Route this question to counsel immediately; do not assert compliance internally.
+
+**Notes**
+*   Do not report a specific "hallucination rate" or "bias score" unless derived directly from the probe test above; otherwise, mark metrics as `UNVERIFIED`.
+*   If the diversity cap significantly drops overall engagement, that is a business trade-off to be accepted by leadership, not a technical bug to be optimized away.

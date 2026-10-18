@@ -1,0 +1,33 @@
+### Pre-Launch Stress Test Plan: Real-Time Translation Earpiece
+
+**1. High-Risk Instruction Categories Prone to Mistranslation**
+Given the constraints of on-device processing and high-noise environments, the following instruction types carry the highest risk of hallucination or omission:
+*   **Directional Ambiguity:** Commands relying on spatial prepositions (e.g., "Move *away* from the north gate" vs. "Move *toward* the north gate"). Noise often strips these modifiers, reversing the safety intent.
+*   **Negated Imperatives:** Instructions containing "do not" or "never." Low-complexity models frequently drop negation tokens under acoustic stress, turning "Do not use the elevator" into "Use the elevator."
+*   **Conditional Triggers:** Phrases like "If you see smoke, exit immediately." The model may hallucinate the condition as fact ("You see smoke") or miss the conditional entirely, causing panic or inaction.
+*   **Proper Noun Substitution:** Replacing specific venue landmarks (e.g., "Section 404") with generic terms ("the exit") or hallucinating non-existent locations due to training data bias toward generic evacuation scripts.
+
+**2. Validation Protocol for Live Drills**
+Execute the following three-phase protocol during the stadium pilot. Do not rely on aggregate accuracy scores; focus on binary pass/fail for critical safety outcomes.
+
+*   **Phase A: Adversarial Audio Injection (Controlled Environment)**
+    *   **Probe Set:** Record standard emergency announcements overlaid with stadium-specific noise profiles (crowd roar, sirens, PA system distortion) at varying decibel levels (70dB–100dB).
+    *   **Controls:** Include a "known-bad" input (garbled speech) to ensure the device refuses to translate rather than hallucinating, and a "known-good" clear audio baseline.
+    *   **Metric:** **Critical Intent Preservation.** The output is a fail if the translated action contradicts the source (e.g., direction reversal, negation drop) or if a specific location is replaced by a generic term.
+    *   **Stop Condition:** Any single instance of a reversed safety command (e.g., directing users *toward* danger) triggers an immediate halt to the pilot until the model's confidence threshold or noise-canceling pre-filter is adjusted.
+
+*   **Phase B: The "Human-in-the-Loop" Verification Gate**
+    *   **Procedure:** During live drills, equip 10% of test users with a "report button." If the translation feels uncertain, contradictory, or confusing, they press the button to log the audio snippet.
+    *   **Override Mechanism:** The device must visually or haptically indicate "Unverified Translation" when the on-device confidence score falls below a defined tier (e.g., "Corroborated" vs. "Single-source"). In these low-confidence states, the device should default to displaying the original audio transcript or a universal safety icon rather than risking a confident mistranslation.
+    *   **Disclosure:** Clearly label the device output as "Machine-Translated – Verify with Visual Signs" on the user packaging and initial setup screen.
+
+*   **Phase C: Post-Drill Residual Risk Report**
+    *   **Artifact:** Publish a **Model Card** specific to this deployment version. It must list:
+        *   Intended Use: Emergency evacuation in high-noise venues only.
+        *   Limitations: Explicitly state that negation and complex conditionals are `UNVERIFIED` below 85dB noise levels.
+        *   Subgroup Performance: Accuracy rates broken down by supported languages (do not report only an aggregate average).
+    *   **Decision Gate:** The launch decision rests with the product owner based on this report. No metric will be fabricated to claim "100% safety" or "zero bias."
+
+**Notes**
+*   Legal counsel must review whether this automated decision tool requires specific regulatory disclosures under local emergency management laws before the live drill.
+*   If the stop condition is triggered, the constraint of "on-device only" may need re-evaluation to allow a lightweight cloud-verify step for critical commands.

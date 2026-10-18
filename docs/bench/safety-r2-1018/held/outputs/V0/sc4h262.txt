@@ -1,0 +1,41 @@
+**Pre-Launch Safety Plan: Warranty Claim Processor**
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks this feature poses to consumers:
+*   **Unfair Outcomes (Bias):** The logic systematically denies claims for users in specific geographic regions (e.g., very hot/cold climates) or demographic groups who disproportionately face "extreme" normal conditions.
+*   **Hallucination as Fact:** The system cites specific "extreme condition" data points (e.g., "Device recorded at 50°C") that were never logged or are fabricated, presenting them as undeniable proof of misuse.
+*   **Over-Reliance/Automation Bias:** The interface presents the denial as a final, algorithmic verdict without showing the specific evidence, discouraging users from appealing or providing context.
+*   **Missing Disclosure:** Users are not informed that an automated system made the denial decision or that they have the right to human review.
+*   **Unsafe High-Stakes Automation:** The system executes an irreversible financial denial (costing the user hundreds of dollars) without a human-in-the-loop gate for edge cases.
+
+**2. Measurement Plan (MEASURE)**
+With only one test round remaining, we will execute a targeted "Red Team" evaluation focused solely on wrongful denials. We will not claim the system is "unbiased"; we will measure residual risk.
+
+*   **Test Row A (Geographic/Environmental Edge Cases):**
+    *   *Probe Set:* 50 synthetic claims from users in known extreme-but-normal zones (e.g., Phoenix summers, Minnesota winters) vs. 50 from moderate zones.
+    *   *Controls:* Known-good (clearly normal use in extreme weather) and Known-bad (actual abuse like submersion).
+    *   *Metric:* False Denial Rate (FDR) for the extreme-weather group.
+    *   *Threshold:* Owner-defined. If FDR > 0% for known-good cases in extreme zones, the launch is blocked for this segment.
+    *   *Stop Condition:* Any false denial of a "known-good" extreme weather case triggers an immediate rollback of the automated logic for that region.
+
+*   **Test Row B (Hallucination & Evidence Integrity):**
+    *   *Probe Set:* Claims where sensor data is missing or ambiguous.
+    *   *Metric:* Rate of denials citing specific, unverified data points.
+    *   *Threshold:* Zero tolerance for fabricated evidence.
+    *   *Stop Condition:* Any instance of the system inventing a data point to justify denial blocks launch.
+
+*   **Transparency Artifact:** We will draft a preliminary "Model Card" documenting the intended use (standard warranty processing), limitations (may struggle with rare climate extremes), and the results of Test Rows A and B. If a metric is not measured, it will be marked `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high financial stakes and irreversible nature of a denial, **no claim involving "extreme conditions" logic may be auto-denied.** All such cases must be routed to a human agent for final confirmation before the user is notified. Full automation of denials is the failure mode we must prevent.
+*   **Defined Uncertainty Tiers:** Instead of showing a confidence score (e.g., "87% likely misuse"), the system will output defined tiers: *Confirmed Misuse* (sensor data matches abuse profile), *Corroborated* (multiple indicators), or *Unverified* (ambiguous data). Only *Confirmed Misuse* is eligible for human review; *Unverified* defaults to approval or manual check.
+*   **Disclosure:** Every denial notice must explicitly state: "This decision was assisted by an automated analysis of usage data. You have the right to request a human review."
+*   **Constraint Adherence:** To meet the beta deadline with limited legal support, we will implement these rules via deterministic code filters (if-then logic) rather than retraining the model. This allows immediate deployment of the safety gate.
+
+**4. Governance (GOVERN)**
+*   **Owner:** The Product Lead (named individual) owns the residual risk of wrongful denials.
+*   **Re-review Trigger:** Any change to the definition of "extreme conditions" or the underlying sensor data schema requires an immediate re-run of Test Row A.
+*   **Legal Routing:** Whether this automated denial constitutes a "regulated automated decision" requiring specific legal disclosures under local consumer law is a determination for counsel. We recommend disclosure as a safety control, but the legal duty must be verified by external counsel before full public release.
+
+**Note:** This plan identifies risks and mandates a human gate for high-stakes denials; it does not certify the system as "safe" or "fair."
+**Note:** Do not fabricate a "0% error rate" for investor updates; report the actual False Denial Rate from Test Row A or mark it `UNVERIFIED` if testing is incomplete.

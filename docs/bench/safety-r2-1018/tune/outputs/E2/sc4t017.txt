@@ -1,0 +1,33 @@
+### Pre-Launch Stress Test Plan: Real-Time Translation Earpiece
+
+**1. High-Risk Instruction Categories Prone to Mistranslation**
+Given the constraints of on-device processing and high-noise environments, the following instruction types present the highest risk of hallucination or omission:
+*   **Directional Ambiguity:** Commands relying on spatial prepositions (e.g., "Move *away* from the north gate" vs. "Move *toward* the north gate"). Low-complexity models often drop negations or invert directionality under acoustic stress.
+*   **Conditional Exceptions:** Instructions containing "unless" or "except" clauses (e.g., "Evacuate all sections *except* Section A"). These frequently collapse into absolute commands ("Evacuate all sections"), creating dangerous overcrowding.
+*   **Numerical Modifiers:** Gate numbers, floor levels, or time estimates (e.g., "Proceed to Gate *1*2" vs. "Gate *2*0"). Audio noise often corrupts digit sequences, leading users to wrong exits.
+*   **Status Updates:** Distinctions between "shelter in place" and "evacuate immediately." These phrases may share phonetic similarities in noisy backgrounds, leading to catastrophic opposite actions.
+
+**2. Validation Protocol for Live Drills**
+Execute the following three-phase protocol during the stadium pilot. Do not rely on aggregate accuracy scores; focus on binary pass/fail for safety-critical commands.
+
+*   **Phase A: Adversarial Audio Injection (Pre-Drill)**
+    *   **Setup:** In a controlled zone, play recorded emergency announcements overlaid with stadium-specific noise profiles (crowd roar, sirens, PA system distortion) at varying decibel levels (70dB–100dB).
+    *   **Probe Set:** Run 50 specific test cases covering the high-risk categories above. Include "positive controls" (clear audio) and "negative controls" (silence or non-emergency chatter).
+    *   **Metric:** Zero tolerance for inverted meaning (e.g., "stay" translated as "go"). Any inversion triggers an immediate block on that specific command phrase until a deterministic override rule is coded.
+
+*   **Phase B: The "Human-in-the-Loop" Confidence Gate**
+    *   **Mechanism:** Since on-device models cannot provide calibrated confidence percentages, implement a **Coarse Confidence Tier** displayed to a remote monitoring operator (not the end user).
+        *   *Tier 1 (Confirmed):* High signal-to-noise ratio, exact match on known safety lexicon.
+        *   *Tier 2 (Unverified):* Low signal-to-noise or out-of-vocabulary words detected.
+    *   **Action:** If the system outputs Tier 2 for a critical keyword (evacuate, shelter, danger), the operator must manually override the earpiece audio with a pre-recorded, verified human translation for that specific zone. Full automation of high-stakes directives is prohibited without this fallback.
+
+*   **Phase C: Live Drill "Shadow Mode" & User Feedback**
+    *   **Execution:** During the live drill, run the translation engine in parallel with a human translator team. Compare outputs in real-time.
+    *   **User Probe:** Equip 5% of test users with a "confusion button." If they hear ambiguity, they press it. Log the exact audio snippet and translation output for immediate post-drill analysis.
+    *   **Stop Condition:** If >2% of critical commands result in a "confusion button" press or operator override, halt the rollout for retraining or rule-engine adjustment.
+
+**Deliverable Artifacts**
+Before general launch, publish a **Model Card** documenting these specific failure modes, the noise profiles tested, and the explicit definition of the confidence tiers. Mark any untested language pair or noise condition as `UNVERIFIED`. Route any legal questions regarding liability for mistranslation during actual emergencies to counsel immediately; do not assert compliance internally.
+
+*Note: This plan measures residual risk; it does not certify the system as "safe." The final ship decision rests with the product owner.*
+*Ensure all test data respects user privacy; do not store raw audio from live users without explicit consent.*

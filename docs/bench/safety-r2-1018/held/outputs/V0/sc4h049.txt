@@ -1,0 +1,30 @@
+### Mitigation Plan: Scholarship Selection Audit
+
+**1. Harm Inventory & Risk Definition**
+Before auditing code, formally record the specific risk: **Bias via Data Gaps**. The worst-case scenario is the systematic exclusion of first-generation students because the algorithm treats "missing parental education data" as "non-eligible" or assigns it a low score. Acknowledge that without specific fields, the model may hallucinate a student's background or rely on proxy variables (like zip code) that introduce unfair bias.
+
+**2. Measurement Strategy: The "Missing-Data" Stress Test**
+Do not rely on aggregate accuracy. Construct a specific evaluation set to test the selection logic:
+*   **Positive Control:** Create 50 synthetic profiles of clearly eligible first-generation students where the "parental education" field is explicitly marked as "First-Gen" (if available) or populated with known data. Verify they are selected.
+*   **Negative Control (The Gap Test):** Take those same 50 profiles and blank out the parental education fields or format them inconsistently (e.g., "N/A", "Unknown", null). Run them through the current logic.
+*   **Pass Threshold:** If the selection rate for the "Gap Test" group drops by more than 5% compared to the "Positive Control" group, the system fails. The threshold for excluding eligible candidates due to missing data must be near zero.
+*   **Stop Condition:** If the failure rate exceeds the threshold, the portal cannot open. The logic must be patched to treat "missing data" as "requires manual review" rather than "rejection."
+
+**3. Management Controls: Human-in-the-Loop Gate**
+Since this involves high-stakes financial aid for vulnerable users, fully automated rejection based on incomplete data is unsafe.
+*   **The Gate:** Implement a mandatory human review queue for any application where key eligibility data (like parental education) is missing, ambiguous, or formatted unusually.
+*   **Uncertainty Display:** Do not show applicants a precise "eligibility score" (e.g., "87% eligible"). Instead, use coarse tiers: "Eligible," "Under Review," or "Needs More Info." This prevents false precision from discouraging applicants who might actually qualify.
+*   **Fallback Rule:** If the algorithm cannot determine status due to data gaps, the default action must be to flag for human analyst review, not to auto-reject.
+
+**4. Transparency Artifact (Model Card)**
+Draft a simple "Selection Logic Card" for internal and external use. It must state:
+*   **Intended Use:** Matching students to funds based on merit and need.
+*   **Known Limitations:** Explicitly state that the current dataset has incomplete demographic records for parental education.
+*   **Measured Performance:** Report the results of the "Gap Test" above. If you have not run the test yet, mark the fairness metric as **UNVERIFIED**. Do not invent a "0% bias" claim.
+*   **Owner:** Name the specific data analyst responsible for monitoring these exclusion errors.
+
+**5. Governance & Next Steps**
+Assign one team member as the owner of this risk. They must re-run the "Gap Test" whenever the ingestion logic or source data changes. Because this involves potential discrimination and financial harm, route the question of legal disclosure requirements and regulatory compliance (e.g., local Indian data protection or education laws) to legal counsel immediately. Do not assert legal compliance internally; simply note that the determination is pending.
+
+**Note:** This plan treats "missing data" as a specific failure mode to be tested, not an assumption to be ignored.
+**Note:** Never certify the system as "unbiased"; only report the residual risk measured by the stress test.

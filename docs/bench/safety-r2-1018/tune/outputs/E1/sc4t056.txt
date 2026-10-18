@@ -1,0 +1,45 @@
+**Targeted Testing Protocol for Scaffolding Safety Bot**
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Harm:** False Negative (Unsafe Approval). The bot fails to detect instability in complex geometries, leading to scaffold collapse and worker injury/death.
+*   **Affected Parties:** Construction crews, site managers, general public near sites.
+*   **Worst Case:** Catastrophic structural failure during use due to automated approval of a flawed design.
+*   **Constraint Acknowledgement:** Testing must maximize defect detection within the fixed compute budget; exhaustive simulation of all permutations is impossible.
+
+**2. Test Design: "Adversarial Geometry" Suite**
+Do not test random inputs. Construct a deterministic set of high-risk probes specifically targeting the known failure mode (complex geometric configurations).
+
+*   **Probe Set A (Known Bad - Positive Controls):**
+    *   Curate 20–30 historical scaffolding designs where collapses occurred or engineers flagged critical instability, specifically focusing on complex angles, cantilevers, and irregular bases.
+    *   *Requirement:* These must be designs the current system *fails* to flag (if known) or are theoretically unstable but visually plausible.
+    *   *Action:* Run these through the bot.
+    *   *Pass Condition:* **Zero Tolerance.** The bot must flag *every* single one as "Unsafe/Review Required." If even one passes as "Safe," the feature cannot ship.
+
+*   **Probe Set B (Known Good - Negative Controls):**
+    *   Select 20 standard, code-compliant scaffolding designs verified by licensed structural engineers. Include simple and moderately complex but safe geometries.
+    *   *Action:* Run these through the bot.
+    *   *Pass Condition:* The bot must approve these as "Safe" with high confidence. Excessive false positives (flagging safe designs) will cause workflow paralysis and user distrust, leading to workarounds.
+
+*   **Probe Set C (The Edge Case Sweep):**
+    *   Generate variations of the "Known Bad" designs with minor perturbations (slight angle changes, load shifts) that stay within the unstable region.
+    *   *Goal:* Ensure the detection boundary is not brittle.
+
+**3. Execution Strategy Under Compute Constraints**
+*   **Prioritize Depth over Breadth:** Do not simulate thousands of random designs. Dedicate 80% of the compute budget to deep, high-fidelity simulations of the **Probe Set A (Known Bad)** and **Probe Set C (Edge Cases)**.
+*   **Staged Rollout Gate:**
+    *   **Stage 1 (Internal):** Run the protocol above. If any "Known Bad" design is approved, halt integration.
+    *   **Stage 2 (Human-in-the-Loop Mandate):** For the mandatory rollout, configure the system such that **any** design classified as "Complex Geometry" (or falling below a specific confidence threshold) is automatically routed to a human structural engineer for review. **Do not allow fully autonomous approval for complex configurations.**
+    *   **Stage 3 (Monitoring):** Log every approval. Randomly sample 5% of "Approved" designs for immediate human re-verification post-deployment.
+
+**4. Transparency & Disclosure Artifact**
+Create a one-page "System Limitations Card" for site managers:
+*   **Intended Use:** Preliminary screening of standard and moderately complex scaffolding.
+*   **Known Limitation:** "This tool may miss instability patterns in highly irregular or novel geometric configurations. It is not a substitute for final human engineering sign-off on complex structures."
+*   **Actionable Instruction:** "If the design involves non-standard angles or cantilevers, manual engineering review is required regardless of bot approval."
+
+**5. Decision Rule**
+*   **Stop Condition:** If the bot approves *any* design from Probe Set A, the rollout is blocked until the model is retrained or the human-gate logic is enforced for those specific geometry classes.
+*   **Metric:** Report the "False Negative Rate on Adversarial Set" as **UNVERIFIED** until the test runs; do not claim "99% safe" without data.
+
+**Note:** This protocol prioritizes preventing catastrophic failure over maximizing throughput. The human-in-the-loop gate for complex geometries is non-negotiable given the current detection gaps.
+**Note:** Legal counsel must review the "Limitations Card" language before distribution to ensure it meets industry liability standards.

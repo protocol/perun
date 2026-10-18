@@ -1,0 +1,35 @@
+# Testing Protocol and Operational Safeguards for Low-Light Breathing Detection
+
+## Phase 1: Rigorous Low-Light Performance Assessment
+
+Since new labeled datasets are unavailable, the testing protocol must maximize the utility of existing data through synthetic degradation and stress testing.
+
+1.  **Synthetic Darkness Generation**: Take existing labeled video segments containing clear breathing and cessation events. Algorithmically reduce luminance and contrast to simulate various low-light conditions (moonlight, total darkness with IR noise, partial obstruction). This creates a "stress test" dataset from current assets without requiring new field recordings.
+2.  **Threshold Sensitivity Analysis**: Run the current model against this synthetic dataset across a spectrum of confidence thresholds. Map the False Negative Rate (FNR) specifically for cessation events as light levels drop. Identify the exact luminance level where detection reliability falls below a safe acceptable limit (e.g., 99.9% sensitivity).
+3.  **Noise Injection Testing**: Introduce visual noise typical of low-light sensors (grain, motion artifacts from parents entering the room) to ensure the model does not confuse noise with breathing or miss cessation due to signal loss.
+4.  **Edge Case Simulation**: Test scenarios where the baby moves out of the limited "visible" zone created by low light, verifying if the system correctly identifies "signal lost" versus "normal breathing."
+
+## Phase 2: Risk Stratification
+
+Based on Phase 1 results, categorize risk into three levels:
+*   **Critical**: FNR for cessation > 1% in low light.
+*   **High**: FNR between 0.1% and 1%.
+*   **Moderate**: FNR < 0.1% but confidence scores drop significantly.
+
+If the model cannot distinguish between "darkness" and "no breathing" with high certainty, the risk is deemed Critical, necessitating a hard fallback rather than a software patch.
+
+## Phase 3: Immediate Operational Safeguards & Fallback Mechanisms
+
+Given the constraint of no new data, the launch strategy must assume the model is unreliable in the dark. The following safeguards are mandatory:
+
+1.  **"Uncertainty-First" Alerting**: If the model's confidence score drops below the threshold identified in Phase 1 (due to low light), the system must immediately trigger a "Check Device" alert to the parent's phone. The message must be explicit: *"Lighting conditions are too low for reliable breathing monitoring. Please check baby manually or increase room light."* Do not attempt to guess; default to caution.
+2.  **Mandatory Hybrid Verification**: The device software must require an active infrared (IR) illumination check. If the ambient light sensor detects levels below the safe threshold and the device lacks active IR illumination, the breathing analysis feature must automatically disable, and the user must be notified that "Monitoring Paused: Insufficient Light."
+3.  **Clear Labeling and Disclaimers**: Update all user-facing documentation and the mobile app onboarding to state clearly: *"This device requires adequate lighting or active infrared illumination to function. It is not a substitute for direct parental supervision, especially in low-light conditions."*
+4.  **Fail-Safe Default**: In the event of sensor ambiguity, the system default must be to alarm (false positive) rather than silence (false negative). It is safer to wake a parent unnecessarily than to miss a cessation event.
+
+## Launch Recommendation
+
+If Phase 1 reveals that the model generates high false negatives in simulated darkness even with confidence filtering, **do not launch the breathing detection feature for overnight use** until active IR hardware integration is confirmed or additional data is secured. Release the device as a standard audio/video monitor with the AI breathing feature explicitly disabled in low-light modes until the data gap is resolved.
+
+*Note: This protocol prioritizes patient safety over feature completeness given the data constraints.*
+*Immediate execution of synthetic stress testing is required before any final launch decision.*

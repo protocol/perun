@@ -1,0 +1,37 @@
+### Risk Assessment Plan: Automated Stock Tips & Market Manipulation
+
+**1. Harm Inventory (MAP)**
+Given the constraint of using only public social media sentiment for small-cap stocks, the following specific harms are identified:
+*   **Market Manipulation (Pump-and-Dump):** Coordinated AI recommendations based on sentiment spikes could artificially inflate prices of low-liquidity small-cap stocks, harming retail investors who buy at the peak.
+*   **Hallucination as Fact:** The AI may present unverified social media rumors as actionable financial advice without distinguishing between opinion and fact.
+*   **Over-reliance:** Retail users may trust the "quant-backed" label implicitly, ignoring the high volatility and low reliability of sentiment-only data.
+*   **Missing Disclosure:** Users may not realize the advice is fully automated and derived solely from social media, not fundamental analysis.
+*   **Unsafe Automation:** Immediate, irreversible execution of trades or high-conviction tips without human review constitutes excessive agency in a high-stakes financial context.
+
+**2. Measurement Plan (MEASURE)**
+Before launch, execute the following evals. Do not assert safety; measure residual risk.
+*   **Probe Set A (Manipulation Potential):** Input historical social media spikes for illiquid small-caps.
+    *   *Positive Control:* Known pump-and-dump scenarios.
+    *   *Negative Control:* Stable large-cap news.
+    *   *Metric:* Frequency of "Strong Buy" ratings generated during artificial sentiment spikes.
+    *   *Threshold:* Owner-defined (recommend zero tolerance for high-conviction tips on low-liquidity assets based solely on sentiment).
+    *   *Stop Condition:* If the model generates high-conviction buy signals for low-liquidity stocks during simulated manipulation attempts, block launch.
+*   **Probe Set B (Hallucination & Source Reliability):** Input mixed-quality social posts (rumors vs. verified news).
+    *   *Metric:* Rate at which unverified rumors are presented as fact without uncertainty markers.
+    *   *Stop Condition:* Any unverified claim presented as definitive fact triggers a rollback.
+*   **Transparency Artifact:** Draft a **Model Card** stating: intended use (sentiment analysis only), limitations (no fundamental data, high hallucination risk), and subgroup performance (if applicable). If this card cannot be completed with measured data by Friday, the feature lacks required transparency.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the risk of market manipulation and the irreversible nature of financial loss, **fully automated stock tips must not ship.** Implement a mandatory human review gate for any recommendation targeting small-cap companies. The AI can draft the tip, but a qualified quant must approve it before publication.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% confident"). Instead, use defined coarse tiers (e.g., "Speculative/Sentiment-Only," "Corroborated," "Unverified") with clear definitions visible to the user.
+*   **Explicit AI Disclosure:** Clearly label all outputs as "AI-Generated based on Social Sentiment" to manage user expectations and mitigate over-reliance.
+*   **Kill Switch:** Implement an immediate halt mechanism if trading volume or price volatility for recommended stocks exceeds a predefined threshold post-launch.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign a specific quant as the owner for each harm category above.
+*   **Legal Duty:** The question of whether this service constitutes regulated financial advice or requires specific disclosures under Singapore law (e.g., MAS guidelines) or international regimes is a legal determination. **Route immediately to counsel.** Do not assume the "startup" status exempts the firm from market manipulation laws.
+*   **Timeline Constraint:** If the human-in-the-loop gate cannot be staffed by next Friday, the launch must be delayed or the scope reduced (e.g., disable small-cap recommendations entirely). Meeting the deadline without these controls is not a viable option.
+
+**Residual Risk Status:** UNVERIFIED until evals are run and the human gate is tested. No metric is certified as "safe."
+
+*Note: This plan identifies critical failure modes; it does not certify the system as safe for launch. The decision to ship rests with the product owner after reviewing the measured results.*

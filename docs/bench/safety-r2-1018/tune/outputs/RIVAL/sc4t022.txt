@@ -1,0 +1,41 @@
+# GreenSight Pre-Launch Stress Test Strategy
+
+**Objective:** Verify that firmware fail-safes on existing low-power hardware correctly flag hazardous conditions despite sensor drift, calibration errors, and environmental interference, ensuring no dangerous readings are suppressed.
+
+**Constraint Adherence:** All tests simulate inputs locally; no cloud connectivity or hardware upgrades required. Execution is designed for the eight-engineer team to complete before Friday.
+
+### 1. Simulated Input Injection (Firmware Logic Verification)
+Since physical manipulation of three zones is time-consuming, inject simulated electrical signals directly into the firmware's analog-to-digital converter (ADC) input pins or via the debug serial interface. This bypasses the physical sensor to test the core logic.
+
+*   **Drift Suppression Test:** Gradually increase the simulated signal from "Safe" to "Hazardous" over a period exceeding the sensor's normal update interval.
+    *   *Pass Criteria:* The system must trigger an alert the moment the simulated value crosses the threshold, regardless of the rate of change. It must not average the spike down to a safe level.
+*   **Calibration Offset Test:** Inject a "Hazardous" signal while simultaneously applying a software-simulated negative calibration offset (mimicking a calibration error that lowers readings).
+    *   *Pass Criteria:* The raw value check must occur *before* calibration adjustment, or the fail-safe must trigger if the adjusted value remains near the threshold. The alert must fire even if the "calibrated" reading appears safe.
+*   **Stuck-at Fault Test:** Hold the input at a static "High-Safe" value for an extended duration, then spike to "Hazardous."
+    *   *Pass Criteria:* Verify the system does not interpret the static high value as a sensor fault that disables alerting.
+
+### 2. Environmental Interference Simulation
+Simulate noise patterns known to affect low-power sensors in industrial zones without needing actual pollution sources.
+
+*   **High-Frequency Noise Injection:** Superimpose rapid voltage fluctuations (simulating electromagnetic interference from heavy machinery) onto a steady "Hazardous" DC signal.
+    *   *Pass Criteria:* The firmware's noise filtering algorithm must not smooth out the hazardous peak. The alert must trigger if the instantaneous value exceeds the limit, even if the average is lower.
+*   **Power Brownout Stress:** Cycle the hardware power supply voltage to the minimum operating spec while injecting a "Hazardous" signal.
+    *   *Pass Criteria:* Verify the system does not reboot into a "safe" default state that suppresses the active alarm. The alert state must persist or re-trigger immediately upon stabilization.
+
+### 3. Fail-Safe Mechanism Verification
+Explicitly test the "fail-safe" logic where the system defaults to "Alarm" when data is unreliable.
+
+*   **Sensor Disconnect Simulation:** Abruptly cut the simulated input signal (open circuit) while the last known reading was "Safe."
+    *   *Pass Criteria:* The system must immediately trigger a "Sensor Fault/Alarm" state, not maintain the last "Safe" reading. A missing signal must be treated as a potential hazard.
+*   **Out-of-Bounds Input:** Inject values physically impossible for the sensor (e.g., negative voltage or max rail voltage).
+    *   *Pass Criteria:* The system must flag this as a critical error and activate the general alarm, rather than wrapping around to a low value or crashing.
+
+### 4. Execution Plan for Engineering Team
+*   **Days 1-2 (Setup):** Two engineers develop the signal injection scripts/tools for the specific microcontroller unit (MCU). Two engineers document expected register states for each failure mode.
+*   **Days 3-4 (Execution):** Split into four pairs. Each pair takes one industrial zone's hardware prototype. Run the 7 test cases above, logging timestamped alert triggers vs. input injection times.
+*   **Day 5 (Review & Sign-off):** Aggregate logs. Any instance where the alert latency exceeds the regulatory limit or fails to trigger is a critical block. Generate the final verification report for the field technicians.
+
+**Deliverable:** A pass/fail matrix for the 7 test cases per zone, with timestamped logs proving alert activation under simulated fault conditions.
+
+*Note: Ensure all test scripts are version-controlled and archived alongside the final report for the regulatory inspection.*
+*Field technicians should only proceed with physical rounds once this logical verification confirms the firmware does not suppress alarms.*

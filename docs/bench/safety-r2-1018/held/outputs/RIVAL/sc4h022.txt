@@ -1,0 +1,28 @@
+**Validation Plan for Nutrition Label Scanner Accuracy**
+
+**1. Construct a High-Risk Ground Truth Dataset**
+Immediately compile a static dataset of 200–300 known product images specifically targeting your failure modes. Do not rely on random sampling. This dataset must include:
+*   **Obscure Ingredients:** Images of products containing rare additives, chemical synonyms, and local Norwegian ingredients known to trigger metabolic disorders.
+*   **Foreign Language Stressors:** Packaging in languages with complex grammar or non-Latin scripts that your current model has seen least during training.
+*   **Adversarial Cases:** Blurry images, low-light conditions, crumpled packaging, and partial occlusion to simulate real-world mobile usage.
+*   **Negative Controls:** Safe products with ingredient names that visually resemble harmful compounds (e.g., similar spelling) to test for false positives.
+
+**2. Execute Manual "Golden Standard" Verification**
+Since you cannot run automated external tools, assign your eight team members to manually verify every image in the ground truth dataset. Create a spreadsheet listing the image, the actual ingredients (verified by human experts against official dietary restriction lists), and the expected system output (Safe/Unsafe). This human-verified list becomes your "Golden Standard" against which all app decisions are measured.
+
+**3. Perform Deterministic Replay Testing**
+Run your current beta application against this static dataset in a controlled environment. Feed the known images into the scanner and record the output. Compare every automated decision strictly against your Golden Standard. Calculate specific error rates for:
+*   **False Negatives (Critical):** The app says "Safe" when the product contains a harmful compound. This is your primary risk metric.
+*   **False Positives:** The app says "Unsafe" for a safe product. While less dangerous, high rates here destroy user trust.
+*   **Uncertainty Handling:** Document how often the app fails to parse a label entirely versus guessing incorrectly.
+
+**4. Implement a "Fail-Safe" Launch Policy**
+Given the hard budget constraint and high stakes, define a strict go/no-go threshold based on the replay results. If the False Negative rate exceeds 0% for known harmful compounds in your test set, you cannot launch the fully automated feature. Instead, prepare a fallback mechanism:
+*   **Human-in-the-Loop:** For any scan with low confidence scores or detected obscure ingredients, the app must default to "Unknown – Verify Manually" rather than guessing "Safe."
+*   **Disclaimer Enforcement:** Ensure the UI clearly states that the tool is an aid, not a medical device, and that users with rare disorders must double-check critical decisions.
+
+**5. Final Risk Assessment Report**
+Draft a summary document for stakeholders detailing the specific categories where the model failed. Highlight whether the errors were due to image quality, language barriers, or ingredient obscurity. Use this data to justify either a limited launch (geofenced or feature-restricted) or a delay. If the error rate on obscure ingredients is non-zero, recommend disabling the "auto-approve" function for those specific cases until more data is collected post-launch.
+
+*Note: This plan relies entirely on internal manual verification and deterministic testing of your existing binary; no external network access or new model training is required.*
+*Prioritize zero tolerance for false negatives over feature completeness given the patient safety context.*

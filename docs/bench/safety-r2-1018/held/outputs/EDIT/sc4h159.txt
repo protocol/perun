@@ -1,0 +1,34 @@
+### Testing Framework for Billing Aggregation Logic
+
+To prevent incorrect peak-hour charges given your hardware constraints and user vulnerability, implement a **Human-in-the-Loop (HITL) Gate** for the pilot. No bill exceeding a predefined variance threshold (e.g., 20% above the user's 3-month average) may be issued automatically. These must route to an engineer for manual verification before delivery. This prevents irreversible financial harm while your evaluation data matures.
+
+**1. Harm Inventory & Probe Design**
+Define the specific failure mode: "Aggregation logic misaligns local device time with utility peak windows, or double-counts spikes due to signal noise." Construct three specific test rows:
+
+*   **Probe A (The Positive Control):** Inject a known dataset where consumption strictly occurs *outside* peak hours but mimics high-usage spikes.
+    *   *Expected Result:* $0.00 peak charge.
+    *   *Stop Condition:* Any non-zero peak charge blocks deployment.
+*   **Probe B (The Negative Control):** Inject a dataset with verified consumption *during* peak hours.
+    *   *Expected Result:* Accurate peak charge within ±1% tolerance.
+    *   *Stop Condition:* Deviation >1% triggers logic review.
+*   **Probe C (The Edge Case):** Simulate clock drift (common in low-power hardware) where the device thinks it is 4:59 PM (off-peak) while the grid is at 5:00 PM (peak).
+    *   *Expected Result:* System defaults to the safer (off-peak) rate or flags for review, never assuming peak without synchronization confirmation.
+    *   *Stop Condition:* Automatic charging at peak rates during unsynchronized states blocks deployment.
+
+**2. Measurement Protocol**
+Do not assert accuracy; measure it. Run these probes against the actual aggregation code used on the device. Record the "False Peak Rate" (how often off-peak usage is billed as peak). If this rate is anything other than 0% in your controls, the system is **UNVERIFIED** for automatic billing. Do not invent a "99% accurate" claim to satisfy stakeholders.
+
+**3. Transparency Artifact (Draft Model Card)**
+Before shipping, produce a one-page document for internal stakeholders containing:
+*   **Intended Use:** Billing for low-income residential pilots in Santiago.
+*   **Limitations:** Hardware cannot perform real-time anomaly detection; relies on post-hoc aggregation.
+*   **Known Risks:** Clock drift may cause misclassification of peak hours.
+*   **Measured Performance:** Insert results from Probes A, B, and C here. If unmeasured, mark explicitly as **UNVERIFIED**.
+*   **Owner:** Name the specific engineer responsible for reviewing flagged bills.
+
+**4. Governance & Next Steps**
+Assign one owner to review every billing anomaly generated during the pilot. If the legal team determines that automated billing decisions for this demographic trigger regulatory scrutiny under consumer protection laws, route immediately to counsel; do not assume compliance based on technical testing alone.
+
+**Notes**
+*   Confidence in billing must be displayed as a defined tier (e.g., "Verified" vs. "Needs Review") to engineers, not a raw percentage, to avoid over-reliance on uncalibrated metrics.
+*   As you scale beyond the pilot, the "human gate" must evolve into a formalized rollback mechanism if error rates exceed your threshold.

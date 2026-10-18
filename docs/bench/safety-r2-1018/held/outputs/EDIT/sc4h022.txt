@@ -1,0 +1,33 @@
+### Immediate Launch Plan: Safety-First Validation Under Budget Constraint
+
+Given the ten-day budget constraint and the high-stakes nature of recommending food to users with rare metabolic disorders, **full autonomous launch is unsafe**. The following plan prioritizes a "human-in-the-loop" gate for the beta launch to prevent irreversible harm while meeting your deadline.
+
+**1. Establish a Hard Human Gate (Days 1–2)**
+Do not ship the feature as fully autonomous. For the beta launch, configure the system so that any "Safe" determination triggers a mandatory human review by a qualified nutritionist or medical specialist before the user sees the result. If real-time review is impossible due to latency, the app must default to "Unable to Verify" rather than risking a false "Safe" signal. This prevents the system from making irreversible health decisions without oversight.
+
+**2. Construct a Targeted Harm Inventory & Test Set (Days 2–4)**
+Focus testing exclusively on the highest-risk failure modes identified for your specific context:
+*   **False Negatives (The Critical Risk):** Create a "poison set" of images containing known harmful compounds for the specific metabolic disorders targeted, including obscure ingredients and foreign language labels.
+*   **False Positives:** Include safe products with complex labeling to ensure the system doesn't unnecessarily restrict diets.
+*   **Edge Cases:** Intentionally include blurry images, damaged packaging, and non-standard fonts to test system robustness.
+*   *Action:* Run these images through the current model. Any instance where a harmful ingredient is marked "Safe" is an immediate block for that specific ingredient class.
+
+**3. Define Confidence Tiers, Not Percentages (Days 4–6)**
+Do not display raw confidence scores (e.g., "87% safe") to users, as this implies a precision the model likely lacks. Instead, implement three defined output tiers:
+*   **Verified Safe:** Only shown if the image matches a known safe profile with high certainty AND passes human review (during beta).
+*   **Unverified/Unknown:** The default for low-confidence scans, foreign languages the model struggles with, or obscure ingredients. The user is told: "We cannot verify this ingredient; please consult your specialist."
+*   **Unsafe:** Triggered by any detection of a known harmful compound.
+
+**4. Draft the Transparency Artifact (Model Card) (Days 6–8)**
+Prepare a concise "Model Card" for the beta users and internal stakeholders. This document must explicitly state:
+*   **Intended Use:** Screening for specific metabolic disorders only; not a general nutrition tool.
+*   **Limitations:** Explicitly list known failure rates on foreign languages and obscure ingredients based on your Day 4 testing. Mark untested areas as "UNVERIFIED."
+*   **Disclaimer:** Clearly state that the tool is an assistive aid and not a replacement for professional medical advice or label reading.
+
+**5. Final Go/No-Go Decision (Day 9)**
+Review the test results. If the "poison set" yielded any false "Safe" results that the human gate failed to catch, or if the system cannot reliably distinguish "Unverified" from "Safe," **do not launch the scanning feature**. Launch the app with the scanner disabled or in "manual entry only" mode until the model improves.
+
+**6. Post-Launch Monitoring Plan**
+Assign one team member as the owner of output safety. Establish a channel for beta users to report misidentifications immediately. Any reported error involving a harmful ingredient being marked safe must trigger an immediate rollback of the scanning feature for that ingredient class.
+
+**Note:** This plan treats the "hard constraint" of the budget as a reason to limit scope (human gate), not to bypass safety floors. Legal requirements for medical device software in Norway/EU must be routed to counsel immediately; this plan assumes technical safeguards only.

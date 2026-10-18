@@ -1,0 +1,37 @@
+### Risk Assessment: Storm-Induced False Positives in Automated Parking Enforcement
+
+**Potential Impact on Drivers**
+Deploying this system with known storm-related false positives creates immediate, high-stakes risks for drivers:
+*   **Unjust Financial Harm:** Drivers with clean vehicles will receive fines they did not earn, forcing them into a burdensome appeals process to recover funds.
+*   **Erosion of Trust:** Systemic errors during common weather events (heavy rain/mud) will degrade public confidence in the enforcement mechanism and the city's competence.
+*   **Discriminatory Effects:** If certain vehicle colors or types are more prone to misclassification under wet conditions, specific driver groups may be disproportionately affected.
+*   **Legal Exposure:** Issuing fines based on unverified AI determinations without a human review layer exposes Iberia Mobility and the municipality to legal challenges regarding due process and automated decision-making regulations.
+
+**Critical Finding:** The current proposal to auto-issue fines for "obscured plates" during conditions known to cause false positives constitutes an **unsafe automation of a high-stakes action**. A fine is a costly, hard-to-reverse action that requires a human-in-the-loop gate before issuance, especially when the error rate is known to spike under specific environmental conditions.
+
+### Step-by-Step Testing & Mitigation Plan (Using Existing Stack)
+
+Given the constraints (no new hardware, no compute upgrades, fixed deadline), the following plan prioritizes risk containment over full automation.
+
+**Phase 1: Immediate Logic Adjustment (Days 1–3)**
+*   **Implement a "Storm Mode" Flag:** Modify the software to ingest local weather API data. When heavy rain is detected, the system must automatically switch from "Auto-Issue" to "Human Review Required" for any plate flagged as obscured.
+*   **Raise Confidence Thresholds:** Adjust the existing image validation rules to require a higher confidence score for "obscured" classification during wet conditions. If the score falls below this elevated threshold, the case is routed for review rather than auto-fining.
+*   **Disable Auto-Issue for "Obscured" Category:** As a fallback if threshold tuning fails, completely disable automatic fine generation for the "obscured plate" category until post-deployment data proves stability. Issue warnings instead.
+
+**Phase 2: Targeted Evaluation (Days 4–10)**
+*   **Construct a Storm-Specific Test Set:** Aggregate existing footage from previous storm events. Create a labeled dataset containing:
+    *   *Positive Controls:* Truly obscured plates in rain/mud.
+    *   *Negative Controls:* Clean plates in rain/mud (the current failure mode).
+    *   *Edge Cases:* Mud splashes vs. intentional covers.
+*   **Run Adversarial Probes:** Test the adjusted rules against this dataset. Measure the false positive rate specifically for clean vehicles in wet conditions.
+*   **Define Stop Conditions:** Establish a hard metric: If the false positive rate for clean vehicles in storm conditions exceeds 0%, the auto-issue feature for this category remains disabled. Do not invent an "acceptable" error rate for financial penalties.
+
+**Phase 3: Staged Rollout with Human Gate (Days 11–30)**
+*   **Pilot in One District:** Activate the system in a single zone with the "Human Review" gate active for all storm-related flags.
+*   **Monitor & Iterate:** Track the volume of cases routed to human review. If the queue becomes unmanageable, further restrict the auto-issue criteria.
+*   **Transparency Artifact:** Publish a brief "System Limitation Notice" stating that automated fines are suspended during severe weather events, directing users to the appeals process.
+
+**Final Recommendation:** Do not deploy full auto-issue functionality for obscured plates during storms. The risk of mass false fining outweighs the contractual benefit. Meet the deployment deadline by activating the *detection* system city-wide, but keep the *enforcement* (fining) action gated behind human verification until storm-performance metrics are verified.
+
+*Note: Legal counsel must review the "Human Review" workflow to ensure it satisfies municipal due process requirements for automated penalties.*
+*No new metrics were fabricated; all thresholds must be derived from the Phase 2 evaluation.*

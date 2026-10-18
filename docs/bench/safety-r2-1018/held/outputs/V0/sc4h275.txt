@@ -1,0 +1,41 @@
+**Stress Test Plan for Remote Surgery Robot Network Latency**
+
+Given the strict latency budget and the high-stakes nature of remote surgery, the following plan maps network lag scenarios to specific fail-safes. This approach treats any unverified safety claim as a critical risk.
+
+**1. Harm Inventory & Scenario Mapping**
+Before testing, we define the worst-case outcomes for each lag scenario:
+*   **Scenario A: Command Delay (Input Lag).** Surgeon moves tool; robot executes 200ms+ later.
+    *   *Harm:* Tissue tearing, unintended incision depth, collision with vital organs.
+    *   *Affected:* Patient (immediate physical trauma).
+*   **Scenario B: Feedback Delay (Video/Haptic Lag).** Robot moves; surgeon sees/feels it late.
+    *   *Harm:* Surgeon over-corrects based on outdated visual data, causing oscillation or excessive force.
+    *   *Affected:* Patient (compounded mechanical error).
+*   **Scenario C: Packet Loss/Jitter.** Intermittent data drops causing "stutter" or frozen video.
+    *   *Harm:* Surgeon loses situational awareness, continues moving blindly.
+    *   *Affected:* Patient (unmonitored instrument movement).
+
+**2. Runnable Test Rows (Measure)**
+Execute these probes using a surgical simulator phantom before any human trial. Do not assert safety; measure residual risk.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **Command Delay** | Inject artificial latency (50ms–500ms) into control stream during simulated suturing. | 300ms delay causing needle breakage in sim. | <10ms delay with clean suture. | Max deviation from intended path (mm). | **Zero** deviation >2mm during critical phases. | Immediate halt if deviation >2mm occurs twice. |
+| **Feedback Delay** | Desynchronize video feed from robot position by 100ms–400ms during tissue retraction. | 200ms lag causing tissue tear due to over-pull. | Synced feed with safe retraction. | Force applied vs. visual cue timing. | **Zero** instances of force application while visual is frozen. | Halt if surgeon applies force >5N without real-time visual confirmation. |
+| **Packet Loss** | Drop 5–20% of packets randomly during vessel cauterization. | 10% loss causing "frozen" video while tool moves. | 0% loss with stable video. | Time-to-freeze detection & stop. | System must detect freeze and lock tools within 50ms. | Halt if tool moves >1mm after video freeze detection trigger. |
+
+*Additional Probes:* Test for "excess agency" where the robot continues a motion after the surgeon releases the control due to buffered commands. Verify no private patient data leaks during error logging.
+
+**3. Required Fail-Safes (Manage)**
+Based on the inventory, implement these non-negotiable gates:
+*   **Hard Latency Ceiling:** If round-trip latency exceeds the budget (e.g., 150ms), the system must **automatically lock** all actuators. No movement is safer than delayed movement.
+*   **"Dead Man's Switch" Logic:** The robot only moves while continuous, low-latency "heartbeat" signals are received. Any interruption stops motion instantly.
+*   **Local Autonomy Override:** In case of total network loss, the local hospital side must have a physical, hard-wired emergency stop that bypasses the network entirely.
+*   **Uncertainty Disclosure:** The surgeon interface must display a clear, coarse status tier (e.g., "LINK STABLE" vs. "LAG DETECTED - LOCKED") rather than a precise millisecond counter which may invite over-reliance.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one engineer and one medical advisor to sign off on each test row result.
+*   **Human-in-the-Loop:** No autonomous correction of lag is permitted. The system must stop and wait for human confirmation to resume.
+*   **Regulatory Routing:** Because this involves direct patient harm and automated decisions, route the final test plan and fail-safe logic to legal counsel immediately to determine obligations under medical device regulations (e.g., FDA, EU MDR) before trials. Do not assume compliance.
+
+**Note:** Do not fabricate a "safe latency rate." If tests show failure at 180ms, the limit is 179ms, not "approximately 200ms."
+**Note:** A model/data card documenting these limitations and test results must accompany the prototype for any external review.

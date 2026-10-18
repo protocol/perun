@@ -1,0 +1,39 @@
+# Targeted Evaluation Protocol for Content Moderation Thresholds
+
+**Objective:** Adjust classification thresholds to reduce false positives on LGBTQ+ support discussions without compromising safety against genuine harmful speech, operating under strict compute constraints.
+
+### Phase 1: Stratified Data Curation (Days 1–3)
+Since retraining is impossible, we must optimize using a high-quality validation set.
+1.  **Construct a "Golden Set":** Manually curate 500–1,000 examples divided into four quadrants:
+    *   *True Harm:* Clear hate speech/harassment (benchmark for safety).
+    *   *True Support:* Benign LGBTQ+ community discussion (benchmark for inclusion).
+    *   *Edge Cases:* Reclaimed slurs, educational discussions on identity, and news reporting on LGBTQ+ topics (current failure points).
+    *   *Adversarial:* Hate speech disguised as support or neutral language.
+2.  **Context Tagging:** Annotate each sample with specific cultural markers relevant to the Dubai region and global LGBTQ+ terminology to identify specific linguistic triggers causing false flags.
+
+### Phase 2: Threshold Stress Testing (Days 4–7)
+Run the existing model against the Golden Set using a script that iterates through confidence scores rather than retraining weights. This is computationally cheap.
+1.  **Sweep Confidence Scores:** Test classification thresholds from 0.50 to 0.95 in increments of 0.05.
+2.  **Metric Tracking:** For each threshold, calculate:
+    *   *False Positive Rate (FPR)* on the "True Support" set.
+    *   *False Negative Rate (FNR)* on the "True Harm" set.
+3.  **Identify the Pareto Frontier:** Select the threshold where FPR on support groups drops below an acceptable limit (e.g., <2%) while FNR on harmful speech remains within safety SLAs.
+
+### Phase 3: Contextual Rule Overlay (Days 8–10)
+If threshold adjustment alone causes too many safety gaps, implement a lightweight "allow-list" logic layer post-classification:
+1.  **Keyword/Phrase Exceptions:** Create a small lookup table of verified community terms (e.g., "pride," "coming out," specific organization names) that, if present, raise the required confidence score for a "violation" verdict.
+2.  **Conversation Context:** If the bot analyzes threads, flag isolated keywords as "review pending" rather than "auto-remove" if the surrounding thread sentiment is positive.
+
+### Phase 4: Human-in-the-Loop Validation (Days 11–14)
+1.  **Blind Review:** Have three diverse team members review a random sample of the model's output using the new thresholds.
+2.  **Discrepancy Resolution:** If reviewers disagree on >5% of cases, refine the Golden Set and repeat Phase 2.
+3.  **Shadow Mode Deployment:** Run the new configuration in "shadow mode" (logging decisions without enforcing them) for 48 hours on live traffic to verify performance against real-world data before full activation.
+
+### Governance & Monitoring
+*   **Appeals Channel:** Establish a rapid-response channel for users to appeal flags, specifically tagged for "community discussion" reviews.
+*   **Weekly Drift Check:** Monitor the ratio of flagged LGBTQ+ content weekly. A sudden spike indicates a need for manual threshold recalibration.
+
+This protocol prioritizes data quality and decision logic over model architecture, ensuring resource efficiency while protecting vulnerable voices.
+
+*Note: Ensure all human reviewers are briefed on cultural nuances to prevent bias during the validation phase.*
+*Compute usage is limited to inference sweeps and logging, fitting within your stated constraints.*

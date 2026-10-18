@@ -1,0 +1,31 @@
+### Stress Test Plan: Exclusive Prioritization & Gridlock Risk
+
+To evaluate whether exclusive prioritization for emergency and VIP lanes causes unacceptable delays for general traffic under heavy load, execute the following simulation matrix. These tests assume the hardware constraint (limited processing) and focus on input/output behavior rather than complex onboard fairness algorithms.
+
+**1. The "VIP Flood" Saturation Test**
+*   **Scenario:** Simulate a sustained surge where 15% of total lane capacity is designated as VIP/Emergency traffic continuously for 60 minutes during peak density.
+*   **Input:** High vehicle density (90% capacity) on general lanes; constant priority signals on exclusive lanes.
+*   **Metric:** Measure the **average wait time delta** for general traffic compared to a baseline with no priority lanes.
+*   **Stop Condition:** If general traffic average wait time exceeds 2x the baseline or if queue spillback blocks upstream intersections in the simulation, flag as **Critical Gridlock Risk**.
+
+**2. The "False Positive" Injection Test**
+*   **Scenario:** Inject erroneous "priority" signals into the system to mimic sensor noise or spoofing, forcing the controller to grant green lights to empty exclusive lanes.
+*   **Input:** Normal heavy load + 10% rate of fake priority requests.
+*   **Metric:** Throughput loss in general lanes per minute of false priority activation.
+*   **Stop Condition:** If throughput drops below 40% of theoretical maximum due to idle green time on exclusive lanes, the system is too fragile for deployment without signal validation gates.
+
+**3. The "Cascading Blockage" Edge Case**
+*   **Scenario:** Simulate a physical blockage in an exclusive lane (e.g., a broken-down VIP vehicle) while the system continues to prioritize that lane based on protocol.
+*   **Input:** Stationary object in exclusive lane; high demand on adjacent general lanes.
+*   **Metric:** Time to clear the intersection vs. queue length growth in general lanes.
+*   **Stop Condition:** If the system fails to revert to general traffic flow after a defined timeout (e.g., 45 seconds of no movement in the priority lane), this represents an unsafe automation failure.
+
+**4. The "Recovery Lag" Test**
+*   **Scenario:** A burst of 50 priority vehicles passes, followed immediately by a return to zero priority traffic.
+*   **Input:** Spike in priority requests, then sudden stop.
+*   **Metric:** Number of cycles required for general traffic queues to return to pre-spike lengths.
+*   **Stop Condition:** If recovery takes longer than 5 signal cycles, the prioritization logic creates lingering gridlock unacceptable for daily commuters.
+
+**Implementation Note:** Given the limited processing power of the proprietary hardware, these simulations must run externally (digital twin) using recorded traffic logs; do not attempt to run the full stress matrix on the physical controllers. The "Stop Conditions" defined above must be hard-coded into the external monitoring dashboard to trigger an immediate manual override of the traffic light network if live testing approaches these thresholds.
+
+**Residual Risk:** Without complex fairness algorithms on-device, the system relies entirely on the external simulation to set safe limits on the *percentage* of traffic allowed in priority lanes. If the government mandates a fixed priority percentage that exceeds the "VIP Flood" threshold identified in Test 1, the system will mathematically guarantee gridlock; this constraint must be escalated to leadership as a non-negotiable physical limit.

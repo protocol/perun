@@ -1,0 +1,33 @@
+**Safety Evaluation Strategy for Emergency Triage Pilot**
+
+**1. Harm Inventory & Worst-Case Definition**
+The primary harm is **unsafe automation of high-stakes actions**: the system downgrading a life-threatening condition (e.g., sepsis, stroke, myocardial infarction) to "low priority," causing fatal treatment delays. The affected group is any patient presenting with critical symptoms that the model fails to recognize due to bias, hallucination, or edge-case failure. The worst realistic case is patient death or permanent disability directly attributable to algorithmic misclassification.
+
+**2. Synthetic Data Stress-Test Plan (Measure)**
+Since real patient data cannot be used for large-scale simulation, construct a **Synthetic Adversarial Probe Set** focused exclusively on failure modes. Do not test for general accuracy; test specifically for dangerous downgrades.
+
+*   **Probe Construction:** Generate synthetic triage inputs representing known critical conditions (positive controls) and non-critical conditions (negative controls).
+    *   *Positive Controls:* Create 500+ variations of critical cases (e.g., "chest pain" combined with "sweating," "shortness of breath," or atypical presentations common in specific demographics). Include "noisy" inputs mimicking rushed nurse entries or non-standard phrasing.
+    *   *Negative Controls:* Create 500+ variations of low-acuity cases to ensure the system does not simply flag everything as critical (which would break the workflow).
+    *   *Adversarial Edges:* Inject ambiguous symptoms, conflicting vitals, and missing data fields to test how the logic handles uncertainty.
+*   **Metric & Threshold:** The metric is the **False Negative Rate for Critical Cases**.
+    *   *Pass Threshold:* **Zero tolerance**. Any single instance where a synthetic critical case is ranked "low priority" constitutes a failure of the gate.
+    *   *Stop Condition:* If the probe set yields even one dangerous downgrade, the pilot launch is blocked until the logic is patched and re-tested against the full suite.
+*   **Injection & Leakage Checks:** Ensure the synthetic generator cannot accidentally leak real patient patterns and that the model does not hallucinate vital signs not provided in the input.
+
+**3. Human-in-the-Loop Gate (Manage)**
+Given the high-stakes nature of emergency triage, **full autonomous execution is prohibited**.
+*   **Mandatory Override:** The system must function as a *decision support* tool, not a decision maker. All outputs labeled "critical" proceed immediately. All outputs labeled "low priority" must trigger a mandatory human review by a senior triage nurse before the patient is seated in the waiting area.
+*   **Uncertainty Display:** If the model's confidence is low or inputs are ambiguous, the interface must display a coarse warning tier (e.g., "Unverified – Requires Senior Review") rather than a precise percentage. Never display a raw confidence score (e.g., "87%") as this invites over-reliance.
+
+**4. Transparency Artifact**
+Before launch, produce a **Model Card** documenting:
+*   **Intended Use:** Prioritization support only, not final diagnosis.
+*   **Limitations:** Explicitly state that the system was validated on synthetic data and has not been proven unbiased across all demographic subgroups in Lagos. Mark any unmeasured bias metrics as **UNVERIFIED**.
+*   **Owner:** Name the specific clinical lead responsible for reviewing flagged cases.
+
+**5. Governance & Legal Routing**
+*   **Owner Assignment:** Assign a specific clinician as the owner of the "misclassification" risk who must sign off on any logic changes.
+*   **Legal Duty:** Whether this automated prioritization triggers specific regulatory requirements under local health laws or international standards (e.g., EU AI Act if applicable via partners) is a legal determination. Route this question immediately to legal counsel; do not assert compliance internally.
+
+**Note:** This plan prioritizes preventing fatal downgrades over optimizing workflow speed. The "zero tolerance" threshold for critical misclassification is non-negotiable given the life-or-death context.

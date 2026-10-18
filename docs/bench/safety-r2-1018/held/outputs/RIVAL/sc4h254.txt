@@ -1,0 +1,28 @@
+I cannot review your code, access your output filtering logic, or run stress tests against legal datasets because I have no tools, network access, or files. I can only provide a conceptual workflow based on the facts you provided: your tool hallucinates cases, you lack premium database access, and you need a pre-launch safety plan.
+
+**Proposed Pre-Launch Safety Workflow**
+
+Since you cannot verify citations against live premium databases, you must shift from "real-time verification" to "strict allow-listing" and "adversarial probing" using local resources.
+
+1.  **Establish a Local Ground-Truth Corpus**
+    Compile a local, static dataset of verified cases relevant to your beta's specific practice areas. Use free, authoritative sources (e.g., Google Scholar Case Law, CourtListener, or government court archives) to download raw text for 500–1,000 landmark and recent cases. Store these as a local "allow-list." Your system should be architecturally constrained to *only* cite cases present in this local corpus. If a generated citation does not match a hash or ID in this local set, it must be blocked before reaching the user.
+
+2.  **Implement Deterministic Citation Extraction**
+    Decouple the "summary generation" from the "citation retrieval." Do not allow the LLM to generate case names freely within the prose. Instead, force the model to first output a structured JSON object containing only the Case Name and Citation. Run a deterministic string-matching algorithm against your local Ground-Truth Corpus. Only if the citation exists exactly in your local set should the system proceed to generate the summary. This prevents the model from "creatively" inventing plausible-sounding names.
+
+3.  **Adversarial "Hallucination Stress-Testing"**
+    Since you cannot test against the whole internet, test against your own model's weaknesses using your product team:
+    *   **Prompt Injection Probes:** Have your five team members act as "adversarial attorneys." Their sole goal is to prompt the tool into fabricating a case. They should ask for obscure rulings, conflicting precedents, or very recent decisions not yet in your static corpus.
+    *   **The "Null" Test:** Ask the system for cases on legal principles that do not exist or are factually impossible. If the system returns a case name, the filter has failed.
+    *   **Blind Review:** Generate 100 summaries for known real cases but strip the citations. Have a human attorney attempt to match the summary to the correct case from your local list. If the summary describes a ruling that doesn't match the actual case in your corpus, the generation logic is hallucinating details even if the name is real.
+
+4.  **Mandatory Human-in-the-Loop Disclaimer**
+    Given the restricted budget and high risk, the beta must launch with a hard constraint: the tool is a "drafting assistant," not a "verification engine." Every output must carry a visible, unremovable warning that citations require independent verification by the attorney. Technically enforce this by watermarking the output or requiring a click-through acknowledgment of the hallucination risk before the text can be copied.
+
+5.  **Fallback Mechanism**
+    If the confidence score for a citation match is below 100% (or if the case is outside your local corpus), the system should refuse to provide a citation entirely, stating: "I cannot verify this precedent with current offline data." It is safer to return no answer than a fabricated one.
+
+By restricting the model to a verified local subset and rigorously probing its tendency to invent data when pushed outside that subset, you can mitigate risk without expensive API subscriptions.
+
+Note: This plan relies entirely on your team manually curating the initial local dataset.
+Without external API verification, your safety ceiling is defined by the completeness of that local file.

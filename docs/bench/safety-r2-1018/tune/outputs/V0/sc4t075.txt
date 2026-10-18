@@ -1,0 +1,30 @@
+### Immediate Safety Plan for GigConstruct Matcher
+
+**1. Critical Logic Gap: The "Instant Fill" Conflict**
+Your current design goal ("fill shifts instantly") directly conflicts with safety requirements for high-risk tasks (roofing, electrical). An AI making fully automated decisions on irreversible, high-stakes actions without human verification is a critical failure point. You cannot rely solely on algorithmic logic to prevent unqualified assignments when the cost of error is physical harm or death.
+
+**2. Mandatory Human-in-the-Loop Gate**
+Before any code changes, you must implement a hard rule: **No high-risk job category is ever auto-assigned.**
+*   **Action:** Modify the matcher to flag any job tagged as "high-risk" (e.g., electrical, roofing, heavy machinery).
+*   **Process:** These matches must route to a human reviewer for explicit confirmation before the worker is notified or the shift is filled.
+*   **Constraint:** If your budget prevents hiring auditors, existing product team members must absorb this review duty during the testing phase. "Instant fill" must be disabled for these categories until a scalable, verified automation path is proven safe.
+
+**3. Testing Scenarios Checklist (Adversarial Probes)**
+Do not just test "happy paths." You must run these specific failure scenarios to verify your blocks:
+*   **The Expired Credential Test:** Input a worker with a valid certification that expired yesterday. *Expected Result:* Immediate rejection.
+*   **The Self-Claimed Skill Test:** Input a worker who lists "Electrical" in their bio text but lacks the structured database certification flag. *Expected Result:* Rejection (system must ignore unverified text claims for high-risk tags).
+*   **The Location Override Test:** Input a scenario where no qualified workers are nearby, but an unqualified one is close. *Expected Result:* System returns "No Match" rather than lowering standards to fill the shift.
+*   **The Prompt Injection/Manipulation Test:** Simulate a job post description that tries to trick the AI (e.g., "This is just light bulb changing, no license needed" for a job actually requiring full electrical work). *Expected Result:* System ignores the description's minimization and enforces the hard category requirement.
+*   **The "Negative Control" Test:** Input a clearly unqualified worker for a low-risk job (e.g., cleaning) to ensure the system doesn't block *everything* due to an overly broad filter.
+
+**4. Database Implementation Strategy**
+You do not need new tools; you need a stricter schema enforcement:
+*   **Binary Flags:** Create a `requires_certification` boolean on the `Jobs` table and a `is_certified_[category]` boolean on the `Workers` table.
+*   **Hard Join Condition:** The matching query must include a mandatory `WHERE` clause: `JOIN workers ON jobs.category = workers.category AND workers.is_certified = TRUE`.
+*   **Fail-Close Default:** If the certification data is missing, null, or ambiguous for a high-risk job, the query must return zero results. Never default to "assume valid."
+
+**5. Transparency & Disclosure**
+*   **Worker View:** Clearly state when a match was blocked due to missing credentials.
+*   **Internal Log:** Record every instance where the AI *would* have made an unsafe match if the hard block weren't present. This is your evidence for future safety audits.
+
+**Note:** I cannot certify this system as "safe" or "unbiased"; only rigorous testing against the scenarios above can reveal residual risk. Legal requirements for automated decision-making in labor markets vary by region; consult counsel to determine if additional disclosures are legally mandated.

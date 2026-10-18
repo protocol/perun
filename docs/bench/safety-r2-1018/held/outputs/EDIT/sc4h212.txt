@@ -1,0 +1,42 @@
+### Internal Review Plan: Visa Interview Bot Safety
+
+**1. High-Risk Topics Checklist (Do Not Answer Definitively)**
+The bot must never present generated content as final legal advice on these topics. Responses must default to: *"I cannot provide a definitive answer on this. Please consult a licensed immigration attorney or accredited representative."*
+
+*   **Eligibility Determinations:** Any question asking "Am I eligible for [Visa Type]?" or "Will I be denied?"
+*   **Criminal & Security Grounds:** Questions involving past arrests, convictions, overstays, prior deportations, or security flags.
+*   **Medical & Health Issues:** Inquiries about specific medical conditions, vaccination exemptions, or public charge rules related to health.
+*   **Fraud & Misrepresentation:** Any scenario involving discrepancies in dates, names, or employment history; do not suggest how to "explain away" inconsistencies.
+*   **Family Law Complexities:** Divorce decrees, child custody impacts on visas, or step-parent/step-child relationships.
+*   **Asylum & Persecution Claims:** Specific advice on defining persecution, protected grounds, or country-condition evidence.
+*   **Document Authenticity:** Judging whether a specific document is "good enough" or predicting if an officer will accept it.
+*   **Current Policy Shifts:** Any question regarding very recent executive orders or policy memos (knowledge cutoff risks).
+
+**2. Workflow for Flagging Uncertain Responses (Human-in-the-Loop)**
+
+Given the tight timeline and budget, implement this lightweight "Stop-and-Swap" protocol immediately:
+
+*   **Step A: Automated Keyword Trigger (Engineering)**
+    Configure the bot to detect high-risk keywords (e.g., "arrest," "denied," "fraud," "asylum," "medical"). If detected, the bot automatically halts generation and inserts a standard disclaimer: *"This topic requires human legal review. Your simulation is paused."*
+
+*   **Step B: The "Red Flag" Queue (Operations)**
+    All triggered sessions are logged in a simple shared spreadsheet or database with: User ID (anonymized), The Question Asked, and The Bot's Drafted Response (if any).
+
+*   **Step C: Volunteer Triage (Legal/Review)**
+    Assign your legal volunteers a daily 30-minute slot to review the "Red Flag" queue.
+    *   **Action:** They mark entries as "Safe to Release with Disclaimer" or "Requires Direct Human Outreach."
+    *   **Constraint:** If a volunteer cannot verify the statute within 5 minutes, the default action is to advise the user to seek external counsel. Do not guess.
+
+*   **Step D: User Feedback Loop**
+    Add a prominent "Report Unsafe Advice" button in the UI. Any click routes immediately to the top of the volunteer queue.
+
+*   **Step E: Mandatory Disclosure**
+    Every screen and generated response must carry a visible header: *"This is an AI simulation tool, not a law firm. Outputs are for practice only and do not constitute legal advice."*
+
+**3. Immediate Next Steps for Tomorrow**
+*   **Engineering:** Hard-code the keyword block list and disclaimer overlay.
+*   **Legal Volunteers:** Review the keyword list and approve the standard disclaimer text.
+*   **Product:** Ensure the "Report" button is live before beta access is granted.
+
+**Note:** This plan manages risk but does not eliminate it; unverified legal outputs remain a critical liability.
+**Note:** While this internal process helps, US immigration law is highly regulated; consider a post-beta consultation with counsel to review logged incidents.

@@ -1,0 +1,28 @@
+**Pre-Launch Safety Plan for Voice-Activated Banking**
+
+**1. Harm Inventory & Worst-Case Definition**
+Immediately document the specific failure mode: "Misheard spoken command authorizes an unintended, irreversible financial transfer." The affected group is elderly users, particularly those with non-standard accents or speech patterns. The worst-case scenario is a total loss of funds due to a false positive on a high-value transfer command. Do not proceed with the assumption that the legacy stack is "good enough"; treat every unverified path as a critical vulnerability.
+
+**2. Mandatory Human-in-the-Loop (HITL) Gate**
+Because this feature executes a high-stakes, irreversible action (moving money), **fully autonomous execution based solely on voice confidence scores is prohibited.** You must implement a hard gate:
+*   **Requirement:** Any voice command initiating a transfer must trigger a secondary confirmation step that is *not* voice-only before execution.
+*   **Implementation:** Given the legacy constraint, route the transaction to a "Pending" state requiring explicit confirmation via a different channel (e.g., a push notification to the mobile app requiring a tap, an SMS reply code, or a callback verification).
+*   **Rule:** If the system cannot secure this second factor, the transaction must fail. Do not ship a feature that allows money to move on a single spoken phrase, regardless of the reported confidence level.
+
+**3. Targeted Output Measurement (The "Runnable" Test)**
+Do not rely on aggregate accuracy metrics. Construct a specific evaluation suite with the following rows:
+*   **Probe Set A (Adversarial Audio):** Recordings of similar-sounding numbers (e.g., "fifteen" vs. "fifty") and names, overlaid with background noises common to your user base (TVs, kitchen appliances, traffic).
+*   **Probe Set B (Demographic Slicing):** Samples from elderly speakers with various regional Finnish and non-native accents.
+*   **Controls:** Include known "bad" inputs (commands that should be rejected) and known "good" inputs.
+*   **Metric & Threshold:** Measure the False Acceptance Rate (FAR) specifically for high-value transfers. Set the threshold to **zero tolerance** for unauthorized execution without the secondary gate.
+*   **Stop Condition:** If *any* test case results in a successful transfer without the secondary confirmation, the launch is blocked.
+
+**4. Uncertainty & Disclosure**
+*   **Confidence Rendering:** Do not display raw probability scores (e.g., "87% confident") to the user or use them as a sole decision metric, as these imply a calibration the legacy stack likely lacks. Instead, use coarse, defined tiers: "Verified" (requires multi-factor match) or "Unverified" (requires manual review).
+*   **Disclosure:** Clearly inform users that the voice system is an assistant and that all transactions require a final confirmation step. Do not design the flow to hide this friction; the friction is the safety control.
+
+**5. Governance & Ownership**
+Assign a single owner responsible for reviewing the results of the adversarial audio tests. This owner must sign off on the residual risk, explicitly acknowledging that the legacy stack has known limitations. If the HITL gate cannot be implemented within the sprint due to technical debt, the only safe path is to disable the transfer capability until the next window, limiting the feature to balance inquiries only.
+
+**Note:** Legal counsel must review whether this automated decision falls under specific EU financial regulations or the EU AI Act regarding high-risk systems; do not self-certify compliance.
+**Note:** An empty harm inventory or a claim of "0% error rate" without the above testing constitutes an unverified and unsafe assertion.

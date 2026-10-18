@@ -1,0 +1,42 @@
+### Mortgage Calculator Transparency & Safety Plan
+
+**1. Harm Inventory & Scope**
+Before launch, explicitly record the worst-case harm: a user binds to a loan based on outdated fee data, resulting in unexpected thousands in closing costs, potential loan denial, or financial distress. This is a **high-stakes, irreversible action** (binding application) driven by potentially stale data.
+
+**2. Human-in-the-Loop Gate (Non-Negotiable)**
+Because this feature executes a **binding financial action** based on data known to be imperfect (outdated legacy database), **fully automated submission is prohibited**.
+*   **Control:** Implement a mandatory "Human Review & Confirm" step before any application is transmitted to a lender.
+*   **Mechanism:** The system must present a clear, itemized breakdown of all estimated fees with a prominent warning: *"Estimates based on available data; final closing costs subject to lender verification. Please review carefully before binding."*
+*   **Action:** The user must actively check a box or click a specific "I Verify These Costs" button to proceed. No background auto-submission.
+
+**3. Measurement & Validation Plan**
+Do not assert accuracy; measure it. Execute these specific tests before launch:
+*   **Data Sync Probe:** Run a daily automated comparison between the legacy database and a sample of current lender fee sheets (positive control: known changed fee; negative control: static fee).
+    *   *Metric:* Discrepancy rate.
+    *   *Stop Condition:* If discrepancy > 0% on critical fees (origination, appraisal), block the "Pre-fill" feature and trigger a manual data audit.
+*   **UI Clarity Test:** Conduct usability testing with 10+ users representing diverse financial literacy levels.
+    *   *Probe:* Ask users to identify the total cash-to-close and list three potential variable fees.
+    *   *Stop Condition:* If >20% of users cannot correctly identify that fees are estimates or miss a major cost category, halt launch and redesign the disclosure interface.
+*   **Injection/Edge Case:** Test inputs for edge-case loan scenarios (e.g., very low credit, unique property types) where legacy data is most likely to fail.
+
+**4. Rollback & Incident Response**
+*   **Kill Switch:** Implement an immediate feature flag to disable the "Pre-fill Application" button while keeping the calculator read-only.
+*   **Trigger:** Activate if any discrepancy is confirmed in production or if a user reports a binding error due to fee mismatch.
+*   **Remediation:** Upon rollback, all pending applications must be flagged for manual agent review before transmission.
+
+**5. Transparency Artifact (Model/Data Card)**
+Publish an internal "Fee Data Card" for this feature, versioned with the legacy database snapshot date.
+*   **Contents:** Source of fee data (Legacy DB), last sync time, known limitations (e.g., "Does not reflect same-day lender updates"), and owner contact.
+*   **User Facing:** Display the "Data As Of" date prominently next to the fee estimate.
+
+**6. Governance & Legal Routing**
+*   **Owner:** Assign a specific Product Manager as the accountable owner for fee accuracy.
+*   **Legal Duty:** Whether this disclosure satisfies specific Truth in Lending Act (TILA) or state-level automated decision requirements is a legal determination. **Route immediately to counsel** to verify if the current disclosure language meets regulatory standards for "binding" estimates. Do not assume the UI warning is legally sufficient.
+
+**Summary of Constraints:**
+*   **No Auto-Submit:** Binding actions require explicit human confirmation.
+*   **No Fabricated Accuracy:** If data sync cannot be verified in real-time, label all figures as "UNVERIFIED ESTIMATES" in the UI.
+*   **Deadline Adherence:** This plan uses configuration flags and UI changes (no retraining) to meet the housing season deadline while maintaining the safety floor.
+
+*Note: This plan addresses product-output safety; it does not certify the system as "bias-free" or "legally compliant."*
+*Legal counsel must validate the specific wording of financial disclosures before launch.*

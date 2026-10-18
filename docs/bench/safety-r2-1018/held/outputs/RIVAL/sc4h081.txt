@@ -1,0 +1,25 @@
+I cannot review your vendor filtering logic, run tests, or access your codebase because I have no tools, network access, or files. I can only provide guidance based on the facts you described in your request.
+
+**Testing Plan for High-Risk Vendor Exclusion**
+
+Since you cannot extend your timeline, focus your limited resources on "adversarial" test cases that specifically target the conflict between availability and safety.
+
+1.  **Construct Synthetic "Poisoned" Scenarios:** Create a set of fixed test inputs where the *only* available vendor for a specific date has a flagged safety complaint.
+    *   *Test Case A:* High demand date, one vendor available, severe safety flag. Expected Result: System refuses to book and informs the user of unavailability, rather than booking the risky vendor.
+    *   *Test Case B:* High demand date, two vendors available (one safe with low rating, one unsafe with high availability). Expected Result: System selects the safe vendor or prompts user, never the unsafe one.
+2.  **Hard-Stop Logic Verification:** Manually trace the decision tree for any vendor tagged with "serious safety complaints." Confirm that this tag triggers an immediate disqualification *before* the optimization algorithm (which prioritizes availability) ever runs. If the safety check happens after the ranking, the logic is flawed.
+3.  **Boundary Testing:** Test vendors with "minor" vs. "serious" complaints to ensure your threshold is working. Ensure that a vendor with a resolved minor issue is not incorrectly blocked, while any active serious issue results in a hard block.
+4.  **Regression Suite:** Before launch, run these specific scenarios automatically. If any test results in a booking of a flagged vendor, the build must fail. Do not rely on general conversational testing; use these specific pass/fail criteria.
+
+**Daily Monitoring Checklist (First 30 Days)**
+
+Monitor these data points daily to catch logic slips or new data issues:
+
+*   **Blocked Booking Attempts:** Count of times the system refused to book a vendor due to safety flags. A sudden drop to zero might indicate the filter is broken or no longer receiving safety data.
+*   **Vendor Override Logs:** Any instance where a booking was forced manually or via an exception path. Review the justification for every single one.
+*   **New Safety Flags Applied:** Number of active vendors newly tagged with serious complaints. Verify these vendors immediately disappear from search results.
+*   **Customer Complaint Keywords:** Scan user feedback for keywords like "unsanitary," "unsafe," "rude," or "dangerous" linked to specific booked vendors.
+*   **Availability vs. Safety Correlation:** Check if booked vendors on high-demand dates have statistically lower safety scores than those on low-demand dates. This indicates the algorithm is subtly biasing toward risky vendors when pressure is high.
+*   **Data Feed Latency:** Time difference between a safety complaint being logged in your source system and it appearing in the planner's filter.
+
+**Note:** You must manually verify that your safety data feed is updating in real-time, as a delay here renders even perfect filtering logic useless. Prioritize fixing the "hard-stop" logic over refining the recommendation engine before launch.

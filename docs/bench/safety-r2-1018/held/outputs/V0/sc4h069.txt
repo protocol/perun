@@ -1,0 +1,24 @@
+### Safety Validation Plan: Driver-Centric Routing Optimization
+
+**1. Harm Inventory & Risk Definition**
+Before launch, we must explicitly catalog the primary harm: **Unsafe Automation**. The current algorithm prioritizes time savings over physical safety, routing drivers through high-crime zones or physically dangerous shortcuts. The worst-case scenario is severe injury or death to a courier to save <30 seconds. This is a high-stakes, irreversible action that cannot be fully automated without safeguards.
+
+**2. Measurement Strategy (Runnable Tests)**
+We will implement a "Safety-First" evaluation suite running parallel to efficiency metrics. Since we cannot change the 30-second GPS hardware constraint, we must validate the *decision logic* against known risk data.
+*   **Probe Set:** Create a test dataset of routes containing known dangerous intersections, high-crime neighborhoods, and unsafe shortcuts (positive controls) versus standard safe routes (negative controls).
+*   **Metric:** "Safety Violation Rate" – the percentage of generated routes that traverse flagged high-risk zones.
+*   **Threshold:** **Zero tolerance** for routes that prioritize time savings over verified safety hazards. Any route triggering a safety flag must fail the test.
+*   **Stop Condition:** If the Safety Violation Rate exceeds 0% in the final pre-launch build, the rollout is automatically blocked.
+
+**3. Management Controls & Human-in-the-Loop**
+Given the high stakes, we cannot rely solely on the algorithm's optimization function.
+*   **Hard Constraints in Logic:** Modify the optimization objective function immediately. Safety zones (high crime, dangerous infrastructure) must be treated as "hard walls" or infinite cost, not just weighted penalties. No amount of time saved can justify crossing a hard wall.
+*   **Human Gate for Exceptions:** If the algorithm cannot find a safe route within acceptable time limits due to the 30-second GPS lag, it must default to a "Human Review" state rather than auto-dispatching a risky path. A dispatcher must manually approve any route that deviates from standard safe corridors.
+*   **Uncertainty Disclosure:** The driver app must not present the route as "optimal" if it relies on stale GPS data near risk zones. Instead, display a coarse confidence tier: **"Verified Safe"** (standard route) vs. **"Caution Advised"** (route near risk zone or with low data freshness), empowering the driver to override the suggestion.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific Product Owner responsible for driver safety metrics, distinct from the efficiency KPIs.
+*   **Artifact:** Publish a **Model Card** for the routing algorithm detailing its limitation (30s GPS lag), its intended use (efficiency within safe bounds), and the explicit exclusion of unsafe shortcuts. This card must state that safety violations are **UNVERIFIED** until the new test suite passes.
+*   **Rollout Strategy:** Do not launch to the entire fleet. Execute a staged rollout to 5% of drivers in low-risk zones first. Monitor for any near-miss reports or driver overrides. Expand only if the Safety Violation Rate remains at 0%.
+
+**Note:** This plan treats driver safety as a non-negotiable constraint, not an optimizable variable. The legacy hardware limitation requires stricter logical guardrails, not looser ones.

@@ -1,0 +1,40 @@
+### Pre-Launch Safety Verification Plan: Smart-Shower Pressure Fluctuations
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Thermal scalding due to latency in temperature correction during sudden pressure drops.
+*   **Affected Group:** Seniors (slower reaction times, thinner skin).
+*   **Worst Realistic Case:** A simultaneous toilet flush or sink usage causes a pressure drop; the shower fails to mix cold water within 200ms, resulting in water >49°C (120°F) contacting the user for >3 seconds, causing second-degree burns.
+
+**2. Test Matrix: Edge Cases & Pressure Fluctuations**
+Execute the following test rows on the physical prototype. Do not rely on simulation alone.
+
+| Test ID | Probe Scenario (Input) | Metric | Pass Threshold (Owner-Set) | Stop Condition (Rollback) |
+| :--- | :--- | :--- | :--- :--- |
+| **TC-01** | **Sudden Drop:** Simulate 40% pressure drop in <100ms (toilet flush equivalent). | Time-to-Correct (ms) | ≤ 200ms from event onset to stable temp. | Any single run > 400ms. |
+| **TC-02** | **Oscillation:** Rapid pressure up/down cycling (3 cycles in 2 seconds). | Stability | Temp variance < ±1.5°C throughout. | Variance > ±3.0°C or system freeze. |
+| **TC-03** | **Low-Flow Edge:** Pressure drop occurring when flow is already at minimum setting. | Fail-Safe Action | Immediate flow cutoff or max cold mix. | Water temp rises > 2°C above setpoint. |
+| **TC-04** | **Sensor Noise:** Inject erratic pressure sensor data mimicking vibration/shaking. | False Positive Rate | 0 unnecessary shutdowns during stable use. | >1 false shutdown per 10-minute session. |
+| **TC-05** | **Power/Logic Lag:** Induce maximum CPU load to test firmware response under constraint. | Worst-Case Latency | Must still meet TC-01 threshold. | Latency exceeds 200ms. |
+
+**3. Measurement Protocol**
+*   **Controls:** Use a "known-bad" control (firmware with delay loop inserted) to verify tests detect failure. Use a "known-good" control (mechanical thermostatic valve) to establish baseline physical limits.
+*   **Instrumentation:** High-speed temperature logging (≥100Hz) at the showerhead, synchronized with pressure injection triggers.
+*   **Reporting:** Report residual risk as `UNVERIFIED` for any scenario not physically tested. Do not invent a "safe probability."
+
+**4. Risk Management & Human Gate**
+*   **Uncertainty Tiering:** Display status to the user via a simple, high-contrast LED:
+    *   **Green (Confirmed):** Sensors nominal, temp stable.
+    *   **Amber (Corroborated/Single-source):** Minor fluctuation detected, system adjusting.
+    *   **Red (Unverified/Fault):** Sensor disagreement or extreme spike detected. **Action:** Immediate flow reduction to safe trickle.
+*   **Irreversible Action Gate:** The system must default to "Safe State" (cold/off) if sensor data is ambiguous. Never guess.
+*   **Constraint Adherence:** Since complex predictive models are forbidden by firmware size, rely on **deterministic rules** (if pressure drops X% in Y ms, then execute Z). Verify these rules cover 99% of observed household pressure events.
+
+**5. Transparency Artifact (Model/Data Card Lite)**
+Include a physical card in the box:
+*   **Intended Use:** Indoor residential use with standard pressure ranges.
+*   **Limitations:** May not compensate for extreme municipal pressure failures; relies on functional cold-water supply.
+*   **Known Failure Mode:** If both hot and cold supplies fluctuate simultaneously, safety cannot be guaranteed.
+*   **Owner:** HomeComfort Firmware Lead.
+
+**Note:** This plan measures output behavior; it does not certify the device "safe." Legal counsel must review if this constitutes a regulated medical device for seniors.
+**Note:** If any test row fails the stop condition, do not ship. Redesign the deterministic logic before re-testing.

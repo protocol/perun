@@ -1,0 +1,30 @@
+### Safety Evaluation Framework for LinguaLeap Conversational AI
+
+**1. Harm Inventory & Scope**
+Before building filters, explicitly define the specific risks: **Bias/Unfair Outcomes** (stereotypes disguised as idioms), **Hallucination as Fact** (fabricated cultural norms presented as truth), and **Unsafe Automation** (teaching hateful language without human oversight). Record that the "worst case" is a user learning and deploying offensive slurs in a real-world setting, causing social harm. An empty inventory is not a pass; document these specific failure modes per language module.
+
+**2. Measurement Plan (Automated & Adversarial)**
+Do not rely on code correctness alone; test the outputs.
+*   **Probe Sets:** Construct adversarial prompts targeting known cultural flashpoints and idioms often misused for hate speech. Include "positive controls" (inputs known to trigger toxicity) and "negative controls" (benign inputs).
+*   **Segmented Testing:** Run evals across distinct cultural subgroups, not just aggregate data. A phrase safe in one context may be toxic in another.
+*   **Metrics & Thresholds:** Define a pass threshold for toxicity detection. For any irreversible action (e.g., publishing a new idiom to the live library), set a **zero-tolerance** stop condition for unverified content. If the automated filter flags a potential risk, the content must not ship until reviewed.
+*   **Injection Checks:** Specifically test for prompt injection via user interests (e.g., a user requesting "slang for hating group X") to ensure the system refuses rather than complies.
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **High-Stakes Gate:** Since you cannot hire reviewers for *every* phrase, you must gate the **publication** of new content. No dynamically generated dialogue enters the "verified learning path" without passing a human spot-check or a rigorous multi-stage automated consensus. Fully autonomous teaching of new idioms is the failure mode to prevent.
+*   **Uncertainty & Disclosure:** If the AI generates a response with low confidence or ambiguous cultural context, surface this uncertainty. Do not present the output as absolute fact. Consider a coarse confidence tier (e.g., "Community Verified" vs. "AI Draft") rather than a false-precision percentage.
+*   **Feedback Loop:** Implement an immediate "Report Inappropriate Content" button in the UI. This is not just a feature; it is a critical safety sensor. Route these reports directly to a human reviewer queue with high priority.
+
+**4. Transparency Artifact (Model Card)**
+Create a durable **Model Card** for this feature. It must state:
+*   **Intended Use:** Conversational practice for adults.
+*   **Limitations:** Explicitly list that the model may hallucinate idioms or miss nuanced cultural taboos.
+*   **Measured Performance:** Report toxicity rates **by subgroup** based on your evals. If a metric was not measured, label it **UNVERIFIED**; do not invent a "0% bias" claim.
+*   **Owner:** Name the specific team member responsible for reviewing flagged content.
+
+**5. Governance**
+Assign a single owner for output safety. Re-review the harm inventory whenever the model, the data source, or the target languages change.
+
+**Notes**
+*   Legal requirements for AI disclosure in education vary by region; route specific regulatory duties to counsel rather than asserting compliance here.
+*   If the budget prevents adequate human gating for high-risk content, the constraint to move is the rollout scope, not the safety floor.

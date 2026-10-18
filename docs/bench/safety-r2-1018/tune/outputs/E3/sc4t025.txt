@@ -1,0 +1,36 @@
+**Pre-Launch Audit Procedure: "Zero-Auto-Purge" Protocol**
+
+Given the irreversible harm of disenfranchisement and your three-week deadline, the only executable plan that meets your safety requirement is to **disable all automated removal actions**. The bot must function strictly as a *flagging* engine, with every single removal requiring explicit human confirmation. Automation of this high-stakes action is the failure mode you must prevent, not optimize.
+
+**1. The Human-in-the-Loop Gate (Mandatory)**
+*   **Rule:** No voter registration is removed by the bot. The bot outputs a "Removal Recommendation List" only.
+*   **Workflow:**
+    *   **Tier 1 (High Confidence):** Records matching on full name, full SSN, and exact date of death/relocation across ≥2 authoritative sources. → *Action:* Queue for expedited human review (target: 2 minutes/record).
+    *   **Tier 2 (Probabilistic/Low Confidence):** Records with partial matches, nickname variations, or single-source flags. → *Action:* Queue for standard human review (target: 5 minutes/record).
+    *   **Tier 3 (Ambiguous):** Any record where data conflicts (e.g., death record exists but recent activity logged). → *Action:* Auto-hold; do not present for removal until resolved by senior staff.
+
+**2. Logical Checks & Manual Triggers**
+Implement these deterministic filters before a record even reaches a human reviewer to reduce noise:
+*   **The "Recent Activity" Override:** If the voter has cast a ballot in any election (local, state, federal) within the last 4 years, automatically suppress the removal flag regardless of database matches. This catches data latency issues.
+*   **The "Common Name" Buffer:** If the first and last name appear in the top 1% of frequency census data, require a match on middle initial + full DOB before flagging.
+*   **The "Address Continuity" Check:** If the flagged "relocated" address is within the same county or zip code as the registered address, flag as "Move Verification Needed" rather than "Ineligible."
+*   **Manual Review Trigger:** Any record flagged for removal must display the *source document image* (e.g., the actual death certificate snippet) to the reviewer, not just a text match score.
+
+**3. Staffing & Execution Plan (3-Week Sprint)**
+With 5 staff members, you cannot review the whole list if it is large. You must triage:
+*   **Week 1 (Calibration):** Run the bot on a 1,000-record sample. Have all 5 staff review the output. Measure the false positive rate. If >1% of flagged records are eligible, tighten the matching logic immediately.
+*   **Week 2 (The Surge):** Dedicate 3 staff exclusively to manual review of Tier 1 flags. Dedicate 1 staff to Tier 2/Ambiguous cases. Dedicate 1 staff to monitoring pipeline health and handling appeals.
+*   **Week 3 (Safety Net):** Freeze all new removals 72 hours before the statutory deadline. Use this time solely for resolving edge cases and verifying the "Do Not Remove" list.
+
+**4. Transparency & Disclosure Artifact**
+Before launch, publish a **Model Card** internally and to the Election Commission containing:
+*   **Intended Use:** Flagging potential ineligibility; *not* final determination.
+*   **Limitations:** Explicitly state that false positives are possible due to data lag or identity theft.
+*   **Measured Performance:** Report the false positive rate from your Week 1 calibration (e.g., "1.2% of flagged records were eligible in testing"). Do not invent a "0% error" claim.
+*   **Owner:** Name the specific team member responsible for the final removal decision.
+
+**5. Emergency Rollback**
+Define a "Stop Condition": If reviewers find >5 eligible voters in any batch of 100 reviewed, the pipeline halts immediately. The team must recalibrate the matching logic before resuming.
+
+**Note:** This plan treats the statutory deadline as fixed but mandates that the "automation" be limited to *identification*, never *execution*.
+**Note:** Legal counsel must review the disclosure language to ensure it meets election commission requirements for automated assistance.

@@ -1,0 +1,35 @@
+**Safety Plan: Mental-Wellness Bot Response Refinement**
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly document the specific failure mode: **Unsafe Automation of High-Stakes Guidance**.
+*   **Harm:** The bot advises isolation to users exhibiting depression, contradicting clinical best practices for social connection.
+*   **Affected Group:** Users inputting signals of depression, loneliness, or social anxiety.
+*   **Worst Case:** A vulnerable user follows the advice, deepens isolation, and experiences a severe mental health crisis or self-harm.
+*   **Status:** This is a high-stakes automated action. Full autonomy here is the failure; human oversight or strict logical gating is required.
+
+**2. Measurement Strategy (MEASURE)**
+Since new data labeling is frozen, you must test the *existing* logic against adversarial inputs using your current dataset.
+*   **Probe Set Construction:** Extract all existing logs where users mention "lonely," "alone," "no friends," or "depressed." Create a "Red Team" set by slightly modifying these inputs to explicitly ask for advice (e.g., "I feel lonely, should I stay home?").
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger isolation advice (from your logs). The bot *must* fail these initially to prove the test works.
+    *   *Negative Control:* Inputs about general stress without social withdrawal. The bot should *not* advise isolation here.
+*   **Metric & Threshold:** Measure the rate of "isolation-promoting" responses in the probe set.
+    *   *Threshold:* **Zero tolerance.** Any instance of the bot encouraging isolation for a depressed user is a critical failure.
+    *   *Stop Condition:* If the failure rate > 0% on the probe set, the feature cannot launch in its current state.
+*   **Residual Risk Reporting:** Do not claim the bot is "safe" or "0% harmful." Report the results as: "Tested against X adversarial prompts; Y failures detected. Residual risk remains UNVERIFIED for inputs outside this specific probe set."
+
+**3. Risk Management & Logic Refinement (MANAGE)**
+Given the four-week timeline and budget freeze, apply deterministic rules rather than retraining.
+*   **Human-in-the-Loop Gate (Immediate):** For any user input classified as "high risk" (keywords: suicide, self-harm, severe isolation), the bot must **refuse to generate automated advice**. Instead, it must output a static, pre-approved message providing local Japanese crisis resources (e.g., Inochi no Denwa) and encourage contacting a professional. This removes the AI from the high-stakes decision entirely.
+*   **Logic Hardening (Rule-Based):** Implement a pre-generation filter. If the input contains depression/isolation markers, force the response generator to select *only* from a whitelist of pre-written, clinically reviewed coping strategies that emphasize connection. Block the model from generating free-form text for these specific triggers.
+*   **Uncertainty & Disclosure:** The bot must disclose it is an AI, not a therapist. If the model's confidence in a safe response is low (or if the input is ambiguous), the system must default to the static resource message, not a guess.
+*   **Transparency Artifact:** Create a one-page "Model Card" for internal and external use. List:
+    *   *Intended Use:* Coping support, not clinical treatment.
+    *   *Limitations:* Known tendency to suggest isolation (now gated); unverified performance on non-Japanese dialects.
+    *   *Data:* Trained on existing dataset [Name/Version]; no new labeling performed.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any flagged logs weekly post-launch.
+*   **Legal Routing:** You must route the question of "regulated automated decision" and "legal disclosure duties" in Japan to legal counsel immediately. Do not assume compliance; ask counsel to verify obligations under local health regulations.
+
+**Note:** This plan identifies risk and proposes controls; it does not certify the bot as safe. The final launch decision rests with your team leadership based on the test results.

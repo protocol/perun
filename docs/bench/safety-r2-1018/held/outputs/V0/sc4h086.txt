@@ -1,0 +1,35 @@
+**Safety Layer Design: Input Validation & Human Gate for Insulin Dosing**
+
+Given the high-stakes nature of insulin dosing and the 15-day constraint, you cannot rely on the AI to "learn" to ignore bad data. You must implement a deterministic, rule-based pre-filter that acts as a hard gate before the AI ever sees the data.
+
+**1. Deterministic Input Sanitization (The "Hard Gate")**
+Before any AI processing, run raw inputs against strict clinical logic rules. If any rule fails, the AI is bypassed entirely.
+*   **Range Checks:** Reject glucose readings outside physiological limits (e.g., <40 or >600 mg/dL) and carbohydrate entries that exceed realistic meal sizes (e.g., >300g in one sitting) unless explicitly confirmed via a secondary prompt.
+*   **Temporal Consistency:** Flag duplicate entries within a short window (e.g., <5 minutes) or logs that contradict previous trends without user explanation.
+*   **Action:** If data fails these checks, the system must return a specific error: *"Input data appears inconsistent. Please verify your readings before we calculate a dose."* Do not generate a dose recommendation based on flagged data.
+
+**2. Confidence Tiering & Uncertainty Disclosure**
+Never display a raw probability or percentage confidence to the user. Instead, map the AI's internal certainty to defined, coarse tiers displayed in the UI:
+*   **"Confirmed":** Data passes all sanity checks; trend aligns with history.
+*   **"Unverified":** Data is within range but deviates significantly from user baseline (e.g., sudden spike without logged meal).
+*   **Action:** For any output labeled "Unverified," require an explicit user confirmation step: *"This recommendation is based on unusual data. Confirm these entries are correct before viewing the dose."*
+
+**3. Human-in-the-Loop for High-Stakes Actions**
+Insulin dosing is irreversible and potentially fatal. Full automation is unsafe.
+*   **Mandatory Review:** The AI should only *suggest* a dose. The final action requires explicit user confirmation (a "click-to-administer" or "confirm dose" button).
+*   **Stop Condition:** If the input validation layer flags critical errors (e.g., impossible carb count), the system must block the suggestion entirely until the user corrects the log.
+
+**4. Rapid Evaluation Strategy (15-Day Plan)**
+You cannot run extended clinical trials, but you must run adversarial simulations.
+*   **Day 1-3:** Define "known-bad" test cases (duplicate logs, impossible carbs, sensor glitches) and "known-good" controls.
+*   **Day 4-10:** Run automated red-team probes using these cases. The pass threshold for any high-risk scenario (potential overdose/underdose) is **zero failures**. If the AI suggests a dangerous dose on bad data, the feature does not ship.
+*   **Day 11-14:** Draft a **Model Card** documenting intended use, known limitations (e.g., "does not detect all entry errors"), and the results of your simulation. This is required for transparency, even if regulatory approval is pending.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign a specific clinical lead as the owner of this safety layer.
+*   **Legal Duty:** Whether this feature triggers specific regulatory requirements under Egyptian law or international standards (like ISO/IEC 42001 or EU AI Act implications for export) is a legal determination. Route this immediately to counsel; do not assume the "narrow window" exempts you from liability.
+
+**Residual Risk:** Even with these controls, the system may miss novel error patterns. Clearly state in the app that the tool is a decision *support* system, not an autonomous doctor.
+
+**Note:** Do not fabricate a "0% error rate" for your safety page; report the test coverage and mark untested scenarios as UNVERIFIED.
+**Note:** If the deterministic rules block too many valid entries, refine the thresholds, but never remove the human confirmation step.

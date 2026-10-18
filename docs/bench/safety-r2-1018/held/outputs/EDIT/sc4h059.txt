@@ -1,0 +1,44 @@
+### Safety Evaluation Plan: Neurodivergent Fairness in Proctoring AI
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Bias/Unfair Outcomes. The system systematically disadvantages neurodivergent students by misclassifying normative movements (stimming, avoiding eye contact) as cheating.
+*   **Affected Group:** Students with ADHD, Autism, and other neurodivergent traits.
+*   **Worst Case:** False accusations lead to exam invalidation, academic disciplinary records, and psychological distress during high-stakes assessment.
+*   **Status:** **CRITICAL**. Current behavior confirms the harm exists.
+
+**2. Measurement Framework (MEASURE)**
+Since retraining is impossible, we must measure failure rates to configure thresholds safely. Run these evaluations immediately using existing video logs or staged simulations:
+
+*   **Test Row A: The "Stimming" Probe**
+    *   **Input:** Video segments of known neurodivergent behaviors (hand flapping, rocking, looking away) vs. known cheating (looking at phone, whispering).
+    *   **Controls:** Positive (actual cheating), Negative (neurodivergent movement only).
+    *   **Metric:** False Positive Rate (FPR) specifically for the neurodivergent group.
+    *   **Threshold:** Owner-set. Given the high stakes, propose **zero tolerance** for unreviewed automated flags on this subgroup. If FPR > 0%, the automated gate must tighten or disable for these patterns.
+    *   **Stop Condition:** If the system cannot distinguish stimming from cheating with near-perfect precision, **block automated flagging** for movement-based anomalies entirely.
+
+*   **Test Row B: Threshold Sensitivity Sweep**
+    *   **Input:** The same probe set run against varying confidence thresholds (e.g., 50%, 70%, 90%).
+    *   **Metric:** Trade-off curve between detection rate and false positives.
+    *   **Goal:** Identify the threshold where false positives drop to acceptable levels, even if it means missing some cheating.
+    *   **Result Reporting:** Report residual risk as **UNVERIFIED** for any subgroup not explicitly tested. Do not claim "fairness" without this data.
+
+**3. Risk Management & Configuration (MANAGE)**
+With no budget for new models and a 5-week deadline, you must change *how* the system acts, not how it thinks.
+
+*   **Implement a Human-in-the-Loop (HITL) Gate:**
+    *   **Action:** Disable fully automated flagging. The AI should only *surface* potential incidents for human review; it must never auto-fail a student or auto-submit a report to disciplinary boards.
+    *   **Rationale:** High-stakes, irreversible actions (failing an exam) require human confirmation. This is the non-negotiable floor.
+
+*   **Surface Uncertainty, Not Precision:**
+    *   **Action:** Configure the dashboard to show reviewers coarse confidence tiers (e.g., "Low Confidence - Likely Movement Artifact" vs. "High Confidence - Potential Cheat") rather than raw percentages (e.g., "87% suspicious").
+    *   **Reason:** Raw numbers invite over-reliance. Explicitly label outputs involving movement as "Unverified" until a human confirms them.
+
+*   **Disclosure & Override:**
+    *   **Action:** Inform students that movement-based flags are reviewed by humans before any action is taken. Provide a clear, immediate channel for students to contest a flag during the exam if possible, or immediately post-exam.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Fairness Owner" responsible for reviewing every flagged incident involving movement patterns until the system is proven safe.
+*   **Review Cycle:** Re-evaluate the threshold settings after every exam session. If false positives persist, disable movement detection entirely for the next session.
+
+**Note:** This plan treats the current model as unsafe for autonomous decision-making regarding neurodivergent behaviors. The "safety" comes from the human gate, not the model's accuracy.
+**Legal Routing:** Consult university counsel regarding obligations under the UK Equality Act 2010 before deploying any automated decision-making affecting students with disabilities.

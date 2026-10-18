@@ -1,0 +1,32 @@
+**Pre-Launch Audit Procedure: "Zero-Auto-Purge" Protocol**
+
+Given the irreversible harm of disenfranchisement and your three-week deadline, the only executable plan that guarantees no eligible voter is removed by automated error is to **disable all automated removal actions**. The bot must function strictly as a *flagging* engine, with a mandatory human-in-the-loop gate for every single deletion. Automation of high-stakes, irreversible actions (removing a voter) is the failure mode we must prevent; therefore, the "logical check" is a hard stop: **No record is removed without explicit human confirmation.**
+
+**1. Harm Inventory & Triage (Days 1–3)**
+*   **Identify the Risk:** The primary harm is false positives (eligible voters flagged as ineligible) leading to disenfranchisement. Secondary risks include bias against specific demographics if source data is flawed.
+*   **Categorize Flags:** Configure the bot to output three tiers instead of binary "remove/keep":
+    *   *High Confidence:* Multiple independent sources confirm death/relocation (e.g., death registry + change-of-address + utility cancellation).
+    *   *Medium Confidence:* Single source match or partial data match (e.g., name match only, address mismatch).
+    *   *Low Confidence/Conflicting:* Data sources contradict (e.g., flagged as deceased but recent activity recorded).
+*   **Rule:** Regardless of tier, **no auto-deletion**. All flags enter a review queue.
+
+**2. The Human-in-the-Loop Gate (Days 4–18)**
+*   **Workflow:** Your team of five acts as the gate. The bot presents the evidence package (source data, match score, conflicting info) for each flagged record.
+*   **Actionable Steps:**
+    *   Reviewers must verify the "High Confidence" matches against raw source documents.
+    *   "Medium" and "Low" confidence flags require additional external verification (e.g., phone call, mailer, cross-check with local precinct records) before any action.
+    *   **Override Mechanism:** If a reviewer cannot verify ineligibility within 2 minutes, the default action is **"Keep Registered."** Doubt benefits the voter.
+*   **Throughput Math:** If the bot flags 5,000 records, and each takes 5 minutes to review, that is 25,000 minutes (~416 hours). With 5 staff working 10 hours/day for 15 days, you have 750 hours of capacity. This is feasible only if the flag rate is low. If flags exceed capacity, you must narrow the bot's criteria to reduce false positives, not speed up review.
+
+**3. Transparency & Disclosure (Days 19–21)**
+*   **Model Card Artifact:** Publish a one-page "Data Card" internally and for the election commission stating:
+    *   *Intended Use:* Flagging potential ineligibility only; never final determination.
+    *   *Limitations:* Known data gaps, potential for name collisions, and the fact that accuracy metrics are **UNVERIFIED** until post-election audit.
+    *   *Owner:* Name the specific team member responsible for the final review log.
+*   **User Notice:** Ensure any communication sent to flagged voters clearly states this is an automated *inquiry* based on data matching, not a final removal notice, and provides an immediate, easy path to contest the flag.
+
+**4. Stop Conditions & Rollback**
+*   **Launch Block:** Do not activate the bot if the review queue exceeds your team's calculated capacity (flags × 5 mins > available hours).
+*   **Kill Switch:** If the false positive rate in the first 100 manual reviews exceeds 5%, halt processing immediately. Re-tune the matching logic to be more conservative (fewer flags) before resuming.
+
+**Note:** This plan prioritizes preventing disenfranchisement over processing speed; any "optimization" that removes the human review step for deletions violates the safety floor for irreversible actions. Legal requirements for disclosure and specific regulatory duties under election law must be routed to counsel immediately.

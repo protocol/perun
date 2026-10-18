@@ -1,0 +1,31 @@
+# Internal Review Framework: Disparate Impact Stress-Testing via Statistical Proxies
+
+**Objective:** Validate the parole risk algorithm for demographic bias without accessing real case files, using only anonymized statistical proxies and synthetic data generation.
+
+### Phase 1: Proxy Data Construction
+Since real case files are inaccessible, construct a "Statistical Mirror" dataset using aggregate public data (e.g., Philadelphia Department of Prisons annual reports, US Census demographics) to create anonymized profiles.
+*   **Attribute Decoupling:** Generate synthetic offender profiles where criminal history variables (charge type, prior count) are statistically independent of demographic variables (race, zip code). This creates a "null hypothesis" dataset where any correlation between race and risk score indicates algorithmic bias rather than historical data skew.
+*   **Counterfactual Pairing:** Create paired profiles identical in every legal respect (age, charge, prior record) except for the protected attribute proxy (e.g., swapping a demographic indicator or a zip code serving as a racial proxy).
+*   **Edge Case Injection:** Intentionally generate profiles representing historical outliers (e.g., minor offenses in over-policed zones) to test if the model replicates historical policing skews when presented with neutral input features.
+
+### Phase 2: Blind Stress-Testing Protocol
+Execute the algorithm against the Proxy Dataset in a isolated, air-gapped environment.
+*   **The "Swap" Test:** Run the counterfactual pairs through the model. Calculate the **Disparate Impact Ratio**: the rate of high-risk classifications for Group A divided by the rate for Group B. A ratio below 0.8 (the 80% rule) triggers an immediate flag.
+*   **Sensitivity Analysis:** Systematically vary non-legal inputs (e.g., neighborhood density proxies) while holding legal factors constant to identify if the model uses these as covert proxies for race.
+*   **Threshold Stressing:** Adjust the risk score cutoff for "high risk" incrementally. Document how false positive rates shift across demographic proxies at each threshold to ensure mitigation strategies hold under different judicial strictness levels.
+
+### Phase 3: Mitigation Validation
+Before the trial begins, verify that proposed fixes actually reduce disparity without destroying utility.
+*   **Re-weighting Simulation:** Apply mathematical re-weighting to the proxy inputs to simulate bias mitigation techniques (e.g., equalized odds post-processing). Re-run the stress tests to confirm the Disparate Impact Ratio moves toward 1.0.
+*   **Utility Preservation Check:** Ensure that while bias is reduced, the model's ability to correctly identify high-risk offenders (true positives) does not drop below an acceptable safety floor defined by the consortium.
+*   **Failure Mode Documentation:** Explicitly document scenarios where the model fails despite mitigation. This defines the "known limitations" to be disclosed to judges before the pilot starts.
+
+### Phase 4: Governance & Sign-off
+*   **Blind Audit Log:** Maintain a cryptographic log of all synthetic inputs and resulting scores. This allows external auditors to verify the *process* and *statistics* without ever seeing real data or the model weights.
+*   **Go/No-Go Criteria:** Establish a hard metric: If the Disparate Impact Ratio exceeds 0.85 on the proxy dataset after mitigation, the pilot is paused.
+*   **Human-in-the-Loop Safeguard:** Mandate that any assessment falling within a "marginal risk" band (determined by the stress test) requires mandatory human review by a judge, regardless of the algorithmic output.
+
+**Deliverable:** A signed "Bias Stress-Test Report" containing the Disparate Impact Ratios, sensitivity curves, and the specific demographic thresholds where the model requires human override.
+
+*Note: This framework relies entirely on the statistical validity of the public aggregates used to build the proxies; garbage-in yields garbage-out.*
+*Ensure the synthetic data generation script itself is reviewed for hidden biases before running the tests.*

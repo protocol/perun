@@ -1,0 +1,30 @@
+### Safety Review Workflow: Automated Herbicide Spraying
+
+**1. Harm Inventory (Map the Failure Modes)**
+Before deployment, explicitly record the specific risks where mapping errors cause physical damage:
+*   **Unsafe Automation of Irreversible Actions:** The drone spraying herbicide on non-target (organic) crops is a high-stakes, hard-to-undo action.
+*   **Bias/Unfair Outcomes:** Systematic misclassification of boundary zones disproportionately affects neighbors with organic certification, causing financial loss and regulatory penalties for them.
+*   **Over-reliance:** Operators trusting the "auto-spray" mode without verifying the underlying map confidence against ground truth.
+*   **Worst Case:** Total loss of a neighbor's organic certification due to chemical drift, resulting in lawsuits and permanent reputational damage for your company.
+
+**2. Measurement Plan (Test the Outputs, Not Just Code)**
+Do not assert safety; measure it using adversarial probes before the harvest deadline:
+*   **Probe Set A (Boundary Stress Test):** Run the system on historical maps where organic/conventional boundaries are ambiguous or known to have shifted. Include "positive controls" (known error cases that caused past damage) and "negative controls" (clear, distinct zones).
+*   **Probe Set B (Injection/Sensor Noise):** Simulate GPS drift or obscured visual markers to see if the system defaults to "spray" or "hold."
+*   **Metric & Threshold:** Define a "Zero-Tolerance" stop condition for any instance where the system targets a verified non-target zone. If the error rate on boundary cases is not 0%, the automated gate must trigger.
+*   **Residual Risk Reporting:** If you cannot measure performance on a specific crop type or terrain, label it **UNVERIFIED**. Do not invent an accuracy percentage.
+
+**3. Management Controls (The Human Gate & Logical Checks)**
+Since you cannot redo the infrastructure, you must layer deterministic logic and human gates over the existing maps:
+*   **The Hard Gate (Human-in-the-Loop):** Any spray decision targeting a zone within a defined buffer (e.g., 50 meters) of an organic farm boundary **must** require explicit human confirmation before execution. Full autonomous execution in these zones is prohibited.
+*   **Logical Check – "Negative Confirmation":** Implement a rule where the drone *only* sprays if the target zone has a secondary verification source (e.g., recent satellite imagery or manual flagging). If the map confidence is below a defined tier (e.g., "Single-source"), the system defaults to **NO SPRAY**.
+*   **Uncertainty Visualization:** Do not show operators a raw probability (e.g., "87% sure"). Instead, display defined coarse tiers: **CONFIRMED** (multiple sources), **CORROBORATED** (single recent source), or **UNVERIFIED** (old/conflicting data). Only **CONFIRMED** zones are eligible for auto-spray; **UNVERIFIED** zones require manual flight inspection.
+*   **Kill Switch:** Equip operators with an immediate "Abort Spray" command that overrides all automation if visual confirmation contradicts the map.
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name one specific person responsible for reviewing every "UNVERIFIED" zone flag before the season starts.
+*   **Transparency Artifact:** Create a simple "System Card" for your clients and neighbors stating: intended use (conventional crops only), known limitations (boundary ambiguity), and the specific protocol for protecting organic zones.
+*   **Legal Routing:** Whether you are legally required to disclose this automation level or liable for specific drift damages under Chilean agricultural law is a determination for counsel. Route this question immediately; do not assume compliance based on this technical review.
+
+**Note:** This workflow treats the mapping error as a known constraint and manages it via strict gating rather than promising a fix you cannot afford.
+**Note:** Never certify the system as "safe" or "drift-free"; only report the residual risk after these controls are tested.

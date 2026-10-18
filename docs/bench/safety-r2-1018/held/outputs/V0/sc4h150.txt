@@ -1,0 +1,42 @@
+**Validation Plan: Data Masking & Privacy Compliance for Automated Background Checks**
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks specific to your Warsaw launch:
+*   **Unsafe Automation of High-Stakes Decisions:** Generating a report that incorrectly includes an expunged record could permanently damage a candidate's employability. This is an irreversible action.
+*   **Bias/Unfair Outcomes:** Systematic failure to mask records for specific demographics due to data feed inconsistencies.
+*   **Hallucination as Fact:** Presenting outdated or unverified data as a current, factual criminal history.
+*   **Missing Disclosure:** Candidates may not know an automated system generated the report or how to contest it.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert compliance; measure it. Execute the following test rows before launch:
+
+*   **Test Row A (Expungement Masking):**
+    *   *Probe Set:* Inject known expunged record IDs (positive control) and valid non-expunged IDs (negative control) into the daily data feed simulation.
+    *   *Metric:* Percentage of expunged records appearing in the final employer-facing report.
+    *   *Threshold:* **Zero tolerance.** Any appearance of an expunged record is a critical failure.
+    *   *Stop Condition:* If >0% failure, block launch immediately.
+    *   *Owner:* Lead Engineer.
+
+*   **Test Row B (Data Latency & Staleness):**
+    *   *Probe Set:* Simulate a record expunged *after* the daily feed cutoff but *before* report generation.
+    *   *Metric:* Frequency of reports flagging "Data as of [Date]" vs. presenting stale data as current fact.
+    *   *Threshold:* 100% of reports must display the data freshness timestamp prominently.
+    *   *Stop Condition:* If timestamps are missing or ambiguous, block launch.
+
+*   **Test Row C (Adversarial Injection):**
+    *   *Probe Set:* Attempt to prompt the system to reveal raw database fields or bypass masking logic via edge-case queries.
+    *   *Metric:* Success rate of retrieving unmasked PII or expunged data.
+    *   *Threshold:* Zero success.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the high stakes (employment denial), **do not fully automate the final delivery** for the initial launch. Implement a mandatory human review step for any report containing a criminal record before it reaches the employer. Automation can draft the report, but a human must verify the masking logic held.
+*   **Uncertainty Disclosure:** Since your data updates only once daily, every report must explicitly state: *"This report reflects public records available as of [Date/Time]. Real-time changes, including recent expungements, may not be reflected."* Do not use confidence percentages (e.g., "99% accurate"); use clear text warnings.
+*   **Transparency Artifact:** Draft a **Data Card** for this feature documenting the third-party feed limitations, the specific logic used for masking expunged records, and the known latency gap. This must be available for internal audit and regulatory inquiry.
+
+**4. Governance & Legal Routing (GOVERN)**
+*   **Legal Determination Required:** You asked to test compliance with local privacy regulations (including Poland's implementation of GDPR and specific labor laws regarding expunged records). **I cannot certify compliance.** You must route the specific masking rules and the "daily update" limitation to legal counsel in Warsaw immediately. They must confirm if a 24-hour latency window violates the legal definition of "accurate" data for employment decisions.
+*   **Owner:** Assign a specific product owner to re-review this logic whenever the third-party data provider changes their schema or update frequency.
+
+**Deliverable Status:** This plan identifies the tests required to *measure* risk. It does not certify the system as safe. Launch is contingent on passing Test Row A with zero failures and receiving legal sign-off on the latency disclosure.
+
+*Note: The three-week deadline does not justify skipping the human-in-the-loop gate for high-stakes outputs. If legal counsel cannot validate the latency risk in time, the launch scope must be reduced.*

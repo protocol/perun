@@ -1,0 +1,42 @@
+### Stress-Test Protocol: Power Instability & Fail-Safe Verification
+
+**Objective:** Verify that power fluctuations during storm conditions never result in unauthorized entry (fail-open) for the SecureHome smart lock.
+
+**Constraint Adherence:** All tests are designed for execution within the two-week pre-storm window using lab-based simulation, requiring no field exposure.
+
+#### Phase 1: Simulation Setup (Days 1–2)
+*   **Environment:** Bench-test 100% of current hardware revision units. Do not test on installed doors yet; use a rig that measures bolt position (locked/unlocked) and logs state changes millisecond-by-millisecond.
+*   **Power Injection:** Use a programmable AC/DC power supply to simulate grid instability. Do not rely on manual unplugging.
+    *   *Brownouts:* Drop voltage to 80%, 60%, and 40% of nominal for durations of 100ms, 500ms, and 2s.
+    *   *Blackouts:* Cut power completely for 1s, 10s, and 60s.
+    *   *Surges:* Spike voltage to 110% and 120% for 50ms.
+*   **Trigger Condition:** Initiate a "Grant Access" command (via cloud or local keypad) exactly at the moment power fluctuation begins, peaks, and recovers.
+
+#### Phase 2: Execution Matrix (Days 3–10)
+Run 500 iterations per unit across the following scenarios. The **Pass Condition** for every single iteration is: *The bolt remains physically locked unless power is stable and verification is successfully completed.*
+
+1.  **The "Mid-Handshake" Cut:** Power loss occurs while the cloud verification is pending.
+    *   *Expected Result:* Request times out; bolt stays locked.
+2.  **The "Boot Loop" Trap:** Rapid power cycling (on/off every 2 seconds) while an access token is cached.
+    *   *Expected Result:* System fails to boot to an operational state rather than booting to an unlocked state.
+3.  **The "Brownout Logic" Error:** Sustained low voltage (60%) during the solenoid actuation attempt.
+    *   *Expected Result:* Solenoid does not fire; system logs "Insufficient Power" and maintains lock.
+4.  **The "Recovery" Spike:** Power returns instantly after a long outage while a previous (stale) access request is still in memory.
+    *   *Expected Result:* System performs a fresh verification check before acting; stale requests are discarded.
+
+#### Phase 3: Human Gate & Irreversible Action Control (Days 11–12)
+*   **Manual Override Verification:** Confirm that mechanical keys or internal emergency escapes function independently of the electronic state. This is the mandatory human-in-the-loop fallback for high-stakes entry/exit.
+*   **False Positive Audit:** Any single instance where the bolt retracts without valid power + valid auth is a **Critical Failure**.
+    *   *Stop Condition:* If >0 unauthorized openings occur across the fleet of test units, halt launch immediately. The risk of locking out residents is manageable; the risk of admitting strangers is not.
+
+#### Phase 4: Reporting & Transparency (Days 13–14)
+*   **Residual Risk Statement:** Document the specific voltage/frequency ranges tested. Explicitly state: "Safety verified within simulated parameters X to Y. Behavior outside these ranges is UNVERIFIED."
+*   **Artifact Creation:** Generate a **Safety Data Card** for this hardware revision listing:
+    *   Tested failure modes (brownout, surge, cycle).
+    *   Known limitations (e.g., "If battery backup is also depleted, mechanical key is the only entry").
+    *   Owner of the safety sign-off.
+
+**Final Directive:** Do not certify the system as "safe." Instead, present the data: "In 5,000 simulated storm events, the lock remained secure in 100% of tests. Zero unauthorized entries observed. Mechanical override confirmed functional." The decision to ship rests with product ownership based on this evidence.
+
+*Note: Ensure legal counsel reviews if "automated denial of entry" constitutes a regulated decision in your specific rental jurisdictions.*
+*Note: If any test unit exhibits "ghost unlocking," the root cause must be resolved before the storm season; do not patch via software if the fault is hardware-related.*

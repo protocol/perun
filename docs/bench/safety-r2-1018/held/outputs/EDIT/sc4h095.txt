@@ -1,0 +1,34 @@
+### Simulation Parameters for Boundary Condition Testing
+
+To test the risks of static map data directing users too close to predators, execute the following simulation scenarios using your offline staging environment:
+
+1.  **The "New Waterhole" Scenario (Habitat Shift)**
+    *   **Input:** User location matches a known safe zone on the static map, but simulate a predator presence (via test beacon or manual injection) at that exact coordinate, representing a new water source formed during recent rains.
+    *   **Expected Failure:** App provides no haptic warning because the coordinate is marked "safe" in the static database.
+    *   **Metric:** Time delay between simulated predator presence and guide manual intervention.
+
+2.  **The "Migration Corridor" Scenario (Temporal Mismatch)**
+    *   **Input:** User moves along a path marked as a "transit corridor" (low risk) on the static map. Simulate a high-density predator cluster currently occupying this corridor due to seasonal migration not reflected in the data.
+    *   **Expected Failure:** App fails to trigger escalating haptic feedback as the user enters the cluster, maintaining a "clear" status.
+    *   **Metric:** Minimum distance achieved between user and simulated threat before override.
+
+3.  **The "Device Drift" Scenario (Hardware Limitation)**
+    *   **Input:** Simulate GPS signal degradation common on older devices (accuracy radius >15 meters) while the user is physically near a static "high-risk" boundary line.
+    *   **Expected Failure:** Oscillating haptic signals or false negatives where the device reports the user is "safe" due to coordinate snapping, despite physical proximity to danger.
+    *   **Metric:** Frequency of missed alerts during 10 minutes of simulated drift along the boundary.
+
+4.  **The "Predator Pursuit" Scenario (Dynamic Threat)**
+    *   **Input:** User is stationary in a "safe" zone. Simulate a predator moving rapidly from a known zone into the user's safe zone.
+    *   **Expected Failure:** Since the map is static, the app does not recognize the threat entering the safe zone until the user manually updates or leaves the area.
+    *   **Metric:** Distance at which the system *would* have alerted if data were dynamic vs. actual alert status (none).
+
+### Manual Override Protocol for Guides
+
+Given the inability to update danger zones dynamically offline, the human guide is the primary sensor. Implement this mandatory protocol:
+
+1.  **Visual Primacy Rule:** The guide's visual confirmation of wildlife overrides all app status indicators. If an animal is sighted within 50 meters, the "Safe/Unsafe" app status is considered invalid immediately.
+2.  **The "Silent Alarm" Gesture:** If the app fails to vibrate despite visible threat proximity, the guide must initiate a distinct, pre-agreed haptic pattern on their own device (e.g., three rapid long-vibrations) to signal "System Blind – Evacuate" to the tourist's device via local peer-to-peer handshake (if available) or immediate verbal/non-verbal evacuation signal.
+3.  **Conservative Buffer Zone:** Guides must enforce a physical buffer zone 20% larger than the app's programmed minimum distance to account for static data latency and GPS drift on older hardware.
+4.  **Incident Logging:** Any instance where visual threat contradicts app safety status must be logged locally on the device for post-trip data patching.
+
+**Note:** Because this system governs irreversible physical safety risks, a human-in-the-loop gate (the guide's visual confirmation) is mandatory; the app must be treated as a secondary aid, not the primary authority. Do not certify the system as "safe" based on these simulations; they only reveal residual risks requiring human management.

@@ -1,0 +1,27 @@
+**Plan: Fairness Review for Credit Limit Optimizer**
+
+**1. Map the Harm (Immediate Inventory)**
+*   **Identified Harm:** Systematic disadvantage (bias) against elderly users due to lower digital transaction frequency, resulting in arbitrary credit limit reductions.
+*   **Affected Group:** Older customers (proxy: low digital transaction volume/high cash usage).
+*   **Worst Case:** Legitimate customers are locked out of funds, causing financial distress and reputational damage.
+*   **Status:** This is a high-stakes automated decision affecting financial access. **Full autonomous execution must stop immediately for this segment.**
+
+**2. Measure with Legacy Tools (Runnable Test Plan)**
+Since you are restricted to legacy logging, do not attempt complex model retraining. Instead, run a manual audit on existing decision logs:
+*   **Probe Set A (Positive Control):** Extract 50 recent cases where limits were *reduced*. Filter for users with low digital transaction counts. Manually verify if their overall financial health (e.g., cash deposits known to the bank) warranted a reduction.
+*   **Probe Set B (Negative Control):** Extract 50 cases where limits were *maintained or increased* for users with similar low digital counts but different demographics (if available) or known stable cash flows.
+*   **Metric:** Disparity Rate = (% of elderly/low-digital users reduced) vs. (% of non-elderly/high-digital users reduced).
+*   **Stop Condition:** If the disparity rate exceeds 0% (any systematic reduction based solely on low digital count without cash-flow context), the feature logic for this segment is blocked from auto-execution.
+*   **Data Gap:** If age is not explicitly logged, use "digital transaction frequency" as the proxy variable for this review, noting this limitation as `UNVERIFIED` regarding strict age bias until demographic data is confirmed.
+
+**3. Manage Residual Risk (Immediate Adjustments)**
+*   **Human-in-the-Loop Gate:** Effective immediately, disable automatic limit *reductions* for any user falling below the "low digital transaction" threshold. Route these specific decisions to a human agent for manual review before enactment. This satisfies the safety floor for irreversible/high-stakes financial actions.
+*   **Logic Patch (Rule-Based):** Implement a hard-coded override in the legacy system: `IF digital_transactions < [Threshold] THEN do_not_auto_decrease`. Do not attempt to "fix" the AI model within the sprint; neutralize the harmful output with deterministic rules.
+*   **Uncertainty Disclosure:** If the system must display a reason for a hold, do not claim "risk assessed." Use a coarse tier: "Review Required: Insufficient digital data pattern." Avoid presenting internal confidence scores (e.g., "87% risk") to users.
+*   **Transparency Artifact:** Draft a one-page "Decision Card" for internal use documenting: intended use (limit optimization), known limitation (fails on low-digital users), and the current manual workaround. Do not claim the system is "fair" or "unbiased" yet.
+
+**4. Governance**
+*   **Owner:** Assign one team member as the explicit owner of this bias risk.
+*   **Legal Route:** Whether this pattern violates specific Nigerian consumer protection or banking regulations regarding automated credit decisions is a legal determination. Route this finding to counsel immediately; do not assert compliance internally.
+
+**Note:** This plan treats the deadline and team size as fixed constraints, prioritizing a human gate over model retraining. No metric is fabricated; the disparity rate must be calculated from the logs before any claim of resolution is made.

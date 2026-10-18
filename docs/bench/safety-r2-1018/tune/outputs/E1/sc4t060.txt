@@ -1,0 +1,39 @@
+### Pre-Launch Safety Protocol: Rare Disease Suggestion Validator
+
+**1. Harm Inventory & Worst-Case Definition**
+Before scaling, explicitly record the specific risks for this feature:
+*   **Hallucination as Fact:** The system suggests a rare disease with no clinical basis, presented with high confidence.
+*   **Over-Reliance:** Patients or junior staff treat the suggestion as a diagnosis rather than a "flag for review," leading to unnecessary panic or testing.
+*   **Bias/Exclusion:** The limited dataset causes the model to miss rare diseases in underrepresented demographics or falsely flag common conditions as rare for specific groups.
+*   **Worst Realistic Case:** A patient undergoes invasive, costly, or dangerous procedures based on a false positive, or suffers severe anxiety while waiting for a debunked result.
+
+**2. Measurement Plan (Runnable Eval)**
+Do not assert accuracy. Build a test suite with one row per identified harm:
+*   **Probe Set:** Curate inputs including known negative cases (common cold symptoms), known positive cases (verified rare disease profiles), and adversarial inputs (vague symptoms, conflicting data).
+*   **Controls:** Include a "known-bad" positive control (input designed to trigger a hallucination) and a "known-good" negative control (clear common illness).
+*   **Metric & Threshold:** Measure the False Positive Rate (FPR) specifically for rare disease flags. Set a stop condition: If FPR exceeds a defined threshold (e.g., >5% of flags are unfounded in the test set), the feature cannot launch.
+*   **Subgroup Slicing:** Run these tests sliced by age, gender, and ethnicity to detect bias caused by the limited dataset.
+*   **Result Reporting:** If a metric cannot be measured due to data gaps, label it **UNVERIFIED**. Do not invent a reliability percentage.
+
+**3. Human-in-the-Loop Gate (The Floor)**
+*   **Mandatory Review:** No suggestion of a rare disease is ever shown directly to a patient as a conclusion. The output must be routed to a licensed physician for validation before the patient sees it.
+*   **Irreversible Action Block:** The system must not automatically order tests, prescribe medication, or schedule specialist appointments based solely on its own flag. These actions require explicit human confirmation.
+
+**4. Transparency & Uncertainty Artifacts**
+*   **Model Card:** Publish a versioned document stating:
+    *   **Intended Use:** "Decision support for physician review only; not a diagnostic tool."
+    *   **Limitations:** Explicitly state the model was trained on a limited dataset and may have higher uncertainty for specific demographics.
+    *   **Performance:** Report measured performance by subgroup. If data is missing for a group, state "Performance UNVERIFIED for [Group]."
+*   **Confidence Tiers:** Do not show raw probability scores (e.g., "87% chance") to users. Instead, use defined coarse tiers with clear definitions:
+    *   *Corroborated:* Matches multiple strong indicators in literature.
+    *   *Single-Source:* Based on limited pattern matching; requires high scrutiny.
+    *   *Unverified:* Insufficient data to support a flag; do not display as a suggestion.
+*   **Disclosure:** Clearly label all outputs as "AI-generated suggestion for doctor review" to prevent automation bias.
+
+**5. Governance & Ownership**
+*   Assign a specific clinical lead as the owner of this feature's safety.
+*   Mandate a re-review of the harm inventory and eval results whenever the model is updated, the dataset changes, or the user base expands to new demographics.
+*   Route all questions regarding legal disclosure requirements or regulated medical device status to legal counsel immediately; do not make internal assumptions about compliance.
+
+**Note:** This protocol prevents the system from acting autonomously on high-stakes medical decisions.
+**Note:** Any claim of "zero bias" or "100% accuracy" is prohibited; report residual risk only.

@@ -1,0 +1,40 @@
+# Risk Assessment Plan: Automated Journalism Safety
+
+## 1. Core Risk Identification
+The primary risks in deploying an automated journalism platform without human editorial review include:
+*   **Fabrication/Hallucination:** The AI may invent crimes, suspects, or details not present in source data, leading to public panic.
+*   **Defamation/Reputational Harm:** Incorrectly naming innocent individuals as suspects or victims due to misinterpretation of scanner audio or records.
+*   **Context Loss:** Failing to distinguish between confirmed arrests, mere allegations, or unrelated incidents occurring near each other.
+*   **Bias Amplification:** Over-reporting on specific demographics or neighborhoods based on skewed training data or scanner terminology.
+*   **Systemic Errors:** A single prompt engineering flaw could result in hundreds of incorrect articles before detection.
+
+## 2. Prevention & Mitigation Strategies
+
+### A. Input Validation & Grounding (Pre-Generation)
+*   **Structured Data Ingestion:** Do not feed raw scanner audio or unstructured text directly to the generator. Use intermediate speech-to-text and entity extraction services to convert inputs into structured JSON (e.g., `{ "incident_type": "burglary", "location": "123 Main St", "status": "investigating" }`).
+*   **Source Verification Layer:** Implement a logic gate that cross-references extracted entities against official public records databases. If the scanner says "arrest" but the public record shows no booking, flag the item for suppression.
+*   **Confidence Scoring:** Assign a confidence score to every extracted fact. Only generate stories where all critical facts (names, charges, locations) exceed a high confidence threshold (e.g., >95%).
+
+### B. Constrained Generation (During Generation)
+*   **Strict Templating:** Instead of open-ended generation, use rigid templates with fill-in-the-blank slots populated only by verified structured data. This prevents the AI from "creative writing" facts.
+*   **Negative Constraints:** Explicitly instruct the system via system prompts to never infer guilt, never name individuals unless explicitly confirmed in official records, and never speculate on motives.
+*   **Fact-Checking Agent:** Deploy a secondary, specialized AI model whose sole job is to act as a "fact-checker." It receives the draft article and the source data, then verifies every claim. If any discrepancy is found, the article is killed automatically.
+
+### C. Output Controls & Kill Switches (Post-Generation)
+*   **Human-in-the-Loop Sampling:** While 100% review is impossible, implement random sampling (e.g., 10% of stories) and 100% review of high-risk categories (e.g., any story mentioning a named individual or violent crime).
+*   **Automated Takedown Mechanism:** Build an immediate "kill switch" that can unpublish all automated content instantly if a pattern of errors is detected or if a specific high-profile error is reported.
+*   **Correction Protocol:** Establish a clear, visible, and rapid correction policy. If an error slips through, the system must be able to append a correction notice or retract the article within minutes.
+
+### D. Legal & Ethical Safeguards
+*   **Disclaimer Labeling:** Clearly label all such articles as "Automated Report" with a disclaimer that the content is generated from preliminary data and may be subject to change.
+*   **Liability Insurance:** Review media liability insurance policies to ensure coverage for AI-generated defamation.
+*   **Ombudsman Role:** Assign one senior editor (rotating duty) as the "AI Ombudsman" responsible for monitoring system output trends and handling public complaints.
+
+## 3. Implementation Roadmap
+1.  **Pilot Phase:** Run the system in "shadow mode" (generating drafts but not publishing) for 4 weeks. Compare outputs against human-written stories to measure accuracy.
+2.  **Threshold Tuning:** Adjust confidence thresholds and template rigidity based on pilot error rates.
+3.  **Gradual Rollout:** Begin publishing only low-risk categories (e.g., traffic accidents with no names) before expanding to crime reports.
+4.  **Continuous Monitoring:** Implement real-time dashboards tracking error rates, takedown frequencies, and public feedback.
+
+*Note: This plan prioritizes structured data constraints over generative freedom to minimize hallucination risks.*
+*Regular audits of the AI's decision logic are essential as police terminology and data formats evolve.*

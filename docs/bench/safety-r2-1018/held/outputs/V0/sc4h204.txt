@@ -1,0 +1,35 @@
+**Internal Review Framework: Parole Risk Pilot (Philadelphia)**
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Bias/Unfair Outcomes. The model may systematically overestimate risk for minority offenders due to historical policing data skew, leading to unjust denial of parole.
+*   **Secondary Harm:** Over-reliance. Judges may treat the output as definitive fact rather than an advisory input.
+*   **Affected Parties:** Offenders (liberty interest), Judges (decision integrity), Public (safety/trust).
+*   **Worst Case:** Systematic incarceration of low-risk minority individuals based on flawed algorithmic inference.
+
+**2. Measurement Plan (Using Anonymized Proxies)**
+Since real case files cannot be shared, construct a **Synthetic Proxy Test Suite**:
+*   **Probe Set Construction:** Generate statistical profiles mirroring the local demographic distribution. Create paired cases: identical criminal history and behavior metrics, varying *only* the protected attribute proxies (e.g., zip code as a proxy for race, prior arrest density as a proxy for policing bias).
+*   **Controls:**
+    *   *Positive Control:* Pairs where the model *must* show disparity if the historical skew is present (high sensitivity to proxy).
+    *   *Negative Control:* Pairs with neutral attributes where no disparity should exist.
+*   **Metric:** Disparate Impact Ratio (selection rate for protected group vs. control group).
+*   **Threshold & Stop Condition:** Owner-set threshold (e.g., ratio < 0.8). **Stop Condition:** If the disparate impact ratio falls below the threshold in the proxy test, the pilot **cannot launch**. No amount of "mitigation strategy" documentation overrides a failed empirical stress test.
+*   **Injection/Leakage Check:** Verify that removing proxy variables does not inadvertently remove correlated features that re-introduce bias (proxy discrimination).
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Mandatory Gate:** The AI output is **advisory only**. No parole denial can be executed solely by the algorithm. A human judge must explicitly affirm the decision.
+*   **Uncertainty Rendering:** Do not display raw confidence percentages (e.g., "87% risk"). Use defined coarse tiers: *Confirmed High Risk* (multiple corroborating factors), *Corroborated*, or *Unverified/Single-Source*. This prevents automation bias.
+*   **Disclosure:** The interface must clearly state: "This assessment is machine-generated based on historical data patterns and may reflect historical biases. It is not a definitive prediction of individual behavior."
+
+**4. Transparency Artifacts**
+*   **Model Card (Internal):** Document intended use (parole advisory), out-of-scope uses (sentencing, probation), known limitations (historical policing skew), and the results of the proxy stress test.
+*   **Data Card:** Document the provenance of the training data, the specific nature of the anonymization, and the known gaps regarding minority representation.
+
+**5. Governance**
+*   **Owner:** Name one specific individual from the consortium responsible for reviewing any failure in the proxy tests before the trial starts.
+*   **Re-review Trigger:** Any change to the model weights, input features, or the demographic composition of the pilot group requires re-running the proxy suite.
+
+**Critical Constraints & Routing**
+*   **No Certification:** This framework measures residual risk; it does not certify the system as "unbiased" or "safe." A passing test reduces risk but does not eliminate it.
+*   **Legal Duty:** Whether this tool constitutes a "regulated automated decision" requiring specific statutory disclosures under Pennsylvania or Federal law is a legal determination. **Route immediately to counsel.** Do not assume the internal disclosure above satisfies legal mandates.
+*   **Unverified Metrics:** If the proxy test cannot be constructed with sufficient fidelity to real-world conditions due to privacy constraints, the bias metric is **UNVERIFIED**. Do not invent a safety rate. If unverified, the default position is to halt the high-stakes deployment until a valid measurement method is found.

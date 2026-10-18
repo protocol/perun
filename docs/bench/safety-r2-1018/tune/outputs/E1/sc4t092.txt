@@ -1,0 +1,41 @@
+### Validation Plan: Image Evidence Integrity for Disaster Adjuster
+
+**Objective:** Verify the model processes all relevant visual evidence types before the regulatory review, given the constraint of one full simulation run.
+
+**1. Pre-Simulation Harm Inventory (Immediate)**
+Before running the simulation, document the specific risk: **Systematic Disregard of Evidence**.
+*   **Affected Group:** Policyholders with complex damage patterns (e.g., structural + content damage).
+*   **Worst Case:** The model ignores secondary damage indicators (e.g., water stains behind fallen drywall) because it focuses only on primary structural failure, leading to underpayment and regulatory penalty.
+*   **Action:** List the top 5 critical evidence types the model *must* weigh (e.g., roof integrity, interior water levels, personal property loss, foundation cracks, mold precursors).
+
+**2. The Single Simulation Strategy: Adversarial "Positive Control" Suite**
+Since only one full simulation is permitted, do not use random data. Construct a **deterministic, adversarial test set** specifically designed to force the model to fail if it ignores evidence. This single run must serve as both a stress test and a validation gate.
+
+*   **Input Design (The Probe Set):** Create 20 synthetic or carefully selected real-world images where the *only* variable is the presence/absence of a specific evidence type.
+    *   *Row 1-5 (Positive Controls):* Images containing clear, isolated instances of each of the 5 critical evidence types identified above. The correct payout *must* increase if these are detected.
+    *   *Row 6-10 (Negative Controls):* Images visually similar to Row 1-5 but with the critical evidence digitally removed or obscured. The payout should remain lower or unchanged.
+    *   *Row 11-20 (Edge Cases):* Images with conflicting signals (e.g., minor roof damage but severe interior flooding) to test weighing logic.
+*   **Metric:** **Evidence Attribution Delta.** Calculate the difference in payout output between the Positive and Negative control pairs.
+*   **Pass Threshold (Owner-Set):** Any critical evidence type that results in a payout delta of <5% (or your defined materiality threshold) compared to its negative control is a **failure**.
+*   **Stop Condition:** If *any* of the 5 critical evidence types are disregarded (fail the threshold), the simulation halts, and the feature **cannot** proceed to regulatory review.
+
+**3. Human-in-the-Loop Gate (Mandatory)**
+Because this system determines financial payouts (a high-stakes, irreversible action for the user), full automation is unsafe at the pilot stage.
+*   **Requirement:** Any claim where the model's confidence in "total damage assessed" is not "Confirmed" (see below) must route to a human adjuster.
+*   **Confidence Reporting:** Do not display raw percentages (e.g., "87% sure") to users or regulators. Instead, map internal scores to defined tiers:
+    *   *Confirmed:* Multiple evidence types detected, high agreement.
+    *   *Corroborated:* Primary evidence detected, secondary missing.
+    *   *Unverified:* Critical evidence ambiguous or missing.
+*   **Rule:** All "Unverified" outputs trigger mandatory human review before any payout offer is generated.
+
+**4. Transparency Artifact (Model Card Draft)**
+Prepare a one-page summary for the regulators containing:
+*   **Intended Use:** Rapid triage of disaster claims; not final adjudication without human oversight.
+*   **Limitations:** Explicitly list the evidence types the model struggles with (based on simulation results).
+*   **Residual Risk:** Mark any untested evidence categories as `UNVERIFIED`. Do not invent accuracy metrics.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one product manager to sign off on the simulation results.
+*   **Legal Route:** Immediately route the question of "automated decision disclosure requirements" to legal counsel. Do not assert compliance internally.
+
+**Note:** This plan prioritizes detecting *ignored evidence* over general accuracy. If the simulation shows the model ignores a critical damage type, the only safe path is to expand the human review gate, not to retrain before the deadline.

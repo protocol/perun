@@ -1,0 +1,34 @@
+### Simulation Strategy for Clinical Trial Matcher Validation
+
+Given the constraint of using only existing simulated data and the critical safety risk of enrolling ineligible patients, the following plan stress-tests your eligibility algorithms without requiring new real-world data access.
+
+**1. Construct Adversarial "Synthetic Edge" Records**
+Do not rely solely on your current simulated dataset's distribution. Programmatically generate a new layer of synthetic patient records specifically designed to break your logic. Create "positive controls" (patients who clearly match) and "negative controls" (patients with explicit contraindications). Then, generate "adversarial cases" where contraindications are obscured:
+*   **Synonym Swaps:** Replace standard medical terms with colloquialisms or abbreviations found in real notes but missing from your ontology.
+*   **Conflicting Data:** Create records where structured fields (e.g., diagnosis code) contradict unstructured notes (e.g., physician narrative saying "rule out diagnosis").
+*   **Temporal Ambiguity:** Insert conditions that existed in the past but are resolved, testing if the system incorrectly flags them as active contraindications.
+
+**2. Implement a "Human-in-the-Loop" Gate for High-Stakes Matches**
+Because enrolling an ineligible patient poses serious health risks, full automation is unsafe for the pilot. Configure the system to operate in a "recommendation-only" mode.
+*   **The Rule:** Any patient flagged as a potential match must trigger a mandatory review by a human researcher before any enrollment action is taken.
+*   **The Test:** Run your adversarial dataset through the system. Measure how many high-risk false positives (ineligible patients) the algorithm confidently recommends. The goal is not 100% algorithmic accuracy, but 100% capture of risky cases for human review.
+
+**3. Define Confidence Tiers, Not Percentages**
+Avoid outputting raw confidence scores (e.g., "87% match") to users or researchers, as this implies a precision your simulated validation cannot prove. Instead, map outputs to defined qualitative tiers:
+*   **Confirmed:** All criteria met with high-clarity data; still requires human sign-off.
+*   **Review Required:** Missing data, conflicting notes, or borderline criteria.
+*   **Excluded:** Clear contraindication found.
+Validate that your system correctly assigns "Review Required" to your adversarial edge cases rather than forcing a binary "Match/No Match" decision.
+
+**4. Execute the "Stop Condition" Protocol**
+Establish a rigid pass/fail threshold before running the simulation.
+*   **Metric:** Zero unflagged false positives on the adversarial "contraindication" set.
+*   **Stop Condition:** If the system auto-recommends *any* patient with a known simulated contraindication without triggering the human review gate, the validation fails. Do not proceed to human trials until the logic is adjusted to catch these specific failure modes.
+
+**5. Document Residual Risk as "UNVERIFIED"**
+In your final validation report, explicitly state that performance metrics derived from simulated data are **UNVERIFIED** against real-world complexity. List the specific types of real-world data quirks (e.g., handwriting errors, unique local jargon) that your simulation could not replicate. This transparency ensures stakeholders understand that the pilot is a logic check, not a safety certification.
+
+***
+
+**Note:** This plan treats the inability to access real data as a fixed constraint, focusing on maximizing the value of synthetic adversarial testing.
+**Note:** Legal requirements for clinical trial automation and patient safety disclosures must be routed to your counsel; this technical plan does not assert regulatory compliance.

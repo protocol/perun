@@ -1,0 +1,35 @@
+**Pre-Launch Validation Plan: Jury Selection Fairness**
+
+Given your strict 24-hour data retention constraint and the high-stakes nature of automated jury selection, you cannot rely on post-hoc audits of real user data. Instead, you must shift to a **Synthetic Benchmark & Shadow Mode** strategy. This approach validates fairness before launch without storing protected personal data.
+
+**1. Construct a Synthetic "Golden Set" (Do this immediately)**
+Since you cannot retain real profiles to test against, build a static, synthetic dataset of 500–1,000 mock social media profiles.
+*   **Composition:** Explicitly vary protected characteristics (race, gender, age, religion, disability) while keeping legal relevance constant. Include "hard cases" where bias signals are ambiguous (e.g., cultural slang vs. hate speech).
+*   **Ground Truth:** Have senior attorneys manually label this set for "exclude/no-exclude" decisions based *only* on legally permissible criteria. This is your baseline for fairness.
+*   **Retention:** This synthetic data is not "personal data" under your constraint and can be stored indefinitely for regression testing.
+
+**2. Implement "Shadow Mode" Testing (Pre-Beta)**
+Before the tool makes actual recommendations to users:
+*   Run the beta cohort's live traffic through the model in "shadow mode" (the model analyzes inputs but outputs are hidden from users and do not affect selection).
+*   Compare the model's shadow decisions against the attorneys' manual reviews for a random sample of live cases.
+*   **Crucial Step:** Because you cannot store the input data for 24 hours to audit later, you must compute fairness metrics **in-memory** during the session. Calculate disparity rates (e.g., exclusion rate by inferred demographic) instantly and log only the *aggregate statistical result*, not the underlying profiles. Delete the raw input immediately after the metric is computed.
+
+**3. Define Stop Conditions & Thresholds**
+Establish clear "kill switches" based on the Synthetic Golden Set and Shadow Mode results:
+*   **Threshold:** If the exclusion rate for any protected group in the synthetic set deviates by >5% from the manual ground truth, or if shadow mode shows a statistically significant disparity (p < 0.05) compared to human reviewers, **block the launch**.
+*   **Action:** Do not attempt to "tune" the model on live data due to retention limits. If the threshold is breached, revert to rule-based logic or halt deployment.
+
+**4. Mandatory Human-in-the-Loop Gate**
+Because this system influences a constitutional right (fair trial) and involves irreversible exclusion:
+*   The tool must never automatically exclude a juror. It should only **flag** potential biases for attorney review.
+*   The final decision to exclude must always be made by a human attorney who sees the raw evidence, not just the AI's score. This mitigates automation bias and satisfies the requirement for human oversight in high-stakes legal decisions.
+
+**5. Transparency Artifact (Model Card)**
+Prepare a brief internal "Model Card" documenting:
+*   **Intended Use:** Assistance only; never final decision-making.
+*   **Limitations:** Explicitly state that the model has not been validated on real-world demographic distributions due to retention constraints, and relies on synthetic proxies.
+*   **Known Risks:** List the specific types of bias (e.g., dialect, cultural references) the synthetic set may have missed.
+
+**Notes:**
+*   Route the question of whether this tool constitutes a "regulated automated decision" requiring specific legal disclosures under local bar rules or civil procedure laws to outside counsel immediately; do not assume the 24-hour rule absolves regulatory duties.
+*   Treat any confidence score the model generates as a coarse tier (e.g., "High Confidence Flag," "Low Confidence Flag") rather than a precise percentage to prevent attorneys from over-trusting the algorithm's certainty.

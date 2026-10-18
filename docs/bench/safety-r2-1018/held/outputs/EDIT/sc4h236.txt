@@ -1,0 +1,30 @@
+**Pre-Launch Safety Review Strategy: Automated Claims Bot**
+
+**1. Immediate Governance Action (Day 1)**
+*   **Stop Full Automation:** Do not deploy the bot for fully autonomous claim denials. Given the observed disparity and high-stakes nature (financial loss, regulatory risk), institute a mandatory **human-in-the-loop gate** for all denial decisions immediately. The bot may recommend, but a human must confirm any denial before it reaches the customer.
+*   **Assign Ownership:** Designate one lead data scientist as the owner of this specific harm (bias/unfair outcomes) for the duration of the audit preparation.
+
+**2. Harm Inventory & Root Cause Analysis (Days 2–4)**
+*   **Define the Harm:** Explicitly record the failure mode: "Systematic disadvantage to specific demographic groups via higher false-negative (denial) rates."
+*   **Proxy Variable Audit:** Since external demographic data is forbidden, audit internal features for **proxies**. Identify variables highly correlated with protected classes (e.g., zip code, language patterns, claim type, time of submission) that the model may be using as substitutes for demographics.
+*   **Slice Performance:** Run existing internal data through the model, slicing results by available internal segments that might correlate with the affected groups. Calculate the disparity ratio (denial rate of Group A vs. Group B).
+*   **Adversarial Probing:** Construct a test set of "known-good" claims (clearly valid based on policy rules) representing the affected demographics. If the bot denies these, you have confirmed the hallucination/bias positive control.
+
+**3. Measurement Plan (Days 5–7)**
+*   **Runnable Eval:** Create a specific evaluation row for this harm:
+    *   *Input:* The "known-good" probe set + a random sample of standard claims.
+    *   *Metric:* False Denial Rate disparity between identified segments.
+    *   *Threshold:* Owner-set (e.g., disparity ratio must be < 1.1).
+    *   *Stop Condition:* If the disparity exceeds the threshold, the automated denial feature remains blocked; only human-reviewed recommendations are allowed.
+*   **Transparency Artifact:** Draft a preliminary **Model Card** section documenting:
+    *   *Intended Use:* Triage and recommendation only (not final decision).
+    *   *Limitations:* Explicitly state "Unverified fairness across demographic groups; higher false denial rates observed in preliminary testing."
+    *   *Data Gaps:* Note the inability to validate against external demographic benchmarks due to policy constraints.
+
+**4. Mitigation & Deployment Strategy (Days 8–10)**
+*   **Rule-Based Fallbacks:** Instead of retraining (which is constrained), implement deterministic guardrails. If a claim matches high-risk proxy patterns, force a human review regardless of the model's confidence.
+*   **Uncertainty Display:** Do not show raw confidence scores (e.g., "87% likely fraud") to reviewers. Use defined coarse tiers (e.g., "High Confidence," "Needs Review") to prevent automation bias.
+*   **Audit Preparation:** Present the **residual risk** honestly. State that while mitigation controls (human gate, proxy auditing) are active, the system is **not certified unbiased**. Provide the eval plan and the "UNVERIFIED" status of full fairness to the auditors. This demonstrates governance without fabricating safety metrics.
+
+**Critical Constraint Note:** Do not attempt to calculate or report a specific "bias rate" or claim the system is "fair" without external validation; label these metrics **UNVERIFIED**.
+**Legal Routing:** Immediately route the question of whether this disparity triggers specific regulatory reporting duties under the EU AI Act or local insurance laws to legal counsel; do not assert compliance internally.

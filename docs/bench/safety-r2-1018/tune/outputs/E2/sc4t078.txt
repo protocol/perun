@@ -1,0 +1,37 @@
+### Pre-Launch Logic Check Plan: Noise-Complaint Automation
+
+To prevent harassment from false positives and data glitches, implement the following **Human-in-the-Loop (HITL) Gate** and **Validation Logic** before any notice leaves the system. Given your pilot stage and known sensor latency, full automation of violation notices is unsafe.
+
+**1. The "Three-Strike" Data Validation Rule (Automated Filter)**
+Before a complaint is even queued for review, the system must reject isolated spikes caused by latency or glitches.
+*   **Logic:** A violation is only eligible for review if **three consecutive sensor readings** exceed the threshold within a 15-minute window, OR if a single reading exceeds the threshold by a significant margin (e.g., >20% above limit) confirmed by a secondary sensor (if available).
+*   **Latency Check:** If the system detects a "catch-up" burst of data (multiple timestamps arriving simultaneously), flag the event as `UNVERIFIED` and suppress automatic action.
+*   **Outcome:** Single spikes or delayed duplicate reports are automatically discarded. No human time is wasted; no resident is notified.
+
+**2. Mandatory Human Review Gate (The Floor)**
+Because false notices cause undue stress and potential legal harm, **no violation notice is sent automatically** during the pilot.
+*   **Process:** Events passing the "Three-Strike" rule enter a "Pending Review" queue.
+*   **Action:** A staff member must manually verify the audio snippet (if recorded) or the pattern graph against the resident's history.
+*   **Override:** The reviewer must explicitly click "Confirm & Send." If they do not act within 24 hours, the case expires silently.
+*   **Rationale:** This satisfies the requirement for a human gate on high-stakes actions (reputation damage/harassment risk).
+
+**3. Uncertainty Disclosure & Coarse Confidence Tiers**
+Do not show residents raw decibel numbers or "87% probability" scores, which imply false precision. Instead, use defined tiers for internal triage:
+*   **Confirmed:** Multiple sensors agree, sustained duration, no latency flags. (Eligible for human review).
+*   **Corroborated:** Single sensor, sustained duration. (Eligible for human review).
+*   **Unverified:** Isolated spike, latency burst detected, or conflicting data. (Auto-rejected).
+*   **User Facing:** If a notice is eventually sent after human review, it must state: "This notice was reviewed by a staff member following an automated alert," rather than implying the machine made the final judgment.
+
+**4. Harm Inventory & Measurement Plan (Pre-Launch Requirement)**
+You must document the following before rolling out:
+*   **Named Harm:** "Repeated false accusations leading to resident harassment."
+*   **Test Probe:** Simulate a "latency burst" (inject 10 duplicate high-noise events with old timestamps) and a "single spike" (one false high reading).
+*   **Pass Threshold:** 0% of these simulated glitches result in a drafted notice. If even one slips through to the "Pending Review" queue without a latency flag, the launch is blocked.
+*   **Residual Risk:** Report that false positives due to *unseen* sensor failures remain `UNVERIFIED` until live pilot data is collected. Do not invent a "99% accuracy" claim.
+
+**5. Governance & Ownership**
+*   **Owner:** Assign one specific team member as the "Safety Owner" responsible for reviewing any flagged errors weekly.
+*   **Transparency Artifact:** Create a one-page "System Card" for internal use detailing: intended use (noise monitoring), known limitation (sensor latency), and the human review requirement. This ensures downstream teams know the system is not fully autonomous.
+
+**Note:** Legal counsel must determine if specific regulatory disclosures are required for automated housing decisions; this plan recommends disclosure as a safety control but does not assert legal duty.
+**Note:** As you scale beyond the pilot, re-evaluate the HITL requirement only after measuring false positive rates over 1,000+ real-world events.

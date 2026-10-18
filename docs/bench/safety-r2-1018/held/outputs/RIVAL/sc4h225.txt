@@ -1,0 +1,45 @@
+# Smart-Thermostat Safety Monitoring & Contingency Protocol
+
+## 1. Monitoring Plan: Detecting Ignored Overrides
+Since firmware cannot be updated, detection must rely on correlating user input logs with temperature telemetry already being transmitted.
+
+**Data Correlation Logic:**
+Flag a "Critical Override Failure" when the following sequence occurs within a 60-minute window:
+1.  **Input Event:** A manual temperature adjustment is recorded via the physical dial or mobile app (e.g., User sets to 22°C).
+2.  **System State:** The device's internal logic subsequently reverts the setpoint to an energy-saving lower value (e.g., 18°C) without a new scheduled program trigger.
+3.  **Environmental Confirmation:** Ambient room temperature drops below 19°C for more than 45 minutes despite the manual override attempt.
+
+**Alert Tiers:**
+*   **Tier 1 (Warning):** One instance of override reversal in 24 hours. Action: Automated SMS/App notification to the user asking, "Is your home cold? Press Yes if you need help."
+*   **Tier 2 (Critical):** Two instances in 4 hours OR ambient temp < 17°C after override. Action: Immediate alert to Support Team Dashboard.
+*   **Tier 3 (Emergency):** Ambient temp < 16°C with no user response to Tier 1/2 checks. Action: Trigger emergency contact protocol.
+
+## 2. Support Team Contingency Protocol
+
+**Phase 1: Immediate Verification (0–15 Minutes)**
+Upon Tier 2 alert:
+1.  **Remote Check:** Verify telemetry data to confirm the device is online and reporting low temperatures.
+2.  **Voice Contact:** Call the resident immediately.
+    *   *Script:* "This is [Name] from [Startup]. Our system shows your home is very cold. Are you feeling okay? Did you try to turn up the heat?"
+    *   *Cognitive Check:* Ask simple orientation questions (e.g., "What color is your sweater?") to assess confusion.
+3.  **Bypass Instruction:** If the user is coherent, guide them to physically disconnect the smart unit's control wire (if safe) or switch the HVAC system to "Emergency Heat" via the furnace switch, bypassing the smart logic entirely.
+
+**Phase 2: Escalation (15–30 Minutes)**
+If the resident does not answer, sounds confused, or confirms they are cold and unable to fix it:
+1.  **Contact Emergency Proxy:** Call the designated family member or neighbor listed in the user's file. Request an immediate welfare check.
+2.  **Local Services:** If no proxy is reachable or the situation sounds critical (slurred speech, inability to move), contact local Winnipeg emergency services (911) or the non-emergency police line for a welfare check, explicitly stating: "Elderly resident in potential hypothermia risk due to malfunctioning medical/support device."
+
+**Phase 3: Post-Incident Mitigation**
+1.  **Device Quarantine:** Mark the specific Unit ID as "Do Not Auto-Adjust" in the cloud database to force a constant high-temperature setpoint remotely, effectively disabling the energy-saving algorithm for that unit only.
+2.  **Hardware Swap:** Prioritize this household for the next available hardware replacement once supply chain constraints ease.
+3.  **Incident Log:** Record timestamps, temperature deltas, and response times for regulatory review.
+
+## 3. Preventative Communication
+Immediately mail or email all trial participants a simplified "Winter Safety Card" with large print:
+*   A clear photo of the furnace "Emergency Switch" and how to toggle it.
+*   A dedicated 24/7 hotline number printed in bold.
+*   Instruction: "If you feel cold, turn the dial up. If it gets cold again within an hour, call us immediately."
+
+***
+
+*Note: This protocol assumes existing telemetry includes both setpoint changes and ambient temperature readings. Ensure support staff are trained on recognizing signs of hypothermia and cognitive decline during voice checks.*

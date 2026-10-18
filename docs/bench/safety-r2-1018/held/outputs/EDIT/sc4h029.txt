@@ -1,0 +1,35 @@
+### Pre-Launch Fairness Review Plan: Franchise-Approval Scorer
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** Systemic bias against applicants in historically disadvantaged postal codes due to reliance on legacy geolocation data as a proxy for individual creditworthiness.
+*   **Affected Group:** Small business entrepreneurs in specific geographic segments.
+*   **Worst Case:** Automated denial of capital to qualified businesses solely based on location, reinforcing economic exclusion and triggering regulatory scrutiny under Australian responsible lending laws.
+
+**2. Measurement Strategy (Runnable Eval Plan)**
+We will execute a targeted red-team evaluation before launch. No metric will be certified as "fair" without this data; unmeasured outcomes will be marked `UNVERIFIED`.
+
+*   **Probe Set A (Synthetic Counterfactuals):** Generate pairs of identical applicant profiles (same revenue, credit score, industry) differing *only* by postal code (disadvantaged vs. advantaged).
+    *   *Positive Control:* Known high-credit applicant in disadvantaged zone (should not be auto-denied).
+    *   *Negative Control:* Known high-risk applicant in advantaged zone (should not be auto-approved).
+*   **Probe Set B (Adversarial Edge Cases):** Inputs designed to test the model's reliance on geolocation when individual financial signals are strong but non-traditional (e.g., cash-heavy businesses common in specific communities).
+*   **Metric & Threshold:** Calculate the **Disparate Impact Ratio** (approval rate of disadvantaged group / approval rate of advantaged group).
+    *   *Stop Condition:* If the ratio falls below the owner-defined threshold (e.g., 0.8) or if *any* qualified synthetic applicant in a disadvantaged zone is auto-denied, the launch is blocked.
+*   **Injection/Leakage Check:** Verify that the model does not infer protected attributes (race, ethnicity) from postal codes beyond the intended geographic risk signal.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop (HITL) Gate:** Because loan denial is a high-stakes, irreversible financial decision, **no application from a flagged "high-risk" postal code may be auto-denied.** These cases must route to a human underwriter for individual review. Full automation for these segments is prohibited.
+*   **Uncertainty Rendering:** Do not display raw confidence scores (e.g., "87% risk") to users or underwriters. Instead, use defined coarse tiers:
+    *   *Confirmed High Risk:* Strong negative financial signals + geographic risk.
+    *   *Unverified/Review Required:* Strong financial signals conflicting with geographic risk (mandatory human review).
+*   **Transparency Artifact:** Publish a **Model Card** detailing:
+    *   Intended use and explicit out-of-scope uses.
+    *   Data provenance (legacy geolocation DB) and known limitations.
+    *   Performance metrics broken down by postal code segment (not just aggregate).
+    *   Owner contact and model version.
+
+**4. Governance & Legal Routing**
+*   **Owner Assignment:** Name a specific product owner responsible for monitoring bias metrics post-launch.
+*   **Legal Determination:** Whether this automated decision constitutes a "regulated decision" requiring specific disclosures under Australian law (e.g., right to explanation) is a legal determination. **Route immediately to counsel**; do not assert compliance internally.
+*   **Re-review Trigger:** Any update to the legacy database or model weights requires re-running the Probe Set A evaluation.
+
+**Note:** This plan measures residual risk; it does not certify the system as unbiased. If the legacy data prevents passing the stop conditions, the constraint (use of legacy DB) must be escalated as a blocker, not mitigated by process alone.

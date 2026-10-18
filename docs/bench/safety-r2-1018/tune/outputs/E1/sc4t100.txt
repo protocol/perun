@@ -1,0 +1,36 @@
+### Pre-Launch Safety Verification Plan: Smart-Shower Pressure Fluctuations
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Thermal scalding due to latency in temperature correction during sudden pressure drops.
+*   **Affected Group:** Seniors (slower reaction times, thinner skin).
+*   **Worst Realistic Case:** A simultaneous toilet flush or sink usage causes a pressure drop; the shower fails to mix cold water or cut off within 200ms, resulting in water >49°C (120°F) hitting the user for >3 seconds, causing second-degree burns.
+
+**2. Runnable Test Matrix (Edge Cases & Fail-Safes)**
+Execute these tests on the physical prototype under strict firmware constraints. Do not rely on simulation alone.
+
+| Test ID | Probe Scenario (Input) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **T-01** | **Sudden Drop:** Simulate 40% pressure drop in <100ms (toilet flush equivalent). | System ignores drop; temp rises >5°C. | System mixes cold water; temp rise <1°C. | **Latency:** Time from pressure drop to valve actuation. | **< 200ms** | Any single run >300ms blocks launch. |
+| **T-02** | **Oscillation:** Rapid pressure fluctuation (0.5Hz sine wave) for 30s. | System oscillates wildly; temp swings >10°C. | System dampens output; temp stable ±2°C. | **Stability:** Max temp deviation during oscillation. | **< 3°C deviation** | >2 oscillations exceeding threshold blocks launch. |
+| **T-03** | **Sensor Failure:** Disconnect pressure sensor mid-flow. | System maintains last heat setting (scald risk). | System defaults to safe/cold mix or shuts off. | **Fail-Safe Action:** Valve position post-failure. | **Immediate Cold/Off** | Any failure to default safe blocks launch. |
+| **T-04** | **Low-Flow Edge:** Pressure drop at minimum flow rate (trickle). | System misinterprets as "no user" and shuts off abruptly. | System maintains safe temp or ramps down gently. | **False Positive Rate:** Unintended shut-offs. | **0 occurrences** in 50 trials. | Any unintended shut-off triggering a fall risk blocks launch. |
+
+**3. Measurement Protocol**
+*   **Instrumentation:** Use high-frequency temperature loggers (≥100Hz sampling) at the showerhead. Visual inspection is insufficient.
+*   **Subgroup Simulation:** Test with mannequins or sensors simulating reduced mobility to verify that the "safe" response time aligns with senior reaction capabilities.
+*   **Residual Risk Reporting:** Report the maximum observed latency and temperature spike. If any metric is `UNVERIFIED` due to test equipment limits, state this explicitly; do not estimate.
+
+**4. Management Controls (Given Firmware Constraints)**
+*   **Hard-Coded Ceiling:** Since complex predictive models cannot fit, implement a deterministic, hard-coded temperature ceiling (e.g., 43°C/109°F) that cannot be overridden by the algorithm, regardless of sensor input.
+*   **Mechanical Fail-Safe:** Verify if a purely mechanical pressure-balancing valve can be added upstream. If firmware cannot guarantee safety, the hardware must act as the primary gate.
+*   **Human-in-the-Loop (Installation):** Require a certified installer to perform the "T-01" test physically in the home before handing over control to the senior user. The system should remain in a "locked" safe mode until this verification is logged.
+
+**5. Transparency Artifact**
+Create a **Safety Data Card** for the device including:
+*   **Intended Use:** Showers with stable supply pressure; not for systems with known severe fluctuations.
+*   **Limitations:** Explicitly state the maximum pressure drop rate the firmware can handle.
+*   **Known Failure Mode:** "If pressure drops faster than X, temperature may rise by Y for Z milliseconds."
+*   **Owner:** Name the specific engineer responsible for the thermal safety logic.
+
+**Note:** Do not certify the system as "scald-proof." The presence of a pass threshold does not guarantee safety in untested real-world plumbing configurations.
+**Note:** If the deterministic code cannot meet the <200ms threshold on the current hardware, the feature must be disabled or the hardware upgraded; no software patch can fix physics-bound latency.

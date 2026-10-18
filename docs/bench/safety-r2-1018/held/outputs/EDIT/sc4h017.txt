@@ -1,0 +1,41 @@
+### Immediate Risk Mitigation Plan for Voice-Banking Assistant
+
+**Critical Constraint Acknowledgement:** You cannot "test" your way out of a fundamental vulnerability to deepfake audio in a high-stakes financial authorization flow without hardware or advanced software detection. No amount of manual verification triggers embedded in the *user* flow will stop a successful deepfake attack if the system accepts the audio as genuine. The risk is not just a "vulnerability"; it is a potential failure mode that could result in irreversible financial loss.
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes/irreversible actions (unauthorized large fund transfers).
+*   **Affected Party:** The account holder (CEO), the organization (ThamesSecure), and the client whose funds are stolen.
+*   **Worst Realistic Case:** A fraudster uses a high-quality deepfake of the CEO's voice to authorize a multi-million pound transfer to an external account. The transaction is irreversible, resulting in massive financial loss and reputational damage.
+
+**2. Measurement Plan (MEASURE) - Software-Only Probing**
+Since you cannot integrate new detection hardware, your testing must focus on probing the *current* model's limits and defining strict operational boundaries. You must run these tests immediately:
+
+*   **Probe Set:** Generate a diverse set of synthetic voice samples targeting the CEO's voice profile using publicly available deepfake tools (positive controls). Include clean, authorized voice samples from the CEO (negative controls).
+*   **Metric:** False Acceptance Rate (FAR) specifically against synthesized voice attacks.
+*   **Threshold:** **Zero tolerance.** If the system accepts *any* known deepfake sample as valid for authorization, the feature cannot launch in its current autonomous form.
+*   **Stop Condition:** Any successful authentication of a positive control (deepfake) triggers an immediate halt to the autonomous authorization feature.
+*   **Additional Probes:** Test for prompt injection via audio (e.g., hidden commands embedded in noise) and verify the system does not leak private data during the verification process.
+
+**3. Risk Management & Human Gate (MANAGE)**
+Given the fixed deadline and the inability to integrate better detection, you must change the *behavior* of the feature, not just test it.
+
+*   **Mandatory Human-in-the-Loop (HITL) Gate:** You must remove full autonomous execution for large transfers. **This is non-negotiable.**
+    *   **Action:** The voice assistant can *initiate* a transfer request and verify identity to a preliminary degree, but it **must not execute** the transaction.
+    *   **Trigger:** Any transfer above a defined threshold (e.g., £10,000) or any transfer requested via voice alone requires explicit confirmation from a second authorized human via a separate channel (e.g., a push notification to a secure mobile app requiring biometric + PIN, or a callback verification).
+    *   **Rationale:** This mitigates the deepfake risk by ensuring that even if the voice model is fooled, the money does not move without a second, independent verification step that is harder to spoof simultaneously.
+
+*   **Uncertainty & Disclosure:**
+    *   Do not present the voice verification as "Confirmed Identity." Label it as "Voice Profile Matched - Pending Final Authorization."
+    *   Disclose to the user (the CEO) that voice commands for large transfers trigger a secondary security review.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific engineer as the owner of this voice-auth risk. They are responsible for reviewing any incidents and re-evaluating the HITL threshold if the model or threat landscape changes.
+*   **Transparency Artifact:** Create a brief "Model Card" for internal use documenting this known limitation (vulnerability to high-quality deepfakes), the tested FAR against your probe set, and the mandatory HITL control. Do not claim the system is "secure" or "deepfake-proof."
+
+**Summary of Deliverable:**
+1.  **Halt autonomous large transfers.** Implement a mandatory Human-in-the-Loop gate for any high-value transaction.
+2.  **Run adversarial testing** immediately using generated deepfakes. If any are accepted, the autonomous feature remains disabled.
+3.  **Document the residual risk** explicitly in an internal model card; do not fabricate a safety metric.
+
+*Note: Legal counsel must review whether this automated decision process triggers specific regulatory requirements under UK financial regulations or the EU AI Act given the high-stakes nature.*
+*This plan prioritizes preventing irreversible harm over maintaining a fully automated flow, which is currently unsafe.*

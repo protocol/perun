@@ -1,0 +1,25 @@
+**Pre-Launch Evaluation Plan: Night-Time Obstacle Detection**
+
+Given the known sensor fusion limitation regarding low-contrast objects in poor lighting, the following evaluation regimen and operational controls are required before rollout.
+
+**1. Targeted Testing Regimen**
+Do not rely on aggregate accuracy metrics. Construct a specific evaluation suite focused on the identified failure mode:
+*   **Probe Set:** Deploy test runs featuring stationary emergency vehicles (police, ambulance, fire) with flashing lights deactivated and reflectors obscured, placed on highway shoulders and within lanes under varying low-light conditions (moonless night, heavy rain, fog, and tunnel exits).
+*   **Controls:** Include "known-good" scenarios (high-contrast barriers, well-lit vehicles) to verify baseline function, and "known-bad" positive controls (objects visually similar to the failure mode) to confirm the system correctly identifies its own uncertainty.
+*   **Metric & Threshold:** Measure the "Detection-to-Braking Latency" and "False Negative Rate" specifically for the low-contrast subgroup. Set a stop condition: if the system fails to identify a stationary emergency vehicle in low light within the calculated stopping distance at the maximum allowed speed, the feature must not launch in autonomous mode for that scenario.
+*   **Adversarial Probes:** Test for "automation bias" by introducing edge cases where the sensor data is ambiguous; verify the system does not hallucinate a clear path when data is missing.
+
+**2. Operational Limitations & Driver Alerts (Human-in-the-Loop)**
+Because the hardware constraint cannot be fixed before launch, full autonomous execution in these specific conditions constitutes an unsafe irreversible action. You must implement the following controls:
+*   **Geofenced/Conditioned Disengagement:** The system must automatically disengage or refuse to activate when ambient light sensors detect levels below the verified threshold or when weather sensors indicate precipitation that historically correlates with the low-contrast failure.
+*   **Explicit Uncertainty Disclosure:** When operating near the performance boundary, the interface must not display a confident "Autopilot Active" status. Instead, surface a defined coarse tier of confidence (e.g., "Limited Visibility – Manual Steering Required") using colorblind-safe cues. Do not show a percentage confidence score (e.g., "87%"), as this implies a calibration precision the system does not possess.
+*   **Mandatory Driver Confirmation:** If the system detects an ambiguous object in low light, it must issue an immediate auditory and haptic alert requiring explicit driver confirmation within 2 seconds, defaulting to a safe stop if no input is received.
+*   **Transparency Artifact:** Publish a "Model Card" for this release explicitly stating: "Intended Use: Highway lane keeping in good lighting. Known Limitation: Stationary low-contrast objects in poor lighting may not be detected. Drivers must remain attentive and ready to take over immediately."
+
+**3. Governance & Next Steps**
+*   **Owner Assignment:** Name a specific product owner responsible for reviewing every failure in the test suite before launch.
+*   **Legal Routing:** Because this involves safety-critical automated decisions with known limitations, route the question of legal disclosure duties and liability regarding the "known limitation" to legal counsel immediately. Do not assert compliance internally; let counsel determine if the current warning labels meet regulatory standards for autonomous driving features.
+*   **Residual Risk:** Acknowledge that residual risk remains. The goal is not to certify the system as "safe" (which is impossible given the hardware constraint) but to manage the risk through strict operational boundaries and human oversight.
+
+**Note:** An empty harm inventory is not a pass; document the specific risk of collision with stationary emergency vehicles explicitly.
+**Note:** If the testing reveals the stop condition is triggered frequently, the only safe path is to delay the rollout or disable the feature in night-time conditions entirely.

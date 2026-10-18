@@ -1,0 +1,29 @@
+# Pre-Launch Fairness Review Plan: Franchise-Approval Scorer
+
+**Objective:** Validate that the legacy geolocation database (postal code grouping) does not induce prohibited discrimination against historically disadvantaged areas under Australian financial services regulations.
+
+### 1. Data Stratification & Baseline Definition
+*   **Identify Protected Clusters:** Map all postal codes in the legacy database against the Australian Bureau of Statistics (ABS) Socio-Economic Indexes for Areas (SEIFA). Explicitly flag the bottom 20% (most disadvantaged) and top 20% (least disadvantaged) deciles.
+*   **Establish Control Groups:** Create synthetic applicant profiles with identical financial metrics (revenue, time in business, requested amount) but varying only by postal code. Ensure these profiles span the full range of your legacy geolocation groups.
+
+### 2. Adversarial Stress Testing (The "Twin" Test)
+*   **Execute Pairwise Comparison:** Run the scorer on thousands of pairs of identical synthetic applicants where the sole variable is the postal code.
+    *   *Test A:* High-credit applicant in a disadvantaged postal code vs. same applicant in an advantaged code.
+    *   *Test B:* Marginal-credit applicant in a disadvantaged postal code vs. same applicant in an advantaged code.
+*   **Measure Disparity:** Calculate the difference in approval rates and interest score outputs between the pairs. Any statistically significant deviation suggests the model is proxying disadvantage rather than assessing risk.
+
+### 3. Threshold Sensitivity Analysis
+*   **Boundary Probing:** Since the database groups by postal code, applicants on the border of two zones may be misclassified or unfairly penalized. Test applicants with addresses near the boundaries of high-risk and low-risk postal codes to ensure the model does not exhibit "cliff-edge" behavior where a minor address change causes a massive score drop.
+*   **Legacy Data Gap Simulation:** Introduce noise into the postal code data to simulate inaccuracies common in legacy systems. Verify that the model degrades gracefully rather than defaulting to a high-risk rejection for ambiguous locations.
+
+### 4. Outcome Audit & Explainability
+*   **False Positive/Negative Review:** Manually inspect rejected applications from the identified disadvantaged postal codes. Determine if rejections are driven by the geolocation feature outweighing strong individual financial indicators.
+*   **Feature Attribution:** Generate explanation reports for a sample of denied applicants from flagged zones. Confirm that "Postal Code" or "Geolocation" is not the dominant negative factor when individual business metrics are strong.
+
+### 5. Governance & Remediation Protocol
+*   **Disparity Thresholds:** Define a hard limit for approval rate variance between SEIFA deciles (e.g., no more than 5% difference for identical financial profiles). If the model exceeds this, it fails launch.
+*   **Human-in-the-Loop Trigger:** Implement a mandatory manual review flag for any applicant from a historically disadvantaged postal code whose score falls within a "margin of uncertainty" band, preventing automated denial based solely on legacy geolocation data.
+*   **Documentation:** Record all disparity findings and mitigation steps to satisfy Responsible AI guidelines and potential regulatory scrutiny regarding indirect discrimination.
+
+**Note:** This plan relies on synthetic data generation as real applicant data cannot be used for pre-launch stress testing without privacy breaches.
+**Note:** Immediate legal counsel review is required if disparity thresholds are exceeded before any model deployment.

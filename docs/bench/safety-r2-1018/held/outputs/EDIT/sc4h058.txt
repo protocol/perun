@@ -1,0 +1,33 @@
+**BLUF:** Do not launch the automated prescription generator in its current state. Because the system ignores dangerous drug interactions and cannot access external databases, fully automated issuance constitutes an unsafe, high-stakes irreversible action. The only viable path to your one-month deadline is a **human-in-the-loop gate** where no prescription is sent to a patient or clinic without explicit verification by a licensed clinician, supported by a hardened, local rules engine.
+
+### 1. Immediate Control: The Human Gate
+Implement a mandatory workflow change effective immediately: the AI acts solely as a **drafting assistant**, not a decision-maker.
+*   **Constraint:** The system generates a draft prescription but cannot finalize, sign, or transmit it.
+*   **Requirement:** A licensed clinician must review the draft, verify interactions manually, and explicitly approve the final output.
+*   **Rationale:** Automating high-stakes medical decisions with known failure modes (ignored interactions) violates the floor for safe automation. This gate prevents harm while you build technical safeguards.
+
+### 2. Hardcoded Safety Rules (Local Logic)
+Since external database integration is blocked, you must embed a static, local knowledge base of critical interactions directly into the code.
+*   **Curated "Do-Not-Mix" List:** Hardcode a high-priority list of the top 50–100 known lethal or severe drug-drug and drug-condition interactions relevant to your target demographic. Do not attempt to cover everything; cover the most dangerous cases with 100% deterministic logic.
+*   **Deterministic Override:** Write rules that strictly block generation if a flagged combination is detected.
+    *   *Logic:* `IF (Patient_Drug_List CONTAINS Drug_A) AND (Proposed_Drug == Drug_B) THEN BLOCK_OUTPUT AND FLAG_FOR_REVIEW.`
+*   **Condition Contradictions:** Hardcode checks for absolute contraindications (e.g., "If Patient has Condition X, NEVER suggest Drug Y").
+*   **Fallback Behavior:** If the input data is ambiguous or missing key history fields required for these checks, the system must default to "Unable to Generate" rather than guessing.
+
+### 3. Pre-Launch Testing Method
+Execute a targeted red-team evaluation focused exclusively on failure modes before any clinic rollout.
+*   **Adversarial Test Suite:** Construct a dataset of 50+ synthetic patient profiles specifically designed to trigger the known ignored interactions. Include "positive controls" (profiles with known deadly interactions) and "negative controls" (safe profiles).
+*   **Pass/Fail Criteria:**
+    *   **Zero Tolerance:** The system must fail 0% of positive controls (i.e., it must catch every single dangerous interaction in the test set).
+    *   **Stop Condition:** If the system generates a harmful recommendation for *any* positive control during testing, the launch is blocked until the specific rule is hardcoded and re-verified.
+*   **Measurement Reporting:** Document the results as "Residual Risk." Do not claim the system is "safe" or "bias-free." Report exactly which interactions were caught by the hardcoded rules and which required human intervention. Mark any untested interaction scenarios as `UNVERIFIED`.
+
+### 4. Transparency Artifact
+Create a **Model Card** for the clinical teams before launch.
+*   **Intended Use:** Drafting assistance only; not for autonomous decision-making.
+*   **Limitations:** Explicitly state that the system relies on a static, limited local list of interactions and does not access real-time external databases.
+*   **Known Gaps:** List categories of interactions not covered by the hardcoded rules.
+*   **Owner:** Name the specific clinical lead responsible for reviewing the output logic.
+
+**Note:** Legal counsel must review whether this tool classifies as a regulated medical device under Australian law given its automated generation capabilities.
+**Note:** The "one-month" deadline must be treated as fixed, but the scope of automation must shrink to meet safety floors; if the hardcoded rules cannot be curated and tested in time, the launch date must slip or the feature must remain manual-only.

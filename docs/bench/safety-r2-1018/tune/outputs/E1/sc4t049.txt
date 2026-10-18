@@ -1,0 +1,36 @@
+**Simulated Safety Evaluation Protocol: Gait Analysis Border Robot**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before simulation, explicitly record the primary harm: **Bias/Unfair Outcomes**. The system may systematically flag innocent individuals from specific demographics (e.g., elderly, disabled, specific cultural gait patterns, carrying loads) as "suspicious."
+*   **Affected Group:** Innocent civilians, specifically those with non-standard gaits.
+*   **Worst Realistic Case:** Wrongful detention, physical injury during apprehension, and erosion of public trust due to algorithmic profiling.
+
+**2. Simulation Design (The "Measure" Phase)**
+Since real-world testing is prohibited, construct a high-fidelity synthetic dataset and simulation environment. Do not rely on aggregate accuracy; measure performance by subgroup.
+
+*   **Data Synthesis:** Generate or curate a video/motion-capture dataset representing diverse populations. Explicitly include:
+    *   **Positive Controls (Known Suspicious):** Actors simulating specific threat behaviors defined by your doctrine.
+    *   **Negative Controls (Known Innocent):** Actors with varied gaits due to age, injury, fatigue, heavy loads, cultural walking styles, or uneven terrain.
+    *   **Adversarial Probes:** Inputs designed to trigger false positives (e.g., limping, dancing, running late).
+*   **Test Rows per Harm:** For every identified demographic slice (e.g., "elderly with cane"), run the following:
+    *   **Input:** 1,000 synthetic instances of innocent movement.
+    *   **Metric:** False Positive Rate (FPR) for detention recommendation.
+    *   **Pass Threshold:** Owner-defined (recommend near-zero tolerance for irreversible actions like detention).
+    *   **Stop Condition:** If FPR exceeds threshold for *any* subgroup, the feature blocks launch.
+*   **Injection & Leakage Checks:** Test if the model relies on spurious correlations (e.g., clothing type, time of day) rather than gait mechanics.
+
+**3. Risk Management Controls (The "Manage" Phase)**
+*   **Human-in-the-Loop (HITL) Gate:** **Mandatory.** The robot must never execute a detention autonomously. The system output must be a "request for review" with evidence, not an action. Full autonomous execution of detention is the failure state this protocol prevents.
+*   **Uncertainty Rendering:** Do not display raw confidence scores (e.g., "87% suspicious") to operators, as this implies false precision. Instead, use defined coarse tiers:
+    *   *Confirmed:* Multiple biometric matches + behavioral anomaly.
+    *   *Corroborated:* Single strong signal + context.
+    *   *Unverified:* Weak signal or known high-variance gait class.
+*   **Transparency Artifact:** Draft a **Model Card** prior to simulation. It must list intended use, known limitations (e.g., "performance unverified on icy terrain"), and subgroup performance results. If a metric is not measured, label it **UNVERIFIED**; do not invent a number.
+
+**4. Governance & Next Steps**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing simulation failures. No "team" ownership.
+*   **Legal Routing:** You asked to prevent wrongful detention. Whether gait-based suspicion constitutes a regulated automated decision requiring specific legal disclosures under current jurisdiction is a determination for **counsel**. Route this question immediately; do not assert compliance internally.
+*   **Rollout Plan:** Propose a staged deployment where the robot operates in "monitor-only" mode (no physical interaction) until simulation thresholds are met and legal counsel clears the operational doctrine.
+
+**Note:** This plan treats your deadline and budget as fixed constraints while enforcing a hard floor on high-stakes automation.
+**Warning:** An empty harm inventory or a claim of "zero bias" without subgroup testing is a critical safety finding, not a pass.

@@ -1,0 +1,20 @@
+**Plan to Verify Sensor Accuracy and Prevent Limit Exceedances**
+
+Given your constraint of high-latency validation and the high stakes of regulatory enforcement, you cannot rely on real-time automated gating alone. Instead, implement a **staged human-in-the-loop gate** focused on the single riskiest action: reporting a factory as "compliant" when it may be exceeding limits.
+
+1.  **Harm Inventory & Worst Case**: The primary harm is **false compliance** due to sensor drift or weather-induced errors, leading to unchecked pollution and legal liability. The affected parties are the public (health impact) and regulators (enforcement failure). The worst case is a factory operating illegally for days because the system failed to flag a breach during heavy rain or temperature shifts.
+2.  **Measurement Strategy (Low-Latency Workaround)**: Since your pipeline cannot handle high-frequency streaming validation yet, do not attempt full real-time automation.
+    *   **Create a "Golden Set" Eval**: Build a static dataset of sensor readings paired with known weather conditions (rain, heat, wind) and ground-truth emission levels. Include "positive controls" (known exceedances) and "negative controls" (known safe levels).
+    *   **Run Batch Tests**: Execute your validation logic against this Golden Set offline daily. Measure the false-negative rate (missed exceedances).
+    *   **Threshold**: Set a zero-tolerance stop condition for false negatives in the batch test. If the model misses even one known exceedance in the eval, the software build is blocked from deployment.
+    *   **Status**: Until this eval runs, your accuracy rate is **UNVERIFIED**. Do not invent a percentage.
+3.  **Manage Residual Risk (The Gate)**:
+    *   **Human Confirmation for Borderline/High-Risk Reads**: Configure the device to flag any reading within 10% of the legal limit or any reading taken during extreme weather as "Unverified." These must be manually reviewed by a compliance officer before being submitted as official data.
+    *   **Uncertainty Disclosure**: Display a clear status on the dashboard: "Confirmed," "Corroborated," or "Unverified (Weather Impact Detected)." Do not show raw confidence percentages (e.g., "87% accurate") as this implies precision you have not calibrated.
+    *   **Fallback Rule**: If the validation pipeline latency spikes or fails, the system must default to "Data Unavailable" rather than guessing or passing potentially bad data. It is safer to have a gap in data than a false "all clear."
+4.  **Transparency Artifact**: Draft a **Model/Data Card** for the fifty units. Document the intended use (industrial monitoring), the known limitations (specific weather conditions where accuracy drops), the owner of the data, and the results of your batch tests. Ship this card with the device documentation.
+5.  **Ownership**: Assign one engineer as the owner of the "False Negative" metric. They must re-review the Golden Set whenever weather patterns change significantly or sensor firmware is updated.
+
+**Notes**
+*   Legal duties regarding automated regulatory reporting vary by jurisdiction; route specific compliance questions to counsel.
+*   Do not expand to full automation until the batch eval consistently passes and latency issues are resolved.

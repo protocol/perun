@@ -1,0 +1,37 @@
+### Testing Strategy for Child-Support Calculator
+
+To address data incompleteness and prevent financial harm to custodial parents, your testing strategy must prioritize **conservative defaulting** and **boundary validation** over general accuracy. Given the three-week timeline and lack of legal review, focus on these four critical pillars:
+
+#### 1. Define and Validate "Conservative Default" Logic
+Before testing outputs, codify the rule: *When data is missing, the system must assume the scenario most favorable to the child (highest likely obligation).*
+*   **Validation Step:** Create a "Missing Data Matrix" listing every input field (e.g., secondary income, overtime, healthcare costs). For each, define the specific conservative default value (e.g., if overtime is unknown, assume the maximum historical average or a statutory minimum, not zero).
+*   **Test Case:** Run the calculator with 50% of inputs intentionally blanked. Verify that the output never drops below the result generated when those same inputs are filled with their lowest plausible real-world values. If a blank field lowers the payment, the default logic is flawed.
+
+#### 2. Stress-Test Data Gaps with Synthetic Edge Cases
+Since real data has gaps, simulate the worst-case missing-data scenarios specific to separated families.
+*   **Key Metrics:**
+    *   **Underestimation Rate:** The percentage of test cases where the "missing data" output is lower than the "full data" output. Target: 0%.
+    *   **Default Trigger Frequency:** How often the system relies on a default rather than a user input. High frequency indicates poor data ingestion, requiring stricter defaults.
+*   **Validation Steps:**
+    *   **The "Zero-Income" Trap:** Test cases where one parent reports \$0 income due to missing data. The system must flag this for manual review or apply a statutory imputed income floor, rather than calculating \$0 support.
+    *   **Partial Income Streams:** Simulate cases where only base salary is present but bonuses/commissions are missing. Ensure the estimator adds a conservative percentage buffer rather than ignoring potential income.
+
+#### 3. Implement "Red Flag" Thresholds
+Automate the detection of potentially harmful underestimations by setting hard limits.
+*   **Key Metric:** **Alert Precision.** The ratio of valid alerts to false positives.
+*   **Validation Steps:**
+    *   Define absolute minimums based on Sydney cost-of-living data. If a calculated payment falls below this threshold while any income data is marked "estimated" or "missing," the system must halt and output a "Requires Manual Review" warning instead of a dollar figure.
+    *   Test the system's ability to distinguish between "low income" and "missing data." A low-income calculation is valid; a low-income calculation resulting from missing high-income data is a failure.
+
+#### 4. Regression Testing on Known Underestimations
+Use the internal test cases where underestimation already occurred as your primary benchmark.
+*   **Key Metric:** **Fix Verification Rate.** 100% of previously failed cases must now either calculate correctly or trigger a conservative default/review flag.
+*   **Validation Steps:**
+    *   Re-run the specific scenarios that caused harm in internal tests.
+    *   Expand these into families of tests by varying the *degree* of data missingness (e.g., missing 10%, 50%, 90% of secondary income) to ensure the conservative slope is consistent.
+
+**Immediate Action Plan:**
+With three weeks remaining, halt feature development. Dedicate Week 1 to codifying the conservative default rules and building the synthetic gap dataset. Dedicate Week 2 to automated execution of these specific gap tests. Dedicate Week 3 to fixing any instance where a missing data point results in a lower payment obligation. Do not launch until the "Underestimation Rate" metric is zero.
+
+*Note: This strategy assumes the legal formulas for "conservative" estimates are defined by your government grant guidelines; if not, this must be clarified immediately with legal counsel.*
+*Automated testing cannot replace legal liability; ensure all outputs carry a disclaimer that they are estimates subject to manual verification.*

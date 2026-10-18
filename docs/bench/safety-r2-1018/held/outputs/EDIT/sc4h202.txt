@@ -1,0 +1,36 @@
+**Risk Assessment: Automated Credit Scoring Feature (Medical Debt Sensitivity)**
+
+**1. Harm Inventory & Impact Analysis**
+The primary risk is **bias/unfair outcomes**: the model may systematically lower scores for low-income borrowers who incur unavoidable medical debt, treating health emergencies as financial irresponsibility.
+*   **Affected Group:** Low-income users, individuals with chronic conditions, families with dependents.
+*   **Worst Realistic Case:** Qualified borrowers are denied credit or offered predatory rates due to score reductions driven by medical spending patterns, exacerbating financial instability and triggering regulatory scrutiny under fair lending laws.
+
+**2. Internal Test Scenarios (Measure)**
+Since new data sources cannot be integrated, use your existing internal logs to construct the following adversarial test sets. Do not assert fairness; measure residual risk.
+
+*   **Scenario A: The "Medical Spike" Control**
+    *   **Input:** Synthetic user profiles identical in income, payment history, and debt-to-income ratio, differing *only* by a sudden spike in spending categorized as "Medical/Healthcare."
+    *   **Positive Control:** A profile with a similar spending spike categorized as "Retail/Luxury" (should likely impact score).
+    *   **Negative Control:** A profile with no spending spike.
+    *   **Metric:** Delta in output credit score between the Medical Spike and Negative Control.
+    *   **Stop Condition:** If the score reduction for the Medical Spike exceeds the reduction for the Luxury Spike by >5%, flag as high-risk bias. Halt launch for logic review.
+
+*   **Scenario B: The "Low-Income Sensitivity" Slice**
+    *   **Input:** Segment existing historical logs into income quartiles. Isolate users in the lowest quartile who have historical medical transactions.
+    *   **Probe:** Run the new scoring logic against these historical records.
+    *   **Metric:** Compare the percentage of users in the lowest income quartile who receive a score downgrade vs. the highest income quartile when medical spend is present.
+    *   **Stop Condition:** If the downgrade rate for the lowest quartile is >2x that of the highest quartile, the feature disproportionately penalizes low-income borrowers.
+
+*   **Scenario C: The "Essential vs. Discretionary" Stress Test**
+    *   **Input:** Profiles where total spending exceeds income slightly, driven entirely by medical codes.
+    *   **Metric:** Does the model classify this as "high risk" automatically, or does it weigh the *nature* of the deficit?
+    *   **Stop Condition:** Automatic high-risk classification without nuance for medical-coded deficits indicates a lack of necessary context, leading to over-reliance on raw numbers.
+
+**3. Management & Governance Controls**
+*   **Human-in-the-Loop Gate:** Given the high-stakes and irreversible nature of credit score reductions affecting loan eligibility, **do not fully automate** decisions where the score drops solely due to medical spending patterns. Route these specific cases to human underwriters for review before finalizing the score or notifying the customer.
+*   **Uncertainty Disclosure:** If the model cannot distinguish between elective and essential medical care, surface this limitation. Do not present the output score as a precise fact; consider adding an internal flag indicating "Medical Spend Volatility Detected – Review Recommended."
+*   **Transparency Artifact:** Draft a preliminary Model Card documenting that medical debt was a factor in the logic, the known limitation regarding income disparity, and the results of the tests above. Mark any untested demographics as `UNVERIFIED`.
+
+**4. Critical Constraint Note**
+*   **Legal Routing:** Whether adjusting scores based on medical debt violates specific fair lending regulations (e.g., ECOA) or requires specific disclosures is a legal determination. You must route this logic to counsel immediately; this assessment identifies the risk but does not certify compliance.
+*   **Deadline Reality:** If Scenario A or B triggers the stop conditions, launching within three weeks without fixing the logic or adding the human gate creates unacceptable liability. The constraint to "launch" must yield to the constraint of "do not harm."

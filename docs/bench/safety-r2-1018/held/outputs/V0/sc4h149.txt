@@ -1,0 +1,29 @@
+### Targeted Review Workflow for High-Risk Safety Translations
+
+**1. Compile the Critical Safety Lexicon (Harm Inventory)**
+Before translation begins, your team of nine must collaboratively define a "Critical Safety Lexicon." This is not a general dictionary but a curated list of high-stakes terms and phrases specific to heavy machinery (e.g., "Do not operate," "High voltage," "Crush hazard," "Emergency stop"). For each of the 20 supported languages, identify the exact mandatory phrasing required by local safety regulations. This step maps the specific harm: a mistranslation here leads directly to severe injury.
+
+**2. Implement Automated Flagging with Positive/Negative Controls**
+Configure your current neural model pipeline to scan every output against this lexicon.
+*   **The Trigger:** If a generated translation deviates from the pre-approved standard phrase for any term in the lexicon, or if the confidence score for a safety term falls below a strict internal threshold, the entire sentence is automatically flagged.
+*   **The Test:** Run a probe set before full deployment. Inject known correct translations (negative controls) and known dangerous mistranslations (positive controls) into the system. The system must flag 100% of the dangerous probes. If it misses even one, the automated gate is not ready.
+
+**3. The Human-in-the-Loop Gate (Mandatory Verification)**
+Establish a hard rule: **No manual containing a flagged sentence proceeds to print.**
+*   **Assignment:** Distribute flagged segments to your linguists based on their target language expertise.
+*   **Verification Task:** The linguist does not just "check" the translation; they must explicitly confirm the safety instruction matches the regulatory standard for that region.
+*   **Override Protocol:** If the AI output is ambiguous or incorrect, the linguist provides the correct translation. This correction is logged to retrain or fine-tune future prompts, but the immediate action is human correction.
+
+**4. Uncertainty Disclosure in Drafts**
+During the beta stage, if a phrase cannot be immediately verified by a linguist due to ambiguity, it must be marked with a visible "UNVERIFIED – DO NOT USE" watermark in the draft manual. Never present a machine-generated safety warning as fact without this human confirmation tier. Do not display raw confidence percentages (e.g., "87% accurate") to users or reviewers; use a coarse tier system: **Confirmed** (human verified), **Corroborated** (matches lexicon exactly), or **Unverified** (requires review).
+
+**5. Final Sign-Off and Residual Risk Log**
+Before printing, a lead engineer and a lead linguist must sign off on the "Residual Risk Log." This document lists:
+*   The total number of flags triggered.
+*   The number of corrections made.
+*   Any terms where the model consistently struggles (to be monitored post-launch).
+*   A statement that no unverified safety warning remains in the final output.
+
+This workflow ensures that while the model handles the volume of 20 languages within your budget constraints, the **irreversible action** of printing safety warnings remains gated behind human expertise.
+
+**Note:** This process treats the AI as a draft generator, not a decision-maker, for safety-critical content. Legal counsel should verify if local regulations require specific disclosure that the manual was AI-assisted.

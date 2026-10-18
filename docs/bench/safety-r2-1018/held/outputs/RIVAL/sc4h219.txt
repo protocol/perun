@@ -1,0 +1,34 @@
+# Pre-Launch Fairness and Transparency Audit Plan
+
+**Objective:** Verify the loan-restructuring tool generates compliant, transparent terms without exploiting borrower vulnerability, using deterministic testing to conserve computational resources.
+
+### 1. Synthetic Borrower Cohort Construction
+Create a fixed dataset of 20–30 synthetic borrower profiles representing edge cases rather than random distributions. This replaces expensive Monte Carlo simulations with targeted stress tests.
+*   **Vulnerability Markers:** Include profiles with maximum debt-to-income ratios, recent income shocks, and limited financial literacy indicators.
+*   **Protected Classes:** Ensure representation across demographics protected under Brazilian law (LGPD and Central Bank resolutions) to detect disparate impact.
+*   **Control Group:** Include "healthy" borrowers who should qualify for standard refinancing to establish a baseline for comparison.
+
+### 2. Transparency and Disclosure Verification
+Implement a deterministic checklist for every generated output to ensure no hidden fees or opaque terms exist.
+*   **Fee Itemization:** Assert that every fee in the output has a corresponding plain-language definition and legal basis. Flag any term labeled "administrative," "processing," or "service" that lacks a specific value breakdown.
+*   **APR Consistency:** Mathematically verify that the disclosed Annual Percentage Rate (CET in Brazil) matches the sum of interest plus all listed fees. Any discrepancy >0.01% is a critical failure.
+*   **Readability Score:** Apply a simple heuristic to ensure terms are written at a secondary education reading level. Reject outputs containing complex nested clauses or undefined jargon.
+
+### 3. Anti-Predation Logic Tests
+Run the synthetic cohort through the engine and apply specific "fairness assertions" to the results.
+*   **Affordability Cap:** Assert that the new monthly payment never exceeds 30% of the borrower's declared net income. Any offer violating this threshold is an automatic failure.
+*   **Total Cost Comparison:** Calculate the total repayment amount (principal + interest + fees) over the full term. Assert that this total does not exceed the original loan's remaining balance by more than a predefined regulatory margin (e.g., 15%).
+*   **Term Extension Limit:** Flag any restructuring that extends the loan term by more than 2x the original duration, as this often indicates fee masking.
+*   **Vulnerability Exploitation Check:** Compare offers for "high vulnerability" profiles against "control" profiles with similar credit scores but lower distress markers. If vulnerable users receive significantly higher effective rates or fees, flag for bias review.
+
+### 4. Execution Strategy
+*   **Tooling:** Use a lightweight script to feed the synthetic profiles into the model and parse the JSON/text output. No GPU acceleration or cloud scaling is required.
+*   **Pass/Fail Criteria:** The audit passes only if 100% of outputs meet the Transparency Checklist and 0% of outputs violate the Anti-Predation Logic.
+*   **Evidence Log:** Generate a report listing every failed case with the specific input profile, the generated term, and the violated rule. This provides the regulatory body with concrete examples of safeguards working (or failing).
+
+### 5. Remediation Loop
+If any test fails, halt the rollout. The engineering team must adjust the reward function or constraint layers in the model to penalize the specific violation type (e.g., adding a hard constraint against fees >X%) before re-running the fixed synthetic suite.
+
+This plan ensures regulatory compliance through rigorous, low-cost deterministic testing rather than probabilistic simulation.
+
+*Note: This plan assumes access to the model's inference endpoint and the ability to parse its structured output. Legal counsel should validate the specific percentage thresholds against current Brazilian Central Bank regulations.*

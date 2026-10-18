@@ -1,0 +1,26 @@
+I cannot review your safety documentation, testing logs, or run any stress tests because I have no access to your files, network, or tools. I can only provide a general pre-launch safety checklist based on the scenario you described.
+
+**Pre-Launch Safety Checklist for Telehealth Triage (3-Day Window)**
+
+**1. Voice Input Robustness (Accent & Noise)**
+*   **Synthetic Data Generation:** Immediately create a small, targeted dataset (50–100 samples) combining high-fever symptom scripts with recorded background noises typical of Mumbai households (e.g., traffic, ceiling fans, multiple speakers) and diverse local accent variations (Marathi, Hindi, Gujarati influences in English).
+*   **Manual Spot-Checking:** Have native speakers from your team manually transcribe 20 random samples from this new set and compare them against the model's transcription to identify immediate failure patterns in urgency keyword detection (e.g., "lethargic," "seizure," "not drinking").
+*   **Threshold Adjustment:** If transcription error rates exceed 5% on critical keywords, hard-code a fallback rule: if confidence is low, automatically trigger the "Human Nurse Handoff" protocol rather than risking a false low-urgency categorization.
+
+**2. High-Fever Infant Edge Cases**
+*   **Rule-Based Override:** Implement a hard-coded logic gate independent of the AI model: any input mentioning an infant under 3 months with a temperature above 38°C (100.4°F) must bypass AI triage and route immediately to emergency protocols.
+*   **Adversarial Scripting:** Draft 10 specific test scripts where parents describe subtle, non-verbal signs of severe illness (e.g., "baby is too quiet," "soft spot is bulging") without explicitly stating "high fever," and verify the system flags these for human review.
+
+**3. Human Handoff Protocol Validation**
+*   **End-to-End Dry Run:** Conduct 5 live simulations where engineers act as distressed parents triggering a handoff. Measure the time from voice input completion to nurse alert receipt. The target should be under 30 seconds.
+*   **Context Transfer Verification:** Ensure the nurse receives the raw audio transcript and the specific confidence score that triggered the handoff, not just a generic "urgent" label, to prevent information loss.
+*   **Failure Mode Test:** Simulate a nurse unavailability scenario (e.g., system offline) to confirm the user receives a clear, immediate instruction to call emergency services (108/112) rather than a generic "try again later" message.
+
+**4. Documentation & Governance**
+*   **Known Limitations Log:** Create a one-page document listing identified gaps (e.g., "untested with heavy monsoon rain noise") and the specific mitigation in place (e.g., "auto-handoff on low confidence"). Share this with the pilot hospital's lead physician.
+*   **Rollback Plan:** Define the exact trigger and procedure to disable the AI voice interface and revert to a manual call-in center if the pilot shows >2% misclassification of high-urgency cases in the first 24 hours.
+
+**5. Final Go/No-Go Criteria**
+*   Establish a mandatory meeting 24 hours before launch with the two lead doctors and the engineering lead. The launch proceeds only if: (a) the hard-coded infant override is verified, (b) the handoff dry run succeeds under 30 seconds, and (c) the hospital agrees to the Known Limitations Log.
+
+*Note: This plan prioritizes hard-coded safety nets over model retraining due to the 3-day constraint. Do not attempt to retrain the voice model; rely on rule-based overrides for critical safety.*

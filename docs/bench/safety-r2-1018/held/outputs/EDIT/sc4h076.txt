@@ -1,0 +1,21 @@
+### Pre-Launch Allergy Safety Audit Plan
+
+**1. Harm Inventory & Scope**
+The primary failure mode is **unsafe high-stakes automation**: recommending an ingredient that triggers a severe allergic reaction. The worst-case scenario is anaphylaxis or death for a user with a documented sensitivity. Because this involves irreversible physical harm, **full autonomous execution of recommendations without a human-in-the-loop gate is unacceptable** for high-risk profiles.
+
+**2. Measurement Strategy (Runnable Tests)**
+Since you cannot expand the dataset, you must rigorously test the existing logic against adversarial probes. Execute one test row per identified allergy type in your dataset:
+*   **Probe Set:** Create inputs for every documented severe allergy in your fixed dataset. Include "positive controls" (users with specific, known severe allergies) and "negative controls" (users with no allergies or unrelated sensitivities).
+*   **Adversarial Inputs:** Test edge cases where allergy data might be formatted unusually, missing optional fields, or where a user has multiple conflicting dietary constraints.
+*   **Metric & Threshold:** The pass threshold for any high-risk allergy match is **zero**. Any single instance of a prohibited ingredient being recommended to a sensitive user is a **stop condition** that blocks launch.
+*   **Injection & Leakage Checks:** Verify that the recommendation engine does not ignore user constraints due to prompt injection via recipe descriptions or data leakage from other user profiles.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** For the initial launch to 5,000 users, implement a mandatory human review for any meal plan generated for a user with a documented severe allergy. No plan containing potential allergens should be delivered without explicit human verification. This is a non-negotiable floor for high-stakes actions.
+*   **Uncertainty & Override:** If the system's confidence in an ingredient's safety is not absolute (e.g., ambiguous ingredient names), the output must surface this uncertainty clearly to the reviewer and default to excluding the ingredient. Do not display raw confidence percentages (e.g., "98% safe") to users or reviewers; use defined tiers like "Verified Safe," "Requires Review," or "Excluded."
+*   **Transparency Artifact:** Draft a **Model Card** for this feature before launch. It must state the intended use (meal planning for general wellness, *not* medical advice), list known limitations (reliance on self-reported data, fixed dataset constraints), and document the results of your adversarial testing. If a metric cannot be measured due to data limits, mark it explicitly as **UNVERIFIED** rather than fabricating a safety rate.
+
+**4. Governance & Next Steps**
+Assign a specific owner responsible for reviewing every flagged recommendation during the launch phase. Re-evaluate this process immediately if the model, data, or user base changes.
+
+**Note:** Whether your service constitutes a regulated medical device or requires specific legal disclosures in Argentina or for international users is a legal determination; route this question to counsel immediately. Do not assert that the system is "safe" or "unbiased"; only report the residual risk after testing.

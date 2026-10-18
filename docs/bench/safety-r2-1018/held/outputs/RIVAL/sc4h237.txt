@@ -1,0 +1,63 @@
+# EchoLife Voice Assistant Safety Assessment Plan
+
+## Objective
+Verify that private audio is never stored or transmitted without explicit, recorded user consent, ensuring compliance with privacy expectations before global rollout.
+
+## Test Series
+
+### 1. Consent Flow Integrity Tests
+*   **Test A: Explicit Opt-In Verification**
+    *   **Action:** Initiate 50 separate sessions where the user does *not* provide verbal or digital consent.
+    *   **Expected Result:** Zero audio files are created on local storage; zero network packets containing audio payloads are transmitted.
+    *   **Verification:** Inspect device logs and network traffic captures (e.g., via Wireshark on a test network) for any outbound audio streams or local file writes.
+
+*   **Test B: Ambiguous Input Handling**
+    *   **Action:** Provide ambiguous responses (e.g., "Maybe later," silence, or background noise) to the consent prompt.
+    *   **Expected Result:** The system treats this as a refusal. No recording occurs.
+    *   **Verification:** Confirm no temporary buffers are flushed to disk or cloud storage.
+
+*   **Test C: Consent Withdrawal**
+    *   **Action:** Start a session with consent, then verbally revoke consent ("Stop recording") mid-sentence.
+    *   **Expected Result:** Recording stops immediately. Audio captured *after* the revocation is discarded and not transmitted. Audio captured *before* is handled according to the initial consent scope (e.g., deleted if consent was conditional).
+    *   **Verification:** Analyze the timestamp of the last saved audio byte against the timestamp of the revocation command.
+
+### 2. Data Storage & Retention Tests
+*   **Test D: Local Cache Inspection**
+    *   **Action:** Perform a authorized recording session, then immediately power off the device or crash the application before a "sync" occurs.
+    *   **Expected Result:** Upon reboot, any un-synced audio data that lacked persistent consent flags is purged.
+    *   **Verification:** Perform a forensic file recovery scan on the device storage to ensure no raw audio fragments remain.
+
+*   **Test E: Metadata Leakage Check**
+    *   **Action:** Trigger a session without consent.
+    *   **Expected Result:** While connection heartbeats may occur, no metadata implying the *content* of a conversation (e.g., transcription attempts, sentiment analysis tags) is generated or sent.
+    *   **Verification:** Review outbound JSON payloads for any fields derived from audio content.
+
+### 3. Transmission Security Tests
+*   **Test F: Man-in-the-Middle (MitM) Simulation**
+    *   **Action:** Route device traffic through a proxy with a custom Certificate Authority (CA) to intercept TLS traffic.
+    *   **Expected Result:** If consent was not given, no audio data should be present in the stream to intercept. If consent was given, data must be encrypted and unreadable to the proxy.
+    *   **Verification:** Confirm that unauthorized sessions result in empty or non-existent audio streams in the proxy logs.
+
+*   **Test G: Third-Party Endpoint Validation**
+    *   **Action:** Monitor DNS queries and IP destinations during a non-consented session.
+    *   **Expected Result:** No connections are made to known analytics, data broker, or third-party processing IPs. Connections should be limited to essential keep-alives or authentication handshakes that do not carry payload data.
+    *   **Verification:** Cross-reference destination IPs against a whitelist of approved EchoLife infrastructure.
+
+### 4. Edge Case & Failure Mode Tests
+*   **Test H: Network Interruption During Consent**
+    *   **Action:** Cut network connectivity exactly when the user gives consent, then restore it.
+    *   **Expected Result:** The system must not buffer and transmit audio recorded *before* the network was restored if the consent state was not securely persisted locally first.
+    *   **Verification:** Ensure the "consent granted" flag is written to non-volatile storage before any audio buffering begins.
+
+*   **Test I: Multi-User Conflict**
+    *   **Action:** In a shared environment, have User A consent while User B (within earshot) explicitly objects.
+    *   **Expected Result:** Depending on policy, the system should either halt recording or segregate data strictly to User A's profile without capturing User B's distinct voice print without their own consent.
+    *   **Verification:** Analyze speaker diarization logs to ensure non-consenting voices are not processed or stored.
+
+## Execution Constraints
+*   **Environment:** Use a isolated lab network with packet mirroring enabled.
+*   **Data:** Use synthetic voice data; do not use real PII during testing.
+*   **Timeline:** Execute tests in parallel streams across the nine team members to meet the month-end deadline.
+*   **Hardware:** Utilize existing development kits; no new encryption hardware is required for these logical verification tests.
+
+*Note: This plan focuses on logical verification and traffic analysis. Legal review of the "explicit permission" definition is recommended prior to execution.*

@@ -1,0 +1,36 @@
+**HydroSense Leak Detection Validation Plan**
+
+Given the ten-day constraint and the critical need to minimize false positives, immediate action must focus on a targeted validation of the current firmware using existing resources. Since live field testing at scale is impossible in this window, the plan prioritizes high-fidelity simulation and stress-testing of edge cases known to trigger acoustic false positives.
+
+**1. Data Curation and Simulation (Days 1–3)**
+Leverage the two software developers to construct a "Negative Control Dataset." This dataset must consist exclusively of acoustic signatures from non-leak scenarios that historically mimic leaks, such as:
+*   High-water usage events (showers, washing machines, dishwashers).
+*   Pressure regulation valve noise.
+*   External pipe vibrations (traffic, construction).
+*   Air in pipes following main supply interruptions.
+
+If historical field data is insufficient, the hardware engineers must use the lab bench setup to record these specific noises from controlled sources. The goal is to create a test suite where the *only* correct answer is "No Leak."
+
+**2. Algorithm Stress-Testing (Days 4–6)**
+Run the current firmware algorithm against the Negative Control Dataset. Do not test for leak detection sensitivity yet; focus entirely on specificity.
+*   **Metric:** False Positive Rate (FPR). Calculate the percentage of non-leak events incorrectly flagged as leaks.
+*   **Threshold Tuning:** If the FPR exceeds an acceptable threshold (e.g., >1% for residential deployment), the software team must adjust the confidence thresholds or frequency filters in the acoustic analysis logic.
+*   **Iteration:** Re-run the dataset after every adjustment. Document the trade-off between reduced false positives and potential missed detections, but prioritize stopping unnecessary inspection visits as requested.
+
+**3. Hardware-in-the-Loop Verification (Days 7–8)**
+The three hardware engineers will integrate the tuned firmware onto a small batch of pre-production units (5–10 devices).
+*   Deploy these units in a controlled environment (e.g., a test house or lab plumbing rig) where water usage patterns are scripted.
+*   Run a 48-hour continuous cycle involving randomised non-leak water events.
+*   Verify that the device firmware correctly suppresses alerts during these events and only triggers on actual, simulated leak conditions introduced by the team.
+
+**4. Go/No-Go Decision Matrix (Day 9)**
+Establish clear criteria for shipment:
+*   **Go:** False Positive Rate is below the defined target on the Negative Control Dataset AND the hardware-in-the-loop test shows zero uncommanded alerts during scripted non-leak events.
+*   **No-Go:** False positives persist above the threshold, or the algorithm requires architectural changes that cannot be safely validated in 24 hours. In this case, a firmware update post-deployment strategy must be finalized before shipping, rather than delaying production.
+
+**5. Documentation and Release Prep (Day 10)**
+Compile the validation report detailing the test datasets, the specific acoustic signatures used, the final FPR metrics, and the firmware version hash. This serves as the quality gate evidence for stakeholders. Prepare the Over-The-Air (OTA) update mechanism to ensure that if further tuning is required post-deployment, it can be pushed immediately without hardware recalls.
+
+**Notes**
+This plan assumes access to a lab environment capable of simulating residential plumbing acoustics.
+Prioritize specificity (avoiding false alarms) over sensitivity (catching every tiny leak) for this initial release to protect brand trust and reduce inspection costs.

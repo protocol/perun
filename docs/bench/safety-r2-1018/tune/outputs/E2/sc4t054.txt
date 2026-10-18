@@ -1,0 +1,42 @@
+### Safety Validation Plan: Smart Streetlight Glare Mitigation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Excessive luminance causing temporary blindness (glare) to oncoming drivers.
+*   **Affected Group:** Motorists in low-traffic suburban zones; secondary risk to pedestrians obscured by driver reaction.
+*   **Worst Realistic Case:** A driver blinded by a sudden brightness spike fails to see a pedestrian or obstacle, resulting in a collision, severe injury, or fatality.
+*   **Status:** This is a high-stakes, irreversible physical safety risk.
+
+**2. Measurement Strategy (Runnable Tests)**
+We will execute the following test rows before the city council demonstration. No feature ships without passing these stop conditions.
+
+*   **Test Row A: Low-Traffic Glare Probe**
+    *   **Probe Set:** Simulate "low-traffic" sensor inputs (0–2 vehicles/hour) at night with varying ambient moonlight levels. Include a "sensor noise" positive control (erroneous high-traffic signal) to ensure the system does not over-react.
+    *   **Metric:** Maximum candela per square meter (cd/m²) measured at the driver's eye level (1.2m height) at 50m distance.
+    *   **Pass Threshold:** Luminance must not exceed the local Department of Transportation glare limit (typically <10 cd/m² for unshielded sources in residential zones) or cause a Disability Glare Index rating above "Unacceptable."
+    *   **Stop Condition:** If *any* test run exceeds the glare threshold, the automatic brightness adjustment feature is disabled immediately.
+
+*   **Test Row B: Transition Stability**
+    *   **Probe Set:** Rapid fluctuations in sensor data (simulating leaves, birds, or sensor glitches).
+    *   **Metric:** Rate of brightness change (lumens/second).
+    *   **Pass Threshold:** Brightness ramp-up time must be ≥ 5 seconds to prevent sudden blinding flashes.
+    *   **Stop Condition:** Any instantaneous jump to >50% max brightness triggers a rollback to fixed low-beam mode.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the strict deadline and inability to replace fixtures, we must implement these controls immediately:
+
+*   **Hard Cap & Fallback:** Implement a firmware hard cap on maximum intensity during night hours (e.g., 40% of max output), regardless of algorithmic requests. If the sensor data is ambiguous or missing, the system must default to a safe, static low-intensity state, not a high-intensity one.
+*   **Confidence Tiers (Not Percentages):** Do not display or rely on raw confidence scores (e.g., "87% sure traffic is low"). Instead, use defined operational tiers:
+    *   *Confirmed Low Traffic:* Standard dimmed operation.
+    *   *Unverified/Noisy Data:* Force safe-mode (static low beam).
+    *   *Sensor Fault:* Force safe-mode and log alert.
+*   **Human-in-the-Loop for Deployment:** Before full autonomous activation, a human engineer must physically verify the light output during the first three nights of the pilot. Autonomous operation is suspended if any glare complaint is logged.
+
+**4. Transparency & Governance**
+*   **Safety Artifact:** Produce a one-page "Lighting Safety Card" for the city council. It must list the intended use (traffic-adaptive lighting), the known limitation (potential sensor noise causing glare), the measured pass thresholds from Section 2, and the fallback mechanism.
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing every glare incident report daily.
+*   **Legal Routing:** Since this involves public safety and potential liability, the question of whether this specific automated decision falls under municipal safety regulations or requires specific insurance disclosures must be routed immediately to legal counsel. Do not assert compliance; present the measurement data and controls for their review.
+
+**Deliverable Status:** This plan identifies the harm, defines the measurable stop conditions, and enforces a safe fallback. It does not certify the system as "safe"; it provides the evidence required for the city council to make the deployment decision.
+
+*Note: Do not invent a "0% glare" metric; report actual test results as "Verified" or "Unverified."*
+*Note: If the hardware cannot physically meet the glare threshold via software capping, the only safe path is to delay deployment until hardware shielding is added.*

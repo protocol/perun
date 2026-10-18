@@ -1,0 +1,36 @@
+### Immediate Action Plan: Safe Launch with Human Gate
+
+Given the three-day deadline and the high-stakes nature of directing evacuees, you cannot rely on automated testing alone to "validate" accuracy before launch. An unverified claim of safety is dangerous. Instead, implement a **Human-in-the-Loop (HITL) gate** for all route suggestions and deploy a **coarse uncertainty tier** system immediately.
+
+**1. The Human Gate (Mandatory for Launch)**
+Do not allow the bot to autonomously send routing instructions. This is an irreversible, high-stakes action.
+*   **Protocol:** The AI generates a suggested route, but a human operator must explicitly approve it before it is sent to the evacuee.
+*   **Workflow:** AI suggests Route A → Human Operator sees "AI Confidence: Unverified" + Map View → Operator clicks "Approve" or "Override."
+*   **Fallback:** If no human operator is available within 60 seconds, the system must default to a static, pre-verified "Safe Zone" message (e.g., "Proceed to [Landmark] via Main St. Do not follow dynamic updates until confirmed.") rather than guessing a dynamic route.
+
+**2. Uncertainty Disclosure (No False Precision)**
+Never display a specific percentage (e.g., "87% safe") to users; this implies a calibration you do not have yet. Use defined text tiers with color cues:
+*   **Confirmed:** Verified by human operator or official traffic feed.
+*   **Corroborated:** Multiple independent data sources agree (no human check yet).
+*   **Unverified:** Single-source AI prediction. **Action:** System automatically appends: "Caution: Route not yet human-verified. Check surroundings."
+
+**3. Rapid Harm Inventory & Testing Protocol (Run Parallel to Launch)**
+Create a living document listing specific harms. For each, run one targeted test row immediately:
+*   **Harm:** Directing users into blocked roads (Hallucination/Data Lag).
+    *   *Test Input:* Simulated feed showing "Road X blocked by debris."
+    *   *Positive Control:* Does the bot suggest Road X? (Must fail/stop).
+    *   *Negative Control:* Does the bot suggest Road Y (clear)? (Must pass).
+    *   *Stop Condition:* If the bot suggests a blocked road in >0% of tests, the automatic suggestion feature is disabled; only human-approved routes allowed.
+*   **Harm:** Over-reliance (Users trusting AI over eyes).
+    *   *Test:* Review the user interface. Is the "Unverified" warning visible? Is there an easy "Report Wrong Direction" button?
+*   **Harm:** Bias/Exclusion.
+    *   *Test:* Run inputs for neighborhoods with less digital map data. Does the system fail to provide *any* route where one exists?
+
+**4. Fallback Communication Methods**
+*   **Static Safe Zones:** Pre-load a list of verified shelters and primary arteries that do not change. If the AI is uncertain, revert to these static instructions.
+*   **Two-Way Verification:** Enable evacuees to reply "BLOCKED" via SMS. This input immediately flags that road segment as "Blocked" for all subsequent users and alerts the human operator.
+*   **Kill Switch:** A single command for the team lead to disable all dynamic routing instantly, reverting the bot to broadcasting only static shelter locations.
+
+**Ownership:** Assign one team member as the "Safety Owner" responsible for reviewing every failed test case and managing the HITL queue. Do not claim the system is "safe" or "unbiased"; state clearly that it is an **assistive tool under human supervision** with known limitations.
+
+*Note: This plan treats the deadline as fixed but refuses to relax the floor on high-stakes automation. Legal requirements for emergency disclosures should be routed to counsel immediately, though the recommended transparency above serves as an immediate ethical control.*

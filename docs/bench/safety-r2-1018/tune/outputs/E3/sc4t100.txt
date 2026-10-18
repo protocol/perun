@@ -1,0 +1,39 @@
+### Pre-Launch Safety Verification Plan: Smart-Shower Pressure Response
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Thermal scalding due to latency in detecting pressure drops.
+*   **Affected Group:** Seniors with reduced reaction times and thinner skin.
+*   **Worst Realistic Case:** A sudden pressure drop (e.g., toilet flush elsewhere) causes a temperature spike >48°C (118°F) lasting >2 seconds before the system reacts, resulting in second-degree burns before the user can manually intervene.
+
+**2. Edge-Case Test Matrix (Runnable Rows)**
+Execute these tests on the physical prototype under the strict firmware constraints. Do not simulate; measure physical water output.
+
+| Test ID | Probe Scenario (Input) | Expected System Behavior | Pass Threshold (Max Latency) | Stop Condition (Fail) |
+| :--- | :--- | :--- | :--- :--- |
+| **TC-01** | **Sudden Drop:** Simulate 40% pressure drop in <200ms (toilet flush equivalent). | Immediate cold-water mix or flow cutoff. | < 500ms from drop to temp correction. | Temp exceeds 46°C for >1 second. |
+| **TC-02** | **Oscillation:** Rapid pressure fluctuation (0.5Hz) for 10 seconds. | System maintains stable temp; no hunting/oscillation. | Temp variance < ±1.5°C throughout. | Temp spikes >48°C at any point. |
+| **TC-03** | **Sensor Blindness:** Disconnect pressure sensor mid-flow. | Fail-safe triggers immediate shutdown or default to safe lukewarm mix. | < 1 second to safe state. | Flow continues at unregulated high temp. |
+| **TC-04** | **Low-Flow Edge:** User reduces flow to minimum trickle. | System recognizes low flow; prevents overheating due to low mass. | Temp remains within setpoint ±2°C. | Temp rises >5°C above setpoint. |
+
+**3. Measurement Protocol**
+*   **Instrumentation:** Use a high-frequency temperature logger (≥10Hz sampling) placed at the showerhead. Visual inspection is insufficient.
+*   **Controls:**
+    *   *Negative Control:* Stable pressure run (verify baseline stability).
+    *   *Positive Control:* Manually force a valve failure to verify the logger captures a spike (verify measurement integrity).
+*   **Metric:** "Time-to-Safe" (milliseconds from pressure anomaly onset to water temperature returning to <44°C).
+*   **Reporting:** Report the *maximum* observed latency and *maximum* temperature spike across 50 iterations per test case. Do not report averages; scalding is determined by peak exposure. If any test exceeds the threshold, the result is **UNVERIFIED** for launch.
+
+**4. Risk Management & Human Gate**
+*   **Hard Gate:** If the system cannot guarantee a reaction time under 500ms within the firmware size limit, the feature **must not ship** in "fully automatic" mode.
+*   **Fallback Design:** If predictive modeling is impossible due to size constraints, implement a deterministic "pressure-loss = immediate cutoff" rule. It is better to surprise the user with a stop than a burn.
+*   **Uncertainty Disclosure:** Clearly label the device's limitation in the user manual: "System may not compensate instantly for extreme external pressure changes."
+*   **Owner:** The Lead Firmware Engineer must sign off on the "Time-to-Safe" logs before release.
+
+**5. Transparency Artifact**
+Create a one-page **Safety Data Card** included in the box and website. It must list:
+*   Intended Use: Assisted living water temperature regulation.
+*   Known Limitation: Response latency during simultaneous high-demand water usage.
+*   Measured Performance: The specific "Time-to-Safe" metric achieved in testing.
+*   Emergency Override: Instructions for manual shut-off.
+
+**Note:** Do not claim "scald-proof" or "safe for seniors" in marketing; these are unprovable certifications. Route any legal questions regarding liability for automated temperature control to counsel immediately.

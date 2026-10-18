@@ -1,0 +1,44 @@
+### Review Protocol: Funeral Planning Bot Output Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+Before launch, explicitly document the specific failure mode: **Contextual Hallucination leading to Emotional Distress**.
+*   **Affected Parties:** Bereaved families (primary), funeral directors (reputational risk).
+*   **Worst Realistic Case:** The bot suggests an upbeat party track for a solemn traditional funeral due to misinterpreting a deceased's ironic or outdated social media post, causing public humiliation and severe emotional trauma to the family during the service.
+*   **Status:** This is not a "bug" to be fixed later; it is a high-stakes output risk requiring immediate containment.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert the model is "culturally sensitive." Instead, execute these specific evaluations before any user sees a suggestion:
+*   **Probe Set A (Adversarial Context):** Input profiles containing irony, sarcasm, or posts from different life stages (e.g., a joyful post from 10 years ago vs. recent solemnity).
+    *   *Metric:* Percentage of suggestions flagged as tonally mismatched by human reviewers.
+    *   *Threshold:* **Zero tolerance** for "High Mismatch" ratings on the first 50 test cases.
+*   **Probe Set B (Cultural Edge Cases):** Use available limited data to construct "known-bad" scenarios (e.g., specific songs taboo in certain cultures despite happy lyrics).
+    *   *Control:* Include at least 5 known inappropriate pairings as positive controls to ensure the filter catches them.
+    *   *Stop Condition:* If the system fails to flag any known-bad positive control, launch is blocked.
+*   **Reporting:** Any untested cultural segment must be labeled **UNVERIFIED** in internal documentation. Do not invent a "99% accuracy" claim.
+
+**3. Management Controls (The Human Gate)**
+Given the high-stakes, irreversible nature of a funeral service, **full automation is prohibited** for music selection.
+*   **Mandatory Human-in-the-Loop:** The bot must function strictly as a *drafting assistant*. Every music suggestion must be presented to a funeral director with a clear **"Unverified/AI-Generated"** label.
+*   **Explicit Confirmation:** The director must manually select and confirm every track before it is added to a service plan. The system cannot auto-populate a final playlist.
+*   **Uncertainty Display:** If the model's confidence in sentiment analysis is low, the UI must display a coarse warning tier (e.g., **"Context Unclear – Manual Review Required"**) rather than a false-precision percentage. Do not show raw confidence scores like "87%."
+
+**4. Transparency Artifact (Model Card)**
+Create a one-page **Model Card** for internal use by funeral directors:
+*   **Intended Use:** Drafting suggestions based on public data only.
+*   **Limitations:** Explicitly state the model struggles with irony, sarcasm, and lacks diverse cultural training data.
+*   **Data Provenance:** Note the limited dataset scope.
+*   **Owner:** Name the specific team member responsible for reviewing failure reports.
+*   *Finding:* Shipping without this card is a transparency failure.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign one person to own the "Inappropriate Suggestion" risk. They must review any flagged incidents weekly.
+*   **Legal Duty:** Whether analyzing public social media of the deceased requires specific consent disclosures or falls under automated decision-making regulations (e.g., EU AI Act) is a legal determination. **Route this immediately to counsel.** Do not assume compliance; ask counsel to define the duty.
+
+**6. Launch Constraint Plan**
+To meet the quarter-end revenue target without violating safety floors:
+*   **Staged Rollout:** Launch only to a pilot group of 3 trusted funeral directors who agree to manual verification of every bot suggestion.
+*   **Kill Switch:** Implement a hard stop that disables the suggestion feature entirely if >2 inappropriate suggestions are reported in the pilot week.
+*   **Fallback:** If the bot cannot generate a "Confirmed" tier suggestion, it must return "No recommendation available" rather than guessing.
+
+**Note:** This protocol treats the bot as an unverified assistant, not an autonomous agent.
+**Note:** Legal counsel must validate data usage rights before the pilot begins.

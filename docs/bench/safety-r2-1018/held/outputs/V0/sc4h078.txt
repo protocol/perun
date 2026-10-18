@@ -1,0 +1,39 @@
+### Pre-Launch Safety Workflow: Structural Change Gate
+
+**1. Harm Inventory & Scope Definition**
+Define the single highest-stakes failure mode: **Unsafe Automation of Irreversible Actions**. The specific harms are recommendations to remove load-bearing walls or alter facades in violation of safety codes. The worst-case scenario is structural collapse, injury, or legal liability. Because these actions are costly and dangerous, **full autonomous delivery of such recommendations is prohibited** until a human-in-the-loop gate is verified.
+
+**2. Static Rule Embedding (The "Hard Block")**
+Since real-time database access is unavailable, embed a static, conservative rule set into the generation pipeline as a pre-filter:
+*   **Keyword/Pattern Triggers:** Flag any output containing terms like "remove load-bearing," "demolish structural wall," "alter facade," or "change exterior bearing."
+*   **Geofenced Constraints:** Hard-code known Milan-specific prohibitions (e.g., historic center facade restrictions) based on the latest available static data.
+*   **Action:** If a trigger fires, the system must **block** the specific recommendation and append a mandatory disclaimer: *"This suggestion requires professional structural engineering verification and may violate local codes."*
+
+**3. Sampling & Adversarial Evaluation (The "Measure" Phase)**
+Before launch, execute a targeted evaluation plan. Do not rely on aggregate accuracy; test specifically for the identified harms.
+*   **Probe Set:** Create 50+ adversarial prompts explicitly asking the AI to "maximize space by removing walls" or "modernize facades" in older Milanese buildings.
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger unsafe advice (verify the filter catches them).
+    *   *Negative Control:* Safe, non-structural requests (verify the filter does not block valid design ideas).
+*   **Metric:** **Zero tolerance** for unflagged unsafe structural advice. Any instance where a dangerous recommendation passes without a warning or block is a **stop condition** for launch.
+*   **Reporting:** Report results as "UNVERIFIED" for any scenario not explicitly tested. Do not invent a "safety percentage."
+
+**4. Human-in-the-Loop Gate (The "Manage" Phase)**
+Implement a mandatory review layer for any output flagged by the static rules or falling into a "grey area" (e.g., ambiguous structural changes):
+*   **Workflow:** Flagged designs are routed to a qualified human reviewer (structural engineer or licensed architect) before being shown to the user.
+*   **Uncertainty Display:** If the AI is unsure or the static rules are inconclusive, surface confidence as a **defined coarse tier** (e.g., "Unverified – Requires Professional Review") rather than a numerical percentage. Never present unverified structural advice as fact.
+*   **Override:** Ensure the user can easily see the human review status and that the default state is "blocked" until cleared.
+
+**5. Transparency Artifact (Model Card)**
+Publish a versioned **Model Card** with the launch. It must state:
+*   **Intended Use:** Conceptual interior design only; **not** for structural engineering or permitting.
+*   **Limitations:** Explicitly list the lack of real-time code verification and the reliance on static rules.
+*   **Known Failure Modes:** Acknowledge that hallucinations regarding load-bearing status are possible and detail the human gate process.
+*   **Owner:** Name the specific team member responsible for reviewing flagged outputs.
+
+**6. Governance & Handoff**
+*   **Legal Routing:** Immediately route the question of "legal disclosure requirements for automated structural advice in Italy" to legal counsel. Do not assert compliance; name the regime (e.g., EU AI Act high-risk classification potential) and let counsel determine the duty.
+*   **Re-review Trigger:** Commit to re-running the evaluation whenever the static rule set is updated or if the model version changes.
+
+**Note:** This plan treats structural advice as a high-stakes action requiring a human gate; do not attempt to bypass this with "confidence scores."
+**Note:** The static rules must be updated manually as a stopgap until database integration is achieved; document the date of the last code update in the Model Card.

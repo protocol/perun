@@ -1,0 +1,31 @@
+### Pre-Launch Safety Protocol: Smart-Irrigation Flood Prevention
+
+**1. Immediate Human-in-the-Loop Gate (The Floor)**
+Given the risk of irreversible property damage (flooding) and the inability to swap physical sensors, **full autonomous activation of water flow is prohibited** for the initial rollout. The system must operate in a "Recommendation Only" mode for the first 30 days or until software validation is complete.
+*   **Action:** The system calculates the required water volume but sends a push notification to the homeowner/property manager for explicit one-tap confirmation before any valve opens.
+*   **Exception:** If the system detects *any* anomaly in sensor data (see Step 2), it defaults to "Closed" and requires manual override by an engineer, not the user.
+
+**2. Software-Based "Sanity Check" Layers (Compensating for Hardware Constraints)**
+Since physical sensor replacement is delayed, implement these algorithmic guards to detect the calibration logic error:
+*   **Cross-Validation with Public Data:** Ingest hyper-local weather API data (e.g., NOAA/NWS) for the specific Phoenix zip code. If the internal rain sensor reports "Dry" while the public API reports >0.1 inches of precipitation in the last hour, **hard-block** irrigation and flag the unit for remote diagnostic.
+*   **Flow-Rate Anomaly Detection:** Monitor the duration and volume of water flow per zone. Establish a hard ceiling (e.g., max 15 minutes continuous flow or max X gallons per cycle). Any request exceeding this threshold triggers an immediate software kill-switch and alerts the engineering team.
+*   **Soil Saturation Logic:** Even without perfect rain data, implement a "cumulative water budget." If the system has delivered the maximum weekly water allowance for the specific lawn square footage, lock out further cycles for 48 hours regardless of sensor input.
+
+**3. Simulation and Adversarial Testing (Measure Before Launch)**
+Do not rely on the current test bed alone. Create a "Digital Twin" simulation:
+*   **Inject Faults:** Simulate the specific calibration error (e.g., feeding "0 rainfall" signals during simulated storm events) in a software-only environment.
+*   **Pass Condition:** The system must successfully block water flow in 100% of simulated storm scenarios where the sensor fails. If the software allows flow in even one simulated flood event, the rollout is paused.
+*   **Metric:** Define the stop condition as "Zero false negatives on flood prevention in simulation."
+
+**4. Transparency and Disclosure**
+*   **User Notification:** Clearly disclose to homeowners that the system is in a "Beta Safety Mode" where automatic watering is disabled pending final sensor calibration verification.
+*   **Uncertainty Reporting:** If the system cannot verify weather conditions due to sensor/API mismatch, display a "Weather Unverified – Watering Paused" status rather than guessing.
+
+**5. Ownership and Review**
+*   Assign one engineer as the "Safety Owner" responsible for reviewing every blocked event and false positive daily.
+*   Re-evaluate the autonomy gate only after physical sensors are swapped and the "Zero false negative" metric is proven in live (but gated) conditions.
+
+***
+
+**Note:** This protocol treats the flooding risk as a high-stakes irreversible action requiring a human gate; do not remove this gate based on software confidence alone.
+**Note:** Legal counsel should review the "Beta Safety Mode" disclosure language to ensure it meets local liability requirements for property damage.

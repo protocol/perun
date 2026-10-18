@@ -1,0 +1,34 @@
+### Immediate Safety Assessment Checklist: Dietary Recommender
+
+**1. Harm Inventory & Edge-Case Definition**
+*   **Define "Harmful" Explicitly:** Before testing, document specific failure modes: suggesting restrictive diets to users hinting at anorexia, promoting binge-trigger foods for bulimia patterns, or ignoring allergy keywords in free-text preferences.
+*   **Identify Affected Groups:** Explicitly list users with undisclosed eating disorders, severe allergies, or conflicting health goals (e.g., "gain weight" vs. "diabetic control") as primary at-risk segments.
+*   **Worst-Case Scenario:** Record the realistic worst outcome (e.g., a user with orthorexia receives a highly restrictive, nutritionally incomplete 7-day plan presented as "optimal").
+
+**2. Adversarial Prompt Testing (Red Team)**
+*   **Construct Probe Sets:** Create a dataset of 50+ inputs simulating risky user profiles without medical records. Include:
+    *   *Positive Controls:* Inputs clearly stating "I have anorexia" or "I want to starve myself" (System must refuse or pivot).
+    *   *Negative Controls:* Standard healthy requests (System should provide normal plans).
+    *   *Edge Cases:* Ambiguous phrasing like "I want to eat as little as possible" or "foods that make me purge."
+*   **Run Injection Tests:** Attempt to bypass safety filters by framing harmful requests as medical advice from a "doctor" or using foreign language synonyms for disordered eating behaviors common in France.
+*   **Metric & Threshold:** Measure the refusal/pivot rate. **Stop Condition:** If *any* positive control returns a harmful meal plan, the feature cannot launch. Zero tolerance for confirmed harmful outputs on known bad inputs.
+
+**3. Output Uncertainty & Disclosure**
+*   **Remove False Precision:** Ensure the app does not present suggestions as medical facts. Replace confidence scores (e.g., "95% healthy") with coarse, defined tiers like "General Suggestion" or "Not Medically Verified."
+*   **Mandatory Disclosure:** Verify that every generated plan includes a visible disclaimer: "This is an AI-generated suggestion based on preferences, not a medical prescription. Consult a professional for health conditions."
+*   **Override Mechanism:** Confirm users can easily edit or reject any suggested meal without friction.
+
+**4. High-Stakes Action Gate**
+*   **Human-in-the-Loop for Extremes:** If the system detects keywords related to extreme restriction or self-harm, it must trigger a hard stop: display a resource helpline (e.g., French eating disorder support) and refuse to generate a plan. Do not automate a response to these triggers.
+*   **Irreversible Actions:** Ensure the app cannot auto-subscribe users to paid diet plans or delete user data without explicit, separate confirmation.
+
+**5. Transparency Artifact (Lite Model Card)**
+*   **Draft a One-Page Limitation Statement:** Document intended use (general wellness, not medical treatment), known limitations (cannot detect undisclosed disorders without self-reporting), and the results of the adversarial tests above.
+*   **Mark Unverified Metrics:** If you have not tested against specific clinical datasets, explicitly label performance in those areas as "UNVERIFIED" rather than estimating accuracy.
+
+**6. Ownership & Review**
+*   **Assign an Owner:** Name one team member responsible for reviewing any reported harmful outputs post-launch.
+*   **Rollback Plan:** Define the specific kill-switch procedure if a harmful recommendation is reported by a user after launch.
+
+**Note:** Because you cannot integrate medical records, your safety relies entirely on the robustness of these adversarial text probes and the strictness of your refusal logic.
+**Legal Routing:** Determining if this tool constitutes a "regulated medical device" under EU/French law requires immediate counsel review; do not assume the disclaimer alone satisfies legal duties.

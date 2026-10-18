@@ -1,0 +1,38 @@
+**Pre-Launch Evaluation Plan: High-Risk Clause Recall**
+
+Given the high stakes of missed liability shifts in merger agreements and the constraint of limited diverse training data, you cannot certify the tool as "safe" or "unbiased" before launch. Instead, you must implement a **Human-in-the-Loop (HITL) gate** for all final advice and execute the following measurement plan to quantify residual risk.
+
+**1. Construct the Harm Inventory & Probe Set**
+Define the specific failure mode: "Missed subtle liability shift." Do not test generic performance. Build a curated evaluation set ("red team" corpus) containing:
+*   **Positive Controls:** 50+ historical contracts where known liability shifts were present but subtle (e.g., buried in definitions, cross-referenced, or using non-standard phrasing). These must be manually verified by senior partners.
+*   **Negative Controls:** 50+ contracts with no such shifts to measure false positives.
+*   **Adversarial Inputs:** Contracts with intentionally ambiguous language or "poisoned" clauses designed to confuse the model (simulating prompt injection via retrieved content).
+*   **Subgroup Slicing:** If possible, slice inputs by deal size, jurisdiction, or industry sector to check for systematic blind spots, acknowledging your data limitations.
+
+**2. Define Metrics and Stop Conditions**
+*   **Primary Metric:** Recall (Sensitivity) on the Positive Control set specifically for "high-risk" tags. Precision is secondary; missing a clause is the critical failure.
+*   **Threshold:** Set a near-zero tolerance for false negatives on high-risk clauses. If the tool misses even one known liability shift in the positive control set, the **stop condition** is triggered: deployment halts until the specific failure mode is mitigated or the HITL process is tightened.
+*   **Reporting:** Report the result as `UNVERIFIED` for any subgroup where you lack sufficient test cases. Do not invent a global accuracy percentage (e.g., "99% accurate") if the test set is small or homogenous.
+
+**3. Operationalize the Human Gate (Mandatory)**
+Because the tool influences final legal advice and errors cause severe client harm:
+*   **No Autonomous Advice:** The tool must never output final advice directly to a client. It acts solely as a draft flagger.
+*   **Verification Workflow:** Every clause flagged as "low confidence" or "unverified" by the system, and a random sample of "clean" documents, must be reviewed by a qualified human attorney before any advice is finalized.
+*   **Uncertainty Display:** Do not show raw model confidence scores (e.g., "87%") to associates, as this invites over-reliance. Instead, use defined coarse tiers: *Confirmed* (multiple sources/patterns), *Single-Source* (needs review), or *Unverified* (high risk, mandatory senior review).
+
+**4. Transparency Artifact (Model Card)**
+Before deployment, publish an internal Model Card documenting:
+*   **Intended Use:** Draft identification of liability shifts in merger agreements only.
+*   **Limitations:** Explicitly state the lack of diverse training data and the specific types of clauses known to be challenging.
+*   **Measured Performance:** List the recall rate on your specific probe set. Mark any untested scenarios as `UNVERIFIED`.
+*   **Owner:** Name the specific legal technologist responsible for monitoring failures post-launch.
+
+**5. Legal and Regulatory Routing**
+*   **Disclosure:** Whether you are legally required to disclose to clients that AI assisted in the review is a determination for counsel, potentially involving EU regulations given the Frankfurt location. Do not assert this duty here; route the question to your legal compliance team immediately.
+*   **Regime Awareness:** Be aware that the EU AI Act may classify this as a high-risk system depending on its final function. Counsel must determine applicability; do not assume compliance based on this test plan alone.
+
+**Execution Timeline:**
+Given your tight deadline, prioritize building the **Positive Control** set immediately. If you cannot construct a robust set of known failures to test against, you cannot measure recall, and the tool must remain in a strictly experimental mode with 100% human review of all outputs.
+
+*Note: This plan measures residual risk; it does not guarantee the absence of errors. The decision to ship rests with the firm's leadership.*
+*Ensure senior partners validate the "Positive Controls" before running the evaluation.*

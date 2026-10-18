@@ -1,0 +1,34 @@
+### Pre-Launch Safety Plan: Pregnancy Appointment Preservation
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Systemic bias causing cancellation of prenatal visits due to priority rule conflicts.
+*   **Affected Group:** Pregnant patients.
+*   **Worst Case:** Missed critical care leading to adverse maternal/fetal health outcomes.
+*   **Status:** High-stakes automated action (cancellation) currently lacks sufficient safeguards.
+
+**2. Targeted Testing Strategy (Measure)**
+Do not rely on aggregate pass rates. Execute the following specific evals before go-live:
+*   **Adversarial Probe Set:** Construct a dataset of 500 synthetic patient profiles where pregnancy status conflicts with other priority flags (e.g., "low urgency" vs. "prenatal routine"). Include edge cases: high-risk pregnancies, multiple gestations, and conflicting provider notes.
+*   **Positive Control:** Inputs known to trigger the glitch (pregnant + conflicting rule) must result in **zero** cancellations in the test environment.
+*   **Negative Control:** Non-pregnant patients with similar conflicting rules should process normally to ensure the fix does not break general logic.
+*   **Metric & Threshold:** **Pass threshold is 0% cancellation** for any profile flagged as pregnant. Any single failure is a stop condition for launch.
+*   **Injection Check:** Verify that user-supplied text fields (e.g., "patient notes") cannot inject commands to override pregnancy flags (prompt injection via retrieved content).
+*   **Reporting:** If the engine cannot be patched to guarantee 0% failure in testing, the residual risk is **UNVERIFIED**. Do not fabricate a "99% safe" metric.
+
+**3. Operational Controls & Human Gate (Manage)**
+Given the fixed deadline and inability to fully patch the core engine, you must implement a **Human-in-the-Loop (HITL) gate** for the specific high-stakes action of canceling appointments.
+*   **The Gate:** Configure the system to **block** any automated cancellation where the patient profile contains pregnancy indicators. These cases must route to a human scheduler for explicit confirmation before execution.
+*   **Uncertainty Display:** If the system flags a conflict, surface this to the human reviewer as "Unverified/Conflict Detected" (a defined coarse tier), not as a numerical confidence score (e.g., "87% likely to cancel").
+*   **Override Mechanism:** Ensure human reviewers can easily override the system recommendation to preserve the slot.
+
+**4. Post-Launch Monitoring & Intervention**
+*   **Real-Time Alerting:** Implement a dashboard filter specifically for "Canceled Appointments: Pregnant Patients." Any entry here triggers an immediate Page 1 incident.
+*   **Rollback Protocol:** Define a hard stop condition: If **one** verified erroneous cancellation occurs post-launch, automatically disable the automated cancellation module and revert to manual scheduling until a root-cause patch is deployed.
+*   **Disclosure:** Inform hospital partners that this specific module operates with a human safety gate for prenatal cases due to identified rule conflicts.
+
+**5. Governance**
+*   **Owner:** Assign a specific individual (name required) accountable for reviewing any flagged prenatal cancellations weekly.
+*   **Documentation:** Create a temporary "Model Card" appendix for this feature documenting the known glitch, the HITL workaround, and the 0% tolerance threshold.
+
+**Note:** Legal counsel must review whether this automated decision falls under specific healthcare regulations requiring formal impact assessments; this plan addresses product safety, not legal compliance.
+**Note:** If the core engine cannot support the HITL gate by the deadline, the constraint (deadline) must move; shipping fully autonomous cancellations for this group is unsafe.

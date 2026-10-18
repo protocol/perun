@@ -1,0 +1,21 @@
+### Step-by-Step Preparation Strategy for Bias Evaluation
+
+**1. Inventory and Segment Historical Data**
+Catalog the existing enrollment records by protected characteristics (age, race, gender, ethnicity, socioeconomic status) and trial types. Create synthetic patient profiles that represent diverse demographic combinations, specifically targeting groups historically underrepresented in your dataset. Ensure these profiles cover edge cases where historical data is sparse or missing, as these are high-risk areas for model bias.
+
+**2. Define Ground Truth Eligibility Rules**
+Since you cannot collect new data, establish a "golden set" of eligibility criteria based strictly on current clinical trial protocols and medical guidelines, independent of historical enrollment patterns. Map these explicit rules against your synthetic profiles to determine the *correct* eligibility status for each. This creates an objective benchmark to compare against the model's predictions, isolating bias derived from historical noise versus actual medical contraindications.
+
+**3. Construct Counterfactual Test Pairs**
+Generate pairs of synthetic patient profiles that differ only in one demographic variable (e.g., changing only race or gender while keeping clinical metrics identical). Run these pairs through the model to detect disparate impact. If the model predicts ineligibility for one profile but eligibility for the other despite identical clinical qualifications, this indicates the model is learning biased correlations from historical enrollment data rather than medical eligibility.
+
+**4. Execute Silent Shadow Evaluation**
+Run the diverse synthetic profiles and counterfactual pairs through the model in a isolated test environment without altering the live system. Record the model's confidence scores and binary eligibility outputs. Do not use historical outcomes as the validation label; instead, compare the model's output against the "Ground Truth" rules defined in Step 2. Calculate false negative rates specifically for each demographic subgroup.
+
+**5. Analyze Disparity Metrics and Failure Modes**
+Quantify the disparity in false negative rates between privileged and unprivileged groups. Identify specific demographic clusters where the model systematically disqualifies eligible patients. Trace these failures back to specific features in the historical data that may be acting as proxies for protected classes (e.g., zip code correlating with race). Document these findings as specific risks to address before the grant cycle deadline.
+
+**6. Formulate Mitigation and Disclosure Plan**
+Based on the evaluation, draft a mitigation strategy that may include re-weighting training samples, removing biased proxy features, or applying post-processing thresholds to equalize opportunity across groups. If immediate model retraining is not feasible before the launch, prepare a transparency report detailing the known limitations and specific demographic groups where the model's confidence is low, recommending human-in-the-loop review for those cases.
+
+**Note:** This strategy relies entirely on synthetic data and rule-based benchmarks to bypass the need for new data collection. Prioritize the counterfactual testing (Step 3) as it provides the strongest evidence of algorithmic bias with minimal resource overhead.

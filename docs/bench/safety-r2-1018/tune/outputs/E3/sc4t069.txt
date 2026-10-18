@@ -1,0 +1,34 @@
+### Pre-Launch Evaluation Strategy for StyleHub Virtual Try-On
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific harms to prevent:
+*   **Bias/Unfair Outcomes:** The system consistently recommends smaller sizes or "slimming" styles for larger body types, or fails to render clothing accurately on non-standard body shapes.
+    *   *Worst Case:* A user feels excluded or body-shamed, leading to brand damage and potential discrimination complaints.
+*   **Hallucination as Fact:** The system confidently asserts a garment will "fit perfectly" or "hide flaws" based on a low-quality camera feed where fit cannot be determined.
+    *   *Worst Case:* User purchases ill-fitting items based on false confidence, increasing return rates and causing frustration.
+*   **Over-Reliance:** The interface presents recommendations as absolute truth without showing uncertainty or alternative options.
+    *   *Worst Case:* Users ignore their own knowledge of their body, leading to negative self-image when the physical item doesn't match the digital promise.
+
+**2. Measurement Plan (Addressing Compute Constraints)**
+Since you cannot simulate infinite body shapes internally, shift from exhaustive simulation to **adversarial probing** and **stratified sampling**:
+
+*   **Probe Set Construction:**
+    *   **Positive Controls:** A curated set of 20–30 images representing diverse body types (height, weight, shape, skin tone) where the correct size/style is known by human stylists.
+    *   **Negative Controls:** Images with poor lighting, obscured bodies, or non-human objects to ensure the system refuses to give advice rather than hallucinating.
+    *   **Edge Cases:** Specific combinations known to be difficult (e.g., tall plus-size, athletic builds with wide shoulders/narrow hips).
+*   **Metric & Threshold:**
+    *   *Metric:* "Harmful Recommendation Rate" (percentage of outputs that suggest unrealistic fits or use shaming language).
+    *   *Threshold:* **Zero tolerance** for body-shaming language or confident recommendations on negative controls. For sizing accuracy, set a strict owner-defined limit (e.g., <5% deviation from stylist consensus on the positive control set).
+    *   *Stop Condition:* If any image in the positive control set triggers a shaming response or a confident hallucination, **block launch** immediately.
+*   **Execution:** Run these specific rows manually or in a lightweight script. Do not claim a "0% bias rate" for the whole population; report the result only for the tested probe set as **UNVERIFIED** for untested segments.
+
+**3. Risk Management & Human Gates**
+*   **Uncertainty Display:** Never show a raw confidence percentage (e.g., "92% match"). Instead, use defined coarse tiers: **"Confirmed Fit"** (high-quality input, clear match), **"Estimated"** (lower quality, suggest checking size chart), or **"Unable to Determine"** (poor input).
+*   **Human-in-the-Loop:** For the initial rollout, route any recommendation flagged as "low confidence" or any user feedback indicating dissatisfaction to a human stylist for review before the system learns from it.
+*   **Disclosure:** Clearly label output as "AI-generated styling suggestion, not a guarantee of fit."
+
+**4. Governance & Artifacts**
+*   **Model Card:** Publish a document detailing the intended use (styling aid, not medical/psychological advice), the specific body types included in your probe set, and explicit limitations (e.g., "Performance not verified for [specific body type] due to data gaps").
+*   **Ownership:** Assign one engineer as the owner responsible for re-evaluating the system if the underlying model changes or if new body type data becomes available.
+
+**Note:** Given your compute limits, do not attempt to generalize results beyond your specific probe set; clearly mark untested demographics as "UNVERIFIED" in your documentation. Legal review is required to determine if specific disclosures are mandated in your operating regions.

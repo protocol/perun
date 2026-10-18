@@ -1,0 +1,32 @@
+### Execution Plan: Responsible Deployment of Automated Loan Denials
+
+**1. Immediate Human-in-the-Loop Gate (Days 1–3)**
+Stop full automation of denials immediately. Given the high-stakes, irreversible nature of credit denial and the "opaque" vendor model, autonomous execution is unsafe.
+*   **Action:** Route 100% of automated denials to a human reviewer for the next two weeks. The system may *recommend* denial, but a human must confirm it before the user is notified.
+*   **Rationale:** This satisfies the floor requirement for high-stakes actions where model internals are unknown. It prevents immediate systemic harm while you gather data.
+
+**2. Proxy Harm Inventory & Adversarial Testing (Days 4–10)**
+Since you cannot audit internal weights, you must audit input-output behavior. Construct a "Harm Inventory" focusing on **Bias/Unfair Outcomes** and **Hallucination-as-Fact** (incorrectly citing reasons for denial).
+*   **Synthetic Probe Set:** Generate 500 synthetic applicant profiles mirroring your Tokyo young urban demographic. Create paired profiles (A/B testing) that differ *only* in protected characteristics (e.g., gender, neighborhood prestige, employment type) while holding financial capacity constant.
+*   **Execution:** Run these profiles through your live beta pipeline.
+*   **Metric:** Measure the disparity in denial rates between paired profiles.
+*   **Threshold:** Set a zero-tolerance stop condition for any statistically significant disparity (>5% difference) in denial rates between protected groups. If triggered, the feature cannot launch.
+
+**3. Transparency & Disclosure Artifacts (Days 11–13)**
+You cannot claim the model is "unbiased" without internal weights. Instead, ship with radical transparency.
+*   **Model Card (Lite):** Publish a versioned document stating: "Intended Use: Short-term micro-loans for urban youth," "Limitations: Vendor model is opaque; internal weights unavailable," and "Known Risks: Potential for proxy discrimination based on behavioral data."
+*   **User Disclosure:** Explicitly inform users: "This decision was assisted by an automated scoring system. You have the right to request a human review."
+*   **Confidence Tiers:** Do not show users a specific score (e.g., "68/100"). Instead, use defined tiers for internal review (e.g., "High Confidence Denial," "Borderline – Requires Human Review").
+
+**4. Governance & Rollback Protocol (Days 14–Launch)**
+*   **Owner Assignment:** Name one specific product lead as the owner of "Output Harm." They hold the authority to pull the plug.
+*   **Rollback Switch:** Implement a hard kill-switch that reverts the system to "Manual Review Only" if post-launch monitoring shows a spike in complaints or disparity metrics.
+*   **Legal Routing:** Immediately route the question "Is this automated decision regulated under Japanese financial laws or requiring specific AI disclosures?" to legal counsel. Do not assert compliance internally; record that this determination is pending counsel.
+
+**Residual Risk Statement:**
+We cannot verify the absence of bias due to vendor opacity. The residual risk of systematic exclusion remains **UNVERIFIED**. The human-in-the-loop gate and synthetic probe testing are controls to *manage*, not eliminate, this risk. The decision to ship rests with the product owner, acknowledging this unmeasured variable.
+
+***
+
+**Note:** This plan prioritizes a human gate over false precision; do not fabricate a "bias score" to satisfy the deadline.
+**Note:** If the synthetic probe test reveals disparity, the only compliant move is to delay launch or remove automation, regardless of the fiscal deadline.

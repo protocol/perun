@@ -1,0 +1,37 @@
+### Testing Strategy for Automated Grade-Curving System
+
+**Objective:** Detect disparate impact on minority student groups using existing anonymized historical data before the Friday deadline, without modifying the core algorithm or acquiring new licenses.
+
+**1. Harm Inventory & Scope (Immediate)**
+*   **Primary Risk:** Bias/Unfair Outcomes. The system may systematically lower scores for specific demographic groups due to historical biases in the training cohort.
+*   **Affected Parties:** Minority students within specific departments.
+*   **Worst Case:** Systematic grade suppression leading to academic probation, loss of scholarships, or delayed graduation for protected groups.
+*   **Constraint Adherence:** This strategy uses only simulation on historical data; no code changes to the production algorithm are required.
+
+**2. Simulation Protocol (The "Dry Run")**
+Execute the current grading algorithm against a frozen snapshot of the last three years of anonymized historical data. Do not use live current-semester data for this test to prevent accidental publication.
+
+*   **Segmentation:** Tag historical records by relevant demographic proxies available in your anonymized set (e.g., department, prior academic track, or self-identified group if ethically cleared and anonymized).
+*   **Control Groups:**
+    *   *Positive Control:* Create a synthetic subset where minority group performance is artificially inflated to verify the system *can* award higher curves when warranted.
+    *   *Negative Control:* Create a synthetic subset where majority group performance is artificially deflated to verify the system does not unfairly penalize them.
+*   **Execution:** Run the curving logic on these segmented datasets exactly as it would run in production.
+
+**3. Measurement Metrics**
+Calculate the **Disparate Impact Ratio** for each group:
+*   *Metric:* (Percentage of Minority Students receiving a grade increase) / (Percentage of Majority Students receiving a grade increase).
+*   *Threshold:* A ratio below 0.8 (the "four-fifths rule" heuristic) indicates potential adverse impact.
+*   **Stop Condition:** If any group falls below the 0.8 threshold, or if the average grade delta for a minority group is statistically significantly lower (p < 0.05) than the majority group despite similar input distributions, **halt publication**.
+
+**4. Management & Human Gate**
+*   **Uncertainty Reporting:** Do not report a specific "bias percentage." Report findings as **"Verified Disparity," "No Disparity Detected,"** or **"Unverified"** (if data sparsity prevents conclusion).
+*   **Human-in-the-Loop:** Any grade curve affecting a cohort where disparity was detected must trigger a mandatory manual review by the grading committee before finalization. The system must not auto-publish these specific results.
+*   **Transparency Artifact:** Draft a one-page "Grading Logic Statement" for the student body. It must state: "Grades were adjusted using an automated cohort-based system. We tested for disparate impact using historical data. [Insert Result: No disparity detected / Manual review applied to X department]." Do not claim the system is "unbiased"; state the testing method and the outcome.
+
+**5. Execution Schedule (Until Friday)**
+*   **Day 1:** Extract and anonymize historical data; define demographic segments.
+*   **Day 2:** Run simulation with positive/negative controls; calculate disparate impact ratios.
+*   **Day 3:** Review results. If disparities exist, isolate affected cohorts for manual review. Draft the Transparency Statement.
+*   **Day 4 (Friday):** Final sign-off. If any metric is "Unverified" due to small sample sizes, default to manual review for those specific departments.
+
+**Note:** This strategy identifies risk but does not certify fairness; if data is too sparse to measure, the result is "Unverified," requiring a human gate. Legal requirements for disclosing automated decisions in education should be confirmed by university counsel immediately.

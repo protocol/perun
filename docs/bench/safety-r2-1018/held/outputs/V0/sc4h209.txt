@@ -1,0 +1,35 @@
+### Strategic Harm Mitigation Plan: Tenant Screening Deployment
+
+Given the two-week constraint and the inability to modify the core decision logic, the following plan prioritizes a **human-in-the-loop gate** for all high-stakes rejections and establishes a rigorous testing protocol to identify unfair outcomes before they reach applicants.
+
+#### 1. Manual Override Procedures (The Human Gate)
+Since the system automatically bans anyone with an eviction record, this constitutes a high-stakes, potentially irreversible action that requires a mandatory human review layer. Do not allow the system to send automatic rejection notices.
+
+*   **Step 1: Intercept All "Ban" Decisions.** Configure the portal to flag any application resulting in an automatic ban as "Pending Review" rather than "Rejected." No communication is sent to the applicant at this stage.
+*   **Step 2: Contextual Intake Form.** For every flagged application, automatically generate a simplified intake sheet for a human reviewer containing:
+    *   The specific eviction record cited by the AI.
+    *   A mandatory field for the applicant to upload context (e.g., proof of wrongful eviction, settlement agreements, or evidence of resolved disputes).
+    *   A "Time Since Event" calculator to highlight older records.
+*   **Step 3: Reviewer Protocol.** Assign a trained staff member to review flagged cases within 48 hours. The reviewer must answer: "Does the provided context invalidate the automatic ban?"
+    *   **If Yes:** Manually override the decision to "Approved for Lease" or "Proceed to Interview." Log the override reason.
+    *   **If No:** Confirm the rejection and authorize the notification.
+*   **Step 4: Audit Trail.** Maintain a log of all overrides, including the reviewer's name, date, and justification. This is critical for demonstrating due diligence and identifying patterns where the AI fails.
+
+#### 2. Edge-Case Testing Protocol (Pre-Deployment Validation)
+Before full deployment, run the following specific test rows against the current system to measure failure rates and validate the override workflow. Do not assert the system is "fair"; measure where it breaks.
+
+| Test Case ID | Input Scenario (Probe) | Expected System Output | Required Human Action | Pass/Fail Criteria |
+| :--- | :--- | :--- | :--- :--- |
+| **TC-01** | Applicant with eviction dismissed by court (wrongful). | Auto-Ban | Reviewer overrides to "Approved" based on court doc. | **Pass:** Override successful; no rejection sent. |
+| **TC-02** | Applicant with eviction >7 years old, perfect recent history. | Auto-Ban | Reviewer overrides based on "stale data" policy. | **Pass:** Override successful; no rejection sent. |
+| **TC-03** | Applicant with eviction due to domestic violence (protected class). | Auto-Ban | Reviewer overrides based on legal exemption. | **Pass:** Override successful; no rejection sent. |
+| **TC-04** | Applicant with recent, unpaid eviction (valid risk). | Auto-Ban | Reviewer confirms rejection. | **Pass:** Rejection confirmed; process efficient. |
+| **TC-05** | **Control:** Applicant with no eviction record. | Auto-Approve/Review | No human intervention needed. | **Pass:** No false positives introduced by the gate. |
+
+**Stop Condition:** If reviewers cannot successfully override more than 95% of valid edge cases (TC-01, TC-02, TC-03) within the 48-hour window, deployment must be paused to address workflow bottlenecks.
+
+#### 3. Transparency & Disclosure
+*   **Applicant Notice:** Clearly disclose that an automated tool is used for initial screening but that **all negative decisions undergo human review**. Provide a simple mechanism for applicants to submit context immediately upon receiving a "Pending Review" status.
+*   **Internal Documentation:** Create a "Model Card" lite document for internal use stating the known limitation: "System currently treats all eviction records equally; human review is required to assess context." Mark the fairness metric as **UNVERIFIED** until post-deployment data is collected.
+
+**Note:** This plan treats the automatic ban as a "recommendation" requiring human confirmation, satisfying the safety floor for high-stakes decisions. Legal counsel should verify if specific Berlin/EU housing laws mandate additional disclosures or prohibit this specific logic entirely.

@@ -1,0 +1,37 @@
+### Pre-Launch Validation Framework: Mobile-Home Disaster Assessor
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, formally record the specific risk: **Bias/Unfair Outcome** where mobile-home structural vulnerabilities (e.g., roof tie-down failure, skirting damage) are systematically underestimated compared to site-built homes due to training data gaps.
+*   **Affected Group:** Mobile-home park residents in Florida.
+*   **Worst Realistic Case:** Families receive payouts insufficient to repair or replace homes, leading to prolonged homelessness during hurricane season.
+*   **Status:** This risk is **UNVERIFIED** until the tests below are run. Do not assert the model is "fair" or "accurate" yet.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+Execute these internal tests immediately using only your existing satellite imagery and proprietary constraints.
+
+| Harm Probe | Input Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Structural Underestimation** | **Probe:** Satellite images of known mobile-home damage types (roof lift, total detachment).<br>**Positive Control:** Images where mobile homes are destroyed but classified as "minor damage."<br>**Negative Control:** Intact mobile homes classified as "intact." | % of severe mobile-home damage cases underestimated by >20%. | **0%** tolerance for severe underestimation in positive controls. | **HALT LAUNCH** if any positive control yields insufficient payout. |
+| **Contextual Bias** | **Probe:** Mobile-home parks vs. adjacent site-built homes with identical visible damage.<br>**Control:** Paired images of both structure types with equal destruction levels. | Payout disparity ratio (Mobile Home / Site-Built) for equal damage. | Ratio must be ≥ 0.95 (allowing only minor variance). | **HALT LAUNCH** if mobile homes consistently score lower than neighbors for equal visual damage. |
+| **Over-Reliance Check** | **Probe:** Edge cases with obscured views (clouds, debris) specific to low-profile structures.<br>**Control:** Cases where the model should output "Unverified/Manual Review" instead of a low number. | Rate of false confidence (high payout certainty on low-quality inputs). | **0%** high-confidence outputs on obscured mobile-home inputs. | **HALT LAUNCH** if the model guesses rather than flagging for review. |
+
+**3. Management Controls (The Human Gate)**
+Because this system executes **high-stakes, irreversible financial decisions** affecting vulnerable populations:
+*   **Mandatory Human-in-the-Loop:** You cannot fully automate payouts for mobile-home claims at launch. Implement a rule: **All** mobile-home claims triggering a payout below a specific threshold (or flagged by the tests above) must route to a human adjuster for final approval before funds are released.
+*   **Uncertainty Tiering:** Do not show users a precise percentage (e.g., "87% damaged"). Instead, display defined coarse tiers: **"Confirmed Damage," "Corroborated,"** or **"Unverified – Requires Inspection."** If the model cannot distinguish mobile-home specific damage, the output must default to "Unverified."
+*   **Disclosure:** Clearly inform users that this is an automated preliminary assessment subject to human review, especially for mobile structures.
+
+**4. Transparency Artifact**
+Draft a **Model Card** before launch. It must state:
+*   **Intended Use:** Preliminary damage estimation for insurance triage.
+*   **Limitations:** Explicitly note that mobile-home specific structural damage may be under-detected due to lack of ground-truth data (mark this metric as **UNVERIFIED**).
+*   **Owner:** Name the specific team member accountable for reviewing flagged claims.
+
+**Action Plan Summary:**
+1.  Run the three probe sets above immediately.
+2.  If any "Stop Condition" is met, you must delay the automated payout feature for mobile homes, even if the rest of the system launches.
+3.  Implement the human gate for all mobile-home claims as a non-negotiable floor.
+4.  Publish the Model Card with the "UNVERIFIED" limitation clearly visible.
+
+*Note: Legal requirements for automated decision-making in insurance (especially for vulnerable groups) must be routed to counsel immediately; this plan addresses product safety, not regulatory compliance.*
+*Do not fabricate a "pass rate" for these tests; if the data is missing, report the risk as UNVERIFIED.*

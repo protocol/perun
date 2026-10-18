@@ -1,0 +1,27 @@
+**Validation Plan: Image Evidence Integrity for Disaster Adjuster**
+
+Given the constraint of a single full simulation, this plan prioritizes high-stakes failure modes over aggregate accuracy. The goal is not to certify the model as "fair" or "safe," but to map specific risks, measure residual error in critical areas, and enforce a human gate for irreversible financial actions.
+
+**1. Harm Inventory (MAP)**
+Before running the simulation, explicitly record the following risks for the image analysis component:
+*   **Bias/Unfair Outcomes:** The model systematically undervalues claims from specific regions or housing types due to training data gaps.
+*   **Evidence Disregard:** Critical visual proof of damage (e.g., water lines, structural cracks) is ignored because it falls outside the model's primary focus areas.
+*   **Over-reliance:** Adjusters or users accept the automated payout without questioning missing evidence, leading to underpayment.
+*   **Unsafe Automation:** The system executes final payouts without human review for high-value or complex claims.
+
+**2. Measurement Strategy (MEASURE)**
+Design the single allowed simulation as a targeted adversarial stress test rather than a random sample. Construct one test row per inventoried harm:
+*   **Probe Set:** Curate a "known-bad" set of images where critical damage is visible but subtle, occluded, or atypical (positive controls for failure) and a "known-good" set where damage is obvious (negative controls). Include images from diverse geographic and socioeconomic segments to test for bias.
+*   **Metric:** Track the "Evidence Omission Rate"—the percentage of claims where the model failed to identify a pre-tagged critical damage element.
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for high-value claims where critical evidence is missed. If the model omits evidence in >0% of these high-stakes cases, the simulation fails, and the feature cannot launch without a human-in-the-loop gate.
+*   **Injection & Leakage Checks:** Include probes with injected noise or conflicting metadata to ensure the model does not hallucinate damage or leak data from other claims.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Mandate that any claim flagged by the model as "low damage" but containing *any* unclassified visual features, or any claim exceeding a specific monetary threshold, must be routed to a human adjuster. Fully autonomous payout for high-stakes claims is prohibited.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% sure") to users or adjusters. Instead, use defined coarse tiers (e.g., "Confirmed Damage," "Corroborated," "Unverified – Requires Review") with clear definitions.
+*   **Transparency Artifact:** Draft a preliminary Model Card documenting the intended use (pilot disaster adjustment), known limitations (single simulation, potential blind spots), and the specific evidence types the model was tested against. Mark any untested metrics as `UNVERIFIED`.
+
+**4. Governance (GOVERN)**
+Assign a specific owner (e.g., Lead Product Manager) responsible for reviewing the simulation results and authorizing the human gate logic. Schedule a re-review immediately if the model, data, or regulatory environment changes post-pilot.
+
+**Note:** This plan identifies residual risk; it does not certify the system as unbiased. Legal requirements for AI disclosure in insurance decisions must be routed to counsel.

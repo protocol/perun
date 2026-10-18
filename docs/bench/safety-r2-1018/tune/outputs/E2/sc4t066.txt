@@ -1,0 +1,39 @@
+### Pre-Launch Safety Check: Parental Consent & Data Collection
+
+**1. Immediate Workflow Halt & Inventory (MAP)**
+Stop all data ingestion pipelines that assume implicit consent. Before proceeding, create a **Harm Inventory** specifically for this feature:
+*   **Harm:** Unauthorized data harvesting from minors (ages 6–10).
+*   **Affected Party:** Children and their parents/guardians.
+*   **Worst Case:** Regulatory violation, loss of trust, potential legal action, and exposure of child behavioral data without verified permission.
+*   **Action:** Map every data point collected (interaction metrics, performance scores, time-on-task) against the new policy. If a data point cannot be linked to a verified, explicit parental consent record, it must be excluded from the pipeline immediately.
+
+**2. Runnable Verification Plan (MEASURE)**
+Do not assert compliance; prove it through adversarial testing. Execute the following test rows before launch:
+*   **Test Row A (Negative Control):** Simulate a user session where parental consent is **missing** or **pending**.
+    *   *Probe:* Attempt to start the game and generate adaptive difficulty data.
+    *   *Pass Threshold:* Zero bytes of personal interaction data are written to storage or transmitted to the personalization engine. The system must default to a non-data-driven "guest mode" or block access entirely.
+    *   *Stop Condition:* If *any* metric is stored without a `consent_verified=true` flag, the launch is blocked.
+*   **Test Row B (Positive Control):** Simulate a user session with **verified explicit consent**.
+    *   *Probe:* Complete the consent flow, then play.
+    *   *Pass Threshold:* Data flows correctly to adapt difficulty.
+    *   *Stop Condition:* If valid consent does not enable the feature, the user experience is broken (fix required, but safety holds).
+*   **Test Row C (Edge Case):** Simulate consent withdrawal mid-session.
+    *   *Probe:* Revoke consent while the game is running.
+    *   *Pass Threshold:* Data collection stops immediately; previously collected session data is flagged for deletion per policy.
+
+**3. Risk Management & Human Gate (MANAGE)**
+*   **Human-in-the-Loop Gate:** Since this involves irreversible data collection from minors, no automated "self-certification" is allowed. A designated **Privacy Owner** (not a developer) must manually review the logs from Test Rows A, B, and C and sign off on the "Zero Data Without Consent" result before the build is promoted to production.
+*   **Transparency Artifact:** Draft a **Data Card** for this feature. It must state:
+    *   *Intended Use:* Real-time difficulty adaptation for ages 6–10.
+    *   *Data Provenance:* Explicit parental consent only.
+    *   *Limitations:* Feature is disabled if consent is not verified; no fallback to implicit data.
+    *   *Owner:* Name the specific individual responsible for this data flow.
+*   **Uncertainty Handling:** If the legacy pipeline cannot be technically guaranteed to drop data without consent (e.g., race conditions in the old code), the status is **UNVERIFIED**. Do not launch. The constraint (privacy policy) is fixed; the launch date must move if the technical gate cannot be met.
+
+**4. Governance (GOVERN)**
+Assign a single owner for this output harm. Any future change to the data schema, the consent UI, or the adaptation algorithm triggers an immediate re-review of this safety check.
+
+***
+
+**Note:** This plan addresses the product's data behavior; it does not constitute legal advice. You must route the specific definition of "explicit consent" and regulatory applicability (e.g., COPPA, GDPR-K) to your legal counsel immediately.
+**Note:** Never fabricate a "100% compliant" metric; report the results of the test rows as pass/fail only.

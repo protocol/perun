@@ -1,0 +1,37 @@
+### Contingency Plan and Review Strategy for Stale Data in Resource Allocation
+
+**1. Immediate Human-in-the-Loop Gate (The Floor)**
+Given the high-stakes nature of food denial (irreversible harm to survival), **fully automatic execution is prohibited** under current conditions. The system must operate in "Recommendation Mode" only.
+*   **Action:** The algorithm generates a proposed distribution list, but no rations are withheld or allocated without explicit confirmation by a camp supervisor.
+*   **Override Mechanism:** Establish a physical "Exception Desk" at each distribution point. Families denied rations by the system based on cached data can present physical proof of registration or status for immediate manual override. This desk must be staffed during all distribution hours.
+
+**2. Stale Data Handling Protocol**
+Since internet connectivity is intermittent and datasets may be days old, the system must explicitly account for data latency rather than treating cached records as ground truth.
+*   **Data Freshness Tagging:** Every record in the local cache must display its "Last Synced" timestamp prominently to the operator.
+*   **Risk Tiering:**
+    *   *Confirmed (Synced < 24h):* System recommendation stands pending spot checks.
+    *   *Unverified (Synced > 24h):* System flags these records for mandatory manual review before any action is taken. Do not auto-deny based on records older than the connectivity window.
+*   **Fallback Logic:** If connectivity is lost for more than 48 hours, revert to the last known verified full roster and distribute based on physical headcount verification, ignoring algorithmic exclusions until sync is restored.
+
+**3. Review Strategy and Harm Inventory**
+Before expanding beyond the two pilot camps, you must measure specific output harms. Do not assert the system is safe; test it.
+*   **Harm Inventory:**
+    *   *Bias/Exclusion:* Does the cached data systematically miss new arrivals or specific demographic groups who register later in the cycle?
+    *   *Hallucination as Fact:* Does the system present a "Denied" status as an absolute fact when the underlying data is merely outdated?
+    *   *Over-reliance:* Are supervisors trusting the "Denied" flag without checking physical documents?
+*   **Runnable Evaluation Plan:**
+    *   *Probe Set:* Inject test cases into the pilot representing "newly arrived families" (not in the cached dataset) and "recently departed families" (in the dataset but no longer eligible).
+    *   *Metric:* Percentage of eligible test cases incorrectly flagged for denial due to data staleness.
+    *   *Stop Condition:* If >0% of eligible test families are denied food without triggering the manual override process, the system cannot proceed to automation.
+    *   *Control:* Compare algorithmic decisions against a daily manual headcount audit.
+
+**4. Transparency and Disclosure**
+*   **User Disclosure:** Clearly inform families that the digital system uses data that may be several days old and that their physical presence and documents are the final authority.
+*   **Operator Disclosure:** The interface must warn supervisors: "Data is cached as of [Date/Time]. Eligibility may have changed."
+
+**5. Governance**
+*   **Owner:** Assign one specific team member as the "Data Integrity Owner" responsible for monitoring sync logs and authorizing any switch to automated modes.
+*   **Re-review Trigger:** Any change in connectivity patterns, data source structure, or camp population dynamics requires an immediate re-evaluation of the stale data thresholds.
+
+**Note:** This plan treats the risk of food denial as a critical failure mode requiring human confirmation; do not remove the human gate until connectivity is real-time and evals prove near-zero false denials.
+**Note:** Legal requirements for automated decision-making in humanitarian contexts vary by region; route specific regulatory compliance questions to legal counsel.

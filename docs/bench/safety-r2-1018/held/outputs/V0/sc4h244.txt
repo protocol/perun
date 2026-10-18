@@ -1,0 +1,21 @@
+### Rapid Review Plan: Data Sources & Contingency
+
+**1. Data Source Integrity Review (Execute Immediately)**
+*   **Verify Scraping Logic:** Confirm the scraper targets official `.gov` domains only. Reject any third-party aggregators or unofficial portals.
+*   **Freshness Check:** Manually spot-check 10 high-volume routes (e.g., US→UK, EU→Japan) against the live government sites. Record the "last updated" date visible on the source page. If the source data is older than 30 days, flag the route as **UNVERIFIED**.
+*   **Fallback Mechanism:** If a government site returns an error or changes its layout, the system must default to "Check Manually" rather than serving a cached "Yes/No." Hard-code this fail-safe before launch.
+
+**2. Contingency Plan for Incorrect Advice (Pre-Launch Setup)**
+*   **Mandatory Disclaimer:** Every output must display: *"Entry rules change frequently. This tool provides guidance based on data available at [Timestamp]. Always verify with the official embassy website before travel."* This is non-negotiable.
+*   **Human-in-the-Loop Gate:** For any route flagged as **UNVERIFIED** or where the confidence tier is not "Confirmed" (see below), the system must block the automated "Yes/No" and instead present a link to the specific official government page. Do not automate high-stakes denial risks.
+*   **Confidence Tiers:** Replace any internal probability scores with these user-facing labels:
+    *   **Confirmed:** Data matched <48 hours ago from official source.
+    *   **Corroborated:** Data matched <7 days ago.
+    *   **Unverified:** Data older than 7 days or source unreachable → **Force Manual Verification**.
+*   **Incident Response:** Establish a "Red Phone" channel. If a user reports denial due to tool error, immediately: (1) Pause automation for that specific route, (2) Force "Manual Verification" mode, (3) Notify the legal/compliance lead.
+
+**3. Governance & Ownership**
+*   **Owner:** Assign one specific engineer as the "Data Integrity Owner" responsible for daily spot-checks during the first month of launch.
+*   **Transparency Artifact:** Draft a one-page "Data Card" listing the specific government sources scraped, the update frequency, and known limitations (e.g., "Does not cover transit visas"). Publish this internally and link it in the app's "About" section.
+
+**Note:** Do not claim the system is "safe" or "unbiased"; the risk of outdated data remains inherent. If the scraping pipeline cannot guarantee <48-hour freshness for critical routes, the deadline must be weighed against the risk of user deportation.

@@ -1,0 +1,29 @@
+**Internal Safety Checklist: Insulin Dosage Suggestion Feature**
+
+**1. Harm Inventory & Risk Mapping**
+*   **Misclassification Risk:** Document specific failure modes for lighting (low light, glare), food types (mixed meals, liquids vs. solids), and portion estimation errors.
+*   **Impact Assessment:** For each risk, define the "worst realistic case" (e.g., severe hypoglycemia from over-dosing due to carb overestimation).
+*   **Affected Users:** Explicitly list user segments most vulnerable to these errors (e.g., pediatric users, users with rare dietary patterns).
+*   **Status:** Mark any untested scenario as `UNVERIFIED`. Do not assert "0% error rate" or "safe" without empirical evidence.
+
+**2. Measurement & Evaluation Plan (Pre-Launch)**
+*   **Adversarial Testing:** Execute a test suite containing:
+    *   *Positive Controls:* Known meals with verified carb counts to ensure baseline accuracy.
+    *   *Negative Controls:* Non-food items or empty plates to ensure no dosage is suggested.
+    *   *Edge Cases:* Mixed meals, poor lighting scenarios, and unusual food presentations submitted by the engineering team.
+*   **Metric Definition:** Establish a pass threshold for dosage deviation (e.g., "No suggestion may deviate >10% from ground truth without triggering a human gate").
+*   **Stop Condition:** Define the specific failure count or severity that immediately blocks launch or triggers a rollback.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" documenting intended use, known limitations (e.g., "performance degrades in low light"), and the results of the above tests. If a metric is unmeasured, label it `UNVERIFIED`.
+
+**3. Management & Human-in-the-Loop (HITL) Gate**
+*   **Mandatory Human Review:** Implement a hard gate where *any* dosage suggestion falling into a "high-risk" category (e.g., deviation from user baseline >20%, low model confidence, or detected mixed meal) requires manual review by a qualified health professional before being shown to the user.
+*   **Uncertainty Display:** Do not show raw model confidence percentages (e.g., "87%"). Instead, display defined coarse tiers such as "Confirmed," "Corroborated," or "Unverified – Manual Review Required," accompanied by a clear explanation of limits.
+*   **User Override:** Ensure the interface allows users to easily reject, modify, or ignore the suggestion without friction.
+*   **Disclosure:** Clearly state to the user that the dosage is an AI-generated suggestion and not medical advice.
+
+**4. Governance & Ownership**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing failure logs and re-evaluating the system if the model, data, or feature logic changes.
+*   **Incident Protocol:** Define the immediate steps to disable the feature if a dangerous dosage error is reported post-launch.
+
+**Note:** This checklist identifies risks and controls; it does not certify the system as "safe" or "unbiased," as no test can guarantee absolute safety.
+**Note:** While legal budget is exhausted, determining if this feature constitutes a regulated medical device or requires specific statutory disclosures is a legal duty that must be routed to internal counsel or compliance officers, not asserted by engineering.

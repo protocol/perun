@@ -1,0 +1,43 @@
+# Risk Assessment Plan: Banking Chatbot False Positive Mitigation
+
+## 1. Scenario Identification Strategy
+Given the constraint of using only anonymized samples, we must synthetically reconstruct "nuance" by categorizing known false positive triggers common in the São Paulo market. Focus testing on these specific high-risk scenarios:
+*   **Legitimate High-Value Spikes:** Simulate transactions matching local patterns such as real estate down payments, vehicle purchases, or seasonal business revenue spikes (e.g., holiday retail) that deviate sharply from a user's baseline but are lawful.
+*   **Cross-Border & Travel Contexts:** Model transactions occurring in neighboring countries (Argentina, Uruguay) or major hubs (Miami, Lisbon) typical for Brazilian travelers, ensuring the system distinguishes between travel spending and account compromise.
+*   **Recurring Large Obligations:** Test automated payments for insurance premiums, school tuition, or loan installments that occur infrequently but are predictable.
+*   **Joint Account Dynamics:** Simulate activity where one authorized user's spending pattern looks anomalous relative to the primary account holder's historical data.
+
+## 2. Validation Roadmap for Decision Thresholds
+Do not enable automated freezing until the following four-phase validation is complete:
+
+**Phase A: Shadow Mode Deployment (Week 1)**
+Deploy the updated model in "read-only" mode against live traffic. The system will flag transactions and propose freezes but will **not** execute them.
+*   *Action:* Log every "freeze recommendation" alongside the transaction context.
+*   *Goal:* Establish a baseline false positive rate (FPR) without customer impact.
+
+**Phase B: Synthetic Stress Testing (Week 2)**
+Augment your anonymized dataset with manually crafted edge cases representing the scenarios above.
+*   *Action:* Run the model against these specific cases. If the model flags a known legitimate high-value transaction as fraud, the threshold is too sensitive.
+*   *Adjustment:* Iteratively raise the confidence score required for a "high-risk" classification until these known good transactions pass.
+
+**Phase C: Human-in-the-Loop Simulation (Week 3)**
+Route the "Shadow Mode" flags to a manual review team simulating the chatbot's escalation path.
+*   *Action:* Measure the time-to-resolution and the accuracy of human reviewers overriding the model.
+*   *Criterion:* If >15% of shadow-mode flags are overturned by humans as "safe," the automation threshold is not yet ready for production.
+
+**Phase D: Staged Rollout with Circuit Breakers (Week 4)**
+Enable automated freezing for only 5% of traffic, specifically excluding high-net-worth accounts initially.
+*   *Safety Mechanism:* Implement a hard "circuit breaker." If the volume of automated freezes exceeds a predefined hourly limit (e.g., 10 freezes/hour), the system automatically reverts to "flag-only" mode and alerts engineering.
+
+## 3. Privacy-Compliant Data Enrichment
+To address the lack of nuance in anonymized logs without violating privacy:
+*   **Pattern Injection:** Instead of using real PII, inject statistical patterns derived from public economic reports (e.g., average car prices in São Paulo) into the test data to create realistic high-value anchors.
+*   **Behavioral Clustering:** Group anonymized users by behavior type (e.g., "frequent traveler," "small business owner") rather than demographics, and test threshold sensitivity within each cluster to ensure the model doesn't penalize specific legitimate lifestyles.
+
+## 4. Success Metrics
+*   **False Positive Rate (FPR):** Must be <0.5% before full automation.
+*   **Precision:** At least 90% of flagged transactions must be confirmed fraud during the shadow phase.
+*   **Customer Impact:** Zero unjustified freezes during the 5% staged rollout.
+
+*Note: Ensure all synthetic data generation is documented for regulatory auditors to prove testing rigor despite data constraints.*
+*Note: The "circuit breaker" logic must be hardcoded, not learned by the model, to guarantee a fail-safe.*

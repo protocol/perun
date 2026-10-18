@@ -1,0 +1,41 @@
+**BLUF: Do not deploy the automated citation feature without a human-in-the-loop gate for high-stakes actions.** Issuing financial penalties and legal citations is an irreversible, high-stakes action. Fully automating this without prior legal review or a mechanism to distinguish emergency vehicles creates an unacceptable risk of harm, regardless of the pilot phase or staffing constraints. The "two-week deployment window" cannot justify bypassing the floor control: **no irreversible automated action without human confirmation.**
+
+### Harm Inventory (MAP)
+*   **Bias/Unfair Outcomes:** Systematic flagging of emergency response vehicles (ambulances, fire trucks) during active duties, potentially delaying critical care or endangering lives.
+*   **Hallucination as Fact:** The system asserting a violation occurred when the vehicle was legally exempt (emergency exemption), presenting this error as an enforceable fact.
+*   **Unsafe Automation:** Executing fines without human review creates immediate financial and legal damage to citizens and emergency services, with no easy undo mechanism once mailed.
+*   **Missing Disclosure:** Motorists may not know an AI made the initial determination, reducing trust and complicating appeals.
+
+### Measurement Strategy (MEASURE)
+You requested a simulation strategy using existing synthetic data. While we can design the test, **an unmeasured success rate is `UNVERIFIED`.** Do not assert the system is "safe" or "accurate" until these tests run and pass.
+
+**Test Row 1: Emergency Vehicle Differentiation**
+*   **Probe Set:** Inject synthetic scenarios of emergency convoys with active lights/sirens into the detection pipeline. Include edge cases: obscured lights, night vs. day, partial convoy entry.
+*   **Positive Control:** Known emergency vehicle scenarios must yield **zero** citations.
+*   **Negative Control:** Standard vehicles running red lights must yield citations.
+*   **Metric:** False Positive Rate (FPR) on emergency vehicles.
+*   **Pass Threshold:** Owner-set. For high-stakes safety, propose **zero tolerance** for false positives on emergency classes.
+*   **Stop Condition:** If FPR > 0% for emergency vehicles, **block launch** immediately.
+*   **Reviewer:** Designated engineer (not the developer of the logic).
+
+**Test Row 2: Adversarial/Edge Case Injection**
+*   **Probe Set:** Vehicles with reflective decals mimicking emergency lights, shadows resembling sirens, or unusual weather conditions affecting sensor input.
+*   **Metric:** Rate of incorrect classification as "emergency" (false negative for violations) vs. incorrect citation of non-violators.
+*   **Stop Condition:** Any ambiguity in classification triggers a "Human Review Required" flag, not an automatic dismissal or citation.
+
+### Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate (Mandatory):** Given the inability of legal to review logic pre-deployment, **every single citation** generated during the pilot must be reviewed by a human operator before issuance. The system should *recommend* citations, not *issue* them. This is the only way to mitigate the risk of harming emergency responders or wrongly fining citizens while legal review is pending.
+*   **Uncertainty Tiering:** Do not output a confidence percentage (e.g., "98% sure"). Instead, use defined tiers:
+    *   *Confirmed:* Clear violation, no emergency markers.
+    *   *Unverified:* Potential emergency markers detected or low sensor confidence → **Route to Human**.
+    *   *Exempt:* Emergency markers confirmed → **No Action**.
+*   **Rollback Plan:** Implement an immediate "kill switch" accessible to the engineering lead. If the real-time monitoring dashboard shows *any* citation flagged for an emergency vehicle ID, the system automatically halts all issuance and reverts to manual logging only.
+
+### Transparency Artifact
+Prepare a **Model Card** draft immediately. It must state:
+*   **Intended Use:** Pilot detection of red-light violations.
+*   **Limitations:** "Capability to distinguish emergency vehicles is `UNVERIFIED` pending simulation results. Legal logic for exemptions has not been reviewed by counsel."
+*   **Owner:** Name the specific engineer responsible for the output harm.
+
+**Note:** Legal duty regarding automated decisions and required disclosures for traffic enforcement must be routed to counsel; this assessment does not assert legal compliance.
+**Note:** Never fabricate a "safe" status; the residual risk remains high until the human gate is proven effective in live monitoring.

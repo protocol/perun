@@ -1,0 +1,39 @@
+### Pre-Launch Safety Protocol: Rare Disease Suggester
+
+**1. Harm Inventory & Worst-Case Definition**
+Before scaling, explicitly document the specific risks of your output:
+*   **False Positive Panic:** A healthy patient is flagged for a rare, severe disease, causing acute psychological distress and unnecessary emergency visits.
+*   **Misdirected Care:** A patient pursues testing for a flagged rare disease while the actual common condition goes untreated.
+*   **Over-Reliance:** Patients or junior staff treat the "suggestion" as a diagnosis rather than a low-confidence hypothesis.
+*   **Missing Disclosure:** Users believe the flag is a confirmed medical finding rather than an unverified AI guess.
+
+**2. Measurement Plan (Run Before Scale)**
+Do not assert accuracy; measure it against your limited data using adversarial testing.
+*   **Probe Set A (Known Negatives):** Run 100+ cases of common conditions (e.g., flu, tension headache) that should *not* trigger rare disease flags.
+    *   *Metric:* False Positive Rate.
+    *   *Stop Condition:* If >0% of common cases trigger a "high severity" rare disease flag, halt launch.
+*   **Probe Set B (Known Positives):** Run verified rare disease cases from your existing dataset.
+    *   *Metric:* Recall rate.
+    *   *Note:* Accept lower recall if it reduces false positives; missing a rare disease is less harmful than falsely accusing a healthy person of having one in this specific "flagging" context.
+*   **Probe Set C (Adversarial/Ambiguous):** Input vague symptoms (e.g., "fatigue," "headache") without specific markers.
+    *   *Goal:* Ensure the system defaults to "No rare disease flagged" or "Insufficient data" rather than guessing.
+*   **Reporting:** Publish results as **UNVERIFIED** for any subgroup where you lack sufficient test cases. Do not invent a global accuracy percentage.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** The system must **never** display a rare disease suggestion directly to the patient. All flags must route to a licensed physician for review first. The doctor acts as the firewall; the AI is merely a note in their workspace.
+*   **Uncertainty Display:** If a flag reaches the doctor, it must carry a defined confidence tier, not a raw percentage. Use coarse labels:
+    *   *Corroborated:* Matches multiple specific symptoms in training data.
+    *   *Single-Source Match:* Matches only one symptom pattern; high risk of error.
+    *   *Speculative:* Weak match; included for completeness only.
+*   **Transparency Artifact (Model Card):** Create a one-page document for your medical team detailing:
+    *   *Intended Use:* Decision support for doctors only, not patient-facing diagnosis.
+    *   *Limitations:* Explicitly state the model was trained on a limited dataset and has high uncertainty for [list specific rare conditions].
+    *   *Data Gaps:* List which demographics or conditions were underrepresented.
+*   **Disclosure:** Ensure the patient interface clearly states: "Our tools assist doctors in identifying possibilities; they do not diagnose."
+
+**4. Governance**
+*   **Owner:** Assign one clinical lead responsible for reviewing every flagged case during the beta expansion.
+*   **Re-review Trigger:** Any change to the symptom input form or the underlying model requires re-running Probe Set A (Known Negatives).
+
+**Note:** Because this involves medical guidance, you must route the question of legal disclosure requirements and regulated decision-making duties to legal counsel immediately; do not rely on this protocol for legal compliance.
+**Note:** If your evaluation shows the system flags common illnesses as rare diseases even once in the test set, do not scale until the false positive rate is reduced to near-zero.

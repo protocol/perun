@@ -1,0 +1,28 @@
+### Pre-Launch Safety Plan: Hudson River Analytics Newsletter
+
+**1. Map the Unverified Data Entry Point**
+The primary risk vector is the ingestion layer where raw social media feeds enter your system. Currently, this appears to be a direct pipe from social platforms to your summarization model. You must insert a "quarantine zone" here. Before any text reaches the AI for summarization, it should pass through a lightweight filtering script. This script does not need expensive APIs; it can rely on simple heuristics to flag high-risk content based on the facts you provided:
+*   **Volatility Keywords:** Flag posts containing ticker symbols paired with words like "surge," "crash," "insider," "halt," or "secret."
+*   **Source Reputation:** If your feed includes metadata about the poster (e.g., account age, follower count), automatically down-weight or flag accounts created recently or with low engagement, as these are common vectors for rumor mills.
+*   **Lack of Corroboration:** If a story appears in only one feed source and nowhere else in your ingested batch, tag it as "Unconfirmed."
+
+**2. Implement a "Confidence Scoring" Layer**
+Modify your generation prompt to require the AI to assign a confidence score to every claim it summarizes. Instruct the model: "If a trend is based solely on unverified social posts without linked official filings or major news headlines, label it as 'Rumor/Unverified' and reduce its prominence in the summary."
+*   **Action:** Update your system prompt to explicitly forbid the AI from presenting social media speculation as fact. The output must distinguish between "Market Sentiment" (what people are saying) and "Verified News" (what has happened).
+*   **Output Formatting:** Visually separate these sections in the newsletter. Use a disclaimer banner for the "Social Sentiment" section stating: *"Derived from unverified social sources; may contain rumors."*
+
+**3. Deploy a "Human-in-the-Loop" Triage for High-Risk Alerts**
+Given your team of eight and the 10-day deadline, do not attempt to review every article. Instead, implement an exception-based workflow:
+*   **Automated Suppression:** If the confidence score is low or the "Volatility Keywords" density is high, the system should automatically hold that specific story for manual review rather than publishing it.
+*   **Rapid Review Rotation:** Assign one team member per day as the "Safety Officer." Their only task is to review the held stories queue. With a focused filter, this should take less than an hour daily, allowing the rest of the team to maintain the release schedule.
+
+**4. Immediate Prompt Engineering Fixes (No Code Required)**
+While engineering the filters above, update your AI's immediate instructions today:
+*   **Negative Constraint:** "Do not generate headlines that imply certainty about future stock movements based solely on social media posts."
+*   **Attribution Requirement:** "Every claim regarding earnings, mergers, or regulatory action must be attributed to a specific source type (e.g., 'Social media users are discussing...' vs. 'Company X announced...')."
+*   **Volatility Warning:** "If a story suggests a sudden price movement, explicitly append: 'This information is unverified and may be speculative.'"
+
+**5. Launch Strategy**
+Proceed with the launch but limit the scope of the "Social Sentiment" section for the first two weeks. Frame this to your users as a "Beta Feature" for community insights, which manages expectations regarding accuracy. This allows you to gather real-world data on false positives without exposing the brand to liability for presenting rumors as facts.
+
+*Note: This plan relies on prompt engineering and logical filtering, requiring no new budget or external APIs. Prioritize the "Human-in-the-Loop" triage immediately to catch the most dangerous rumors before the first issue goes out.*

@@ -1,0 +1,32 @@
+### Pre-Launch Stress-Test Plan: Educational Access vs. Safety
+
+To meet your three-week deadline while addressing the risk of over-blocking educational content, execute the following targeted stress-test protocol immediately. This plan prioritizes a human-in-the-loop gate for high-stakes blocking errors and measures residual risk without fabricating accuracy claims.
+
+**1. Construct a "Known-Good" Adversarial Probe Set**
+Do not rely on random sampling. Build a dedicated evaluation dataset containing 50–100 specific URLs that represent the highest risk for false positives (e.g., health education sites discussing anatomy, history archives containing primary sources with sensitive language, literature hubs hosting classic texts).
+*   **Positive Controls:** Include 10 verified safe educational sites that previously triggered false blocks in development.
+*   **Negative Controls:** Include 10 verified inappropriate sites to ensure the filter still functions.
+*   **Edge Cases:** Include sites with mixed content (e.g., a university page hosting both research papers and student forums).
+
+**2. Define Metrics and Stop Conditions**
+Run the filter against this probe set. Measure the **False Positive Rate (FPR)** specifically for the "Known-Good" set.
+*   **Threshold:** Set a zero-tolerance threshold for critical educational resources (e.g., government education domains, major textbook publishers). If *any* critical site is blocked, the build fails.
+*   **Stop Condition:** If the FPR on the "Known-Good" set exceeds 1%, halt the launch. Do not proceed to general QA until the logic is tuned. This prevents shipping a feature that systematically disadvantages students needing specific resources.
+
+**3. Implement a Human-in-the-Loop Override (The Safety Gate)**
+Since your dataset is limited and the stakes involve children's access to learning, you cannot rely on full automation for borderline cases.
+*   **Action:** For any content flagged as "uncertain" by the context analysis (e.g., confidence scores in a middle range), default to **allowing access** but logging the event for rapid human review, OR implement a "report a block" button that instantly whitelists the domain for the user pending admin review.
+*   **Rationale:** It is safer to temporarily allow a questionable site than to permanently block a required school resource during the first week of class. The cost of a false negative (seeing bad content) is managed by existing reporting tools; the cost of a false positive (blocked homework) is immediate academic harm.
+
+**4. Transparency and Disclosure Artifact**
+Draft a brief "Limitations Note" for your internal support team and parent documentation.
+*   **Content:** Explicitly state that the filter is in a "learning phase" due to limited training data. List categories known to be prone to over-blocking (e.g., "health education," "historical archives").
+*   **Status:** Mark the accuracy metric for these specific categories as **UNVERIFIED** until post-launch data confirms performance. Do not claim "99% accuracy" without this evidence.
+
+**5. Execution Schedule (3-Week Sprint)**
+*   **Week 1:** Build the probe set and run initial stress tests. Tune logic to clear all "Known-Good" false positives.
+*   **Week 2:** Deploy the human-override mechanism and train support staff on the "Limitations Note."
+*   **Week 3:** Final regression test. If the stop condition is met, delay the feature toggle, not the whole app update.
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe" or "unbiased."
+**Note:** If legal requirements for automated decision-making disclosures apply in your region, route that determination to counsel immediately.

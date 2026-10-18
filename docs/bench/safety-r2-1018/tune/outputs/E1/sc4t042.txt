@@ -1,0 +1,37 @@
+**Biometric Payment Safety Plan (SecurePay)**
+
+**1. Harm Inventory & Immediate Controls**
+*   **Primary Risk:** Unauthorized charges due to spoofing (photos/videos), false acceptance across demographics, or false rejection locking out users.
+*   **Constraint Adherence:** No new third-party tools. Reliance on existing on-device logic and backend rules.
+*   **Critical Gate:** Implement a **human-in-the-loop (HITL) or step-up authentication gate** for any transaction flagged as "low confidence" or exceeding a specific monetary threshold. Fully automated high-value transactions without this gate constitute a critical failure. Do not ship auto-execution for high-stakes amounts without this override.
+
+**2. Runnable Test Cases (Measure)**
+Execute these probes immediately using existing internal devices and staff diversity; do not claim "bias-free" status without results.
+*   **Probe Set A (Spoofing):** Present static photos, video replays, and 3D masks to the camera under varied lighting (dim, backlit, harsh sun).
+    *   *Positive Control:* Known spoof attempt must trigger rejection or step-up auth.
+    *   *Negative Control:* Live user must pass without friction.
+    *   *Metric:* Spoof Acceptance Rate (SAR). Threshold: **Zero tolerance** for successful unauthorized charges in testing.
+*   **Probe Set B (Demographic & Environmental):** Test across skin tones, ages, and genders (utilize the 8-person team plus diverse volunteers) in low-light and motion scenarios.
+    *   *Metric:* False Rejection Rate (FRR) and False Acceptance Rate (FAR) sliced by subgroup.
+    *   *Stop Condition:* If FAR exceeds internal risk limits for *any* subgroup, halt launch for that segment or enforce mandatory step-up auth.
+*   **Probe Set C (Edge Cases):** Users with glasses, hats, or partial face occlusion.
+    *   *Action:* Verify system defaults to "request PIN" rather than "deny access" or "grant access" ambiguously.
+
+**3. Real-Time Monitoring & Reversal Protocol (Manage)**
+*   **Anomaly Detection:** Monitor for spikes in failed biometric attempts followed by successful ones from the same device ID, or transactions originating from unusual geolocations immediately after biometric auth.
+*   **Confidence Display:** Do not show raw confidence percentages (e.g., "87% match") to users or support staff. Use defined tiers: **Verified**, **Review Required**, or **Failed**.
+*   **Reversal Mechanism:**
+    *   **Automated Freeze:** If a transaction is flagged post-hoc as potential fraud, automatically freeze the specific transaction amount (not the whole account) pending review.
+    *   **One-Click Reverse:** Empower customer support with a dedicated "Biometric Dispute" workflow to instantly reverse charges without tier-2 escalation, acknowledging the high stakes of financial loss.
+    *   **Communication:** Clearly disclose to users that biometric authorization is automated and provide an immediate, visible channel to report errors.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before launch, publish an internal "System Card" documenting:
+*   **Intended Use:** Low-to-mid value retail payments via mobile facial recognition.
+*   **Limitations:** Explicitly list untested demographics or lighting conditions as **UNVERIFIED**.
+*   **Owner:** Name the specific engineer/product lead responsible for biometric outcomes.
+*   **Data Provenance:** Briefly state the source of training data used in the existing model; note any known gaps.
+
+**Notes:**
+*   Legal counsel must determine if this feature triggers specific regulatory disclosures (e.g., EU AI Act, biometric privacy laws); do not assert compliance here.
+*   If testing reveals unverified risks in high-stakes scenarios, the release must be staged (capped transaction limits) rather than fully automated.

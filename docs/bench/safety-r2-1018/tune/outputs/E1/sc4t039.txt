@@ -1,0 +1,38 @@
+### Offline Mode Safety Simulation Plan
+
+To verify the local logic prevents double dosing during connectivity loss and reconnection, execute the following simulation scenarios. Each scenario must be run against the device firmware with the cloud service emulated to inject specific network states.
+
+**1. The "Pending Sync" Reconnection Storm**
+*   **Scenario:** Device dispenses Dose A while offline. Local log marks Dose A as "dispensed, pending sync." Simulate 50 rapid connect/disconnect cycles before the device successfully syncs.
+*   **Stress Point:** Verify the retry logic does not re-queue Dose A as "new" upon each reconnection attempt.
+*   **Pass Criteria:** Dose A is recorded exactly once in the cloud log; no physical dispensing occurs after the initial event.
+
+**2. The Clock-Drift Window**
+*   **Scenario:** Disconnect the device. Manually advance the device's local real-time clock (RTC) by +2 hours, then revert it, then advance it by -2 hours. Trigger a scheduled dose time during these shifts while offline.
+*   **Stress Point:** Verify the local scheduler does not interpret clock adjustments as "missed time windows" requiring immediate catch-up dispensing.
+*   **Pass Criteria:** Device dispenses only if the local time crosses the specific dose window threshold naturally; no double dispensing due to time-jumping.
+
+**3. The Power-Cycle Race Condition**
+*   **Scenario:** Initiate a dispense command. Cut power to the device 500ms after the motor starts but before the "cycle complete" sensor triggers. Restore power immediately (simulating a brownout). Repeat with power restoration occurring exactly as the cloud reconnects.
+*   **Stress Point:** Verify the local state machine recovers from an incomplete transaction without assuming the dose failed and needs re-administration.
+*   **Pass Criteria:** Device resumes or aborts the cycle based on sensor state; it never restarts the motor for the same dose ID.
+
+**4. The Queue Overflow & Eviction**
+*   **Scenario:** Simulate a 14-day offline period where 42 doses are scheduled. Fill the local non-volatile memory to 95% capacity with log entries. Force a sync attempt.
+*   **Stress Point:** Verify that memory pressure does not cause the device to corrupt the "last dispensed" pointer or drop the lock flag for the current dose.
+*   **Pass Criteria:** Oldest logs are archived or dropped per policy, but the integrity of the "next dose" and "last dispensed" flags remains intact; no duplicate dispensing.
+
+**5. The Conflicting Command Arrival**
+*   **Scenario:** While offline, simulate a caregiver remotely cancelling Dose B via the app (command queued in cloud). Reconnect the device exactly as it is preparing to dispense Dose B locally.
+*   **Stress Point:** Verify the precedence logic: does the local schedule override the incoming cloud cancellation, or vice versa?
+*   **Pass Criteria:** The system follows the defined safety hierarchy (e.g., "Cloud Cancel overrides Local Schedule" or "Local Dispense completes before processing Cloud Queue"). Crucially, it must not process the cancellation, fail, and then re-queue the dose.
+
+**6. The Dual-Interface Trigger**
+*   **Scenario:** If the device has a physical button for manual dispensing, press the button while the automated timer triggers a dose during an offline state.
+*   **Stress Point:** Verify arbitration between manual and automated requests.
+*   **Pass Criteria:** Only one dose is released; the second request is logged as "blocked due to recent dispense."
+
+**Measurement Protocol:**
+For every scenario, the primary metric is **Binary Safety**: 0 duplicate physical dispenses per test run. Secondary metrics include log consistency (local log matches cloud log post-sync) and recovery time. Any instance of double dispensing is a critical failure requiring immediate firmware halt and root cause analysis before further testing.
+
+Note: These simulations address the logical failure modes; physical mechanical jams or sensor failures require separate hardware-in-the-loop testing. Ensure all test results are documented for your regulatory submission dossier.

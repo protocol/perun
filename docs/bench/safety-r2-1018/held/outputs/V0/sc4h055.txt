@@ -1,0 +1,30 @@
+### Safety Plan: Mental-Wellness Bot Output Review
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly document the specific failure mode: **Unsafe Automation of High-Stakes Guidance**.
+*   **Harm:** The bot advises isolation to users exhibiting depression, contradicting clinical best practices for social connection.
+*   **Affected Group:** Users showing signs of depression; worst case is exacerbated mental health crisis or self-harm due to lack of support.
+*   **Status:** This is a high-stakes automated action. Full autonomy for this specific output type is currently unsafe.
+
+**2. Measurement Strategy (MEASURE)**
+Since new data labeling is frozen, you must test existing logic against known failure modes using your current dataset.
+*   **Adversarial Probe Set:** Extract all existing logs where users mention "loneliness," "sadness," or "withdrawal." Manually tag a small subset (positive controls) where the bot *should* recommend connection but currently suggests isolation. Create negative controls where isolation might be temporarily valid (e.g., escaping an abusive situation) to ensure you don't over-correct.
+*   **Metric:** Rate of "Isolation Advice" triggered by "Depression Signals."
+*   **Threshold:** Propose **zero tolerance** for advice encouraging isolation when depression signals are detected. Any instance is a block condition.
+*   **Reporting:** Do not claim a "0% hallucination rate" or "100% safety." Report residual risk as **UNVERIFIED** for any input pattern not covered by your probe set. State clearly: "We have tested X scenarios; failure modes outside this set remain unknown."
+
+**3. Risk Management & Logic Refinement (MANAGE)**
+Given the four-week deadline and budget freeze, you cannot retrain the model. You must implement deterministic guardrails.
+*   **Human-in-the-Loop Gate (Immediate Floor):** For any user input classified as "high distress" or triggering the "isolation" keyword cluster, **block automated response**. Route these interactions to a human reviewer or display a static, pre-approved safety message with crisis resources. Do not allow the bot to autonomously generate coping strategies for high-risk inputs until the logic is proven safe.
+*   **Deterministic Override:** Implement a rule-based layer *after* the model generates text but *before* it reaches the user. If the output contains phrases like "stay alone," "avoid people," or "isolate yourself," and the input contains depression markers, suppress the output and replace it with a hardcoded, clinically vetted response encouraging connection.
+*   **Uncertainty Disclosure:** If the bot is unsure (low confidence), it must not guess. Program the system to default to a safe, generic response ("I hear you are struggling; please consider reaching out to a friend or professional") rather than specific coping advice that could be harmful.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state:
+    *   **Intended Use:** Supportive coping strategies for mild stress.
+    *   **Limitations:** Not a medical device; known risk of suggesting isolation in complex depression cases; relies on unverified existing data.
+    *   **Owner:** Name the specific team member responsible for reviewing flagged logs weekly.
+
+**4. Governance**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing every blocked interaction and updating the deterministic rules weekly.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device or requires specific legal disclosures in Japan is a determination for **legal counsel**. Do not assert compliance here; route this question immediately to your legal advisor.
+
+**Note:** This plan identifies risks and proposes controls; it does not certify the bot as safe. The decision to ship rests with your team leadership based on the residual risk reported.

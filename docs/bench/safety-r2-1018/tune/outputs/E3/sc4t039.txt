@@ -1,0 +1,32 @@
+### Offline Mode Safety Simulation Suite: Double-Dose Prevention
+
+To verify the local logic prevents double dosing during connectivity loss and reconnection, execute the following simulation scenarios. Each scenario targets a specific failure mode where the device might incorrectly assume a dose was missed or needs to be re-synchronized.
+
+**1. The "Ghost Acknowledgement" Reconnection**
+*   **Scenario:** Initiate a scheduled dose while offline. Simulate the user manually confirming the dose was taken (via physical button press). Immediately restore internet connectivity *before* the device attempts its next scheduled sync.
+*   **Stress Point:** Force the cloud server to believe the dose was *not* taken (simulate a dropped ACK packet from the previous cycle).
+*   **Pass Criterion:** Upon reconnection, the device must reconcile the local "taken" status with the cloud's "missed" status without dispensing. The local log must override the cloud command for that specific timestamp. No second dispense event occurs.
+
+**2. The Rapid Cycle Flap**
+*   **Scenario:** Trigger a dose event. As the motor begins to turn, cut power to the Wi-Fi module. Restore it 2 seconds later. Cut it again 2 seconds later. Repeat this "flapping" state 10 times during the single dose window.
+*   **Stress Point:** Test the state machine's ability to lock the "dispensing" flag locally despite erratic network state changes.
+*   **Pass Criterion:** The motor completes exactly one rotation cycle. The system does not reset the dose state to "pending" due to network interruption events.
+
+**3. The Backlog Flood**
+*   **Scenario:** Simulate a 48-hour offline period covering four scheduled doses. Manually administer only two of these doses locally (recording them on-device). Restore connectivity.
+*   **Stress Point:** The cloud sends a synchronization payload indicating four missed doses and attempts to "catch up" the schedule.
+*   **Pass Criterion:** The device accepts the sync for record-keeping but strictly inhibits any mechanical action for past-due doses. It must not attempt to dispense the two "missed" doses that were actually taken locally, nor the two that were truly missed (unless explicitly configured for catch-up, which must require a separate caregiver override, not automatic execution).
+
+**4. The Clock Drift Desync**
+*   **Scenario:** Disconnect the device. Alter the local real-time clock (RTC) to drift 15 minutes fast. Administer a dose at the *local* scheduled time. Reconnect to the cloud (which holds the correct time).
+*   **Stress Point:** The cloud sees a dose taken "early" or "late" relative to its window and may flag it as invalid or missed.
+*   **Pass Criterion:** The device accepts the time correction from the cloud but maintains the integrity of the dose event that already occurred. It does not re-queue the dose because the timestamp alignment shifted post-facto.
+
+**5. The Power Loss During Sync**
+*   **Scenario:** Administer a dose while offline. Restore connectivity. As the device begins the handshake to upload the "dose taken" record, cut main power (simulating a battery backup switch or outage). Restore power.
+*   **Stress Point:** Verify the non-volatile memory correctly preserved the "taken" state before the sync completed.
+*   **Pass Criterion:** Upon reboot, the device reads the local log, sees the dose as "taken," and does not attempt to dispense upon re-establishing the cloud link.
+
+**Implementation Note:** Ensure every test includes a physical verification step (e.g., sensor count or weight measurement) rather than relying solely on software logs, as the motor driver itself could be desynchronized from the logic board.
+
+**Governance Note:** Document the results of these simulations in a safety artifact for your regulatory submission, explicitly marking any untested edge cases as "unverified" rather than assuming safety.

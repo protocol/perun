@@ -1,0 +1,35 @@
+### Pre-Launch Logic Check: Complaint Validation Gateway
+
+To prevent harassment from false or duplicate notices caused by sensor latency, implement a **Validation Gateway** that intercepts every potential violation notice before it is sent. This logic must run in memory or a fast cache layer (e.g., Redis) to ensure real-time evaluation against recent history.
+
+**1. Deduplication Window (The "Cool-Down" Check)**
+Before generating a notice, query the last 60 minutes of processed events for the specific unit and sensor ID.
+*   **Logic:** If a valid notice was sent to this unit for the same violation type within the last 60 minutes, **suppress** the new alert.
+*   **Reasoning:** This directly mitigates the known latency issue where delayed packets might re-trigger an already-handled event. It ensures a resident receives maximum one notice per hour per violation type, regardless of how many duplicate data points arrive.
+
+**2. Consecutive Threshold Verification (The "Pattern" Check)**
+Do not trigger a notice based on a single data spike, which may be a sensor glitch or an anomaly (e.g., a dropped pan).
+*   **Logic:** Require **three consecutive** readings above the threshold within a 5-minute sliding window before flagging a violation.
+*   **Data Handling:** If the stream is interrupted by a "null" or "delayed" flag due to latency, reset the consecutive counter. Only sustained, contiguous noise triggers an alert.
+
+**3. Latency-Aware Timestamping**
+Since data arrival time differs from event time, validate the *event timestamp*, not the *processing timestamp*.
+*   **Logic:** Discard any data point where `(Current Processing Time - Event Timestamp) > 15 minutes`.
+*   **Reasoning:** Do not send notices for "old" noise. Harassment claims often stem from residents being notified of incidents that happened long ago, making the notification feel intrusive and irrelevant.
+
+**4. Human-in-the-Loop Pilot Mode**
+For the pilot stage with six team members, do not automate the final send action.
+*   **Logic:** Route all "Validated Violations" to a manual review dashboard. A team member must explicitly click "Approve" to send the notice.
+*   **Reasoning:** This allows your team to audit the logic's accuracy against real-world context (e.g., distinguishing a party from construction noise) before full automation. Log every approval and rejection to refine the thresholds.
+
+**5. Fairness Safeguard: The "Strike" Reset**
+Implement a soft-reset mechanism to prevent accumulation of errors during known system outages.
+*   **Logic:** If the system detects a data backlog or latency spike exceeding 10 minutes, automatically pause notice generation and flag the queue for review. Do not process the backlog automatically once connectivity is restored; require manual clearance.
+
+**Implementation Flow:**
+`Sensor Data In` → `Check Timestamp Freshness` → `Check Consecutive Count` → `Check Deduplication Window` → `Route to Manual Review (Pilot)` → `Send Notice`.
+
+By enforcing these gates, you shift the system from "reactive to every data point" to "responsive to verified patterns," significantly reducing the risk of false positives and resident harassment.
+
+*Note: Ensure all suppressed/dropped events are logged with a "suppressed_reason" tag for post-mortem analysis during the pilot.*
+*This logic assumes sensor data includes a reliable unique ID and event timestamp.*

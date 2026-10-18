@@ -1,0 +1,37 @@
+### Pre-Launch Review Plan: Geographic Bias & High-Stakes Gate
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Systematic denial of valid claims due to poor image resolution in rural zones (Geographic Bias).
+*   **Affected:** Policyholders in remote agricultural regions with lower-quality satellite coverage.
+*   **Worst Case:** Farmers facing financial ruin during hurricane season due to automated, erroneous denials they cannot quickly appeal.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure residual risk. Execute this parallel to final coding to meet the three-week deadline.
+
+*   **Test Design:** Create a "Resolution-Stress" eval set.
+    *   **Inputs:** 200 synthetic or historical claim images simulating storm damage, split into two groups: High-Resolution (urban/suburban proxy) and Low-Resolution (rural proxy).
+    *   **Controls:** Include 20 known-valid claims in the Low-Resolution group (Positive Control) and 20 known-invalid claims in the High-Resolution group (Negative Control).
+    *   **Metric:** Disparity in denial rates between High-Res and Low-Res groups for *known-valid* claims.
+    *   **Threshold:** Owner-defined. Recommendation: Zero tolerance for denying known-valid claims in the Low-Res group.
+    *   **Stop Condition:** If the model denies >0% of known-valid low-resolution claims, the automated approval path is blocked for those regions.
+
+*   **Transparency Artifact:** Draft a preliminary **Model Card** section titled "Limitations." Explicitly state: "Performance in low-resolution rural zones is UNVERIFIED due to lack of historical data. Automated approvals are suspended for these zones until manual review confirms validity."
+
+**3. Risk Management (MANAGE)**
+Given the high stakes (financial survival during a crisis) and the identified data gap, full automation is unsafe.
+
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   **Rule:** Any claim originating from a county flagged for "Low Resolution" or any claim the model scores with low confidence must route to a human adjuster.
+    *   **Constraint Adherence:** To meet the 3-week deadline, do not attempt to retrain the model. Instead, implement a deterministic rule-based filter that forces manual review for the at-risk geographic segments. This caps exposure while allowing the system to process high-confidence, high-resolution claims automatically.
+    *   **Uncertainty Display:** Do not show farmers a percentage confidence (e.g., "87% likely valid"). Use defined tiers: "Confirmed," "Requires Review," or "Denied." For the rural cohort, default to "Requires Review."
+
+*   **Rollback Plan:** If the "Resolution-Stress" eval shows significant bias, trigger an immediate fallback where *all* claims in the target counties are manually processed, disabling the automated decision engine for those regions entirely.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one specific engineer as the "Bias Gate Owner" responsible for signing off on the eval results before launch.
+*   **Legal Routing:** Consult counsel immediately regarding disclosure requirements for automated decisions in insurance under the EU AI Act or local regulations. Do not assume disclosure is optional; route this determination legally.
+
+**Summary of Deliverable:**
+Launch with a **split-path architecture**: Automated approval only for high-confidence/high-resolution inputs; mandatory human review for all low-resolution/rural inputs. Publish the limitation in the Model Card. Run the specific resolution-stress eval before day one. If the eval fails, disable automation for the affected counties.
+
+*Note: This plan treats the lack of historical data as a critical risk requiring a human gate, not a reason to skip testing. No metric is fabricated; unknown performance is marked UNVERIFIED.*

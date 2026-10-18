@@ -1,0 +1,41 @@
+### Pre-Launch Validation Plan: Vacation Mode Safety Gate
+
+**Objective:** Prevent pipe-freeze incidents caused by incorrect schedule learning during long absences while meeting the 14-day firmware deadline.
+
+**1. Harm Inventory & Edge Case Definition (Days 1–2)**
+*   **Primary Harm:** Unsafe automation of high-stakes action (heating reduction) leading to irreversible property damage (frozen pipes).
+*   **Specific Failure Mode:** The system interprets "no motion/no adjustment" for >48 hours as "user away permanently" or "eco-mode desired," dropping temperatures below the freeze-protection threshold (e.g., 45°F/7°C) without explicit confirmation.
+*   **Affected Group:** Homeowners with secondary properties or extended travel plans.
+*   **Worst Case:** Catastrophic water damage requiring full property remediation; brand reputation loss; hardware recall.
+
+**2. Runnable Test Matrix (Days 3–9)**
+Execute one test row per identified harm. Do not rely on aggregate accuracy; focus on failure conditions.
+
+| Harm Scenario | Probe Set (Input Sequence) | Pass Threshold | Stop Condition (Block Launch) | Owner |
+| :--- | :--- | :--- | :--- :--- |
+| **Silent Vacation** | Simulate 7 days of zero interaction + ambient temp drop to 30°F. | System maintains min. freeze-safe temp (e.g., 50°F) OR triggers explicit "Vacation?" alert. | Any drop below 45°F without user confirmation. | QA Lead |
+| **Pattern Misinterpretation** | Irregular usage (e.g., weekends only) followed by 5-day gap. | System defaults to "Safe Mode" (freeze protection) rather than "Eco Mode." | System learns gap as new "normal" and lowers temp. | Eng Lead |
+| **Sensor Failure/Noise** | Motion sensor reports "0" due to battery save, but temp is stable. | System cross-references time-of-day/historical data before acting. | Immediate temp drop based solely on single-sensor "0" reading. | Firmware Eng |
+| **Recovery Latency** | User returns after 14 days; requests "Home" mode. | System reaches safe temp within 2 hours. | Delay >4 hours to reach safe temp. | QA Lead |
+
+*   **Red-Team Probe:** Attempt to "trick" the algorithm by simulating a user slowly lowering temps over 3 days to see if it accelerates the drop unsafely.
+*   **Data Leakage Check:** Ensure one user's "vacation" pattern does not bleed into neighbor devices or global models.
+
+**3. Human-in-the-Loop Gate (Mandatory Control)**
+*   **Rule:** Any automated decision to drop temperature below 50°F (10°C) requires **explicit user confirmation** via app push notification or physical interface interaction if the device detects an extended absence (>48 hrs).
+*   **Fallback:** If confirmation is not received within 24 hours of detecting absence, the system **defaults to Freeze Protection Mode**, not "Off" or "Eco."
+*   **Override:** Users must be able to manually set "Vacation Mode" with a single tap, bypassing learning logic entirely.
+
+**4. Transparency & Uncertainty (Days 10–12)**
+*   **Confidence Tiers:** Do not display raw probability (e.g., "87% sure you are away"). Use defined tiers:
+    *   *Confirmed Away:* User explicitly set Vacation Mode.
+    *   *Likely Away:* No interaction >48hrs + external weather data suggests risk. (Action: Alert user, maintain freeze protection).
+    *   *Unknown:* Insufficient data. (Action: Maintain current safe temp).
+*   **Disclosure:** Update user manual/app tooltip: "During extended absences, the system requires manual confirmation to enter deep energy-saving modes to prevent pipe freezing."
+
+**5. Rollout Strategy (Days 13–14)**
+*   **Staged Deployment:** Push update to 5% of devices (internal/beta users) for 48 hours. Monitor specifically for "temp drop" events.
+*   **Kill Switch:** Remote capability to disable the "learning" component and revert to static schedule if freeze events are detected in the wild.
+*   **Final Go/No-Go:** Review test results. If *any* "Stop Condition" was triggered and not resolved, delay launch. The cost of a recall exceeds the cost of a missed deadline.
+
+**Note:** This plan treats the freeze risk as a safety-critical failure, not a feature bug. Legal counsel should review the updated disclosure language regarding "extended absences" before final sign-off.

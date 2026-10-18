@@ -1,0 +1,42 @@
+**Rapid Pre-Launch Safety Plan for Voting Information Bot**
+
+Given the 10-day constraint and frozen ingestion pipeline, we cannot certify the system as "accurate" or "safe." Instead, we will execute a targeted harm reduction strategy focused on the worst-case outcome: directing a voter to an incorrect location, resulting in disenfranchisement.
+
+**1. Harm Inventory & Prioritization**
+The primary harm is **Hallucination surfaced as fact** (incorrect address/hours presented confidently) and **Unsafe Automation** (acting on unverified data without a human gate).
+*   **Affected Group:** Voters in high-churn or high-dispute jurisdictions.
+*   **Worst Case:** A voter travels to a closed or wrong location and cannot cast a ballot.
+*   **Strategy:** We will not sample randomly. We will target **High-Risk Geographies**: swing states, counties with recent polling place consolidations, and areas with historically high data volatility.
+
+**2. Measurement Plan (Runnable Tests)**
+We will run a "Red Team" evaluation over the next 48 hours using three specific probe sets. Each test row includes a pass/fail threshold that blocks launch for that specific region if failed.
+
+*   **Probe Set A (Positive Control - Known Good):** Query 50 verified, static locations (e.g., major city halls known to be polling sites).
+    *   *Metric:* 100% match on address and hours.
+    *   *Stop Condition:* Any mismatch triggers an immediate rollback of the bot for that state.
+*   **Probe Set B (Negative Control - Known Bad/Edge):** Query closed locations, non-existent addresses, and ambiguous inputs (e.g., "polling place near [closed school]").
+    *   *Metric:* The bot must refuse to give a specific location or explicitly state uncertainty.
+    *   *Stop Condition:* If the bot invents an address or provides a closed location with confidence, the feature is blocked.
+*   **Probe Set C (Latency Simulation):** Query regions known for last-minute changes in the live database.
+    *   *Metric:* Compare bot output against the raw database snapshot taken at the exact second of the query.
+    *   *Stop Condition:* Discrepancy > 0% in high-risk counties.
+
+**3. Managing Residual Risk (The Human Gate)**
+Since we cannot fix the pipeline, we must change the product behavior to prevent irreversible harm.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "95% sure"). Instead, implement a **Coarse Confidence Tier**:
+    *   *Verified:* Data matches multiple sources or is from a static official list.
+    *   *Unverified:* Data relies on a single, recently updated feed. Display: *"This information was updated recently. Please verify with [Official State Website Link] before traveling."*
+*   **Mandatory Override:** For any query resulting in a location change from the user's previous vote or in a high-risk county, the bot must require an explicit user confirmation: *"I understand this location may have changed. Confirm I want to see it."*
+*   **Kill Switch:** Implement a manual toggle to disable the bot's location answers entirely for specific states if real-time monitoring detects error spikes.
+
+**4. Transparency Artifact**
+Publish a **Model Card** alongside the launch. It must state:
+*   *Intended Use:* Preliminary guidance only; not a legal notice of polling location.
+*   *Limitations:* Data latency may cause discrepancies; users must verify via official channels.
+*   *Measured Results:* List the pass rates for Probe Sets A, B, and C. Any untested region is marked **UNVERIFIED**.
+
+**5. Governance**
+Assign one team member as the **Safety Owner** with the authority to pull the plug. They must review error logs every 4 hours during the election window. If legal questions arise regarding disclosure requirements for automated election information, route immediately to counsel; do not assume compliance based on this plan.
+
+**Note:** This plan measures risk; it does not eliminate it. The decision to ship rests with the Safety Owner.
+**Note:** Never fabricate an accuracy rate; if a region was not tested, label it UNVERIFIED.

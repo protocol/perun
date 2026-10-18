@@ -1,0 +1,33 @@
+**Validation Plan for CardiaCare Rhythm Detection Logic**
+
+Given the 30-day constraint and the life-critical nature of automatic shock delivery, the validation plan must prioritize preventing false positives (unnecessary shocks) while maintaining sensitivity to true emergencies. The following methods address the specific risk of faulty detection leading to harmful automated actions:
+
+1.  **Adversarial "Stress-Test" Dataset Construction**
+    Do not rely solely on clean clinical data. Construct a specific evaluation set containing "edge-case" signals known to mimic arrhythmias but requiring no shock. This must include:
+    *   **Motion Artifacts:** Data simulating running, falling, or sleeping movements.
+    *   **Electrical Interference:** Signals mimicking power line noise or muscle tremors (EMG).
+    *   **Benign Arrhythmias:** Rhythms that are irregular but not life-threatening (e.g., sinus arrhythmia, premature beats).
+    *   **Method:** Run the detection logic against this set. The pass threshold for false positives in this specific subset must be near-zero, as any error here results in direct physical harm.
+
+2.  **Subgroup Performance Analysis**
+    Aggregated accuracy metrics are insufficient. You must measure performance sliced by user demographics and physiological variables that affect signal quality:
+    *   **Segments:** Age groups, body mass indices, skin tones (if optical sensors are involved), and presence of other cardiac conditions.
+    *   **Goal:** Identify if the device systematically misinterprets signals for specific groups (e.g., higher false shock rates for users with higher BMI due to signal attenuation). Report these subgroup metrics explicitly; do not hide disparities behind an overall "99% accurate" claim.
+
+3.  **Human-in-the-Loop Gate for Ambiguous Cases**
+    For the final clinical trial and potential deployment, the system architecture must include a confidence tiering mechanism:
+    *   **Defined Tiers:** Classify detections as "Confirmed High-Certainty," "Corroborated," or "Unverified/Ambiguous."
+    *   **Control:** If the logic outputs an "Unverified" tier, the device must **withhold** the automatic shock and instead issue an audible/visual alert for the user to seek manual help or confirm the event, unless the latency requirement for that specific arrhythmia type makes human intervention impossible. If full automation is medically mandated even for ambiguous cases, this residual risk must be explicitly documented and accepted by clinical leadership, not masked by the algorithm.
+
+4.  **Runnable Evaluation Protocol**
+    Create a single test row for the primary harm (unnecessary shock):
+    *   **Probe Set:** The adversarial dataset defined in step 1.
+    *   **Metric:** False Positive Rate (FPR) per 24-hour monitoring period.
+    *   **Stop Condition:** If FPR exceeds the clinically agreed safety limit (e.g., >1 false shock per X patient-years), the feature cannot proceed to the next trial phase.
+    *   **Owner:** Assign a specific clinical engineer to review every failure instance in the test set.
+
+5.  **Transparency Artifact (Device Logic Card)**
+    Draft a versioned document summarizing the intended use, the specific arrhythmias covered, the known failure modes (e.g., "may misinterpret severe tremors"), and the subgroup performance data. This serves as the rigorous safety documentation required for your regulatory submission. Do not invent a "0% error rate"; state the measured residual risk and the controls in place.
+
+**Note:** This plan measures residual risk; it does not certify the device as "safe" or "unbiased." The final decision to ship or proceed to the next trial phase rests with CardiaCare's clinical and regulatory owners.
+**Note:** Any legal determination regarding specific regulatory disclosure duties under medical device laws must be routed to your legal counsel immediately.

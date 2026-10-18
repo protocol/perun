@@ -1,0 +1,40 @@
+**Testing Strategy for Offline Telehealth Dosage Safety**
+
+Given the critical risk of outdated allergy data on low-end offline devices, the testing strategy must prioritize "fail-safe" behaviors over feature completeness. The core objective is to verify that the application refuses to provide dosage suggestions when critical safety data (allergies) is missing or stale, rather than risking an incorrect suggestion.
+
+**1. Data Staleness and Cache Expiration Testing**
+Simulate various states of data freshness on emulated low-end Android devices. Create test scenarios where the local cache is:
+*   **Expired:** The last sync timestamp exceeds the defined safety window (e.g., >24 hours).
+*   **Partial:** Patient profile exists, but the allergy sub-record is missing or corrupted.
+*   **Conflicting:** Local cache says "No Allergies," but a queued sync packet indicates a newly recorded penicillin allergy.
+
+*Expected Behavior:* In all three cases, the dosage engine must lock. The UI should display a clear, non-technical warning: "Safety data outdated. Please connect to the network to update patient records before viewing dosage." No dosage number should be visible.
+
+**2. The "Offline-First" Negative Test Suite**
+Develop a specific suite of negative tests focused on the absence of data. Since positive tests (correct dosage given correct data) are standard, focus 70% of effort on:
+*   Inputting symptoms for a patient with a blank allergy field in offline mode.
+*   Attempting to bypass the sync check by manipulating device time or clearing specific cache partitions.
+*   Interrupting a sync process mid-way to leave the database in a transactional half-state.
+
+*Expected Behavior:* The system must treat "missing allergy data" as a hard stop condition. There is no fallback calculation for dosage if allergy status is unknown. The only valid output is a refusal to act.
+
+**3. Low-Resource Stress Testing**
+Since the app targets low-end smartphones, performance constraints must not compromise safety logic.
+*   Run the app on devices with minimal RAM (e.g., 1GB) and slow storage.
+*   Induce memory pressure while the safety check is running.
+
+*Expected Behavior:* Ensure the app does not crash or skip the allergy validation step due to resource starvation. If the device is too slow to perform the check within a reasonable time, the timeout behavior must default to "No Dosage Suggested."
+
+**4. Manual Synchronization Verification**
+Test the re-entry path. Once the device reconnects to the network:
+*   Verify that the updated allergy data immediately unlocks the dosage engine.
+*   Ensure that the sync logic prioritizes allergy updates over less critical data (like UI preferences) to minimize the window of vulnerability.
+
+**5. Field Simulation with Medical Advisors**
+Before clinic distribution, conduct a "tabletop" simulation with your medical advisors using the actual prototype. Present them with scenarios where the device is offline and data is incomplete. Observe if the UI clearly communicates *why* the dosage is hidden. If a medical advisor attempts to guess a dosage because the app was unclear, the UI design must be revised.
+
+**Conclusion**
+The safety mechanism relies on the principle that "No Data" equals "No Action." The testing must prove that the application consistently fails closed. If the sync fails or the cache is old, the app becomes a static record viewer, not a dosage calculator. This constraint is non-negotiable for patient safety in an offline environment.
+
+*Note: This strategy assumes the app has a built-in mechanism to detect cache age; if not, this logic must be implemented before testing begins.*
+*Do not proceed to clinic distribution until the "fail-closed" behavior is observed in 100% of negative test cases.*

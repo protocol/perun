@@ -1,0 +1,36 @@
+### Offline Mode Safety Simulation Scenarios
+
+To verify the smart pill dispenser's local logic prevents double dosing during connectivity loss, execute the following simulation scenarios. These tests focus on state synchronization, boundary conditions, and failure recovery without relying on continuous cloud verification.
+
+**1. The "Straddle" Disconnect**
+*   **Setup:** Initiate a scheduled dose event. Trigger a network disconnect exactly when the device receives the "confirm dispense" signal from the cloud but before it updates its local "dose delivered" flag.
+*   **Action:** Allow the device to complete the mechanical dispense locally. Restore connectivity immediately after the motor stops but before the next sync cycle.
+*   **Verification:** Confirm the device marks the dose as complete locally and does not attempt a second dispense upon re-syncing the pending status with the cloud. The cloud record must match the local log without duplication.
+
+**2. The Repeated Reconnection Loop**
+*   **Setup:** Simulate a missed dose window where the cloud believes the dose is pending.
+*   **Action:** Force the device into offline mode. Have the local timer trigger the dose. Immediately after dispensing, simulate a rapid "flapping" network state (connect-disconnect-connect-disconnect) five times within 30 seconds.
+*   **Verification:** Ensure the device locks the dose status locally after the first successful mechanical action. Subsequent connection attempts must only transmit the completion status, never re-request or re-authorize the same dose ID.
+
+**3. The Clock Drift Conflict**
+*   **Setup:** Desynchronize the device's real-time clock (RTC) by +15 minutes relative to the cloud server to simulate battery backup drift common in older Wi-Fi modules.
+*   **Action:** Trigger a dose event based on the device's local time while offline. Reconnect to the cloud where the server time indicates the dose window has not yet opened (or has already closed).
+*   **Verification:** Verify the device prioritizes its local execution for the immediate safety window but correctly flags the timestamp discrepancy in the sync log. Crucially, ensure the cloud does not interpret this as a new, unscheduled event and queue a duplicate for the "correct" time window.
+
+**4. The Power Loss During Sync**
+*   **Setup:** Initiate a dose dispensing sequence while offline.
+*   **Action:** Simulate a hard power cut (battery removal) immediately after the motor completes the dispense but before the local non-volatile memory writes the "completed" status. Restore power and reconnect to the cloud.
+*   **Verification:** The device must perform a startup self-check. If the mechanical sensors indicate a pill was released, the system must assume the dose was delivered and update the cloud accordingly, rather than defaulting to "missed" and requesting a make-up dose.
+
+**5. The Queue Backlog Storm**
+*   **Setup:** Simulate a 24-hour offline period accumulating three scheduled doses in the local queue.
+*   **Action:** Restore connectivity. Allow the device to sync the backlog.
+*   **Verification:** Confirm the device reports all three missed doses as "skipped" or "manual intervention required" based on your safety policy, rather than attempting to auto-dispense all three immediately. The logic must prevent a "catch-up" burst that could lead to overdose, ensuring only the current real-time dose is eligible for automatic dispensing.
+
+**6. The Duplicate Acknowledgement Race**
+*   **Setup:** Simulate a high-latency network where the cloud sends a "dispense authorized" packet twice due to timeout retries.
+*   **Action:** Process both packets while the device is offline (queued) or just as it reconnects.
+*   **Verification:** The local logic must deduplicate requests based on unique transaction IDs. Even if two valid authorization tokens arrive for the same time slot, only one mechanical actuation should occur.
+
+*Note: Ensure all mechanical sensors are mocked to accurately reflect physical states during these simulations to avoid false positives.*
+*Document every state transition log to satisfy regulatory audit trails for the upcoming submission.*

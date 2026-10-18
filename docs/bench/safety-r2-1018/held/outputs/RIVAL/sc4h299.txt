@@ -1,0 +1,30 @@
+### Contingency Plan: Stale Data & Manual Override for Resource Allocation
+
+**1. Risk Identification: The "Stale Data" Gap**
+Given intermittent connectivity, the local cache creates a latency window where the system's view of the camp population differs from reality. The primary failure mode is **False Negative Denial**: eligible families present at the camp are missing from the cached dataset, resulting in zero ration allocation. Secondary risks include allocating rations to families who have departed (waste) or incorrect household sizes leading to under/over-feeding.
+
+**2. Detection Strategy: The "Rolling Reconciliation" Protocol**
+Before full automation, implement a daily manual reconciliation step at the distribution point:
+*   **The Headcount Check:** Camp managers must perform a rapid physical headcount of families in the queue before the system generates the final distribution list.
+*   **The Variance Threshold:** If the number of families in the queue exceeds the number of records in the local cache by more than 5% (or a predefined camp-specific threshold), the system is flagged as "Compromised by Stale Data."
+*   **The Shadow Run:** For the first two weeks, run the allocation algorithm in "shadow mode." Generate the list but do not distribute based solely on it. Compare the algorithmic list against the registration desk's paper logbook of arrivals from the last 48 hours.
+
+**3. Manual Override Process: The "Emergency Ration" Protocol**
+When stale data is detected or a family is denied due to missing records, activate this immediate fallback:
+*   **Step A: Verification via Physical Token:** Issue a temporary, time-stamped paper voucher to any family verified by camp leadership as present and eligible, regardless of digital status. This voucher guarantees a standard baseline ration.
+*   **Step B: The "Hold-Back" Reserve:** Mandate that 10% of the daily food supply is physically separated and held back from the automated distribution. This reserve is exclusively for manual override cases (families missing from the cache).
+*   **Step C: Dual-Entry Logging:** Staff must manually record the ID and household size of any family receiving rations via the override process on a physical ledger. This data is prioritized for entry into the digital system once connectivity is restored.
+*   **Step D: System Pause Trigger:** If override cases exceed 15% of total distributions in a single day, the automated system must be paused entirely. Distribution reverts to 100% manual processing based on the physical ledger until connectivity allows a full data sync.
+
+**4. Review Strategy: Pre-Deployment Simulation**
+Conduct a "Connectivity Blackout Drill" with the team of eight before going live:
+*   **Scenario:** Simulate a 72-hour internet outage where the local cache is frozen at T-minus 3 days.
+*   **Action:** Introduce 20 "new" fake families into the pilot camp flow.
+*   **Measurement:** Time how long it takes for the team to identify the discrepancy between the queue and the screen, activate the hold-back reserve, and issue paper vouchers.
+*   **Success Criteria:** No eligible family (including the fake ones) leaves without a ration voucher, and the manual ledger accurately captures all override transactions for later digital reconciliation.
+
+**5. Data Hygiene Post-Connection**
+Establish a strict rule: upon connectivity restoration, the system must not simply overwrite local data. It must run a "merge logic" that prioritizes the manual override ledger entries to ensure families who received emergency rations are immediately updated in the central database before the next cycle begins.
+
+*Note: This plan prioritizes human safety over data precision; false positives (giving food to unregistered users) are acceptable risks compared to false negatives (starvation).*
+*Ensure all staff are trained on the physical ledger format to prevent data loss during the manual phase.*

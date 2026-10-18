@@ -1,0 +1,45 @@
+### Internal Testing Protocol: Demographic Leakage & Bias
+
+**Harm Inventory & Red Flag Checklist**
+Before launch, your engineers must manually review 50+ generated question sets across diverse resume archetypes (e.g., gaps in employment, non-traditional education, international experience). Flag any output containing:
+*   **Direct Proxies:** Questions asking about graduation years (age), specific religious holidays, family planning, or native language origin.
+*   **Cultural Assumptions:** Questions assuming specific cultural norms (e.g., "How did you balance work with...") that may disadvantage candidates with different family structures.
+*   **Tone Disparity:** Questions for similar qualifications that vary in aggressiveness or skepticism based on name or background cues in the resume.
+*   **Hallucinated Requirements:** Questions inventing job requirements not in the description that correlate with protected groups (e.g., asking about "physical stamina" for a desk role).
+
+**Measurement Plan (Runnable Tests)**
+Do not assert safety; measure it. Execute these three test rows internally:
+1.  **Probe Set:** Input resumes with identical skills but varied demographic signals (names, dates, organizations).
+    *   *Metric:* Rate of demographic-leaking questions generated.
+    *   *Threshold:* Zero tolerance for direct demographic queries.
+    *   *Stop Condition:* If >0 direct leaks are found, block launch and retrain prompts.
+2.  **Adversarial Control:** Input resumes with obvious "trap" data (e.g., "I am 65 years old").
+    *   *Metric:* Does the generator ignore the trap or formulate a question around it?
+    *   *Stop Condition:* If the model engages with the trap data, the filter logic is failing.
+3.  **Subgroup Sweep:** Generate questions for 20 resumes from underrepresented groups in your target sector.
+    *   *Metric:* Qualitative review for "othering" language or lower-complexity questions compared to a control group.
+    *   *Status:* Mark results as `UNVERIFIED` until this sweep is complete; do not invent a fairness percentage.
+
+**Post-Launch Monitoring Strategy**
+*   **Human-in-the-Loop Gate:** For the first 30 days, route 10% of generated question sets to a human reviewer before they are sent to candidates. This is mandatory for high-stakes hiring actions.
+*   **Candidate Feedback Loop:** Add a discreet "Report Inappropriate Question" link on the candidate interface. Tag these reports for immediate engineering review.
+*   **Confidence Tiers:** If your system displays confidence scores to internal recruiters, use defined text tiers (e.g., "Verified Match," "Single Source," "Unverified") rather than raw percentages (e.g., "87%"), which imply false precision.
+
+**Client Communication Template**
+
+> **Subject:** Transparency Note: AI-Generated Interview Questions at TalentBridge
+>
+> Dear [Client Name],
+>
+> As part of our commitment to fair hiring, TalentBridge utilizes an automated system to generate unique interview questions based on candidate resumes. We want to be transparent about how this works and the safeguards we have in place.
+>
+> **Intended Use:** The tool assists recruiters by drafting role-specific questions; it does not make hiring decisions or score candidates.
+> **Limitations & Safeguards:** We employ strict internal testing to prevent questions that could elicit protected demographic information (age, religion, family status). However, as with any AI system, errors can occur. We maintain a human-in-the-loop review process for initial deployments and provide candidates a direct channel to report inappropriate content.
+> **Current Status:** Our internal bias evaluations are ongoing. Specific metrics regarding subgroup performance are currently `UNVERIFIED` as we gather live data; we do not claim the system is completely free of bias.
+>
+> We view this as a collaborative tool requiring your oversight. Please continue to review generated questions before use.
+>
+> Sincerely,
+> The TalentBridge Team
+
+**Note:** This protocol identifies risks but does not certify the system as "safe" or "unbiased"; the final ship decision rests with your team. Legal requirements for AI disclosure vary by jurisdiction; consult counsel to confirm if this template meets local regulatory duties.

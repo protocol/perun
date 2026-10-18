@@ -1,0 +1,33 @@
+### Safety Validation Plan: Internal Drug-Interaction Checker
+
+**1. Harm Inventory & Risk Acknowledgement**
+The primary identified harm is **false negatives** (missing rare interactions) due to limited data, leading to patient injury. Secondary harms include **automation bias** (doctors trusting the tool over clinical judgment) and **hallucination** (the AI inventing non-existent interactions). Because the system cannot access comprehensive global databases, it must be explicitly classified as an **assistive decision-support tool**, not a definitive safety gate. No metric can certify this system "safe" or "unbiased" given the known data gaps; residual risk is **UNVERIFIED** for rare combinations outside your current dataset.
+
+**2. Measurement Strategy (Pre-Launch)**
+Since you cannot test against a complete global database, you must test against known failures and edge cases:
+*   **Adversarial Probe Set:** Compile a list of 50 known rare but critical drug interactions *not* currently in your database. Run these through the system.
+    *   *Pass Condition:* The system must **never** confidently state "No interaction found." Instead, it must trigger a "Data Limitation Warning" for any query involving drugs outside its known index.
+    *   *Stop Condition:* If the system asserts "Safe" for any probe in this set without a warning, launch is blocked.
+*   **Negative Control:** Test common, non-interacting pairs to ensure the system does not generate excessive false alarms (noise), which causes alert fatigue.
+
+**3. Human-in-the-Loop Workflow (The Gate)**
+To manage the risk of missing data, the following workflow is mandatory for all prescriptions:
+*   **Mandatory Disclosure:** Every output must display a prominent banner: *"Warning: This tool uses a limited internal database. It may miss rare interactions. Always verify with clinical judgment and external resources."*
+*   **Confidence Tiers (No False Precision):** Do not show percentages (e.g., "90% safe"). Use defined text tiers:
+    *   **Confirmed:** Interaction exists in the local database.
+    *   **Unverified:** One or both drugs are not fully indexed; manual verification required.
+    *   **Unknown:** Drugs not found; do not rely on this tool.
+*   **Verification Step:** The doctor must actively acknowledge the "Unverified" or "Unknown" status before finalizing a prescription involving those drugs. The system must not auto-complete or auto-sign these orders.
+
+**4. Protocol for Reporting Missed Interactions**
+Establish a closed-loop feedback mechanism immediately upon launch:
+*   **Reporting Channel:** Create a simple, one-click "Report Missed Interaction" button within the tool interface. This should capture the drug pair, patient context (anonymized), and the outcome.
+*   **Review Cadence:** A designated medical lead must review all reports weekly.
+*   **Update Loop:** Validated missed interactions must be manually added to the local database within 48 hours of confirmation, and the system version updated.
+*   **Rollback Trigger:** If more than two critical misses are confirmed in a single week, the tool must be temporarily disabled for manual-only review until the database is patched.
+
+**5. Governance**
+Assign one medical staff member as the **Owner** of this safety protocol. They are responsible for the weekly review and the decision to patch or pause the tool. This plan treats the data limitation as a fixed constraint; the safety control is the human verification step, not the algorithm itself.
+
+*Note: This plan assumes the tool is for internal support only. If this tool influences automated dispensing or billing, legal counsel must review regulatory duties under EU/IRISH medical device regulations before launch.*
+*Do not claim the system is "compliant" or "safe"; explicitly document the data gaps in your internal model card.*

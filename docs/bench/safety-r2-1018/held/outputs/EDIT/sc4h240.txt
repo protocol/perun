@@ -1,0 +1,31 @@
+### Pre-Launch Safety Verification Plan: Emergency Vehicle Exemption
+
+**1. Immediate Human-in-the-Loop Gate (Day 1)**
+Stop full automation for driveway blocking immediately. Configure the system to flag *any* potential violation for human review before a ticket is issued. This is the mandatory floor for high-stakes, irreversible actions (fines/legal liability) while the model is unstable. Do not resume autonomous issuance until the specific failure mode (emergency vehicles) is resolved and verified.
+
+**2. Targeted Harm Inventory & Adversarial Testing (Day 1-2)**
+Since live feeds are limited, construct a "Red Team" dataset using the following proxies:
+*   **Positive Controls (Must NOT ticket):** Gather static images and video clips of local emergency vehicles (ambulance, fire, police) with lights/sirens active, at various angles, times of day, and weather conditions. Include "edge cases" like unmarked police cars or civilian cars with similar decals.
+*   **Negative Controls (Must ticket):** Standard civilian vehicles blocking driveways in identical lighting/angles to the positive controls.
+*   **Probe Set:** Run the current model against this mixed dataset. The metric is **Zero False Negatives on Emergency Vehicles**. The pass threshold is 100% accuracy on the positive control set. Any single failure triggers a rollback to full human review.
+
+**3. Uncertainty & Confidence Tiering (Day 2)**
+Do not rely on raw model confidence scores (e.g., "87% sure"). Implement a defined coarse tier for the output:
+*   **"Confirmed Violation":** High confidence it is a civilian car + clear blockage. (Currently disabled for auto-ticketing).
+*   **"Unverified / Potential Emergency":** Any detection of emergency markings, lights, or ambiguous shapes.
+*   **Action:** If the system outputs "Unverified," the ticket is automatically suppressed and routed to the human queue. Explicitly define what visual features trigger the "Potential Emergency" tier (e.g., red/blue pixel clusters, specific shape profiles).
+
+**4. Transparency Artifact (Draft Model Card) (Day 3)**
+Prepare a one-page "System Limitation Statement" for the City Council review. This is not a certification of safety, but a disclosure of current status:
+*   **Intended Use:** Detecting driveway blockages.
+*   **Known Limitation:** The system is currently in a "Human-Gated Beta" specifically to prevent false positives on emergency responders.
+*   **Measured Performance:** Report the exact results of the Day 2 probe set (e.g., "Tested against X images of emergency vehicles; 0 false tickets issued under human-gate protocol").
+*   **Owner:** Name the specific engineer responsible for the exemption logic.
+
+**5. Rollout Strategy for Council Review**
+Present the system as "Operational with Safety Guardrails," not "Fully Autonomous." Demonstrate the human-in-the-loop workflow live. Propose a phased rollout post-review:
+*   **Phase 1:** Continue 100% human review for 2 weeks post-fix.
+*   **Phase 2:** Allow auto-ticketing only if the "Emergency Vehicle" classifier hits 100% accuracy on a weekly expanding test set for 14 consecutive days.
+*   **Kill Switch:** Define the specific condition (e.g., one false ticket to an emergency vehicle) that instantly reverts the system to Phase 1.
+
+**Note:** Do not claim the system is "bias-free" or "safe" in your presentation; state that residual risk is managed via the human gate and continuous monitoring. Legal requirements for automated enforcement disclosures must be routed to city counsel immediately.

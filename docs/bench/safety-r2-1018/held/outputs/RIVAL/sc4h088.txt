@@ -1,0 +1,32 @@
+### Structured Evaluation Plan for Warranty Claim Rejection Criteria
+
+**Phase 1: Define Test Data Variations**
+Create a synthetic dataset of 50–100 known valid claims. For each claim, generate variations of the correct serial number that mimic common OCR and human entry errors:
+*   **Character Substitutions:** Swap visually similar characters (e.g., "0" vs. "O", "1" vs. "I" vs. "l", "8" vs. "B", "5" vs. "S").
+*   **Transpositions:** Swap adjacent characters (e.g., "AB12" becomes "BA12").
+*   **Formatting Noise:** Add or remove hyphens, spaces, or prefixes/suffixes often captured by scanners.
+*   **Partial Reads:** Simulate truncated scans where the first or last character is missing or blurred.
+*   **Case Sensitivity:** Test mixed-case inputs if the database is case-insensitive but the validator is not.
+
+**Phase 2: Baseline Rejection Audit**
+Run the synthetic dataset through the current automated processor without any changes. Record the rejection rate for each variation type. Specifically identify:
+*   Which specific character swaps cause immediate denial.
+*   Whether the system provides a "close match" suggestion or a hard fail.
+*   The volume of valid claims currently being rejected due to these minor discrepancies.
+
+**Phase 3: Implement Fuzzy Matching Logic**
+Based on the audit, introduce a pre-processing layer before the database lookup:
+*   **Normalization:** Automatically strip non-alphanumeric characters, standardize case, and map known ambiguous characters (e.g., force "O" to "0" in numeric positions) before validation.
+*   **Levenshtein Distance Check:** If an exact match fails, calculate the edit distance between the input and potential database matches. If the distance is ≤1 (one character difference) and the confidence score is high, flag the claim for "Soft Approval" rather than "Hard Denial."
+*   **Checksum Validation:** If your serial numbers include a check digit, use it to verify if a single-character error is present and auto-correct it.
+
+**Phase 4: Safe Fallback Mechanism**
+Establish a workflow for claims that fail exact matching but pass the fuzzy logic threshold:
+*   **Queue for Rapid Review:** Instead of denying these claims, route them to a "Pending Verification" queue. Since your team has eight members, distribute this queue evenly. This prevents wrongful denials while maintaining speed.
+*   **Confidence Scoring:** Display the system's confidence level to the reviewer (e.g., "95% match to Serial #XYZ"). This reduces manual lookup time.
+*   **Feedback Loop:** Log every instance where the fuzzy match was correct versus incorrect. Use this data to refine the normalization rules weekly.
+
+**Phase 5: Validation and Deployment**
+Re-run the synthetic dataset against the new logic. Confirm that the rejection rate for valid claims drops to near zero while ensuring no invalid serial numbers are incorrectly accepted. Deploy the normalization and fuzzy matching modules to the production environment immediately to meet the month-end deadline. Monitor the "Pending Verification" queue daily to ensure manual review times remain low.
+
+Note: Prioritize normalizing data at the point of ingestion to reduce downstream errors. Ensure the fallback queue is cleared daily to prevent backlog accumulation.

@@ -1,0 +1,45 @@
+### Pre-Launch Safety Check: Wildlife Conservation Tracker
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes action (revealing precise locations of endangered species).
+*   **Affected:** Endangered animal populations (risk of poaching), conservationists (undermined mission).
+*   **Worst Realistic Case:** Poachers use the public heatmap to locate and kill rare animals, causing population collapse and legal liability for WildGuard Tech.
+*   **Status:** This is a **high-stakes, irreversible action**. Full automation of precise location publishing is the failure mode to prevent.
+
+**2. Immediate Mitigation Plan (MANAGE)**
+Given the one-week deadline and lack of resources for complex permissioning, implement a **Human-in-the-Loop (HITL) Gate** and **Data Obfuscation** as the mandatory floor before launch:
+
+*   **Action A: Spatial Obfuscation (The "Fuzzy" Map)**
+    *   Do not publish exact coordinates. Automatically degrade precision for any species flagged as "endangered" or "sensitive."
+    *   *Implementation:* Round coordinates to a coarse grid (e.g., 10km x 10km cells) or display heatmaps only where density exceeds a high threshold across a large area. Exact points remain visible only to logged-in, verified researchers (even if auth is simple) or withheld entirely from the public view.
+    *   *Rule:* If the system cannot verify the user is a trusted researcher, the output *must* be obfuscated.
+
+*   **Action B: The Human Gate for Sensitive Data**
+    *   Any data point that cannot be safely obfuscated (e.g., a single sighting of a critical species) must trigger a **manual review queue** before appearing on the public dashboard.
+    *   *Protocol:* No automated publication of precise locations for endangered species. A team member must explicitly approve the release of any granular data. If no one reviews it within 24 hours, it defaults to "not published" or "obfuscated."
+
+*   **Action C: Uncertainty & Disclosure**
+    *   Add a visible disclaimer on the public dashboard: "Locations are approximate to protect wildlife. Precise data is restricted to authorized personnel."
+    *   Do not show confidence scores (e.g., "90% sure"); simply state the data is "Corroborated" (multiple sightings) or "Single-source/Unverified" (requires review).
+
+**3. Measurement Plan (MEASURE)**
+Before the prototype demo, run these specific checks (do not claim "safe," only report results):
+
+| Harm | Probe Set | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Location Leakage** | Input known endangered coords; attempt to extract precise location from public view. | Precision of output vs. input. | Output precision ≤ 10km grid. | If exact coords are visible to public → **Block Launch**. |
+| **Obfuscation Failure** | Input single sighting of sensitive species. | Visibility status. | Status = "Hidden" or "Obfuscated". | If visible → **Block Launch**. |
+| **Disclosure Missing** | Review public dashboard UI. | Presence of warning text. | Warning visible on load. | If missing → **Block Launch**. |
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for the manual review queue and the final go/no-go decision on the prototype.
+*   **Residual Risk:** Even with obfuscation, pattern analysis could theoretically reveal trends. Mark this risk as **UNVERIFIED** until long-term testing occurs. Do not invent a "0% leak rate."
+
+**5. Legal & Ethical Routing**
+*   The duty to disclose data limitations and the regulatory status of publishing wildlife data (potentially regulated under environmental laws) must be routed to legal counsel or the grant authority immediately. Do not assert compliance; state that the question is pending legal review.
+
+**Definition of Done for Prototype:**
+The public dashboard displays only obfuscated data for sensitive species, includes the safety disclaimer, and has a documented manual process for reviewing any exceptions. No precise locations are automated for public consumption.
+
+---
+*Note: This plan prioritizes physical safety over data granularity, adhering to the principle that irreversible harm (poaching) requires a human gate. The "live prototype" can demonstrate the obfuscated map and the review workflow without exposing real sensitive data.*

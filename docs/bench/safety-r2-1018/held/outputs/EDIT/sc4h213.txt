@@ -1,0 +1,40 @@
+### Immediate Action Plan: Conservative Defaults and Targeted Validation
+
+**1. Implement a "Human-in-the-Loop" Gate for All Estimates**
+Do not launch fully automated calculations for this pilot. Given the high stakes (financial support for children) and the known risk of underestimation, every output must be treated as a **draft recommendation** requiring explicit human review or user confirmation before being acted upon. The system must display a prominent disclaimer: *"This is an estimated figure based on incomplete data. It is not a legal determination of child support obligations."* Full automation of financial obligations without a human gate is a critical failure mode that must be prevented.
+
+**2. Define "Conservative Default" Logic Explicitly**
+Instead of guessing missing income data (which risks underestimation), the algorithm must default to **conservative assumptions** that favor the custodial parent when data is missing.
+*   **Rule:** If income data is missing or ambiguous, the system must assume the *higher* plausible income for the paying parent or the *lower* plausible income for the receiving parent, whichever results in a higher support estimate.
+*   **Implementation:** Hard-code these fallback rules. Do not rely on the model to "infer" missing values probabilistically.
+
+**3. Rigorous Testing Strategy: The Harm Inventory & Eval Plan**
+You requested a testing strategy targeting data incompleteness. Execute the following specific evaluation rows before any launch:
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Data Gap Underestimation** | Records with 1+ missing income fields (simulated gaps). | Input with missing payer income → Output < True Obligation. | Input with missing payer income → Output ≥ True Obligation (Conservative). | **% of cases underestimating true obligation.** Threshold: **0%**. | **Block launch** if any case underestimates the known correct value. |
+| **Over-Reliance / False Precision** | Outputs shown to users with varying confidence levels. | Output shows specific dollar amount with no warning. | Output shows range or "Minimum Estimate" label with clear uncertainty. | **User comprehension score** (via survey): % understanding it's an estimate. Threshold: >90%. | **Block launch** if users treat the number as final/legal fact. |
+| **Bias Against Custodial Parents** | Sliced by family structure, income bracket, employment type. | Systematic underestimation for gig-economy workers or single-income families. | Equal accuracy across all subgroups. | **Disparity ratio** in error rates between subgroups. Threshold: No subgroup has >0% underestimation rate. | **Block launch** if any protected subgroup shows systematic underestimation. |
+
+**4. Transparency Artifact: The Model Card**
+Before the pilot starts, publish a **Model Card** for internal and government stakeholders. This document must include:
+*   **Intended Use:** Estimation tool only; not for legal enforcement.
+*   **Limitations:** Explicitly list data sources with known gaps and the specific conservative logic applied.
+*   **Measured Performance:** Report the results of the evals above. If a metric is unmeasured, label it **UNVERIFIED**. Do not invent an accuracy percentage.
+*   **Owner:** Name the specific data scientist responsible for reviewing flagged cases.
+
+**5. Legal and Regulatory Routing**
+Child support calculations are a **regulated, high-stakes domain**. The question of whether this tool requires specific legal disclosures or falls under automated decision-making regulations (such as those potentially applicable in NSW or under federal AI frameworks) is a **legal determination**. You must route this immediately to legal counsel or the government grant authority's compliance officer. Do not assume the pilot exemption covers liability for financial harm.
+
+**6. Confidence Reporting**
+Never show a raw probability (e.g., "87% confident") to users. Instead, use defined coarse tiers:
+*   **"Verified":** All data sources present and matched.
+*   **"Estimated (Conservative)":** One or more data gaps; default logic applied.
+*   **"Unverified":** Critical data missing; no calculation provided.
+
+**Schedule Adjustment:**
+To meet the three-week deadline, prioritize the **conservative default logic** and the **human-in-the-loop gate** immediately. These are non-negotiable floors. If the full eval suite cannot be completed in time, launch with a **capped exposure** (e.g., only 10% of users, or only cases with complete data) and a manual review step for all others. Do not sacrifice the human gate for speed.
+
+---
+*Note: This plan assumes the "conservative" direction is legally defined as favoring the child/custodial parent; verify this definition with counsel. The 0% underestimation threshold is a safety floor, not a typical performance metric.*

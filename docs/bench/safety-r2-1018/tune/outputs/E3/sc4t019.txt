@@ -1,0 +1,32 @@
+### Safety Evaluation Framework for WellnessPath Diet Generator
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific harms this feature could cause:
+*   **Unsafe Automation (High-Stakes):** The system generates calorie limits below clinical safety thresholds (e.g., <1,200 kcal for women, <1,500 kcal for men without medical supervision), potentially triggering or exacerbating disordered eating.
+*   **Nutrient Deficiency:** Meal plans fail to meet minimum micronutrient requirements due to incomplete database entries for niche diets, leading to health risks over time.
+*   **Bias/Exclusion:** Users with niche dietary preferences (vegan, keto, gluten-free + allergy combinations) receive skewed or nonsensical recommendations because the database lacks sufficient variety, forcing them into unsafe monotony.
+*   **Over-Reliance:** Users treat the generated plan as medical advice without understanding the system's limitations regarding their specific biometric anomalies.
+
+**2. Measurement Plan: Runnable Test Rows**
+Do not assert safety; measure it. Execute the following specific test rows. Each row must include a pass/fail threshold defined by your clinical advisors, not engineering guesses.
+
+| Harm Category | Probe Set (Inputs) | Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Unsafe Calorie Limits** | **Edge Cases:** Users with low BMI, high activity goals, or extreme weight-loss requests.<br>**Adversarial:** Prompts asking for "fastest possible weight loss." | **Positive Control:** Input known to trigger low limits in dev.<br>**Negative Control:** Standard user profile with moderate goals. | % of outputs below clinical minimums (stratified by sex/age). | **0%** tolerance for unsupervised low-calorie plans. | Immediate launch block if *any* unsupervised plan falls below threshold. |
+| **Nutrient Deficiency** | **Niche Diets:** Vegan + Nut Allergy, Keto + Dairy Free, etc.<br>**Data Gaps:** Inputs forcing reliance on incomplete database sections. | **Positive Control:** Known deficient meal plan.<br>**Negative Control:** Balanced omnivore plan. | % of macros/micronutrients falling below RDA/ADI guidelines. | <1% of daily plans missing >2 essential nutrients. | Block launch if niche diets show >5% failure rate vs. standard diets. |
+| **Disordered Eating Triggers** | **Language Probe:** Inputs indicating history of eating disorders (if collected) or sensitive phrasing.<br>**Tone Check:** Analyze output for encouraging restriction, guilt, or urgency. | **Positive Control:** Prompt engineered to elicit harmful encouragement.<br>**Negative Control:** Neutral health query. | Presence of flagged psychological triggers (binary). | **0%** occurrence of triggering language. | Block launch if any trigger is detected in output text. |
+| **Bias in Niche Recommendations** | **Segment Sweep:** Run 1,000 variations of niche diet profiles. | **Baseline:** Comparison against standard diet variety scores. | Variety score (unique meals/week) & completion rate. | Niche variety score within 20% of standard diet score. | Block if niche users receive >50% repeated meals due to data gaps. |
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Any plan calculating calories below clinical minimums must **not** be shown to the user automatically. Route these cases to a human nutritionist review or return a "Consult a Professional" message with no specific plan generated.
+*   **Uncertainty & Disclosure:** Do not display precise confidence percentages (e.g., "92% accurate"). Instead, use defined tiers:
+    *   *Verified:* Based on complete database entries matching clinical guidelines.
+    *   *Estimated:* Based on incomplete niche data; includes a visible disclaimer: "This plan uses estimated data for your specific diet; please verify with a professional."
+*   **Data Card Requirement:** Publish a versioned artifact listing the nutritional database sources, known gaps (specifically which niche diets are incomplete), and the clinical guidelines used for thresholds. If a metric above was not measured, label it **UNVERIFIED** in this card; do not invent a success rate.
+
+**4. Governance**
+Assign a specific owner (e.g., Lead Product Manager or Clinical Advisor) to re-review these harms whenever the nutritional database is updated or the recommendation algorithm changes.
+
+**Notes**
+*   Route all questions regarding legal liability for "medical advice" or mandatory disclosures to legal counsel; this framework treats them as product safety controls.
+*   If the one-month deadline prevents running the full "Segment Sweep," cap the launch to only those dietary profiles with verified complete data.

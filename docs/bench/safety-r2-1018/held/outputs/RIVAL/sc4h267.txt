@@ -1,0 +1,26 @@
+### Fail-Safe Mechanism: "Triple-Lock Thermal Guardian"
+
+To prevent erroneous shutoffs during cold snaps, implement a hardware-agnostic logic layer that requires three concurrent conditions to be met before any heating reduction command is issued. If any single condition fails, the system defaults to "Heat On."
+
+1.  **External Weather Verification Lock:** The predictor cannot act on internal algorithms alone. It must cross-reference a trusted, third-party weather API. If the external temperature is below a critical threshold (e.g., 32°F / 0°C) or a "Cold Snap" alert is active for the facility's zip code, the shutoff command is automatically vetoed, regardless of the predictor's internal confidence score.
+2.  **Internal Sensor Consensus Lock:** The system must read from at least two independent internal temperature sensors per zone. A shutoff is only permitted if both sensors agree the temperature is above the safety baseline (e.g., 72°F). If sensors disagree by more than 2 degrees, the system locks into "Heat On" and flags a maintenance alert rather than risking a shutoff.
+3.  **Human-in-the-Loop Time Delay:** For any predicted shutoff lasting longer than 15 minutes during winter months (Nov–Mar), the command enters a "pending" state. A notification is sent to the facility manager's dashboard requiring an explicit "Acknowledge" within 5 minutes. If no acknowledgment is received, the command expires, and heating continues.
+
+**Fail-Default State:** The system architecture must be designed so that a loss of power, network connectivity, or software crash physically defaults the heating valves to the OPEN position. The "safe" state is always warmth.
+
+***
+
+### Pre-Launch Verification Checklist
+
+Execute these five steps sequentially before granting live control to the predictor:
+
+*   **[ ] The "Deep Freeze" Simulation:** Manually inject data simulating a -10°F external temperature with a faulty internal sensor reading of 80°F. Verify the system ignores the internal sensor and maintains heating due to the External Weather Verification Lock.
+*   **[ ] The Network Blackout Test:** Physically disconnect the predictor server from the internet while the building is in a heating cycle. Confirm that the building management system receives no shutoff commands and that valves remain open (fail-default).
+*   **[ ] The Sensor Disagreement Drill:** Spoof data where Zone A's two sensors differ by 3 degrees. Ensure the system refuses to modulate heat and instead generates a "Sensor Mismatch" alarm.
+*   **[ ] The Timeout Validation:** Trigger a valid shutoff scenario during winter hours but do not provide the required human acknowledgment. Verify that after the 5-minute window, the heating system remains active.
+*   **[ ] The Rollback Rehearsal:** Simulate a critical software error during operation. Measure the time taken to revert to manual control. The target is under 30 seconds with zero interruption to heat output.
+
+Only when all five tests pass with zero heating interruptions should the system be switched from "Monitor Only" to "Active Control."
+
+*Note: Keep the system in "Monitor Only" mode for the first 48 hours of winter operation to log predicted actions without executing them.*
+*Ensure the facility manager's mobile device is whitelisted to receive urgent override alerts even during off-hours.*

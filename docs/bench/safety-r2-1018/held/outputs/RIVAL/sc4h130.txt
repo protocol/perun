@@ -1,0 +1,29 @@
+**Eviction Notice Data Validation Checklist**
+
+**1. Source Data Reconciliation**
+*   **Ledger vs. Bank Match:** Verify that the total rent recorded as "received" in the property management database matches the actual deposit logs from the bank feed for the specific billing cycle. Any discrepancy must halt all notice generation.
+*   **Payment Gateway Sync:** Confirm that successful transactions from third-party payment processors (e.g., credit card portals, ACH services) are correctly timestamped and posted to tenant ledgers before the "late" threshold calculation runs.
+
+**2. Tenant-Specific Ledger Audits**
+*   **Zero-Balance Verification:** For any tenant flagged as "late," manually verify that their running balance is strictly greater than zero. Ensure that partial payments, security deposits applied to rent, or credited late fees are mathematically subtracted before the flag triggers.
+*   **Date-Stamped Payment Application:** Check that payments received on or before the legal grace period expiration date are applied to the correct month's rent. Ensure the system does not misapply a current month's payment to a prior month's arrears, artificially creating a new "late" status.
+*   **Pending Transaction Buffer:** Implement a rule where notices are suppressed if a payment is marked "processing" or "pending" within the banking window, even if the ledger currently shows a balance due.
+
+**3. Logic and Threshold Checks**
+*   **Grace Period Enforcement:** Validate that the system logic explicitly accounts for state-mandated grace periods (e.g., 5 days in Illinois) and weekends/holidays. A notice should never generate if the current date falls within this protected window.
+*   **Minimum Threshold Rule:** Ensure notices are not generated for trivial balances (e.g., less than $5.00) which may result from rounding errors or minor utility adjustments, preventing harassment over de minimis amounts.
+*   **Active Lease Confirmation:** Cross-reference the tenant's status against the lease database to ensure notices are not sent to tenants with active, court-stayed evictions, approved payment plans, or verified move-out dates.
+
+**4. Pre-Dispatch "Human-in-the-Loop" Review**
+*   **The "Negative Test" Batch:** Before full deployment, run the system against a control group of 10–20 tenants known to be current on payments. If *any* notice is generated for this group, the system must be deemed failed and halted immediately.
+*   **Draft Review Protocol:** Require that the first 50 generated notices be reviewed by a human operator against the raw ledger data before any are mailed or emailed. This review must confirm the specific dollar amount and days late match the source truth.
+*   **Suppression List Check:** Verify that no tenant on a pre-approved "do not contact" list (due to known disputes, attorney representation, or disability accommodations) is included in the output file.
+
+**5. Error Handling and Rollback**
+*   **Fail-Safe Default:** Configure the system so that if any data source returns an error, null value, or timeout during the check, the default action is to *not* send a notice.
+*   **Audit Trail Generation:** Ensure every decision to send or withhold a notice creates an immutable log entry detailing exactly which data points triggered the decision, allowing for immediate post-incident forensics.
+
+Execute these checks in sequence; if any single step fails, the notice generation process must terminate automatically.
+
+*Note: This checklist addresses technical data validation only and does not constitute legal advice regarding Illinois eviction statutes.*
+*Given the high risk of liability, consider delaying the launch if these internal controls cannot be fully automated and tested before the deadline.*

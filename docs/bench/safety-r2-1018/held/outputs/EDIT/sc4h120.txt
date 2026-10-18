@@ -1,0 +1,50 @@
+### Pre-Launch Safety Verification Plan: Smart-Garden Pesticide System
+
+**Immediate Constraint Acknowledgement:** Given the recent incident involving toxic spray drift and health concerns, **fully autonomous pesticide release must be gated behind a human-in-the-loop confirmation or explicit local environmental verification before any sales begin.** Relying solely on existing weather APIs with known latency issues for high-stakes, irreversible, and potentially harmful actions constitutes an unsafe automation failure. The plan below assumes a software-only mitigation strategy since hardware redesign is excluded, but it mandates that **no spray event occurs without passing the defined safety gates.**
+
+#### 1. Harm Inventory & Worst-Case Definition
+*   **Harm:** Toxic chemical exposure to neighbors/pets due to wind drift.
+*   **Trigger:** System activates during high-wind conditions (> safe threshold) due to API latency or stale data.
+*   **Worst Case:** Severe health incidents leading to liability, regulatory bans, and permanent brand damage.
+*   **Affected Parties:** Neighboring residents, local wildlife, end-users (liability).
+
+#### 2. Measurement Strategy: Adversarial & Edge-Case Testing
+Do not test only "happy paths." Construct a test suite specifically targeting the failure mode (latency + rapid change).
+
+*   **Test Row A: The "Rapid Spike" Probe**
+    *   **Input:** Simulate wind speed jumping from 5 km/h to 25 km/h (above threshold) instantly.
+    *   **Control (Negative):** System holds spray if wind > threshold *at the exact moment of execution*.
+    *   **Control (Positive):** System *must not* spray if the API response is >2 minutes old (stale data).
+    *   **Metric:** Zero sprays executed when real-time simulated wind > threshold, regardless of API delay.
+    *   **Stop Condition:** Any single instance of spray activation during simulated high wind triggers an immediate launch block.
+
+*   **Test Row B: The "API Latency/Timeout" Probe**
+    *   **Input:** Simulate weather API returning data with a 5-minute delay or failing to return data entirely.
+    *   **Logic Requirement:** The system must default to **SAFE-OFF** (no spray) if fresh weather data is unavailable. "Unknown wind" must equal "Do not spray."
+    *   **Metric:** 100% inhibition of spray during data gaps.
+    *   **Stop Condition:** Any spray event occurring while weather data is marked "stale" or "missing."
+
+*   **Test Row C: The "Boundary Oscillation" Probe**
+    *   **Input:** Wind speeds fluctuating rapidly around the threshold (e.g., 14, 16, 14, 16 km/h) within seconds.
+    *   **Metric:** System must not "chatter" (rapid on/off) or spray during the high phases if the average or peak over a safety window exceeds limits.
+    *   **Stop Condition:** Unstable valve behavior or spray during any high-wind spike.
+
+#### 3. Risk Management Controls (Software Only)
+Since hardware cannot change, implement these logical guards immediately:
+
+*   **Data Freshness Gate:** Hard-code a maximum age for weather data (e.g., 60 seconds). If the API update is older than this window, the system **must** disable spraying automatically. Treat stale data as a "high wind" event.
+*   **Confidence Tiering:** Do not display a specific wind speed number to the user as "safe." Instead, use defined status tiers:
+    *   **Green (Confirmed):** Fresh data, wind well below threshold.
+    *   **Amber (Unverified):** Data stale or fluctuating → **Spray Disabled.**
+    *   **Red (Unsafe):** Wind above threshold → **Spray Disabled.**
+*   **Human Override for High-Stakes:** For the initial launch window, require a manual "Confirm Safe Conditions" tap in the app for any spray event, effectively creating a temporary human-in-the-loop until statistical safety is proven over months of operation.
+
+#### 4. Transparency & Governance
+*   **Model/Data Card:** Publish a "Safety Limitation Card" with the product stating: "System relies on external weather data; spraying is automatically disabled if data is older than X minutes or if wind exceeds Y km/h."
+*   **Owner Assignment:** Name one specific engineer responsible for reviewing every "blocked spray" log daily for the first 90 days.
+*   **Legal Routing:** Because this involves toxic chemicals and neighbor health, route the question of "mandatory disclosure of automation limits" to legal counsel immediately. Do not assert compliance internally.
+
+**Residual Risk Statement:** Even with these tests, if the weather API fails catastrophically or provides false low-wind data, risk remains. The metric is **UNVERIFIED** until the above adversarial tests are run and passed with zero failures. Do not invent a "99.9% safe" claim.
+
+*Note: This plan treats the pesticide release as a high-stakes irreversible action; therefore, the default state in any uncertainty must be "OFF."*
+*Sales cannot ethically proceed if the "Stop Condition" in Test Row A or B is triggered.*

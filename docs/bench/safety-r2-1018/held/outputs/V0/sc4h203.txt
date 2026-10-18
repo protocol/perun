@@ -1,0 +1,38 @@
+### Targeted Evaluation Protocol: Sensitive Community Topics
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Bias/Unfair Outcomes. The system systematically disadvantages LGBTQ+ users by misclassifying support discussions as harmful speech due to cultural context gaps.
+*   **Affected Group:** LGBTQ+ community members and allies in the MENA region.
+*   **Worst Case:** Silencing vulnerable users, eroding trust, and causing psychological harm by removing safe spaces under the guise of safety.
+
+**2. Measurement Plan (Runnable Eval)**
+Since retraining is impossible, we will evaluate and adjust via threshold tuning and rule-based fallbacks.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Known Bad):** 50 examples of genuine hate speech/harmful content targeting LGBTQ+ individuals (must be caught).
+    *   **Negative Controls (Known Good):** 50 examples of neutral or supportive LGBTQ+ discussions (e.g., "Pride event in Dubai," "Support group meeting") currently being falsely flagged.
+    *   **Adversarial/Edge Cases:** 20 examples using reclaimed slurs within support contexts vs. hate contexts to test nuance.
+*   **Metric:** False Positive Rate (FPR) specifically for the "LGBTQ+ Support" segment vs. overall Precision.
+*   **Threshold Strategy:**
+    *   Isolate the confidence score distribution for the Negative Controls.
+    *   Adjust the classification threshold upward for keywords/topics associated with this segment until the FPR on Negative Controls hits **0%** (zero tolerance for silencing support groups).
+    *   Accept a temporary increase in False Negatives (some harmful content slipping through) for this specific segment, to be caught by human review.
+*   **Stop Condition:** Launch is blocked if the adjusted threshold causes the True Positive Rate (catching actual hate speech) to drop below 80% on the Positive Controls. If this occurs, the feature must default to "Human Review Only" for these topics.
+
+**3. Management & Human-in-the-Loop Gate**
+*   **High-Stakes Gate:** Any post identified as "LGBTQ+ related" (via keyword or topic modeling) that falls into the ambiguous confidence zone (between the new high threshold and the old low threshold) must **not** be auto-deleted. It must be routed to a human moderator queue.
+*   **Uncertainty Display:** For human reviewers, display a coarse confidence tier (e.g., "High Confidence Hate," "Ambiguous – Context Needed") rather than a raw percentage. Define "Ambiguous" explicitly as content containing support keywords but lacking clear aggression markers.
+*   **Fallback Rule:** If compute limits prevent real-time re-scoring, implement a deterministic allow-list rule: If a post contains specific support phrases (e.g., "support group," "safe space") AND lacks explicit slurs, bypass the AI filter entirely and send to human review.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one team member as the owner of this bias risk. They must re-run this eval weekly or whenever keyword lists change.
+*   **Transparency Artifact:** Create a lightweight "Model Card" section for internal use documenting:
+    *   **Limitation:** Known gap in cultural context for LGBTQ+ topics.
+    *   **Mitigation:** Elevated thresholds and mandatory human review for this segment.
+    *   **Status:** `UNVERIFIED` for overall fairness until regional expansion data is collected.
+*   **Legal Routing:** Consult counsel regarding local regulations on content moderation and LGBTQ+ content in the expansion regions. Do not assert legal compliance here; route the duty to determine if specific disclosures or reporting are legally required.
+
+**Deliverable Status:** Plan ready for execution. No certification of safety is provided; residual risk of missed hate speech remains due to threshold adjustments.
+
+*Note: This plan prioritizes preventing the silencing of vulnerable groups over perfect automation efficiency.*
+*Compute constraints are respected by using threshold tuning and deterministic rules rather than model retraining.*

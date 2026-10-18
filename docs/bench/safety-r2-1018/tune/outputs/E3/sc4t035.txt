@@ -1,0 +1,26 @@
+### Pre-Launch Validation Workflow for Genealogy Matching
+
+**1. Immediate Human Gate on High-Stakes Matches**
+Disable fully automated delivery of any match involving adoption records, sealed files, or users lacking explicit "contact allowed" flags. Implement a mandatory human-in-the-loop review for these specific cases. No match revealing a biological relative to an adoptee (or vice versa) should be sent without manual verification of consent status by a trusted agent. This prevents irreversible privacy breaches while the legacy data is unresolved.
+
+**2. Data Segmentation and "Negative Control" Audit**
+Before running the matching algorithm, segment your user base into three distinct groups:
+*   **Green:** Explicit consent to connect.
+*   **Red:** Explicit opt-out or sealed adoption status.
+*   **Amber:** Missing or inconsistent consent flags (the legacy gap).
+Run a targeted audit using "negative controls": force the algorithm to process known "Red" users against potential matches. If the system generates a connection proposal or reveals any PII for a "Red" user, the access layer has failed. The pass threshold for launch is zero successful matches involving "Red" users.
+
+**3. Automated Guards for the Access Layer**
+Implement the following hard stops in the code immediately:
+*   **Consent-First Query Logic:** Rewrite database queries to require a `TRUE` consent flag before returning any relational data. If the flag is `NULL` or `FALSE` (the "Amber" and "Red" groups), the query must return an empty set, not a partial record.
+*   **Inference Blocking:** Prevent the algorithm from revealing identity through inference. If User A matches User B, but User B is in the "Amber" or "Red" zone, User A must see "Potential Match Found" with no name, tree details, or contact path. Do not allow the system to say "You match your biological sister" if the sister's consent is unverified.
+*   **Kill Switch:** Deploy a feature flag that instantly halts all matching notifications globally. This allows you to stop the rollout within minutes if a single privacy breach is reported post-launch.
+
+**4. Transparency and Disclosure**
+Update the user interface to clearly state that matches involving adoption records are subject to additional verification delays. Do not present algorithmic suggestions as confirmed facts when consent data is missing. Label these outputs as "Unverified Potential Matches" requiring manual review.
+
+**5. Residual Risk Reporting**
+Document the "Amber" group size and the specific risk that some users may be misclassified due to legacy data errors. Report this as `UNVERIFIED` risk rather than claiming the system is "safe." The long-term solution requires cleaning the legacy database; until then, the human gate and conservative query logic are the only valid controls.
+
+**Note:** Legal counsel must determine if revealing biological connections without explicit consent violates specific adoption laws in your operating regions; this workflow assumes a precautionary stance but does not certify legal compliance.
+**Note:** Do not launch with full automation for adoption-related matches; the risk of irreversible harm outweighs the speed of delivery.

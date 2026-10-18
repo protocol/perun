@@ -1,0 +1,40 @@
+### Pre-Launch Review Plan: Reducing False Positives in Child Safety Monitoring
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly record the primary harm: **Over-reliance/Automation Bias** leading to **unnecessary parental panic** and **erosion of trust** due to false positives on innocent gaming chats. The worst-case scenario is parents disabling the system entirely after repeated false alarms, leaving children unprotected, or severe family conflict arising from misinterpreted innocent play.
+
+**2. Runnable Test Cases (Measure)**
+Execute one test row per identified harm. Do not assert accuracy; measure it against these specific probes:
+
+*   **Probe Set A (Gaming Contexts):** Inputs containing common gaming terminology often flagged as grooming (e.g., "carry me," "drop your loot," "meet at the base," "gg no re").
+    *   *Positive Control:* Known grooming script using gaming slang to isolate a child.
+    *   *Negative Control:* Standard team coordination chat from public gaming forums.
+    *   *Metric:* False Positive Rate (FPR) specifically within gaming-tagged conversations.
+    *   *Stop Condition:* If FPR > 5% in gaming contexts, block launch.
+*   **Probe Set B (Developmental Norms):** Inputs reflecting age-appropriate secrecy or friendship dynamics (e.g., "don't tell my mom," "let's keep this our secret" regarding a surprise party).
+    *   *Positive Control:* Groomer instructing a child to hide communication from parents.
+    *   *Negative Control:* Children planning a birthday surprise.
+    *   *Metric:* Precision score on "secrecy" keywords.
+    *   *Stop Condition:* If the system cannot distinguish context (surprise vs. isolation) with >90% precision, trigger rollback.
+*   **Probe Set C (Adversarial Injection):** Inputs where a bad actor intentionally uses innocent phrases to test the filter.
+    *   *Metric:* Detection rate of actual threats when disguised as harmless chat.
+    *   *Stop Condition:* Any successful evasion of a known high-risk pattern.
+
+**3. Mitigation Strategy: Human-in-the-Loop Triage**
+Since budget prevents reviewing *every* alert, you must implement a **confidence-tiered gate** rather than full automation:
+
+*   **Tier 1 (High Confidence/High Risk):** Clear indicators of grooming (e.g., explicit sexual coercion, attempts to arrange physical meetings). **Action:** Immediate alert to parents.
+*   **Tier 2 (Ambiguous/Low Confidence):** Gaming slang or ambiguous secrecy. **Action:** Do **not** alert parents immediately. Queue these for internal review by your existing 7-person team *only if* volume allows, or suppress them entirely until the model improves.
+*   **Disclosure:** Clearly inform parents that the system filters noise and that not every flagged "suspicious" keyword results in an alert to prevent panic.
+
+**4. Transparency Artifact**
+Draft a **Model Card** for internal and parental use. It must list:
+*   **Intended Use:** Detecting grooming, not monitoring general behavior.
+*   **Limitations:** Explicitly state the system struggles with gaming slang and may miss nuanced threats.
+*   **Measured Performance:** Report the FPR from the tests above. If unmeasured for a specific subgroup, mark it **UNVERIFIED**. Do not invent a "99% accurate" claim.
+
+**5. Governance**
+Assign one team member as the owner of the "False Positive" metric. Re-review is mandatory if the game vocabulary changes or new platforms are added.
+
+**Note:** Legal counsel must determine if suppressing alerts (Tier 2) meets local duty-of-care laws in Madrid; this plan assumes risk reduction, not legal compliance certification.
+Do not deploy without passing the "Stop Condition" thresholds defined above.

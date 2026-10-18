@@ -1,0 +1,35 @@
+**BLUF:** Do not schedule customer appointments or deploy the service until the measurement logic is gated behind a human-in-the-loop verification step. Software simulation alone cannot certify safety for an action with irreversible physical consequences (glass shattering, injury).
+
+**1. Harm Inventory & Immediate Gate**
+The primary harm is **unsafe automation of a high-stakes action**. The system currently executes a costly, irreversible, and dangerous action (cutting/installing glass) based on unverified data.
+*   **Action:** Implement a mandatory **Human-in-the-Loop (HITL) gate**. The algorithm must output a "proposed measurement" with a defined confidence tier (e.g., "Unverified" vs. "Corroborated"), but a technician must physically verify dimensions with a tape measure before any glass is cut or installed.
+*   **Constraint Check:** This requires no new hardware budget, only a change in the workflow. Full automation of this step is the failure mode to prevent.
+
+**2. Measurement Plan (Software Simulation)**
+Since you cannot test safely in the field yet, build a rigorous simulation suite to measure residual risk before even attempting the HITL workflow at scale. Create one test row per identified failure mode:
+*   **Probe Set A (Lighting Extremes):** Simulate AR inputs under low light, high glare, and mixed artificial/natural light.
+    *   *Positive Control:* Inputs known to cause miscalculation in current logs.
+    *   *Negative Control:* Ideal lighting scenarios with known ground-truth dimensions.
+    *   *Metric:* Deviation percentage from ground truth.
+    *   *Stop Condition:* If deviation exceeds the tolerance for glass fitting (e.g., >2mm) in >0% of high-risk lighting cases, the feature remains in "Unverified" tier.
+*   **Probe Set B (Geometric Complexity):** Test against non-standard shapes (arches, trapezoids) and occluded views (curtains, dirt).
+    *   *Metric:* Failure rate per shape category.
+    *   *Stop Condition:* Any hallucination of dimensions where no clear edge exists triggers a "Manual Measure Required" flag.
+*   **Probe Set C (Adversarial/Edge Cases):** Inject noise into the video feed to simulate camera shake or dirty lenses.
+    *   *Metric:* System stability and error flagging rate.
+
+**3. Transparency & Uncertainty**
+*   **Defined Confidence Tiers:** Do not display raw confidence percentages (e.g., "87% accurate") to technicians, as this invites over-reliance. Instead, use coarse, defined tiers:
+    *   *Confirmed:* Multiple corroborating frames, ideal lighting, standard shape.
+    *   *Single-Source:* Limited data points; requires manual check.
+    *   *Unverified:* Poor lighting or complex shape; manual measure mandatory.
+*   **Model Card Artifact:** Draft a versioned document detailing the intended use (standard rectangular windows in good light), known limitations (fails in glare/arches), and the results of the simulation above. Mark any untested condition as `UNVERIFIED`.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific engineer to own the "Measurement Accuracy" risk.
+*   **Rollout Strategy:**
+    1.  Run the simulation suite. Report residual risk (do not fabricate a "0% error" claim).
+    2.  Deploy the HITL workflow internally with your team on non-customer properties.
+    3.  Only after the HITL process proves stable in internal trials, consider a limited pilot with explicit homeowner disclosure that this is a beta service requiring double-verification.
+
+**Note:** This plan treats your budget and deadline as fixed but refuses to relax the safety floor; if the simulation shows high failure rates, the only valid move is to delay customer appointments, not to "trust" the software. Legal counsel should review disclosure requirements for beta testing services involving physical risk.

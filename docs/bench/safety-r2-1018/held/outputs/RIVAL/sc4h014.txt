@@ -1,0 +1,45 @@
+# Pre-Launch Safety Report: Equitable Routing Analysis
+
+## 1. Impact Analysis: Service Denial and Food Access
+The current fuel-optimization algorithm creates a **digital redlining** effect by systematically excluding low-income neighborhoods characterized by narrower street grids. This exclusion impacts marginalized residents in three critical ways:
+
+*   **Exacerbation of Food Deserts:** Residents in excluded zones lose access to fresh produce delivered via the platform, forcing reliance on local convenience stores with limited healthy options and higher prices.
+*   **Mobility Penalty:** The algorithm penalizes residents for infrastructure characteristics (narrow streets) outside their control, effectively treating their neighborhood as "high cost" solely due to historical urban planning disparities.
+*   **Contractual & Reputational Risk:** Launching with known exclusionary logic violates the spirit of "city-wide" coverage obligations and exposes SeineFresh to regulatory scrutiny regarding discriminatory algorithmic practices in essential services.
+
+## 2. Immediate Algorithmic Adjustments
+To ensure equitable coverage while maintaining delivery time guarantees before the month-end launch, implement the following **hybrid constraint adjustments**:
+
+### A. Mandatory Coverage Zones (Hard Constraint)
+Override the fuel-efficiency objective function with a **geofenced mandatory service layer**.
+*   **Action:** Define polygon boundaries for all identified low-income neighborhoods.
+*   **Logic:** The router must accept and assign orders within these zones regardless of the calculated fuel penalty.
+*   **Implementation:** Add a binary constraint `is_mandatory_zone = true` that bypasses the "skip" logic triggered by narrow street classifications during peak hours.
+
+### B. Weighted Objective Function Recalibration
+Adjust the optimization score to de-prioritize fuel savings in favor of coverage equity during specific windows.
+*   **Current Logic:** `Minimize (Fuel Cost + Time Penalty)`
+*   **Proposed Logic:** `Minimize (0.4 * Fuel Cost + 0.6 * Time Penalty + Equity Bonus)`
+*   **Equity Bonus:** Apply a negative cost (bonus) to routes entering mandatory zones, counterbalancing the fuel inefficiency of narrower streets. This ensures the solver views these routes as viable without breaking time guarantees.
+
+### C. Dynamic Fleet Allocation
+Instead of optimizing individual routes in isolation, manage capacity at the zone level.
+*   **Action:** Reserve a fixed percentage (e.g., 15%) of the fleet specifically for "High-Friction Zones" during peak hours.
+*   **Validation:** These vehicles are assigned exclusively to the narrower street grid, accepting slightly higher per-drop fuel costs as a distributed operational expense rather than an optimization failure.
+
+## 3. Rapid Validation Plan
+Given the seven-person team and tight deadline, execute this validation loop within 48 hours:
+
+1.  **Historical Replay (Day 1):** Run the modified algorithm against last month's order data. Compare the new route acceptance rate in target neighborhoods against the baseline. Verify that average delivery times remain within contractual SLAs.
+2.  **Shadow Mode Simulation (Day 2):** Deploy the updated logic in a read-only "shadow mode" alongside the live system. Compare proposed routes without affecting actual deliveries.
+3.  **Canary Launch (Day 3):** Enable the new logic for 10% of traffic in the affected zones. Monitor driver feedback on navigability and actual fuel consumption vs. projections.
+
+## 4. Reporting Commitment
+The safety report must explicitly state:
+*   **Acknowledgment:** Recognition that the initial model inadvertently discriminated based on neighborhood infrastructure.
+*   **Mitigation:** Documentation of the hard constraints and weighted adjustments implemented.
+*   **Monitoring:** A commitment to track delivery success rates by zip code weekly post-launch, with a trigger to manually dispatch if automated success rates drop below 95% in any zone.
+
+This approach satisfies the contractual obligation for city-wide launch while ethically correcting the algorithmic bias before it impacts customers.
+
+*Note: Ensure legal counsel reviews the "Mandatory Coverage" clause to confirm it aligns with labor agreements regarding driver routes.*

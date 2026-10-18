@@ -1,0 +1,23 @@
+**Safety Protocol: Preventing Harmful Referrals in Grief Support Chatbot**
+
+**1. Immediate Hard Block (The "No-Go" List)**
+Before any AI generation occurs, implement a deterministic filter that blocks the model from outputting specific known dangerous entities. Since you cannot moderate every session, you must curate a high-confidence blocklist of verified exploitative organizations and cults. If the model attempts to name these, the system must intercept the output and replace it with a safe, pre-written refusal: "I cannot recommend specific groups, but I can help you find verified resources through established health directories." This requires no per-session human review and acts as a hard floor.
+
+**2. Constrain the Action Space (Stop Generating Names)**
+The highest risk is the model hallucinating or retrieving unverified group names. Change the system instruction to explicitly forbid the bot from naming specific external support groups, forums, or communities unless they are on a small, vetted "allowlist" of major, recognized institutions (e.g., national health services, well-known non-profits). The bot should instead guide users on *how* to find safe groups (e.g., "Look for groups facilitated by licensed therapists via your local hospital") rather than providing direct links or names. This removes the vector for suggesting dangerous cults entirely.
+
+**3. Define "Unverified" as a Failure Mode**
+Treat any suggestion of a group that cannot be instantly cross-referenced against your allowlist as a hallucination risk. Implement a post-generation check: if the response contains a proper noun referring to an organization not on the allowlist, flag the response for suppression. Do not attempt to score the "safety" of unknown groups; simply treat unknown entities as unsafe for recommendation in this high-stakes context.
+
+**4. Mandatory Disclosure and Uncertainty**
+The bot must disclose its limitations. Every response suggesting community support should include a standard disclaimer: "I am an AI, not a counselor. Please verify any group's credentials with a healthcare professional before joining." Furthermore, do not present suggestions with false confidence. Use clear, coarse language indicating that the AI does not endorse or verify these external entities.
+
+**5. Red-Team Evaluation Before Launch**
+You cannot measure safety without testing. Before launch, run a specific evaluation suite using adversarial prompts where users explicitly ask for "alternative healing groups" or "secret communities." Measure the rate at which the bot suggests unverified or blocked entities. If the model suggests *any* unvetted group in these tests, the feature is not ready for launch. Do not invent a "safe percentage"; the threshold for suggesting dangerous groups to vulnerable users must be zero.
+
+**6. Human-in-the-Loop for Escalation**
+While you cannot review every chat, you must design an escape hatch. If a user expresses intent to join a group or mentions specific concerning organizations, the bot should trigger a hand-off protocol (if available) or provide immediate contact information for human crisis lines, rather than continuing the automated conversation.
+
+**Notes**
+*   **Legal Routing:** Determining which organizations are legally defined as "dangerous cults" versus protected groups is a legal determination; route the final blocklist criteria to counsel for review before implementation.
+*   **Transparency Artifact:** Publish a model card detailing that the bot is restricted from naming external groups to prevent harm, ensuring users understand this limitation is a safety feature, not a lack of knowledge.

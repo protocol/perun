@@ -1,0 +1,36 @@
+### Safety Evaluation Plan: Medical Translation Pilot (ER)
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record these specific risks for the ER context:
+*   **Hallucination as Fact:** The model invents a symptom or severity level (e.g., translating "mild pressure" as "crushing chest pain"), leading to incorrect triage priority.
+*   **Bias/Dialect Failure:** The system fails on specific non-standard German dialects or accents common in the local demographic, systematically delaying care for those groups.
+*   **Over-reliance:** Staff trust the translation without verification, bypassing standard visual assessment or gesture-based communication.
+*   **Unsafe Automation:** The app automatically tags a patient's record with a triage code without human confirmation.
+
+**2. Measurement Strategy (MEASURE)**
+Do not test general fluency; test only high-stakes failure modes. Execute these specific evals before the pilot starts:
+*   **Critical Term Red-Team:** Create a probe set of 50 life-threatening symptoms (e.g., "shortness of breath," "numbness in left arm," "severe bleeding") in top 5 local dialects.
+    *   *Positive Control:* Input known critical phrases; verify output retains critical urgency.
+    *   *Negative Control:* Input benign phrases; verify output does not escalate urgency.
+    *   *Metric:* 0% tolerance for downgrading severity or omitting critical terms.
+    *   *Stop Condition:* Any single instance of severity downgrading blocks launch.
+*   **Injection & Leakage Check:** Test if patient input can trick the system into ignoring instructions or revealing other patients' data (unlikely in isolated mode but must be probed).
+*   **Residual Risk Report:** Publish results as "UNVERIFIED" for any dialect not explicitly tested. Do not claim "99% accuracy"; state exactly which dialects and terms were covered.
+
+**3. Risk Management Controls (MANAGE)**
+Given the high stakes and strict deadline, implement these mandatory gates:
+*   **Human-in-the-Loop Gate (Non-Negotiable):** The app must **never** auto-assign triage codes or update medical records. It must function strictly as a "draft suggestion" tool. A human nurse/doctor must explicitly confirm the translation before it influences any medical decision. Full automation of triage is the failure state this plan prevents.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "87%") to staff, as this implies false precision. Instead, use coarse, defined tiers:
+    *   *Confirmed:* Matches standard medical dictionary exactly.
+    *   *Unverified:* Dialect detected or low lexical overlap; requires mandatory human double-check.
+    *   *Visual Cue:* Use color-blind safe indicators (e.g., Green/Amber) alongside text.
+*   **Disclosure:** Clearly label all outputs as "Machine-Generated Draft – Verify Before Use."
+*   **Rollback Plan:** Define a "kill switch" procedure. If two or more near-miss errors occur during the first 48 hours, the pilot pauses immediately for review.
+
+**4. Governance & Transparency**
+*   **Owner:** Name one specific developer as the owner of output safety for this pilot.
+*   **Transparency Artifact:** Create a one-page "Model Card" for the nursing staff. It must list: intended use (symptom translation only), known limitations (specific dialects not tested), and the rule that it never replaces human judgment.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device or requires specific patient consent under local/EU law is a legal determination. Route this question immediately to hospital counsel; do not assume the pilot is exempt.
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe." The decision to launch rests with the hospital leadership based on these findings.
+Ensure the "Human-in-the-Loop" gate is technically enforced in the code, not just a policy guideline.

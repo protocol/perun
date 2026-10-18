@@ -1,0 +1,35 @@
+### Pre-Launch Safety Review Plan: Mortgage Underwriting Beta
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** Systemic bias causing unfair rejection of qualified applicants from protected groups (e.g., based on zip code, name, or non-traditional income sources).
+*   **Worst Case:** A qualified applicant from an underrepresented community is instantly rejected with no explanation, unable to appeal, while a similar profile from a majority group is approved.
+*   **Scope:** Limit this review to the "instant reject" logic only, as this is the irreversible action.
+
+**2. Immediate Manual Checks (Do within 24 hours)**
+*   **Feature Audit:** Manually inspect every input variable used in the "instant reject" decision. Flag any proxy variables for protected classes (e.g., specific zip codes acting as race proxies, or job titles correlated with gender).
+*   **Rule Walkthrough:** Have a human who was *not* involved in writing the rules attempt to get a "borderline" qualified profile rejected. Use three specific synthetic profiles:
+    *   *Profile A (Positive Control):* Clearly qualified, standard income, majority-demographic proxy. Expected: Pass.
+    *   *Profile B (Negative Control):* Clearly unqualified (e.g., zero income). Expected: Reject.
+    *   *Profile C (Adversarial Test):* Qualified but with features common in underrepresented groups (e.g., gig-economy income, non-Western name, specific neighborhood). Expected: Pass.
+    *   *Failure Condition:* If Profile C is rejected while Profile A passes, **do not launch** the auto-reject feature.
+
+**3. Automated "Micro-Eval" (Do within 24 hours)**
+*   **Synthetic Batch Test:** Generate a minimal dataset (50–100 rows) using your existing engineering scripts. Do not buy data; synthesize variations of the same financial profile changing only demographic proxies (names, locations).
+*   **Disparity Spot-Check:** Run this batch. If the rejection rate for the "underrepresented proxy" group exceeds the "majority proxy" group by *any* margin in this small sample, treat it as a critical signal.
+*   **Metric:** Report the raw count of disparate outcomes. Do not calculate a "bias score" or percentage; simply state: "X disparate rejections found in 50 tests." If X > 0, the risk is **UNVERIFIED** and high.
+
+**4. Mandatory Human-in-the-Loop Gate**
+*   **Suspension of Auto-Reject:** For the beta launch, **disable fully automated rejections**. Any application triggering the "instant reject" logic must be routed to a human underwriter for manual review before a decision is sent to the user.
+*   **Rationale:** Mortgage rejection is a high-stakes, financially damaging action. Full automation of this decision without extensive statistical validation is unsafe. The "instant" speed must be sacrificed for safety until more data is gathered.
+
+**5. Transparency & Disclosure Artifacts**
+*   **Internal Model Card (Lite):** Create a one-page document stating:
+    *   *Intended Use:* Initial screening only, not final denial.
+    *   *Known Limitations:* Not tested on diverse real-world data; high risk of proxy bias.
+    *   *Owner:* Name the specific engineer/product manager responsible.
+*   **User Disclosure:** Clearly inform beta users that the decision is AI-assisted and subject to human review. Do not present the output as a final, algorithmic verdict.
+
+**6. Go/No-Go Criteria**
+*   **Stop Condition:** If Profile C (Adversarial Test) is rejected, or if the Micro-Eval shows *any* disparate impact, the auto-reject feature remains disabled. The beta proceeds with human review for all "reject" candidates only.
+
+**Note:** This plan identifies residual risk; it does not certify the model as "unbiased." Legal counsel must verify if this automated screening triggers specific EU/German regulatory obligations for credit decisions before launch.

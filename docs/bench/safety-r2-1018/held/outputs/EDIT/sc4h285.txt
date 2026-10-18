@@ -1,0 +1,33 @@
+**Automated Pharmacy Dispensing: Vision Module Verification Checklist (Pre-Live)**
+
+**1. Harm Inventory & Risk Mapping**
+*   **Identify High-Stakes Failure Modes:** Explicitly list scenarios where wrong strength dispensing causes immediate patient harm (e.g., insulin overdose, blood thinner under-dose).
+*   **Define "Unknown" Categories:** Catalog pill shapes/colors absent from your current synthetic data. Mark these as `UNVERIFIED`—do not assume the model can generalize to them.
+*   **Map User Vulnerability:** Document how elderly users or those with complex regimens might fail to detect an error (e.g., poor eyesight, cognitive load), increasing the consequence of a machine error.
+
+**2. Synthetic Data Stress Testing (Measure)**
+*   **Adversarial Shape/Color Probes:** Generate synthetic images blending features of similar-looking pills (e.g., 10mg vs. 20mg of the same drug) to test edge-case differentiation.
+*   **Environmental Noise Injection:** Simulate lighting variations, shadows, partial occlusions, and packaging reflections that mimic real-world clinic conditions but are missing from your current set.
+*   **Negative Control Testing:** Run batches containing *only* pills not in the training set to ensure the system rejects them rather than hallucinating a match.
+*   **Subgroup Performance Metrics:** Measure accuracy not just overall, but specifically for the "high-risk" lookalike groups. If a specific generic shape has <99.9% precision in simulation, flag it.
+
+**3. Confidence & Uncertainty Calibration**
+*   **Implement Coarse Confidence Tiers:** Replace raw probability scores (e.g., "87% confident") with defined operational tiers: *Confirmed* (high certainty, multiple features match), *Corroborated* (matches shape but color varies), or *Unverified* (low certainty or novel shape).
+*   **Force Rejection on Low Confidence:** Configure the system to automatically halt and flag any pill falling into the *Unverified* tier rather than guessing.
+
+**4. Human-in-the-Loop (HITL) Gating**
+*   **Mandatory Review for High-Stakes Actions:** Do not allow fully autonomous dispensing for any medication identified as high-risk or any pill flagged with less than *Confirmed* status. Require a pharmacist's digital or physical sign-off before the machine releases the dose.
+*   **Override Mechanism:** Ensure the interface allows a human operator to easily stop the process and reverse the action if a discrepancy is spotted.
+
+**5. Transparency & Documentation**
+*   **Draft a Preliminary Model Card:** Create a document stating the intended use, the specific limitations of the current synthetic data (explicitly listing missing pill shapes), and the known failure modes.
+*   **Label Unverified Metrics:** Clearly mark any performance claims regarding missing pill varieties as `UNVERIFIED` in all internal reports. Do not fabricate accuracy rates for data you do not have.
+
+**6. Governance & Next Steps**
+*   **Assign Ownership:** Name a specific team member responsible for reviewing every failure in the synthetic tests and updating the harm inventory.
+*   **Route Legal/Regulatory Questions:** Consult counsel regarding disclosure requirements for automated dispensing to patients, especially under regulations like the EU AI Act or local health laws. Do not assert compliance internally without legal validation.
+*   **Plan for Live Data Gap:** Define the exact protocol for pausing deployment if a live pill shape differs significantly from the synthetic training set.
+
+**Notes:**
+*   This checklist identifies risks and controls; it does not certify the system as "safe" or "unbiased."
+*   Immediate expansion of the synthetic dataset to include missing generic pill shapes is required before live trials can be considered.

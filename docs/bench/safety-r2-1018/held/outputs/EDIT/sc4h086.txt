@@ -1,0 +1,34 @@
+**Safety Layer Design: Input Validation & Human Gate for Insulin Dosing**
+
+Given the high-stakes nature of insulin dosing and your 15-day constraint, you cannot rely on the AI to self-correct input errors. You must implement a deterministic "pre-flight" validation gate that blocks unsafe data from ever reaching the dose calculation engine. This approach satisfies the requirement for a human-in-the-loop on irreversible actions without requiring extended clinical trials for the AI model itself.
+
+**1. Deterministic Input Sanitization (The Hard Gate)**
+Before the AI processes any request, run these hard-coded rules. If any fail, halt the dose calculation and return a specific error to the user.
+*   **Range Checks:** Reject glucose readings outside physiological limits (e.g., <40 or >600 mg/dL) and carbohydrate entries that exceed realistic single-meal limits (e.g., >300g) unless explicitly flagged as a "feast" event requiring manual confirmation.
+*   **Temporal Logic:** Flag and reject duplicate entries logged within an impossible timeframe (e.g., two meal logs <15 minutes apart with conflicting macros).
+*   **Rate-of-Change Limits:** If a user logs a glucose drop or spike that exceeds biological possibility (e.g., >100 mg/dL change in 5 minutes without insulin/bolus), flag as sensor error.
+*   **Action:** When triggered, the app must display: *"Data inconsistency detected. Please verify your last entry before we can calculate a dose."* Do not offer a dose until valid data is entered.
+
+**2. Confidence Tiers & Uncertainty Display**
+Never show a raw probability or let the AI present a dose as absolute fact when input quality is borderline.
+*   **Tiered Output:** If inputs pass hard gates but show anomalies (e.g., high variance in recent logs), the AI must output a **"Corroborated"** tier (standard dose) or **"Single-Source/Unverified"** tier (dose range with a warning).
+*   **Visual Cue:** Use color-blind-safe indicators (e.g., Green for Confirmed, Amber for Unverified) alongside text. Never display "87% confident"; instead, state: *"Recommendation based on limited recent data; verify with a fingerstick."*
+
+**3. Human-in-the-Loop for High-Stakes Actions**
+Insulin administration is irreversible and potentially fatal. Full automation is the failure mode you must prevent.
+*   **Mandatory Confirmation:** For any dose adjustment >20% from the user's baseline or any dose triggered by "Unverified" data, require an explicit "Confirm & Log" tap.
+*   **Override Mechanism:** Always allow the user to manually override the suggested dose with a warning modal: *"You are overriding the system recommendation. Ensure this matches your care plan."*
+
+**4. Rapid Validation Strategy (15-Day Plan)**
+You cannot run clinical trials, but you must run adversarial simulations.
+*   **Days 1-5 (Red Team Inputs):** Generate 500 synthetic user logs containing known bad patterns (duplicates, impossible carbs, sensor spikes). Verify the deterministic gate blocks 100% of these from reaching the AI.
+*   **Days 6-10 (Edge Case Simulation):** Test the AI's response to valid but rare scenarios (e.g., illness, extreme exercise) to ensure it defaults to conservative ranges or asks for clarification rather than guessing.
+*   **Days 11-14 (Staged Rollout):** Release to 5% of users (internal staff/family) with a "kill switch" ready to revert to manual logging only if any unsafe suggestion slips through.
+*   **Day 15:** Full release contingent on zero critical failures in the pilot.
+
+**5. Transparency Artifact (Model Card Lite)**
+Publish a one-page "Safety & Limitations" note in the app settings. Explicitly state: *"This tool assists but does not replace clinical judgment. It may fail if input data is erroneous. Always verify with your healthcare provider."* List the specific input checks performed.
+
+**Notes**
+Route the question of whether this constitutes a "regulated automated decision" requiring specific legal disclosures under local Egyptian law or international standards to your legal counsel immediately; do not assert compliance here.
+Do not fabricate a "0% error rate" for your safety page; report the results of your 500-case simulation as "UNVERIFIED" until real-world data confirms performance.

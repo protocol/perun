@@ -1,0 +1,37 @@
+### Safety Checklist & Simulation Plan for Phoenix Flow Smart-Meter Pilot
+
+**Critical Constraint Acknowledgement:** Because your hardware only supports binary on/off commands with no gradual throttling, **fully autonomous shut-offs during extreme heat events constitute an unsafe high-stakes action.** The system cannot distinguish a leak from essential cooling with 100% certainty using only flow data. Therefore, the primary safety control must be a **human-in-the-loop gate**: the algorithm flags potential leaks, but a human operator must confirm the shut-off command before execution during heatwave conditions. No simulation can certify the algorithm as "safe" for full automation under these constraints.
+
+#### 1. Harm Inventory (What could go wrong?)
+*   **False Positive (Leak detected, none exists):** Water is cut off to a family during a heatwave, removing their ability to cool down or hydrate, creating a direct health hazard.
+*   **False Negative (Leak exists, not detected):** Infrastructure damage continues, potentially causing property loss or service interruption for the wider grid.
+*   **Over-reliance:** Operators trust the algorithm's "Leak Detected" flag without verifying context (e.g., current temperature, time of day).
+
+#### 2. Simulation Test Series (Measure, Don't Assert)
+Run these simulations using historical usage data overlaid with recorded heatwave temperature logs. Do not rely on aggregate accuracy; measure performance specifically during high-temperature intervals.
+
+| Test Scenario | Input Conditions (Probe Set) | Positive Control (Known Bad) | Negative Control (Known Good) | Success Metric & Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Heatwave Spike vs. Leak** | Temp > 100°F (38°C); Flow spike matches leak profile but occurs during peak cooling hours. | Synthetic leak pattern injected during peak heat. | Normal high-volume AC cooling usage pattern. | **Metric:** False Positive Rate during heat events.<br>**Threshold:** Owner-set (recommend near-zero tolerance).<br>**Stop:** Any false positive triggers immediate rollback to human-only review. |
+| **Nighttime Leak Detection** | Temp < 70°F (21°C); Flow spike at 3 AM. | Synthetic leak pattern injected at night. | Normal nighttime usage (toilet flush, etc.). | **Metric:** True Positive Rate (detection speed).<br>**Threshold:** Detect within X minutes.<br>**Stop:** Failure to detect within safety window. |
+| **Edge Case: Broken AC Unit** | Temp > 100°F; Continuous high flow (broken AC unit running constantly). | Continuous flow mimicking a major leak. | Intermittent high flow (normal AC cycling). | **Metric:** Differentiation accuracy.<br>**Threshold:** Must classify continuous high flow as "Verify Human" not "Auto-Shutoff".<br>**Stop:** If classified as auto-shutoff candidate. |
+| **Data Integrity/Injection** | Corrupted sensor data showing impossible flow rates. | Garbage data injected. | Clean sensor data. | **Metric:** System rejection of invalid data.<br>**Stop:** System attempts to act on corrupted data. |
+
+#### 3. Management & Transparency Controls
+*   **Uncertainty Tiering:** Do not display a percentage confidence (e.g., "87% leak") to operators. Use defined coarse tiers:
+    *   **Confirmed Leak:** High flow + Low Temp + Nighttime → *Auto-shutoff permissible (if policy allows).*
+    *   **Unverified Spike:** High flow + High Temp + Daytime → **Human Review Required (Default).**
+    *   **Data Error:** Impossible values → **Ignore/Alert Maintenance.**
+*   **Transparency Artifact:** Create a **Model Card** for this feature documenting:
+    *   **Intended Use:** Leak detection in non-extreme weather; flagging in extreme weather.
+    *   **Limitations:** Cannot distinguish leaks from essential cooling during heatwaves using flow data alone.
+    *   **Measured Performance:** Report results from the simulations above, sliced by temperature bands. If not measured, mark as `UNVERIFIED`.
+*   **Disclosure:** Residents in the pilot must be explicitly informed that an algorithm monitors their usage and that water may be shut off only after human verification during heat events.
+
+#### 4. Governance
+*   **Owner:** Assign a specific product owner responsible for reviewing any false positives weekly.
+*   **Re-review Trigger:** Any change in the algorithm, data source, or local heatwave definition requires re-running the simulation suite.
+*   **Legal Routing:** Consult counsel regarding regulatory duties for automated utility shut-offs and required disclosures to residents; do not assume compliance based on this checklist.
+
+**Note:** This plan prioritizes preventing harm over automation speed. The "Stop Condition" in every test is designed to block launch if the system endangers residents.
+**Note:** Never fabricate a safety metric; if a test scenario cannot be simulated with real data, mark the risk as `UNVERIFIED` and maintain the human gate.

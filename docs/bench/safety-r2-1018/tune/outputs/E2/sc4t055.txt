@@ -1,0 +1,35 @@
+**Vaccine Eligibility Checker Validation Checklist**
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Identify Specific Failure Modes:** Explicitly list scenarios where the system could incorrectly deny eligibility (e.g., misinterpreting complex medical history, failing to recognize specific immunocompromised conditions, or errors in age calculation for elderly users).
+*   **Define Worst-Case Impact:** For each failure mode, document the specific harm to the user (e.g., "High-risk individual exposed to virus due to false denial").
+*   **Verify Subgroup Coverage:** Ensure the inventory specifically addresses vulnerable segments (elderly, immunocompromised) rather than treating users as a monolith.
+
+**2. Rigorous Output Measurement (Pre-Launch)**
+*   **Construct Adversarial Test Sets:** Create specific test rows for every identified harm. Include:
+    *   **Positive Controls:** Known eligible cases (especially complex medical histories) that must pass.
+    *   **Negative Controls:** Known ineligible cases that must be denied.
+    *   **Edge Cases:** Ambiguous inputs common among the elderly (e.g., handwritten records, varying terminology for conditions).
+*   **Establish Stop Conditions:** Define a "zero tolerance" threshold for false denials of high-risk groups. If the system denies a single known-eligible high-risk user in testing, the launch must halt.
+*   **Red-Team Prompt Logic:** If any part of the logic uses generative AI or flexible matching, probe it with injected or confusing data to ensure it does not hallucinate ineligibility.
+*   **Report Residual Risk:** Document any unverified metrics as `UNVERIFIED`. Do not claim "0% error" without empirical evidence from the test sets.
+
+**3. Human-in-the-Loop Gate (Irreversible Action Control)**
+*   **Mandatory Review for Denials:** Implement a hard rule: **No eligibility denial is final if the user falls into a high-risk category.** Any output suggesting "Not Eligible" for these groups must trigger an immediate human review by a health official before being communicated to the user.
+*   **Easy Override Mechanism:** Ensure the interface allows health officials to easily overturn a system decision and schedule an appointment manually without friction.
+*   **Uncertainty Display:** If the system cannot determine eligibility with high confidence based on defined tiers (e.g., "Confirmed" vs. "Unverified"), it must default to requesting human review rather than issuing a denial.
+
+**4. Transparency & Disclosure Artifacts**
+*   **Draft a Model/Data Card:** Create a durable document detailing:
+    *   **Intended Use:** Strictly for flu vaccine eligibility screening.
+    *   **Limitations:** Explicitly state known gaps in logic or data sources.
+    *   **Performance by Subgroup:** Report accuracy metrics specifically for the elderly and immunocompromised, not just aggregate averages.
+    *   **Owner & Version:** Clearly name the responsible health official and the logic version.
+*   **User Disclosure:** Clearly inform users that this is an automated screening tool and that a human will verify any negative results.
+
+**5. Governance & Ownership**
+*   **Assign Ownership:** Name a specific health official responsible for the output harms of this feature.
+*   **Re-review Trigger:** Mandate an immediate re-evaluation if eligibility criteria change or if new data sources are added.
+
+**Note:** Legal requirements for automated decision-making in health contexts must be routed to counsel immediately; this checklist addresses product safety controls only.
+Do not fabricate accuracy rates; if testing cannot be completed before the deadline, the residual risk must be explicitly stated to leadership.

@@ -1,0 +1,34 @@
+### Safety Assessment Plan: Credit-Limit Adjuster
+
+**1. Harm Inventory (MAP)**
+Before deployment, explicitly record the following risks specific to gig-worker volatility:
+*   **Bias/Unfair Outcomes:** The model systematically penalizes workers in specific neighborhoods or gig sectors (e.g., delivery vs. ride-share) due to correlated earnings dips, effectively redlining groups.
+*   **Over-reliance/Automation Bias:** The system treats volatile earnings as permanent risk, cutting limits during predictable low-seasons without context, trapping workers when they need liquidity most.
+*   **Unsafe High-Stakes Automation:** Fully autonomous reduction of spending limits without human review or user recourse, causing immediate financial hardship (inability to buy fuel/food).
+*   **Missing Disclosure:** Users are unaware that their limit changes are automated decisions based on real-time data, leading to confusion and loss of trust.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure it against the 200ms constraint.
+*   **Eval Design:** Construct a test suite with adversarial inputs simulating "volatile but reliable" earners vs. "stable but declining" earners.
+    *   *Positive Control:* A user with high volatility but strong long-term repayment history should *not* see a limit cut.
+    *   *Negative Control:* A user with declining earnings and missed payments *should* see a adjustment.
+*   **Subgroup Slicing:** Run probes segmented by gig platform, time of day, and geographic zone within Mexico City to detect disparate impact.
+*   **Metrics & Thresholds:** Define a "Fairness Stop Condition." Example: If the false-positive rate (cutting limits for solvent users) exceeds 0% for any protected subgroup, the feature blocks launch.
+*   **Transparency Artifact:** Draft a **Model Card** detailing intended use (short-term liquidity smoothing), limitations (cannot predict external shocks), and measured performance by subgroup. If a metric is unmeasured, label it `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the high stakes of cutting off funds, **fully autonomous limit reductions must be gated.**
+    *   *Constraint Solution:* To meet the 200ms requirement, the system should default to "no change" or "temporary hold" rather than an immediate cut when confidence is low or volatility is high. Flag these cases for asynchronous human review or trigger a simplified, rule-based "grace period" logic that requires no complex model inference.
+    *   *Irreversible Action:* Any decision that reduces a limit below a subsistence threshold requires explicit user confirmation or human approval before execution.
+*   **Uncertainty Disclosure:** Do not display raw model confidence scores (e.g., "87% risk"). Instead, use defined coarse tiers for internal logging and user communication (e.g., "Verified Income," "Volatile Pattern," "Unverified").
+*   **AI Disclosure:** Clearly inform users within the app interface that limit adjustments are automated based on earnings data.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign a specific product owner responsible for reviewing harm logs weekly.
+*   **Legal Routing:** Because this involves credit decisions and potential regulatory scrutiny in Mexico, **route the question of legal disclosure duties and regulated decision definitions to local counsel.** Do not assume compliance; name the regimes (e.g., local consumer finance laws) for legal to verify.
+*   **Re-review Trigger:** Mandate a re-assessment whenever the data source (gig API) changes or the model is retrained.
+
+**Deliverable Status:** This plan provides the inventory, measurement rows, and gating logic required to proceed. No safety certification is granted; residual risk remains until evals are run and thresholds met.
+
+*Note: The 200ms constraint necessitates moving complex fairness checks to asynchronous review or simple rule-based fallbacks rather than deep model inference during the request.*
+*Ensure legal counsel verifies if "automated credit denial" triggers specific Mexican regulatory notifications before launch.*

@@ -1,0 +1,31 @@
+### Internal Validation Framework: Adoption Screener False-Positive Reduction
+
+Given the high-stakes nature of adoption decisions and the constraint against third-party auditors, your internal team must act as the primary gatekeeper. Do not attempt to certify the system as "unbiased" or "safe"; instead, measure residual risk and implement strict human controls.
+
+**1. Construct a Harm Inventory (Map)**
+Before testing, explicitly document the specific failure modes for your context:
+*   **Bias/Unfair Outcomes:** Does the model disproportionately flag posts common in specific cultural, socioeconomic, or neurodivergent communities as "risky"?
+*   **Hallucination as Fact:** Does the model interpret sarcasm, memes, or outdated posts (e.g., from 10 years ago) as current evidence of unfitness?
+*   **Over-reliance:** Are caseworkers tempted to accept the AI's "Reject" score without reviewing the raw social media context?
+*   **Missing Disclosure:** Do applicants know their social media is being scored by an algorithm?
+
+**2. Build Adversarial Test Suites (Measure)**
+Create a "Red Team" dataset of diverse family profiles specifically designed to trigger false positives. Do not rely on aggregate accuracy; test by subgroup.
+*   **Probe Set A (Context & Sarcasm):** Profiles containing ironic humor, satire, or fictional storytelling that mimics "concerning" language but is harmless in context.
+*   **Probe Set B (Temporal Relevance):** Profiles with "red flag" keywords from 5+ years ago, followed by years of positive content, to test if the model weighs outdated data too heavily.
+*   **Probe Set C (Cultural Nuance):** Profiles reflecting diverse parenting styles, religious practices, or non-traditional family structures that might be misinterpreted by a model trained on narrow norms.
+*   **Controls:** For every test, include a known "False Positive" (harmless parent flagged) and a known "True Negative" (harmless parent passed).
+*   **Metric & Threshold:** Define a "False Positive Rate" per subgroup. Since this involves blocking loving homes, propose a **zero-tolerance threshold** for automated rejections without human review. If the model flags *any* profile in the "harmless" control set as "high risk," the automated gate fails.
+
+**3. Implement Human-in-the-Loop Gates (Manage)**
+*   **Irreversible Action Gate:** An AI recommendation to "Reject" an applicant is a high-stakes, potentially irreversible action. **Do not allow full automation.** Every negative score must trigger a mandatory human review by a qualified caseworker who sees the raw data, not just the score.
+*   **Uncertainty Display:** Do not show caseworkers a precise percentage (e.g., "87% risk"). This implies false precision. Instead, use defined coarse tiers: *Confirmed Concern*, *Corroborated Signal*, *Single-Source Flag*, or *Unverified*. Require the system to highlight *which* specific post triggered the flag so humans can verify context.
+*   **Transparency Artifact:** Draft a "Model Card" for internal use. Document the intended use (screening only, not final decision), known limitations (struggles with sarcasm, outdated content), and the results of your internal red-team tests. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one team member as the owner of this validation process.
+*   **Legal Routing:** You asked about fairness and blocking homes. Whether this automated screening violates adoption regulations or requires specific legal disclosures to applicants is a legal determination. **Route this immediately to counsel.** Do not assume internal testing satisfies legal duties.
+*   **Rollback Plan:** If the beta launch reveals a false positive rate above your threshold, have a kill-switch ready to disable the scoring feature while retaining the data collection for manual review.
+
+**Note:** This framework measures risk; it does not eliminate it. The decision to ship rests with your leadership, not this plan.
+**Note:** Never invent a "0% bias" claim; report only the actual failure rates found in your adversarial testing.

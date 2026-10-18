@@ -1,0 +1,35 @@
+### Pre-Launch Stress Test Plan: Real-Time Translation Earpiece
+
+**1. High-Risk Instruction Categories Prone to Mistranslation**
+Given the constraints of on-device processing and high-noise environments, the following instruction types present the highest risk of hallucination or omission:
+*   **Directional Ambiguity:** Commands relying on spatial prepositions (e.g., "Move *away* from the north exit" vs. "Move *toward*..."). Noise often obscures the critical negation or direction, leading to fatal reversals.
+*   **Conditional Exceptions:** Instructions containing "unless" or "except" (e.g., "Proceed to the field *unless* you see smoke"). Low-complexity models often drop the conditional clause, leaving only the primary action.
+*   **Numerical Identifiers:** Gate numbers, section codes, or time limits (e.g., "Gate 4" vs. "Gate 14"). Audio distortion frequently causes digit substitution.
+*   **Status Updates:** Distinctions between "Hold position" and "Evacuate immediately." In high stress, users may conflate waiting commands with movement commands if the translation lacks urgency markers.
+
+**2. Validation Protocol for Live Drills**
+Execute the following three-phase protocol during the stadium pilot. Do not rely on aggregate accuracy scores; focus on binary pass/fail for safety-critical commands.
+
+*   **Phase A: Adversarial Audio Injection (Controlled Environment)**
+    *   **Setup:** Play recorded emergency announcements over stadium speakers while introducing synthetic crowd noise at 85–95 dB.
+    *   **Probe Set:** Run 50 specific test cases covering the high-risk categories above. Include "positive controls" (clear audio, simple commands) and "negative controls" (commands that should trigger a "Unable to translate" safety fallback, not a guess).
+    *   **Metric:** Zero tolerance for reversed directions or dropped negations. Any instance where "Do not enter" translates to "Enter" is an immediate stop condition.
+
+*   **Phase B: The "Blind Listener" Drill (Live Simulation)**
+    *   **Participants:** Recruit 20 native speakers of the target languages who are unfamiliar with the stadium layout.
+    *   **Procedure:** During the live drill, broadcast ambiguous or complex instructions. Participants must act solely on the earpiece translation.
+    *   **Observation:** Track physical movement. If a user moves toward danger based on the translation, record it as a critical failure.
+    *   **Uncertainty Display:** Verify that when the model confidence is low (due to noise), the device outputs a defined coarse tier warning (e.g., "Signal Unclear – Wait for Visual Confirmation") rather than a confident but incorrect translation.
+
+*   **Phase C: Human-in-the-Loop Gate**
+    *   **Requirement:** For the initial live deployment, any automated translation of a "Level 1" emergency command (evacuation, shelter-in-place) must be accompanied by a visual confirmation (flashing light on the device or synchronized stadium signage) before the user acts.
+    *   **Rollback Trigger:** If more than 2% of critical commands result in user hesitation or wrong-way movement during the drill, halt the launch.
+
+**3. Transparency Artifact**
+Before deployment, publish a **Model Card** specific to this earpiece version. It must list:
+*   **Intended Use:** Noisy public venues only; explicitly state it is not verified for silent or medical instruction contexts.
+*   **Known Limitations:** Document specific phonemes or languages where accuracy drops below the threshold in >85dB noise.
+*   **Residual Risk:** Mark untested noise profiles or languages as `UNVERIFIED`. Do not invent an overall accuracy percentage.
+
+**Note:** Legal counsel must review whether this automated decision tool requires specific regulatory disclosures under local safety laws before the drill begins.
+Ensure the "Unable to translate" fallback is louder and more distinct than any partial translation to prevent automation bias.

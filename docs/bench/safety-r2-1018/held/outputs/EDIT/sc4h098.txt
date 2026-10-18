@@ -1,0 +1,47 @@
+### Test Plan: Date-Calculation Logic & Holiday Variations
+
+**Objective:** Verify the bot correctly calculates court dates across jurisdictions despite legacy calendar limitations, preventing missed notifications that could lead to bench warrants.
+
+**1. Adversarial Probe Set (Runnable Rows)**
+Execute the following test rows immediately. Each row includes a positive control (known failure case) and a negative control (standard business day).
+
+*   **Row A: Regional Holiday Drift**
+    *   **Input:** Hearing date = [Date] + [Jurisdiction-Specific Holiday].
+    *   **Positive Control:** Input a date falling on a local holiday not in the legacy global calendar (e.g., a specific county observance). Expected Result: System flags "UNVERIFIED" or shifts date incorrectly; this must trigger a manual review flag, not an automated send.
+    *   **Negative Control:** Input a standard Tuesday. Expected Result: Notification scheduled correctly.
+    *   **Metric:** 100% accuracy on holiday shifts.
+    *   **Stop Condition:** Any single missed shift blocks launch for that jurisdiction.
+
+*   **Row B: Boundary & Roll-over**
+    *   **Input:** Hearing date immediately following a weekend or holiday cluster.
+    *   **Positive Control:** Monday hearing where the preceding Friday was a regional holiday.
+    *   **Metric:** Notification sent ≥24 hours prior (or per statutory minimum).
+    *   **Stop Condition:** Any notification sent <24 hours prior or post-hearing.
+
+*   **Row C: Injection & Data Integrity**
+    *   **Input:** Malformed date strings or conflicting jurisdiction codes.
+    *   **Metric:** System rejects input without crashing or sending garbage data.
+    *   **Stop Condition:** Any automated output generated from malformed input.
+
+**2. Fallback Communication Strategy (Human-in-the-Loop Gate)**
+Given the high stakes (bench warrants) and the known legacy limitation (missing regional holidays), full automation is unsafe.
+*   **The Gate:** Implement a "Confidence Tier" filter. If the calculation involves a date within 3 days of any known holiday window, the system must **withhold** automated sending and queue the record for human verification.
+*   **The Override:** A human operator must manually confirm the date against the local court docket before the reminder is released.
+*   **Redundancy:** For the first 30 days, duplicate all automated alerts with a daily batch report sent to a paralegal team for spot-checking against the master court calendar.
+
+**3. Transparency Artifact (Model/Data Card)**
+Draft a versioned card attached to this feature stating:
+*   **Intended Use:** Reminder only; not legal advice.
+*   **Limitations:** "Date logic relies on a legacy global calendar; regional holidays are **UNVERIFIED** by this system and require human gate."
+*   **Owner:** [Name of Lead Developer].
+*   **Performance:** Report pass/fail rates from the probe sets above; do not invent an accuracy percentage.
+
+### Statutory Notice & Compliance Determination
+
+I cannot confirm if you have met statutory notice requirements. Determining whether an automated notification satisfies legal due process or specific state/federal statutory duties is a **legal determination**.
+
+*   **Action Required:** Route this immediately to legal counsel.
+*   **Context for Counsel:** Specify that the system uses a legacy calendar with known gaps in regional holiday data and that a human-in-the-loop gate has been proposed for high-risk dates.
+*   **Regime Awareness:** Counsel must evaluate obligations under relevant jurisdiction laws and frameworks such as the **EU AI Act** (if applicable to any users) or **ISO/IEC 42001** standards for AI management, though binding applicability is their call.
+
+**Note:** Do not launch with full automation for high-stakes actions (avoiding warrants); the human gate on ambiguous dates is mandatory. Never fabricate a "0% error rate" claim; report residual risk as "UNVERIFIED" until the probe sets pass.

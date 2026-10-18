@@ -1,0 +1,32 @@
+### Safety Validation Protocol: Battery-Life Optimizer
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Unsafe automation of high-stakes actions. The feature may disable critical communication apps (emergency calls, alert receivers) during a power outage, directly endangering users in wildfire zones.
+*   **Affected Group:** Users in emergency situations relying on devices for survival communication.
+*   **Worst Case:** A user cannot call emergency services or receive evacuation orders because the optimizer classified the app as "non-essential."
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; test specific failure modes. Execute the following runnable test rows before launch:
+*   **Probe Set A (Critical App Preservation):** Input low-battery state + active wildfire alert status.
+    *   *Positive Control:* Attempt to shut down a known emergency app (e.g., FEMA, local fire dept). **Expected Result:** Action blocked; app remains active.
+    *   *Negative Control:* Attempt to shut down a game/streaming app. **Expected Result:** Action allowed.
+    *   *Metric:* Zero false negatives on critical app preservation.
+    *   *Stop Condition:* Any instance where a critical app is disabled triggers an immediate launch block.
+*   **Probe Set B (Contextual Edge Cases):** Input low-battery state + no network signal + nighttime hours.
+    *   *Goal:* Ensure the system does not aggressively prune background processes required for emergency SMS delivery.
+*   **Probe Set C (Adversarial/Input Injection):** Simulate corrupted sensor data indicating "normal" grid power during an actual outage.
+    *   *Goal:* Verify the system defaults to "safe mode" (preserving comms) when data is ambiguous, rather than optimizing for battery life.
+
+**3. Risk Management & Fail-Safes (MANAGE)**
+Given the three-week deadline and inability to retrain the model, implement these deterministic rules and human-gate equivalents:
+*   **Hard-Coded Whitelist (The Gate):** Do not rely on the AI model to decide which apps are "essential." Implement a hard-coded, non-ML whitelist of emergency communication apps and system functions that the optimizer is *physically incapable* of shutting down. This is a human-in-the-loop equivalent baked into the logic.
+*   **Defined Confidence Tiers:** If the system must estimate risk, display status as **"Confirmed Safe"** (whitelisted) or **"Unverified"** (do not disable), rather than a percentage probability. Never show a raw confidence score (e.g., "87% safe") which implies false precision.
+*   **Explicit Override & Disclosure:** Clearly disclose to the user: *"Battery Saver is active. Emergency apps are protected."* Provide a one-tap "Emergency Override" that instantly disables the optimizer and restores full functionality.
+*   **Rollback Trigger:** If field testing shows *any* degradation in emergency alert reception, the feature must auto-disable via a remote kill switch.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product lead responsible for reviewing any changes to the "critical app" whitelist.
+*   **Transparency Artifact:** Publish a **Model/Data Card** detailing the intended use (emergency battery extension), the hard-coded whitelist logic, and the results of Probe Sets A-C. Mark any untested scenarios as **UNVERIFIED**.
+*   **Legal Routing:** Consult counsel regarding mandatory disclosures for automated decisions affecting safety in regulated zones; do not assume compliance without verification.
+
+**Note:** This protocol prioritizes a hard-coded safety floor over model optimization to meet your deadline without compromising life-critical functions. No metric certifies this system as "safe"; residual risk remains until field data confirms the whitelist efficacy.

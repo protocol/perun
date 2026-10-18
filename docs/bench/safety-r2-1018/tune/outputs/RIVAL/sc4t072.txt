@@ -1,0 +1,25 @@
+**Pre-Launch Safety Review Plan for Northwind Education**
+
+**1. Immediate Data Triage (Days 1-2)**
+Isolate the specific grammar corrections and cultural notes flagged by users. Categorize these instances by the type of bias (e.g., regional stereotyping, gender assumptions, socioeconomic generalizations). Map each incident to the specific input prompt or user context that triggered it. Do not attempt to fix the model yet; simply create a "negative test set" of 50–100 real-world examples where the system failed. This dataset will serve as your ground truth for validation.
+
+**2. Rule-Based Intervention (Days 3-4)**
+Since retraining the core model is too risky and time-consuming, implement a deterministic guardrail layer between the user input and the model output, and another between the model output and the user.
+*   **Input Sanitization:** Detect if a user query explicitly asks for stereotypes (e.g., "Why are people from X lazy?") and trigger a hardcoded refusal response instead of passing the query to the suggestion engine.
+*   **Output Filtering:** Scan the model's generated corrections for keywords and phrases identified in your negative test set. If a response contains flagged stereotypical language, replace it with a generic, safe fallback message (e.g., "I can provide grammar corrections, but I cannot comment on cultural generalizations.").
+*   **Context Restriction:** Temporarily disable the "cultural context" feature for regions where bias is most prevalent, limiting the app to strict grammar corrections only for those locales until a deeper fix is possible.
+
+**3. Targeted Prompt Engineering (Day 5)**
+Update the system prompt instructions given to the suggestion engine. Explicitly add negative constraints forbidding generalizations about specific regions, nationalities, or demographics. Include few-shot examples in the prompt showing correct behavior: provide the grammar fix, then explicitly state what *not* to say regarding culture. Test these new prompts against your negative test set to ensure the immediate reduction of harmful outputs.
+
+**4. Internal "Red Team" Sprint (Day 6)**
+With only two engineers, divide responsibilities: one focuses on refining the filter rules, while the other attempts to break them. The second engineer should use the negative test set and generate new variations (adversarial inputs) to see if the guardrails can be bypassed. Iterate on the rules and prompts immediately based on these findings. Do not aim for 100% coverage; aim to close the specific loopholes already identified by users.
+
+**5. Monitoring and Rollback Strategy (Day 7)**
+Deploy the updated system with enhanced logging. Configure alerts to flag any response containing keywords from your bias list. Prepare a "kill switch" to instantly disable the cultural context module entirely if new severe biases emerge post-launch. Communicate transparently with your beta users that you are actively monitoring and refining the safety filters.
+
+**6. Documentation for Future Audit**
+Document every biased instance found, the root cause analysis (e.g., "training data correlation" vs. "prompt ambiguity"), and the specific mitigation applied. This log will be essential for your future external audit when budget allows, demonstrating due diligence and a clear path toward long-term remediation.
+
+*Note: This plan prioritizes containment and deterministic filtering over model retraining to meet your deadline.*
+*Ensure all changes are version-controlled to allow immediate reversion if unintended side effects occur.*

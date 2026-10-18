@@ -1,0 +1,19 @@
+### Fairness Audit and Remediation Plan
+
+**Phase 1: Data Stratification and Baseline Measurement (Week 1)**
+Immediately segment your historical grading dataset by linguistic markers relevant to the Kenyan context (e.g., speakers of Sheng, Swahili-first speakers, specific mother-tongue influences like Luo or Kikuyu English variants, and rural vs. urban dialects). If demographic metadata is missing, use a separate, audited classifier to tag essays by dialect before analysis. Calculate the baseline disparity: compare the mean scores and score distributions of each dialect group against the standard "Queen's English" baseline, controlling for essay length and prompt type. Identify the "harshness gap"—the average point difference attributable solely to dialect.
+
+**Phase 2: Adversarial Stress Testing (Week 2)**
+Since you cannot wait for more real-world data, generate synthetic probe essays. Take a set of high-scoring standard English essays and systematically rewrite them into identified local dialects while preserving semantic meaning, argument structure, and vocabulary complexity. Run these paired essays through your current system. If the dialect version scores significantly lower than the standard version, you have isolated algorithmic bias rather than differences in writing quality. Document the specific linguistic features (syntax, idioms, spelling variations) that trigger score penalties.
+
+**Phase 3: Root Cause Analysis and Logic Adjustment (Week 3)**
+Analyze the model's attention weights or feature importance scores (if accessible) to see if it penalizes specific grammatical structures common in Kenyan English but non-standard globally. If the system uses a rubric-based approach, adjust the weighting of "grammar and mechanics" versus "content and argumentation" to ensure dialectal variations do not disproportionately lower the total score. If using a black-box neural model, you may need to apply post-hoc calibration: develop a correction layer that adds a bias-offset score to essays identified as belonging to disadvantaged dialect groups, derived from the disparity metrics in Phase 1.
+
+**Phase 4: Validation and Human-in-the-Loop Calibration (Week 4)**
+Run the adjusted system against the synthetic probe set and a hold-out set of real historical essays. The goal is statistical parity: the average score for a specific writing quality should be identical across all dialect groups. Engage your team of fourteen graders to blind-review a random sample of the system's outputs, specifically looking for false negatives in dialect-heavy essays. Use their feedback to fine-tune the correction layer. Ensure the system does not over-correct to the point of inflating scores; the goal is equity, not advantage.
+
+**Phase 5: Deployment Safeguards and Monitoring (Week 5)**
+Before the Ministry handover, implement a "fairness monitor" dashboard that tracks scoring distributions by dialect in real-time. Set automatic alerts if the score gap for any group exceeds a predefined threshold (e.g., 2%). Include a manual appeal workflow where essays flagged as low-scoring due to heavy dialect usage are routed immediately to human graders for verification. Prepare a transparency report for the Ministry detailing the audit methodology, the identified biases, and the specific calibration steps taken to mitigate them.
+
+**Note:** This plan assumes you have immediate access to the historical scoring data and the ability to modify the scoring logic or apply post-processing adjustments.
+Given the five-week constraint, prioritize the synthetic stress testing (Phase 2) as it provides the fastest, most defensible evidence of bias.

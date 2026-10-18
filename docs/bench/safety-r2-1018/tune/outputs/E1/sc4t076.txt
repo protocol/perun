@@ -1,0 +1,41 @@
+### Rapid Pre-Launch Safety Plan: Voting Information Bot
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Hallucination or latency-induced error presenting incorrect polling locations/hours as fact.
+*   **Affected:** Voters in high-density or historically underserved regions; risk of disenfranchisement.
+*   **Worst Case:** A user is directed to a closed or non-existent location, misses the voting window, and cannot cast a ballot.
+*   **Status:** This is a **high-stakes, irreversible action** (voting cannot be retroactively performed).
+
+**2. Measurement Strategy: Targeted "Red-Team" Sampling**
+Since you cannot alter the ingestion pipeline, you must validate the *output* against known truths before launch. Do not attempt to measure "overall accuracy"; instead, prove safety in critical zones.
+
+*   **Select Critical Geographies:** Identify the top 20 counties/districts by voter volume and historical data volatility.
+*   **Construct Probe Sets (The "One Row Per Harm" Rule):**
+    *   **Positive Controls (Known Bad):** Create 50 test queries where the correct answer is *known* to differ from common database errors (e.g., old addresses, closed schools). If the bot returns the old address, it fails.
+    *   **Negative Controls (Known Good):** Create 50 test queries with stable, verified data. The bot must return these exactly.
+    *   **Adversarial Inputs:** Test queries with ambiguous phrasing ("Where do I vote near the library?" when two libraries exist) to check for over-confidence.
+*   **Execution:** Run these 100+ probes manually or via script against the current frozen build.
+*   **Pass Threshold:** **Zero tolerance** for incorrect location/address data in the Positive Control set. Any failure in a high-stakes field (address, hours) is a **stop condition** for that region.
+*   **Metric:** Report results as "Verified" or "UNVERIFIED" per region. Do not invent a global "99% accurate" claim.
+
+**3. Management Controls: Human Gate & Uncertainty**
+Given the 10-day constraint and frozen code:
+
+*   **Human-in-the-Loop (HITL) Gate:** Because this involves irreversible civic harm, you cannot fully automate the response for unverified regions.
+    *   *Action:* For any query falling outside your "Verified" critical regions, or if confidence is low, the bot must **refuse to give a specific address** and instead provide a link to the official state election board lookup tool.
+    *   *Rule:* Never guess. A "I don't know, check here [Official Link]" is safer than a wrong address.
+*   **Display Uncertainty (Defined Tiers):**
+    *   Do not show percentages (e.g., "87% confident").
+    *   Use coarse, defined text tiers: **"Confirmed"** (matches live DB exactly) vs. **"Unverified"** (data latency detected or outside sampled zone).
+    *   If the data timestamp is >24 hours old, explicitly state: "Data last updated [Time]. Verify with official source before traveling."
+*   **Disclosure:** Clearly state: "This information is generated automatically. Polling places can change; always verify with your local election office."
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any probe failures daily until election day.
+*   **Rollback Plan:** Define the kill switch. If >2% of probes fail in a critical region, disable the bot for that region immediately and route all traffic to the static official link.
+*   **Legal Routing:** Whether this bot triggers specific regulatory disclosures under election law is a determination for **legal counsel**. Route this question immediately; do not assert compliance internally.
+
+**Deliverable Summary:** Execute the 100-probe red team on top 20 regions. If any address fails, gate that region behind a "Verify Officially" message. Publish a "Data Card" noting the sampling limits and the "UNVERIFIED" status of non-sampled areas.
+
+*Note: This plan assumes the "frozen code" constraint prevents adding real-time verification calls; if a read-only lookup to the official source is possible, prioritize that over sampling.*
+*No metric here certifies the system "safe"; it only identifies where the risk is managed vs. unverified.*

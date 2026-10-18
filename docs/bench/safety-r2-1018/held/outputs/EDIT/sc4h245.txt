@@ -1,0 +1,36 @@
+### Testing Strategy: Siren Masking Risk (Simulation-Only)
+
+Given the constraint of simulation-only validation for the next two weeks, the testing strategy must focus on adversarial audio probes rather than physical hardware trials. The goal is to measure the "masking ratio"—the degree to which the noise cancellation (NC) algorithm attenuates emergency sirens compared to ambient urban noise.
+
+**1. Construct Adversarial Audio Probe Sets**
+Create a digital library of test cases combining standard urban noise (traffic, construction, wind) with emergency signals.
+*   **Positive Controls (Known Bad):** Mix sirens (police, ambulance, fire) at varying distances and angles into heavy traffic noise. The expected failure mode is the NC algorithm classifying the siren as "steady-state noise" and aggressively canceling it.
+*   **Negative Controls (Known Good):** Mix sirens into silence or low-noise environments where the NC should remain passive or transparent.
+*   **Edge Cases:** Sirens that start abruptly, sirens with Doppler shifts (approaching vs. receding), and overlapping frequencies where the siren pitch matches common engine drones.
+
+**2. Define Metrics and Pass Thresholds**
+Run these probes through your acoustic simulation engine.
+*   **Metric:** *Siren Preservation Ratio (SPR)*. Calculate the decibel (dB) reduction applied to the siren frequency band versus the reduction applied to the background noise.
+*   **Threshold:** Set a zero-tolerance stop condition for any scenario where the siren is attenuated by more than 3–5 dB relative to the background noise, or where the siren becomes undetectable by a standard audio detection algorithm running on the output stream.
+*   **Stop Condition:** If any positive control results in the siren being masked below the threshold of human hearing in the simulation, the firmware build fails validation. Do not proceed to mass market release until this specific failure mode is resolved.
+
+**3. Injection and Agency Checks**
+Simulate "prompt injection" equivalents for audio: feed the system non-siren sounds that mimic siren frequencies (e.g., certain musical instruments or industrial alarms) to ensure the system does not erroneously *amplify* noise or behave unpredictably when confused. Ensure the algorithm does not exhibit "excess agency" by making irreversible decisions to block frequencies without a fallback.
+
+### Mitigation Tactics for Firmware
+
+Based on potential simulation failures, implement the following controls before shipping:
+
+**1. Frequency Guardrails (Hard Filter)**
+Modify the firmware to whitelist critical emergency frequency bands (typically 500 Hz – 2 kHz, depending on region). The NC algorithm must be hard-coded to *never* apply active cancellation to these specific bands, regardless of how much they resemble ambient noise. This creates a "transparent window" for sirens.
+
+**2. Dynamic Transparency Mode**
+Implement a "siren detection" pre-processor. If the input microphone detects a pattern matching emergency signals, the firmware must instantly disengage active noise cancellation and switch to "Transparency Mode" (pass-through), allowing external sound in naturally. This acts as a human-in-the-loop equivalent by restoring the user's natural hearing ability when high-stakes risks are detected.
+
+**3. Uncertainty Signaling**
+If the algorithm cannot confidently distinguish between a siren and noise, it must default to the safer state: reducing cancellation intensity. Do not display a precise "confidence percentage" to the user; instead, design the system to fail safely by letting sound in when uncertain.
+
+**4. User Disclosure and Override**
+Include a clear, physical, or haptic override button labeled "Hear Surroundings" that instantly disables NC. Ensure product packaging and setup flows explicitly disclose that while NC reduces noise, users must remain visually and auditorily vigilant in traffic, as no system is infallible.
+
+**Note:** This strategy identifies residual risk via simulation but cannot certify the system as "safe" for all real-world conditions; physical validation remains required before final sign-off. Legal counsel should review disclosure language regarding liability for pedestrian safety.

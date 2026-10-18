@@ -1,0 +1,37 @@
+**Plan: Automated Safety Filter for Fashion Stylist Launch**
+
+Given the five-day hard stop and inability to manually verify all materials, we will implement a **deterministic, rule-based metadata gate** that sits between the AI recommendation engine and the user interface. This approach requires no model retraining and minimizes latency.
+
+**1. Define the "Block List" (Day 1)**
+Instead of verifying every item, we define the specific failure modes to block. Create a static JSON list of banned or hazardous materials based on EU regulations (relevant for Milan) and general safety standards (e.g., specific azo dyes, untreated asbestos, known carcinogens).
+*   *Action:* Compile a concise list of prohibited keywords and chemical codes (e.g., "PVC" in children's wear contexts if applicable, specific banned dye codes).
+*   *Owner:* Lead Engineer + One Founder (legal quick-scan).
+
+**2. Implement the Metadata Gate (Days 2–3)**
+Build a lightweight middleware function that intercepts every outfit suggestion before it is displayed.
+*   **Logic:** If `item.material_composition` contains any string from the "Block List," the item is immediately excluded from the recommendation set.
+*   **Fallback:** If the material field is missing, empty, or ambiguous (e.g., "mixed fibers" without detail), the system must **downgrade confidence** and append a visible disclaimer: *"Material composition unverified by source."* Do not guess; treat missing data as a potential risk.
+*   **Performance:** This is a simple string-match operation, adding negligible latency (<10ms) to the recommendation pipeline.
+
+**3. Sourcing Link Safeguard (Day 4)**
+Since you cannot verify the physical items, you must verify the *claim* at the point of sale.
+*   **Action:** Modify the UI to only display the "Buy" link if the material data passes the gate. If an item is flagged or missing data, show the outfit image but disable the direct purchase link, or route the user to the retailer's page with a warning banner: *"Please verify material safety with the retailer before purchase."*
+*   **Rationale:** This shifts the liability of final verification to the point of sale while protecting your app from actively promoting known hazards.
+
+**4. Human-in-the-Loop for High-Stakes Errors (Day 5)**
+*   **Action:** Set up a simple dashboard logging any items blocked by the filter. Before the Fashion Week launch, a human must review the "blocked" list to ensure the filter isn't too aggressive (false positives) and check the "unverified" bucket for any high-profile brands that might need manual spot-checking.
+*   **Constraint:** Do not attempt to clear the "unverified" bucket entirely. Accept that some recommendations will carry the "unverified" label. This is safer than guessing.
+
+**Residual Risk & Disclosure**
+*   **Transparency:** Add a permanent footer in the app: *"Recommendations are AI-generated based on partner data. We filter for known banned substances, but material claims are not independently lab-tested."*
+*   **Legal Route:** Because this involves consumer safety and EU markets, you must route the question of specific legal disclosure duties and liability for "misleading descriptions" to legal counsel immediately. Do not assert compliance; assert that you have implemented a reasonable filtering control.
+*   **Metric:** Do not claim "0% hazardous items." Report the filter as "Active against known banned list; unverified items flagged."
+
+**Summary of Deliverables by Day 5:**
+1.  Static "Block List" of banned materials.
+2.  Middleware filter blocking matches and flagging missing data.
+3.  UI updates disabling links or showing warnings for unverified items.
+4.  Public disclaimer regarding data limitations.
+
+*Note: This plan manages risk via exclusion and disclosure rather than impossible verification. It prevents known harms but cannot guarantee total safety due to reliance on partner data accuracy.*
+*Ensure legal counsel reviews the specific wording of the disclaimer for EU consumer law compliance before launch.*

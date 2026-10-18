@@ -1,0 +1,37 @@
+### Pre-Launch Review Process: Vintage-Car Valuation AI
+
+**1. Harm Inventory & Risk Definition**
+Before launch, formally record the primary risk: **Systematic Undervaluation due to Data Gaps**.
+*   **Harm:** Sellers of unique/rare vehicles receive estimates significantly below market reality because the model lacks recent private sale records.
+*   **Affected Party:** Vehicle sellers (financial loss), collectors (missed opportunities), platform credibility.
+*   **Worst Case:** A seller accepts a low-ball offer based on your AI's "authoritative" estimate, losing tens or hundreds of thousands of pounds.
+
+**2. Human-in-the-Loop Gate (High-Stakes Filter)**
+Implement a mandatory human review tier for any valuation exceeding a specific threshold or flagged as "unique/rare."
+*   **Trigger:** Any estimate >£50,000 (or your defined high-value floor) OR any vehicle with <5 comparable auction records in the training set.
+*   **Action:** The AI generates a *draft* valuation but **does not display it** to the user immediately. Instead, it routes the case to one of your four team members (or a hired expert) for validation.
+*   **Output:** The human expert adjusts the figure based on off-market knowledge, adds a "Expert Reviewed" badge, and only then is the value released to the user.
+*   **Constraint:** Fully automated valuations are prohibited for this high-stakes segment until private sale data is integrated.
+
+**3. Measurement & Evaluation Plan**
+Do not claim accuracy; measure the gap.
+*   **Test Row 1 (Undervaluation Probe):** Run the model against a hold-out set of known recent private sales (even if just 10–20 examples you can manually source).
+    *   *Metric:* Percentage deviation between AI estimate and actual private sale price.
+    *   *Stop Condition:* If the average deviation exceeds 15% for rare models, the automated path remains closed for those segments.
+*   **Test Row 2 (Uncertainty Calibration):** Verify that the system correctly identifies "low data" scenarios.
+    *   *Metric:* False negative rate (cases where the system claimed high confidence despite missing private sale comparables).
+    *   *Stop Condition:* Any high-confidence output on a vehicle with no recent comparables triggers an immediate rollback of the automated feature.
+
+**4. Feedback Loop & Data Correction**
+Turn the human review into a data engine.
+*   **Capture:** Every adjustment made by a human expert must be logged as a structured data point (Vehicle ID, AI Estimate, Human Correction, Reason Code).
+*   **Retraining Trigger:** Accumulate 50 validated corrections before attempting to retrain or fine-tune the model.
+*   **Transparency Artifact (Model Card):** Publish a simple "Data Limitations" notice with every estimate: *"This valuation is based on public auction data only. Recent private sales are not included. Values for rare models are subject to expert review."* Never present the AI output as a definitive market price.
+
+**5. Governance**
+*   **Owner:** Assign one team member as the "Valuation Safety Owner" responsible for reviewing the weekly log of human corrections and deciding when (or if) to expand automation.
+*   **Disclosure:** Clearly label all outputs as "AI-Estimated" and distinguish between "Automated Draft" and "Expert Validated."
+
+**Notes**
+*   Do not invent a "bias score" or "accuracy percentage" for your marketing; label unmeasured metrics as **UNVERIFIED**.
+*   If legal questions arise regarding whether this constitutes "regulated financial advice" in the UK, route immediately to counsel; do not assert compliance internally.

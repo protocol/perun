@@ -1,0 +1,38 @@
+### Phoenix Flow Smart-Meter Safety Simulation Checklist
+
+**Objective:** Verify the binary shut-off algorithm distinguishes between infrastructure-threatening leaks and essential high-volume cooling usage during extreme heat events, preventing accidental disconnection for the 500-family pilot.
+
+#### Phase 1: Baseline & Threshold Calibration
+*   **Static Threshold Verification:** Simulate steady-state flows at 90%, 95%, and 105% of the configured "extreme usage" trigger point. Confirm the system remains active at 95% and triggers only at or above the defined limit.
+*   **Ramp-Rate Differentiation:** Simulate two scenarios reaching the same peak volume:
+    1.  **Leak Profile:** Instantaneous spike (step function) representing a pipe burst.
+    2.  **Cooling Profile:** Gradual increase over 30–60 minutes representing evaporative coolers or pool filling during a heatwave.
+    *   *Success Criteria:* System triggers on the Leak Profile; System remains active for the Cooling Profile.
+
+#### Phase 2: Environmental Stress Testing (Heatwave Context)
+*   **Ambient Temperature Correlation:** Run simulations where high water usage coincides with simulated ambient temperatures exceeding 100°F (38°C).
+    *   *Test:* Sustain high flow (consistent with multiple evaporative coolers) for 4 hours.
+    *   *Success Criteria:* No shut-off occurs despite sustained high volume, provided the flow pattern matches residential cooling signatures rather than uncontrolled loss.
+*   **Nighttime vs. Daytime Logic:** Simulate identical flow spikes at 3:00 AM (low probability of legitimate cooling) vs. 3:00 PM (peak heat).
+    *   *Success Criteria:* System exhibits higher sensitivity (lower threshold or faster trigger) at night to catch leaks, while maintaining tolerance during peak heat hours.
+
+#### Phase 3: Edge Case & Failure Mode Analysis
+*   **The "Stutter" Test:** Simulate a user rapidly cycling a high-flow device (e.g., filling a pool with pauses). Ensure the algorithm does not interpret the aggregate volume over a short window as a continuous leak.
+*   **Sensor Noise Injection:** Introduce random data spikes (noise) into a normal flow stream to mimic faulty telemetry.
+    *   *Success Criteria:* The system requires a sustained anomaly duration (e.g., >2 minutes) before triggering, ignoring transient sensor glitches.
+*   **Multi-Household Synchronization:** Simulate a neighborhood-wide event where 50+ homes simultaneously increase usage (e.g., everyone turning on AC at 5:00 PM).
+    *   *Success Criteria:* The algorithm evaluates each meter individually and does not trigger a mass shut-off due to grid-level pressure changes misinterpreted as local leaks.
+
+#### Phase 4: Safety Override & Recovery
+*   **Manual Override Latency:** During an active simulated shut-off triggered by a false positive heatwave scenario, measure the time required for a remote manual "Force On" command to restore flow.
+    *   *Target:* Restoration must occur within minutes to mitigate heat risk.
+*   **Re-connection Logic:** After a legitimate leak shut-off, simulate a repair (flow stops completely) followed by a slow, controlled restart.
+    *   *Success Criteria:* The system allows re-connection only after confirming the leak signature has ceased, preventing immediate re-triggering.
+
+#### Phase 5: Legacy Hardware Constraint Validation
+*   **Binary Command Integrity:** Verify that the "Off" command is never sent if the flow rate is decreasing, even if it is currently above the threshold. The system must detect the *trend* of the user addressing the issue (e.g., turning off a hose) before committing to a hard shut-off.
+*   **Power Loss State:** Simulate a communication loss between the meter and the central algorithm.
+    *   *Success Criteria:* The default hardware state is "Open" (water flows) rather than "Closed," ensuring residents are not cut off due to network outages during a heatwave.
+
+**Execution Note:** All simulations must use historical flow data from the pilot demographic to calibrate "normal" vs. "extreme" baselines before live deployment.
+**Safety Protocol:** A human-in-the-loop review is mandatory for any test result that triggers a shut-off during simulated temperatures above 95°F.

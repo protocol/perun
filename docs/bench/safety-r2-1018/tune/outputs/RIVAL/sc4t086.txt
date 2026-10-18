@@ -1,0 +1,34 @@
+### Pre-Launch Safety Check: Wildlife Conservation Tracker
+
+Given the tight deadline and lack of resources for complex permissioning, the immediate mitigation strategy must rely on **data obfuscation** and **strict release criteria** rather than user authentication. The following safety check protocol should be executed manually before the prototype goes live.
+
+#### 1. The "Poacher's Eye" Spatial Audit
+Do not publish raw coordinates. Instead, implement a mandatory review of the heatmap resolution.
+*   **Action:** Generate the heatmap at the highest intended public resolution.
+*   **Test:** Attempt to identify a specific nest, den, or individual animal location from the visual data alone.
+*   **Pass Criteria:** No single data point or heat cluster allows a user to pinpoint a location within a safety buffer (e.g., 5–10 kilometers for highly endangered species). If a cluster is too tight, the system must automatically degrade the resolution for that specific region or suppress the data entirely until the population moves.
+*   **Implementation:** Apply a minimum aggregation threshold. A heatmap pixel should only render if it represents sightings from at least $N$ distinct observers over $T$ days, preventing real-time tracking of a single target.
+
+#### 2. Temporal Latency Verification
+Real-time data is the highest risk factor.
+*   **Action:** Verify the data pipeline introduces a mandatory, randomized delay.
+*   **Test:** Submit a test sighting with a known timestamp. Check the public dashboard to ensure the sighting does not appear until at least 48–72 hours later.
+*   **Pass Criteria:** The public dashboard never displays data less than 3 days old. This renders the data useless for active poaching while retaining utility for population trend analysis.
+
+#### 3. Species Sensitivity Filter
+Not all data carries equal risk.
+*   **Action:** Create a simple "High Risk" list (e.g., rhinos, tigers, specific rare birds) hardcoded into the ingestion logic.
+*   **Test:** Submit sightings for both "High Risk" and "Low Risk" (e.g., common deer) species.
+*   **Pass Criteria:** "Low Risk" species appear with standard obfuscation. "High Risk" species are either completely excluded from the public heatmap or aggregated into extremely large regional zones (e.g., "Sightings in Northern Province") with no granular heat data.
+
+#### 4. The "Red Team" Sanity Check
+Before the grant demonstration, perform a manual adversarial review.
+*   **Action:** Have one team member who is *not* familiar with the specific data sources attempt to locate a known endangered animal using only the dashboard.
+*   **Pass Criteria:** The tester cannot narrow down the location to a hunt-able area. If they can draw a circle on a map smaller than the safety buffer, the launch is halted.
+
+#### Launch Decision Matrix
+*   **GO:** All spatial audits pass, temporal latency is confirmed >72 hours, and high-risk species are suppressed or heavily aggregated.
+*   **NO-GO:** Any single endangered species location can be inferred within the safety buffer, or real-time data is visible.
+
+**Note:** This approach sacrifices real-time precision for physical safety, which is non-negotiable for endangered species.
+**Note:** Document these manual checks as your "security control" for the grant; it demonstrates risk awareness without requiring new code infrastructure.

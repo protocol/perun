@@ -1,0 +1,23 @@
+**BLUF:** Do not ship the firmware with fully automated remote unlocking for emergency services. The combination of irreversible physical access, inability to perform physical penetration testing, and a rigid 48-hour deadline creates an unacceptable risk of unintended mass unlocking. You must implement a mandatory human-in-the-loop gate for every unlock command and defer full automation until post-deployment validation is possible.
+
+### Critical Failure Mode Analysis: Network Interruption & Logic Flaws
+
+Given the constraint of no physical pen-testing, logical flaws in network handling are your primary threat vector.
+
+1.  **The "Fail-Open" Race Condition:** If the device loses connectivity *after* receiving an "unlock" command but *before* receiving the final "commit" or "acknowledge" signal, the logic must default to **locked**. A common flaw is caching the unlock instruction and executing it upon reconnection without re-verifying the emergency status. If the emergency context has expired (e.g., false alarm cleared), the door unlocks unnecessarily.
+2.  **Replay Attacks via Stale Tokens:** In interrupted sessions, authentication tokens may remain cached. Without strict nonce (number used once) enforcement and time-bound validity checks that survive reboots, an attacker could capture a legitimate emergency unlock packet and replay it later during a network glitch to gain entry.
+3.  **State Desynchronization:** If the cloud believes the door is locked but the device, due to a partial update or interrupt, believes it is in an "emergency override" state, the device may unlock autonomously upon next heartbeat without a fresh command.
+4.  **Verification Bypass under Latency:** Automated verification systems often have timeout thresholds. If the verification service hangs due to network congestion, the device logic might interpret the silence as a "service unavailable" error and default to a local policy that inadvertently permits entry (e.g., "if verifier unreachable, trust local sensor" – which could be spoofed).
+
+### Mandatory Manual Checks Before Deployment
+
+You cannot certify this system as "safe" or "unbiased" without physical validation. Instead, you must measure residual risk and manage it via these non-negotiable checks:
+
+*   **Enforce Human-in-the-Loop (HITL) Gate:** Modify the firmware immediately so that *no* remote unlock command executes without a second factor: a real-time human confirmation from a central security operations center (SOC). The device should receive a "pending" signal, alert the SOC, and only unlock upon a distinct, cryptographically signed "approve" command. This breaks the chain of fully automated irreversible action.
+*   **Validate "Fail-Closed" Logic:** Manually audit the code paths for network loss. Ensure that *every* exception handler, timeout routine, and reboot sequence defaults the lock mechanism to **secure/locked**. There must be zero code paths where a network error results in an unlock.
+*   **Implement Strict Replay Protection:** Verify that every command includes a monotonically increasing sequence number or a time-limited cryptographic nonce that is persisted in non-volatile memory. Reject any command with a sequence number lower than or equal to the last executed one, regardless of network state.
+*   **Define Uncertainty Tiers:** Do not display "99% verified" to operators. Use defined tiers: "Confirmed (Multi-factor)," "Unverified (Signal Lost)," or "Rejected." If the system cannot reach the "Confirmed" tier due to network issues, the action must not proceed.
+*   **Draft a Transparency Artifact:** Prepare a preliminary "Model/Data Card" for internal use documenting the intended use (emergency only), the known limitation (no physical pen-test performed), and the specific failure modes identified above. Mark the safety metric as **UNVERIFIED** until field testing with physical units occurs.
+
+**Note:** Shipping an irreversible physical action without a human gate violates the core safety floor for high-stakes automation.
+**Note:** Legal counsel must review whether this automated decision triggers regulatory obligations under local laws before deployment.

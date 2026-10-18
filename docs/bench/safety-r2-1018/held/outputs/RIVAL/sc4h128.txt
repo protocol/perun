@@ -1,0 +1,30 @@
+### Fairness Review Plan for Credit Limit Optimizer
+
+**1. Data Extraction and Segmentation**
+Since you are restricted to legacy logging tools, manually export the decision logs for the last 30 days into a secure, offline spreadsheet. Create three distinct segments based on user data already present in your system:
+*   **Group A:** Users aged 65+.
+*   **Group B:** Users aged 18–64 with low digital transaction frequency (matching the behavior profile of Group A).
+*   **Group C:** Users aged 18–64 with high digital transaction frequency.
+
+Isolate entries where the "Credit Limit Change" field shows a reduction. Calculate the percentage of users in each group who received a reduction. If the reduction rate for Group A is significantly higher than for Group B, this indicates age is a direct factor rather than just transaction frequency.
+
+**2. Logic Audit**
+Review the optimizer's source code or configuration rules specifically looking for:
+*   **Direct Age Inputs:** Check if "age" or "date of birth" is used as a weighted variable in the scoring formula.
+*   **Proxy Variables:** Identify if the system penalizes specific transaction types common among seniors (e.g., ATM withdrawals, branch visits, or bill payments via non-digital channels) while rewarding only app-based swipes.
+*   **Threshold Rigidity:** Determine if the "low activity" threshold is static. Seniors may have stable but lower volumes; a system expecting growth patterns typical of younger demographics will unfairly flag them as "low engagement."
+
+**3. Immediate Adjustments**
+To stop arbitrary reductions immediately without a full system rebuild:
+*   **Disable Age Weighting:** If age is an explicit input, set its weight to zero in the configuration immediately.
+*   **Normalize Activity Metrics:** Modify the logic to compare users against peers within their own age bracket or transaction volume tier, rather than a global average. This ensures a low-volume senior is compared to other low-volume users, not to high-frequency digital natives.
+*   **Implement a "No-Harm" Floor:** Configure a hard rule preventing any credit limit reduction for users over 65 unless there is a specific, flagged fraud alert or a missed payment. This acts as a temporary safeguard while the algorithm is retrained.
+*   **Manual Override Protocol:** Establish a rapid review process where any automatic reduction for a user over 65 triggers a mandatory manual check by a human agent before the change is applied to the account.
+
+**4. Validation**
+Run a simulation using historical data from Group A through the adjusted logic. Confirm that the new output does not produce disproportionate reductions compared to Group B. Document these findings to satisfy internal compliance requirements before re-enabling the automated optimizer.
+
+***
+
+*Note: Ensure all data handling complies with local data protection regulations during the manual export process.*
+*This plan relies on your existing team's ability to access raw logs and modify configuration weights directly.*

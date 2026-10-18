@@ -1,0 +1,33 @@
+**Risk Mitigation Strategy: Mental-Health Companion Safety**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before release, explicitly document the following specific harms for this feature:
+*   **Unsafe High-Stakes Guidance:** The model recommends actions that escalate self-harm risk or contradicts clinical safety protocols during a crisis. *Worst Case:* User follows advice, resulting in severe injury or death.
+*   **Hallucination as Fact:** The system invents coping techniques or medical facts with false authority. *Worst Case:* User relies on fabricated advice, delaying effective care.
+*   **Over-Reliance:** The interface design implies the app replaces human crisis intervention. *Worst Case:* User isolates from human support during a life-threatening episode.
+
+**2. Measurement Plan (Runnable Evaluations)**
+Do not assert safety; measure it using adversarial testing. Create a test suite with one row per identified harm:
+*   **Probe Set:** Construct inputs simulating high-severity crisis states (e.g., explicit mentions of self-harm, hopelessness, specific plans) and edge cases where standard coping mechanisms are contraindicated. Include "known-bad" positive controls (inputs that must trigger a crisis protocol) and "known-good" negative controls (general anxiety where coping suggestions are safe).
+*   **Metric & Threshold:** Define a **zero-tolerance threshold** for any output that fails to de-escalate or that suggests harmful actions in high-severity probes.
+*   **Stop Condition:** If any single high-severity probe generates an unsafe recommendation, the launch is blocked immediately.
+*   **Injection & Leakage Checks:** Test if user-supplied content can inject malicious instructions (prompt injection) or if the system inadvertently reveals private data from other users.
+*   **Reporting:** Report results as "Residual Risk." If a metric cannot be measured due to infrastructure limits, label it **UNVERIFIED**; do not invent a safety percentage.
+
+**3. Risk Management Controls**
+Given the constraint that complex real-time human oversight for *every* interaction is impossible, implement these targeted gates:
+*   **Mandatory Human Gate for Irreversible Actions:** While every chat message cannot be reviewed, any detection of "high-severity" keywords or intent must trigger an immediate, hard-coded handoff to a human crisis counselor or emergency services protocol. Fully autonomous execution of advice in these specific high-stakes moments is prohibited.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "87% sure") to users, as this implies false precision. Instead, use defined coarse tiers for internal routing:
+    *   *Confirmed:* Matches verified clinical database.
+    *   *Unverified:* Lacks corroboration; restrict output to general support and resource referral.
+*   **Uncertainty & Override:** Design the UI to clearly state the system is an AI companion, not a therapist. Provide an obvious, one-tap "Connect to Human" override on every screen.
+*   **Transparency Artifact:** Publish a **Model Card** detailing intended use (support, not treatment), limitations (not for acute crisis without human backup), and subgroup performance results. Absence of this card is a transparency failure.
+
+**4. Governance**
+Assign a specific owner (e.g., Lead Clinical Advisor) responsible for reviewing any failure detected in the evals. Re-review the harm inventory whenever the model, data, or crisis protocols change.
+
+**5. Legal & Regulatory Routing**
+Because this system operates in a high-stakes health domain, route questions regarding legal disclosure requirements and regulated automated decision-making (e.g., EU AI Act, local health regulations) to legal counsel immediately. Do not assert compliance internally; let counsel define the duty.
+
+**Note:** This strategy treats the "tight technical constraint" as a fixed input but refuses to relax the floor: high-stakes crisis moments require a human gate or a hard-coded safety fallback, not probabilistic hope.
+**Note:** Any claim of "bias-free" or "safe" without running the specified adversarial probes is invalid; rely only on the measured residual risk.

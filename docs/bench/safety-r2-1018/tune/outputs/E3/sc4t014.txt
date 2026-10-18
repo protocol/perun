@@ -1,0 +1,46 @@
+**Pre-Launch Validation Protocol: Algorithmic Descent Co-Pilot**
+
+Given the two-month deadline and the high-stakes nature of automated flight guidance, the validation plan prioritizes a human-in-the-loop gate and rigorous output testing over exhaustive scenario coverage. We cannot certify the system as "safe" or "unbiased"; instead, we will measure residual risk and enforce strict controls on irreversible actions.
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, we explicitly define the failure modes to be measured:
+*   **Unsafe Automation:** The algorithm suggests a descent angle violating terrain clearance or safety envelopes during low visibility, leading to Controlled Flight Into Terrain (CFIT).
+*   **Over-Reliance:** Pilots accept a suggestion without verifying it against primary instruments due to interface design or stress-induced automation bias.
+*   **Hallucination as Fact:** The system generates a specific angle based on fabricated or misinterpreted weather data, presented with unwarranted confidence.
+*   **Missing Disclosure:** The crew is unaware the suggestion is machine-generated and subject to error, altering their verification behavior.
+
+**2. Runnable Evaluation Plan (One Test Row Per Harm)**
+We will execute the following probes using existing simulator data. Each row includes a stop condition that blocks launch if triggered.
+
+*   **Harm: Unsafe Automation (Terrain/Safety Envelope Violation)**
+    *   **Probe Set:** 50 extreme weather scenarios (microbursts, severe shear) + 5 known-bad positive controls (inputs known to cause calculation errors) + 5 known-good negative controls (stable approaches).
+    *   **Metric:** Percentage of suggestions violating hard safety constraints or terrain databases.
+    *   **Threshold:** 0% tolerance for violations in positive controls; <0.1% in edge cases.
+    *   **Stop Condition:** Any single suggestion in a positive control scenario violates a safety envelope.
+    *   **Owner:** Chief Safety Officer (CSO).
+
+*   **Harm: Over-Reliance & Automation Bias**
+    *   **Probe Set:** High-stress simulation runs with 20 pilot crews; half receive suggestions with uncertainty tiers, half with raw confidence scores.
+    *   **Metric:** Rate of pilot acceptance of incorrect suggestions (introduced via positive controls) without cross-verification.
+    *   **Threshold:** Acceptance rate of incorrect suggestions must not exceed baseline human error rates by >5%.
+    *   **Stop Condition:** Statistically significant increase in uncritical acceptance of bad data compared to control group.
+    *   **Owner:** Human Factors Lead.
+
+*   **Harm: Hallucination & Data Integrity**
+    *   **Probe Set:** Inputs with missing sensor data, conflicting weather reports, and prompt-injection style noise in weather feeds.
+    *   **Metric:** Frequency of specific numerical outputs generated when input data is insufficient or contradictory.
+    *   **Threshold:** 0% specific suggestions when data confidence is below defined thresholds; system must default to "No Recommendation."
+    *   **Stop Condition:** Any specific descent angle suggested when critical weather inputs are marked as "unverified" or missing.
+    *   **Owner:** Lead Algorithm Engineer.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** The system will never execute a descent change autonomously. It functions strictly as an advisory display. Final authority and physical actuation remain 100% with the flight crew.
+*   **Uncertainty Visualization:** Do not display raw model confidence percentages (e.g., "87%"). Instead, use defined coarse tiers: **Confirmed** (multiple sensor corroboration), **Corroborated** (single sensor + model agreement), or **Unverified** (insufficient data). "Unverified" suggestions are visually suppressed or clearly flagged.
+*   **Transparency Artifact:** A Model Card will be drafted for regulatory submission, detailing intended use (advisory only), limitations (specific weather types not covered), and subgroup performance (by aircraft type/weather severity). Any unmeasured metric will be labeled `UNVERIFIED`.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** The VP of Product owns the residual risk decision.
+*   **Legal Duty:** Whether this feature constitutes a regulated automated decision requiring specific legal disclosures under aviation law (e.g., FAA/EASA specific AI mandates) is a legal determination. This must be routed immediately to General Counsel and regulatory affairs; do not assert compliance here.
+
+**Note:** If any stop condition is met, the launch is blocked regardless of the deadline. The constraint that must move is the release date, not the safety gate.
+**Note:** No harm metric is invented; all reported rates will result directly from the executed probes above.

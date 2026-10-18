@@ -1,0 +1,32 @@
+**Pre-Launch Review Strategy: Mitigating False Positives from Data Latency**
+
+**1. Harm Inventory & Risk Definition**
+The primary harm is **unfair exclusion**: legitimate travelers denied entry due to outdated watchlist data (false positives). The worst-case scenario involves diplomatic incidents, detainment of innocent individuals, and reputational damage to the security firm and host government. This is a **high-stakes, irreversible action** (denial of entry) executed by an automated system.
+
+**2. Simulation Framework (Measure)**
+Since live feeds are unavailable, construct a "Synthetic Latency Lab" using the static snapshot:
+*   **Positive Control Set (Known Bad):** Inject records from the static snapshot that *should* be flagged. Verify the kiosk correctly denies these.
+*   **Negative Control Set (Known Good - The Critical Test):** Create a dataset of identities that were added to the *real* watchlist *after* the static snapshot date. Since you cannot access the live list, synthesize these based on public incident reports or hypothetical profiles representing typical new threats. The system must **fail to flag these** in the simulation. If the system flags them using only the old snapshot, your logic is flawed; if it doesn't flag them, you have confirmed the latency gap exists.
+*   **Adversarial "Time-Travel" Probes:** Take identities currently clear in the static snapshot but simulate a "update event" where they appear on a new list. Test the system's behavior when the local cache differs from the simulated "truth."
+*   **Metric & Threshold:** Define a **Zero-Tolerance Stop Condition** for any automated denial where the match confidence relies solely on data older than a specific threshold (e.g., >24 hours) without human verification. Do not invent a "safe" false-positive rate; any unverified denial is a failure.
+
+**3. Management Controls (Manage)**
+*   **Mandatory Human-in-the-Loop (HITL) Gate:** Given the risk of outdated data causing irreversible denial, **fully automated denial is unsafe.** Re-architect the flow:
+    *   *Match Found:* Trigger an immediate alert to a border officer for manual verification against real-time channels before denial is enacted.
+    *   *No Match:* Allow automated passage.
+    *   *Uncertain/Data Stale:* Default to manual review.
+*   **Confidence Tiering:** Do not display raw match percentages (e.g., "98% match") to operators, as this implies precision the stale data cannot support. Use defined tiers: **"Confirmed (Live Verified)," "Stale Match (Requires Review),"** or **"No Match."**
+*   **Disclosure & Transparency:** Travelers denied entry must be informed that the decision involves automated processing and provided an immediate, clear path to human appeal.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific product owner responsible for reviewing every simulated false positive before launch.
+*   **Legal Routing:** The use of biometric data for automated border control likely triggers strict regulations (e.g., EU AI Act high-risk classification, GDPR). **Route immediately to legal counsel** to verify if fully automated denial is legally permissible or if human review is mandated by law. Do not assert compliance internally.
+*   **Documentation:** Publish a **Model Card** detailing the data limitation (static snapshot), the known risk of latency-induced errors, and the mandatory human review protocol. Absence of this card is a transparency failure.
+
+**Execution Plan (10 Days):**
+*   **Days 1-3:** Build synthetic "new threat" dataset and define HITL workflow.
+*   **Days 4-7:** Run adversarial simulations; tune thresholds to ensure no automated denials occur on stale matches.
+*   **Days 8-9:** Legal review of the HITL protocol and disclosure language.
+*   **Day 10:** Final go/no-go based on zero automated false positives in simulation.
+
+**Note:** This strategy assumes the "mandatory deadline" does not override the ethical and legal necessity of human review for high-stakes decisions. If the government demands fully automated denial despite known data latency, the residual risk must be formally accepted by the government stakeholder, not the engineering team.

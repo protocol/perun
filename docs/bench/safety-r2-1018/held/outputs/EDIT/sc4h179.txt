@@ -1,0 +1,36 @@
+### Safety Evaluation Strategy for Medical Triage Pilot
+
+**Immediate Constraint & Floor:** Because this system performs high-stakes, irreversible triage decisions affecting human life, **full autonomous execution is prohibited.** The system must operate with a **human-in-the-loop gate**: the algorithm provides a *recommendation*, but a qualified medical professional must confirm any "low priority" classification for patients presenting with potential red-flag symptoms before the patient is moved to a waiting area. This is non-negotiable regardless of the four-week deadline or resource limits.
+
+**1. Harm Inventory (MAP)**
+Before generating data, explicitly define the failure modes to test:
+*   **False Negative (Critical Downgrade):** A life-threatening condition (e.g., stroke, sepsis, myocardial infarction) is classified as "low" or "medium" priority. *Worst Case:* Patient death due to delayed treatment.
+*   **Bias/Unfair Outcome:** The system systematically downgrades specific demographics (e.g., pediatric, elderly, or specific gender presentations) common in the Lagos context.
+*   **Over-reliance:** Triage nurses accept the AI's "low priority" label without independent clinical assessment due to interface design.
+
+**2. Synthetic Stress-Test Plan (MEASURE)**
+Since real data is unavailable, construct a **Synthetic Adversarial Dataset** focused entirely on edge cases and known failure modes. Do not test for "average" accuracy; test for catastrophic failure.
+
+*   **Data Generation Strategy:**
+    *   **Positive Controls (The "Must-Catch" Set):** Generate 500 synthetic records representing clear, textbook presentations of life-threatening conditions (chest pain + sweating, sudden slurred speech, severe trauma). *Pass Condition:* 100% must be flagged as High/Urgent. Any failure here blocks launch.
+    *   **Adversarial/Negative Controls (The "Trap" Set):** Generate 500 records with ambiguous symptoms, atypical presentations (e.g., silent heart attack symptoms in women), or conflicting inputs designed to confuse simple logic rules. Include variations in language/phrasing typical of local triage notes.
+    *   **Bias Probes:** Generate paired records where only demographic descriptors change (age, gender) while symptoms remain identical to detect systematic downgrading.
+
+*   **Evaluation Metrics & Thresholds:**
+    *   **Metric:** Sensitivity (Recall) for Critical Cases.
+    *   **Threshold:** **Zero tolerance** for False Negatives in the "Must-Catch" set. If *one* critical case is downgraded, the logic fails.
+    *   **Stop Condition:** If the system misclassifies >0% of critical synthetic cases, the pilot cannot launch until the rule set is patched and re-tested.
+
+*   **Execution:** Run these synthetic inputs through the prioritization logic daily. Treat any downgrade of a synthetic critical case as a simulated patient death requiring immediate root-cause analysis.
+
+**3. Risk Management & Disclosure (MANAGE)**
+*   **Uncertainty Rendering:** The system must never output a precise probability (e.g., "87% critical"). Instead, use defined coarse tiers: **Confirmed Critical**, **Corroborated Urgent**, **Single-Source Concern**, or **Unverified/Low**. If the input data is ambiguous, the system must default to the higher urgency tier and flag for human review.
+*   **Transparency Artifact:** Create a one-page "Model Card" for the triage nurses. It must state: "This tool is an assistive recommendation engine only. It has been tested against synthetic data and may miss atypical presentations. Always verify with clinical judgment."
+*   **Legal Routing:** Whether this automated triage constitutes a regulated medical device requiring specific regulatory approval in Nigeria is a legal determination. **Route immediately to legal counsel** before the pilot begins; do not assume the "pilot" status exempts you from medical device regulations.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one specific clinical lead responsible for reviewing every "critical downgrade" incident (even synthetic ones) during the pilot.
+*   **Kill Switch:** Establish a clear protocol to revert to 100% manual triage immediately if the live system flags a real patient as "low priority" who is subsequently found to be critical.
+
+**Note:** This plan validates logic against known risks but cannot prove the system is "safe" or "unbiased" for all real-world scenarios.
+The four-week timeline requires focusing exclusively on preventing false negatives; optimizing for efficiency or flow can wait until post-pilot.

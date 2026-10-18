@@ -1,0 +1,32 @@
+### Pre-Launch Safety Review Method
+
+Given the constraint against external databases and the critical nature of drug interactions, your safety review must rely on a **deterministic, closed-loop testing framework** using a curated internal "Gold Standard" dataset.
+
+**1. Construct the "Gold Standard" Interaction Matrix**
+Since you cannot query live databases, manually compile a high-priority dataset of known dangerous interactions relevant to your target patient demographics.
+*   **Source Data:** Extract specific interaction pairs (Drug A + Drug B = Contraindication) from established clinical guidelines (e.g., FDA labels, TGA alerts, standard formularies like MIMS or eTG) available to your clinical team.
+*   **Scope:** Focus on the top 50–100 high-severity interactions (e.g., MAOIs + SSRIs, Warfarin + NSAIDs) rather than attempting comprehensive coverage.
+*   **Format:** Structure this as a static JSON or CSV file containing: `Patient History`, `Current Medications`, `Proposed New Drug`, and `Expected Outcome` (e.g., "HARD STOP: Contraindicated").
+
+**2. Execute Deterministic Scenario Testing**
+Run your prescription generator against this static dataset in an isolated environment.
+*   **Input Injection:** Feed the system patient profiles containing the specific drug combinations from your Gold Standard matrix.
+*   **Binary Verification:** The test passes only if the system explicitly flags the interaction and blocks the prescription. Any recommendation that proceeds without a warning is a critical failure.
+*   **Edge Case Variation:** Modify patient variables (age, renal function, weight) within the test cases to ensure the logic holds across different physiological states, not just simple drug pairs.
+
+**3. Implement Hardcoded Guardrails (The "Safety Interlock")**
+Do not rely solely on the generative model's reasoning. Implement a deterministic pre-check layer that runs *before* the AI generates a recommendation.
+*   **Rule Logic:** Create a strict `IF [Drug A] AND [Drug B] IN [Patient List] THEN BLOCK` function.
+*   **Priority Override:** This logic must supersede any AI output. If the hardcoded rule triggers, the system should return a fixed safety message and prevent the prescription from being drafted, regardless of what the generative model suggests.
+*   **Maintenance:** This list becomes your "never-execute" registry, updated only through manual clinical review, not automated learning.
+
+### Hardcoded Rules to Implement
+
+To immediately mitigate risk before launch, hardcode the following logical constraints:
+
+1.  **The Absolute Contraindication List:** A fixed lookup table of drug pairs that must never be co-prescribed. If a match is found, the system terminates the workflow immediately.
+2.  **Therapeutic Class Caps:** Rules preventing the simultaneous prescription of multiple drugs from the same high-risk class (e.g., "Do not allow >1 opioid" or "Do not allow >1 anticoagulant") unless a specific, rare exemption code is entered by a senior clinician.
+3.  **Maximum Daily Dose Ceilings:** Hard limits on total milligram dosage per 24 hours for narrow-therapeutic-index drugs, calculated by summing all active prescriptions in the patient's history.
+4.  **Renal/Hepatic Adjustment Triggers:** If patient data indicates reduced organ function, hardcode a rule that automatically reduces the maximum allowable dose of cleared medications by a fixed percentage (e.g., 50%) or blocks them entirely.
+
+**Note:** This approach shifts reliance from probabilistic AI reasoning to deterministic safety checks, which is essential for high-stakes medical applications. Ensure your clinical team validates the "Gold Standard" dataset for accuracy before testing begins.

@@ -1,0 +1,25 @@
+### Safety Check Design: Equitable Access Verification
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Systemic exclusion of non-digital users (elderly, low-literacy) due to "app-first" logic or inventory hoarding.
+*   **Affected Group:** Rural elderly residents without smartphones or data access.
+*   **Worst Realistic Case:** The automated scheduler fills 100% of slots via the app before community health workers (CHWs) or phone lines can access the pool, leaving vulnerable populations unvaccinated despite physical availability.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+
+| Harm Probe | Input / Scenario | Positive Control (Should Fail) | Negative Control (Should Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Inventory Hoarding** | Simulate high-volume app traffic filling 90% of slots in a mock district. | App users see slots; CHW/Phone interface shows "0 available" while total capacity > 10%. | App users see slots; CHW/Phone interface shows proportional availability (e.g., reserved pool). | **Pass:** Non-digital channels access ≥20% of total inventory at all times. | **Block Launch** if non-digital access drops below threshold during peak load. |
+| **Alternative Pathway Function** | Execute booking via SMS gateway and manual CHW entry with intermittent sync. | System rejects valid SMS/Manual input due to "app-only" validation flags. | System accepts input, reserves slot, and syncs correctly upon reconnection. | **Pass:** 100% success rate on alternative channels in offline/online transition tests. | **Block Launch** if any valid non-app booking is rejected. |
+| **Exclusion Logic** | Inject user profiles marked "no smartphone" into the allocation algorithm. | Algorithm routes these users to a dead-end or waitlist indefinitely. | Algorithm triggers a callback task for a CHW or reserves a phone-bookable slot. | **Pass:** 0% of "no smartphone" profiles end in unresolvable dead-ends. | **Block Launch** if exclusion logic creates unactionable records. |
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Reserved Inventory Pool:** Hard-code a rule that a fixed percentage (e.g., 30%) of slots are *invisible* to the app and reserved strictly for CHW/SMS/Phone channels. This prevents automated logic from consuming the entire supply.
+*   **Manual Override Gate:** Before expanding to the next district, a human operator must verify that the "Reserved Pool" was accessed by non-digital users in the pilot. If the reserved pool remains untouched while the app pool is empty, the rollout pauses for logic review.
+*   **Uncertainty Display:** If sync is delayed, the system must display "Status Unverified – Contact Local Health Post" rather than showing potentially stale "Available" counts that could lead to failed trips for elderly users.
+
+**4. Transparency Artifact**
+Create a one-page **System Limitation Card** for district leads stating: "This system reserves X% of slots for non-digital access. If the app shows full but the campaign is active, contact the CHW coordinator immediately." Do not claim the system is "bias-free"; state that equity relies on the reserved pool mechanism functioning as tested.
+
+**Note:** Legal requirements for equitable health access in Indonesia must be confirmed by local counsel; this plan addresses technical enforcement of equity goals.
+Ensure the "Reserved Pool" logic is immutable in the code to prevent accidental configuration changes during high-pressure rollout phases.

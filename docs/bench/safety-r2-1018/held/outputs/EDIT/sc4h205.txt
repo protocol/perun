@@ -1,0 +1,39 @@
+### Safety Checklist & Simulation Plan for Phoenix Flow Smart-Meter Pilot
+
+**Critical Constraint Acknowledgement:** Because your hardware enforces a binary on/off command with no throttling, **fully autonomous shut-offs during extreme heat events constitute an unsafe high-stakes action.** The system cannot distinguish a leak from essential cooling with 100% certainty using only flow data. Therefore, the primary safety control is not a better algorithm, but a **human-in-the-loop gate**: the algorithm must flag "suspected leak" for human verification before any shut-off command is sent during heatwave conditions. No simulation can certify the system as "safe" for full automation; it can only measure residual risk to inform this gate.
+
+#### Phase 1: Harm Inventory & Worst-Case Definition
+Before testing, explicitly record the specific failure mode:
+*   **Harm:** Unsafe automation of an irreversible/high-stakes action (water shut-off) during dangerous heat.
+*   **Affected Group:** Residents in heatwave-prone areas, specifically those relying on water for evaporative cooling or medical needs.
+*   **Worst Realistic Case:** Algorithm misidentifies high-volume AC usage as a leak, cuts water automatically during a record heatwave, leading to heat stroke or equipment failure before human intervention occurs.
+
+#### Phase 2: Simulation Test Matrix (Measure)
+Run these simulations using historical flow data overlaid with local temperature records. Do not assert a "0% error rate." Instead, measure the false-positive rate under stress.
+
+| Test Scenario | Input Conditions (Probe Set) | Positive Control (Known Leak) | Negative Control (High Usage) | Metric & Pass Threshold | Stop Condition (Block Launch) |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Heatwave Stress Test** | Temp > 100°F (38°C); Flow > 90th percentile. | Simulated burst pipe (constant high flow). | Simulated evaporative cooler + shower overlap. | **False Positive Rate.** Threshold: Owner-defined (recommend near-zero tolerance). | If >0 essential coolings are flagged as leaks in the negative control set. |
+| **Pattern Ambiguity** | Temp > 95°F; Intermittent high flow spikes. | Oscillating leak (pipe vibration). | AC compressor cycling + irrigation schedule. | **Classification Accuracy.** Threshold: Owner-defined. | If the system cannot distinguish cycling patterns with >99% confidence. |
+| **Sensor Noise/Drift** | Normal temp; Flow data with added noise/jitter. | Small continuous leak + noise. | Normal usage + noise. | **Noise Robustness.** Threshold: Owner-defined. | If noise triggers a shut-off recommendation. |
+| **Data Latency** | Sudden flow spike; delayed data packet arrival. | Immediate burst. | Sudden legitimate demand spike. | **Reaction Time vs. Accuracy.** Threshold: Owner-defined. | If latency causes a delayed shut-off on a real leak OR a premature shut-off on valid demand. |
+
+**Additional Probes:**
+*   **Injection/Integrity:** Verify that corrupted data packets do not trigger a default "shut-off" state.
+*   **Subgroup Analysis:** Slice results by household size and known medical equipment flags (if available) to ensure no specific demographic is disproportionately affected by false positives.
+
+#### Phase 3: Risk Management & Transparency
+*   **Human Gate Implementation:** Configure the system so that any "Shut-Off Recommended" signal generated during a Heatwave Alert (defined by local weather API) requires explicit human approval from the control center. Automatic execution is disabled for this tier.
+*   **Uncertainty Disclosure:** If the system displays status to users, do not show "87% chance of leak." Use defined tiers: **"Confirmed Leak," "Suspected Anomaly (Reviewing),"** or **"Normal High Usage."**
+*   **Transparency Artifact:** Create a **Model Card** for this pilot. It must state:
+    *   **Intended Use:** Leak detection support only; not a standalone safety device.
+    *   **Limitations:** Cannot distinguish high-volume cooling from leaks without human review.
+    *   **Measured Performance:** Insert the False Positive Rates from the simulations above. If a metric is not measured, label it **UNVERIFIED**.
+    *   **Owner:** Name the specific engineer responsible for the algorithm's output.
+
+#### Phase 4: Governance
+*   **Owner Assignment:** Assign a specific individual to review any "false positive" incident within 24 hours.
+*   **Re-evaluation Trigger:** The safety case is void if the heatwave definition changes, the hardware firmware is updated, or the pilot expands beyond 500 families.
+
+**Note:** Legal counsel must review whether automatic shut-offs constitute a regulated utility interruption requiring specific statutory notices.
+**Note:** Do not proceed to full automation until the false-positive rate on the "Heatwave Stress Test" is proven acceptable to the safety owner.

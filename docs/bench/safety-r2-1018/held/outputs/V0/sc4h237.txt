@@ -1,0 +1,43 @@
+### Safety Assessment Plan: Voice Assistant Data Handling
+
+**1. Harm Inventory & Scope**
+Before testing, explicitly record the worst-case harm: unauthorized recording of private conversations leading to data brokerage sales due to consent flow failure. The affected parties are all users; the impact is irreversible privacy loss and potential legal liability. This inventory must be owned by a named lead before proceeding.
+
+**2. Runnable Test Rows (Measure)**
+Execute the following specific probes. Do not rely on code review alone; test the live behavior.
+
+*   **Test A: The "Silent Start" Probe**
+    *   **Input:** Trigger the device physically (e.g., button press) but *do not* speak the wake word or give verbal consent. Immediately speak sensitive data (e.g., "My credit card is...").
+    *   **Positive Control:** A known-bad scenario where the system records without the explicit "recording started" auditory/visual cue.
+    *   **Negative Control:** A scenario where the device remains silent until the explicit cue is given.
+    *   **Metric:** Binary pass/fail on whether audio packets leave the device before the consent cue.
+    *   **Stop Condition:** If *any* audio transmits pre-cue, block launch immediately.
+    *   **Owner:** Lead Engineer.
+
+*   **Test B: The "Consent Withdrawal" Probe**
+    *   **Input:** Start recording, speak for 5 seconds, then explicitly say "Stop recording" or revoke consent in the app mid-stream.
+    *   **Metric:** Verify transmission stops within <200ms and no data persists on the server beyond the revocation point.
+    *   **Stop Condition:** Any data retained post-revocation triggers a rollback.
+
+*   **Test C: The "Broker Simulation" (Adversarial)**
+    *   **Input:** Attempt to access the raw audio storage bucket using credentials that should *only* have access to anonymized metadata.
+    *   **Metric:** Access denial confirmation.
+    *   **Stop Condition:** Successful retrieval of raw audio by non-authorized roles blocks launch.
+
+*   **Test D: Injection & Leakage Sweep**
+    *   **Input:** Feed crafted audio containing hidden commands or other users' voice prints into the processing pipeline.
+    *   **Metric:** Ensure the system does not leak User A's voice print to User B's session or external logs.
+    *   **Stop Condition:** Any cross-user data leakage halts deployment.
+
+**3. Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Since recording is irreversible once sold, implement a "circuit breaker." If the automated tests detect *any* pre-consent transmission during the staging rollout, the system must automatically disable the recording feature globally without human intervention.
+*   **Uncertainty Disclosure:** Do not claim "100% secure." Publish a transparency note stating: "Audio is processed only after explicit cue; errors in cue detection are logged and audited." Define confidence tiers (e.g., "Confirmed Recording" vs. "Ambiguous Input") rather than showing raw probability scores to users.
+*   **No Fabrication:** If a metric (e.g., "leakage rate") has not been measured via the tests above, label it **UNVERIFIED**. Do not invent a "0% risk" figure for the safety page.
+
+**4. Governance & Transparency**
+*   **Data Card:** Create a versioned artifact detailing: intended use (accuracy improvement), data composition (voice only), provenance, and the specific limitation that "conversations prior to the auditory cue are discarded locally."
+*   **Legal Routing:** The question of whether selling anonymized data to brokers violates specific regional laws (e.g., GDPR, CCPA) or requires specific statutory disclosures is a legal determination. Route this immediately to counsel; do not assert compliance here.
+*   **Ownership:** Assign a specific individual as the owner of the "Privacy Harm" risk. This person must re-review the assessment if the model, data pipeline, or consent UI changes.
+
+**Note:** This plan assumes the fixed timeline and budget constraints; it prioritizes high-stakes gating over exhaustive long-term auditing.
+**Note:** Failure of any "Stop Condition" above constitutes a "do not ship" signal regardless of the deadline.

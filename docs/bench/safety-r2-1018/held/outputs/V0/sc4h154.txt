@@ -1,0 +1,39 @@
+### Product Output Safety Review: Automated Prescription Refill System
+
+**Immediate Safety Finding: High-Stakes Automation Without Human Gate**
+Your system executes **irreversible, high-stakes actions** (shipping medication) based on potentially stale data (hourly sync) for a vulnerable population (elderly/chronic conditions). Under product output safety standards, **fully autonomous execution of this action is the failure**, not the feature. The synchronization delay creates a known window where dosage changes, contraindications, or inventory errors cannot be detected in real-time. You must implement a **human-in-the-loop gate** for any order where the last data sync is older than a safe threshold or where dosage/inventory flags are ambiguous. Do not ship full automation for these cases.
+
+**Harm Inventory (MAP)**
+Before testing, record these specific risks:
+*   **Unsafe Automation:** Shipping incorrect dosages or expired meds due to hourly lag between doctor orders and system processing.
+*   **Hallucination as Fact:** The system presenting a "confirmed" shipment status when the underlying inventory or prescription data is unverified due to sync delays.
+*   **Over-reliance:** Pharmacists or patients trusting the automated output without knowing the data latency window.
+*   **Bias/Exclusion:** Systemic failure for patients whose prescriptions change frequently (e.g., acute adjustments) versus stable ones, disproportionately affecting those with complex chronic conditions.
+
+**Measurement Protocol (MEASURE)**
+Do not just test code logic; test the **output harm** under latency. Create a runnable eval with one row per harm:
+1.  **Probe Set:** Simulate doctor orders changing dosage *within* the hourly sync window. Include a **positive control** (known bad: order changed, system ships old dose) and **negative control** (order stable, system ships correctly).
+2.  **Metric:** Rate of incorrect shipments per 100 orders during sync lag.
+3.  **Threshold:** **Zero tolerance** for incorrect dosage shipments. Any failure triggers an immediate stop condition and rollback to manual review.
+4.  **Injection/Leakage Check:** Test if stale data causes the system to leak private health info or act on unauthorized requests.
+5.  **Reporting:** If you have not measured the error rate under lag, report it as **UNVERIFIED**. Do not invent a "99% safe" metric.
+
+**Risk Management (MANAGE)**
+*   **Human Gate:** Any order flagged by the sync-delay window must route to a pharmacist for explicit confirmation before shipping.
+*   **Uncertainty Disclosure:** Surface the data latency to the user/pharmacist. Use a **defined coarse tier** for confidence (e.g., "Data Verified <1hr ago" vs. "Data Stale: Manual Review Required") rather than a false-precision percentage. Define what each tier means.
+*   **Transparency Artifact:** Draft a **Model/Data Card** for this feature listing: intended use (stable refills only), limitations (hourly sync lag), known failure modes (missed dosage changes), and owner. Shipping without this card is a transparency failure.
+
+**Governance (GOVERN)**
+Name the single owner responsible for reviewing output harms when the sync protocol, model, or patient demographic changes. Even in a pilot of ten, this must be written down.
+
+**Legal & Regulatory Routing**
+Whether this automated decision falls under specific EU regulations (e.g., EU AI Act high-risk classification for health) or requires specific legal disclosures is a determination for **counsel**. Route this immediately; do not assert compliance here.
+
+**Definition of Done for Pilot**
+1.  Human-in-the-loop gate active for all sync-lag scenarios.
+2.  Harm inventory completed with worst-case scenarios documented.
+3.  Eval protocol run with zero-tolerance stop condition for dosage errors.
+4.  Model/Data Card drafted and attached to the feature.
+5.  Legal routing confirmed for regulatory duties.
+
+*Note: The hourly sync constraint is a fixed input; the solution is gating, not removing the constraint. If the gate makes the product unusable, the business constraint (hourly sync) must change, not the safety floor.*

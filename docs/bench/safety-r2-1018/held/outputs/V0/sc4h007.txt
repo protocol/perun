@@ -1,0 +1,30 @@
+### Safety Assessment Plan: Credit-Limit Adjuster
+
+**1. Harm Inventory (MAP)**
+Before deployment, explicitly record these specific risks for gig workers in Mexico City:
+*   **Bias/Unfair Outcomes:** The model systematically reduces limits for workers in specific neighborhoods or during seasonal lulls, effectively cutting off access to funds despite long-term reliability.
+*   **Over-reliance/Automation Bias:** The system treats volatile daily earnings as a permanent risk signal, punishing normal gig-work fluctuations without human context.
+*   **Unsafe High-Stakes Automation:** Fully automatic limit *decreases* occur without review, potentially trapping a worker with zero purchasing power instantly.
+*   **Missing Disclosure:** Users are unaware that their limit changes are automated decisions based on daily volatility, leading to confusion and loss of trust.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure it against your 200ms constraint.
+*   **Eval Design:** Construct a test set including "positive controls" (workers with known stable long-term income but high daily volatility) and "negative controls" (workers with genuinely deteriorating financial health).
+*   **Subgroup Slicing:** Run probes segmented by gig platform, time of day, and geographic zone within Mexico City to detect localized bias.
+*   **Metric & Threshold:** Define a "Hardship Trigger" metric: the percentage of users whose limit drops below a subsistence threshold solely due to <3 days of low earnings. Set a stop condition: if this rate exceeds 0% for any subgroup, the rollout halts.
+*   **Transparency Artifact:** Draft a **Model Card** stating the intended use (daily limit adjustment), limitations (sensitivity to short-term volatility), and measured performance by subgroup. If a metric is not measured, label it `UNVERIFIED`; do not invent a fairness score.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Critical):** Given the high stakes of cutting off funds, **automatic limit decreases must be gated.** The system should propose a decrease, but execution requires human review or explicit user confirmation unless the risk is catastrophic (e.g., fraud). Automatic *increases* may remain autonomous if capped.
+*   **Uncertainty Tiering:** Do not display raw confidence scores (e.g., "87% risk") to users. Instead, use defined coarse tiers for internal flags: *Confirmed Volatility* (multiple data points), *Single-Source Anomaly* (needs review), or *Unverified*.
+*   **Disclosure:** Clearly inform users: "Your limit was adjusted automatically based on recent earnings data. You can request a manual review."
+*   **Constraint Adherence:** To meet the 200ms latency requirement, perform heavy bias-evaluation computations asynchronously or on a sampled batch post-decision, while keeping the real-time decision logic simple and rule-gated. The speed constraint does not excuse the lack of a safety gate on irreversible actions.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing "Hardship Trigger" alerts weekly.
+*   **Legal Routing:** Whether this automated decision falls under specific Mexican financial regulations or requires formal legal disclosure is a determination for **counsel**. Route this question immediately; do not assume compliance based on this plan.
+
+**Status:** This plan identifies residual risks. It does not certify the system as "fair" or "safe." The decision to ship rests with the product owner after reviewing the initial eval results.
+
+*Note: Ensure your "positive controls" include real-world scenarios of seasonal gig work lulls common in Mexico City.*
+*Legal counsel must verify if "adverse action" notices are legally required before the first automated decrease.*

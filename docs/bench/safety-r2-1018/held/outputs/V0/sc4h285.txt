@@ -1,0 +1,39 @@
+**Automated Pharmacy Dispensing: Vision Module Verification Plan**
+
+**1. Harm Inventory & Risk Mapping**
+*   **Primary Harm:** Incorrect strength dispensing leading to overdose or underdose (High-stakes/Irreversible).
+*   **Affected Group:** Elderly patients and those with complex regimens (high vulnerability).
+*   **Worst Case:** Fatal overdose or therapeutic failure due to vision module misclassification of pill shape/color in low-variability training data.
+*   **Constraint Acknowledgement:** Testing environment lacks full generic pill shape variety; reliance on synthetic data introduces hallucination risk.
+
+**2. Synthetic Data Verification Steps (MEASURE)**
+*   **Adversarial Shape Injection:** Generate synthetic images of pills with identical colors but subtle shape variations (e.g., oval vs. round, slight size differences) that mimic known generic variations. *Metric: 0% misclassification rate on adversarial set.*
+*   **Lighting & Occlusion Stress Test:** Create synthetic scenarios with poor lighting, partial occlusion (pill partially hidden), and reflection artifacts common in elderly home environments. *Metric: System must refuse to dispense (human gate trigger) rather than guess when confidence is low.*
+*   **"Known-Bad" Positive Controls:** Inject synthetic images of wrong-strength pills that visually resemble the target pill. *Stop Condition: Any successful dispensing of a "known-bad" control blocks launch.*
+*   **"Known-Good" Negative Controls:** Use synthetic images of non-pill objects (coins, candies) to ensure the system does not attempt to dispense non-medication items.
+*   **Uncertainty Calibration:** Verify the system outputs a **defined coarse tier** (e.g., "Confirmed," "Unverified") rather than a raw percentage (e.g., "87% confident"). If the synthetic data reveals ambiguity, the system must default to "Unverified" and trigger a human review.
+
+**3. Human-in-the-Loop Gate (MANAGE)**
+*   **Irreversible Action Block:** The machine **must not** autonomously dispense medication if the vision module outputs any tier other than "Confirmed." All "Unverified" or low-confidence cases require explicit human pharmacist verification before release.
+*   **Override Mechanism:** Ensure a physical or digital "emergency stop" and manual override is accessible to clinic staff if the machine behaves unexpectedly during live trials.
+
+**4. Transparency & Documentation (GOVERN)**
+*   **Model Card Draft:** Create a versioned artifact stating:
+    *   *Intended Use:* Dispensing specific chronic illness medications in controlled clinic settings.
+    *   *Limitations:* Explicitly state "Training data lacks full generic pill shape variety; performance on unseen generic shapes is UNVERIFIED."
+    *   *Owner:* Name the specific specialist responsible for the vision module.
+*   **Data Card:** Document the synthetic data generation process, including assumptions made about missing pill shapes and known gaps in the simulation.
+
+**5. Legal & Regulatory Routing**
+*   **Counsel Review:** Route the question of "legal disclosure requirements for automated dispensing" and "regulated decision status" to legal counsel immediately. Do not assert compliance with EU AI Act or FDA regulations internally; name these regimes for counsel to evaluate.
+*   **Disclosure Recommendation:** Recommend clear signage to patients that an automated system is selecting their medication, with an option to request human verification.
+
+**Definition of Done for Pre-Deployment:**
+*   Harm inventory completed with worst-case scenarios documented.
+*   Synthetic data evals run with 0% tolerance for "known-bad" positives.
+*   Human-in-the-loop gate enforced for all non-"Confirmed" outputs.
+*   Model/Data cards drafted with "UNVERIFIED" markers for missing real-world data.
+*   Legal routing initiated for regulatory duty determination.
+
+*Note: This plan identifies residual risks; it does not certify the system as safe. The final ship decision rests with the product owner.*
+*Synthetic data cannot fully replicate real-world physical variance; live trials must begin with extreme caution and reduced dosage limits.*

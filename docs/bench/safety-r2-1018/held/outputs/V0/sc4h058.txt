@@ -1,0 +1,30 @@
+**BLUF:** Do not launch the automated prescription generator in its current state. The described failure mode (ignoring dangerous drug interactions) presents an immediate, irreversible risk to patient safety that cannot be mitigated by testing alone without an external knowledge base or a human-in-the-loop gate.
+
+**1. Immediate Control: Human-in-the-Loop Gate**
+Because the system executes high-stakes, irreversible actions (issuing prescriptions) and currently fails on known safety constraints, full automation is unsafe. You must implement a mandatory human review step for **every** generated prescription before it reaches a patient.
+*   **Action:** The system generates a draft; a licensed clinician must explicitly verify and sign off on the output.
+*   **Constraint Alignment:** This requires no external database integration and can be implemented within your one-month timeline via workflow changes rather than code retraining.
+*   **Rule:** No prescription leaves the system without explicit human confirmation. This is the non-negotiable floor for safety.
+
+**2. Testing Method: Adversarial "Red Team" Evaluation**
+Since you cannot integrate external databases for real-time checks, you must test against a static, curated set of known failure cases.
+*   **Construct a "Known-Bad" Probe Set:** Manually compile a list of 50–100 specific patient profiles with complex histories and conflicting medications where the interaction is medically established as dangerous. Include these as fixed test inputs.
+*   **Construct a "Known-Good" Control Set:** Compile profiles with no interactions to ensure the system does not generate false positives that clutter clinician workflow.
+*   **Execution:** Run the generator against the "Known-Bad" set.
+    *   **Pass Threshold:** Zero instances of the system issuing a final recommendation that ignores the interaction *without* flagging it for human review.
+    *   **Stop Condition:** If the system fails to flag even one dangerous interaction in the probe set, the feature is blocked from any form of automated release.
+*   **Reporting:** Report the residual risk as "UNVERIFIED" for any interaction types not explicitly included in your static probe set. Do not claim the system is "safe" or "bias-free"; state clearly that it has only been validated against the specific scenarios tested.
+
+**3. Hardcoded Rules (Local Fallbacks)**
+Without external database access, your hardcoded rules must be conservative and rely on explicit deny-lists rather than dynamic lookup.
+*   **Explicit Deny-List:** Hardcode a small, static table of the most critical, life-threatening drug pairs (e.g., specific MAOI combinations, teratogenic pairs) directly into the application logic. If any input matches this pair, the system must hard-fail and refuse to generate a draft, forcing a manual override path.
+*   **Complexity Trigger:** Hardcode a rule that if a patient profile exceeds a certain complexity threshold (e.g., >5 active medications or >3 chronic conditions), the system automatically routes the case to senior human review, bypassing any automated confidence scores.
+*   **Uncertainty Disclosure:** If the system generates a recommendation, it must append a visible disclaimer: "Generated based on limited local rules; does not check full interaction database. Clinician verification required."
+
+**4. Governance and Transparency**
+*   **Owner:** Name a specific clinical lead responsible for reviewing every failure in the test set and owning the risk of the static deny-list.
+*   **Artifact:** Create a "Model Card" for this feature documenting that it lacks external database integration, listing the specific interactions covered by the hardcoded deny-list, and explicitly stating its limitations. This document must travel with the software to clinics.
+*   **Legal Routing:** Because this involves regulated medical decisions and potential liability for harm, route the question of legal disclosure requirements and regulatory compliance (e.g., TGA guidelines) to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** A "0% error rate" claim is impossible without comprehensive data; rely on the human gate as your primary safety mechanism.
+**Note:** If the one-month deadline prevents implementing the human review workflow, the only safe option is to delay the launch.

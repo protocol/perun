@@ -1,0 +1,35 @@
+**Risk Assessment: Automated Credit Scoring Feature (Medical Debt Sensitivity)**
+
+**1. Harm Inventory & Impact Analysis**
+The primary risk is **bias/unfair outcomes**: the model may systematically lower scores for low-income borrowers who incur unavoidable medical debt, penalizing them for health emergencies rather than creditworthiness.
+*   **Affected Group:** Low-income users, specifically those with high medical expense ratios relative to income.
+*   **Worst Realistic Case:** Qualified borrowers are denied credit or offered predatory rates due to health-related spending spikes, leading to financial exclusion and potential regulatory scrutiny under fair lending laws.
+
+**2. Internal Test Scenarios (Measure)**
+Since you cannot integrate new external data, you must synthesize test cases using your existing internal logs. Run these specific probes before launch:
+
+*   **Scenario A: The "Medical Spike" Control**
+    *   **Input:** Take 100 historical profiles of low-income users with stable payment history. Artificially inject a sudden, high-value merchant category code (MCC) transaction typical of medical care (e.g., hospital, pharmacy) into their recent spending log.
+    *   **Expected Behavior:** The score should not drop disproportionately compared to a similar spike in non-essential spending (e.g., electronics).
+    *   **Pass Threshold:** Score reduction for medical MCCs must be ≤ score reduction for neutral essential spending (e.g., groceries). If medical spikes cause a >15% larger drop than grocery spikes, **STOP**.
+
+*   **Scenario B: The "Recovery" Test**
+    *   **Input:** Simulate a user with a large medical debt entry followed by three months of on-time minimum payments.
+    *   **Expected Behavior:** The algorithm should recognize the stabilization and begin recovering the score.
+    *   **Pass Threshold:** Score must show positive trajectory within 60 days of consistent payment. If the score remains suppressed indefinitely despite good behavior, **STOP**.
+
+*   **Scenario C: Adversarial Segment Sweep**
+    *   **Input:** Slice your internal logs by zip code (as a proxy for income/region). Run the scoring logic on users from lowest-income zip codes vs. highest-income zip codes who have identical debt-to-income ratios but different spending mixes.
+    *   **Metric:** Disparate Impact Ratio.
+    *   **Pass Threshold:** The approval rate or average score for the low-income segment must not be less than 80% of the high-income segment (the "four-fifths rule" heuristic). If the ratio falls below 0.8, **STOP**.
+
+**3. Mandatory Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Do not allow fully automated score reductions exceeding 20 points for accounts flagged with high medical MCC concentration. These cases must route to a human underwriter for review before any credit limit change or denial is finalized.
+*   **Uncertainty Disclosure:** If the model flags an account based primarily on volatile spending patterns, surface this as "Under Review" to the user rather than a final "Score Reduced" notification.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" documenting that medical debt is an input, explicitly stating the limitation that the model may not distinguish between voluntary and involuntary health debt without manual review.
+
+**4. Legal & Governance Routing**
+*   **Legal Duty:** Whether adjusting scores based on medical debt violates specific Illinois state laws or federal fair lending regulations (e.g., ECOA) is a legal determination. **Route immediately to counsel.** Do not assert compliance internally.
+*   **Ownership:** Assign a specific product owner to re-evaluate these metrics weekly post-launch.
+
+**Note:** Do not fabricate a "fairness score" or claim the system is unbiased; report the results of the tests above as "Verified" or "Unverified." If any stop condition is met, the launch must be delayed regardless of investor timelines.

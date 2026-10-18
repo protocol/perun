@@ -1,0 +1,28 @@
+### Pre-Launch Validation Workflow for Privacy Protection
+
+**Step 1: Immediate Data Segmentation and "Hard Stop" Gate**
+Before any code audit, isolate all records lacking explicit consent flags for adoptees. Implement a hard-coded rule in the matching engine: **if `consent_flag` is missing or null, the record is invisible to the matching algorithm.** Do not attempt to infer consent from legacy data patterns. This creates an immediate "default deny" posture for the at-risk population.
+
+**Step 2: Adversarial Probe Set Construction**
+Construct a specific evaluation dataset ("red team" probes) containing:
+*   **Positive Controls:** Known adoptee records with `consent_flag = false` paired with known biological relative profiles. The expected output is **zero matches**.
+*   **Negative Controls:** Known adoptee records with `consent_flag = true` paired with relatives. The expected output is a **valid match**.
+*   **Edge Cases:** Records with corrupted, mixed, or legacy-format consent fields.
+Run the matching algorithm against this set. If *any* positive control yields a match, the feature fails the launch gate.
+
+**Step 3: Automated Guard Implementation**
+Deploy the following guards at the API and database query layers:
+*   **Query-Level Enforcement:** Modify the SQL/query logic to append `AND consent_flag = TRUE` to every matching query. This prevents application-layer bugs from bypassing the logic.
+*   **Output Scrubbing:** Implement a post-processing filter that scans any generated match list for IDs belonging to the "no-consent" segment. If detected, the entire response is blocked and logged as a critical security event.
+*   **Human-in-the-Loop for Ambiguity:** Any match involving a record where data integrity is questionable (e.g., conflicting legacy flags) must route to a human reviewer before notification. No automated message is sent for these cases.
+
+**Step 4: Residual Risk Reporting**
+Document the volume of records excluded due to missing consent. Report this as "UNVERIFIED" regarding their willingness to connect, rather than assuming silence equals consent. Explicitly state that the matching accuracy metric is now conditional on the presence of a consent flag.
+
+**Step 5: Governance and Ownership**
+Assign a specific owner to review every blocked match attempt during the first month of rollout. Schedule a mandatory re-evaluation of the consent logic before expanding the feature to new user segments.
+
+***
+
+**Note:** This plan treats the lack of consent flags as a high-stakes privacy risk requiring a human gate and strict "default deny" logic; it does not certify the system as "safe" or "compliant."
+**Note:** Legal determination regarding regulatory duties (e.g., GDPR, local adoption laws) for these disclosures must be routed to counsel immediately.

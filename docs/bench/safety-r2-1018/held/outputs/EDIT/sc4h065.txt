@@ -1,0 +1,40 @@
+### Pre-Launch Safety Plan: Traffic-Management AI Equity & Emergency Throughput
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Identified Harm:** Bias/Unfair Outcomes. The system systematically disadvantages low-income districts by deprioritizing emergency vehicles in favor of commuter throughput on main arteries.
+*   **Affected Group:** Residents of low-income districts and emergency service recipients (ambulance patients).
+*   **Worst Realistic Case:** Preventable mortality or severe morbidity due to delayed ambulance arrival caused by algorithmic signal timing, leading to public trust collapse and legal liability.
+
+**2. Simulation Validation Protocol (MEASURE)**
+Since live testing is prohibited, the simulation must serve as the rigorous gate. We will execute the following evals immediately:
+*   **Adversarial Probe Set:** Construct simulation scenarios specifically targeting the identified failure mode.
+    *   *Inputs:* High commuter volume on arterials + simultaneous ambulance dispatch in low-income zones.
+    *   *Positive Control:* A scenario where the AI *fails* (current behavior: ambulance delayed > X minutes).
+    *   *Negative Control:* A scenario with low commuter volume where the AI correctly prioritizes the ambulance.
+    *   *Subgroup Slicing:* Run these probes across all low-income district maps, not just an aggregate city model.
+*   **Metric & Threshold:** Define "Emergency Throughput" as the delta in arrival time compared to a baseline (non-AI or human-optimized) signal plan.
+    *   *Proposed Stop Condition:* Zero tolerance for any simulation run where ambulance delay exceeds the baseline by more than 5%. If *any* probe in a low-income district fails this, the launch is blocked.
+*   **Injection & Agency Checks:** Test if malicious actors could spoof traffic data to intentionally gridlock specific districts (prompt injection via sensor spoofing). Ensure the AI cannot override manual emergency overrides (excess agency check).
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** Given the high-stakes, irreversible nature of delayed emergency response, full autonomous execution is unsafe.
+    *   *Control:* Implement a "Shadow Mode" for the first 2 weeks post-launch (if certification allows) or a strict "Human Confirmation" layer where a city operator must validate signal changes affecting emergency routes during peak festival traffic.
+    *   *Fallback:* Hard-code a rule that any detected emergency vehicle beacon automatically triggers a pre-defined "green wave" sequence, bypassing the AI's optimization logic entirely. This requires no retraining.
+*   **Uncertainty & Transparency:** Do not present the AI's optimization score as a precise fact to operators. Display status as a coarse tier: "Confirmed Flow," "Corroborated," or "Unverified/Conflicted" (e.g., when ambulance presence conflicts with congestion goals).
+*   **Disclosure:** Clearly document in the system manual that the AI optimizes for *overall* congestion but is bounded by emergency priority rules. Do not claim the system is "bias-free"; state that residual risk remains in edge cases until further data is gathered.
+
+**4. Governance & Artifacts**
+*   **Model/Data Card:** Before certification, publish a card detailing:
+    *   *Intended Use:* Congestion reduction subject to emergency priority constraints.
+    *   *Limitations:* Explicitly state the observed bias in low-income districts during simulation and the steps taken to mitigate it.
+    *   *Performance:* Report simulation results by district (subgroup), not just city-wide averages.
+    *   *Owner:* Name the specific engineer and city planner jointly responsible for monitoring emergency throughput metrics.
+*   **Review Cycle:** Mandate an immediate re-review of the model weights if any simulation probe fails or if real-world incident reports indicate delays.
+
+**5. Legal & Regulatory Routing**
+*   The question of whether this automated decision constitutes a regulated action under Indian digital governance frameworks or specific municipal liability laws must be routed immediately to legal counsel. Do not assert compliance; provide counsel with the harm inventory and simulation results for their determination.
+
+**Schedule Adjustment:** To meet the six-week deadline, dedicate the next 10 days exclusively to the adversarial simulation probes and the implementation of the hard-coded emergency fallback. If the stop condition is triggered, the launch date must move; shipping with known fatal flaws is not a viable option.
+
+**Note:** This plan identifies residual risk; it does not certify the system as safe. The final ship decision rests with the municipality owners.
+**Note:** All simulation metrics currently marked "UNVERIFIED" until the proposed probe set is executed.

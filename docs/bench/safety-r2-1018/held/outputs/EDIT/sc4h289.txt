@@ -1,0 +1,33 @@
+**Pre-Launch Security Review Plan: Voice Data Protection**
+
+Given the constraint preventing live penetration testing, your review must shift entirely to static verification, architectural threat modeling, and local environment simulation. Prioritize these manual inspection procedures and code review focus areas to prevent accidental exposure of voice recordings:
+
+**1. Hardcoded Credential & Endpoint Sweep**
+Manually grep the entire codebase and configuration files for hardcoded AWS access keys, bucket names, or IP addresses. Verify that storage endpoints are injected via environment variables at runtime, not compiled into the binary.
+*   **Focus Area:** Ensure the code explicitly rejects any upload request if the target bucket configuration is missing or defaults to a public-read ACL. Look for fallback logic that might redirect data to a debug or public bucket if the primary secure bucket is unreachable.
+
+**2. Data Flow & Serialization Inspection**
+Trace the exact path of a voice blob from the microphone input to the disk/network call.
+*   **Focus Area:** Identify any temporary storage points. If voice logs are cached locally before upload, verify they are encrypted at rest and deleted immediately after successful transmission.
+*   **Focus Area:** Check serialization logic. Ensure voice data is never logged to standard output (stdout) or application logs, which often end up in unsecured aggregation systems. Search for `print`, `log`, or `console` statements near audio handling functions.
+
+**3. Access Control Logic Verification**
+Review the code responsible for generating pre-signed URLs or setting bucket policies.
+*   **Focus Area:** Confirm that the principle of least privilege is enforced in the code. The application identity should have `PutObject` permissions only to the specific private bucket and explicitly *no* `ListBucket` or `GetObject` permissions unless strictly required for functionality.
+*   **Focus Area:** Verify that no code path exists that sets `public-read` or `public-write` ACLs on uploaded objects. This is a common error in SDK usage where default settings are inadvertently accepted.
+
+**4. Local Environment Simulation (The "Dry Run")**
+Since live testing is blocked, spin up a local mock storage server (e.g., LocalStack or MinIO) configured to mimic your production security posture.
+*   **Procedure:** Run the application against this local mock with intentionally misconfigured permissions (e.g., a public bucket). Verify that the application fails securely (refuses to upload) rather than succeeding in uploading sensitive data to the insecure target.
+*   **Procedure:** Inject network failures during the upload phase to ensure the application does not retry by downgrading security protocols or switching to an unencrypted HTTP endpoint.
+
+**5. Dependency & Supply Chain Check**
+Manually audit third-party libraries used for audio processing and cloud interaction.
+*   **Focus Area:** Check for known vulnerabilities in these specific versions that allow remote code execution or data leakage. Ensure no telemetry libraries are inadvertently capturing and transmitting raw audio buffers to third-party analytics endpoints.
+
+**6. Architectural "Blind Spot" Review**
+Conduct a manual walkthrough of the infrastructure-as-code (Terraform/CloudFormation) scripts.
+*   **Focus Area:** Verify that the default encryption setting for the bucket is enabled server-side. Ensure that public access blocks are enabled at the *bucket level* in the script, not just relied upon via application logic.
+
+**Note:** This plan relies on static analysis and local simulation; it cannot guarantee runtime behavior under real-world network conditions until the post-deployment window opens.
+**Note:** Given the end users are children, treat any finding related to data leakage as a critical block to launch, regardless of perceived probability.

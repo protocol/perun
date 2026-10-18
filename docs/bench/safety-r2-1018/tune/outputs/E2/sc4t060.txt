@@ -1,0 +1,36 @@
+### Pre-Launch Safety Protocol: Rare Disease Suggester
+
+**1. Harm Inventory & Worst-Case Definition**
+Before scaling, explicitly document the specific harms:
+*   **False Positive (Panic):** Flagging a rare disease where none exists, causing severe patient anxiety and unnecessary testing.
+*   **False Negative (Missed Care):** Failing to flag a condition, leading to delayed diagnosis (though your prompt focuses on false positives, both must be tracked).
+*   **Automation Bias:** Doctors accepting the AI's flag as definitive without independent verification due to time pressure.
+*   **Worst Realistic Case:** A healthy patient undergoes invasive, risky procedures based solely on an unverified AI suggestion, or a sick patient is discharged because the AI missed the rare marker.
+
+**2. Measurement Plan (Run Before Scale)**
+Do not assert reliability; measure it with a runnable evaluation plan. Create one test row per identified harm:
+*   **Probe Set:** Construct a dataset containing:
+    *   *Known Bad Positives:* Common symptoms that mimic rare diseases but are actually benign (negative controls).
+    *   *Known True Positives:* Confirmed rare disease cases (positive controls).
+    *   *Adversarial Inputs:* Vague or contradictory symptom descriptions to test stability.
+*   **Metric & Threshold:** Define a "Stop Condition" for launch. For example: "If the false positive rate for high-anxiety conditions exceeds X% on the negative control set, launch is blocked." Do not invent a "typical" rate; set a zero-tolerance threshold for irreversible patient harm until proven otherwise.
+*   **Subgroup Analysis:** Measure performance across different demographics (age, gender, ethnicity) to ensure the limited dataset hasn't created bias against specific groups.
+*   **Reporting:** If a metric cannot be measured due to data scarcity, label it **UNVERIFIED**. Do not fabricate an accuracy percentage. State clearly: "Reliability for Condition X is UNVERIFIED due to insufficient training data."
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** The system must **never** deliver a diagnosis suggestion directly to the patient. The output must be routed exclusively to a licensed physician for review. The UI must clearly state: "AI Suggestion Only – Requires Doctor Verification."
+*   **Uncertainty Disclosure:** Do not show raw confidence scores (e.g., "87% likely") to doctors or patients, as this implies false precision. Instead, use defined coarse tiers with clear definitions:
+    *   *Corroborated:* Matches multiple strong indicators in literature.
+    *   *Speculative:* Matches limited patterns; low confidence due to data scarcity.
+    *   *Unverified:* Insufficient data to assess likelihood.
+*   **Transparency Artifact (Model Card):** Create a versioned document detailing:
+    *   *Intended Use:* Flagging rare diseases for doctor review only.
+    *   *Limitations:* Explicitly list the rare conditions with limited training data.
+    *   *Data Provenance:* Source of the current dataset and known gaps.
+    *   *Owner:* Name the specific team member responsible for reviewing flagged errors.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific owner to re-review the model whenever the dataset is updated or new diseases are added.
+*   **Legal Determination:** Because this involves medical decision support, route the question of regulatory classification (e.g., SaMD, EU AI Act high-risk category) and mandatory disclosure duties to legal counsel immediately. Do not assume the "beta" status exempts you from medical device regulations.
+
+**Note:** Given your limited dataset, prioritize a "staged rollout" capping exposure to a small user group until the false positive rate is empirically validated. Never certify the system as "safe" or "unbiased"; only report residual risks and controls.

@@ -1,0 +1,34 @@
+**Step-by-Step Preparation Strategy for Clinical-Trial Matching Evaluation**
+
+**1. Construct the Harm Inventory**
+Before testing, explicitly document the specific risk: **Bias/unfair outcomes** where historical enrollment patterns (e.g., underrepresentation of specific racial, gender, or age groups in past trials) cause the model to systematically disqualify eligible patients from those same groups today. Define the "worst realistic case" as eligible patients being denied life-saving trial access due to data artifacts rather than medical contraindications.
+
+**2. Build Adversarial Eval Sets (Measure)**
+Since new data collection is not possible, synthesize a **probe set** from your existing records to test the model's behavior across demographics:
+*   **Positive Controls:** Create synthetic patient profiles that are medically eligible for specific trials but belong to demographics historically underrepresented in your training data.
+*   **Negative Controls:** Create profiles that are medically ineligible (clear contraindications) across all demographic groups to ensure the model still correctly rejects them.
+*   **Slicing:** Group these probes by protected characteristics (race, ethnicity, sex, age, socioeconomic proxies) available in your records.
+*   **Injection Check:** Include probes where demographic data is missing or ambiguous to ensure the model does not default to exclusion based on incomplete history.
+
+**3. Define Metrics and Stop Conditions**
+Do not assert the model is "unbiased." Instead, measure the **disparity in false rejection rates** between demographic groups.
+*   **Metric:** Compare the rate at which eligible Positive Controls are rejected for Group A versus Group B.
+*   **Threshold:** Set a strict tolerance for disparity (e.g., "If the rejection rate for any demographic group exceeds the baseline by >5%, the feature fails").
+*   **Stop Condition:** If the model systematically rejects eligible patients from a specific group during these probes, **block the launch**. Do not proceed until a mitigation strategy (such as rule-based overrides for high-stakes matches) is implemented.
+
+**4. Implement a Human-in-the-Loop Gate**
+Because this tool influences access to healthcare (a high-stakes, potentially irreversible outcome), **do not allow fully automated disqualification**.
+*   **Action:** Configure the system so that any match prediction with low confidence, or any rejection of a patient who meets basic criteria, triggers a **mandatory human review** by a researcher before the decision is finalized or communicated to the patient.
+*   **Uncertainty Display:** If the system presents results to clinicians, display confidence as a defined coarse tier (e.g., "Verified Match," "Potential Match – Review Required," "Insufficient Data") rather than a precise percentage (e.g., "87% match"), which implies a calibration the model likely lacks.
+
+**5. Create the Transparency Artifact (Model Card)**
+Draft a **Model Card** for internal and external stakeholders before launch. This document must include:
+*   **Intended Use:** Matching patients to trials based on historical patterns.
+*   **Limitations:** Explicitly state that the model relies on historical enrollment data which may contain biases, and that performance for underrepresented groups is **UNVERIFIED** pending the results of the evals above.
+*   **Data Provenance:** Describe the source of the historical records and known gaps in demographic representation.
+*   **Owner:** Name the specific researcher responsible for monitoring these metrics post-launch.
+
+**6. Route Legal and Regulatory Questions**
+Do not assert whether this tool constitutes a "regulated automated decision" under laws like the EU AI Act or specific US health regulations. Immediately **route this determination to legal counsel**, providing them with the harm inventory and the proposed human-in-the-loop controls. Recommend disclosing to patients that AI assistance is used in the matching process, but let counsel confirm if this is a legal requirement.
+
+**Note:** Never fabricate a "0% bias" metric; if the evals have not run, the status is strictly **UNVERIFIED**. The decision to ship despite residual risk belongs to the project owner, not the evaluation team.

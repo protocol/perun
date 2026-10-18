@@ -1,0 +1,40 @@
+**Safety Assessment Plan: Automated Book Recommender**
+
+**1. Map Harm Inventory (Immediate)**
+Define the specific failure mode: "Restricted Content Leakage." Identify affected groups (minors by age bracket: 0–12, 13–17) and the worst-case scenario (a minor accessing age-inappropriate material via algorithmic suggestion). Explicitly list edge cases to test, such as users with mixed borrowing histories (e.g., a parent account shared with a child) or ambiguous metadata in book records.
+
+**2. Construct Adversarial Test Profiles (Days 1–5)**
+Create a suite of synthetic user profiles representing edge cases without needing new software:
+*   **The Boundary Case:** A 12-year-old profile with borrowing history bordering on Young Adult (YA) content.
+*   **The Shared Account:** A profile with interleaved adult and children's borrowing history.
+*   **The Researcher:** A minor profile searching for legitimate but sensitive topics (e.g., health, history) that might trigger false positives in filtering logic.
+*   **The Negative Control:** A standard child profile with only age-appropriate history to ensure valid recommendations still function.
+
+**3. Execute Manual Red-Team Probes (Days 6–15)**
+Since budget prevents new tools, run manual simulations using existing architecture:
+*   Input each test profile into the current system.
+*   Record the top 20 recommendations generated for each.
+*   Manually verify every suggested title against the library's restricted list.
+*   **Stop Condition:** If *any* restricted title appears in a minor's top 20 suggestions, the feature fails the safety gate. Do not proceed to launch.
+
+**4. Implement a Human-in-the-Loop Gate (Mandatory)**
+Because the system has demonstrated unsafe automation (bypassing filters), you cannot launch with fully autonomous suggestions for minors.
+*   **Action:** Modify the workflow so that any recommendation flagged as "borderline" by metadata or generated for a user under 13 requires explicit librarian approval before being displayed or emailed.
+*   **Fallback:** If the system cannot technically support a review queue within the existing architecture, disable automated suggestions for minors entirely until a fix is engineered. Safety overrides the launch deadline.
+
+**5. Define Uncertainty and Disclosure**
+*   **Confidence Tiers:** Do not display algorithmic confidence scores (e.g., "90% match") to users. Instead, use coarse, defined tiers like "Verified Age-Appropriate" (manually vetted) or "Suggested Based on History" (algorithmic, unvetted).
+*   **Disclosure:** Clearly label all outputs as "Automated Suggestions" so patrons understand a machine, not a librarian, selected the books.
+
+**6. Document Residual Risk (Model Card)**
+Create a one-page "Data Card" for this feature listing:
+*   **Intended Use:** Suggesting books based on borrowing history.
+*   **Known Limitations:** "System may occasionally surface restricted titles for users with mixed borrowing histories; human review is active for under-13 accounts."
+*   **Owner:** Name the specific team member responsible for reviewing flagged items.
+*   **Status:** Mark the safety metric as "UNVERIFIED" for fully autonomous modes; only mark "Verified" where the human gate is active.
+
+**7. Governance and Launch Decision**
+Present the findings to the consortium lead. If the red-team probes found leaks and no human gate is feasible within the budget/constraint, the recommendation is to delay the automated component for minors, not to launch with known risks. The decision to ship despite residual risk belongs to the library director, not the technical team.
+
+*Note: This plan assumes the "existing architecture" allows for a manual review step; if the system is strictly black-box automation, the only safe path is disabling the feature for minors.*
+*Legal duties regarding automated decisions affecting minors in the EU (GDPR/AI Act) must be confirmed by counsel before launch.*

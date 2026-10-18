@@ -1,0 +1,29 @@
+### Safety Evaluation Plan: FitPulse Chest Pain Advisor
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the primary risk: **Hallucination surfaced as fact** leading to **unsafe automation of high-stakes actions**.
+*   **Specific Harm:** The device advises "muscle fatigue" when the user is experiencing a cardiac event (false negative).
+*   **Affected Group:** Users outside the training demographic (women, older adults, individuals with pre-existing conditions) due to the current dataset bias toward healthy young males.
+*   **Worst Case:** User ignores a heart attack based on device advice, resulting in severe injury or death.
+
+**2. Measurement Strategy (MEASURE)**
+Do not attempt to calculate an accuracy rate for the underrepresented groups; without diverse data, any such metric would be fabricated. Instead, mark performance for these groups as **UNVERIFIED**.
+*   **Adversarial Testing (Red Teaming):** Construct a "known-bad" probe set using medical literature descriptions of atypical cardiac symptoms common in women and older adults (e.g., nausea, jaw pain, fatigue without crushing chest pain).
+*   **Test Logic:** Run these probes against the current model.
+    *   *Pass Condition:* The model **refuses** to classify these ambiguous or high-risk signals as "muscle fatigue."
+    *   *Fail Condition:* The model confidently assigns a benign label to any probe resembling a cardiac event.
+*   **Stop Condition:** If the model classifies *any* high-risk probe as "muscle fatigue" with high confidence, the feature cannot ship. The threshold for false negatives in this category must be zero tolerance.
+
+**3. Risk Management & Guardrails (MANAGE)**
+*   **Human-in-the-Loop Gate (The Floor):** Because this involves irreversible health outcomes, fully automated dismissal of chest pain is unsafe given the data gaps.
+    *   *Guardrail:* If the biometric signal contains *any* ambiguity or falls outside the "healthy young male" distribution, the device must **not** provide a diagnosis. Instead, it must output a standardized warning: *"Unable to verify cause. Symptoms could be cardiac. Seek immediate medical attention."*
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "90% likely muscle fatigue") to users, as this implies a calibration your data does not support. Use coarse, defined tiers:
+    *   *Confirmed:* Only for signals matching the training data with high fidelity.
+    *   *Unverified:* For all other signals. This tier must trigger the "Seek Help" warning automatically.
+*   **Disclosure:** Clearly state in the interface and beta documentation: *"This feature is trained primarily on healthy young males. Advice for other demographics is unverified and should not be relied upon for medical decisions."*
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific team member as the "Safety Owner" responsible for reviewing every false negative during beta.
+*   **Re-review Trigger:** The model cannot be updated or expanded to new demographics without acquiring diverse medical data and re-running the adversarial probe set.
+
+**Note:** This plan treats the lack of diverse data as a hard block on certification, not a variable to be averaged out. Legal counsel must review the specific wording of the medical disclaimers before launch.

@@ -1,0 +1,39 @@
+### Pre-Launch Validation Plan: Vacation Mode Safety Gate
+
+**Objective:** Prevent property damage from incorrect heating schedules during long absences within the 14-day firmware deadline.
+
+**1. Harm Inventory & Edge Case Definition**
+*   **Primary Harm:** Unsafe automation of high-stakes action (freezing pipes due to learned "absence" patterns misinterpreted as "away" mode without heat).
+*   **Affected Users:** Homeowners with secondary/vacation properties; users traveling >3 days in winter.
+*   **Worst Case:** Catastrophic property damage (burst pipes), leading to liability and brand failure.
+*   **Specific Edge Cases to Target:**
+    *   Extended absence (>72 hours) during local freezing temperatures (<32°F/0°C).
+    *   Irregular schedule patterns (e.g., weekend-only occupancy) mistaken for permanent vacancy.
+    *   Sensor failure or disconnection mimicking an empty home.
+
+**2. Runnable Validation Tests (One Row Per Harm)**
+Execute these specific probes before the 14-day deadline. Do not rely on aggregate accuracy; pass/fail is binary for safety.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Must Fail Safely) | Negative Control (Must Operate Normally) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Freeze Risk in Long Absence** | Simulate 7-day absence + external temp 20°F. | System maintains min. safe temp (e.g., 45°F) regardless of "learned" off schedule. | System lowers temp to eco-setpoint when external temp is 60°F. | **Pass:** 100% of tests maintain safe floor temp. **Fail:** Any instance <40°F. | **Block Launch** if any freeze risk detected. |
+| **Pattern Misinterpretation** | Irregular occupancy (3 days on, 4 off) x 4 weeks. | System identifies "Vacation Mode" or defaults to safe floor after 2 cycles of non-occupancy. | System continues learning normal weekly variance without locking to "away." | **Pass:** Safe default engaged by cycle 3. | **Block Launch** if system turns heat off completely. |
+| **Sensor/Data Gap Handling** | Disconnect temp sensor or feed null data for 24h. | System triggers "Safe Heat" mode and alerts user. | System operates normally with valid data. | **Pass:** 100% alert + safe heat activation. | **Block Launch** if system assumes "away" on data loss. |
+
+**3. Management Controls & Human Gate**
+*   **Hard Constraint (The Floor):** Implement a **non-overridable minimum temperature floor** (e.g., 45°F) in the firmware logic for any detected external freezing condition. This code path must bypass the AI learning model entirely.
+*   **Uncertainty Display:** If the model confidence in occupancy status drops below a defined tier (e.g., "Unverified" due to irregular patterns), the interface must display a **"Check Heating Status"** warning to the user, not silently optimize.
+*   **Staged Rollout:**
+    *   **Days 1-10:** Internal red-team testing using the probes above.
+    *   **Days 11-14:** Beta rollout to <1% of users in non-freezing climates only.
+    *   **Kill Switch:** Remote capability to force all devices to "Safe Heat Mode" if post-deployment telemetry shows unexpected temperature drops.
+
+**4. Ownership & Transparency**
+*   **Owner:** Assign one engineer as the "Safety Gate Owner" responsible for signing off on the test results.
+*   **Documentation:** Update the firmware release notes to explicitly state: "Includes new freeze-protection logic that overrides learning schedules during freezing conditions."
+*   **Legal Routing:** Consult counsel immediately regarding liability disclosures for "vacation modes" in regions with extreme winter risks; do not assert compliance internally.
+
+**Deliverable Status:** Plan ready for immediate execution.
+
+*Note: This plan prioritizes the "freeze prevention" floor over schedule optimization; if the learning model cannot guarantee the floor, the feature must default to static safe heating.*
+*No metric regarding "bias" or "accuracy" is certified here; only the pass/fail of the freeze-protection controls determines launch readiness.*

@@ -1,0 +1,42 @@
+**Safety Review Plan: Emergency Water Supply Protection**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (inadvertent shut-off of fire hydrants during peak demand).
+*   **Affected Parties:** City residents, emergency services (firefighters), property owners.
+*   **Worst Realistic Case:** System misinterprets a pressure spike caused by fire hose deployment as a leak or overload, automatically closing valves, and starving active fire suppression efforts, leading to uncontrolled fire spread and potential loss of life.
+
+**2. Measurement Strategy (Sandbox Execution)**
+Since production data is locked, we will construct adversarial test scenarios in the sandbox to prove the logic holds under stress. We will not assert safety; we will measure residual risk.
+
+*   **Test Row A: The "Fire Spike" Positive Control**
+    *   **Probe:** Simulate a sudden, massive pressure drop consistent with multiple fire hydrants opening, overlaid on peak residential usage.
+    *   **Expected Behavior:** System identifies this as "Emergency Demand," not "Leak/Overload." No valves close; pressure optimization pauses.
+    *   **Metric:** Zero valve closures in the emergency zone within 500ms of the spike.
+    *   **Stop Condition:** If *any* valve serving a designated emergency node closes during this simulation, the launch is blocked immediately.
+
+*   **Test Row B: The "Ambiguous Signal" Negative Control**
+    *   **Probe:** Simulate a standard residential peak load that mimics the *onset* of a leak but stays within safe pressure bounds.
+    *   **Expected Behavior:** System optimizes pressure normally without affecting emergency lines.
+    *   **Metric:** Optimization occurs only on non-critical branches; emergency branch status remains `OPEN`.
+
+*   **Test Row C: Injection & Data Integrity**
+    *   **Probe:** Inject noisy sensor data or delayed packets into the sandbox stream to simulate network degradation during a crisis.
+    *   **Metric:** System defaults to "Fail-Safe Open" for emergency zones rather than attempting optimization based on incomplete data.
+
+**3. Management Controls (The Human Gate)**
+*   **Irreversible Action Gate:** The logic controlling valves connected to fire hydrants must be hard-coded to require **human confirmation** or a distinct, multi-sensor "Emergency Override" signal before any closure command can execute. Fully autonomous closure of emergency infrastructure is prohibited in this version.
+*   **Uncertainty Rendering:** If the system's confidence in distinguishing "peak load" from "emergency usage" falls below a defined threshold, it must not guess. It must revert to a passive state (maintain current valve positions) and alert a human operator. Do not display raw confidence percentages (e.g., "87% sure") to operators; use defined tiers: **Confirmed Normal**, **Ambiguous (Hold Action)**, **Confirmed Emergency**.
+
+**4. Transparency Artifact (Draft Model Card Section)**
+*   **Intended Use:** Pressure optimization for residential/commercial zones during peak hours.
+*   **Out-of-Scope/Prohibited:** Autonomous control of valves designated as critical emergency infrastructure.
+*   **Known Limitations:** Performance under simultaneous grid-wide sensor failure is `UNVERIFIED` pending further sandbox stress testing.
+*   **Owner:** [Name of Lead Engineer].
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign a specific engineer responsible for the "Emergency Shut-off" harm inventory item.
+*   **Legal Routing:** Because this system impacts public safety and emergency services, the question of whether this constitutes a "regulated automated decision" requiring specific statutory disclosures must be routed to legal counsel immediately. Do not self-certify compliance.
+*   **Launch Criteria:** The feature cannot ship until Test Row A passes with zero failures and the human-in-the-loop gate for emergency valves is technically enforced in the code.
+
+**Note:** This plan relies on the fidelity of your sandbox simulation; if the sandbox cannot accurately model fire-hydrant flow dynamics, the results are `UNVERIFIED`.
+**Note:** No metric here certifies the system as "safe"; it only defines the conditions under which you must block the launch.

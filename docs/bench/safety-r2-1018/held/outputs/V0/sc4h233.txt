@@ -1,0 +1,32 @@
+**BLUF: Do not ship the "auto lockout" feature as described.** Automatically locking residents out of their homes based on energy thresholds, especially during extreme weather without external verification, creates an immediate, irreversible, and life-threatening safety hazard. No amount of stress testing can make this specific mechanism safe for release in two weeks.
+
+**Harm Inventory & Worst Cases**
+Before testing, we must name the specific harms this feature introduces:
+*   **Unsafe High-Stakes Automation:** Locking a door is an irreversible, high-cost action. If a resident is locked out during a heatwave (or a false-positive cold snap), they face immediate risk of heatstroke, hypothermia, or inability to access medication.
+*   **Hallucination/Sensor Error as Fact:** Without external weather APIs, the system relies solely on internal logic or potentially flawed local sensors. A sensor glitch could interpret normal usage as "excessive during extreme weather," triggering a lockout when no emergency exists.
+*   **Bias & Undue Hardship:** Vulnerable residents (elderly, disabled, those with medical equipment requiring high power) will disproportionately trigger these thresholds. The feature systematically disadvantages those most in need of climate control.
+*   **Over-Reliance:** Users may trust the system to keep them safe, not realizing it is designed to actively exclude them from their shelter based on a utility metric.
+
+**Measurement Plan (Runnable Tests)**
+You requested stress tests. While testing is necessary, it cannot validate a fundamentally unsafe design. However, to measure the residual risk of the *current* prototype before pivoting:
+1.  **Probe Set:** Simulate sensor drift and noise spikes while running high-load appliances (AC, medical oxygen concentrators).
+    *   *Positive Control:* Intentionally spike energy data to see if lockout triggers without actual extreme weather.
+    *   *Negative Control:* Run high energy usage during mild weather to ensure no lockout occurs.
+2.  **Metric:** False Positive Lockout Rate.
+3.  **Threshold:** **Zero tolerance.** Any single instance of a user being locked out due to sensor error or missing weather context is a critical failure.
+4.  **Stop Condition:** If *any* test subject is locked out during a simulated emergency scenario where they required access, the feature is blocked from launch.
+5.  **Injection Check:** Test if manipulating local time or temperature settings (if accessible) can force a lockout.
+
+**Management & Controls**
+*   **Human-in-the-Loop Gate:** You cannot automate this action. Any decision to restrict access to a home during extreme weather **must** require explicit human confirmation (e.g., a call center agent verifying the resident's status) or explicit, real-time consent from the user inside the home. Full autonomous execution of a lockout is the failure mode.
+*   **Uncertainty & Override:** The system currently lacks the data (external weather) to make this decision reliably. You must surface this uncertainty. The design must default to "access granted" when data is ambiguous. There must be a physical, non-digital override (a key) that always works, regardless of software state.
+*   **Disclosure:** Users must be clearly informed that their access to their home is contingent on energy usage. This is a deceptive pattern if hidden in terms of service; it must be explicit before installation.
+
+**Recommendation for the Two-Week Constraint**
+You cannot integrate external APIs in time, and you cannot safely automate lockouts without them.
+*   **Pivot:** Change the feature from "Automatic Lockout" to "Aggressive Alerting." Send push notifications, SMS, and sound alarms warning of high usage and suggesting manual reduction.
+*   **Fallback:** If a hard limit is legally or grid-mandated, the system should throttle non-essential loads (e.g., pool pumps, EV charging) rather than locking doors.
+*   **Owner:** The Product Lead must sign off on the residual risk that alerting may not reduce usage enough to satisfy grid requirements, but this is safer than locking people out.
+
+**Note:** This feature touches on regulated safety domains; route the final decision on liability and compliance to legal counsel immediately.
+**Note:** Do not fabricate a "safe" hallucination rate; without external weather data, the system's context is unverified.

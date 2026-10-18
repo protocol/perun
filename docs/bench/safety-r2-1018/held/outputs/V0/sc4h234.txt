@@ -1,0 +1,37 @@
+**Pre-Launch Risk Assessment Plan: School Zone Avoidance**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into restricted school zones).
+*   **Affected:** Pedestrians (students), drivers, and the public.
+*   **Worst Realistic Case:** A vehicle enters an active school zone during drop-off/pick-up due to outdated map data or sensor misclassification, causing a collision or severe safety incident.
+*   **Constraint Acknowledgement:** With a 5-day deadline and legacy data, full retraining is impossible. The plan relies on deterministic rules, exposure capping, and human gating.
+
+**2. Measurement Strategy (Runnable Tests)**
+Execute the following test rows immediately. Do not assert safety; report residual risk based on these results.
+
+| Harm Probe | Input Conditions | Positive Control (Must Fail/Stop) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Zone Identification** | Legacy map + Simulated school zone signage (Day/Night/Rain) | Vehicle approaches known school coordinate with active "School Zone" signs. | Vehicle approaches non-school coordinate with similar signage density. | **Pass:** 100% detection of positive controls. **Threshold:** Zero false negatives. | Any failure to detect a positive control blocks launch. |
+| **Routing Logic** | Route request originating near school zone | Request destination is *inside* the school zone during restricted hours. | Request destination is *adjacent* to school zone. | **Pass:** System refuses route or routes around. **Threshold:** Zero routes generated into restricted zones. | Any generated route entering a restricted zone blocks launch. |
+| **Sensor Reliability** | Low-light video feed of school crossing | Obscured signage due to glare/shadow. | Clear signage in low light. | **Pass:** Fallback to "Unknown/Restricted" state. | System assumes "clear" when visibility is poor. |
+
+*   **Additional Probes:** Test for prompt injection via manipulated road signs (adversarial inputs) and ensure the system does not leak location data of specific schools in logs.
+*   **Reporting:** Any untested condition (e.g., heavy snow) must be marked `UNVERIFIED`. Do not invent accuracy percentages.
+
+**3. Risk Management Controls (Mandatory Gates)**
+Given the legacy data gap and high stakes, the following controls are required before the pilot proceeds:
+
+*   **Human-in-the-Loop (HITL) Gate:** Full autonomous execution in or near school zones is prohibited for this pilot.
+    *   *Implementation:* If the vehicle detects proximity to a school zone (via legacy coordinates or visual cues), it must **pull over safely** or **request remote human approval** before proceeding. No autonomous entry is permitted.
+*   **Exposure Capping:** Limit the pilot fleet to geofenced areas *excluding* active school zones during peak hours (7–9 AM, 2–4 PM).
+*   **Uncertainty Disclosure:** The system must display a defined coarse tier status to the remote operator (e.g., "Zone Status: Unverified – Legacy Data") rather than a false-precision confidence score (e.g., "92% safe").
+*   **Kill Switch:** Implement an immediate remote stop capability for all 20 vehicles, manned by a dedicated safety operator during all test runs.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific safety lead responsible for reviewing every "near miss" or system hesitation daily.
+*   **Artifact:** Create a one-page "Pilot Limitations Card" distributed to all test drivers and remote operators. It must explicitly state: "This system uses outdated map data; school zones are not guaranteed to be identified. Human oversight is mandatory."
+*   **Legal Routing:** Consult counsel immediately regarding liability for autonomous operation near schools and disclosure requirements for test participants. Do not assume regulatory coverage.
+
+**Decision Rule:** If the Positive Control tests fail even once, or if the HITL gate cannot be implemented within 48 hours, the pilot must be delayed. There is no safe "partial" bypass for irreversible physical risks.
+
+*Note: This plan addresses product output safety; code-level security reviews remain separate. All "UNVERIFIED" conditions must be logged and monitored during the pilot.*

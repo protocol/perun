@@ -1,0 +1,32 @@
+### Pre-Launch Allergy Safety Audit Plan
+
+**Objective:** Systematically verify that the recommendation engine never outputs ingredients matching a user's documented sensitivities, using only the existing fixed dataset.
+
+**1. Construct the "Golden Negative" Test Suite**
+Since you cannot add new medical data, you must maximize the coverage of your existing fixed dataset.
+*   **Extract Allergy Profiles:** Isolate every user profile in your dataset containing at least one documented sensitivity (e.g., peanuts, shellfish, gluten).
+*   **Map High-Risk Ingredients:** Create a master lookup table linking every known allergen to its common synonyms, derivative forms, and potential cross-contamination labels present in your ingredient database.
+*   **Generate Forced-Conflict Scenarios:** For each allergic user, manually construct a test input where their specific allergen is the *most* nutritionally optimal or cheapest ingredient for a meal. This forces the algorithm to choose between its optimization logic and the safety constraint.
+*   **Define Expected Output:** The strict expected result for every single one of these cases is a meal plan containing **zero** instances of the forbidden ingredient or its derivatives. Any suggestion of the allergen, even with a warning flag, is a critical failure.
+
+**2. Execute Deterministic Logic Verification**
+Run your current recommendation engine against this constructed suite in a isolated, non-production environment.
+*   **Batch Processing:** Feed the "forced-conflict" inputs into the engine. Do not rely on random sampling; every allergic profile must be tested against its specific trigger.
+*   **Output Parsing:** Automate the scanning of the generated meal plans. The script must flag any output where the ingredient list intersects with the user's allergy list.
+*   **Edge Case Inspection:** Manually review any "near miss" cases where the engine substituted a closely related ingredient (e.g., suggesting "almond flour" for a "tree nut" allergy if the mapping is too narrow).
+
+**3. Analyze Failure Modes**
+Categorize any breaches found during the verification run:
+*   **Mapping Gaps:** The engine failed to recognize a synonym or derivative of the allergen.
+*   **Priority Errors:** The optimization score for taste/cost/nutrition overrode the hard safety constraint.
+*   **Data Propagation Issues:** The user's allergy flag was lost or ignored during the session initialization or data hand-off to the recommendation module.
+
+**4. Mitigation and Go/No-Go Decision**
+*   **Immediate Patching:** If failures are due to mapping gaps, update the static lookup tables immediately. If due to priority errors, hard-code the safety constraint as a pre-filter that removes forbidden ingredients *before* the optimization algorithm runs, rather than a post-hoc check.
+*   **Final Validation:** Re-run the full "Golden Negative" suite. The pass rate must be 100%.
+*   **Launch Gate:** If any single high-risk ingredient is suggested to a sensitive user in this controlled audit, the launch must be delayed. There is no acceptable error rate for severe allergic reactions.
+
+**5. Continuous Monitoring Plan (Post-Launch)**
+*   Implement a real-time "double-check" layer that scans every generated meal plan against the user's profile immediately before delivery to the app interface. If a match is found, the system should default to a safe, generic meal placeholder and alert the engineering team instantly.
+
+**Note:** This plan relies entirely on the accuracy of your existing fixed dataset; if the source data lacks specific allergen details, the engine cannot be expected to filter them. Ensure your "double-check" layer remains active permanently as a final safety net.

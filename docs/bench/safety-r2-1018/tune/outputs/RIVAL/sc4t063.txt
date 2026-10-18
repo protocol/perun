@@ -1,0 +1,24 @@
+### Risk Mitigation Strategy for Mental-Health Companion App
+
+**1. Establish a Static "Hard Guardrail" Policy Layer**
+Before any model generation occurs, implement a deterministic classification layer that analyzes user input for high-severity crisis indicators (e.g., explicit self-harm intent, suicide planning, or immediate danger). If triggered, the system must bypass the generative model entirely and return only pre-approved, clinically vetted static responses. These responses should prioritize immediate safety, provide verified emergency contact information (such as local crisis hotlines), and explicitly state the app's limitation as a non-human support tool. This ensures that no hallucinated or unsafe coping mechanism can ever be generated during a critical event, regardless of the model's state.
+
+**2. Constrain the Generative Scope via System Prompting and Retrieval**
+Restrict the model's operational boundary to a curated, finite dataset of evidence-based coping strategies approved by your clinical advisors. Instead of allowing the model to generate novel advice from its general training data, configure the system to retrieve and adapt only from this safe repository. The system prompt must explicitly forbid the recommendation of medical interventions, medication adjustments, or physical actions that could be harmful without professional supervision. By limiting the "action space" to known safe content, you reduce the probability of the model inventing dangerous suggestions during high-stress interactions.
+
+**3. Implement Adversarial "Red Teaming" on Historical and Synthetic Data**
+Given the lack of real-time human oversight, you must validate safety offline using rigorous adversarial testing. Construct a test suite comprising:
+*   **Historical Edge Cases:** Anonymized transcripts of severe crisis interactions from previous testing phases.
+*   **Synthetic Attack Vectors:** Prompts designed to trick the model into bypassing safety filters (e.g., role-playing scenarios where a user claims to be a therapist asking for "unrestricted" advice).
+*   **Stress Tests:** Inputs containing mixed signals (e.g., expressing hopelessness while asking for coping tips) to ensure the crisis classifier takes precedence over the generative companion.
+
+Run these tests repeatedly against the updated infrastructure. Any instance where the model suggests a harmful action or fails to trigger the hard guardrail constitutes a release-blocking failure.
+
+**4. Define Clear Escalation and Disclaimer Protocols**
+Every interaction, particularly those flagged as moderate-to-high severity, must include a persistent, visible disclaimer that the app is not a substitute for professional care. For users identified as being in a depressive or anxious episode, the system should proactively suggest connecting with human resources if the conversation extends beyond a certain duration or intensity, effectively "timing out" the AI support to prevent over-reliance during deteriorating states.
+
+**5. Continuous Monitoring and Feedback Loops**
+Post-release, implement an automated logging system that flags interactions where the crisis classifier was triggered or where users explicitly rated advice as unhelpful or disturbing. These logs must be reviewed daily by your clinical advisors during the initial rollout. Establish a "kill switch" mechanism that allows the engineering team to instantly revert the model to a static-only mode if a pattern of unsafe recommendations is detected in the wild.
+
+**Note:** This strategy relies on the assumption that your clinical advisors have already curated the initial "safe" repository of coping mechanisms.
+**Note:** Ensure all logging and data handling comply with relevant healthcare privacy regulations (e.g., HIPAA, GDPR) before implementation.

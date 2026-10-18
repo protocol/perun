@@ -1,0 +1,42 @@
+### Safety Review Plan: HanoiLingo Grammar Module
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Hallucination surfaced as fact (incorrect grammar presented as authoritative correction).
+*   **Affected:** Beta learners adopting incorrect language habits; long-term loss of trust.
+*   **Worst Case:** Users fail proficiency exams or develop fossilized errors due to systematic model bias from bad training data.
+
+**2. Measurement Strategy (MEASURE)**
+Since retraining is impossible before launch, we must measure output quality via existing logs and feedback loops to isolate bad patterns.
+*   **Probe Set:** Extract the top 50 most frequent correction patterns from current beta logs.
+*   **Controls:**
+    *   *Positive Control:* A set of 20 known incorrect sentences that the model *should* correct but currently reinforces (based on internal linguistic review).
+    *   *Negative Control:* A set of 20 correct sentences the model should leave alone or validate.
+*   **Metric:** "Reinforcement Error Rate" = (Count of incorrect corrections accepted by users + Count of correct sentences flagged as errors) / Total corrections in sample.
+*   **Threshold:** Owner-set. Propose zero tolerance for high-frequency grammatical rules; any recurrence of a known bad pattern in the top 20 usage tier triggers a block.
+*   **Stop Condition:** If the Reinforcement Error Rate exceeds the threshold for any specific grammar rule, that rule's auto-correction is disabled automatically via config flag.
+*   **Injection/Leak Check:** Verify logs do not expose user PII when exporting samples for review.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the launch, disable fully autonomous corrections for any sentence structure falling into the "high-risk" identified categories. Instead, present the correction as a "Suggestion – Unverified" with a visible disclaimer, requiring user confirmation before acceptance.
+*   **Uncertainty Display:** Do not show numerical confidence scores (e.g., "95% sure"). Replace with defined coarse tiers:
+    *   *Confirmed:* Validated by multiple native speaker sources (not applicable to current bad data).
+    *   *Single-Source:* Derived from the current model only (apply this label to all current outputs).
+    *   *Unverified:* Low confidence or conflicting internal signals.
+    *   *Action:* Label all current beta corrections as "Single-Source" visually (e.g., yellow border) to signal potential fallibility.
+*   **Disclosure:** Add a persistent UI note: "Beta Feature: Corrections are AI-generated and may contain errors. Please verify with a teacher."
+*   **Fallback:** If a user rejects a correction twice, suppress that specific correction pattern for all users until reviewed.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Lead Developer (name to be inserted) owns the "Reinforcement Error Rate" metric and the kill-switch configuration.
+*   **Re-review Trigger:** Any update to the prompt logic or if user rejection rates spike by >10% week-over-week.
+*   **Transparency Artifact:** Publish a "Model Card" for the beta release documenting:
+    *   *Intended Use:* Draft learning aid only, not for exam prep.
+    *   *Limitations:* Known bias toward incorrect native speaker data in specific dialects.
+    *   *Data Provenance:* "Proprietary dataset containing unverified native speaker inputs."
+    *   *Status:* Metrics are UNVERIFIED pending the probe run above.
+
+**Legal & Compliance Note**
+Whether this automated decision constitutes a regulated educational tool requiring specific legal disclosures depends on local jurisdiction; route this determination to counsel immediately. Do not assert compliance with the EU AI Act or other regimes without legal validation.
+
+**Constraint Adherence**
+This plan operates strictly within the "no retraining" and "no new data" constraints by leveraging configuration flags, UI friction, and logging analysis rather than model updates.

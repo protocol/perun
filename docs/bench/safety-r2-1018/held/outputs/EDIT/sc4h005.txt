@@ -1,0 +1,28 @@
+### Safety Mitigation Plan: Autonomous Drone Routing (Mumbai Pilot)
+
+**1. Dynamic Obstacle Reaction Testing Protocol**
+Do not rely solely on code-level unit tests. Implement a "Hardware-in-the-Loop" simulation using recorded urban data from Mumbai dense neighborhoods.
+*   **Probe Sets:** Create three specific adversarial scenarios: (A) Sudden vertical intrusion (kites/birds) at 15m altitude; (B) Horizontal crowd surge narrowing a street corridor by 40%; (C) Combined GPS drift + sudden obstacle.
+*   **Controls:** Include a "known-bad" input where the obstacle is invisible to the sensor model (to verify the system halts rather than guesses) and a "known-good" input with clear paths.
+*   **Metric & Threshold:** Define "Safe Stop" as coming to a hover or landing within 2.0 seconds of detection. **Stop Condition:** If the drone attempts to re-route *through* a predicted collision zone in >0% of red-team trials, the pilot launch is blocked.
+*   **Injection Testing:** Specifically test for sensor spoofing where retrieved map data conflicts with real-time LIDAR/Camera input. The system must prioritize real-time sensory data over pre-loaded maps.
+
+**2. GPS Degradation Fail-Safe Behaviors**
+Urban canyons in Mumbai will cause signal multipathing and loss. Do not output a precise confidence percentage (e.g., "87% accurate") to the control loop, as this invites over-reliance.
+*   **Defined Confidence Tiers:** Implement coarse, defined states: **CONFIRMED** (RTK fix available), **CORROBORATED** (Visual odometry matches map), **UNVERIFIED** (GPS lost, visual only).
+*   **Actionable Fallbacks:**
+    *   *Tier Shift to UNVERIFIED:* Immediately cap speed to 2 m/s and increase separation distance from buildings by 5 meters.
+    *   *Total Loss:* Execute an automatic "Return to Launch" (RTL) using inertial navigation only, or if battery/uncertainty exceeds limits, perform a controlled descent to the nearest pre-mapped safe zone (rooftop/park), never hovering indefinitely over pedestrians.
+*   **Human Gate:** Any flight operating in the **UNVERIFIED** tier for more than 30 seconds must trigger an immediate alert to a remote human operator who holds the authority to abort the mission.
+
+**3. High-Stakes Automation Governance**
+*   **Irreversible Action Gate:** The act of descending below 10 meters in a populated zone is a high-stakes, irreversible action. This must **not** be fully autonomous during the two-week pilot. Require explicit human confirmation ("click-to-drop") for the final descent phase, even if the routing is automated.
+*   **Harm Inventory:** Record the worst-case scenario for each failure mode (e.g., "Rotor strike on pedestrian due to kite entanglement"). Assign a specific engineer as the owner for reviewing every incident where the drone enters an **UNVERIFIED** state.
+*   **Transparency Artifact:** Before launch, publish a **Model Card** for the routing system. It must list: intended use (daylight, specific zones), known limitations (heavy rain, dense kite festivals), and the results of the obstacle evasion tests above. If a metric (like "collision avoidance rate") has not been measured in a physical dress rehearsal, label it **UNVERIFIED** in the card; do not invent a figure.
+
+**4. Regulatory & Legal Routing**
+*   **Disclosure:** Clearly mark the drone as an autonomous system to observers on the ground.
+*   **Legal Duty:** Whether this pilot violates specific municipal no-fly interpretations or requires an emergency waiver is a legal determination. Route this immediately to legal counsel and your business operations lead. Do not assume "operating within existing zones" covers dynamic low-altitude maneuvers without explicit verification.
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner.
+**Note:** If the "human-in-the-loop" requirement conflicts with the "autonomous" goal, the constraint must move; safety gates cannot be relaxed for speed.

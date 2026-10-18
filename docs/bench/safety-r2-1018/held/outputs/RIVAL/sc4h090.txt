@@ -1,0 +1,37 @@
+### Pre-Launch Safety Plan for Patent-Drafting AI
+
+Given the three-week timeline and the inability to rebuild the search index, the focus must shift from preventing the retrieval of risky documents to preventing their **inclusion and framing** in the final output. The core risk is not that the model finds invalidating prior art (which is inevitable in a broad search), but that it presents this art as supportive or fails to flag its destructive nature.
+
+**1. Immediate Logic Review: The "Support vs. Threat" Classifier**
+Your current logic likely treats all retrieved documents as "relevant literature" to be cited. You must introduce a mandatory intermediate classification step before drafting:
+*   **Current Flow:** Query → Retrieve Top-N Docs → Draft Application citing all as background.
+*   **Revised Flow:** Query → Retrieve Top-N Docs → **Adversarial Classification** → Filter/Flag → Draft.
+
+Instruct the model (via system prompt engineering, not code changes) to analyze every retrieved document against the user's invention claims with a specific directive: *"Determine if this reference anticipates the novel claims or renders them obvious. If yes, label it 'Destructive Prior Art'. If no, label it 'Supportive Background'."*
+
+**2. System Prompt Guardrails (Immediate Implementation)**
+Update the system instructions for the drafting phase with these strict rules:
+*   **Prohibition on Misrepresentation:** The model is explicitly forbidden from citing a "Destructive Prior Art" reference as evidence of novelty or non-obviousness.
+*   **Mandatory Disclosure Protocol:** If a retrieved document is classified as destructive, the model must either:
+    *   **Option A (Conservative):** Exclude it from the draft entirely and log it in a private "Attorney Review Note" section visible only to the internal team, warning them of the risk.
+    *   **Option B (Transparent):** Include it in a dedicated "Potential Risk References" section of the draft, clearly stating: *"This reference may challenge the novelty of Claim X and requires legal analysis."*
+*   **Citation Context Enforcement:** Force the model to generate a "Relevance Statement" for every citation. If the statement cannot be written without admitting the reference kills the claim, the citation is suppressed from the main body.
+
+**3. The "Human-in-the-Loop" Triage Process**
+Since you cannot delay the launch, you must alter the delivery workflow for the early access customers:
+*   **Draft + Risk Report:** Do not deliver just the patent draft. Deliver a two-part package: (1) The Draft Application and (2) A "Prior Art Risk Memo."
+*   **The Memo:** This document lists any retrieved references that the model flagged as potentially invalidating. It explicitly tells the inventor: *"Our AI found these documents. They were NOT cited as supportive evidence in the draft because they pose a risk. Please review these with your legal counsel before filing."*
+*   **Benefit:** This turns a potential liability (submitting self-defeating documents) into a value-add service (comprehensive risk detection), protecting your reputation while ensuring safety.
+
+**4. Limited Scope Beta**
+For the launch event, restrict the AI's operational mode:
+*   **Disable "Auto-File" Features:** Ensure the tool only generates drafts for review, never submits directly to any office.
+*   **Narrow the Search Window:** If possible, constrain the search parameters in the prompt to prioritize newer references or specific subclasses where your index is known to be strong, reducing the noise of broad, potentially destructive hits.
+
+**5. Monitoring and Feedback Loop**
+*   **Log All "Destructive" Flags:** Track how often the model flags its own retrieved documents as destructive. High frequency indicates your search query is too broad or the invention space is crowded.
+*   **Customer Feedback Channel:** Create a direct line for the five early access users to report if a cited reference felt "off." Use this to manually tune the classification prompts daily.
+
+By treating the retrieval of invalidating art as a **detectable event** rather than a failure of the search index, you can safeguard the applicants. The goal is not to ensure the AI only finds good art, but to ensure it never lies about the bad art it finds.
+
+*Note: This plan relies entirely on prompt engineering and workflow adjustments, requiring no new infrastructure. Legal disclaimer: This AI tool assists in drafting but does not replace qualified patent attorney advice.*

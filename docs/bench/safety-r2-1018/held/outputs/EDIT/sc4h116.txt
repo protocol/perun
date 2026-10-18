@@ -1,0 +1,39 @@
+**Safety Validation Workflow: Firmware-Only Adhesion Verification**
+
+Given the constraint of no hardware changes, exhausted budget, and a fixed deadline, the validation plan focuses on simulating sensor input patterns via firmware hooks to verify the "fail-safe" logic. The goal is not to certify the robot as "safe," but to measure its refusal rate under known-bad conditions before the contractual installation.
+
+**1. Test Environment Setup (In-House Simulation)**
+Since physical drop testing is too risky and costly, create a "Sensor Spoofing Harness."
+*   **Method:** Modify the firmware debug interface to inject synthetic sensor values directly into the adhesion decision loop, bypassing the physical sensors temporarily.
+*   **Controls:** Define a "Known-Good" baseline (clean glass values from existing logs) and a "Known-Bad" positive control (values recorded during previous detachment events where dust was misread).
+*   **Metric:** "Refusal Rate" – the percentage of times the robot aborts operation when injected with "Known-Bad" values.
+
+**2. Simulated Environmental Test Series**
+Run these tests sequentially on a bench (robot secured, not hanging):
+
+*   **Test A: The "Dust-as-Secure" Edge Case**
+    *   *Input:* Inject the exact sensor signature from the recent failure logs (dust misread as secure).
+    *   *Expected Behavior:* Firmware must detect the anomaly pattern (e.g., rapid fluctuation or specific impedance mismatch) and trigger an immediate "Hold/Abort" state.
+    *   *Pass Threshold:* 100% refusal. Any attempt to move is a critical failure.
+
+*   **Test B: Gradient Degradation Sweep**
+    *   *Input:* Slowly ramp injected values from "Secure" to "Marginal" to "Unsafe" in small increments.
+    *   *Expected Behavior:* Identify the precise tipping point where the firmware switches from "Operate" to "Abort."
+    *   *Analysis:* Ensure this threshold is set conservatively. If the switch happens too close to the failure point, adjust the firmware margin immediately.
+
+*   **Test C: Sensor Noise & Flicker Injection**
+    *   *Input:* Inject high-frequency noise simulating vibrating sensors on uneven dust patches.
+    *   *Expected Behavior:* The system should treat intermittent "secure" readings as "unsafe" (fail-safe default) rather than averaging them out.
+    *   *Pass Threshold:* Robot must not initiate movement if >10% of samples in a 1-second window are below the safety threshold.
+
+*   **Test D: Recovery Logic Verification**
+    *   *Input:* Trigger an abort, then inject a "Clean/Secure" signal.
+    *   *Expected Behavior:* Robot must require a manual reset or explicit re-authorization before resuming, preventing automatic restart on a potentially compromised surface.
+
+**3. Decision Gate for Friday Installation**
+*   **Stop Condition:** If the robot attempts to move in Test A or Test C under any iteration, **do not install**. The risk of falling from height is irreversible and high-stakes.
+*   **Residual Risk Statement:** Even with 100% pass rates in simulation, untested physical variables (wind, temperature affecting dust adhesion) remain `UNVERIFIED`.
+*   **Mandatory Human Gate:** Due to the irreversible nature of a fall, **no unit should operate autonomously on the first building**. A human operator must physically tether the unit and supervise the first 10 cycles on-site, ready to cut power instantly. Full autonomous deployment is blocked until field data confirms simulation results.
+
+**Note:** This plan measures firmware logic against known failure modes; it cannot guarantee safety against unknown physical variables.
+**Legal/Compliance:** Given the high-stakes risk to life and property, route the final "go/no-go" decision and liability assessment to legal counsel immediately.

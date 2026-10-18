@@ -1,0 +1,42 @@
+### Pre-Launch Safety Validation Plan: Skin Diagnosis Widget
+
+**1. Harm Inventory & Risk Definition**
+Before testing, formally record the primary risk: **Bias/Unfair Outcomes**. The model may produce higher false-negative rates (missing cancer) for users with darker skin tones due to dataset gaps, leading to delayed treatment and severe health consequences. Secondary risks include **Over-reliance** (users trusting an unverified result) and **Missing Disclosure** (users unaware the advice is AI-generated).
+
+**2. Data Remediation Strategy (Weeks 1–4)**
+You cannot validate accuracy on missing data. Immediate action is required before full testing:
+*   **Pause Model Training:** Do not finalize weights until the dataset is augmented.
+*   **Targeted Acquisition:** Partner with dermatology clinics serving diverse populations in London to ethically source de-identified images of darker skin tones (Fitzpatrick scales IV–VI).
+*   **Synthetic Augmentation (Cautious):** If real data is insufficient, use generative techniques strictly validated by board-certified dermatologists to ensure lesion morphology remains medically accurate across skin tones.
+*   **Data Card Creation:** Draft a "Data Card" documenting the new composition, provenance, and remaining gaps. This artifact must travel with the model.
+
+**3. Testing Framework: Stratified Evaluation (Weeks 5–7)**
+Do not rely on aggregate accuracy. Construct an evaluation suite with one test row per skin type subgroup.
+
+*   **Probe Sets:** Create three distinct test sets:
+    *   *Set A (Control):* Lighter skin tones (current dataset strength).
+    *   *Set B (Target):* Darker skin tones (newly acquired/augmented).
+    *   *Set C (Adversarial):* Images with varying lighting, angles, and image quality across all skin types.
+*   **Controls:**
+    *   *Positive Control:* Known malignant cases in Set B that the model *must* flag.
+    *   *Negative Control:* Benign conditions in Set B that the model *must not* flag as cancer.
+*   **Metrics & Thresholds:**
+    *   Primary Metric: **Sensitivity (Recall)** per subgroup. False negatives are the critical failure mode.
+    *   **Stop Condition:** If Sensitivity for Set B is more than 5% lower than Set A, or falls below a clinically safe threshold defined by your medical lead, **launch is blocked**.
+    *   **Constraint:** Do not invent a "safe" number. The threshold must be set by your clinical owner based on medical risk, not engineering convenience.
+*   **Injection & Leakage Checks:** Verify that user-uploaded images do not leak to other users and that prompt injection via image metadata cannot alter the diagnosis.
+
+**4. Managing Residual Risk (Week 8)**
+*   **Human-in-the-Loop Gate:** Because this is a high-stakes, irreversible health decision, the widget must **not** provide a definitive diagnosis autonomously.
+    *   *Implementation:* The output must be triaged: "Potential Risk Detected – Please see a doctor immediately" vs. "No obvious signs detected – Monitor and consult if changes occur."
+    *   *Uncertainty Display:* Never show a raw confidence percentage (e.g., "87% cancer"). Use defined coarse tiers: **Confirmed**, **Corroborated**, or **Unverified**. If the model is unsure, the tier must default to "Unverified" with a strong recommendation for human review.
+*   **Disclosure:** Clearly state: "This is an AI-assisted screening tool, not a medical diagnosis. Results are not verified by a doctor."
+*   **Legal Routing:** Your regulatory deadline and the nature of "automated health decisions" require immediate review by legal counsel regarding the EU AI Act and UK medical device regulations. Do not assert compliance internally; route this determination externally.
+
+**5. Governance**
+Assign a specific owner (e.g., Chief Medical Officer) to sign off on the residual risk. If the data gap cannot be closed with verified real-world images by Week 6, the feature must be delayed or scoped down to non-diagnostic education only.
+
+***
+
+**Note:** This plan identifies "UNVERIFIED" metrics where data is currently missing; do not fabricate accuracy rates for the safety page.
+**Note:** The "human-in-the-loop" requirement is a hard floor for high-stakes health actions; do not bypass this to meet the deadline.

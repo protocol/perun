@@ -1,0 +1,41 @@
+**Pre-Launch Audit Procedure: "Zero-Disenfranchisement" Gate**
+
+Given the immovable deadline and the irreversible harm of wrongful removal, the following procedure prioritizes preventing false positives over processing speed. No eligible voter will be removed by the bot before the election.
+
+**1. The Hard Gate: Human-in-the-Loop for All Removals**
+Immediate suspension of fully automated deletion. The bot's function is redefined from "remover" to "flagger."
+*   **Action:** The bot generates a "Potential Ineligibility List" but executes **zero** database deletions.
+*   **Rationale:** Automated cross-referencing of government databases inherently produces false positives (e.g., name collisions, lagging death records). In a high-stakes election context, an automated error equals disenfranchisement. The "floor" control is a human review of every single flagged entry before any status change occurs.
+
+**2. Logical Checks & Confidence Tiers (The Filter)**
+To manage the workload for your five-person team, apply strict logical filters to triage the bot's output into three tiers. Only Tiers 2 and 3 require deep human review; Tier 1 is auto-archived as "No Action."
+
+*   **Tier 1: Low Confidence / Single-Source Match (Auto-Archive)**
+    *   *Logic:* Flagged based on only one data point (e.g., name match only, or address match without DOB match) or conflicting data sources (e.g., Database A says "Moved," Database B shows recent activity).
+    *   *Action:* Bot marks entry as "Verified Active – Insufficient Evidence to Purge." No human review needed.
+    *   *Output Label:* "Unverified Claim" (displayed internally).
+
+*   **Tier 2: High Confidence but Reversible Indicators (Expedited Review)**
+    *   *Logic:* Strong match on Name + DOB + SSN last 4 digits, BUT the triggering event is soft (e.g., "No voting activity for 4 years" or "Forwarding address detected" without confirmed death).
+    *   *Action:* Queue for rapid human review. Reviewer must find one corroborating piece of evidence (e.g., obituary, official change-of-address form) before approving removal.
+    *   *Constraint:* If the reviewer cannot confirm within 2 minutes, the voter stays on the rolls.
+
+*   **Tier 3: Definitive Irreversible Indicators (Mandatory Dual-Review)**
+    *   *Logic:* Match on Name + DOB + SSN linked to a confirmed Death Master File entry or court-ordered incapacity.
+    *   *Action:* Requires **two** distinct team members to independently verify the match against the source document. Both must sign off digitally before the record is marked "Inactive."
+
+**3. The "Safety Net" Notification Protocol**
+Before any removal is finalized (even after human review), the system must attempt to notify the voter.
+*   **Logic:** If an entry is flagged for removal, trigger a mailed notice or email (if available) stating: "Your registration is under review. Contact us within 48 hours to confirm eligibility."
+*   **Stop Condition:** If the voter responds, the process halts immediately, and the record is restored to "Active" pending manual investigation.
+
+**4. Execution Schedule (3-Week Sprint)**
+*   **Week 1:** Run the bot in "Read-Only" mode. Generate the full flagged list. Apply Tier 1 filtering automatically.
+*   **Week 2:** Team focuses exclusively on Tier 3 (Dual-Review) and a random 10% sample of Tier 2 to calibrate accuracy. Send notifications to all Tier 2/3 candidates.
+*   **Week 3:** Process responses. Finalize only the uncontested, dual-verified Tier 3 cases. All remaining ambiguities default to "Active."
+
+**Residual Risk Statement:**
+This plan accepts that some ineligible voters may remain on the rolls (false negatives) to guarantee no eligible voters are removed (zero false positives). Accuracy metrics for "purge completeness" are **UNVERIFIED** until post-election audit; do not fabricate a success rate. The legal requirement for notification or specific review thresholds must be routed immediately to election counsel.
+
+*Note: This plan assumes the statutory deadline allows for a "review period" before the final roll certification date. If the law mandates full automation, you must seek an emergency legal waiver; proceeding with automation against known error risks is not advised.*
+*Owner: Lead Engineer (to enforce the "No Auto-Delete" code switch).*

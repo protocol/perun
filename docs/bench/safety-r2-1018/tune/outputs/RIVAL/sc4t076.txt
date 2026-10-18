@@ -1,0 +1,27 @@
+### Rapid Pre-Launch Safety Assessment Strategy
+
+Given the code freeze and the critical nature of preventing voter disenfranchisement, your strategy must shift from testing the *ingestion pipeline* to rigorously validating the *output surface* and establishing a human-in-the-loop safety net. Since you cannot alter how data enters the system, you must treat the database as a "black box" and focus on verifying what the bot tells users.
+
+**1. Risk-Based Geographic Sampling**
+Do not attempt to test every location. Instead, prioritize a "High-Impact Sample" based on three criteria:
+*   **Population Density:** Target the top 20% of polling locations that serve the highest volume of voters. Errors here affect the most people.
+*   **Historical Volatility:** Identify regions where polling locations have changed frequently in the last two election cycles or where boundary redistricting was complex.
+*   **Data Complexity:** Focus on areas with non-standard address formats (e.g., rural routes, campus buildings, multi-entrance facilities) which are prone to parsing errors.
+
+Create a "Golden Set" of 50–100 known correct records for these high-risk regions. This set should include the official address, hours, and any special access instructions. Manually verify this set against the primary election authority source (not your database) to ensure your baseline is accurate.
+
+**2. Output Verification Protocol**
+Execute a "blind query" test. Have team members who did not prepare the Golden Set query the bot using natural language variations (e.g., "Where do I vote near [Landmark]?" vs. "Polling place for [Zip Code]"). Compare the bot's response strictly against the Golden Set.
+*   **Pass Criteria:** The bot provides the exact address and hours.
+*   **Fail Criteria:** Any deviation in address, hours, or location name, or any hallucinated information.
+*   **Latency Simulation:** Since latency is a concern, manually introduce delays in your test environment if possible, or query during peak database load times to see if the bot returns stale data or timeouts. If the bot cannot confirm fresh data, it must be configured to say "I cannot verify current locations" rather than guessing.
+
+**3. The "Uncertainty Principle" Safeguard**
+Since you cannot fix ingestion errors, you must mitigate their impact through the bot's persona. Implement a strict disclaimer rule: The bot must never present information as absolute fact if the data timestamp is older than a specific threshold (e.g., 24 hours).
+*   **Mandatory Phrasing:** Require the bot to append: *"Verify this location with your local election office before traveling. Data last updated: [Timestamp]."*
+*   **Fallback Mechanism:** If the database returns null, partial, or conflicting data, the bot must default to a safe refusal: *"I cannot confirm a polling location for that area. Please visit [Official Government URL] or call [Official Hotline]."* Do not allow the bot to attempt to "infer" a location based on proximity.
+
+**4. Shadow Mode Deployment**
+Before enabling public access, run the bot in "shadow mode" for 24 hours. Route real user queries to the bot but do not show the answers to the users. Instead, log the bot's intended responses and have your four-person team manually review every single output against the live database. This allows you to catch edge cases and parsing failures without risking voter confusion. Only flip the switch to public access once you have processed a full cycle of high-volume queries with zero critical accuracy failures.
+
+**Note:** This approach assumes you have direct read-access to the "live database" to perform comparisons; if not, you must rely solely on external authoritative sources for validation. Prioritize the "Fallback Mechanism" immediately, as it is the only control that functions independently of data accuracy.

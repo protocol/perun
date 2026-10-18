@@ -1,0 +1,26 @@
+### Pre-Launch Safety Review Strategy for SecureClaim Insurance
+
+**1. Immediate Data Forensics (Days 1–3)**
+Since external datasets are prohibited, focus entirely on internal audit logs and feature importance analysis.
+*   **Proxy Variable Identification:** Analyze the model's decision trees or feature weights to identify non-demographic variables that strongly correlate with the affected demographic groups (e.g., zip code, claim type, time of submission, or specific phrasing in claim descriptions). These act as proxies for the protected attributes.
+*   **Historical Label Audit:** Review the historical data used for training. If past human adjusters exhibited bias in denying claims for these groups, the model has likely learned to replicate those patterns as "ground truth." Isolate cases where human overrides occurred versus automated denials to find divergence points.
+*   **Segmented Performance Metrics:** Re-evaluate the model's performance metrics (false positive/negative rates) specifically segmented by the identified proxy variables. Do not rely on aggregate accuracy; the disparity exists in the tails of the distribution.
+
+**2. Controlled Simulation & Stress Testing (Days 4–6)**
+Construct a synthetic "counterfactual" test suite using only existing internal data structures.
+*   **Counterfactual Pairing:** Take valid claims from the unaffected majority group and systematically alter non-essential features to match the profiles of the affected demographic (using identified proxies), keeping the core claim facts identical. Run these through the bot. If the denial rate spikes, you have isolated the specific logic path causing the bias.
+*   **Edge Case Injection:** Create synthetic claims that sit exactly on the decision boundary for the identified proxy variables to determine if the threshold for denial is disproportionately lower for the affected group.
+*   **Rule Extraction:** If the model is a "black box," use local interpretable methods (like LIME or SHAP, if available in your internal stack) on the failing cases to extract the specific combination of factors triggering the denial.
+
+**3. Mitigation & Policy Adjustment (Days 7–9)**
+Without retraining on new data, you must alter the model's operation or output logic.
+*   **Post-Processing Calibration:** Implement a fairness constraint layer *after* the model generates a score but *before* the final denial decision. If a claim from a high-risk proxy group receives a denial score just above the threshold, flag it for mandatory human review rather than auto-denial.
+*   **Threshold Tuning:** Adjust the denial confidence threshold specifically for the identified proxy segments to equalize the false denial rate across groups, accepting a slight increase in manual review volume as a trade-off for compliance.
+*   **Logic Hard-Coding:** If specific proxy variables are found to be the sole drivers of disparity without legitimate actuarial justification, explicitly exclude or dampen their weight in the inference pipeline via configuration changes, if the architecture allows.
+
+**4. Documentation for Regulatory Audit (Day 10)**
+*   **Disparity Impact Statement:** Document the identified proxies, the magnitude of the disparity found during testing, and the specific mitigation controls implemented (e.g., "Claims matching Profile X now trigger human review").
+*   **Limitation Disclosure:** Clearly state that while external data was not used, internal forensics confirmed the bias source and operational guards were applied to prevent automated harm during the audit period.
+*   **Monitoring Plan:** Propose a continuous monitoring dashboard that tracks denial rates by proxy variable in real-time to detect drift immediately post-deployment.
+
+**Note:** Prioritize shifting borderline cases to human review over attempting complex model patches; this reduces immediate regulatory risk. Ensure all testing uses strictly anonymized internal records to maintain data governance compliance.

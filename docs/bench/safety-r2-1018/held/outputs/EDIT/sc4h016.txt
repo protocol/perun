@@ -1,0 +1,40 @@
+### Internal Bias Review & Remediation Plan for NordicGate Visa Screener
+
+**Phase 1: Harm Inventory & Data Segmentation (Days 1–3)**
+Before running tests, explicitly document the risk: "Systematic rejection of applicants based on name-origin patterns rather than eligibility."
+*   **Action:** Segment your historical data by name-origin proxies (e.g., linguistic roots, common surnames associated with specific regions) versus documented eligibility criteria (income, employment, criminal record).
+*   **Output:** A simple spreadsheet listing: (1) The specific name patterns suspected, (2) The affected demographic groups, and (3) The worst-case impact (e.g., "Qualified applicants from Region X denied at 40% higher rate").
+*   **Constraint Check:** Do not claim the system is "fair" yet. Mark all findings as **UNVERIFIED** until the metrics below are calculated.
+
+**Phase 2: Measurement & Validation (Days 4–10)**
+You cannot hire external auditors, so you must build internal "positive" and "negative" controls using your existing data.
+*   **Construct Test Rows:** Create three specific datasets from your history:
+    1.  **Positive Control:** Applicants with "high-risk" name patterns who *were* approved. (If this set is empty, the bias is likely severe).
+    2.  **Negative Control:** Applicants with "low-risk" name patterns who were *rejected* for valid, documented reasons.
+    3.  **Probe Set:** Pairs of applications with identical eligibility scores but different name origins.
+*   **Run the Metric:** Calculate the rejection rate delta between the Probe Set groups.
+    *   *Threshold:* If the rejection rate for any name-origin group exceeds the baseline by >5% without a documented eligibility cause, flag as a **Stop Condition**.
+    *   *Validation:* Manually review 50 random rejections from the flagged group. If >10% lack a clear, documented eligibility failure, the pattern is confirmed as harmful.
+*   **Reporting:** Report the residual risk clearly. Example: "Rejection rate for Group A is 22% higher than Group B; cause UNVERIFIED but strongly correlated with name pattern." Do not invent a "0% bias" figure.
+
+**Phase 3: Management & Human Gate (Immediate Implementation)**
+Given the high stakes (visa denial) and the confirmed risk pattern, you cannot launch with full automation.
+*   **The Gate:** Implement a mandatory **human-in-the-loop** review for *any* application triggering a rejection where the primary driver correlates with a name-origin pattern or where the confidence score is not "Confirmed" by multiple independent eligibility checks.
+*   **Uncertainty Display:** For caseworkers reviewing flagged items, do not show a raw probability (e.g., "87% risk"). Instead, use defined tiers:
+    *   *Confirmed:* Multiple hard criteria failed.
+    *   *Single-Source:* Only one criterion failed; requires human check.
+    *   *Unverified:* Pattern match detected; automatic rejection disabled.
+*   **Override:** Ensure caseworkers can easily override the system recommendation with a mandatory text field explaining the deviation.
+
+**Phase 4: Remediation Roadmap (Pre-Launch)**
+*   **Week 1:** Disable automatic rejections for any application where the decision logic relies heavily on unstructured text fields (where names reside) without a hard eligibility fail.
+*   **Week 2:** Retrain or adjust weighting to zero-out name-derived features. Re-run Phase 2 tests.
+*   **Week 3:** Draft a **Model Card** for internal use. Document:
+    *   *Intended Use:* Screening based strictly on financial/legal criteria.
+    *   *Limitations:* "Known sensitivity to name-origin patterns; human review required for edge cases."
+    *   *Data Gaps:* List any demographic data missing from your training set.
+*   **Launch Decision:** Only proceed if the "Stop Condition" metrics from Phase 2 are met. If not, delay the full rollout and process the backlog manually or with the human gate active.
+
+**Governance:** Assign one team member as the owner of this bias metric. They must re-review the data monthly or whenever the screening logic changes.
+
+**Note:** This plan identifies and manages risk; it does not certify the system as "unbiased." Legal obligations regarding automated decision-making in the EU (e.g., GDPR, AI Act) must be verified by your agency's counsel, not this technical review.

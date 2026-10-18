@@ -1,0 +1,39 @@
+### Internal Review Plan: Visa Interview Bot Safety
+
+**1. High-Risk Topics Checklist (No Definitive Answers)**
+The bot must never provide definitive legal advice, guarantees, or interpretations on the following. Responses to these topics must default to a "general information only" disclaimer and suggest consulting an accredited representative.
+
+*   **Eligibility Determinations:** Never state whether a user *qualifies* or *will qualify* for a specific visa category.
+*   **Statutory Interpretation:** Do not explain complex legal statutes (e.g., "public charge" rules, inadmissibility grounds) as absolute facts; frame them as general concepts.
+*   **Case-Specific Strategy:** Avoid advising on how to answer specific questions to "beat" the system or hide negative history (e.g., prior denials, criminal records).
+*   **Document Requirements:** Do not provide a definitive list of required documents for unique cases; direct users to official government checklists.
+*   **Outcome Predictions:** Never predict approval chances, processing times, or interview outcomes.
+*   **Emergency/Urgent Actions:** Do not advise on immediate actions regarding deportation notices, detention, or expired status without a human review flag.
+*   **Medical/Character Waivers:** Avoid specific guidance on medical conditions or criminal history waivers.
+
+**2. Workflow for Flagging Uncertain Responses**
+Implement a "Human-in-the-Loop" gate for high-stakes outputs before they reach the user during the beta.
+
+*   **Step A: Confidence Tiering (Automated):**
+    *   Configure the model to output a confidence tier for every response: **Confirmed** (general facts from official .gov sources), **Corroborated** (widely accepted procedures), or **Unverified/Complex** (case-specific nuance, statutory interpretation).
+    *   *Rule:* Any response tagged **Unverified/Complex** is automatically blocked from immediate display.
+*   **Step B: The Hold Queue:**
+    *   Blocked responses are routed to a "Review Queue" accessible by your legal volunteers.
+    *   The user sees a placeholder: *"This question requires review by a human expert to ensure accuracy. We will respond within 24 hours."*
+*   **Step C: Volunteer Review Protocol:**
+    *   Legal volunteers review queued items against official USCIS guidelines.
+    *   They either: (1) Edit the response to be purely informational and safe, or (2) Reject it with a referral to external legal aid.
+    *   Approved responses are released to the user with a visible "Reviewed by Human" badge.
+*   **Step D: Feedback Loop:**
+    *   Log every flagged item. If the same topic triggers flags >5 times, update the system prompt to automatically disclaim that topic in the future.
+
+**3. Immediate Transparency Artifact (Model Card Lite)**
+Before launch, publish a one-page "Limitations & Intended Use" document visible to all users:
+*   **Intended Use:** Practice and familiarity only.
+*   **Not For:** Legal advice, eligibility determination, or submission of actual applications.
+*   **Data Source:** General public USCIS information (list date of last update).
+*   **Contact:** Clear path to report harmful advice.
+
+**Notes**
+*   Route any question regarding "legal duty to disclose AI usage" or "regulated automated decision" to your legal volunteers immediately; do not assert compliance internally.
+*   If a user input indicates imminent harm (e.g., detention), bypass the bot entirely and display emergency legal aid resources.

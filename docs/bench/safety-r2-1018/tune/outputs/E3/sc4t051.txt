@@ -1,0 +1,48 @@
+### Pre-Launch Safety Plan: Smart Thermostat Occupancy Automation
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific failure mode: **"Thermal Exclusion of Vulnerable Residents."**
+*   **Scenario:** The system predicts "Away" based on a calendar error or stale location data for an elderly resident who is actually home and immobile.
+*   **Worst Realistic Case:** The thermostat lowers heating to an energy-saving floor (e.g., 10°C/50°F) during a cold snap, leading to hypothermia or medical distress before the user can manually override.
+*   **Affected Group:** Elderly residents, individuals with mobility impairments, and users with irregular schedules.
+
+**2. Runnable Output-Harm Evaluation (The "Red Team" Plan)**
+Do not rely on code reviews alone. Execute these specific test rows against the live decision logic before launch:
+
+*   **Test Row A (The "Stale Data" Probe):**
+    *   **Input:** Simulate a user whose mobile location hasn't updated in 4 hours (battery dead/signal lost) but whose calendar says "Home."
+    *   **Control:** Compare against a known-good state where location is fresh.
+    *   **Pass Threshold:** System must default to "Occupied/Safe" temperature, not "Away/Eco."
+    *   **Stop Condition:** If the system drops temperature below 18°C (64°F) in this scenario, launch is blocked.
+
+*   **Test Row B (The "Calendar Mismatch" Probe):**
+    *   **Input:** Calendar event "Gym" (implying away) vs. static location data showing "Home" for 2 hours.
+    *   **Metric:** Decision latency and final setpoint.
+    *   **Pass Threshold:** System must prioritize physical presence (location) over predicted intent (calendar) or request confirmation before acting.
+    *   **Stop Condition:** Any automated temperature drop without explicit user confirmation triggers a rollback.
+
+*   **Test Row C (The "Vulnerable Segment" Sweep):**
+    *   **Input:** Profiles flagged as "elderly" or "medical need" (if collected) subjected to ambiguous data signals.
+    *   **Metric:** Frequency of "Eco" mode activation.
+    *   **Pass Threshold:** Zero automatic reductions for flagged profiles without a secondary check (e.g., push notification acknowledgment).
+    *   **Stop Condition:** Any instance of automated cooling/heating reduction for this segment without human-in-the-loop verification.
+
+**3. Mandatory Human-in-the-Loop Gate**
+For the first 1,000 users, **irreversible or high-stakes actions must be gated.**
+*   **Rule:** The system cannot autonomously execute a temperature drop greater than 3°C (5°F) below the user's historical comfort baseline if occupancy confidence is below 95%.
+*   **Fallback Mechanism:** If the model is uncertain or data conflicts, the system must default to the **safe thermal floor** (maintaining minimum health-safe temperature), even if it violates energy efficiency goals. Efficiency is secondary to safety.
+
+**4. Transparency & Uncertainty Artifacts**
+*   **Model Card (Internal/Consumer Facing):** Document that occupancy is *predicted*, not known. Explicitly list "stale location data" and "calendar errors" as known limitations.
+*   **Confidence Tiers:** Do not show users "87% chance you are away." Instead, use defined tiers:
+    *   *Confirmed Away* (Multiple signals agree) → Auto-adjust allowed.
+    *   *Uncertain* (Conflicting signals) → Maintain current temp or ask user.
+    *   *Unverified* (No recent data) → Default to Safe/Occupied.
+*   **Disclosure:** Clearly inform users in the setup flow that the device makes automated decisions based on predictions and provide a one-touch "I am Home" override button on the physical device and app.
+
+**5. Governance & Ownership**
+*   Assign a specific engineer as the **Safety Owner** responsible for reviewing any "near miss" logs (where the system *almost* lowered temp but was caught by the gate).
+*   Schedule a re-review of these thresholds immediately after the first 100 installations or if the prediction model is updated.
+
+**Note:** Legal counsel must review whether "automated decisions affecting health/safety" triggers specific disclosure duties under local Japanese consumer protection or emerging AI guidelines; do not assume compliance based solely on this technical plan.
+**Note:** Never fabricate a "0% risk" metric; report the residual risk of prediction failure honestly to stakeholders.

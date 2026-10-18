@@ -1,0 +1,29 @@
+**BLUF:** I cannot determine if specific demographics are disproportionately affected because you have not provided the cancellation criteria, the mapping of "broad neighborhood tags" to demographic data, or the historical incident distribution. Without these inputs, any claim of bias or fairness would be fabricated. However, given your hard deadline next Friday, here is the immediate plan to measure equity impact and manage residual risk without delaying deployment.
+
+### 1. Map: The Harm Inventory
+Before testing, record the specific risk: **Bias/Unfair Outcomes**.
+*   **Harm:** The system systematically cancels routes serving low-income or minority neighborhoods due to coarse crime data tagging, stranding night-shift workers.
+*   **Worst Case:** Vulnerable populations lose reliable transport for weeks; reputational damage and potential civil rights violations.
+*   **Status:** Currently `UNVERIFIED` due to missing data granularity.
+
+### 2. Measure: Runnable Testing Plan (Execute Immediately)
+Create one test row per hypothesis. Do not wait for perfect data; use proxies.
+
+| Harm Hypothesis | Probe Set (Inputs) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Disproportionate Cancellation** | **Positive Control:** Simulate identical incident rates across a wealthy vs. a vulnerable neighborhood tag. <br> **Negative Control:** Zero incidents in all tags. <br> **Edge Case:** Cluster minor incidents in vulnerable tags to trigger "high crime" broad tags. | % Difference in cancellation frequency between demographic groups when incident severity is held constant. | **0%** tolerance for disparity in identical scenarios. | If disparity > 0%, block auto-deployment; require human review of criteria logic. |
+| **Data Granularity Bias** | Input incidents mapped to "broad tags" that span mixed-demographic areas. Compare output against a manual split of those tags. | False Positive Rate (routes cancelled that wouldn't be if data were granular). | < 5% (Proposed) | If FPR > threshold, cap automation to "recommendation only" for affected zones. |
+| **Over-Reliance** | Feed ambiguous incident reports (low confidence) into the engine. | % of routes cancelled automatically vs. flagged for review. | **0%** auto-cancellation for low-confidence inputs. | If system auto-cancels on low confidence, disable automatic execution immediately. |
+
+**Action:** Run these probes using your current broad tags. If you lack internal demographic maps, use public census data aggregated to your neighborhood tags as a proxy for the "Positive Control." Report the result as `UNVERIFIED` if the proxy is too coarse to be statistically significant, but do not invent a bias score.
+
+### 3. Manage: Residual Risk Controls (Deadline Aware)
+Since you cannot retrain or acquire granular data by next Friday, you must manage the risk via process controls:
+
+*   **Human-in-the-Loop Gate (Mandatory):** Do not allow fully autonomous cancellation for night-time routes serving identified vulnerable zones. Change the system output from "Execute Cancellation" to "Recommend Cancellation" for these specific tags. A human dispatcher must confirm the cancellation before it goes live. This satisfies the safety floor for high-stakes, irreversible actions (stranding commuters).
+*   **Transparency & Disclosure:** Publish a **Model Card** with the launch. Explicitly state: "Cancellation logic relies on broad neighborhood tags which may not reflect hyper-local safety. Intended for incident response only; not validated for demographic fairness." List the `UNVERIFIED` equity metrics.
+*   **Confidence Tiers:** Do not show users a percentage probability of cancellation. Instead, use defined tiers: **Confirmed** (verified police report), **Corroborated** (multiple user reports), or **Unverified** (single source). Auto-cancel only on **Confirmed**; require human review for others.
+*   **Rollback Plan:** Define a specific trigger (e.g., "3 complaints from same route in 24 hours") that automatically disables the automation feature and reverts to static scheduling.
+
+**Note:** Legal counsel must review whether automated route cancellation constitutes a regulated decision under local transit laws or the EU AI Act (if applicable); do not assert compliance internally.
+**Note:** This plan measures risk; it does not certify the system as unbiased. The decision to ship with `UNVERIFIED` equity metrics rests with the product owner.

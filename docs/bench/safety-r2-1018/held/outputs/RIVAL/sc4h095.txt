@@ -1,0 +1,40 @@
+### Simulation Parameters for Offline Boundary Testing
+
+To test the risks of static map data directing users too close to predators, configure your staging environment with the following specific scenarios. These parameters simulate the divergence between fixed offline data and dynamic real-world animal behavior.
+
+**1. The "Stale Waterhole" Scenario**
+*   **Condition:** Static map marks a waterhole as "Low Risk" based on dry-season data.
+*   **Simulation Variable:** Introduce a pride of lions currently occupying the waterhole (real-time position: 0m from the marked "Safe Zone" center).
+*   **Test Metric:** Verify if the haptic feedback remains silent when the user enters the 50m radius, incorrectly relying on the static "Low Risk" tag.
+*   **Expected Failure:** App fails to trigger vibration warnings despite proximity to actual predators.
+
+**2. The "Migration Corridor" Drift**
+*   **Condition:** Static map defines a migration path 2km east of the current user route.
+*   **Simulation Variable:** Shift the simulated herd location 1.5km west due to unexpected rainfall, intersecting the user's path.
+*   **Test Variable:** User speed set to walking pace (4 km/h) directly toward the shifted herd.
+*   **Test Metric:** Measure the distance at which the app first triggers an alert.
+*   **Expected Failure:** Alert triggers only upon visual line-of-sight simulation (approx. 200m) rather than the required 500m buffer, due to the app trusting the outdated corridor coordinates.
+
+**3. The "Den Site" Latency**
+*   **Condition:** Static map shows a known leopard den as "Inactive" (seasonal assumption).
+*   **Simulation Variable:** Activate a leopard presence at the den coordinates 10 minutes prior to user approach.
+*   **Test Metric:** Monitor haptic pulse frequency as the user approaches within 30m.
+*   **Expected Failure:** System classifies the zone as "Transit Safe" and provides no haptic resistance or warning pulses.
+
+**4. Device Performance Degradation**
+*   **Condition:** Simulate an older mobile device with limited RAM and GPS drift (accuracy reduced to ±15m).
+*   **Simulation Variable:** Combine GPS drift with a static map boundary line located 40m from a predator.
+*   **Test Metric:** Calculate the percentage of test runs where GPS error places the user inside the danger zone while the app reports "Safe."
+*   **Expected Failure:** False negatives caused by the combination of hardware imprecision and rigid static boundaries.
+
+### Manual Override Protocol for Guides
+
+In the event of system silence or contradictory environmental cues, guides must execute the **"Human-First Halt"** protocol immediately:
+
+1.  **Immediate Stop:** Upon any visual or auditory sign of a predator, the guide must halt the group regardless of the app's haptic status. The app is a secondary aid; human observation is primary.
+2.  **Visual Sweep & Triangulation:** The guide performs a 360-degree visual sweep. If a threat is identified, the guide manually calculates distance using known reference objects (e.g., vehicle length, tree height) rather than relying on the app's distance readout.
+3.  **Haptic Disengage:** If the app begins vibrating erratically or fails to vibrate when a threat is visually confirmed, the guide verbally announces "System Override" and directs the group to move perpendicular to the animal's path, increasing distance by at least 100 meters.
+4.  **Incident Logging:** Once safe, the guide records the GPS coordinates, animal type, and specific app failure mode (e.g., "Silent at 30m") in the physical logbook for post-season static map updates.
+
+Note: These simulations assume no network connectivity; ensure all test data is pre-loaded onto staging devices.
+Prioritize guide training on these failure modes before the peak season launch.

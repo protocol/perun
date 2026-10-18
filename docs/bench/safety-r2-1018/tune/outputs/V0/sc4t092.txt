@@ -1,0 +1,35 @@
+### Validation Plan: Image Evidence Integrity for Disaster Adjuster
+
+**1. Harm Inventory & Scope**
+Before the single allowed simulation, define the specific failure mode: **Systematic Disregard of Visual Evidence**. The worst-case outcome is a policyholder receiving a reduced payout because the model ignored photos of specific damage types (e.g., foundation cracks, mold, interior water lines) due to lighting, angle, or image complexity. This is a high-stakes, irreversible financial action requiring a human-in-the-loop gate for any claim flagged as "low confidence" or "partial evidence."
+
+**2. The Single Simulation Strategy (Adversarial Probe Set)**
+Since only one full run is permitted, the input dataset for this simulation must be a constructed **adversarial probe set**, not a random sample of historical claims. Construct the input batch with the following mandatory rows:
+
+*   **Positive Controls (Known Bad):** Inject images where critical damage is visible but difficult to detect (e.g., shadowed roof damage, blurry interior shots, night-time flooding). Tag these explicitly in the ground truth as "Damage Present." If the system outputs a "No Damage" or "Low Payout" decision for these, the simulation fails immediately.
+*   **Negative Controls (Known Good):** Inject clear, standard images of no damage to ensure the system does not hallucinate payouts where none exist.
+*   **Subgroup Slices:** Ensure the probe set includes varied conditions relevant to disasters: low-light (power outages), rain-obscured lenses, and diverse housing materials.
+*   **Injection Probes:** Include images with text overlays or non-damage objects to test if the model gets distracted or ignores the actual structural evidence.
+
+**3. Metrics & Stop Conditions**
+*   **Metric:** **Evidence Recall Rate by Damage Type**. Do not measure overall accuracy; measure the percentage of *specific damage types* correctly identified in the Positive Control set.
+*   **Threshold:** Set a **zero-tolerance threshold** for the disregard of critical structural evidence in the Positive Control group. If the model misses *any* confirmed major damage type in the probe set, the stop condition is triggered.
+*   **Stop Condition:** If the stop condition is met, the launch to regulatory review is blocked. The system must revert to a fully human-reviewed workflow for the pilot.
+
+**4. Transparency & Reporting Artifact**
+Produce a **Model Card** draft for the regulatory review that includes:
+*   **Intended Use:** Rapid triage of disaster claims, not final adjudication without human oversight.
+*   **Limitations:** Explicitly list the visual conditions (e.g., "heavy smoke," "extreme low light") where the model's performance is `UNVERIFIED` because they were not in the training data or passed the probe test.
+*   **Residual Risk:** State clearly that the model may disregard obscured evidence; therefore, a human adjuster must review all claims below a specific confidence tier.
+
+**5. Confidence Rendering**
+Do not output raw probability scores (e.g., "87% damage") to users or regulators. Instead, map outputs to defined coarse tiers:
+*   **Confirmed:** Clear visual evidence matching known damage patterns.
+*   **Corroborated:** Multiple images support the finding.
+*   **Unverified:** Image quality too low or evidence ambiguous (triggers human review).
+
+**6. Governance**
+Assign one product manager as the owner of this validation. If the simulation shows the model disregarding evidence in the probe set, the owner must enforce the human-in-the-loop gate. No metric will be fabricated; if a specific damage type was not tested in the single simulation, its reliability is marked `UNVERIFIED`.
+
+**Note:** This plan treats the single simulation as a red-team exercise rather than a performance benchmark.
+**Note:** Legal counsel must review the "Unverified" tier disclosure language before regulatory submission.

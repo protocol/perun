@@ -1,0 +1,40 @@
+### Testing Approach for Inclusive Vaccine Appointment Access
+
+**Objective:** Verify that non-digital users can successfully book appointments via alternative channels and that system logic does not prioritize app/SMS users to the exclusion of vulnerable populations.
+
+**1. Define Alternative Pathways and Success Criteria**
+Before testing, explicitly map the non-digital booking flows. These likely include:
+*   **Community Health Worker (Kader) Mediation:** Local volunteers booking on behalf of residents using a dedicated interface or paper forms later digitized by staff.
+*   **Call Center/Hotline:** Telephone operators manually reserving slots in the system.
+*   **Walk-in Registration:** On-site staff assigning remaining slots or specific reserved quotas at the vaccination site.
+
+*Success Criteria:* A user without a smartphone must be able to secure a slot within the same timeframe (e.g., 48 hours) as a digital user, with no systematic delay or unavailability.
+
+**2. Inventory and Slot Logic Verification**
+Test the core database logic to ensure "fair share" enforcement:
+*   **Quota Reservation Test:** Verify if the system supports hard or soft quotas (e.g., holding 20% of slots for walk-ins/Kader booking). If no hard quota exists, test the "first-come, first-served" logic under load to ensure digital speed doesn't instantly exhaust supply.
+*   **Race Condition Simulation:** Simulate high-volume digital traffic (SMS/App) while simultaneously attempting to book via the alternative channel. Confirm that the alternative channel does not receive "0 slots available" errors while digital channels still show availability or successfully complete transactions.
+*   **Synchronization Latency Check:** Given the intermittent connectivity, test the offline-to-online sync window. Ensure that slots booked offline by a Kader are immediately marked as "unavailable" to the app once synchronization occurs, preventing double-booking, while also ensuring offline bookings aren't rejected due to perceived lack of connectivity.
+
+**3. End-to-End Scenario Testing**
+Execute specific test cases representing the target demographic:
+*   **Scenario A (The Kader Proxy):** A tester acts as a village volunteer with a list of 10 elderly residents. Attempt to book 10 slots via the Kader interface. Measure success rate and time-to-confirm compared to an automated script booking 10 slots via the app.
+*   **Scenario B (The Call Center):** A tester calls the hotline requesting an appointment for a specific date. The operator must be able to see real-time availability and confirm a slot that immediately reflects in the central database.
+*   **Scenario C (The Walk-in):** Simulate a user arriving at the clinic. Staff attempts to register them for a same-day or next-day slot. Verify the system allows this even if the public-facing app shows "fully booked" for general online users (if reserved pools are implemented).
+
+**4. Monitoring and Metrics for Pilot Rollout**
+During the pilot, track these specific metrics daily:
+*   **Channel Distribution:** Percentage of total bookings by channel (App, SMS, Kader, Call Center, Walk-in). If App/SMS exceeds 90% in a remote village, investigate barriers to alternative access.
+*   **Failure Rates by Channel:** Compare error rates (e.g., "no slots found") between digital and non-digital entry points.
+*   **Demographic Correlation:** Cross-reference booking data with age/location. If the 70+ demographic in remote villages has near-zero bookings, the digital divide is likely causing exclusion.
+
+**5. Remediation Triggers**
+Establish clear thresholds for pausing expansion to the next district:
+*   If alternative channel success rates drop below 95%.
+*   If >80% of slots in a remote pilot site are filled within the first hour of release (indicating digital bots or fast users are crowding out others).
+*   If qualitative feedback from village heads indicates confusion or inability to access the Kader/Call Center support.
+
+By rigorously testing these pathways and monitoring real-time equity metrics, you can ensure the system serves the most vulnerable rather than just the most connected.
+
+*Note: Ensure all test data uses synthetic identities to protect resident privacy during these simulations.*
+*Connectivity tests should be performed using network throttling tools to accurately mimic rural signal conditions.*

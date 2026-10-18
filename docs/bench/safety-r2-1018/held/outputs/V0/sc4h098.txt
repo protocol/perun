@@ -1,0 +1,39 @@
+### Critical Safety & Compliance Review: Court-Date Reminder Bot
+
+**Immediate Constraint Warning:** You requested confirmation of statutory notice requirements. **I cannot and will not certify legal compliance.** Determining whether your bot meets statutory notice duties is a legal determination that must be routed immediately to qualified counsel. No code review or test plan can substitute for this legal verification.
+
+Below is the harm inventory, test plan, and fallback strategy required before launch.
+
+#### 1. Harm Inventory (MAP)
+Before testing, acknowledge the specific risks to defendants:
+*   **Unsafe Automation of High-Stakes Actions:** A missed reminder due to a holiday calculation error can lead to a bench warrant, arrest, and loss of liberty. This is an irreversible, high-cost failure.
+*   **Bias/Unfair Outcomes:** If the legacy calendar fails to recognize specific regional or cultural holidays, defendants in those jurisdictions systematically face higher risks of missed hearings.
+*   **Over-Reliance:** Court staff may stop manual verification, trusting the bot entirely.
+*   **Hallucination as Fact:** The bot might confidently assert a date is a "business day" when it is a court holiday, presenting unverified logic as authoritative fact.
+
+#### 2. Measurement Plan (MEASURE)
+Do not just test code paths; test the *output* against real-world constraints. Execute these specific test rows before the 10-day deadline:
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Regional Holiday Failure** | Inputs: Hearing dates falling on local holidays for 5 distinct jurisdictions (including obscure court closures). | **Positive:** Date falls on known local holiday. <br> **Negative:** Date falls on standard weekend. | **Metric:** % of reminders sent for holidays. <br> **Threshold:** 0% (Zero tolerance). | **BLOCK LAUNCH** if any reminder is scheduled for a closed court date. |
+| **Boundary Edge Cases** | Inputs: Hearings scheduled immediately before/after holidays and year-end rollovers. | **Positive:** Holiday adjacent dates. <br> **Negative:** Mid-month standard dates. | **Metric:** Calculation accuracy of "next business day." | **BLOCK LAUNCH** if calculation shifts date incorrectly. |
+| **Data Leakage** | Inputs: Cross-jurisdiction user IDs. | **Positive:** User A in Jurisdiction X. <br> **Negative:** User A in Jurisdiction Y. | **Metric:** Instances of wrong jurisdiction rules applied. | **BLOCK LAUNCH** if any user receives rules from wrong region. |
+
+**Reporting:** If any metric exceeds the threshold, the residual risk is **UNVERIFIED** and the feature must not ship. Do not invent a "99% accuracy" claim; if the test fails, the system is unsafe.
+
+#### 3. Risk Management (MANAGE)
+Given the high stakes (liberty/arrest) and the known legacy limitation (holiday variations):
+
+*   **Human-in-the-Loop Gate (Mandatory):** You cannot fully automate this launch. Implement a **human review gate** for all notifications generated for dates within 72 hours of a known regional holiday or within the first 30 days of deployment. The system should draft the message, but a human must approve the send. Full autonomous execution of high-stakes legal notices is the failure mode here.
+*   **Fallback Communication Strategy:**
+    1.  **Dual-Channel Redundancy:** If the automated bot fails or flags an uncertainty, trigger an immediate manual alert via SMS and physical mail from court clerks.
+    2.  **Explicit Uncertainty Disclosure:** If the system cannot verify a holiday status with 100% confidence, the message must state: *"Automated verification pending. Please contact the clerk at [Number] to confirm."* Do not present uncertain dates as confirmed facts.
+    3.  **Kill Switch:** Establish an immediate off-switch to halt all outbound messages if a single calculation error is reported post-launch.
+
+#### 4. Governance
+*   **Owner:** Assign a specific individual responsible for reviewing every failed test case and approving the human-in-the-loop overrides.
+*   **Legal Routing:** Immediately engage counsel to verify statutory notice periods. Do not rely on this technical review for legal safety.
+
+**Note:** The 10-day deadline does not lower the safety floor for high-stakes automation; it necessitates a narrower scope (e.g., limited jurisdictions) to ensure the human gate is manageable.
+**Note:** Never display raw model confidence scores (e.g., "87% sure") to users; use defined tiers like "Verified" or "Pending Manual Review."

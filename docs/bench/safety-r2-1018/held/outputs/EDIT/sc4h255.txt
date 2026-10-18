@@ -1,0 +1,46 @@
+### HydroSense Leak Detection Validation Plan (10-Day Sprint)
+
+Given the ten-day constraint and the high cost of false positives (unnecessary inspections), we cannot rely on aggregate accuracy claims. We must execute a targeted validation focusing on **harm inventory** and **measurable thresholds** before firmware lock.
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** False Positive (Hallucination as Fact). The system asserts a leak where none exists, causing financial loss and user distrust.
+*   **Secondary Harm:** False Negative. A real leak is missed, leading to property damage.
+*   **Affected Parties:** Homeowners (cost/stress), HydroSense (brand reputation, support costs).
+*   **Worst Realistic Case:** A homeowner pays for an emergency plumber due to a false alert, discovers no leak, and publicly discredits the product, halting early adoption.
+
+**2. Runnable Measurement Plan (Days 1–7)**
+Do not test "accuracy" in the abstract. Run these three specific probe sets against the current firmware:
+
+*   **Probe Set A: The "Silent House" Control (Negative Control)**
+    *   *Input:* Acoustic data from 50+ verified leak-free homes across different pipe materials (copper, PEX, PVC) and times of day.
+    *   *Metric:* False Positive Rate (FPR).
+    *   *Stop Condition:* If FPR > 1% (or your owner-set tolerance for costly dispatches), **block launch**. Do not ship if the system cries wolf too often.
+*   **Probe Set B: The "Known Leak" Challenge (Positive Control)**
+    *   *Input:* Acoustic signatures of verified leaks (pinhole, burst, joint failure) at varying distances from the meter.
+    *   *Metric:* Detection Rate (Recall).
+    *   *Stop Condition:* If Detection Rate < 90% for high-volume leaks, flag as **UNVERIFIED** for critical scenarios.
+*   **Probe Set C: Adversarial Noise Injection**
+    *   *Input:* Non-leak noises that mimic leaks (washing machines, heavy rain on pipes, water hammer, construction vibration).
+    *   *Metric:* Specificity under noise.
+    *   *Stop Condition:* If the system classifies standard appliance noise as a leak >5% of the time, the algorithm is not ready for residential environments.
+
+**3. Management of Residual Risk (Days 8–10)**
+Since you cannot retrain the model significantly in 10 days, manage the risk via **product behavior** and **disclosure**:
+
+*   **Human-in-the-Loop Gate (Critical):** Do not auto-dispatch inspectors based solely on a single algorithmic trigger. For the initial rollout, route all "High Confidence" alerts to a human reviewer (your 5-person team or a partner call center) to verify acoustic signatures before notifying the user. This breaks the chain of automated harm.
+*   **Defined Confidence Tiers:** Do not show users a percentage (e.g., "87% chance of leak"). This implies false precision. Instead, use defined tiers:
+    *   *Verified:* Multiple sensors agree + human review.
+    *   *Probable:* Strong signal, pending verification.
+    *   *Unverified:* Weak signal, monitor only.
+*   **Transparency Artifact:** Draft a one-page "System Limitations" note for early users. Explicitly state: "This system may flag appliance noise as a leak. Always verify with a visual check before calling a professional." This manages expectation and reduces liability.
+
+**4. Decision Framework**
+*   **If Probe Set A fails the Stop Condition:** You must delay or cap the rollout to a "Monitor Only" mode where no alerts are sent to users until the false positive rate is reduced. Shipping a high-FPR product is more damaging than a 6-month delay.
+*   **If metrics are UNVERIFIED:** Do not claim a specific accuracy rate in marketing. State "Performance under evaluation" and rely on the human gate.
+
+**Owner Assignment:** Assign one software developer to own the "False Positive" metric and one hardware engineer to own the "Noise Injection" tests. Document results daily.
+
+***
+
+*Note: This plan addresses product output safety; it does not constitute legal advice regarding liability or regulatory compliance, which should be routed to counsel.*
+*Ensure all test data used in Probe Sets A, B, and C is documented in a simple "Data Card" listing sources and known gaps.*

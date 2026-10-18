@@ -1,0 +1,32 @@
+**Harm Inventory & Residual Risk Status**
+Your current logic presents a verified **Bias/Unfair Outcome** risk: flagging employment gaps systematically disadvantages applicants with maternity leaves, likely correlating with gender. Under the constraint forbidding explicit demographic data collection, any claim that the model is "unbiased" or "equitable" prior to measurement is **UNVERIFIED**. You cannot certify safety; you can only measure residual risk and manage it.
+
+**Measurement Plan: Proxy-Based Bias Audit**
+Since direct demographic labels are unavailable, construct a runnable evaluation using proxy variables and synthetic controls. Do not rely on aggregate accuracy; measure performance deltas across inferred segments.
+
+1.  **Probe Set Construction**:
+    *   **Positive Control (Known Bad)**: Generate synthetic resumes identical in skills/experience but varying only in gap duration (e.g., 0 months vs. 18 months) and gap context clues (e.g., "volunteer coordination" vs. generic gap).
+    *   **Negative Control (Known Good)**: Resumes with continuous employment and matched skill profiles.
+    *   **Proxy Segmentation**: Infer protected groups using lawful proxies where legally permissible (e.g., women's college affiliations, membership in professional organizations historically associated with specific demographics, or name-based gender inference *strictly for audit purposes*, not storage).
+    *   **Injection Check**: Test if adding neutral gap explanations (e.g., "family care") reduces the penalty score compared to unexplained gaps.
+
+2.  **Metrics & Thresholds**:
+    *   **Metric**: Disparate Impact Ratio (selection rate of proxy-group A / selection rate of proxy-group B).
+    *   **Stop Condition**: If the ratio falls below 0.8 (the "four-fifths" rule of thumb) or if the gap penalty coefficient exceeds a pre-defined tolerance for non-performance-related time off, **block launch**.
+    *   **Owner-Set Threshold**: Define zero tolerance for automated rejection based solely on gap duration without human review.
+
+3.  **Execution**: Run these probes against the current tuning stage. Report the specific disparity found (e.g., "Resumes with 12+ month gaps see a 40% score reduction"). Do not invent a "fairness score."
+
+**Risk Management: Controls & Gates**
+You cannot retrain immediately due to data constraints, so you must manage the residual risk via process controls:
+
+*   **Human-in-the-Loop (HITL) Gate**: This is mandatory. Any resume flagged *primarily* for an employment gap must bypass automated rejection and route to a human reviewer. Fully autonomous exclusion based on gap duration is an unsafe, high-stakes action.
+*   **Scoring Adjustment (Rule-Based Fallback)**: Until retraining occurs, implement a deterministic rule override: if `gap_duration > X` and `core_skills_match = true`, neutralize the gap penalty in the final score. Do not rely on the model to "learn" this nuance without explicit data.
+*   **Transparency Artifact**: Draft a **Model Card** section explicitly stating: "This model penalizes employment gaps. We have identified a potential disparate impact on caregivers. Mitigation: Human review for all gap-based flags." Label the fairness metric as **UNVERIFIED** pending the proxy audit results.
+*   **Disclosure**: Inform applicants that employment history is a factor in screening. Whether legal disclosure of the *automated* nature is required is a determination for counsel; route this question immediately.
+
+**Governance**
+Assign a specific owner to re-run this proxy audit whenever the model weights change. The absence of a completed audit report is a blocking finding.
+
+**Note**: Do not assert that proxy variables perfectly capture protected classes; they are imperfect estimators for audit signals only.
+Legal counsel must validate the use of specific proxies (like name inference) to ensure the audit itself does not violate privacy policies.

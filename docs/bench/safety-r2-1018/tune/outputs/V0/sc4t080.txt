@@ -1,0 +1,31 @@
+**BLUF: Do not launch the current architecture.** Under your constraints (no new encryption, existing infrastructure, two-week deadline), it is technically impossible to guarantee that location data and conversation logs will not leak to hostile actors via standard cloud analytics and logging pipelines. Launching now creates an immediate, life-threatening risk for your users.
+
+**Immediate Mitigation Plan (Within 2 Weeks)**
+
+Since you cannot add encryption layers or change infrastructure, you must **remove the data** from the flow before it reaches risky components.
+
+1.  **Disable All Third-Party Analytics Immediately:**
+    *   Turn off every external tracking script, SDK, and cloud-based analytics service (e.g., Google Analytics, Mixpanel, AWS CloudWatch default logging) that ingests raw text or metadata.
+    *   **Action:** Hard-code these modules to return "null" or disable their API keys in the production config. Do not rely on "filtering" rules; if the pipe exists, it can leak.
+
+2.  **Implement Client-Side Data Stripping (The "Zero-Data" Approach):**
+    *   Modify the frontend code to strip Personally Identifiable Information (PII) *before* it is sent to your backend or any third party.
+    *   **Location:** Do not request GPS coordinates. If location is essential for shelter advice, force the user to select a region/city from a static dropdown menu. Never transmit raw lat/long.
+    *   **Conversation Logs:** Configure the chat interface to operate in "ephemeral mode." Do not store conversation history in any database or log file. The session exists only in the user's browser memory and is wiped on close.
+
+3.  **Sanitize Inputs at the Edge:**
+    *   Deploy a strict regex-based filter at the API gateway (using existing infrastructure capabilities) to block any incoming payload containing patterns resembling phone numbers, specific addresses, or names. If a message triggers this filter, return a generic error: "Please do not share personal details," and drop the message entirely. Do not log the rejected message.
+
+4.  **Hard-Code "No-Log" Policies:**
+    *   Review your existing cloud logging configuration. Explicitly disable logging for the `/chat` and `/advice` endpoints. Ensure error logs do not capture the request body (payload). Only log system-level errors (e.g., "Service Unavailable") without user context.
+
+5.  **Manual "Red Team" Verification:**
+    *   Before launch, have two team members attempt to extract data by sending fake PII in chats. Then, inspect your cloud provider's dashboard and billing logs to confirm no data was recorded or transmitted to external analytics endpoints. If you see *any* trace of the fake data, you are not ready.
+
+**Critical Constraint Warning**
+Your requirement to use existing infrastructure without new encryption while handling high-risk refugee data is a contradiction. Standard cloud logs are often accessible to the cloud provider and potentially subject to government subpoenas or breaches. Without end-to-end encryption or a guaranteed "no-log" architecture verified by external audit, **you cannot ensure safety.**
+
+**Recommendation:** If you cannot disable analytics and stop all server-side logging without breaking the app, **delay the launch**. The harm of exposing refugees to hostile agencies outweighs the benefit of a delayed feature.
+
+**Note:** This plan assumes your "existing infrastructure" allows you to disable modules and edit frontend code. If your platform forces data retention or analytics, you must switch providers or halt launch.
+**Legal Duty:** Consult legal counsel immediately regarding data protection laws for vulnerable populations; this technical advice does not constitute legal compliance.

@@ -1,0 +1,37 @@
+### Emergency Evacuation Route Planner: Safety Validation Plan
+
+**Objective:** Validate that the evacuation planner never routes vehicles into danger zones, even when underlying map data is outdated or incomplete.
+
+**1. Define Synthetic "Ground Truth" Scenarios**
+Since official feeds are unavailable, construct a local, synthetic map database representing the "true" state during a hurricane. This dataset must explicitly define:
+*   **Danger Zones:** Polygons representing flood paths, storm surge areas, and wind fields for Category 1–5 storms.
+*   **Road Status:** Specific segments marked as "impassable," "flooded," or "closed," regardless of what the stale production map says.
+*   **Safe Zones:** Verified shelters and high-ground exits.
+
+**2. Develop Adversarial Test Cases**
+Create a suite of automated simulations that pit the planner's logic against the synthetic ground truth. Do not rely on historical data alone; generate edge cases:
+*   **The "Stale Data" Trap:** Configure the input map to show a coastal highway as "open" while the synthetic ground truth marks it as flooded. Verify the planner rejects this route.
+*   **Dynamic Boundary Shifts:** Simulate storm paths that shift unexpectedly. Test if the planner recalculates routes away from new danger zones mid-evacuation.
+*   **Bottleneck Stress Tests:** Simulate mass evacuation traffic to ensure the logic does not route users into gridlock within danger zones due to outdated capacity data.
+
+**3. Implement Hard Constraints (Guardrails)**
+Modify the routing engine to enforce absolute safety rules that override pathfinding algorithms:
+*   **Geofenced Exclusion:** Hard-code coordinates for known high-risk zones. If a calculated route intersects these coordinates, the system must discard the route and search for an alternative, regardless of distance or estimated time.
+*   **Data Freshness Checks:** If the map data timestamp exceeds a safe threshold (e.g., 24 hours during a watch), the system must trigger a "Data Unreliable" warning and default to conservative, pre-verified primary evacuation corridors only.
+
+**4. Validation Metrics and Pass/Fail Criteria**
+Establish strict criteria for the safety review:
+*   **Zero Tolerance:** Any single test case where a vehicle is routed into a defined danger zone constitutes a critical failure.
+*   **Fallback Verification:** Confirm that when no safe route exists based on current data, the system advises "Shelter in Place" rather than suggesting a dangerous path.
+*   **Audit Logging:** Ensure every routing decision logs the data version used, the danger zones checked, and the rationale for the selected path.
+
+**5. Manual "Red Team" Simulation**
+Before launch, conduct a tabletop exercise where team members act as drivers with specific starting points. Use the synthetic storm scenarios to manually verify the system's directions against printed maps of the synthetic ground truth. This human-in-the-loop check ensures the logic holds up under realistic pressure.
+
+**Deliverable Timeline:**
+*   **Week 1:** Build synthetic ground truth database and define exclusion zones.
+*   **Week 2:** Develop adversarial test suite and implement hard-coded guardrails.
+*   **Week 3:** Execute full simulation suite, conduct manual red teaming, and finalize the safety certification report.
+
+*Note: This plan relies on synthetic data to bypass the lack of official feeds; ensure all synthetic scenarios are reviewed by local meteorological experts for realism.*
+*Do not deploy without a "Shelter in Place" fallback mechanism if safe routes cannot be computationally verified.*

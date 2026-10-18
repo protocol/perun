@@ -1,0 +1,47 @@
+**Pre-Launch Validation Plan: Fall Detection Logic**
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** False positives triggering unnecessary ambulance dispatches (distress, resource strain).
+*   **Secondary Harm:** False negatives missing real falls (life safety risk).
+*   **Constraint:** Hardware limits data transmission; timeline is two weeks.
+*   **Stakeholders:** Seniors, families, local emergency services, care network.
+
+**2. Measurement Strategy (Runnable Test Rows)**
+Execute the following specific test rows using historical motion data or staged simulations within the pilot environment. Each row must include a known "bad" positive control (non-fall movement) and a known "good" negative control (actual fall).
+
+*   **Row A: Common Non-Fall Movements**
+    *   *Probe Set:* Rapid sitting, bending to tie shoes, dropping objects, vigorous cleaning.
+    *   *Metric:* False Positive Rate (FPR) per 100 hours of activity.
+    *   *Threshold:* Owner-set (e.g., <1 false dispatch per 30 days per user).
+    *   *Stop Condition:* If FPR exceeds threshold, block auto-dispatch; revert to alert-only mode.
+
+*   **Row B: High-Risk Edge Cases**
+    *   *Probe Set:* Slow slides down walls, sitting down heavily, seizures/tremors.
+    *   *Metric:* Detection sensitivity (True Positive Rate).
+    *   *Threshold:* Owner-set (e.g., >95% detection of simulated severe falls).
+    *   *Stop Condition:* If sensitivity drops below threshold, halt launch until model retrained or rules adjusted.
+
+*   **Row C: Data Transmission Gaps**
+    *   *Probe Set:* Simulated signal loss during movement events; burst transmission delays.
+    *   *Metric:* Event reconstruction accuracy.
+    *   *Threshold:* 100% of critical events logged despite gaps.
+    *   *Stop Condition:* Any lost fall event triggers immediate hardware/firmware review.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high stakes of irreversible emergency dispatch, **fully autonomous dispatch is blocked for the pilot.** All "fall detected" signals must route to a human monitor (care network staff) for verification before emergency services are contacted. This is the floor; do not relax this for the pilot.
+*   **Uncertainty Reporting:** Do not display raw confidence percentages (e.g., "87% fall likely") to monitors. Use defined coarse tiers:
+    *   *Confirmed:* High certainty, multiple sensor triggers.
+    *   *Probable:* Single strong trigger, requires immediate human check.
+    *   *Unverified:* Ambiguous signal, log only, no alert.
+*   **Transparency Artifact:** Draft a one-page "Model Card" for the care network detailing: intended use (fall detection only), known limitations (specific movements that confuse the sensor), and the verification protocol.
+
+**4. Governance**
+*   **Owner:** Assign one product lead responsible for reviewing any false positive/negative incident within 24 hours.
+*   **Legal Routing:** Consult counsel immediately regarding legal duties for automated emergency dispatch and required disclosures to families about AI involvement. Do not assert compliance internally; get external validation.
+
+**5. Launch Decision Criteria**
+*   Launch proceeds only if: (1) Human-in-the-loop gate is active, (2) Test Rows A-C meet owner-set thresholds, and (3) Model Card is distributed to the care network.
+*   If thresholds are not met, cap exposure (reduce pilot size) or delay auto-dispatch features. Do not fabricate a "safe" metric to meet the deadline.
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased."
+**Note:** Legal determination on disclosure requirements must be completed by counsel before pilot start.

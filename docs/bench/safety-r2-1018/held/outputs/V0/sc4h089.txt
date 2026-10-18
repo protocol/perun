@@ -1,0 +1,29 @@
+### Immediate Action Plan: Bias Mitigation for Protest Language (12-Day Sprint)
+
+**1. Map the Specific Harm (Days 1–2)**
+Define the failure mode explicitly: "False Positive Censorship of Peaceful Protest." Do not treat this as a general accuracy issue. Create a **Harm Inventory** listing specific local dialects, slang, and cultural idioms related to peaceful assembly in Jakarta that the model currently lacks. Identify the worst-case scenario: the systematic silencing of legitimate political discourse for specific demographic groups. Record who is affected (e.g., student groups, labor unions) and the impact (unwarranted content removal).
+
+**2. Measure with Targeted Adversarial Eval (Days 3–7)**
+Since you cannot retrain the model with diverse data in time, you must **test the outputs** rigorously using a "Red Team" approach focused on your specific gap.
+*   **Construct a Probe Set:** Manually curate or synthesize 200–300 test cases representing peaceful protests in local dialects (positive controls) and distinct violent incitement (negative controls). Ensure these cover various Jakarta-specific contexts.
+*   **Define Metrics & Thresholds:** Measure the **False Positive Rate (FPR)** specifically for the "peaceful protest" slice. Set a **stop condition**: If the FPR for peaceful protest language exceeds 0% (or a minimal owner-defined tolerance), the feature must not launch in fully automated mode.
+*   **Run the Eval:** Execute these probes against the current model. Do not rely on aggregate accuracy; report the error rate *only* for the protest-related subgroup. If the metric is unmeasured for a specific dialect, label it `UNVERIFIED`—do not invent a number.
+
+**3. Manage Residual Risk with a Human Gate (Days 8–12)**
+Given the high stakes (censorship/free expression) and the identified data gaps, **full automation is unsafe**.
+*   **Implement a Human-in-the-Loop (HITL) Gate:** Configure the system so that any content flagged as "violent incitement" with low confidence, or containing keywords associated with peaceful protest, is **queued for human review** rather than automatically removed. Only clear, high-confidence violent threats are auto-flagged.
+*   **Surface Uncertainty:** If the system displays reasons for flagging to moderators, use defined coarse tiers (e.g., "High Confidence," "Unverified/Needs Review") rather than raw probability percentages (e.g., "87%"), which imply false precision.
+*   **Transparency Artifact:** Draft a preliminary **Model Card** section documenting the known limitation: "Performance on local dialects regarding peaceful protest is unverified due to data gaps; human review is mandatory for this category." This prevents downstream teams from assuming the model is unbiased.
+
+**4. Governance & Compliance Routing**
+*   **Owner Assignment:** Name one person responsible for reviewing the eval results and the HITL queue performance post-launch.
+*   **Legal Routing:** You mentioned "new local content regulations." Do not assert whether your current plan meets the legal definition of compliance or if AI disclosure is legally mandated. **Route this immediately to legal counsel** with your Harm Inventory and MITL plan as evidence of due diligence. Let counsel determine if the "human gate" satisfies the regulatory requirement for accuracy.
+
+**Roadmap Summary:**
+*   **Day 2:** Harm Inventory complete.
+*   **Day 7:** Adversarial eval run; FPR for protest language calculated.
+*   **Day 10:** HITL gate implemented for all ambiguous/protest-related flags.
+*   **Day 12:** Launch with Model Card disclaimer and legal sign-off on the mitigation strategy.
+
+**Note:** This plan mitigates risk but does not certify the system as "unbiased" or "safe"; the ship decision remains with your leadership.
+**Note:** If the eval shows catastrophic failure (e.g., >50% of peaceful posts flagged), the only safe path is to delay the automated component and operate purely manually until data gaps are filled.

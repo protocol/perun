@@ -1,0 +1,46 @@
+**Pre-Launch Safety Plan: Patent-Drafting AI**
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Hallucination/Adversarial Citation. The AI cites prior art that invalidates the user's novelty claim, presented as supporting evidence.
+*   **Affected Party:** Inventors (loss of patent rights, wasted legal fees), Bavaria IP Solutions (reputational damage, liability).
+*   **Worst Case:** An inventor files an application based on AI output that explicitly cites a reference destroying their own claim, leading to immediate rejection or invalidation.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; test specifically for self-defeating outputs.
+*   **Probe Set:** Construct 10 "poisoned" test cases where the correct answer requires *ignoring* a specific known prior art reference that destroys novelty. Include positive controls (cases where the reference is correctly identified as invalidating) and negative controls (cases where the reference is irrelevant).
+*   **Metric:** Rate of "Self-Defeating Citations" (citing invalidating art as supportive).
+*   **Threshold:** Zero tolerance for self-defeating citations in the launch cohort.
+*   **Stop Condition:** If any test case generates a document citing invalidating art as supportive without a warning, block auto-generation for that class of inputs.
+*   **Scope:** Test for prompt injection via user-supplied technical descriptions that might trick the search logic.
+
+**3. Risk Management Controls (MANAGE)**
+Given the three-week deadline and inability to rebuild the index, implement these behavioral and interface guards:
+
+*   **Human-in-the-Loop Gate (Mandatory):** For the launch phase, **no application document is finalized or filed without human attorney review.** The AI acts strictly as a draft assistant, not an autonomous filer. This is the non-negotiable floor for high-stakes irreversible actions.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "92% relevant"). Instead, label citations with coarse, defined tiers:
+    *   *Verified:* Matched against a curated, high-confidence subset of the index.
+    *   *Probable:* Standard retrieval match.
+    *   *Unverified:* Low-confidence match or derived from ambiguous query results.
+*   **Explicit Uncertainty & Override:** Every cited reference must include a visible disclaimer: *"AI-generated citation. Must be validated by a qualified patent attorney for novelty and inventive step."* Provide a one-click mechanism for users/attorneys to flag or remove a citation easily.
+*   **Transparency Artifact (Mini-Card):** Publish a one-page "System Limitation Notice" for early access users. It must state:
+    *   *Intended Use:* Drafting assistance only.
+    *   *Limitation:* The system may retrieve prior art that invalidates claims; it does not perform legal validity analysis.
+    *   *Data Source:* Current search index (version X), known to have gaps.
+    *   *Owner:* [Name of Lead Engineer/Product Owner].
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing any flagged "self-defeating" incidents daily during the launch window.
+*   **Re-review Trigger:** Any change to the search index or prompt logic requires an immediate re-run of the "poisoned" probe set before deployment.
+
+**5. Legal & Compliance Routing**
+*   **Disclosure Duty:** Whether specific AI disclosures are legally required under German/EU law for patent services is a legal determination. Route this immediately to counsel; do not assert compliance here.
+*   **Regime Awareness:** Note that the EU AI Act and ISO/IEC 42001 may apply to high-risk AI systems; counsel must determine binding status and deadlines.
+
+**Summary of Immediate Actions:**
+1.  Run the "poisoned" probe set against current logic.
+2.  Enforce mandatory human review for all launch documents.
+3.  Deploy the "System Limitation Notice" and confidence tiers.
+4.  Route legal disclosure questions to counsel.
+
+*Note: This plan minimizes risk but does not certify the system as safe or unbiased. The decision to ship rests with the product owner.*
+*Residual risk of invalidating citations remains until the search index is improved.*

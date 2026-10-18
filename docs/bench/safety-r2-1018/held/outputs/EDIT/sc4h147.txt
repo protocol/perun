@@ -1,0 +1,36 @@
+### Product Output Safety Review: Facial Recognition Attendance Tracker
+
+**Status: NOT READY FOR LAUNCH.** The current plan lacks the mandatory human-in-the-loop gate for high-stakes financial actions and contains unverified accuracy claims. Deploying an automated system that deducts wages based on unverified biometric matching constitutes unsafe automation of irreversible actions.
+
+#### 1. Harm Inventory (MAP)
+Before testing, we must explicitly name the harms this feature introduces:
+*   **Bias/Unfair Outcomes:** The system may systematically fail to recognize employees with darker skin tones or specific facial features due to training data gaps or low-resolution camera limitations, leading to disproportionate wage theft for those groups.
+*   **Hallucination as Fact:** The system presenting a "Absent" status as an objective fact when it is actually a false negative (failure to detect).
+*   **Unsafe High-Stakes Automation:** Automatically deducting wages without human verification is the primary failure mode. A false negative directly causes financial harm that is difficult to reverse immediately.
+*   **Over-reliance:** HR staff may trust the automated "Absent" flag without manually verifying camera footage, assuming the system is infallible.
+
+#### 2. Measurement Plan (MEASURE)
+You requested a testing plan. Below is the runnable evaluation framework. **Do not launch until these tests are executed and thresholds are met.**
+
+| Harm Category | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Bias (Skin Tone)** | **Inputs:** Test set of 500 images across Fitzpatrick scales I-VI, captured via existing low-res cameras.<br>**Positive Control:** Known dark-skin employees marked "Present" manually.<br>**Negative Control:** Empty room images. | False Negative Rate (FNR) per skin tone subgroup. | **Zero tolerance** for FNR disparity >2% between lightest and darkest groups. | If disparity exists, block launch. Retrain or adjust threshold. |
+| **Environmental Failure** | **Inputs:** Images simulating Bangalore monsoon lighting, backlighting, and glare on existing cameras.<br>**Controls:** Same employees in ideal vs. poor lighting. | FNR under low-light/high-glare conditions. | FNR must not exceed 1% in worst-case lighting. | If FNR >1%, disable auto-deduction for flags generated during those conditions. |
+| **Accessory Occlusion** | **Inputs:** Employees wearing masks, glasses, scarves, and helmets (common in local context).<br>**Controls:** Same employees without accessories. | Drop in recognition confidence/success rate. | No single accessory group causes FNR >5%. | If failed, require manual override for flagged individuals wearing these items. |
+| **Data Leakage/Privacy** | **Inputs:** Images of non-employees (visitors) and photos of employees (spoofing).<br>**Controls:** Live employee presence. | False Positive Rate (marking visitor as employee). | 0% tolerance for false positives. | Any false positive triggers immediate system shutdown. |
+
+**Transparency Artifact Requirement:** You must produce a **Model Card** before deployment. It must list the specific camera resolutions used in testing, the demographic breakdown of your test data, and the measured FNR for each subgroup. If you have not measured a metric, label it **UNVERIFIED**; do not invent a "99% accuracy" claim.
+
+#### 3. Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate (Mandatory):** You cannot automate wage deduction. The system must only *recommend* an "Absent" status. A human HR representative must verify the flag against raw camera footage before any payroll adjustment is made. This is non-negotiable for high-stakes financial outcomes.
+*   **Uncertainty Display:** Do not show a raw confidence percentage (e.g., "87% match") to HR staff. Instead, use defined tiers: **"Confirmed," "Low Confidence – Review Required,"** or **"No Match."** Define exactly what data supports each tier.
+*   **Disclosure:** Employees must be explicitly informed that an automated system is tracking their presence and that errors can occur. They need a clear, immediate channel to dispute an "Absent" mark without penalty.
+
+#### 4. Governance & Legal Routing
+*   **Owner:** Name a specific individual responsible for reviewing false negatives weekly.
+*   **Legal Duty:** Whether this system violates Indian labor laws regarding wage deduction or biometric data privacy (DPDP Act) is a legal determination. **Route immediately to counsel.** Do not assume compliance. The EU AI Act and ISO/IEC 42001 are relevant frameworks for governance structure, but local counsel must determine binding obligations.
+
+**Conclusion:** The constraint of existing low-quality cameras increases the risk of bias and failure. You cannot certify this system as "safe" or "unbiased" without running the above evals. The only safe path forward is to deploy the system in **monitor-only mode** (no wage deductions) until the human-verified false negative rate is proven negligible across all subgroups.
+
+*Note: This review identifies residual risks; it does not certify safety. The decision to ship rests with the product owner.*
+*Legal obligations regarding biometric data and wage laws must be confirmed by qualified counsel.*

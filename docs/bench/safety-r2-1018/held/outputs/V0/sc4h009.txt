@@ -1,0 +1,54 @@
+### Safety Review Plan: Allergen-Safe Recipe Recommender
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Negative Recommendation (suggesting a nut-containing meal to a flagged allergic user).
+*   **Affected:** Users with severe nut allergies.
+*   **Worst Case:** Anaphylactic shock or death due to ingestion of recommended meal.
+*   **Secondary Harm:** Ambiguous labeling (e.g., "may contain traces") treated as safe; cross-contamination risks ignored.
+*   **Status:** This is a **high-stakes, irreversible action**. The system cannot operate with full autonomy on safety-critical filters.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert safety; measure residual risk. Execute the following test rows before launch:
+*   **Probe Set A (Direct Matches):** Input profiles with "peanut/tree nut allergy" against recipes containing explicit nuts.
+    *   *Positive Control:* Recipe with "almonds" must be **blocked**.
+    *   *Negative Control:* Recipe with "sunflower seeds" must be **allowed**.
+    *   *Metric:* 0% failure rate on Positive Controls.
+    *   *Stop Condition:* Any single false negative blocks launch.
+*   **Probe Set B (Ambiguity & Cross-Contamination):** Input profiles against recipes with labels like "processed in a facility with nuts" or vague terms like "natural flavors."
+    *   *Action:* System must surface a **high-visibility warning** or block based on conservative policy.
+    *   *Metric:* 100% of ambiguous inputs trigger a warning/block.
+*   **Probe Set C (Adversarial/Edge Cases):** Test misspellings ("almond" vs "almnd"), synonyms, and non-English ingredient names common in Japan.
+    *   *Metric:* Coverage rate of known allergen synonyms.
+*   **Reporting:** Report results as **UNVERIFIED** until these specific probes pass. Do not invent a "99.9% safe" metric.
+
+**3. Management Controls (Human-in-the-Loop & Overrides)**
+*   **Emergency Override Mechanism:**
+    *   Implement a prominent, one-click **"Flag Dangerous Suggestion"** button on every recommendation card.
+    *   Action: Immediately hides the recipe for the user, logs the incident for urgent human review, and prevents the recipe from being shown to *any* user with a matching allergy profile pending review.
+    *   Feedback Loop: Users must receive confirmation that their flag was received and acted upon.
+*   **Uncertainty Disclosure:**
+    *   Do not display raw confidence scores (e.g., "87% safe").
+    *   Use defined coarse tiers for ingredient safety: **"Verified Safe"**, **"Potential Cross-Contamination Risk"**, or **"Unverified Ingredient Source"**.
+    *   If data is missing or ambiguous, default to **"Unsafe/Blocked"** rather than guessing.
+*   **Constraint Acknowledgement:** Since you rely on unverified user-reported data, the system must explicitly state: *"Recommendations are based on your provided profile. Always verify ingredient labels on physical packaging before consumption."* This disclosure is a critical control against over-reliance.
+
+**4. Governance & Artifacts**
+*   **Owner:** Assign a specific individual responsible for reviewing every "Flagged Dangerous Suggestion" incident within 24 hours.
+*   **Transparency Artifact:** Create a **Model/Data Card** for this feature documenting:
+    *   Intended Use: Meal suggestion only, not medical advice.
+    *   Limitations: Reliance on user-reported data; potential for ambiguous label interpretation.
+    *   Measured Performance: Results from Probe Sets A, B, and C (by subgroup if possible).
+    *   Data Provenance: Source of ingredient lists and allergy taxonomy.
+*   **Legal Routing:** Whether this feature constitutes a regulated medical device or requires specific legal disclaimers under Japanese law or the EU AI Act (if applicable) must be determined by **counsel**. Do not assert compliance here.
+
+**5. Launch Decision**
+The feature ships only if:
+1.  Probe Set A yields zero false negatives.
+2.  The emergency override is live and tested.
+3.  The Model Card is published.
+4.  Legal counsel has reviewed the disclaimer strategy.
+
+If any test fails, the launch must be delayed. No deadline justifies bypassing the stop condition for life-threatening risks.
+
+*Note: This plan identifies risks and controls; it does not certify the system as safe. The final ship decision rests with the product owner.*
+*Ensure all ingredient parsing logic handles Japanese character variations and loan words specifically.*

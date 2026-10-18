@@ -1,0 +1,34 @@
+### Safety Validation Plan for Drug-Interaction Checker
+
+**1. Pre-Launch Validation Workflow (Weeks 1–3)**
+Given the inability to license comprehensive databases, validation must rely on a "Known-Good" subset rather than exhaustive testing.
+*   **Curate a Gold Standard Set:** Compile a local list of 50–100 high-risk, well-documented drug interactions (e.g., Warfarin + Aspirin, MAOIs + SSRIs) using free, reputable sources like the Irish Medicines Board (HPRA) alerts or open-source datasets (e.g., DrugBank free tier).
+*   **Baseline Testing:** Run these known pairs through the system. The tool must flag 100% of this specific set. Any failure here is a critical block to launch.
+*   **Negative Control Testing:** Run 50 pairs of drugs known *not* to interact to ensure the system does not generate excessive false positives, which causes alert fatigue.
+*   **Edge Case Simulation:** Manually input complex profiles (e.g., a patient on 5+ medications) to verify the system handles multiple inputs without crashing or truncating results, even if the interaction data itself is incomplete.
+
+**2. Clinical Verification Workflow for Doctors**
+Since the AI is an assistant and not an authoritative source, the workflow must enforce human oversight.
+*   **Mandatory Disclaimer:** Every result screen must display a prominent warning: *"This tool uses a limited database. It does not replace clinical judgment or a full pharmaceutical review."*
+*   **The "Second Source" Rule:** For any patient with complex health profiles (polypharmacy, renal/hepatic impairment, or rare conditions), doctors must verify AI suggestions against a secondary free resource (e.g., the HPRA website or Medscape) before prescribing.
+*   **Structured Output:** The tool should categorize outputs clearly:
+    *   *Confirmed Interaction:* Found in local database.
+    *   *No Data Found:* Explicitly state "No interaction found in current limited database," rather than "Safe." This distinction is critical to prevent false reassurance.
+*   **Checklist Integration:** Include a physical or digital checklist in the patient file where the doctor signs off that they have considered interactions outside the tool's scope for high-risk patients.
+
+**3. Protocol for Reporting Missed Interactions**
+Establish a rapid feedback loop to capture errors and improve the local dataset without expensive licensing.
+*   **Immediate Reporting Channel:** Create a dedicated, low-friction channel (e.g., a specific Slack thread, Teams channel, or simple web form) for staff to report "Missed Interactions."
+*   **Required Data Points:** Reports must include:
+    *   Patient demographics (anonymized).
+    *   The specific drug combination missed.
+    *   The clinical outcome or near-miss description.
+    *   The external source that confirmed the interaction.
+*   **Triage and Update Cycle:** Assign one developer and one pharmacist to review reports weekly.
+    *   *Verification:* Confirm the interaction using open literature.
+    *   *Patch:* If verified, manually add the rule to the local database immediately.
+    *   *Notification:* Send a brief "Safety Update" alert to all GPs listing the newly added interaction to raise awareness.
+*   **Post-Incident Review:** If a missed interaction leads to patient harm, conduct a root-cause analysis to determine if the gap was due to data absence or a logic error, and adjust the "Second Source" protocol accordingly.
+
+**Note:** This plan prioritizes transparency about data limitations over false confidence.
+Ensure all staff are trained that "No Data Found" is not equivalent to "Safe."

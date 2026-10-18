@@ -1,0 +1,36 @@
+### Dynamic Odds Adjustment: Harm Inventory & Review Checklist
+
+**1. Harm Inventory (Map)**
+Before beta, record these specific risks for users with prior responsible play histories:
+*   **Bias/Unfair Outcomes:** The engine systematically lowers odds or increases limits for users exhibiting early, subtle signs of distress that the model misinterprets as "high engagement potential."
+*   **Over-reliance/Automation Bias:** The system aggressively adjusts odds based on stale data (due to API limits) during a user's rapid behavioral shift, failing to detect a crisis moment.
+*   **Unsafe Automation (High-Stakes):** Automated odds increases occur without a human review when a user's betting velocity spikes, potentially accelerating financial loss for a vulnerable individual.
+*   **Deceptive Patterns:** The interface uses dynamic odds to manufacture urgency ("Odds boosting now!") that nudges users to chase losses.
+
+**2. Measurement Plan (Measure)**
+Do not assert safety. Run these specific evaluations before launch:
+*   **Probe Set A (Rapid Change):** Simulate user sessions where betting frequency doubles in 10 minutes while loss magnitude increases.
+    *   *Metric:* Does the engine increase exposure (odds/limits) or trigger a cooling-off period?
+    *   *Threshold:* Zero instances of increased exposure during simulated distress spikes.
+    *   *Stop Condition:* If >0% of distress simulations result in aggressive engagement, block launch.
+*   **Probe Set B (API Latency Edge Case):** Inject scenarios where the third-party API returns data >5 minutes old while real-time behavior diverges.
+    *   *Metric:* Frequency of "stale profile" decisions leading to harmful offers.
+    *   *Control:* Compare against a known-good rule-based fallback.
+*   **Probe Set C (Subgroup Slice):** Isolate users with historical "near-miss" addiction markers.
+    *   *Metric:* Disparity in aggressive offer rates compared to the general population.
+    *   *Status:* If unmeasured, mark as **UNVERIFIED**. Do not invent a disparity rate.
+
+**3. Safeguards & Management (Manage)**
+*   **Human-in-the-Loop Gate (Floor):** Any automated decision that increases a user's betting limit or improves odds must be gated behind human review if the user's session shows >20% velocity increase in the last hour. Full autonomous execution of high-stakes exposure changes is the failure mode to prevent.
+*   **Uncertainty & Fallbacks:** Since real-time profiling is constrained by API limits, treat any profile older than 2 minutes as **Unverified**.
+    *   *Action:* Default to conservative odds (no enhancement) when data freshness is low or confidence is undefined.
+    *   *Display:* Do not show precise confidence percentages (e.g., "87% safe") to internal reviewers; use defined tiers (Confirmed, Stale, Unverified).
+*   **Kill Switch:** Implement an immediate global toggle to freeze all dynamic adjustments to static, pre-approved baselines if red-team probes fail.
+
+**4. Governance**
+*   **Owner:** Assign a specific product owner responsible for reviewing every flagged "distress" simulation result.
+*   **Transparency Artifact:** Draft a Model Card detailing the intended use (responsible engagement only), the API latency limitation, and the specific failure modes identified in testing. If this card is missing at beta, the feature lacks transparency.
+*   **Legal Routing:** Whether these automated decisions constitute a regulated "high-risk" system under emerging AI laws or gambling statutes is a legal determination. Route the question of mandatory disclosures or regulatory thresholds to counsel; do not assert compliance internally.
+
+**Note:** This checklist identifies residual risk; it does not certify the system as "safe" or "unbiased."
+**Note:** If the API limit prevents detecting rapid harm signals, the only safe fallback is to disable dynamic adjustments entirely for affected users.

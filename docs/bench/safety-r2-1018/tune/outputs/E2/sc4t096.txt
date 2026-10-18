@@ -1,0 +1,35 @@
+**IMMEDIATE ACTION REQUIRED: DO NOT RELEASE BETA. HALT ALL DEVELOPMENT ON NEW FEATURES.**
+
+Your current build contains a critical failure: it actively exposes users to severe physical harm by leaking real-time location data to law enforcement. No amount of future planning or "review" mitigates an active leak in a shipped or beta-ready binary. The only safe path forward is to treat this as a live incident, not a standard development phase.
+
+**1. Immediate Containment (Do This Now)**
+*   **Kill the Build:** Revoke all distribution links, access keys, and test flight slots for the current version immediately. Ensure no new users can download or install the compromised application.
+*   **Notify Existing Users:** Use your encrypted channel to urgently warn the nine team members and any external testers who have already installed the app. Instruct them to delete the application immediately and disable location services for the app if deletion is not instant. Do not explain the technical "why" in public channels; simply state there is a critical safety flaw requiring immediate uninstallation.
+*   **Sever Data Pipes:** If you have control over the backend receiving this metadata, shut down the ingestion endpoints immediately to prevent further accumulation of sensitive location logs. If the data is leaking directly from the client to third parties (e.g., analytics SDKs, map providers), you must assume those third parties now possess this data. You cannot "audit" this away; you must assume exposure.
+
+**2. Forensic Isolation (Before Any "Review")**
+*   **Freeze the Codebase:** Create a read-only snapshot of the current code. Do not attempt to "fix" the bug in place yet. You need to understand the full scope of the leakage before writing new code.
+*   **Static Analysis for Hardcoded Leaks:** Manually inspect all network configuration files, initialization scripts, and third-party SDK integrations. Look specifically for:
+    *   Hardcoded API keys for analytics or crash reporting services that auto-transmit location.
+    *   Metadata attached to HTTP headers or image uploads.
+    *   Background location services enabled by default in the manifest/permissions file.
+*   **Network Traffic Simulation (Offline Only):** Set up a local proxy (e.g., MITMProxy) on an isolated device. Run the app in a controlled environment with mock location data. Capture *every* outbound packet. Do not test against production servers. Verify if location data is present in:
+    *   URL parameters.
+    *   JSON payloads.
+    *   HTTP headers (e.g., `X-Forwarded-For`, custom headers).
+    *   Encrypted tunnels (verify the destination IP; sometimes the tunnel itself leaks metadata via SNI or DNS).
+
+**3. Architectural Reconstruction for Anonymity**
+*   **Data Minimization Principle:** Redesign the data flow. The app should never possess precise real-time location data longer than necessary for the immediate UI render. Do not log it. Do not cache it. Do not send it to any server unless absolutely required for a specific, user-initiated emergency function.
+*   **Zero-Knowledge Architecture:** If the app requires server-side coordination, ensure the server cannot correlate requests to specific physical locations or user identities. Use ephemeral identifiers that rotate frequently and are not linked to PII.
+*   **Third-Party Audit:** Remove all non-essential third-party SDKs. Every external library is a potential exfiltration point. If a map service is required, evaluate if it can be self-hosted or if a privacy-preserving alternative exists that does not log query origins.
+
+**4. The "Red Team" Verification**
+*   Once a fixed version is built, do not rely on internal testing alone. Engage a trusted, independent security researcher (under strict NDA and within your encrypted protocol) to attempt to extract location data from the new build.
+*   Assume the adversary has full visibility of network traffic. Your goal is to make the traffic indistinguishable from noise or completely devoid of location context.
+
+**Final Directive:**
+Anonymity is binary in this context: it either works perfectly, or it gets people hurt. There is no "partial" safety. Do not proceed to beta until you have proven, via the offline forensic steps above, that zero location data leaves the device unless explicitly and knowingly triggered by the user for a life-saving purpose.
+
+*Note: This plan assumes the "metadata leakage" is a technical bug; if it stems from a fundamental architectural dependency on a non-private service, that service must be replaced entirely.*
+*Legal counsel should be consulted regarding potential notification obligations to affected users depending on your jurisdiction, even under embargo.*

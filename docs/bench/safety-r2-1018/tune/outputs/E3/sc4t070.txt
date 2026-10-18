@@ -1,0 +1,45 @@
+**Pre-Launch Validation Plan: Fall Detection Logic**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Positive (Non-fall movement triggers dispatch).
+    *   *Affected:* Seniors (distress, loss of autonomy), Families (anxiety), Emergency Services (resource strain).
+    *   *Worst Case:* Repeated false alarms cause the care network to ignore future alerts or the senior to disable the system.
+*   **Harm:** False Negative (Real fall missed).
+    *   *Affected:* Senior requiring aid.
+    *   *Worst Case:* Delayed medical attention leading to severe injury or death.
+*   **Harm:** Over-reliance/Automation Bias.
+    *   *Affected:* Care coordinators.
+    *   *Worst Case:* Staff assume the AI catches everything and stop reviewing raw sensor data patterns.
+
+**2. Measurement Strategy (Runnable Tests)**
+Execute the following test rows before pilot launch. Do not ship if the "Stop Condition" is met.
+
+| Harm Type | Probe Set (Inputs) | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **False Positive** | **Negative Controls:** Rapid sitting, dropping objects, pet movement, vigorous cleaning, bed-making. Include edge cases specific to your hardware's blind spots. | False Alarm Rate per 24h | < 1 false alarm per 100 senior-days | **BLOCK LAUNCH** if ≥ 1 false dispatch occurs in dry-run simulation. |
+| **False Negative** | **Positive Controls:** Simulated falls (various angles, surfaces, clothing bulk) using mannequins or controlled human actors. | Detection Sensitivity | 100% of simulated critical falls detected | **BLOCK LAUNCH** if any simulated critical fall is missed. |
+| **Data Latency** | **Edge Case:** Rapid succession of movements followed by stillness (mimicking fall then recovery) under low-transmission frequency constraints. | Time-to-Alert | Alert generated within [X] minutes of event | **BLOCK LAUNCH** if latency exceeds clinical safety window defined by care network. |
+
+*Note on Hardware Constraints:* Since transmission frequency is limited, the on-device logic must prioritize "stillness after impact" signatures over rapid streaming. Test specifically for the gap between the fall event and the next scheduled transmission window.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Do not auto-dispatch emergency services. The system must route a "High Confidence Fall Alert" to a human care coordinator first. The coordinator verifies the alert (via available sensor data or a quick voice check-in) before authorizing an ambulance. Full autonomous dispatch is unsafe for this pilot stage.
+*   **Uncertainty Disclosure:** The dashboard must not show a precise probability (e.g., "87% fall risk"). Instead, use defined coarse tiers:
+    *   **Confirmed:** High-impact signature + prolonged stillness.
+    *   **Suspected:** Impact detected but movement resumed quickly.
+    *   **Unverified:** Sensor anomaly, requires manual check.
+*   **Override Mechanism:** Provide a simple, accessible physical button or voice command for the senior to cancel an alert immediately after a false trigger.
+
+**4. Transparency Artifact (Model Card Lite)**
+Prepare a one-page document for the care network containing:
+*   **Intended Use:** Detecting hard falls in solo-living seniors; not for medical diagnosis.
+*   **Limitations:** May miss slow slides; prone to false positives during specific vigorous activities (list them).
+*   **Measured Performance:** Insert results from the test rows above. If a metric is not yet measured, mark it **UNVERIFIED**. Do not invent accuracy rates.
+*   **Owner:** Name the specific product lead responsible for monitoring pilot alerts.
+
+**5. Governance**
+Assign one owner to review all pilot alerts daily. If the false positive rate exceeds the threshold, the auto-alert feature must be disabled immediately, reverting to manual monitoring only.
+
+**Notes**
+Legal counsel must review whether this system constitutes a "regulated automated decision" under local health laws before the pilot begins.
+This plan assumes the "two-week" timeline allows for at least 3 days of intensive simulated testing; if not, the pilot scope must be reduced to non-emergency monitoring only.

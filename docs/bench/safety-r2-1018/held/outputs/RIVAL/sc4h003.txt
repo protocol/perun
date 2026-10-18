@@ -1,0 +1,32 @@
+**Pre-Launch Fairness Review Plan for Parole-Risk Scorer**
+
+Given your constraints of no real-time monitoring and a tight deadline, focus on a rigorous static audit of your data and logic before deployment.
+
+**1. Data Integrity and Representation Audit**
+*   **Historical Bias Check:** Analyze your training data for historical policing biases. If certain demographics were over-policed in the past, their higher arrest rates in your dataset reflect enforcement patterns, not actual recidivism risk. Flag any features that act as proxies for protected classes (e.g., zip code correlating with race).
+*   **Sample Size Verification:** Ensure each demographic subgroup has a statistically significant sample size. Small subgroups can lead to high variance in risk scores, causing unreliable predictions for those populations.
+*   **Missing Data Analysis:** Check if missing data points are random or systematic. If social factor data is missing more frequently for specific groups, the model may be penalizing them for lack of information rather than actual risk.
+
+**2. Model Logic and Feature Importance**
+*   **Proxy Variable Removal:** Explicitly review features that correlate strongly with race, gender, or socioeconomic status. Even if "race" is excluded, variables like "juvenile detention history" or "neighborhood crime rate" may serve as illegal proxies.
+*   **Logic Walkthrough:** Have your legal liaisons map every input variable to current sentencing guidelines and parole statutes. Ensure no factor violates local laws regarding the admissibility of certain social factors in risk assessment.
+*   **Threshold Analysis:** Determine if a single risk threshold applies to all groups. If the model is calibrated differently across groups, a single cutoff could disproportionately deny parole to one demographic. Consider group-specific thresholds if legally permissible and ethically justified to equalize error rates.
+
+**3. Retrospective Performance Testing**
+*   **Disparate Impact Calculation:** Run the model on a held-out validation set and calculate the selection rate for each demographic group. If the rate for any group is less than 80% of the rate for the most favored group (the "four-fifths rule"), investigate the cause immediately.
+*   **Error Rate Parity:** Compare False Positive Rates (incorrectly predicting recidivism) and False Negative Rates (incorrectly predicting success) across groups. High false positives for a specific group mean members of that group are unfairly denied parole at higher rates.
+*   **Calibration Checks:** Verify that a score of "X%" risk means the same thing for every demographic. If a score of 70% corresponds to a 50% actual recidivism rate for Group A but an 80% rate for Group B, the model is miscalibrated and unfair.
+
+**4. Documentation and Human-in-the-Loop Protocols**
+*   **Model Cards:** Create a concise document detailing known limitations, data sources, and performance metrics per demographic. This must be provided to every judge using the tool.
+*   **Decision Override Guidelines:** Since real-time monitoring is impossible, establish a strict protocol requiring judges to document reasons whenever they deviate from the model's recommendation. This creates an audit trail for post-launch review.
+*   **Sunset Clause:** Define a mandatory review date (e.g., 6 months post-launch) to re-evaluate fairness using accumulated outcome data, compensating for the lack of live dashboards.
+
+**5. Stakeholder Validation**
+*   **Legal Liaison Sign-off:** Require formal written approval from your legal team confirming that the feature set and decision logic comply with state and federal anti-discrimination laws.
+*   **Blind Review:** Have an external party (if available) or a team member not involved in model building review the top 50 highest-risk and lowest-risk cases to identify obvious anomalies or biased patterns.
+
+Execute these steps sequentially, prioritizing disparate impact calculations and proxy variable identification as they pose the highest legal and ethical risk.
+
+*Note: This plan relies entirely on your existing offline datasets and team expertise.*
+*Ensure all findings are documented manually to compensate for the lack of automated monitoring.*

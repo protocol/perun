@@ -1,0 +1,32 @@
+### Risk Assessment Plan: Fraud Detection Chatbot (São Paulo)
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record these specific risks for the "automated freeze" feature:
+*   **Unsafe High-Stakes Automation:** The system executes an irreversible action (account freeze) that disrupts livelihoods without human confirmation. This is the primary failure mode.
+*   **Bias/Unfair Outcomes:** Anonymized data may strip context unique to specific demographics or business types in São Paulo, causing systematic false positives against legitimate high-value users.
+*   **Over-Reliance:** The design invites total trust in the model's "suspicious" flag, ignoring the known limitation of the test data (lack of nuance).
+*   **Hallucination as Fact:** The chatbot presents a probabilistic flag as a confirmed fraud event, triggering an automatic penalty.
+
+**2. Measurement Strategy (MEASURE)**
+Since real logs are unavailable, you must construct a runnable evaluation plan using your anonymized samples:
+*   **Synthetic Adversarial Probes:** Generate synthetic transaction rows that mimic "normal high-value" behaviors missing from your anonymized set (e.g., seasonal business spikes, large one-time purchases). Treat these as your **positive controls** (known good) to test if the model incorrectly freezes them.
+*   **Threshold Sweep:** Do not test a single threshold. Run the model across a range of decision scores. For each threshold, record the false positive rate against your synthetic "normal high-value" set.
+*   **Stop Condition:** Define a specific false positive rate (e.g., >0.1% of legitimate high-value transactions) that automatically blocks the launch of the *automated* freeze feature.
+*   **Metric Reporting:** Report residual risk as `UNVERIFIED` for any scenario not covered by your synthetic probes. Do not invent a global "accuracy" number; state clearly that performance on non-anonymized nuances is unmeasured.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high stakes (livelihood disruption) and limited data nuance, **fully automated freezing must not ship.** The default state for any "high-value" flag must be a hold pending human review or explicit user confirmation via a secondary channel. Automation is the failure; the gate is the floor.
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "87% risk") to users or operators. Use defined coarse tiers:
+    *   *Confirmed:* Multiple strong signals + human verification.
+    *   *Suspected:* Algorithmic flag only → Triggers review, not freeze.
+    *   *Unverified:* Low confidence → No action.
+*   **Disclosure:** Clearly inform users when an automated system has flagged their account and provide an immediate, easy path to human override.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing every false positive incident post-launch.
+*   **Re-review Trigger:** Any change to the anonymization method or the underlying model requires re-running the threshold sweep.
+
+**Deliverable Status:** This plan identifies the inventory, defines the synthetic testing required, and mandates a human gate. It does not certify the system as safe.
+
+**Note:** Legal counsel must determine if specific Brazilian regulations require additional disclosures for automated financial decisions; this plan recommends disclosure as a safety control but does not assert legal duty.
+**Note:** Do not proceed to automated freezing until the synthetic probe false positive rate meets your owner-defined stop condition.

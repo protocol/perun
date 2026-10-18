@@ -1,0 +1,31 @@
+**Risk Assessment: Echo Chamber Formation in BosphorusNews Aggregator**
+
+**Identified Harm Inventory**
+The current configuration poses a high risk of **Bias/Unfair Outcomes** and **Over-reliance**, specifically creating feedback loops that narrow user exposure to diverse political viewpoints (echo chambers). Without diversity injectors or friction mechanisms in the legacy CMS, the engine will likely optimize strictly for engagement, systematically excluding dissenting or complex narratives that do not match historical reading habits. The worst-case scenario involves the unintentional radicalization of users by reinforcing extreme viewpoints without counter-balancing information, damaging the public discourse in Ankara.
+
+**Measurement Plan (Runnable)**
+To validate this risk before launch, execute the following evaluation row:
+*   **Probe Set:** Simulate 1,000 user profiles with varying initial political leanings (left, center, right) using historical Ankara news consumption data. Include a "known-bad" control where a user clicks only one type of sensationalist headline.
+*   **Metric:** "Viewpoint Diversity Score" – the ratio of distinct political perspectives shown in a 30-day simulated feed versus the user's initial profile.
+*   **Threshold:** Owner-defined. Propose zero tolerance for a feed that shows <20% content outside the user's initial cluster after 10 interactions.
+*   **Stop Condition:** If the diversity score drops below the threshold for any segment, block the automated personalization rollout.
+*   **Status:** **UNVERIFIED**. This eval must be run; no existing metric proves safety.
+
+**Mitigation Strategies (Configuration Only)**
+Since the legacy CMS cannot be updated with new code, apply these configuration-based controls to manage residual risk:
+
+1.  **Cap Engagement Weighting:** Adjust the recommendation algorithm's configuration to cap the weight of "click-through rate" or "time spent" at 50% of the total scoring formula. Force the remaining 50% to rely on recency and source authority, preventing the loop from optimizing purely for sensationalism.
+2.  **Mandatory Source Rotation Rule:** Configure a hard rule that limits any single news source to a maximum of 2 stories per day per user, regardless of relevance score. This forces the engine to pull from the broader pool of indexed sources, introducing passive diversity.
+3.  **Confidence Tiering & Disclosure:** Do not present recommendations as "Top Stories for You." Configure the UI labels to read "Suggested based on recent reads" (a coarse transparency tier). Avoid displaying numerical confidence scores (e.g., "98% match") which imply false precision and invite over-reliance.
+4.  **Human-in-the-Loop for High-Stakes Topics:** For topics tagged as "Election," "Civil Unrest," or "Policy Change," configure the system to default to a chronological, non-personalized feed rather than a ranked one. This removes the algorithmic bias from high-stakes information entirely until the CMS can be updated.
+
+**Governance**
+Assign a specific Product Owner to review the "Viewpoint Diversity Score" weekly post-launch. If the metric degrades, the owner must trigger a rollback to the chronological default.
+
+**Transparency Artifact Requirement**
+Before shipping, publish a **Model Card** detailing the intended use (general news curation), the known limitation (potential for reduced viewpoint diversity due to legacy constraints), and the results of the diversity eval above. Shipping without this card is a transparency failure.
+
+**Legal Routing**
+Whether this automated curation constitutes a regulated decision requiring specific legal disclosures under local or EU frameworks is a determination for counsel; route this question immediately. Do not assert compliance.
+
+*Note: This assessment identifies residual risk; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner.*

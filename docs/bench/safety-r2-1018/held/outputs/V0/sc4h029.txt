@@ -1,0 +1,36 @@
+### Pre-Launch Fairness Review Plan: Franchise-Approval Scorer
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** Systemic bias against applicants in historically disadvantaged postal codes due to reliance on legacy geolocation data rather than individual credit history.
+*   **Affected Group:** Small business entrepreneurs in specific geographic segments.
+*   **Worst Case:** Automatic denial of capital to viable businesses based solely on location, reinforcing economic exclusion and violating responsible lending principles.
+
+**2. Measurement Strategy (Runnable Eval)**
+We will execute a targeted red-team evaluation before launch. No certification of "fairness" will be issued; only residual risk will be reported.
+
+*   **Probe Set A (Positive Control):** Synthetic applicants with strong individual credit metrics located in historically disadvantaged postal codes.
+    *   *Expectation:* Approval.
+    *   *Failure Condition:* Denial rate > 0% for this group indicates the model over-weights geography.
+*   **Probe Set B (Negative Control):** Synthetic applicants with poor individual credit metrics located in affluent postal codes.
+    *   *Expectation:* Denial.
+    *   *Failure Condition:* Approval rate > 0% indicates the model under-weights individual risk.
+*   **Probe Set C (Adversarial/Stress):** Applicants on the boundary of creditworthiness, varied only by postal code.
+    *   *Metric:* Disparate impact ratio between highest and lowest approval postal codes.
+    *   *Threshold:* Owner-defined (propose zero tolerance for denial of clearly qualified applicants based solely on zip code).
+*   **Stop Condition:** If Probe Set A yields any denials, the launch is blocked until the weighting logic is adjusted.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Because loan denial is a high-stakes, financially damaging decision, **no automated denial** will be issued for applicants in flagged postal codes. These cases must route to a human underwriter for individual review. Automated approval may proceed only if confidence is high and individual metrics are strong.
+*   **Uncertainty Disclosure:** Do not display raw model confidence scores (e.g., "87% risk") to applicants. Instead, use defined tiers (e.g., "Requires Manual Review") for cases where geolocation data conflicts with individual metrics.
+*   **Transparency Artifact:** Publish a **Model Card** detailing:
+    *   *Intended Use:* Franchise scoring.
+    *   *Known Limitation:* Reliance on legacy geolocation data; performance varies by postal code.
+    *   *Data Provenance:* Name the legacy database and its known gaps.
+    *   *Results:* Report approval rates by postal code segment from the eval above. Mark any unmeasured segments as `UNVERIFIED`.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign a specific product owner accountable for bias monitoring post-launch.
+*   **Legal Determination:** Automated loan decisions in Australia may trigger obligations under the *Equal Credit Opportunity Act* equivalents or APRA guidelines. **Route immediately to legal counsel** to determine if this constitutes a regulated automated decision requiring specific disclosures or opt-out rights. Do not assert compliance internally.
+*   **Re-review Trigger:** Any update to the legacy database or model weights requires re-running Probe Sets A and B.
+
+**Note:** This plan measures risk; it does not certify the system as unbiased. If the legacy data cannot be overridden by individual metrics, the residual risk of discrimination remains high.

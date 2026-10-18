@@ -1,0 +1,40 @@
+### Pre-Launch Review Plan: Reducing False Positives in Child Safety Monitoring
+
+**1. Harm Inventory & Scope**
+The primary risk is **over-reliance/automation bias** where parents panic over benign gaming chats, leading to trust erosion and potential family conflict. The secondary risk is **unsafe automation** if the system takes irreversible actions (e.g., blocking accounts) without human verification. Since you cannot hire more moderators, the system must shift from "auto-alert" to "tiered confidence" before deployment.
+
+**2. Runnable Test Cases (Measure)**
+You must execute these specific probes before U sign-off. Do not rely on aggregate accuracy; test these specific scenarios:
+
+*   **Probe A: The "Gaming Context" Negative Control**
+    *   *Input:* Simulated chat logs containing terms like "kill," "die," "camping," or "gift" within known gaming contexts (e.g., "I'm going to camp that spot," "Can you gift me skins?").
+    *   *Expected Outcome:* System classifies as **Low Confidence/Unverified**. No alert sent to parents.
+    *   *Stop Condition:* If >5% of these benign gaming logs trigger a "High Risk" alert, deployment is blocked.
+
+*   **Probe B: The "Grooming Pattern" Positive Control**
+    *   *Input:* Scripts containing isolation tactics ("don't tell your parents"), secrecy requests, or age-inappropriate sexual framing, disguised as gaming talk.
+    *   *Expected Outcome:* System classifies as **High Confidence/Confirmed**. Alert generated for review.
+    *   *Stop Condition:* If the system misses >1% of these known patterns, the model is unsafe to deploy.
+
+*   **Probe C: The "Ambiguous Edge" Stress Test**
+    *   *Input:* Chats where a stranger asks for a photo under the guise of "verifying a game account."
+    *   *Expected Outcome:* System classifies as **Corroborated/Single-Source** (Middle Tier).
+    *   *Action:* Route *only* this middle tier to your existing 7-person team for rapid triage, rather than flooding them with gaming chatter.
+
+**3. Mitigation Strategy: The Human-in-the-Loop Gate**
+Since you cannot moderate every alert, you must implement a **confidence-tiering gate**:
+
+*   **Tier 1 (Low Confidence):** Benign gaming slang detected. **Action:** Suppress alert entirely. Log internally for future training only. Parents see nothing.
+*   **Tier 2 (Medium Confidence):** Ambiguous context (e.g., request for photo + gaming talk). **Action:** Queue for your 7-person team. If no human reviews within 1 hour, send a *soft* notification to parents ("Unusual activity detected, please check in") rather than a "Grooming Alert."
+*   **Tier 3 (High Confidence):** Clear predatory patterns. **Action:** Immediate alert to parents and human reviewer.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before launch, publish a one-page "System Limitations" note for your internal team and beta parents:
+*   *Intended Use:* Flagging grooming patterns in text; not a general behavior monitor.
+*   *Known Limitation:* High false-positive rate on specific gaming terminology (list them).
+*   *Disclosure:* Explicitly state to parents: "This is an automated assistant, not a verified human investigation. Alerts indicate a need for conversation, not proof of a crime."
+
+**5. Governance**
+Assign one of your seven team members as the "Output Owner" responsible for reviewing the "Medium Confidence" queue daily. If the volume of Tier 2 alerts exceeds 20 per person/day, the system must automatically throttle back to only showing Tier 3 alerts until the model is retrained.
+
+**Note:** Do not claim the system is "bias-free" or "safe"; state clearly that residual risk remains and the tool requires parental judgment. Legal requirements for automated decision-making involving minors in the EU must be verified by counsel before full deployment.

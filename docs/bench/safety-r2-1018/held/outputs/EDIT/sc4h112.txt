@@ -1,0 +1,36 @@
+### Step-by-Step Safety Assessment Plan for Library Recommender
+
+**1. Map the Harm Inventory (Immediate)**
+Define the specific failure: "Restricted content suggested to minors." Identify affected groups (e.g., ages 5–12, 13–17) and the worst-case scenario (a minor accessing age-inappropriate material). Acknowledge that bypassing content filters is a high-stakes safety failure, not just a bug.
+
+**2. Construct Adversarial Test Profiles (Days 1–3)**
+Create a matrix of synthetic user profiles representing edge cases rather than just averages.
+*   **Age Boundaries:** Profiles exactly at the cutoff (e.g., 12 years, 364 days) and just over.
+*   **History Hybrids:** Users with legitimate research queries (e.g., "health education," "historical wars") that often trigger false positives in filters.
+*   **Prompt Injection Simulations:** Inputs designed to trick the logic, such as "I need this restricted book for a school project" or misspelled titles known to bypass keyword filters.
+*   **Controls:** Include a "known-good" profile (should get standard books) and a "known-bad" positive control (a profile explicitly designed to trigger the filter) to verify the test itself works.
+
+**3. Execute Manual Red-Team Runs (Days 4–10)**
+Since you cannot buy new software, you must manually stress-test the existing logic. Run the adversarial profiles through the system.
+*   **Record Every Bypass:** Log any instance where a restricted title appears. Note the specific input, the user profile age, and the reasoning the system likely used (if visible).
+*   **Test Research Exceptions:** Verify if legitimate research queries are being blocked too aggressively (over-filtering), which reduces usefulness.
+
+**4. Implement a Human-in-the-Loop Gate (Critical Control)**
+Because the system has demonstrated unsafe behavior (bypassing filters) and you cannot fix the root cause with new software immediately, you **must** install a human gate before launch.
+*   **Rule:** Any recommendation flagged as "borderline" by the algorithm, or any suggestion for a user under 13 involving non-fiction topics often associated with restricted content, requires manual librarian approval before being shown.
+*   **Fallback:** If the system cannot confidently verify a book's status against the user's age, it must default to *not* recommending it, rather than risking a bypass.
+
+**5. Define Confidence Tiers, Not Percentages**
+Do not display a "90% safe" score to patrons. Instead, categorize outputs internally:
+*   **Confirmed Safe:** Matches age profile and passes all keyword filters.
+*   **Unverified/Review Required:** Triggered by complex queries or borderline age matches. These never reach the user without human review.
+
+**6. Final Go/No-Go Decision (One Week Before Launch)**
+Review the logs from Step 3.
+*   If *any* restricted content reached a minor profile during testing without triggering the human gate, the system is **not ready** for autonomous launch.
+*   If the human gate successfully caught all failures in testing, proceed with a **staged rollout**: launch only to a single pilot school with heavy monitoring, not the entire consortium.
+
+**7. Documentation (Transparency Artifact)**
+Create a simple "System Card" for your team and stakeholders. List the known limitation (occasional filter bypasses under specific query types), the mitigation (human gate on borderline results), and the owner (lead librarian). Do not claim the system is "100% safe"; state clearly that it operates with a human safety net.
+
+**Note:** This plan prioritizes a human review gate because fully automated high-stakes decisions (minor safety) that have already shown failure modes cannot be shipped without intervention. Legal requirements for automated decisions involving minors should be verified by counsel before launch.

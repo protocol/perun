@@ -1,0 +1,61 @@
+# Dialect Sensitivity Testing Protocol for AndesTech
+
+**Objective:** Enable engineers to distinguish between genuine linguistic errors and valid regional dialect variations using only existing datasets, ensuring cultural integrity prior to beta release.
+
+### Phase 1: Dataset Stratification & Baseline Mapping
+Since external linguists are unavailable, the engineering team must restructure the current dataset to serve as the ground truth.
+
+1.  **Geographic Tagging:** Audit the existing audio/text corpus. Tag every entry with its specific region of origin (e.g., Cusco, Ayacucho, Puno, Ancash) based on available metadata or speaker profiles.
+2.  **Frequency Clustering:** Group utterances by phonetic and grammatical patterns. Identify clusters that appear frequently within a specific region but are absent in others. High intra-regional frequency with zero inter-regional presence suggests a dialect feature, not an error.
+3.  **The "Standard" Definition:** Explicitly define the "Standard Reference" currently used by your AI (likely a specific academic or dominant regional variant). Document this clearly. Any deviation from this standard is currently being flagged as an error; this protocol aims to validate which deviations are legitimate.
+
+### Phase 2: The "Triangulation" Evaluation Criteria
+Engineers will evaluate flagged items using three specific criteria. An utterance is considered a **Valid Regional Expression** if it meets at least two of the following:
+
+*   **Criterion A: Internal Consistency.** The pattern appears in ≥3 distinct speakers from the same geographic cluster within the dataset. Isolated anomalies are treated as potential errors until proven otherwise.
+*   **Criterion B: Systematic Variation.** The deviation follows a consistent rule rather than random noise.
+    *   *Example:* If speakers from Region X consistently swap vowel sounds /a/ and /o/ in closed syllables, this is a systematic phonological rule, not a mistake.
+    *   *Example:* If verb conjugation endings differ consistently by region, this is morphological variation.
+*   **Criterion C: Semantic Preservation.** The variation does not obscure the core meaning when interpreted by other speakers from the *same* region (simulated by cross-checking against other entries from that tag). If the meaning is lost even within the region, it may be a genuine error or data corruption.
+
+### Phase 3: Execution Workflow
+
+**Step 1: The False Positive Audit**
+Run the current AI correction logic against the stratified dataset. Extract all instances where the AI flagged an input as an "error" or "correction needed."
+
+**Step 2: Manual Triangulation Review**
+For each flagged item, engineers apply the Triangulation Criteria:
+*   *Check Metadata:* Does this speaker belong to a specific cluster?
+*   *Check Peers:* Do other speakers from that cluster exhibit this same trait?
+*   *Check Structure:* Is the deviation systematic?
+
+**Step 3: Classification & Labeling**
+Assign one of three labels to each flagged item:
+1.  **Confirmed Dialect:** Meets criteria. Action: Add to "Allow List" for that region.
+2.  **Genuine Error:** Fails criteria (isolated, nonsensical, or breaks internal regional logic). Action: Retain as a correction target.
+3.  **Ambiguous:** Insufficient data points. Action: Flag for "Low Confidence" mode in beta (do not auto-correct; perhaps ask for clarification or provide a neutral response).
+
+### Phase 4: Logic Refinement Rules
+Update the correction logic based on the audit:
+*   **Regional Context Switching:** If the user profile or input metadata indicates a specific region, disable corrections for items on that region's "Allow List."
+*   **Confidence Thresholding:** For "Ambiguous" cases, lower the correction confidence score. The AI should refrain from definitive corrections when the input matches an ambiguous pattern, preventing aggressive flagging of potential dialects.
+*   **Feedback Loop:** In the beta, log instances where the AI *refrained* from correcting. This data will serve as the validation set for future linguist review once travel restrictions lift.
+
+### Deliverable Output Format
+Engineers must produce a `dialect_allow_list.json` structured as:
+```json
+{
+  "region_code": "PE-CUS",
+  "valid_variations": [
+    {
+      "pattern_type": "phonetic",
+      "example_input": "...",
+      "ai_original_flag": "mispronunciation",
+      "justification": "Systematic vowel shift observed in 5+ speakers"
+    }
+  ]
+}
+```
+
+**Note:** This protocol relies entirely on internal data consistency; it cannot validate dialects absent from your current dataset.
+**Note:** Prioritize high-frequency patterns first to maximize beta stability.

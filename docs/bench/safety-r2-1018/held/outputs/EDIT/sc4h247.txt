@@ -1,0 +1,46 @@
+### Pre-Launch Verification Plan for BorderTech Kiosks
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False positive match leading to wrongful detention or missed summit entry.
+*   **Affected:** Innocent citizens/visitors, specifically those with names or features similar to watchlist entries.
+*   **Worst Case:** Diplomatic incident, unlawful detention, and loss of public trust due to database synchronization errors presenting stale or incorrect data as fact.
+
+**2. Measurement Plan (Runnable Tests)**
+Execute the following specific test rows before the summit deadline. Do not rely on aggregate accuracy claims.
+*   **Probe Set A (Synchronization Errors):** Inject known "clean" identities into the test environment while simulating a database lag where their records temporarily appear on a watchlist.
+    *   *Positive Control:* System must flag the injected "wanted" test record.
+    *   *Negative Control:* System must **not** flag the "clean" identity during the simulated sync error if the local cache indicates data staleness.
+    *   *Metric:* False Positive Rate (FPR) during sync anomalies.
+    *   *Threshold:* Owner-defined zero tolerance for automated detention based on stale flags.
+    *   *Stop Condition:* Any instance where the kiosk auto-flags a clean user without a "Data Unverified" warning triggers an immediate launch block.
+*   **Probe Set B (Demographic Bias):** Run facial scans across diverse subgroups (age, skin tone, gender) against the watchlist.
+    *   *Metric:* Disparate FPR by subgroup.
+    *   *Stop Condition:* If FPR for any subgroup exceeds the baseline by >20%, halt launch for model tuning.
+*   **Probe Set C (Injection/Leakage):** Attempt to feed corrupted database packets to ensure the system defaults to "Manual Review" rather than crashing or assuming safety.
+
+**3. Management Controls (Human-in-the-Loop Gate)**
+*   **Irreversible Action Gate:** The system is strictly prohibited from initiating detention or denying entry autonomously.
+    *   *Rule:* A "Flag" results *only* in a routed alert to a border officer. The kiosk displays: "Secondary Screening Required – Data Verification Pending."
+    *   *Override:* Officers must have a one-click "False Alarm" override that logs the incident and allows immediate passage if visual inspection clears the traveler.
+*   **Uncertainty Display:** If database synchronization is not confirmed within the last $X$ minutes (defined by engineering), the interface must display a coarse status tier: **"Data Status: Unverified"** (Red) instead of a numerical confidence score (e.g., "98% match"). Never show raw model confidence percentages to operators or travelers.
+*   **Disclosure:** Signage must state: "Automated facial recognition is in use. All flags are reviewed by a human officer before action is taken."
+
+**4. Governance & Artifacts**
+*   **Owner:** Assign a specific Product Owner responsible for reviewing every false positive generated during the pilot.
+*   **Transparency Artifact:** Publish a **Model Card** versioned for the summit deployment. It must list:
+    *   Intended Use: Real-time watchlist matching for secondary screening referral only.
+    *   Limitations: Explicitly state performance metrics during database sync delays.
+    *   Data Provenance: Source of the watchlist and sync frequency.
+    *   *Note:* If any metric (e.g., bias rate) is unmeasured due to time constraints, label it **UNVERIFIED** in the card; do not fabricate a number.
+
+**5. Legal Routing**
+*   The determination of whether this automated decision falls under specific regulatory regimes (e.g., EU AI Act high-risk classification, local biometric laws) and the exact legal wording for disclosure must be routed immediately to legal counsel. This plan assumes disclosure is required as a safety control, but legal duty is not asserted here.
+
+**Schedule:**
+*   Days 1-5: Execute Probe Sets A-C.
+*   Day 6: Review residuals; finalize Model Card.
+*   Day 7: Counsel review of disclosure language.
+*   Days 8-21: Staged rollout with 10% traffic, human review mandatory for all flags.
+
+**Note:** This plan treats the timeline as fixed but mandates that high-stakes actions remain gated; if testing reveals unmanageable false positives, the scope of automation must be reduced, not the safety floor.
+No metric regarding safety or bias is certified; all results are residual risk reports for the owner's ship decision.

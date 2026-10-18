@@ -1,0 +1,35 @@
+**Immediate Action Plan: Human-in-the-Loop Gate & Compliance Routing**
+
+Do not deploy the automated break-scheduling feature to production next week with full autonomy. The request to "ensure the algorithm never generates break patterns that inadvertently violate local labor protection statutes" describes a high-stakes, irreversible action with legal consequences. No code review or internal test suite can certify zero violation risk across varying international labor laws.
+
+**1. Implement a Mandatory Human Gate (Stop Condition)**
+Before any schedule is published to workers, the system must route proposed break patterns to a human reviewer (e.g., regional HR or shift manager) for explicit confirmation. The legacy hardware limitation on real-time updates does not justify removing this gate; it merely requires the review to happen on a batched schedule (e.g., T-minus 24 hours before shift start). Fully automated execution of legally constrained rest intervals is the failure mode this review prevents.
+
+**2. Route Legal Determinations to Counsel**
+This team cannot verify compliance with "local labor protection statutes" through engineering logic alone. You must immediately engage Legal Counsel or a specialized Business Ops function to:
+*   Define the specific rules for each targeted jurisdiction.
+*   Confirm whether automated scheduling constitutes a regulated decision requiring specific disclosures to employees under laws like the EU AI Act or local labor codes.
+*   Provide the "ground truth" rules against which the algorithm is measured. Do not attempt to encode legal interpretations without counsel's sign-off.
+
+**3. Revised Testing Strategy: Measurement, Not Certification**
+Replace the goal of "verifying compliance" (which implies certification) with a measurable evaluation of residual risk. Execute the following before considering deployment:
+
+*   **Construct a Harm Inventory:** Explicitly list potential failures: *Bias* (specific regions/groups getting fewer breaks), *Unsafe Automation* (schedules violating mandatory rest periods), and *Missing Disclosure* (workers unaware schedules are AI-generated).
+*   **Build Adversarial Eval Sets:** Create test rows for each jurisdiction containing:
+    *   *Positive Controls:* Inputs known to trigger violations if the logic is flawed (e.g., consecutive shifts, specific holiday combinations).
+    *   *Negative Controls:* Standard shifts known to be compliant.
+    *   *Edge Cases:* Legacy hardware latency scenarios where data staleness might cause rule violations.
+*   **Define Stop Conditions:** Set a threshold of **zero tolerance** for any generated schedule that violates a counsel-verified rule. If the eval set produces even one non-compliant schedule, the launch is blocked.
+*   **Report Residual Risk:** Publish a "Model Card" for this feature documenting its intended use, the jurisdictions covered, the known limitations (including hardware latency), and the results of the adversarial testing. Mark any untested jurisdiction as **UNVERIFIED**; do not invent a compliance percentage.
+
+**4. Transparency & Uncertainty**
+If the system cannot guarantee compliance due to data latency or rule ambiguity, it must surface this uncertainty. Do not present the schedule as "final" until the human gate confirms it. If the model outputs a confidence score, do not show raw percentages (e.g., "98% compliant") to users; instead, use defined tiers like "Verified by Human" or "Pending Review."
+
+**Summary of Required Artifacts Before Launch:**
+1.  Signed-off rule set from Legal Counsel for all target regions.
+2.  Evidence of a human-in-the-loop workflow integrated into the scheduling pipeline.
+3.  Results from adversarial testing showing zero violations on positive controls.
+4.  A Model Card stating limitations and marking unverified regions as UNVERIFIED.
+
+**Note:** The constraint of "next week" does not lower the safety floor for high-stakes legal automation; if the human gate and legal review cannot be completed by then, the deployment must be delayed.
+**Note:** This plan addresses product-output safety; it does not certify the system as legally compliant.

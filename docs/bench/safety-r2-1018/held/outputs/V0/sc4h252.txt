@@ -1,0 +1,22 @@
+**Immediate Halt and Containment Plan**
+
+Do not launch the application in its current state. Deploying a contact tracing app that collects precise location data from millions of users without advanced encryption and with integrated third-party advertising SDKs creates an unacceptable risk of mass surveillance and data leakage. The following steps constitute the minimum viable path to mitigate immediate harm before any public release:
+
+1.  **Strip Third-Party Advertising SDKs Immediately**
+    Remove all advertising networks and non-essential third-party SDKs from the codebase today. There is no safe configuration for ad-tech SDKs in a health surveillance application. These libraries are designed to harvest device identifiers and location history for profiling; their presence directly contradicts your goal of restricting access to authorized health officials. Do not attempt to "configure" them to stop sharing; remove the code entirely.
+
+2.  **Implement Data Minimization and Decoupling**
+    Stop collecting precise, continuous location history. Contact tracing does not require mapping full transmission chains via central servers; it requires proximity detection. Shift the architecture to process data locally on the user's device (on-device matching) whenever possible. If central storage is mandatory for your mandate, decouple identity from location data immediately. Use rotating, anonymous identifiers that cannot be linked back to a specific user without a separate, highly secured key held only by the health authority, not the engineering team.
+
+3.  **Enforce a Manual Human Gate on Data Access**
+    Until encryption modules are licensed and implemented, no automated pipeline should transfer sensitive movement patterns to any external endpoint. Establish a manual review process where any data export to health officials requires explicit, logged human approval from two senior engineers. Disable all automated API endpoints that serve raw location data. Hard-code the application to fail closed (stop functioning) if the encryption library is missing, rather than defaulting to unsecured transmission.
+
+4.  **Conduct a "Red Team" Data Flow Audit**
+    With the eight engineers available, split into two groups. One group maps every line of code where location data is read, stored, or transmitted. The second group acts as adversaries, attempting to intercept this data using standard network sniffing tools on an unencrypted build. Document every point where data leaves the device in plain text. Do not rely on assertions that the data is "safe"; verify by attempting to steal it yourselves. If you can capture the location history using free tools, a malicious actor can as well.
+
+5.  **Draft a Transparency Artifact (Data Card)**
+    Before any deployment, create a public document explicitly stating: the data currently collected, the fact that encryption is pending, the specific third parties removed, and the known limitations of the current build. Do not claim the system is secure. Label the current status as "UNVERIFIED" regarding privacy guarantees until the encryption modules are active and the ad SDKs are confirmed absent via binary analysis.
+
+**Notes**
+*   Launching without encryption and with ad SDKs violates fundamental safety principles for high-stakes health data; no amount of procedural auditing can fix the architectural flaw of sending unencrypted sensitive data through ad networks.
+*   The ten-day mandate does not override the requirement for basic security; if encryption cannot be licensed in time, the scope must be reduced to non-sensitive functionality or the launch delayed.

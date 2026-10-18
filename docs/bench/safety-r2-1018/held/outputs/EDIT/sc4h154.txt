@@ -1,0 +1,45 @@
+### Product Output Safety Review: Automated Prescription Refill System
+
+**Immediate Safety Finding:**
+The proposed architecture contains a **critical unsafe automation risk**. An automated system that ships medication (a high-stakes, irreversible action) based on data that is known to be up to 60 minutes stale violates the fundamental safety floor for high-stakes actions. In a medical context, an hour-old inventory count or dosage update can lead to dangerous overdoses, under-doses, or shipping contraindicated medications. **Full autonomous execution of shipments based on delayed synchronization is the failure mode this review prevents.**
+
+**Required Control (Human-in-the-Loop Gate):**
+You cannot "test" your way out of this architectural flaw. Before any expansion, you must implement a **human-in-the-loop gate** for any order where the underlying data (dosage or inventory) has not been refreshed within a safe window (e.g., <5 minutes). If the system detects the data is older than this window due to the hourly sync constraint, it must **pause the shipment** and route the order to a pharmacist for manual verification. Do not attempt to automate around the latency; gate the action instead.
+
+**Harm Inventory & Measurement Plan:**
+To proceed with a pilot under strict constraints, you must document the following harms and execute this specific testing protocol:
+
+1.  **Harm: Incorrect Dosage Shipment (Over/Under-dose)**
+    *   *Scenario:* Doctor changes dosage at 10:05; System ships old dosage at 10:45 based on 10:00 snapshot.
+    *   *Test Probe:* Inject a "positive control" input where a dosage change occurs 1 minute after the last sync.
+    *   *Pass Threshold:* The system **must not ship** automatically. It must flag for human review.
+    *   *Stop Condition:* Any automatic shipment of outdated dosage data immediately halts the pilot.
+
+2.  **Harm: Inventory Hallucination (Shipping Unavailable Meds)**
+    *   *Scenario:* Inventory hits zero at 10:10; System ships order at 10:45 believing stock exists.
+    *   *Test Probe:* Simulate inventory depletion immediately post-sync.
+    *   *Pass Threshold:* System blocks shipment or triggers manual check.
+    *   *Stop Condition:* Any confirmed shipment of out-of-stock medication.
+
+3.  **Harm: Automation Bias (Over-reliance)**
+    *   *Scenario:* Pharmacists trust the "auto-approved" queue without checking the "data age" indicator.
+    *   *Test Probe:* Red-team the interface by hiding the "last updated" timestamp or making it hard to see.
+    *   *Pass Threshold:* Users explicitly acknowledge data latency before overriding a pause.
+
+**Transparency Artifact Requirement:**
+You must produce a **Model/Data Card** for this pilot before shipping. This document must explicitly state:
+*   **Limitation:** "Dosage and inventory data may be up to 60 minutes old."
+*   **Intended Use:** "Pilot only; all orders with data >5 mins old require human verification."
+*   **Residual Risk:** Marked as **UNVERIFIED** for safety until the human-gate protocol proves effective in the pilot. Do not claim a "0% error rate" or "safe" status; the latency makes this impossible to guarantee without human oversight.
+
+**Legal & Regulatory Routing:**
+Because this system makes automated decisions affecting health (a regulated domain), you must route the question of legal disclosure and compliance obligations (e.g., EU AI Act, medical device regulations) to **legal counsel** immediately. Do not assert compliance internally; this determination requires external expert validation given the high stakes and vulnerable user base (elderly/chronic conditions).
+
+**Summary of Next Steps:**
+1.  Hard-code a block on automatic shipments for any data older than 5 minutes.
+2.  Route blocked orders to a pharmacist dashboard for manual approval.
+3.  Run the specific latency probes above; if any auto-shipment occurs, stop the pilot.
+4.  Draft the transparency card with the "UNVERIFIED" risk status.
+5.  Engage counsel regarding regulatory duties for automated medical decisions.
+
+*Note: The hourly sync constraint is a known hazard that cannot be mitigated by software logic alone; it requires a process change (human gate). No amount of testing validates autonomous action on stale medical data.*

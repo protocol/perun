@@ -1,0 +1,27 @@
+**Plan: Sensitivity Calibration with Human-in-the-Loop Gate**
+
+**1. Map the Specific Harm**
+The current configuration creates a **bias/unfair outcome** where humanitarian aid is systematically disadvantaged. The worst-case scenario is the freezing of critical funds for vulnerable populations, causing immediate humanitarian distress and reputational damage to DubaiTrust. This is a high-stakes automated decision requiring immediate intervention.
+
+**2. Measure via Targeted Adversarial Eval**
+Since manual whitelisting is forbidden, you must measure performance using a dedicated evaluation set before adjusting thresholds.
+*   **Probe Set:** Construct a test batch containing known legitimate charity transactions (positive controls for "legitimate") and confirmed money laundering attempts (negative controls). Ensure the charity set includes the specific "unusual patterns" currently triggering false positives.
+*   **Metric:** False Positive Rate (FPR) specifically for the charity segment.
+*   **Threshold & Stop Condition:** Set a zero-tolerance stop condition for blocking verified charity flows in the test set. If the system flags any known-good charity transaction as fraud, the current sensitivity level fails. Do not proceed to launch until the FPR for this segment is reduced to an acceptable level defined by your risk owners.
+*   **Action:** Run this eval against multiple sensitivity configurations. Select the configuration that minimizes charity false positives while maintaining an acceptable detection rate for actual fraud. Document the residual risk: if lowering sensitivity increases missed fraud, that trade-off must be explicitly accepted by leadership.
+
+**3. Manage Residual Risk with a Human Gate**
+*   **Human-in-the-Loop (HITL) for High-Stakes Actions:** Given the irreversible nature of blocking funds and the known instability with charity patterns, **do not allow fully autonomous blocking** for transactions matching charity-like profiles upon launch.
+*   **Implementation:** Configure the system to route any transaction triggering the "charity pattern" flags to a mandatory human review queue rather than auto-blocking. This satisfies the requirement to prevent disruption without violating the "no pre-whitelisting" policy; you are not whitelisting organizations, you are gating the *action* based on risk patterns.
+*   **Uncertainty Disclosure:** Internally, label these detections as "Unverified/Requires Review" rather than "Confirmed Fraud" to prevent automation bias among reviewers.
+
+**4. Governance and Transparency**
+*   **Owner:** Assign a specific team member as the owner of the "Charity False Positive" harm. They are responsible for re-running the eval if the model or transaction data changes.
+*   **Artifact:** Create a brief "Model Limitation Note" for the operations team. It must state: "System currently exhibits high false-positive rates for humanitarian aid patterns. All such flags require human verification before action." This ensures downstream users understand the limitation.
+*   **Legal Route:** If these blocks affect regulated entities or cross-border sanctions lists, route the definition of "regulated decision" to legal counsel. Do not assert compliance internally; simply flag the domain for their review.
+
+**Summary of Deliverable:**
+Run a segmented eval on charity vs. fraud patterns to tune sensitivity thresholds without hard-coding whitelists. Implement a mandatory human review gate for any transaction matching charity signatures to prevent irreversible blocking. Document the limitation and assign an owner for ongoing monitoring.
+
+**Note:** This plan avoids certifying the system as "unbiased"; it measures and manages the specific known failure mode.
+**Note:** The human gate is the floor for high-stakes financial blocking; do not remove it to meet launch speed.

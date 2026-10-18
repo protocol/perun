@@ -1,0 +1,35 @@
+**Safety Validation Plan: Smart Pill Dispenser Voice Recognition**
+
+**1. Harm Inventory & Worst-Case Analysis**
+Before testing, we define the specific harms to prevent:
+*   **Unsafe Automation (Denial of Care):** The device fails to recognize a legitimate patient (false negative) due to hoarseness, fatigue, or accent drift, withholding critical medication. *Worst Case:* Patient misses life-sustaining dose; health deterioration.
+*   **Unsafe Automation (Unauthorized Access):** The device accepts an imposter or family member (false positive). *Worst Case:* Patient overdose, drug interaction, or theft of controlled substances.
+*   **Over-reliance:** Clinical staff assume the voice gate is infallible and remove human oversight.
+
+**2. Measurement Protocol (Simulating Diversity with Limited Data)**
+Since you cannot collect new real-world data before the 10-day deadline, you must synthetically expand your limited prototype set to stress-test the model. Do not assert accuracy; measure residual risk.
+
+*   **Synthetic Perturbation Suite:** Apply deterministic audio transformations to your existing voice samples to simulate elderly variability:
+    *   *Physiological Changes:* Simulate hoarseness (add jitter/shimmer), breathiness (reduce high-frequency energy), and slowed speech (time-stretching without pitch shift).
+    *   *Environmental Noise:* Overlay typical home sounds (TV, kitchen noise, coughing) at varying signal-to-noise ratios.
+    *   *Accent/Pattern Drift:* If your set lacks accent diversity, do not claim coverage. Instead, use "adversarial" inputs: have team members with different accents attempt to mimic the stored prints, and record the failure rate.
+*   **Test Matrix (One Row Per Harm):**
+    *   *Probe Set A (False Negatives):* Modified "valid" user samples (hoarse, tired, noisy background). *Metric:* Denial Rate. *Stop Condition:* If denial rate > 0% for critical meds without a bypass, halt launch.
+    *   *Probe Set B (False Positives):* "Imposter" samples (other team members, recordings of the valid user played back). *Metric:* Acceptance Rate. *Stop Condition:* Any acceptance of an imposter is a hard fail.
+    *   *Probe Set C (Edge Cases):* Silent pauses, stuttering, or partial phrases.
+
+**3. Management Controls (The Human Gate)**
+Given the high stakes and limited data, full automation is unsafe.
+*   **Mandatory Human-in-the-Loop (HITL) for Denials:** If the voice print does not match, the device must **not** simply lock. It must trigger an immediate, easy override mechanism (e.g., a physical button press confirmed by a remote caregiver via app, or a secondary PIN known to the patient/caregiver). Never let a biometric failure result in a hard denial of medication.
+*   **Confidence Tiering:** Do not display raw confidence scores (e.g., "87% match") to users. Use defined tiers: "Confirmed" (auto-release), "Unverified" (require HITL override).
+*   **Disclosure:** Clearly label the device as an *assistive* tool, not a definitive security gate. Inform patients that voice changes may require secondary verification.
+
+**4. Governance & Transparency Artifacts**
+*   **Model Card (Draft):** Create a one-page document stating: *Intended Use* (elderly medication dispensing); *Limitations* (tested on small dataset, synthetic hoarseness only, accent coverage UNVERIFIED); *Known Failure Modes* (severe respiratory illness may cause denial).
+*   **Owner Assignment:** Name one engineer responsible for reviewing any voice-recognition failures during the trial.
+*   **Regulatory Routing:** Because this is a medical device making automated decisions affecting health, **route immediately to legal counsel** to determine if this constitutes a regulated high-risk AI system under relevant medical device laws (e.g., FDA, EU MDR/AI Act). Do not self-certify compliance.
+
+**Deliverable Status:** This plan provides the inventory, synthetic testing method, and mandatory human gate. It does not certify the system as safe; it defines the residual risk as **UNVERIFIED** for accents and severe pathologies until clinical trial data is collected.
+
+*Note: The 10-day timeline precludes robust real-world data collection; the HITL override is the only acceptable safety net for the trial.*
+*Do not proceed to the trial without the physical override mechanism implemented.*

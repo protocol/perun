@@ -1,0 +1,34 @@
+**BLUF: Do not launch the biometric payment feature in two days without a human-in-the-loop gate for high-value transactions or verified anti-spoofing metrics. Full automation of irreversible financial actions based on unverified biometric matching is the primary failure mode this checklist prevents.**
+
+Given the constraint against new third-party tools and the high stakes of financial loss, the following plan addresses your immediate needs while adhering to safety floors.
+
+### 1. Harm Inventory & Immediate Controls
+Before testing, acknowledge the specific risks: **Spoofing** (photos/videos bypassing sensors), **Bias** (failure rates across demographics/lighting), and **Over-reliance** (users assuming 100% accuracy).
+*   **Control:** Implement a hard cap on transaction value for biometric-only authorization until metrics are verified. Any transaction above this threshold requires a secondary factor (PIN/OTP) or manual review. This is non-negotiable for irreversible financial actions.
+
+### 2. Runnable Test Cases (Measure)
+Do not assert accuracy; measure it. Execute these specific probes using your existing internal data and devices. Do not invent pass rates; set thresholds based on zero tolerance for unauthorized charges.
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric & Stop Condition |
+| :--- | :--- | :--- | : |
+| **Spoofing / Presentation Attack** | High-res photos, video replays, and 3D masks of authorized users presented to the camera. | **Positive:** Live user (must pass). **Negative:** Photo of user (must fail). | **False Acceptance Rate (FAR).** Stop launch if FAR > 0% for any spoof type. |
+| **Demographic Bias** | Dataset sliced by skin tone (Fitzpatrick scale), gender, and age groups under standard lighting. | **Positive:** Diverse live users. **Negative:** Non-matching diverse users. | **False Rejection Rate (FRR) disparity.** Stop if FRR for any subgroup exceeds baseline by >5%. |
+| **Environmental Failure** | Same users tested in low light, backlight, and partial occlusion (glasses/masks). | **Positive:** User in ideal light. **Negative:** User in dark/obscured. | **Failure Rate.** Stop if failure rate in low light exceeds 10% without fallback to PIN. |
+| **Injection/Agency** | Attempt to inject pre-recorded video streams or manipulate camera input via software hooks. | **Positive:** Live camera feed. **Negative:** Virtual camera feed. | **System Integrity.** Stop if system accepts non-live feeds. |
+
+*Note: If any test row lacks a known-bad positive control (e.g., a photo that *should* fail but doesn't), the feature is unsafe to ship.*
+
+### 3. Post-Launch Monitoring & Reversal Protocol
+Since residual risk remains, operationalize the following immediately:
+*   **Anomaly Detection:** Monitor for spikes in failed biometric attempts followed by successful low-value transactions (testing behavior) or multiple users failing on the same device model.
+*   **Reversal Protocol:**
+    1.  **Automated Freeze:** Any transaction flagged by the anomaly system is instantly frozen, not just logged.
+    2.  **Instant Reversal:** Enable a "one-click" reversal button for customer support to refund disputed biometric charges within 1 hour, bypassing standard investigation queues.
+    3.  **Kill Switch:** Prepare a configuration flag to disable biometric auth globally and force PIN entry instantly if FAR spikes above 0.
+
+### 4. Transparency & Governance
+*   **Disclosure:** Clearly inform users that biometric auth is automated and provide an immediate, easy path to dispute charges.
+*   **Ownership:** Assign a specific owner to review failure logs daily for the first 30 days.
+*   **Documentation:** Publish an internal model card detailing the tested demographics and lighting conditions. Mark any untested subgroup as **UNVERIFIED**.
+
+**Critical Constraint Check:** You cannot certify this system as "safe" or "unbiased" without running the above tests. If you cannot generate the "known-bad" controls (spoofs) internally, the risk is **UNVERIFIED**, and the human gate (secondary factor) must remain permanent for high-value items. Legal requirements for biometric data handling vary by region; route specific regulatory compliance questions to counsel immediately.

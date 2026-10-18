@@ -1,0 +1,38 @@
+### Safety Assessment Plan: Voice Assistant Data Handling
+
+**1. Harm Inventory & Scope**
+Before testing, explicitly record the worst-case harm: **Unauthorized Data Brokerage**. If consent flows fail, private audio is captured, stored, or transmitted without permission, violating user trust and potential regulations. The affected parties are all end-users; the impact is irreversible privacy loss.
+
+**2. Runnable Test Rows (Measure)**
+Execute these specific probes before global enablement. Do not rely on code review alone; test the live system behavior.
+
+*   **Test A: The "No-Consent" Probe**
+    *   **Input:** Activate the device but explicitly decline the voice recording permission in the app/interface. Speak a unique, sensitive phrase (e.g., "This is a test of unauthorized capture alpha-9").
+    *   **Positive Control:** A known-bad state where the backend accepts audio despite denial (simulate by temporarily disabling the check in a staging env to ensure the test *can* catch failure).
+    *   **Negative Control:** A known-good state where the microphone driver is physically or logically muted at the OS level.
+    *   **Metric:** Zero bytes of audio data associated with the user ID on the server.
+    *   **Pass Threshold:** 0% transmission. Any audio packet received is a critical failure.
+    *   **Stop Condition:** If *any* audio is detected from a non-consenting user, halt the rollout immediately.
+    *   **Owner:** Lead Backend Engineer.
+
+*   **Test B: The "Consent Withdrawal" Probe**
+    *   **Input:** User opts in, records briefly, then immediately opts out. Continue speaking sensitive data post-opt-out.
+    *   **Metric:** Audio stops transmitting within <200ms of the withdrawal signal. No data from the post-withdrawal period exists on the server.
+    *   **Stop Condition:** Any audio recorded after the withdrawal timestamp triggers a rollback.
+
+*   **Test C: Data Broker Simulation (Exfiltration Check)**
+    *   **Input:** Monitor all outbound network traffic from the device and backend during a "consent denied" session.
+    *   **Metric:** No outbound packets containing audio payloads or unique conversation identifiers to any IP outside the primary processing cluster.
+    *   **Stop Condition:** Detection of audio data flowing to any third-party endpoint or unlisted IP.
+
+**3. Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Do not enable global recording automatically. Implement a **staged rollout** capped at 1% of users. Require a manual "Go/No-Go" decision by the Product Owner after reviewing the Test A-C results for the initial cohort.
+*   **Transparency Artifact:** Publish a **Data Card** for this feature. It must state: "Intended Use: Accuracy improvement via optional recording," "Limitations: If consent flow fails, data *could* be captured (residual risk)," and "Owner: [Name]." Do not claim "100% secure" or "Zero risk"; mark unverified metrics as `UNVERIFIED`.
+*   **Uncertainty Display:** In the user interface, do not use vague indicators. Clearly display "Recording Active" only when permission is granted. If the system state is ambiguous, default to "Muted" and show a warning icon.
+
+**4. Governance**
+Assign a single owner responsible for re-running these tests if the consent logic, network stack, or smart speaker SDK changes.
+
+**Notes**
+*   Legal counsel must verify if this data collection triggers specific regulatory disclosures (e.g., EU AI Act, local privacy laws); do not assume compliance based solely on these tests.
+*   Since new encryption hardware is not an option, rely on existing transport layer security but prioritize the *prevention* of data capture (the "off switch") over securing data that should never exist.

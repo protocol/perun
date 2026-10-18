@@ -1,0 +1,40 @@
+# Risk Assessment: Automated Credit Scoring for Medical Debt
+
+**Executive Summary**
+Adjusting credit scores downward based on spending patterns that indicate medical debt poses a significant fairness risk for low-income borrowers. Unlike discretionary spending, medical expenses are often unavoidable and non-discretionary. Without external income verification (which is out of scope), internal logs must be analyzed to ensure the algorithm does not confuse "high medical spend" with "high financial risk." The primary risk is that the model penalizes users for seeking necessary care, disproportionately affecting those with lower disposable income who may already be financially fragile.
+
+**Key Fairness Risks**
+1.  **The "Necessity" Blind Spot:** Internal logs show transaction amounts and merchant codes, but not context. A \$2,000 charge at a hospital is treated the same as a \$2,000 luxury purchase if the logic only looks at cash outflow velocity. Low-income users have less buffer to absorb these hits; penalizing them further creates a downward spiral.
+2.  **Frequency vs. Severity:** Low-income borrowers may make smaller, more frequent payments to medical providers (payment plans) compared to wealthier users who pay in lump sums. An algorithm sensitive to transaction frequency might unfairly flag these users as "unstable."
+3.  **Geographic and Provider Bias:** If internal logs show clusters of users transacting with specific community health clinics or rural hospitals, a blanket reduction rule could systematically downgrade entire demographics based on where they receive care.
+
+**Recommended Internal Test Scenarios**
+Run these scenarios against your historical internal logs using a "shadow mode" deployment of the new logic. Do not apply changes to live scores yet.
+
+*   **Scenario A: The "Identical Outflow, Different Context" Test**
+    *   **Setup:** Identify two user segments with identical monthly cash outflows (\$500–\$1,000). Segment 1 has outflows categorized as "Medical/Pharmacy." Segment 2 has outflows categorized as "Retail/Entertainment."
+    *   **Hypothesis:** If the new logic lowers scores for Segment 1 but not Segment 2, it is penalizing necessity.
+    *   **Success Metric:** The score impact for medical outflows should be neutral or significantly less negative than discretionary outflows of the same amount.
+
+*   **Scenario B: The "Payment Plan" Penalty Test**
+    *   **Setup:** Filter users with recurring monthly transactions to the same medical merchant code (indicating a payment plan) versus users with single, large lump-sum medical transactions.
+    *   **Hypothesis:** Users on payment plans (often lower liquidity) should not receive a lower score than those who paid upfront, provided the total annual medical spend is similar.
+    *   **Success Metric:** No statistically significant score difference between "recurring medical payer" and "lump-sum medical payer" cohorts when total debt service ratios are controlled.
+
+*   **Scenario C: The "Buffer Zone" Stress Test**
+    *   **Setup:** Segment users by their average ending monthly balance (proxy for income/wealth). Apply the new scoring logic to users with balances under \$500 who incur a medical charge.
+    *   **Hypothesis:** The algorithm should not trigger a "high risk" downgrade solely because a low-balance user incurred a medical expense.
+    *   **Success Metric:** Users with low balances but consistent payment history on non-medical debts should not see a score drop exceeding a defined threshold (e.g., 5 points) due to medical coding alone.
+
+*   **Scenario D: The "Essential vs. Elective" Proxy Test**
+    *   **Setup:** Differentiate between merchant codes for emergency rooms/general practice vs. elective cosmetic procedures or dental aesthetics (if distinguishable in your logs).
+    *   **Hypothesis:** Emergency/General care spending should carry zero or near-zero negative weight. Elective procedures may carry standard risk weight.
+    *   **Success Metric:** A clear divergence in score impact between emergency care codes and elective care codes.
+
+**Immediate Next Steps**
+1.  Run Scenario A immediately on the last 12 months of logs.
+2.  If Segment 1 shows a score drop >10 points compared to Segment 2, halt the launch.
+3.  Refine the weighting logic to exclude MCCs (Merchant Category Codes) related to hospitals, pharmacies, and urgent care from "risk" calculations entirely.
+
+*Note: These tests rely solely on your existing transaction logs and merchant categorizations. No external data integration is required.*
+*Ensure all testing is done in a sandbox environment to prevent accidental updates to live customer files.*

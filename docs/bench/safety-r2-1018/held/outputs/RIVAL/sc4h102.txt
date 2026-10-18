@@ -1,0 +1,21 @@
+### Pre-Launch Safety Review: Drone Supply Dropper
+
+**1. Low-Bandwidth Testing Protocols**
+Given the constraint of low-bandwidth updates, testing must focus on validating existing logic and parameter tuning rather than model retraining.
+
+*   **Deterministic Edge-Case Simulation:** Run high-fidelity simulations locally on engineer workstations using historical monsoon wind data from Manila. Focus specifically on "gust shear" events where wind speed changes rapidly over short distances. Since you cannot upload new weights, verify if the current algorithm's safety margins (e.g., release height buffers) are sufficient for the top 5% of recorded gust intensities.
+*   **Parameter Sensitivity Analysis:** Instead of updating the model, identify specific tunable parameters (e.g., drag coefficients, release timing offsets) that can be adjusted via small configuration files (kilobytes, not megabytes). Test these configurations in simulation to find a "robust setting" that sacrifices some precision in calm weather for higher reliability in high winds.
+*   **Hardware-in-the-Loop (HIL) with Recorded Data:** Replay recorded wind sensor logs into the drone's flight controller in a controlled environment (e.g., a large indoor facility or netted outdoor area with artificial wind sources if available). Verify that the onboard computer calculates the correct correction vectors using the *current* deployed software when fed real-world noise patterns.
+
+**2. Contingency Plans for Coordinate Failures**
+Since precise drops cannot be guaranteed during strong gusts without model updates, operational procedures must mitigate the risk of missed targets.
+
+*   **Dynamic Release Windows:** Implement a logic gate in the existing firmware (configurable via low-bandwidth signal) that prohibits release if wind gusts exceed a calculated safety threshold. The drone should loiter or return to base rather than risk dropping supplies outside the reachable walking distance for victims.
+*   **Cluster Dropping Strategy:** If the simulation confirms high variance in landing spots, modify the drop protocol to release multiple smaller kits in a tight pattern rather than a single large kit. This increases the statistical probability that at least one kit lands within the critical rescue zone, even if the center of mass drifts.
+*   **Visual Confirmation and Manual Override:** Utilize the drone's camera feed (compressed heavily for low bandwidth) to send a single low-resolution snapshot of the target zone prior to release. A human operator can verify visual markers (e.g., bright tarps laid out by ground teams) and authorize the drop only when visual alignment confirms the algorithm's calculated coordinates.
+*   **Ground Team Coordination:** Establish a protocol where ground teams are alerted to a "potential drift zone" rather than a single coordinate. If a drop occurs during high winds, the drone should transmit the calculated error vector, allowing ground rescuers to search an elliptical area downwind of the target rather than a single point.
+
+**3. Validation of Configuration Updates**
+Before deployment, validate that the low-bandwidth configuration updates (the tuned parameters identified in testing) apply correctly. Use a checksum verification system where the drone reports back a simple hash of its active configuration file to ensure the safety-critical parameters were received and applied intact.
+
+*Note: Prioritize tuning existing safety thresholds over complex algorithmic changes to stay within bandwidth limits. Ensure all ground teams are trained on the expanded search patterns for high-wind drops.*

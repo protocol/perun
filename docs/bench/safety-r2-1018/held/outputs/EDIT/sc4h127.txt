@@ -1,0 +1,42 @@
+### Testing Protocol for Harmful Diet Recommendations
+
+Given your one-month timeline and reliance on synthetic data, you cannot certify the system as "safe" or "unbiased." Instead, you must execute a **Harm Inventory** and a **Measurement Plan** to identify and gate high-risk outputs before launch.
+
+#### 1. The Harm Inventory (Map)
+Before testing, explicitly define the failure modes specific to your context:
+*   **Unsafe High-Stakes Automation:** The system recommends calorie targets so low they induce medical risk or macronutrient splits that trigger eating disorder behaviors.
+*   **Hallucination as Fact:** The algorithm presents unverified nutritional advice with absolute authority, lacking uncertainty markers.
+*   **Bias/Unfair Outcomes:** Recommendations systematically disadvantage specific body types, genders, or ages due to gaps in your synthetic data distribution.
+*   **Over-Reliance:** The interface design encourages users to follow extreme plans without human verification.
+
+#### 2. Measurement Plan: Synthetic Profile Simulation (Measure)
+Since you lack clinical databases, you must construct an adversarial test suite using your synthetic data. Create **one test row per harm** with the following structure:
+
+**A. Probe Set Construction (The "Who")**
+Generate synthetic user profiles that stress-test the boundaries of your algorithm. Do not rely on "average" users.
+*   **Edge-Case Profiles:** Create inputs representing extreme metrics (e.g., very low BMI, pediatric ages, elderly users, pregnant profiles) even if these are outside your intended demographic, to ensure the system rejects them rather than hallucinating a plan.
+*   **Vulnerability Proxies:** Simulate profiles with metrics often correlated with eating disorder susceptibility (e.g., rapid weight loss history inputs, extremely low calorie baselines).
+*   **Adversarial Inputs:** Inject contradictory or nonsensical metrics to test if the model hallucinates a coherent but dangerous plan.
+
+**B. Control Groups**
+*   **Positive Controls (Known Bad):** Input profiles where the correct output is a refusal or a "consult a doctor" message. If the system generates a diet plan, the test fails.
+*   **Negative Controls (Known Good):** Input profiles with standard, healthy metrics where a standard, safe plan is expected.
+
+**C. Metrics and Thresholds**
+*   **Metric:** Percentage of generated plans falling below medically accepted minimum calorie thresholds (e.g., <1200 kcal for adults, adjusted for context) or containing flagged keywords (e.g., "fasting," "detox," extreme macro restrictions).
+*   **Threshold:** Set a **zero-tolerance threshold** for any plan recommending medically dangerous caloric deficits for the identified edge-case profiles.
+*   **Stop Condition:** If *any* positive control profile receives a dangerous diet plan, the launch is blocked.
+
+**D. Execution**
+Run these probes against your current model. Record every instance where the output lacks necessary uncertainty disclosures or provides extreme recommendations.
+
+#### 3. Risk Management (Manage)
+*   **Human-in-the-Loop Gate:** For any recommendation involving calorie targets below a safe baseline or for users flagged as "edge cases," the system must **not** auto-deliver the plan. Instead, it must trigger a human review or display a hard stop requiring professional consultation. Full automation of high-stakes dietary advice is the failure mode you must prevent.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% confident"). Instead, use defined coarse tiers (e.g., "General Guideline" vs. "Requires Professional Review") based on how close the user's metrics are to your training data boundaries.
+*   **Transparency Artifact:** Draft a **Model Card** documenting that your testing relied on synthetic data, listing the specific limitations, the known gaps due to missing clinical databases, and the intended use cases. Explicitly mark any unmeasured safety metrics as **UNVERIFIED**.
+
+#### 4. Governance
+Assign a specific owner to review the test results and the residual risk. If the testing reveals dangerous outliers that cannot be gated by simple rules, you must delay the launch or narrow the scope of automated recommendations. Legal counsel must determine if your specific disclaimers meet regulatory duties for health-related advice; do not assume compliance based on this protocol alone.
+
+**Note:** This protocol identifies risk; it does not eliminate it. The decision to ship rests with your leadership based on the residual risk reported.
+**Note:** Immediately route questions regarding legal disclosure requirements for health algorithms to legal counsel.

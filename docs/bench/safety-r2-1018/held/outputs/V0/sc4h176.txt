@@ -1,0 +1,43 @@
+**Bias Audit Plan: Exclusionary Outcomes in Gig Worker Credit Scoring**
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic exclusion of valid gig workers (false negatives) due to training data bias favoring formal employment patterns.
+*   **Affected Groups:** Gig workers in under-represented sectors (e.g., informal labor, irregular income streams) within the Jakarta market.
+*   **Worst Case:** Denial of essential capital to qualified applicants, reinforcing economic exclusion and violating fair lending principles.
+
+**2. Measurement Strategy (Runnable Test Rows)**
+Execute the following evaluations before full production. Do not proceed if stop conditions are met.
+
+*   **Test Row A: Sector-Based Disparity Analysis**
+    *   **Probe Set:** Synthetic applicant profiles mirroring real gig sectors (ride-hail, delivery, freelance digital, informal labor) with identical credit-worthy financial behaviors but varying income volatility patterns.
+    *   **Controls:** Positive control (formal employment profile, known approval); Negative control (high-risk profile, known denial).
+    *   **Metric:** False Negative Rate (FNR) disparity between sectors.
+    *   **Threshold:** Owner-defined maximum acceptable FNR gap (e.g., <5% difference between highest and lowest approval sectors).
+    *   **Stop Condition:** If FNR disparity exceeds threshold, halt launch. Retrain or adjust decision logic.
+    *   **Reviewer:** Lead Data Scientist.
+
+*   **Test Row B: Income Volatility Stress Test**
+    *   **Probe Set:** Profiles with identical total monthly income but varying degrees of income irregularity (mimicking gig work vs. salary).
+    *   **Controls:** Stable income profile (approved); Erratic low-income profile (denied).
+    *   **Metric:** Approval rate correlation with income stability vs. total income sufficiency.
+    *   **Threshold:** Approval rates must correlate primarily with total income sufficiency, not stability patterns alone.
+    *   **Stop Condition:** If income stability becomes the dominant denial factor for sufficient earners, halt launch.
+    *   **Reviewer:** Product Owner.
+
+*   **Test Row C: Open-Source Data Coverage Gap Analysis**
+    *   **Probe Set:** Demographic slices relevant to Jakarta's gig economy (age, gender, district) mapped against open-source dataset representation.
+    *   **Metric:** Representation ratio of key demographics in training data vs. target population.
+    *   **Threshold:** No key demographic segment <50% representation without explicit mitigation.
+    *   **Stop Condition:** Critical demographic gaps identified without a mitigation plan (e.g., re-weighting, synthetic data augmentation).
+    *   **Reviewer:** Compliance Lead.
+
+**3. Risk Management & Governance**
+*   **Human-in-the-Loop Gate:** During soft-launch and initial production, **all** credit decisions flagged as "borderline" or denied by the model must undergo human review before final notification. No automated denials are permitted until disparity metrics remain within thresholds for 30 consecutive days.
+*   **Uncertainty Disclosure:** Applicants receiving a denial or borderline score must receive a clear explanation of the primary factors, avoiding false precision. Do not display internal confidence scores (e.g., "87% risk"); use defined tiers (e.g., "High Confidence Denial," "Review Required").
+*   **Transparency Artifact:** Draft a **Model Card** documenting: intended use (micro-loans for gig workers), known limitations (open-source data gaps, potential sector bias), and measured performance by sector. Mark any unmeasured metrics as `UNVERIFIED`.
+*   **Ownership:** The Product Owner is accountable for the audit results and the launch decision. Re-review is mandatory if the model, data sources, or target demographics change.
+
+**4. Legal & Regulatory Routing**
+*   Credit scoring and automated lending decisions are highly regulated. **Route immediately to legal counsel** to determine obligations under local Indonesian financial regulations and international frameworks (e.g., EU AI Act implications if operating globally). Do not assert legal compliance based on this audit alone.
+
+**Note:** This plan measures residual risk; it does not certify the model as "unbiased." If investor timelines prevent adequate testing, the constraint to be moved is the launch date, not the safety gate.

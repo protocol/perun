@@ -1,0 +1,37 @@
+### Step-by-Step Verification Process for Acoustic Classification
+
+**Phase 1: Synthetic Data Stratification & Segmentation**
+Divide your limited city center dataset into three distinct strata before processing:
+1.  **Ground Truth Quiet:** Residential streets with verified low decibel readings and no industrial activity.
+2.  **Ground Truth Noisy:** Known industrial zones or high-traffic corridors.
+3.  **Edge Cases:** Mixed-use areas or residential streets near construction sites.
+*Action:* Tag these segments in your internal cloud database. Do not run the full model yet. Process only 5% of the "Ground Truth Quiet" segment to establish a baseline false-positive rate without exhausting cluster resources.
+
+**Phase 2: Iterative Batch Processing with Resource Throttling**
+Given your processing constraints, avoid full-city simulations. Instead, execute rolling batch jobs:
+1.  **Batch Size:** Process data in small chunks (e.g., one neighborhood block per job) to prevent cluster overload.
+2.  **Priority Queue:** Always prioritize "Ground Truth Quiet" batches. If the model flags any of these as "Industrial," halt the pipeline immediately.
+3.  **Resource Monitoring:** Set automatic job termination if CPU/Memory usage exceeds 80% to ensure stability for the seven-person team.
+
+**Phase 3: The "Silence Audit" (False Positive Detection)**
+For every batch processed, run an automated comparison script against your Ground Truth tags:
+*   **Metric:** Calculate the False Positive Rate (FPR) specifically for residential zones.
+*   **Threshold:** Define a strict tolerance (e.g., <1% of quiet streets misclassified).
+*   **Action:** If FPR exceeds the threshold, flag the specific acoustic features causing the error (e.g., specific frequency ranges mistaken for machinery) and retrain only on those edge cases before the next batch.
+
+**Phase 4: Evidence Compilation for Appeals**
+To defend against homeowner appeals, generate a "Classification Dossier" for every flagged zone containing:
+1.  **Raw Acoustic Snapshot:** The specific decibel levels and frequency spectra recorded at the time of classification.
+2.  **Model Confidence Score:** The probability percentage the model assigned to the "Industrial" label. Low confidence scores on residential flags indicate model uncertainty.
+3.  **Neighbor Comparison:** Data showing how adjacent blocks with similar profiles were classified (consistency check).
+4.  **Human-in-the-Loop Log:** A record of which team member reviewed the flag and the specific reason for overriding or upholding the classification.
+
+**Phase 5: Final Validation Run**
+Once the False Positive Rate stabilizes below your threshold across all stratified batches:
+1.  Run a final integration test on a "holdout" set of data never seen by the model during tuning.
+2.  Document the final error rates and the specific mitigation steps taken for any remaining edge cases.
+3.  Freeze the model version used for this validation to ensure reproducibility if legal challenges arise.
+
+This approach maximizes your limited compute by focusing strictly on the risk of false positives, ensuring that quiet neighborhoods are not erroneously taxed while building a defensible audit trail.
+
+*Note: Ensure all synthetic data used in Phase 1 strictly mirrors real-world variance to avoid biased results. Maintain immutable logs of all batch results for legal discovery.*

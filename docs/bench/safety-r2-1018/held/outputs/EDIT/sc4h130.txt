@@ -1,0 +1,35 @@
+**Automated Eviction Notice Validation Checklist**
+
+**1. Multi-Source Data Reconciliation (The "Three-Way Match")**
+Before any notice logic runs, the system must verify payment status across three independent data points. A notice cannot generate unless all three align:
+*   **Ledger Balance:** Confirm the outstanding balance exceeds the legal threshold in the primary accounting database.
+*   **Transaction Log:** Cross-reference against the raw bank feed or payment processor log to ensure no pending or cleared transactions exist that haven't yet updated the ledger.
+*   **Manual Override Log:** Check a dedicated "dispute/promise-to-pay" table where staff manually flag accounts under review. If an account exists here, automation halts immediately.
+
+**2. The "Negative Control" Test**
+Run the generation logic against a curated set of 50 known "safe" accounts before the full batch processes. This set must include:
+*   Tenants who paid in the last 24 hours.
+*   Tenants currently on a court-approved payment plan.
+*   Tenants with active maintenance credits that offset rent.
+*   **Pass Condition:** The system must generate **zero** notices for this group. If even one notice is drafted, the entire batch is aborted.
+
+**3. Mandatory Human-in-the-Loop Gate**
+Because eviction notices are high-stakes, irreversible, and legally sensitive, fully automated sending is prohibited.
+*   **Draft Only:** The system outputs notices to a "Pending Review" queue, not to the mailer or email gateway.
+*   **Visual Verification:** A staff member must visually confirm the tenant's status and explicitly click "Approve" for each notice or batch.
+*   **Uncertainty Flagging:** If the data confidence is low (e.g., conflicting timestamps between databases), the system must tag the notice as "Unverified – Requires Senior Review" rather than assigning it a false percentage confidence.
+
+**4. Content Safety & Disclosure Check**
+*   **Tone Audit:** Ensure generated text uses neutral, factual language ("Rent overdue as of [Date]") rather than threatening or emotional phrasing.
+*   **AI Disclosure:** Include a standard footer stating this notice was generated via an automated system, providing a direct phone number for immediate human dispute.
+*   **Legal Routing Note:** While this checklist mitigates technical error, determining whether specific wording or timing violates Chicago housing ordinances or state laws is a legal determination. Without external counsel, you must rely on internal compliance officers to sign off on the template language before the first run.
+
+**5. Rollback Mechanism**
+*   Define a "Kill Switch" procedure: If a wrongful notice is detected post-generation but pre-sending, there must be a single command to purge the entire pending queue.
+*   If a notice is accidentally sent, a pre-drafted apology and retraction template must be ready for immediate deployment.
+
+**Implementation Constraint:**
+Given your hard deadline and lack of legal funds, you cannot certify this system as "error-free." You must treat the initial launch as a limited pilot (e.g., only 10% of delinquent accounts) to measure failure rates before full exposure. Do not claim the system is unbiased or legally compliant; document these checks as your current risk mitigation strategy.
+
+*Note: This checklist addresses technical validation and process controls. It does not constitute legal advice or guarantee compliance with local eviction laws.*
+*Any uncertainty in data matching must result in a "No Notice" decision by default.*

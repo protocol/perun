@@ -1,0 +1,37 @@
+**Validation Plan: Data Masking & Privacy Compliance for Automated Background Checks**
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** Disclosure of expunged, sealed, or legally non-reportable criminal records due to reliance on stale third-party data feeds.
+*   **Affected Parties:** Job candidates in Warsaw (potential loss of employment opportunity, privacy violation, reputational damage).
+*   **Worst Case:** Systematic rejection of qualified candidates based on illegal data, triggering regulatory fines under local privacy laws and GDPR, plus reputational collapse for SafeHire PL and client agencies.
+*   **Constraint Acknowledgement:** The 24-hour data lag is a known limitation; the validation must prove the masking logic holds even when source data is outdated or incomplete.
+
+**2. Measurement Strategy (Runnable Tests)**
+Execute the following test rows before launch. Do not rely on aggregate accuracy claims; each row must pass its specific stop condition.
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Expunged Record Leakage** | **Positive Control:** Input candidate profile linked to a known expunged record in the test dataset.<br>**Negative Control:** Input profile with no criminal history.<br>**Edge Case:** Profile where record was expunged *after* the last daily feed update. | % of reports incorrectly displaying expunged data. | **0%** (Zero tolerance). | **Block Launch** if any expunged record appears in a generated report. |
+| **Stale Data Handling** | **Probe:** Simulate a record status change (e.g., conviction overturned) occurring 1 hour after the daily feed snapshot. | System ability to flag data as "unverified since [timestamp]" or suppress output. | 100% suppression or clear uncertainty disclosure. | **Block Launch** if the system presents stale negative data as current fact without disclaimer. |
+| **Over-Reliance / Automation Bias** | **Probe:** Generate reports with low-confidence matches or conflicting data sources. | Presence of human-review flags or uncertainty tiers in the UI. | All ambiguous matches require manual reviewer confirmation before release. | **Block Launch** if the system auto-releases a report containing unverified or conflicting criminal data. |
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Irreversible Action Gate:** The delivery of a background check report containing *any* criminal record information (even a "no record found" result in high-stakes roles) must require **explicit human review and sign-off** by a SafeHire PL operator before being sent to the employer. Fully automated delivery of criminal history data is prohibited until the masking logic is proven over a longer period.
+*   **Uncertainty Disclosure:** Reports must explicitly state: *"Data sourced from third-party feeds updated as of [Date/Time]. Real-time verification of expungement status is not available. This report should not be the sole basis for an adverse employment decision."*
+*   **Confidence Tiers:** Do not display numerical confidence scores (e.g., "95% match"). Use defined tiers: **Confirmed** (multiple sources, recent), **Single-Source** (requires review), **Unverified/Stale** (requires manual validation).
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign a specific Product Owner responsible for reviewing every failed test case and signing off on residual risk.
+*   **Legal Determination:** **Immediate routing to legal counsel** is required to confirm:
+    *   Specific Warsaw/Poland regulations regarding expunged records and automated processing.
+    *   Whether this tool constitutes a "regulated automated decision" requiring additional disclosures or consent mechanisms under GDPR/local law.
+    *   Validity of the proposed disclaimer language.
+    *   *Do not assert compliance; counsel must validate the regulatory framework.*
+
+**5. Transparency Artifact**
+*   Draft a **Data Card** for the tool documenting: the third-party data sources, the 24-hour update latency, known gaps (inability to catch same-day expungements), and the results of the above validation tests. This card must accompany the tool for internal and client audit.
+
+**Status:** The plan identifies a critical "UNVERIFIED" risk regarding same-day expungements due to the data feed constraint. The human-in-the-loop gate is mandatory to mitigate this until real-time data is available.
+
+**Note:** This plan measures risk; it does not certify safety. The final launch decision rests with SafeHire PL leadership upon counsel's review.
+**Note:** Legal counsel must define the specific Polish regulatory thresholds before any test thresholds can be considered final.

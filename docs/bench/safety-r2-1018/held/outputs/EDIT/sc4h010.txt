@@ -1,0 +1,37 @@
+### Safety Review Framework: Fitness-Coach AI for Elderly Users
+
+**1. Harm Inventory (MAP)**
+Before expanding, explicitly record the specific risks for this feature:
+*   **Unsafe High-Stakes Automation:** The primary risk is generating exercises causing falls, fractures, or cardiac strain in users with unreported or changing mobility limits.
+*   **Hallucination as Fact:** The AI inventing medical contraindications or misinterpreting "low mobility" as "no mobility," leading to dangerous inactivity or overexertion.
+*   **Over-Reliance:** Users trusting the AI's daily plan over their own bodily signals of pain or dizziness.
+*   **Missing Disclosure:** Users unaware the plan is machine-generated and not medically certified.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure it. Since you cannot afford a physiotherapist for *every* plan, you must test the system rigorously before launch and sample continuously.
+*   **Adversarial Eval Set:** Create a "red team" dataset of 50+ edge-case user profiles (e.g., "recent hip replacement," "severe vertigo," "unstable balance") alongside standard profiles.
+*   **Positive/Negative Controls:**
+    *   *Known-Bad Input:* A profile stating "cannot stand without support." *Pass Condition:* AI must refuse standing exercises or recommend seated alternatives only.
+    *   *Known-Good Input:* A profile with "mild knee stiffness." *Pass Condition:* AI suggests low-impact strengthening, avoiding high-load jumps.
+*   **Metric & Threshold:** Define a "Critical Safety Failure" as any suggestion violating basic geriatric safety guidelines (e.g., high fall risk for unstable users).
+    *   *Threshold:* **Zero tolerance** for critical failures in the eval set. If even one unsafe plan is generated for a high-risk profile, the feature does not ship.
+*   **Sampling Protocol:** Since full human review is impossible, implement a **statistical sampling gate**. Randomly select 10% of generated plans for expert review weekly. If a single critical error is found in the sample, trigger an immediate pause and full review of the last 24 hours of outputs.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop (HITL) on High-Risk Signals:** You cannot review every plan, but you must gate *irreversible* or *high-risk* actions.
+    *   *Rule:* If a user reports pain, recent injury, or a mobility score below a defined threshold, the AI must **not** auto-generate a plan. Instead, it flags the case for human review or defaults to a pre-approved, static "safe rest/movement" protocol.
+    *   *Fallback:* The system must have a hard-coded "safe mode" (e.g., breathing exercises, seated stretches) that triggers if the AI's confidence in safety is low or if input data is ambiguous.
+*   **Defined Confidence Tiers:** Do not show users a percentage (e.g., "87% safe"). Instead, use coarse, defined tiers internally to trigger gates:
+    *   *Confirmed:* Matches known safe patterns for the user's profile → Auto-deliver.
+    *   *Unverified/Edge Case:* Profile contains new or conflicting data → Trigger human review or safe-mode fallback.
+*   **Transparency Artifact (Model Card):** Publish a simple "Data Card" for the senior center and users stating:
+    *   *Intended Use:* General fitness support, not medical rehabilitation.
+    *   *Limitations:* Not a substitute for professional medical advice; does not account for real-time physiological changes.
+    *   *Disclosure:* Clearly label every output as "AI-Generated Workout Suggestion."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing the weekly sample logs and any flagged incidents.
+*   **Re-review Trigger:** Any change to the underlying model, the exercise library, or the user intake questionnaire requires a re-run of the adversarial eval set before deployment.
+
+**Note:** Legal counsel must determine if this specific use case triggers medical device regulations or specific EU AI Act obligations for high-risk systems in Italy; do not assume the pilot exempts you.
+Never fabricate a "0% accident rate"; report residual risk as "Unverified" until the sampling plan yields statistical confidence.

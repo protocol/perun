@@ -1,0 +1,38 @@
+### Biometric Payment Safety Plan for SecurePay
+
+**1. Harm Inventory & High-Stakes Gate (Immediate Action)**
+The primary harm is **unauthorized financial loss** due to spoofing (photos, masks) or false acceptance, disproportionately affecting demographics with historically higher error rates in facial recognition. Because moving money is a high-stakes, irreversible action, **full autonomous execution based solely on biometric matching is unsafe** without additional controls.
+*   **Mandatory Gate:** Implement a "human-in-the-loop" or "step-up" verification for any transaction flagged as low-confidence, unusual for the user, or exceeding a specific threshold. Do not rely on the biometric score alone for final authorization.
+*   **Disclosure:** Clearly inform users that facial recognition is an automated decision tool and provide an immediate, easy alternative (e.g., PIN or password) if the scan fails or feels uncertain.
+
+**2. Test Case Design (Measurement Plan)**
+Since you cannot integrate new third-party tools, you must rigorously test the existing model against adversarial conditions using your internal data. Create a runnable evaluation suite with one test row per harm scenario:
+*   **Probe Set A (Spoofing):** Simulate presentation attacks using high-resolution photos, video replays, and 3D mask proxies under varied lighting (dim, backlit, harsh shadow).
+    *   *Metric:* False Acceptance Rate (FAR) on spoof attempts.
+    *   *Threshold:* Zero tolerance for successful spoofing in high-value transactions.
+*   **Probe Set B (Demographic Slicing):** Run accuracy tests sliced by skin tone, gender, age, and accessory use (glasses, masks).
+    *   *Metric:* False Rejection Rate (FRR) and FAR per subgroup.
+    *   *Stop Condition:* If any subgroup shows a statistically significant deviation in error rates compared to the baseline, block launch for that segment.
+*   **Probe Set C (Environmental Edge Cases):** Test extreme angles, motion blur, and low-battery device throttling.
+    *   *Control:* Include known-good (legitimate user, ideal conditions) and known-bad (spoof, wrong user) inputs to validate the test harness itself.
+*   **Reporting:** Report results as **UNVERIFIED** for any metric not explicitly measured in this suite. Do not invent an overall "accuracy rate."
+
+**3. Real-Time Monitoring & Reversal Protocol**
+*   **Anomaly Detection:** Monitor for spikes in failed biometric attempts followed by successful overrides, rapid successive transactions from new devices, or transactions originating from geolocations inconsistent with user history.
+*   **Reversal Mechanism:** Establish an automated "kill switch" capable of pausing biometric authorization globally or per-user segment if error rates exceed the defined threshold.
+*   **Remediation:** Pre-authorize immediate provisional credits for disputed biometric charges pending investigation. The burden of proof for fraud in automated systems should not rest solely on the customer during the investigation window.
+
+**4. Transparency Artifact (Model Card)**
+Before release, draft a concise internal **Model Card** documenting:
+*   **Intended Use:** Mobile payment authorization only; explicitly list out-of-scope uses (e.g., legal ID verification).
+*   **Limitations:** Known failure modes (e.g., specific lighting, demographic gaps identified in testing).
+*   **Performance:** Subgroup-specific metrics from your test suite, not just aggregate averages.
+*   **Owner:** Name the specific engineer/product lead responsible for ongoing monitoring.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign a named owner for each identified harm who is responsible for re-review if the model or data changes.
+*   **Legal Duty:** Whether this feature triggers specific regulatory requirements under the **EU AI Act** (high-risk classification) or local consumer protection laws regarding automated financial decisions is a legal determination. **Route this immediately to counsel**; do not assume compliance based on technical testing alone.
+
+**Notes:**
+*   Confidence scores from the model must be presented as defined tiers (e.g., "Verified," "Review Needed") rather than raw percentages to prevent over-reliance.
+*   If the two-day timeline prevents completing the demographic slicing tests, the safe path is to delay launch or restrict the feature to a small beta cohort until data is verified.

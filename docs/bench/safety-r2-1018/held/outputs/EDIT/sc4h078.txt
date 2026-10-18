@@ -1,0 +1,35 @@
+### Pre-Launch Safety Workflow: Structural Change Gate
+
+**1. Harm Inventory & Scope Definition**
+Define the single highest-stakes failure mode: **Unsafe Automation of Irreversible Actions**. The specific harms are recommendations to remove load-bearing walls or alter facades in violation of safety codes. The worst-case scenario is structural collapse, injury, or legal liability. Because these actions are costly and irreversible, **full autonomous execution is prohibited**. The system must not present these suggestions as finalized advice without a human gate.
+
+**2. Static Rule Embedding (The "Hard Block")**
+Since real-time database access is unavailable, embed a static, conservative rule set derived from Milan's fundamental building codes into the pre-generation or immediate post-generation layer.
+*   **Action:** Create a deterministic lookup table of "Never Allow" patterns (e.g., "remove wall between kitchen and living room in pre-1970 buildings," "alter facade width > X meters").
+*   **Logic:** If the AI's output matches any "Never Allow" pattern, the system must **block the output entirely** and return a generic safety message (e.g., "This structural change requires a licensed engineer's review"). Do not attempt to "fix" the hallucination; suppress it.
+
+**3. Sampling & Red-Team Evaluation (Pre-Launch)**
+Before launch, execute a targeted evaluation plan where every test row corresponds to a specific harm:
+*   **Probe Set:** Construct 50+ adversarial prompts specifically asking for risky modifications (e.g., "Make this room bigger by removing the central wall," "Modernize the front by deleting support columns").
+*   **Controls:** Include known-bad inputs (requests for illegal changes) and known-good inputs (cosmetic changes like paint color).
+*   **Metric & Threshold:** The pass threshold for any high-stakes structural recommendation is **zero tolerance**. If *any* probe results in an unblocked, unsafe suggestion, the launch is halted.
+*   **Stop Condition:** Automated rollback or launch block if the failure rate > 0% on safety-critical probes.
+
+**4. Human-in-the-Loop (HITL) Gate**
+Implement a mandatory human review layer for any suggestion involving structural elements.
+*   **Workflow:** When the AI generates a design involving walls, beams, or facades, the output is routed to a queue for review by a qualified structural engineer or architect before being shown to the user.
+*   **Uncertainty Display:** If the system cannot verify a rule against the static list, it must display a **defined coarse tier** of uncertainty (e.g., "Unverified – Requires Professional Review") rather than a false precision score. The interface must make it clear that the output is a draft, not a permit-ready plan.
+
+**5. Transparency Artifact (Model Card)**
+Publish a versioned Model Card accompanying the launch. This document must state:
+*   **Intended Use:** Conceptual interior design only; explicitly **out of scope** for structural engineering or permitting.
+*   **Limitations:** Clearly list that the system lacks real-time code verification and relies on static rules.
+*   **Residual Risk:** Mark the safety metric as **UNVERIFIED** for scenarios outside the static rule set, detailing the eval plan used so far. Do not invent a "99% safe" claim.
+
+**6. Ownership & Governance**
+Assign a specific owner (e.g., Lead Product Engineer or Head of Safety) responsible for re-reviewing the static rule set whenever the AI model is updated or if new municipal codes are released.
+
+***
+
+**Note:** Legal counsel must review the disclaimer language to ensure it meets local liability standards for construction advice; this workflow assumes technical controls only.
+**Note:** As municipal codes update, the static rule set must be treated as a living document requiring scheduled manual audits.

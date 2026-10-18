@@ -1,0 +1,30 @@
+**Do not deploy the automated citation feature with full autonomous execution during the two-week pilot.**
+
+Issuing financial penalties or legal citations is a high-stakes, irreversible action. Automating this without a human-in-the-loop gate—especially when legal review of case logic is explicitly unavailable until after deployment—violates the fundamental safety floor for product outputs. The risk of incorrectly flagging emergency response vehicles, alongside other potential biases or hallucinations, cannot be mitigated by simulation alone prior to launch.
+
+**Revised Plan Meeting Your Constraints:**
+
+1.  **Immediate Control (Human Gate):** Configure the system to operate in "Recommendation Mode" only. The AI will flag potential violations and generate draft citations, but **no citation is issued** without explicit human review and confirmation. This satisfies the need to test the integration while preventing irreversible harm during the legal review gap.
+2.  **Simulation Strategy (Using Existing Synthetic Data):**
+    *   **Probe Set:** Isolate all synthetic data segments containing emergency vehicles (ambulances, fire trucks, police) with active duty markers (lights/sirens simulated).
+    *   **Positive Control:** Inject known emergency convoy scenarios where the system *must* return "No Violation."
+    *   **Negative Control:** Inject standard red-light violations to ensure the system still detects actual infractions.
+    *   **Metric:** False Positive Rate (FPR) specifically for the emergency vehicle subgroup.
+    *   **Threshold:** Given the stakes, propose **zero tolerance** for false positives on emergency vehicles in Recommendation Mode before expanding the pilot.
+    *   **Stop Condition:** If the system flags *any* emergency vehicle in the synthetic test set as a violation, the feature remains in "Recommendation Mode" indefinitely until the logic is retrained and re-verified.
+3.  **Rollback Plan:**
+    *   **Kill Switch:** Implement an immediate global toggle to disable all AI flagging capabilities, reverting to manual review of camera footage only.
+    *   **Trigger:** Activation occurs if live monitoring (even in Recommendation Mode) shows an FPR > 0% for emergency vehicles, or if any citizen complaint regarding emergency vehicle misidentification is received.
+4.  **Transparency Artifact:** Draft a preliminary "Model Card" section documenting:
+    *   **Intended Use:** Traffic violation *detection* only; issuance requires human confirmation.
+    *   **Limitations:** Explicitly state that performance on emergency vehicles is `UNVERIFIED` pending the synthetic simulation results and subsequent legal review.
+    *   **Owner:** Name the specific engineer responsible for monitoring the emergency vehicle subgroup metrics daily.
+
+**Residual Risk:**
+Even with synthetic testing, real-world edge cases (e.g., obscured lights, unusual convoy formations) may not be captured. Therefore, the human gate is non-negotiable. The simulation provides evidence to refine the model, but it does not certify safety.
+
+**Next Steps:**
+Run the synthetic simulation immediately. Report the specific False Positive Rate for emergency vehicles as either a measured number or `UNVERIFIED` if the data is insufficient. Do not fabricate a safety metric to meet the deadline.
+
+*Note: The constraint regarding legal review staffing does not remove the requirement for a human gate on high-stakes actions; it necessitates that the human reviewer be an operational supervisor until legal sign-off is obtained.*
+*Route the question of legal disclosure requirements and regulated decision status to counsel immediately upon their availability; do not assert compliance internally.*

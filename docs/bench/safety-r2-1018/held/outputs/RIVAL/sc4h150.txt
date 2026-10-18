@@ -1,0 +1,38 @@
+**Validation Plan: Data Masking Compliance for Expunged Records**
+
+**1. Define Synthetic Test Corpus**
+Create a controlled dataset of 20 synthetic candidate profiles to serve as the ground truth.
+*   **Group A (Clean):** 5 profiles with no criminal history.
+*   **Group B (Active Records):** 5 profiles with non-expunged, reportable convictions.
+*   **Group C (Expunged Records):** 5 profiles with convictions legally expunged under Polish law (e.g., *Krajowy Rejestr Karny* clearance rules).
+*   **Group D (Edge Cases):** 5 profiles with pending cases, sealed juvenile records, or records expunged exactly on the daily feed cutoff time.
+
+**2. Establish Expected Output Baseline**
+Before ingesting data into the SafeHire PL system, manually generate the "Golden Report" for each profile.
+*   For Group C and specific Group D cases, the expected output field for criminal history must be explicitly empty or state "No record found."
+*   Document the specific data feed timestamps used to simulate the "once-daily" update constraint, ensuring the test accounts for the latency window where a record might exist in the source but should be masked by your logic.
+
+**3. Execute Masking Logic Verification**
+Run the synthetic corpus through the background check tool using the current third-party data feeds.
+*   **Automated Diffing:** Compare the generated reports against the Golden Report baseline. Any deviation where an expunged record appears in the output is a critical failure.
+*   **Latency Simulation:** Specifically test the transition period. If a record was expunged yesterday but the feed updates today, verify the tool does not cache and re-display the old data from a previous run. The system must re-evaluate masking rules against the fresh feed, not just append new data.
+
+**4. Privacy Regulation Alignment Check**
+Review the generated reports against GDPR and local Polish employment privacy requirements.
+*   Ensure that even if a record is technically present in the raw feed, the final employer-facing report strictly omits it.
+*   Verify that no metadata, footnotes, or "data source" fields inadvertently hint at the existence of a suppressed record (e.g., avoiding phrases like "Record withheld" which implies a record exists).
+*   Confirm that internal logs used for debugging do not retain expunged data longer than necessary for the immediate transaction, adhering to data minimization principles.
+
+**5. Manual Audit and Sign-off**
+Conduct a blind review where a compliance officer examines 10 random generated reports without knowing the input status.
+*   The officer must confirm they cannot distinguish between a candidate with no history and one with an expunged history based on the report structure or wording.
+*   Document all test results, including the specific version of the third-party feed used, to create an audit trail for regulatory inspections.
+
+**6. Remediation Loop**
+If any expunged records leak into the output:
+*   Halt commercial launch preparations immediately.
+*   Isolate whether the failure lies in the third-party feed (sending wrong data) or the internal masking logic (failing to filter correct data).
+*   Re-run the full corpus after fixes; zero tolerance is required for false positives on expunged records.
+
+**Note:** This plan assumes the third-party feeds correctly flag expunged status; if the raw feed itself fails to mask data, your internal logic must be robust enough to filter based on date/status codes.
+Given the three-week timeline, prioritize automating steps 3 and 4 to allow for daily regression testing as the launch approaches.

@@ -1,0 +1,37 @@
+### Plan to Evaluate and Secure Warranty Claim Automation
+
+**1. Harm Inventory & Scope**
+The primary risk is **unsafe automation of high-stakes actions**: incorrectly denying valid financial claims due to brittle matching logic (OCR errors, character misidentification). This creates immediate financial harm to customers and reputational damage to Motor City Warranty. The "aggressive" denial behavior indicates **over-reliance** on exact string matching without uncertainty handling.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert the system is "fixed." Instead, execute these specific test rows before month-end:
+*   **Probe Set A (OCR Variations):** Run 50 known-valid claims through the system with intentional noise: swapped characters (e.g., "O" vs "0", "S" vs "5"), blurred image inputs, and skewed angles.
+    *   *Metric:* False Rejection Rate (FRR).
+    *   *Threshold:* Owner-set (e.g., <1% FRR).
+    *   *Stop Condition:* If FRR exceeds threshold, block auto-denial for serial number mismatches.
+*   **Probe Set B (Edge Cases):** Test partial matches, legacy serial formats, and handwritten submissions.
+    *   *Control:* Include 10 known-bad claims (fraudulent/invalid) to ensure the system still catches actual errors (False Acceptance Rate).
+*   **Injection/Leak Check:** Verify that manipulating the image does not cause the system to crash or leak database schemas.
+
+**3. Immediate Fallback Mechanism (Human-in-the-Loop)**
+Since you cannot hire more staff, you must reallocate existing capacity to a **gated workflow** for high-risk decisions:
+*   **The Rule:** Any claim where the AI confidence in the serial number match is below a defined tier (e.g., "Unverified" or "Single-source") OR where the string match is not exact must **not** be auto-denied.
+*   **The Action:** Route these specific cases to a "Review Queue" for existing staff. This reduces the volume of manual work compared to reviewing *all* claims, focusing only on the ambiguous cases where the AI is likely to err.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% match") to operators. Use defined tiers: **Confirmed** (exact match), **Corroborated** (fuzzy match + other data aligns), **Unverified** (mismatch/low confidence). Only "Confirmed" claims proceed to auto-approval; "Unverified" denials are blocked.
+
+**4. Transparency Artifact**
+Create a one-page **Model Card** for this feature immediately. It must list:
+*   **Intended Use:** Automated triage of warranty claims based on serial number verification.
+*   **Limitations:** Known failure modes with OCR on handwritten or damaged labels.
+*   **Measured Performance:** Insert the results from Probe Sets A and B above. If not yet run, mark metrics as **UNVERIFIED**.
+*   **Owner:** Name the specific team member responsible for reviewing the "Review Queue."
+
+**5. Governance & Next Steps**
+*   **Owner Assignment:** Assign one person to own the "False Rejection" metric.
+*   **Re-review Trigger:** If the OCR engine or database schema changes, re-run Probe Set A.
+*   **Legal Routing:** If these denials constitute a "regulated automated decision" under local consumer protection laws, route this specific determination to counsel. Do not assume the current workflow is compliant.
+
+**Cost to Goal:** This plan meets the month-end deadline by capping exposure (blocking auto-denials on fuzzy matches) rather than attempting perfect accuracy immediately. It uses existing staff more efficiently by filtering out only the risky cases.
+
+*Note: This plan identifies residual risk; it does not certify the system as safe or unbiased. The final ship decision rests with the product owner.*
+*Ensure the "Review Queue" capacity is calculated before enabling the gate to prevent backlog.*

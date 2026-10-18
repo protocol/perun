@@ -1,0 +1,25 @@
+**Pre-Launch Safety Verification Plan for Smart Thermostat**
+
+To ensure the safety of vulnerable residents and verify system robustness within your existing infrastructure constraints, execute the following four specific safety checks before enabling the first 1,000 users:
+
+**1. The "Silent Failure" Occupancy Drill**
+Simulate a complete loss of input data (calendar API outage and mobile location signal loss) for a test group representing elderly users.
+*   **Success Criterion:** The system must immediately revert to a "Safe Default Profile" rather than maintaining the last predicted state or turning off. This profile must maintain a conservative thermal range (e.g., 18°C–26°C) regardless of time of day.
+*   **Verification:** Confirm via logs that the fallback triggers within 5 minutes of data cessation and that no "eco-mode" or aggressive energy-saving algorithms activate during this fault state.
+
+**2. The Rapid Re-Entry Stress Test**
+Test the system's response to unexpected occupancy changes that contradict historical patterns (e.g., an elderly resident returning home at 2 PM instead of the predicted 6 PM).
+*   **Success Criterion:** Upon detecting presence via any available sensor (even if calendar says "away"), the system must prioritize immediate comfort recovery over energy optimization.
+*   **Verification:** Measure the time-to-comfort. If the indoor temperature is outside the safe range upon detection, the HVAC must run at maximum safe capacity until the safe range is reached, ignoring predicted departure times.
+
+**3. The "Stuck Prediction" Boundary Check**
+Force a scenario where the prediction engine erroneously believes the home will be empty for an extended period (e.g., a calendar glitch showing a two-week vacation).
+*   **Success Criterion:** Implement a hard-coded "Maximum Unoccupied Duration" limit (e.g., 24 hours). If no motion or location data confirms absence beyond this window, the system must automatically suspend predictions and revert to the Safe Default Profile.
+*   **Verification:** Ensure this override cannot be disabled by user settings and that it generates a local alert or notification to a designated emergency contact if available.
+
+**4. Manual Override Latency Audit**
+Verify that a physical or app-based manual temperature adjustment instantly disables all automated predictions for a fixed "cool-down" period (e.g., 4 hours).
+*   **Success Criterion:** The system must treat manual intervention as the highest priority truth, assuming the algorithm is incorrect.
+*   **Verification:** Confirm that during this cool-down period, the system does not attempt to "correct" the user's setting based on its own logic, ensuring the resident retains full control during anomalies.
+
+**Implementation Note:** These tests can be executed using your current staging environment by mocking API responses; no additional cloud budget is required. Prioritize these checks over new feature development to meet your winter launch safely.

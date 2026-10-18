@@ -1,0 +1,40 @@
+### Pre-Launch Safety Check: Parental Consent & Data Collection
+
+**1. Immediate Data Flow Halt & Inventory**
+Stop all data ingestion pipelines that currently rely on implicit consent. Create a "Harm Inventory" listing every data point collected (e.g., response time, error rates, session duration) and map it to the specific user ID. For each point, record the worst-case scenario if collected without verified parental consent (e.g., permanent profile creation of a minor without authorization). An empty inventory is not a pass; it is an unfilled requirement.
+
+**2. The "Consent-Gate" Mechanism**
+Redesign the data pipeline to enforce a hard block at the source. The system must query a verified consent status *before* any interaction metric is written to storage or used for difficulty adaptation.
+*   **Default State:** If consent status is "unknown," "pending," or "unverified," the feature must default to a static, non-adaptive difficulty mode. No data is stored; no personalization occurs.
+*   **Verification Loop:** Explicit parental consent must be cryptographically verified and linked to the child's session ID before the adaptive engine activates.
+*   **Irreversible Action Control:** Treat the activation of data collection as a high-stakes action. It requires an explicit, human-verified trigger (the parent's digital signature) and cannot be automated based on assumed user behavior.
+
+**3. Runnable Validation Plan (One Test Per Risk)**
+Do not assert safety; measure it. Execute these specific probes before launch:
+*   **Probe A (The Negative Control):** Simulate a user session with *no* consent record.
+    *   *Metric:* Zero bytes written to the database; adaptive engine remains inactive.
+    *   *Stop Condition:* Any data persistence or difficulty change triggers an immediate launch block.
+*   **Probe B (The Positive Control):** Simulate a session with valid, verified consent.
+    *   *Metric:* Data flows correctly; adaptation functions as designed.
+*   **Probe C (The Edge Case):** Simulate a session where consent is "pending" or expired mid-session.
+    *   *Metric:* Immediate cessation of data logging; reversion to static mode without crashing.
+*   **Probe D (Injection/Leak):** Attempt to inject a fake consent token or escalate privileges via the API.
+    *   *Metric:* System rejects the token; no data is harvested.
+
+**4. Transparency Artifact (Model/Data Card)**
+Publish a versioned "Data Card" for this feature accessible to internal stakeholders and, where appropriate, parents. This document must state:
+*   **Intended Use:** Real-time difficulty adaptation for ages 6–10.
+*   **Data Provenance:** Exactly which interaction metrics are collected and why.
+*   **Consent Mechanism:** Explicit description of how parental verification is obtained and stored.
+*   **Limitations:** Clearly mark any metric not yet measured in production as `UNVERIFIED`. Do not invent accuracy or compliance rates.
+
+**5. Governance & Ownership**
+Assign a single named owner (e.g., Lead Product Manager or Privacy Officer) responsible for re-reviewing this workflow if the data schema, the consent provider, or the adaptation algorithm changes. This owner holds the authority to halt the rollout if the "Consent-Gate" fails any probe.
+
+**6. Legal Routing**
+Since this involves minors and automated decision-making, the determination of whether this constitutes a "regulated automated decision" under frameworks like the EU AI Act or local child privacy laws is a legal duty. Route this specific classification to legal counsel immediately. Do not assume the internal policy covers all external statutory requirements.
+
+***
+
+**Note:** The adaptive feature must remain disabled for any user lacking a verified consent flag; there is no "grace period" for data collection.
+**Note:** Confidence in safety is not a percentage; it is a binary pass/fail based on the successful execution of the probes above.

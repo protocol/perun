@@ -1,0 +1,40 @@
+**BLUF:** Your current constraints make a valid fairness validation impossible before launch; you cannot measure disproportionate exclusion without retaining the very data needed to prove it. Do not proceed to beta with automated exclusion logic.
+
+**The Conflict**
+You aim to detect bias against protected characteristics (race, religion, gender, etc.) while adhering to a 24-hour data retention limit. This is a logical contradiction. To measure if your system disproportionately excludes a specific group, you must:
+1.  Ingest a test dataset containing known protected characteristics.
+2.  Run the selection logic.
+3.  **Retain** the inputs and outputs long enough to aggregate results and calculate disparity metrics (e.g., selection rates by group).
+
+If you delete the data within 24 hours, you destroy the evidence required to calculate bias. You cannot audit what you do not remember. A "pre-launch validation plan" that adheres strictly to your production retention rule will yield zero data points, rendering the fairness claim **UNVERIFIED**.
+
+**Required Adjustments to the Plan**
+To launch responsibly, you must decouple your *testing environment* from your *production retention constraints*.
+
+1.  **Create a Synthetic Audit Sandbox:**
+    Do not use real public profiles for your initial fairness validation. Generate a large corpus of **synthetic social media profiles** where the protected characteristics are explicitly tagged and known ground truth is established.
+    *   *Action:* Build a dataset of 10,000+ synthetic personas with balanced representation across protected groups.
+    *   *Retention:* In this isolated sandbox, you are permitted (and required) to retain data indefinitely to perform statistical analysis. The 24-hour rule applies to *user* data in production, not to internal *test* artifacts used to validate safety before shipping.
+
+2.  **Define the Test Rows (Measure, Don't Assert):**
+    For each protected characteristic, run a specific test row:
+    *   **Probe:** Input the synthetic corpus into the selection logic.
+    *   **Metric:** Calculate the selection rate difference between groups (e.g., Four-Fifths Rule).
+    *   **Stop Condition:** If the selection rate for any protected group is less than 80% of the rate for the highest-selected group, the launch is blocked.
+    *   **Control:** Include a "null model" (random selection) to ensure your test harness itself isn't biased.
+
+3.  **Human-in-the-Loop Gate (Manage Risk):**
+    Jury selection is a high-stakes, irreversible action with profound legal and civil rights implications. Fully automated exclusion of potential jurors based on opaque AI analysis of social media is an unsafe automation pattern.
+    *   **Requirement:** The system must not automatically exclude a juror. It should only **flag** potential biases for human attorney review. The final decision to strike a juror must remain with a human who can explain the reasoning in court. Automation bias (trusting the tool's score over human judgment) is a critical failure mode here.
+
+4.  **Transparency Artifact:**
+    Before beta, produce a **Model Card** that explicitly states:
+    *   **Intended Use:** Assistance tool only; not a decision-maker.
+    *   **Limitations:** "Fairness metrics were derived from synthetic data; real-world performance is UNVERIFIED due to data retention constraints."
+    *   **Data Provenance:** Description of the synthetic data generation method.
+
+**Conclusion**
+You cannot validate fairness under a 24-hour deletion policy. You must build a separate, persistent testing environment using synthetic data to generate the necessary audit trails. If you cannot implement a human review gate for exclusions, the feature should not ship.
+
+*Note: Legal duties regarding automated decision-making in jury selection (e.g., Batson challenges) require immediate routing to counsel; this review addresses product safety mechanics only.*
+*Do not fabricate a "pass" rate; if the synthetic test fails, the residual risk is too high for beta.*

@@ -1,0 +1,38 @@
+### Pre-Launch Safety Protocol: Rare Disease Suggester
+
+**1. Harm Inventory & Worst-Case Definition**
+Before scaling, explicitly document the specific risks for this feature:
+*   **Hallucination as Fact:** The system flags a rare disease with high confidence despite insufficient evidence, causing severe patient anxiety.
+*   **Bias/Exclusion:** The model fails to flag conditions in underrepresented demographics due to the limited dataset, delaying critical care.
+*   **Over-Reliance:** Patients or junior staff treat the "flag" as a diagnosis rather than a hypothesis, bypassing necessary differential diagnosis.
+*   **Missing Disclosure:** Users believe the output is a definitive medical conclusion rather than an AI-generated suggestion.
+*   **Worst Realistic Case:** A patient receives a false positive for a terminal rare disease, undergoes invasive unnecessary testing, and suffers psychological trauma; or a false negative delays treatment for a high-risk group.
+
+**2. Measurement Plan (Runnable Evals)**
+Do not assert reliability; measure it. Create one test row per identified harm:
+*   **Probe Set:** Construct a dataset of 50 known negative cases (common ailments mimicking rare diseases) and 50 known positive cases (verified rare disease symptoms). Include edge cases from demographic groups underrepresented in your current data.
+*   **Controls:**
+    *   *Positive Control:* Inputs that must trigger a flag (verified rare disease profiles).
+    *   *Negative Control:* Inputs that must NOT trigger a flag (common cold/flu symptoms).
+*   **Metric & Threshold:** Measure False Positive Rate (FPR) specifically for the "panic-inducing" rare diseases.
+    *   *Stop Condition:* If FPR exceeds 0% for high-severity/low-treatability conditions in the negative control set, block launch.
+    *   *Owner-Set Threshold:* Define the maximum acceptable miss rate for high-risk groups. If the model cannot meet this with current data, do not scale.
+*   **Injection & Leakage Check:** Test if user-supplied text can manipulate the output (prompt injection) or if the model leaks private data from other patients.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human-in-the-Loop:** The system must **never** display a rare disease flag directly to the patient as a finalized insight. All flags must route to a licensed physician for review before the patient sees the suggestion. The UI must clearly state: "AI Suggestion Pending Doctor Review."
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% likely"). Instead, use defined coarse tiers with clear definitions:
+    *   *Corroborated:* Matches multiple key symptoms and lab values.
+    *   *Single-Source:* Matches symptom pattern but lacks lab confirmation.
+    *   *Unverified:* Low-confidence match requiring extensive further testing.
+*   **Transparency Artifact (Model Card):** Publish a versioned document detailing:
+    *   *Intended Use:* Decision support for doctors only, not direct diagnosis.
+    *   *Limitations:* Explicitly state the model is trained on a limited dataset and may underperform on specific demographics.
+    *   *Data Provenance:* Source of the training data and known gaps.
+    *   *Owner:* Name the specific team member responsible for monitoring output quality.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific product owner to re-review the harm inventory whenever the model, data, or user base changes.
+*   **Legal Determination:** Whether this feature constitutes a regulated medical device or requires specific statutory disclosures under laws like the EU AI Act is a legal determination. Route this immediately to counsel; do not assume compliance based on internal testing.
+
+**Note:** An unmeasured error rate is `UNVERIFIED`; do not invent a "99% accurate" claim for marketing. If the limited dataset prevents meeting the stop condition, the only safe path is to restrict the feature's scope or delay scaling until more data is acquired.

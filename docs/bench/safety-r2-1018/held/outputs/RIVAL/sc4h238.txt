@@ -1,0 +1,40 @@
+### Diversity Metric Design: The Engagement-Integrity Score (EIS)
+
+To balance engagement with factual accuracy without exceeding your compute budget, implement the **Engagement-Integrity Score (EIS)** as a re-ranking modifier applied post-prediction but pre-delivery. This avoids retraining the core model.
+
+**Formula:**
+$$EIS = (C_{norm} \times w_e) + (F_{score} \times w_f) + (D_{div} \times w_d)$$
+
+Where:
+*   **$C_{norm}$ (Normalized Engagement):** The predicted click-through rate (CTR) or time-spent, scaled 0–1.
+*   **$F_{score}$ (Factual Integrity):** A static score (0–1) assigned to the content source or article based on your trusted third-party fact-checking API or internal whitelist/blacklist. Conspiracy content receives $0.0$; verified news receives $1.0$.
+*   **$D_{div}$ (Topic Diversity Penalty/Bonus):** A calculated value based on the user's last $N$ viewed articles. If the current candidate article belongs to a cluster (e.g., "Political Conspiracy") that exceeds a threshold (e.g., >30% of the last 10 items), $D_{div}$ becomes negative. If it introduces a new topic cluster, it is positive.
+*   **Weights ($w_e, w_f, w_d$):** Tunable parameters. Start with $w_e=0.5$, $w_f=0.3$, $w_d=0.2$. Adjust based on A/B testing results regarding retention vs. safety.
+
+**Implementation Strategy:**
+1.  **Pre-compute $F_{score}$:** Run your known conspiracy list and trusted sources through a batch job to assign static integrity scores. This adds zero latency to real-time inference.
+2.  **Real-time Calculation:** When the model generates a candidate list, calculate $D_{div}$ based on the user's immediate session history, apply the EIS formula, and re-sort the list.
+3.  **Hard Floor:** Implement a rule where any content with $F_{score} = 0$ (confirmed conspiracy) is capped at a maximum EIS threshold, ensuring it never appears in the top 50 recommendations regardless of predicted engagement.
+
+### Testing Plan: The "Conspiracy Resistance" Audit
+
+Given your fixed compute budget, avoid full retraining cycles for testing. Use **offline evaluation** with a static dataset and **shadow mode** deployment.
+
+**Step 1: Construct the Adversarial Dataset**
+Create a static test set of 500 user profiles paired with 2,000 articles.
+*   **Profiles:** Include "vulnerable" personas (users with historical clicks on borderline content) and "neutral" personas.
+*   **Articles:** Mix 20% known conspiracy narratives (labeled with ground truth $F_{score}=0$), 20% high-quality news, and 60% neutral/engagement-bait content.
+
+**Step 2: Define Success Metrics**
+Run your current algorithm and the EIS-modified algorithm against this dataset. Measure:
+*   **Radicalization Rate:** The percentage of "vulnerable" profiles whose top-10 feed composition shifts >20% toward conspiracy content over a simulated 10-step session.
+*   **Suppression Efficiency:** The average rank position of known conspiracy articles. Goal: Push them below the fold (rank >20).
+*   **Engagement Cost:** The estimated drop in CTR. Acceptable loss should be defined beforehand (e.g., <5%).
+
+**Step 3: Shadow Mode Validation**
+Before full rollout, run the EIS logic in "shadow mode" on live traffic for 48 hours. Log what the system *would* have shown versus what it *did* show. Compare the "would-have-shown" list against your conspiracy database to ensure the filter triggers correctly on real-time, unseen content without impacting actual user experience.
+
+**Step 4: Iterative Tuning**
+Adjust weights ($w_f, w_d$) based on shadow logs. If engagement drops too sharply, lower $w_e$ slightly rather than compromising $w_f$. This loop requires only data analysis, not model retraining.
+
+NewsFlow Team, this approach prioritizes safety via re-ranking and offline testing, respecting your compute constraints while establishing a robust defense against algorithmic radicalization.

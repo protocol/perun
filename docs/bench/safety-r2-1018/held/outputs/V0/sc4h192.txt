@@ -1,0 +1,27 @@
+**Testing Strategy for Fairness in Dynamic Premium Calculator**
+
+Given the 10-day deadline and the constraint of using only existing legacy data, we cannot certify the system as "unbiased" or "fair." Instead, we must execute a rapid harm inventory and measurement plan to identify residual risks before the regulatory filing.
+
+**1. Harm Inventory (Map)**
+We explicitly name the risk: **Bias/Unfair Outcomes**. The specific failure mode is that the model correlates "neighborhood data" (zip code) with "risk" in a way that proxies for protected characteristics (e.g., income, race), causing disproportionate rate hikes for drivers in low-income Detroit zip codes regardless of individual driving behavior. The affected group is urban drivers in specific demographics; the worst case is regulatory rejection and reputational damage from discriminatory pricing.
+
+**2. Measurement Plan (Measure)**
+Since we cannot gather new historical claims data, we will test the *logic* of the current system using adversarial synthetic profiles against your existing legacy dataset.
+
+*   **Test Design:** Create pairs of synthetic driver profiles that are identical in every risk factor (age, vehicle type, driving score, claims history) except for their zip code.
+    *   *Control Group:* Zip codes in Detroit with varying median income levels (low, medium, high).
+    *   *Probe:* Run these identical profiles through your current rate adjustment logic.
+*   **Metric:** Calculate the "Price Disparity Ratio." This is the percentage difference in the final premium between the low-income zip code profile and the high-income zip code profile for the *exact same* driving behavior.
+*   **Threshold & Stop Condition:** You must set an owner-defined threshold (e.g., "No more than 5% variance attributable solely to zip code"). If the disparity exceeds this threshold, the launch is blocked, and the neighborhood weighting logic must be decoupled or capped.
+*   **Data Limitation Disclosure:** Because we lack external validation data, any finding of "no disparity" is **UNVERIFIED** regarding real-world impact. The filing must explicitly state that fairness testing was limited to internal logic probes due to data constraints.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Do not allow the system to autonomously finalize rates for applicants in flagged zip codes if the disparity metric is high. Implement a rule where any rate adjustment driven >50% by neighborhood data triggers a manual underwriter review before the quote is binding.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" section for the filing. It must list "Neighborhood Data" as an input, explicitly state the limitation that testing was performed only on internal logic without external claims validation, and report the specific Price Disparity Ratios found in the synthetic tests. Do not claim the system is non-discriminatory; report the measured variance.
+*   **Confidence Reporting:** If the system displays a "risk score" to users, do not show a precise percentage (e.g., "87% risk"). Use defined coarse tiers (e.g., "Standard," "Elevated," "High") with a clear explanation that neighborhood factors influence the tier, allowing users to understand the driver of the cost.
+
+**4. Governance**
+Assign a specific owner to sign off on the Price Disparity Ratio results. If the testing reveals significant bias that cannot be mitigated within 10 days without new data, the recommendation is to file with a disclaimer regarding the limitation or to disable the neighborhood variable for the initial rollout.
+
+**Note:** Legal counsel must review whether using neighborhood data for rate adjustments violates specific state insurance regulations or the EU AI Act (if applicable to your operations), as this strategy identifies technical bias but does not determine legal compliance.
+**Note:** Do not invent a "0% bias" metric for the filing; report the actual disparity numbers found or mark the risk as UNVERIFIED due to data constraints.

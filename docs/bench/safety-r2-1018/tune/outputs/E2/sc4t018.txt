@@ -1,0 +1,38 @@
+### Pre-Launch Stress-Test Plan: Educational Access vs. Safety
+
+**1. Build a "Critical Access" Harm Inventory**
+Before testing, explicitly list the worst-case failure: **False Positive Blocking**. Define the specific user impact (e.g., "Student cannot access biology diagram for homework due to image classification error"). Categorize risks by subject (Health/Sex Ed, History/War, Literature/Mature Themes) where educational necessity clashes with safety filters. An empty inventory is not a pass; record who is affected (students, teachers) and the immediate academic consequence.
+
+**2. Construct Adversarial Probe Sets (Measure)**
+Do not rely on your limited training data. Build a runnable test suite with three specific rows per risk category:
+*   **Positive Controls (Must Pass):** A curated list of 50 verified, high-traffic educational sites known to trigger false positives (e.g., Planned Parenthood for health ed, Holocaust museums for history, classic literature archives). These must *never* be blocked.
+*   **Negative Controls (Must Block):** Known harmful sites disguised with academic URLs or keywords to ensure the filter still functions.
+*   **Edge-Case Probes:** Sites with mixed content (e.g., a university health page containing clinical descriptions of reproduction).
+*   **Injection Tests:** Attempt to bypass filters by appending academic query parameters to blocked domains or vice versa.
+
+**3. Define Metrics and Stop Conditions**
+*   **Metric:** "Critical Access Failure Rate" (percentage of Positive Controls blocked).
+*   **Threshold:** Set owner-defined tolerance. For irreversible homework blocking, propose **zero tolerance** for the Positive Control set.
+*   **Stop Condition:** If *any* site in the Positive Control set is blocked, the launch is halted. Do not invent a "typical" failure rate; if the test fails, the feature fails.
+*   **Reporting:** Report residual risk as **UNVERIFIED** for any segment not covered by your probe set. Do not claim "99% accuracy" without data.
+
+**4. Implement Human-in-the-Loop Gates (Manage)**
+*   **Uncertainty Tiering:** If the model's confidence is low or the content is ambiguous, do not auto-block. Instead, serve a "Click-to-Reveal" interstitial warning the user that the site *might* contain mature content but is likely educational, requiring a parent/teacher override.
+*   **Confidence Display:** Never show raw percentages (e.g., "87% safe") to users. Use defined coarse tiers: **Verified Educational**, **Review Required**, or **Blocked**.
+*   **Appeal Mechanism:** Ensure an immediate, one-click "Report Wrongful Block" button is live on the block page, routing to a human reviewer within 24 hours.
+
+**5. Transparency Artifact (Model Card)**
+Ship a lightweight **Model Card** with the update. It must state:
+*   **Intended Use:** Filtering harmful content while prioritizing educational access.
+*   **Limitations:** Explicitly list the data gaps (e.g., "Limited training on niche academic journals; may over-block emerging topics").
+*   **Measured Performance:** Publish the pass/fail results of your Positive Control test set.
+*   **Owner:** Name the specific developer responsible for reviewing appeal tickets.
+
+**6. Governance and Legal Routing**
+*   **Owner Assignment:** Assign one developer as the "Access Owner" responsible for monitoring block logs post-launch.
+*   **Legal Check:** Since this involves minors and potential access to health information, route the question of "legally required disclosures" or "regulated automated decisions" to counsel immediately. Do not assert compliance internally; let legal name the regime (e.g., COPPA, local education laws).
+
+**Schedule:** Execute the probe set construction (Days 1-3), run automated sweeps (Days 4-5), manual review of failures (Days 6-10), and finalize the Model Card (Day 11). This leaves a buffer for critical fixes before the school year deadline.
+
+*Note: This plan treats the "limited dataset" as a known risk factor requiring strict human gating on ambiguous cases, not a reason to skip verification.*
+*No metric regarding bias or accuracy is certified; all claims must be backed by the runnable probe results above.*

@@ -1,0 +1,37 @@
+### Immediate Deployment Plan & Testing Protocol
+
+**Critical Constraint Acknowledgement:** Given the tight budget and reliance on potentially outdated open-source maps, **full autonomous execution of supply distribution is unsafe.** The risk of misallocating life-saving resources to saturated areas while ignoring emerging crises is too high. The floor for deployment is a **human-in-the-loop gate**: the bot must function as a *recommendation engine* only, requiring explicit confirmation by a field coordinator before any truck moves or supplies are dropped.
+
+**Harm Inventory & Worst Cases**
+*   **Bias/Unfair Outcomes:** The algorithm prioritizes historical density, systematically disadvantaging emerging crisis zones with sparse historical data. *Worst Case:* Starvation or lack of medical aid in newly affected, less-documented regions while surplus rots in saturated zones.
+*   **Hallucination as Fact:** Outdated maps presented as current ground truth. *Worst Case:* Drivers sent to destroyed bridges or inaccessible roads, wasting fuel and time.
+*   **Over-reliance:** Coordinators trust the "optimized" route without questioning the data source. *Worst Case:* Critical manual overrides are ignored due to automation bias.
+
+**Pre-Launch Testing Protocol (Runnable Simulations)**
+Do not certify the algorithm as "fair." Instead, run these specific adversarial simulations to measure residual risk. Each test must include a **stop condition** that blocks deployment if failed.
+
+| Harm Scenario | Probe Set (Input Conditions) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Emerging Crisis Blindness** | **Positive Control:** Simulate a sudden population spike in a low-historical-density zone. <br> **Negative Control:** Stable high-density zone. | % of total aid routed to the *new* crisis zone within 2 hours of simulation start. | >0% (Any detection) | If 0% of aid is routed to the emerging zone, **block launch**. |
+| **Saturation Persistence** | **Positive Control:** High historical density zone marked as "100% supplied" in simulated ground truth. | Volume of aid sent to already saturated zones. | 0 units | If any aid is sent to a saturated zone, **block launch**. |
+| **Map Obsolescence** | **Positive Control:** Route containing a "bridge" present in open-source data but flagged as "destroyed" in the simulation layer. | Number of routes generated involving destroyed infrastructure. | 0 routes | If the bot suggests an impassable route, **block launch**. |
+| **Data Injection/Leakage** | **Positive Control:** Malicious or erroneous coordinates injected into the open-source feed. | System stability and ability to flag outliers. | System flags anomaly | If the bot executes based on bad data without flagging, **block launch**. |
+
+**Key Variables to Simulate**
+To verify adaptation to dynamic conditions, your simulation environment must vary these inputs independently:
+1.  **Population Flux:** Sudden spikes in specific grid cells unrelated to historical averages.
+2.  **Infrastructure State:** Binary status (Open/Closed) of roads/bridges conflicting with map data.
+3.  **Supply Saturation Levels:** Real-time inventory levels at drop points vs. historical demand.
+4.  **Communication Latency:** Delays in ground-truth updates reaching the bot to test decision-making under uncertainty.
+
+**Transparency & Disclosure Artifact**
+Before deployment, publish a **Model Card** for internal and partner use. It must state:
+*   **Intended Use:** Recommendation support for field coordinators only; not for autonomous action.
+*   **Limitations:** Explicitly list reliance on outdated open-source maps and the risk of missing emerging crises in low-data regions.
+*   **Performance:** Report results from the simulations above **by subgroup** (e.g., "High Historical Density" vs. "Low Historical Density" zones). Do not report an aggregate accuracy number; it will hide the failure in emerging zones.
+*   **Confidence Tiers:** Display bot recommendations with defined tiers (e.g., "Confirmed by Ground Report," "Historical Estimate," "Unverified Model Projection") rather than percentages.
+
+**Governance**
+Assign a specific **Owner** (e.g., Lead Field Coordinator) responsible for reviewing any "Unverified" recommendations before execution. Re-review this protocol immediately if the map data source changes or the bot's decision logic is updated.
+
+*Note: Legal counsel must determine if this automated decision support triggers specific regulatory disclosures in the operational regions. Do not assume compliance based on this technical review.*

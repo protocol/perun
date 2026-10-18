@@ -1,0 +1,41 @@
+### Safety Evaluation Strategy for Medical Triage Assistant
+
+Given your constraints (no real patient data, limited compute, 4-week timeline), the following strategy uses **synthetic data stress-testing** to validate your prioritization logic before deployment.
+
+#### 1. Construct a "Golden Set" of Synthetic Cases
+Create a curated dataset of 50–100 synthetic patient profiles representing the full spectrum of emergency severity. Do not rely on random generation; hand-craft these to cover specific failure modes:
+*   **Critical Anchors:** 20 cases of life-threatening conditions (e.g., stroke, myocardial infarction, severe trauma, anaphylaxis) with varying symptom presentations (typical and atypical).
+*   **Edge Cases:** 20 cases with ambiguous symptoms, conflicting vitals, or comorbidities that often confuse algorithms (e.g., elderly patients with muted pain responses).
+*   **Negative Controls:** 20 non-urgent cases (e.g., minor lacerations, mild viral symptoms) to ensure the system does not over-triage low-risk patients, which wastes resources.
+*   **Adversarial Inputs:** 10 cases with noisy, incomplete, or slightly contradictory nurse inputs to test robustness against human error.
+
+Assign each case a **ground-truth priority level** based on established medical guidelines (e.g., ESI or Manchester Triage System), reviewed by your clinical leads.
+
+#### 2. Define "Hard Failure" Criteria
+Establish binary pass/fail rules before running tests. A test is a **critical failure** if:
+*   Any "Critical Anchor" is assigned a priority lower than "Emergency" or "Very Urgent."
+*   Any case with specific red-flag keywords (e.g., "chest pain," "loss of consciousness") is deprioritized without explicit contraindicating evidence in the input.
+
+Do not use average accuracy as a metric. For this pilot, **zero tolerance** for downgrading critical cases is required.
+
+#### 3. Execute Deterministic Stress Tests
+Since you cannot run large-scale simulations, run a **deterministic sweep**:
+*   Feed every synthetic case into the system.
+*   Record the assigned priority and the system's reasoning (if available).
+*   Compare output against the ground-truth label.
+*   **Manual Review:** Any mismatch, especially a downgrade of a critical case, must be manually inspected by a clinician and an engineer to determine if it was a logic error, data formatting issue, or ambiguity in the synthetic input.
+
+#### 4. Implement a "Human-in-the-Loop" Safety Net
+For the pilot launch, configure the system to **flag** rather than **decide** in uncertain scenarios:
+*   If the model's confidence score is below a high threshold (e.g., <90%), automatically assign the highest priority level or flag for immediate human review.
+*   Hard-code rules for absolute red flags (e.g., if input contains "not breathing," force Priority 1 regardless of algorithmic output). This acts as a deterministic override to catch algorithmic blind spots.
+
+#### 5. Iterative Refinement Cycle (4-Week Plan)
+*   **Week 1:** Build the Golden Set and define hard-coded overrides.
+*   **Week 2:** Run initial tests, analyze failures, and adjust logic/weights.
+*   **Week 3:** Re-test with modified logic; introduce "adversarial" variations of previously failed cases to ensure fixes are robust.
+*   **Week 4:** Final validation run. Document all known limitations and deploy with the "Human-in-the-Loop" safety net active.
+
+This approach maximizes safety coverage using minimal computational resources by focusing entirely on high-risk scenarios rather than statistical averages.
+
+*Note: Ensure all synthetic data is documented as artificial to prevent accidental inclusion in future training sets. Maintain a log of all "forced overrides" during the pilot to inform future model retraining.*

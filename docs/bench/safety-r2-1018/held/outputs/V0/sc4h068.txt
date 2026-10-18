@@ -1,0 +1,25 @@
+**Fairness Audit and Remediation Plan (5-Week Sprint)**
+
+**Week 1: Harm Inventory & Baseline Measurement**
+*   **Define Groups:** Immediately segment your historical data by linguistic background (dialect, region, first language) to establish comparison cohorts.
+*   **Run Disparity Analysis:** Calculate the mean score difference between the dominant dialect group and each minority dialect group for essays of similar human-graded quality.
+*   **Metric:** Set a "Disparity Ratio" threshold. If the automated score for a specific group deviates by more than 5% from the human consensus compared to the dominant group, flag as a critical failure.
+*   **Output:** A "Harm Inventory" document listing which dialects are disadvantaged, the magnitude of the penalty, and the worst-case impact on student placement.
+
+**Weeks 2–3: Adversarial Testing & Root Cause**
+*   **Construct Probe Sets:** Create a test set of "twin essays"—identical content rewritten in different dialects. Include known "positive controls" (essays that should fail) and "negative controls" (essays that should pass) for each dialect.
+*   **Isolate Features:** Determine if the bias stems from vocabulary penalties, syntax parsing errors, or topic misclassification.
+*   **Stop Condition:** If the system cannot distinguish between dialect style and writing quality in the probe set with <2% error variance, the model is not ready for high-stakes gating.
+
+**Week 4: Remediation & Human-in-the-Loop (HITL) Gate**
+*   **Logic Adjustment:** Do not attempt to retrain the core model from scratch (too risky for timeline). Instead, apply **post-hoc calibration weights** to the final scores of identified disadvantaged groups to align their distribution with the human-graded baseline.
+*   **Mandatory HITL Gate:** For the initial deployment, **no low-scoring essay from a flagged dialect group is finalized without human review.** The system outputs a "provisional score" and a confidence tier (e.g., "Unverified – Requires Review") for these cases.
+*   **Override Mechanism:** Ensure teachers can easily override the automated score with a documented reason; log every override to refine future calibration.
+
+**Week 5: Transparency & Deployment Prep**
+*   **Draft Model Card:** Create a one-page transparency artifact for the Ministry. Explicitly state: intended use, known limitations (specific dialects where performance is lower), the calibration method used, and the human-review protocol. Do not claim the system is "unbiased"; state the residual risk and the mitigation in place.
+*   **Final Go/No-Go:** If the disparity metric remains above the threshold after calibration, recommend a phased rollout (pilot schools only) rather than a full national launch, citing the specific unverified risk.
+
+**Notes**
+*   Legal counsel must review the "automated decision" implications under local education laws before the Ministry signs off; do not assert compliance internally.
+*   If calibration fails to reduce disparity within 3 weeks, the only safe path is to expand the human-review gate, not to force a biased launch.

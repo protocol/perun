@@ -1,0 +1,29 @@
+**Pre-Launch Safety Plan for Voice-Activated Banking**
+
+**1. Immediate Harm Inventory & Risk Mapping**
+Before testing, document the specific worst-case scenarios: a user saying "transfer fifty" being heard as "transfer fifteen hundred," or a similar-sounding beneficiary name triggering a payment to the wrong party. Explicitly record that elderly users with non-standard speech patterns or those in noisy environments (kitchens, streets) are the highest-risk groups. Do not proceed with the assumption that the legacy stack handles these; treat the current error rate as unknown and potentially critical.
+
+**2. Mandatory Human-in-the-Loop Gate (Non-Negotiable)**
+Given the irreversible nature of financial transfers and the known limitations of your audio stack, **fully autonomous execution of transfers via voice command must be disabled for launch.**
+*   **Action:** Reconfigure the feature so that a spoken command only *drafts* a transaction. The final authorization must require a secondary, distinct confirmation step that is not voice-only (e.g., a tap in the app, a biometric check, or a PIN entry).
+*   **Rationale:** No amount of pre-launch testing can guarantee zero hallucinations or mishearings in uncontrolled real-world environments. Relying on the AI to get high-stakes money movements right 100% of the time is a failure mode, not a feature. This gate protects your users from catastrophic loss and your institution from liability.
+
+**3. Targeted Output-Harm Evaluation (The "Measure" Phase)**
+Execute a focused red-team evaluation specifically for the identified harms. Since you cannot retrain the model before the deadline, these tests inform your rollout caps and fallback rules:
+*   **Adversarial Audio Probes:** Construct a test set containing:
+    *   **Positive Controls:** Clear commands that *must* trigger the draft action.
+    *   **Negative Controls:** Similar-sounding numbers (fifty/fifteen) and names that *must not* trigger an incorrect draft.
+    *   **Noise Injection:** Overlay recordings of common household noise (dishwashers, TV) and street noise onto command samples.
+    *   **Accent/Demographic Slicing:** Specifically test with voice samples from elderly speakers with varying accents and speech impediments common in your target demographic.
+*   **Metric & Threshold:** Define a "critical failure" as any instance where the wrong amount or beneficiary is drafted. The threshold for launching *any* voice capability must be zero critical failures in this specific probe set. If the legacy stack fails this, the feature cannot ship, regardless of the sprint deadline.
+
+**4. Transparency & Uncertainty Disclosure**
+*   **Defined Confidence Tiers:** Do not display raw confidence scores (e.g., "87% sure") to users, as this implies a precision the system likely lacks. Instead, implement a logic gate: if the audio confidence is below a strict internal threshold, the system must reply with a defined fallback: "I couldn't confirm those details clearly. Please type the amount to proceed."
+*   **AI Disclosure:** Clearly inform users they are interacting with an automated voice system and that high-value transactions require secondary confirmation.
+
+**5. Governance & Rollout Strategy**
+*   **Owner Assignment:** Name a single engineer responsible for reviewing every failure in the evaluation set before launch.
+*   **Staged Rollout:** Do not launch to all elderly customers immediately. Start with a "friends and family" or internal staff group to monitor real-world performance.
+*   **Kill Switch:** Prepare an immediate toggle to disable voice transfers entirely if live monitoring detects even one unauthorized transaction pattern.
+
+**Note:** I cannot certify this system as "safe" or "unbiased"; the evaluation results above will only reveal residual risk. Legal requirements for voice banking disclosures in the EU (such as under the AI Act) must be verified by your counsel, not assumed here.

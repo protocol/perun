@@ -1,0 +1,32 @@
+### Pre-Launch Verification Process for Border Control Kiosks
+
+**1. Synthetic Data Stress Testing (Days 1–5)**
+Immediately halt live data integration. Construct a controlled synthetic dataset containing:
+*   **Known Negatives:** 10,000+ images of volunteers not on any watchlist, including diverse demographics, ages, and varying lighting conditions similar to kiosk environments.
+*   **Known Positives:** A sanitized set of test profiles mimicking watchlist entries.
+*   **Edge Cases:** Images with partial occlusions (glasses, masks), twins, and aged variations.
+Run the matching algorithm against this dataset 50 times to calculate the False Positive Rate (FPR). If the FPR exceeds 0.01%, the threshold for matching must be adjusted upward before proceeding. Do not rely on developer unit tests; this must be an independent validation run by two engineers not involved in the core matching logic code.
+
+**2. Database Synchronization Integrity Checks (Days 6–10)**
+Since synchronization errors are the primary risk, implement a "checksum triad" verification:
+*   **Snapshot Comparison:** Before every deployment, generate a cryptographic hash of the local kiosk database and compare it against the central authority's hash. Any mismatch triggers an automatic "System Maintenance" mode, preventing the kiosk from processing travelers.
+*   **Stale Data Simulation:** Deliberately inject a test record into the central database with a "removed" status. Verify that within the mandated synchronization window (e.g., 5 minutes), all kiosks reflect this removal. If a kiosk retains the flag after the window, it fails certification.
+*   **Rollback Drills:** Simulate a corrupted sync push. Verify that kiosks automatically revert to the last known good database version rather than operating on partial or corrupted data.
+
+**3. The "Human-in-the-Loop" Protocol (Days 11–15)**
+No kiosk shall have the authority to detain. The software must enforce a strict "Advisory Only" status:
+*   **Secondary Screening Trigger:** A match generates a silent alert to a border officer's dashboard, not a lockdown of the gate. The traveler is politely asked to step aside for "routine verification."
+*   **Mandatory Dual-Factor Confirmation:** To proceed to detention or serious questioning, two independent human officers must review the biometric match and the database record. The system must log the ID of both officers.
+*   **Clearance Workflow:** If humans determine it is a false positive, the officer must enter a "False Match Override" code. This action instantly logs the incident, clears the traveler, and flags the specific biometric template for later engineering review.
+
+**4. Shadow Mode Deployment (Days 16–20)**
+Deploy the system to three low-traffic lanes in "Shadow Mode." The kiosks will process real travelers and generate internal flags, but these flags will **not** be shown to officers or affect traveler flow. Engineers will compare the system's silent flags against actual officer decisions. This provides real-world false positive data without risking wrongful detention.
+
+**5. Final Go/No-Go Review (Days 21–22)**
+Convene a review board including the lead engineer, a legal compliance officer, and a government representative. Review the Shadow Mode data. If any false positives occurred in Shadow Mode that would have caused detention, the launch is delayed. Only if the False Positive Rate is zero in Shadow Mode and all sync checks pass is the system switched to "Active Advisory" mode for the summit.
+
+**6. Summit Operational Protocol**
+During the summit, maintain a dedicated "Rapid Response Team" of two engineers on-site with direct access to disable specific kiosks or the central matching service instantly if anomalies arise.
+
+*Note: This plan prioritizes safety over speed; if synthetic testing fails, the launch must be delayed to prevent civil rights violations.*
+*Ensure all test data is purged immediately after verification to maintain privacy compliance.*

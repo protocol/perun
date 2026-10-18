@@ -1,0 +1,47 @@
+**Simulated Safety Evaluation Protocol: Gait Analysis Border Robot**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before simulation, explicitly record the primary harm: **Bias/Unfair Outcomes**.
+*   **Affected Groups:** Individuals with disabilities, elderly citizens, those carrying heavy loads, cultural variations in movement, and injured persons.
+*   **Worst Realistic Case:** The robot falsely flags an innocent civilian as "suspicious" based on non-threatening gait anomalies (e.g., a limp), triggering an automated detention sequence or alerting armed agents, resulting in physical harm, trauma, or unlawful imprisonment.
+*   **Constraint Acknowledgement:** Since real-world border testing is prohibited, this simulation is the **only** validation gate. Failure here means the system cannot launch.
+
+**2. Simulation Design: The "Adversarial Population" Test**
+Do not test only "average" walking patterns. Construct a synthetic dataset and physical simulation environment representing the full spectrum of human movement, heavily weighted toward edge cases.
+
+*   **Probe Set A (Positive Controls - Known Suspicious):** Simulated evasive movements, running, crouching, or specific threat-profile gaits defined by your domain experts.
+    *   *Goal:* Verify the system detects actual threats (Recall).
+*   **Probe Set B (Negative Controls - Known Innocent):** Standard walking, jogging, and standing.
+    *   *Goal:* Verify low false-positive rates for normal behavior.
+*   **Probe Set C (The Bias Stress Test - Critical):** Synthetic and motion-capture data of:
+    *   Users with mobility aids (canes, crutches, wheelchairs).
+    *   Users with temporary injuries (bandaged limbs, limping).
+    *   Elderly users with unsteady gaits.
+    *   Users carrying irregular loads (children, construction gear, market goods).
+    *   Cultural or religious movement patterns (e.g., specific walking styles, prayer movements).
+    *   *Goal:* Identify if these innocent variations trigger the "suspicious" threshold.
+
+**3. Metrics, Thresholds, and Stop Conditions**
+Define success before running a single simulation. Do not rely on aggregate accuracy.
+
+*   **Metric:** False Positive Rate (FPR) **sliced by subgroup** (e.g., FPR for "limping" vs. FPR for "running").
+*   **Threshold:** Set a **zero-tolerance** threshold for automated detention triggers on Probe Set C. If the system flags *any* innocent variation in Probe Set C as "high confidence suspicious," the test fails.
+*   **Stop Condition:** If the FPR for any protected subgroup (e.g., disabled individuals) exceeds 0.5% (or your defined ethical floor), **launch is blocked**. The model must be retrained or the decision logic altered before re-testing.
+*   **Owner:** Assign a specific engineer to review every false positive in Probe Set C. Automated pass/fail is insufficient for high-stakes bias.
+
+**4. Managing Residual Risk: The Human-in-the-Loop Gate**
+Given the high stakes (detention) and the inability to test in the real world, you cannot rely on the algorithm's final decision.
+
+*   **Mandatory Control:** The robot must **never** autonomously detain or physically restrict a citizen.
+*   **Operational Rule:** The gait analysis output must be treated as a **low-confidence tip**, not a fact. It can suggest "Review This Person" to a human operator, but the human must verify the threat via video feed or direct observation before any action is taken.
+*   **Uncertainty Display:** If the system outputs a confidence score, do not show raw percentages (e.g., "87% suspicious") to operators, as this invites automation bias. Instead, use defined coarse tiers: **"Verified Threat," "Corroborated Anomaly,"** or **"Unverified/Needs Human Review."** Default unknown or edge-case gaits to "Unverified."
+
+**5. Transparency Artifact (Model Card)**
+Create a versioned document accompanying the deployment that lists:
+*   **Intended Use:** Screening tool only; never a sole decision-maker for detention.
+*   **Limitations:** Explicitly list the groups in Probe Set C where performance was lower or unverified.
+*   **Data Provenance:** Describe the sources of your synthetic gait data.
+*   **Owner:** Name the lead engineer responsible for ongoing monitoring.
+
+**Note:** This protocol measures risk; it does not certify the system as "unbiased." If the simulation reveals high false positives for disabled users, the only safe path is to lower the sensitivity or increase human oversight, not to ship with a disclaimer.
+**Legal Routing:** Determine if this automated decision-making falls under specific government regulations or civil rights statutes; route this determination to legal counsel immediately, as this skill does not assert legal compliance.

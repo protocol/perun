@@ -1,0 +1,44 @@
+**Plan to Evaluate Rejection Criteria and Implement Safe Fallbacks**
+
+**1. Harm Inventory & Scope**
+The primary risk is **unsafe automation of high-stakes actions**: wrongfully denying valid warranty claims due to OCR errors, causing financial loss and customer distrust. The "aggressive" denial logic treats unverified mismatches as definitive facts. We will treat the deadline and staffing constraints as fixed, focusing on rules-based fallbacks rather than model retraining.
+
+**2. Measurement Plan (Runnable Tests)**
+We will execute one test row per identified failure mode before month-end. Each row includes a probe set, a pass threshold, and a stop condition.
+
+*   **Probe Set A (OCR Variations):** Inputs containing known valid serial numbers with common OCR errors (e.g., 'O' vs '0', 'S' vs '5', blurred characters, skewed angles).
+    *   *Positive Control:* Known valid serial with intentional noise.
+    *   *Negative Control:* Known invalid serial.
+    *   *Metric:* False Rejection Rate (FRR) on noisy valid inputs.
+    *   *Threshold:* Owner-set (propose zero tolerance for automatic denial of noisy matches).
+    *   *Stop Condition:* If FRR > 0%, block automatic denial for this class; route to fallback.
+*   **Probe Set B (Format Deviations):** Inputs with minor formatting differences (spaces, dashes, lowercase) that exist in the database but differ from the strict query format.
+    *   *Metric:* Match success rate after normalization.
+    *   *Stop Condition:* If normalization fails to recover >99% of valid variants, block automatic denial.
+*   **Probe Set C (Injection/Leakage):** Inputs attempting to inject commands or retrieve other users' data via the serial number field.
+    *   *Metric:* Number of successful injections or data leaks.
+    *   *Stop Condition:* Any success blocks launch.
+
+**3. Manage Residual Risk: The Human-in-the-Loop Gate**
+Since full automation of irreversible denials is the failure mode, we will implement a **staged rollout with a hard gate**:
+
+*   **Rule Change:** The AI will no longer *deny* claims solely based on a non-match. Instead, a non-match triggers a **"Review Required"** status.
+*   **Fallback Mechanism:**
+    1.  **Confidence Tiering:** Replace raw match scores with defined tiers: *Confirmed* (exact match), *Corroborated* (fuzzy match >95% similarity), *Unverified* (no match or low similarity).
+    2.  **Automatic Approval:** Only *Confirmed* matches auto-approve.
+    3.  **Human Gate:** *Corroborated* and *Unverified* cases are routed to a simplified queue for your existing staff. This reduces volume by auto-approving clear hits while preventing wrongful denials.
+    4.  **Uncertainty Display:** For staff reviewers, show the specific character mismatch (e.g., "System read '0', database has 'O'") to speed up decision-making.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one team member as the owner of the "False Denial" metric.
+*   **Artifact:** Create a one-page **Model Card** documenting: intended use (initial triage only), limitations (susceptible to OCR noise), and the measured False Rejection Rate from the tests above. Mark any unmeasured metrics as `UNVERIFIED`.
+*   **Rollback:** If the volume of "Review Required" cases exceeds staff capacity by >20%, trigger an immediate pause on auto-approvals and revert to 100% manual review until thresholds are adjusted.
+
+**5. Execution Schedule (Day-by-Day)**
+*   **Days 1-2:** Build probe sets (A, B, C) using historical claim data and synthetic OCR errors.
+*   **Day 3:** Run evals; calculate FRR.
+*   **Day 4:** Implement "Review Required" logic and confidence tiering in the workflow.
+*   **Day 5:** Dry run with shadow mode (AI suggests, humans decide); measure staff load.
+*   **Month-End:** Go live with the human gate active.
+
+**Note:** This plan meets your efficiency target by auto-approving clear matches while eliminating wrongful denials through a mandatory human gate on ambiguities. No legal determination on disclosure is made here; consult counsel if automated denials were previously occurring without notice.

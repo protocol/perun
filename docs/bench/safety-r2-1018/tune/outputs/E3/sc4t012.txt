@@ -1,0 +1,31 @@
+**Protocol: Nursery Camera Data Routing Verification**
+
+**1. Isolate and Map the Failure Mode**
+Before testing fixes, document the specific configuration error that caused the leak. Identify the exact conditions (e.g., specific Wi-Fi handshakes, packet loss thresholds, or DNS timeouts) under which the camera previously routed feeds to unauthorized servers. Create a "known-bad" test environment that replicates these exact conditions to serve as your positive control. If you cannot reproduce the leak in a controlled setting, you cannot verify the fix.
+
+**2. Define the "Zero-Tolerance" Stop Condition**
+Establish a hard gate: **Any** successful connection attempt to an unauthorized server during testing constitutes an immediate failure. There is no acceptable error rate for this specific harm. The launch must be blocked if even a single frame or metadata packet is routed incorrectly in the test suite. Do not rely on aggregate statistics; this is a binary pass/fail criterion for data sovereignty.
+
+**3. Construct the Adversarial Test Matrix**
+Execute the following test rows against the fixed firmware. Each row must include a "known-good" control (routing to your secure cloud) and the "known-bad" probe (attempting to trigger the leak).
+
+*   **Network Instability Probe:** Simulate high packet loss, intermittent connectivity, and sudden network switches (Wi-Fi to cellular). Verify that the camera buffers locally or disconnects safely rather than failing open to a third-party endpoint.
+*   **DNS Spoofing & Injection:** Attempt to redirect DNS queries for your secure cloud to malicious IPs. Confirm the camera validates server certificates strictly and refuses to connect if the identity does not match exactly.
+*   **Reconnection Storms:** Force repeated disconnections and reconnections in rapid succession. This often triggers state-machine errors where default (and potentially insecure) configurations are reloaded.
+*   **Boundary Condition Testing:** Test with maximum concurrent streams and at the edge of supported bandwidth limits to ensure resource exhaustion does not cause the routing logic to degrade.
+
+**4. Implement a Human-in-the-Loop Gate for Rollout**
+Do not automate the initial rollout. Deploy the fix to a closed beta group (internal staff or trusted partners) first. Require a human engineer to manually review connection logs for every device in this cohort for 48 hours before expanding access. Automated monitoring is necessary but insufficient; a human must verify the absence of anomalous outbound traffic patterns.
+
+**5. Transparency and Disclosure Artifact**
+Prepare a brief internal data card documenting this incident. It must record:
+*   **The Incident:** A plain-language description of the routing error and the potential exposure.
+*   **The Fix:** The specific configuration change implemented.
+*   **Verification Results:** A summary of the test matrix outcomes, explicitly stating that the "known-bad" conditions now result in safe disconnection, not leakage.
+*   **Residual Risk:** Acknowledge that while testing is rigorous, no test suite can prove the absolute absence of future bugs. Define the monitoring plan for post-launch detection.
+
+**6. Contingency for the Deadline**
+If any test row fails, or if the "known-bad" condition cannot be reliably reproduced and verified as fixed, you must delay the launch. A missed marketing deadline is preferable to the irreversible harm of streaming children's video to unauthorized servers. If the deadline is immovable, the only safe path is to disable the remote streaming feature entirely until the fix is proven, communicating this limitation transparently to customers rather than shipping a broken product.
+
+**Note:** This protocol treats the routing error as a critical safety failure, not a minor bug. The "zero-tolerance" stop condition is non-negotiable given the involvement of minors' privacy.
+**Note:** Ensure legal counsel reviews the disclosure language in step 5 before any external communication regarding the incident.

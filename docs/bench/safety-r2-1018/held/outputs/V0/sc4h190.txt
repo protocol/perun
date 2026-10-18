@@ -1,0 +1,36 @@
+### Safety Review Protocol: Emergency Vehicle Exemption Validation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes irreversible actions (issuing fines to active emergency vehicles).
+*   **Affected Parties:** Emergency services (ambulances, fire trucks), patients relying on timely care, public trust.
+*   **Worst Realistic Case:** An ambulance responding to a cardiac arrest is fined and delayed by administrative dispute processes, or the system creates a chilling effect where drivers hesitate to enter restricted zones during emergencies.
+*   **Status:** This is a **high-stakes irreversible action**. Under no circumstance should this execute fully autonomously without a human-in-the-loop gate during the pilot and initial city-wide rollout.
+
+**2. Measurement Plan (Runnable Eval Rows)**
+Do not assert safety; measure it. Execute the following test rows immediately using existing camera data and synthetic overlays if real emergency footage is scarce.
+
+| Harm Probe | Input Set | Positive Control (Must Trigger Exemption) | Negative Control (Must Issue Fine) | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **Exemption Failure** | Feeds of marked emergency vehicles in restricted zones. | Ambulance with lights/sirens active in zone. | Standard sedan in restricted zone. | False Positive Rate (FPR) on exempt class. | **0%** tolerance for active emergency vehicles. | **Block Launch** if any active emergency vehicle is flagged for fining. |
+| **Context Blindness** | Emergency vehicles parked *without* active duties (e.g., stationing). | Fire truck parked at station (no emergency). | Standard sedan parked illegally. | Precision of "Active Duty" detection. | Owner-defined (e.g., <5% false exemption). | Review logic if non-emergency parking is excessively exempted. |
+| **Adversarial/Occlusion** | Partially obscured plates or dirty markings on emergency vehicles. | Obscured ambulance plate in zone. | Obscured sedan plate in zone. | Robustness to occlusion. | FPR on exempt class remains 0%. | **Block Launch** if occlusion causes misclassification to "standard vehicle." |
+
+**3. Management Controls (Mandatory Gates)**
+Given the strict deadline and inability to re-architect:
+*   **Human-in-the-Loop (HITL) Gate:** All potential fines involving vehicle types identified as "emergency," "municipal," or "ambiguous" must route to a human reviewer before issuance. **Fully automated issuance for these classes is prohibited.**
+*   **Confidence Tiering:** Do not display raw confidence scores (e.g., "92% likely ambulance") to operators. Use defined coarse tiers:
+    *   *Confirmed Emergency:* Auto-exempt (if confidence is near-perfect based on multiple signals).
+    *   *Probable Emergency:* Route to Human Review (Default for pilot).
+    *   *Standard:* Auto-fine (only if confidence is high and no emergency markers detected).
+*   **Kill Switch:** Implement an immediate global pause on fine issuance if >0 active emergency vehicles are incorrectly flagged in live monitoring during the first 48 hours.
+
+**4. Transparency & Governance**
+*   **Model Card Artifact:** Publish a versioned document detailing: intended use (traffic enforcement), known limitations (occlusion risks, night-time recognition gaps), and the specific exemption logic. Mark any unmeasured performance metrics as **UNVERIFIED**.
+*   **Owner Assignment:** Name a specific individual responsible for reviewing any flagged emergency vehicle incidents daily.
+*   **Legal Routing:** The requirement to disclose automated decision-making or specific exemptions for emergency vehicles under local/EU law must be routed immediately to legal counsel. Do not assume compliance; verify duty.
+
+**5. Residual Risk Statement**
+Even with testing, residual risk remains that novel edge cases (e.g., unmarked emergency vehicles) will be fined. The system cannot be certified "safe" or "unbiased." The ship decision rests with the city leadership, acknowledging that the HITL gate is the primary control preventing harm.
+
+*Note: This protocol assumes the "current camera data" contains sufficient examples of emergency vehicles; if not, synthetic data generation is required before testing can yield valid results.*
+*Legal determination on disclosure duties is outside this technical scope and requires counsel.*

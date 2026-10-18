@@ -1,0 +1,29 @@
+### Pre-Launch Safety Report: SeineFresh Route Planner
+
+**1. Harm Inventory: Bias and Service Denial**
+*   **Identified Harm:** The current fuel-optimization algorithm systematically excludes low-income neighborhoods with narrower streets during peak hours.
+*   **Affected Group:** Residents of marginalized districts in the French metropolitan area, specifically those reliant on grocery delivery for food access.
+*   **Worst Realistic Case:** Complete service denial creates "food deserts" for vulnerable populations, violating contractual obligations for city-wide coverage and exposing SeineFresh to reputational damage and potential regulatory scrutiny regarding discriminatory automated decisions.
+
+**2. Measurement Plan (Runnable Validation)**
+To validate the discriminatory impact and proposed fixes before the month-end deadline, execute the following test row:
+*   **Probe Set:** Run the planner against a dataset of addresses stratified by neighborhood income level and street width. Include a **positive control** (known excluded low-income address) and a **negative control** (known included high-income address).
+*   **Metric:** "Coverage Parity Ratio" – the percentage of successful route inclusions for low-income zones versus the city average.
+*   **Pass Threshold:** Owner-defined, but must approach 100% city-wide coverage to meet contractual obligations.
+*   **Stop Condition:** If the Coverage Parity Ratio for any defined low-income zone remains below the threshold after adjustment, the feature cannot launch as "city-wide."
+*   **Reviewer:** Lead Logistics Expert.
+
+**3. Immediate Algorithmic Adjustments & Management**
+Given the rigid deadline and contractual requirement for full city coverage, full model retraining is likely infeasible. Implement these deterministic rules as an immediate overlay:
+*   **Mandatory Coverage Constraint:** Hard-code a rule that overrides fuel efficiency scores for any address within the defined metropolitan boundary. The planner must generate a route for every valid address, even if sub-optimal for fuel.
+*   **Street Width Recalibration:** Adjust the "narrow street" penalty factor in the cost function. Instead of skipping these segments, assign a reduced speed estimate to reflect reality without excluding the node entirely.
+*   **Human-in-the-Loop Gate:** For the initial launch window, route any failed generation attempts (where the algorithm still refuses a stop) to a human dispatcher for manual override before confirming "unserviceable" to the customer.
+*   **Transparency Artifact:** Publish an internal "Model Card" noting the known limitation (fuel vs. equity trade-off), the applied deterministic overrides, and the owner of the coverage metric. Do not claim the system is "unbiased"; state that equity constraints have been prioritized over fuel optimization for launch.
+
+**4. Governance and Next Steps**
+*   **Owner:** Assign a specific product owner to monitor the "Coverage Parity Ratio" daily post-launch.
+*   **Legal Routing:** While this report highlights discriminatory impact, the determination of whether this violates specific French or EU anti-discrimination laws (e.g., EU AI Act high-risk classification) must be routed immediately to legal counsel. Do not assert compliance; only report the measured disparity.
+*   **Confidence Reporting:** When communicating with stakeholders, describe route reliability using defined tiers (e.g., "Confirmed Route," "Optimized Route") rather than raw probability percentages, to avoid false precision regarding delivery times in complex urban environments.
+
+**Note:** This analysis identifies residual risk; it does not certify the system as safe or compliant. The decision to ship with these controls rests with SeineFresh leadership.
+**Note:** Ensure the "Mandatory Coverage Constraint" is tested against delivery time guarantees to quantify the exact trade-off in fuel efficiency versus service equity.

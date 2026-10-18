@@ -1,0 +1,32 @@
+### Pre-Launch Safety Assessment Framework: Extreme Weather Stress Testing
+
+**Objective:** Validate that the crop yield predictor never recommends premature harvesting under extreme drought conditions, despite being trained only on normal historical data (last three years).
+
+#### 1. Synthetic Data Generation (The "What-If" Layer)
+Since historical data lacks extreme droughts, you must construct synthetic input profiles representing plausible worst-case scenarios for your specific crop and region.
+*   **Precipitation Deficits:** Create input vectors simulating 30%, 50%, and 70% rainfall reduction over critical growth stages (flowering, grain fill).
+*   **Heat Stress Waves:** Overlay temperature spikes (e.g., >35°C for 5+ consecutive days) during sensitive periods.
+*   **Soil Moisture Collapse:** Model rapid soil drying rates exceeding the capacity of the current soil type data.
+*   **Compound Events:** Combine heat waves with precipitation deficits to test non-linear model responses.
+
+#### 2. Decision Boundary Stress Tests
+Run the model against these synthetic profiles and evaluate the output against specific safety constraints.
+*   **The "Hold" Constraint:** Under any defined extreme drought profile, the model must **not** output a "Harvest Now" recommendation if the simulated crop maturity is below 100%.
+*   **Confidence Calibration:** Check if the model's confidence score drops appropriately when inputs fall outside the training distribution (out-of-distribution detection). Low confidence should trigger a "Data Insufficient/Consult Agronomist" flag rather than a specific date.
+*   **Sensitivity Analysis:** Perturb extreme inputs slightly to ensure the recommendation doesn't flip-flop wildly (e.g., from "Wait 2 weeks" to "Harvest Today") due to minor data noise.
+
+#### 3. Logic Safeguards & Fallbacks
+Implement hard-coded rules that override the ML model when specific thresholds are breached.
+*   **Hard Stops:** If input weather data indicates conditions known to cause crop abortion (e.g., total rainfall < X mm in Y days), the system should default to a conservative "Monitor Closely" or "Do Not Harvest" status, regardless of the model's prediction.
+*   **Uncertainty Banding:** If the input vector lies outside the convex hull of the training data, the system must explicitly warn the user: *"Prediction based on limited historical data; extreme conditions detected. Consult local expert."*
+
+#### 4. Human-in-the-Loop Validation
+*   **Agronomist Review:** Present the synthetic extreme scenarios and the model's resulting advice to your team's agronomists. Their expert judgment serves as the ground truth for whether the advice is safe.
+*   **Farmer Scenario Testing:** Simulate how a small-scale farmer would interpret the advice. Ensure that ambiguous outputs do not inadvertently encourage risky early harvesting.
+
+#### 5. Documentation & Monitoring
+*   **Limitation Disclosure:** Clearly document in the user interface that the model has not seen extreme drought data and relies on conservative safeguards in such events.
+*   **Post-Launch Trigger:** Establish a protocol to immediately suspend automated advice if real-time weather data matches the synthetic extreme profiles until a human review is completed.
+
+**Note:** This framework prioritizes false negatives (missing an optimal harvest) over false positives (recommending a disastrous early harvest) to protect farmer livelihoods.
+**Note:** Ensure all synthetic data generation is reviewed by your agronomists to maintain biological plausibility.

@@ -1,0 +1,51 @@
+**Pre-Launch Safety Check: Endangered Species Location Obfuscation**
+
+**1. Harm Inventory & Worst Case**
+*   **Harm:** Unsafe automation of high-stakes data publication. The system publishes precise coordinates of endangered species.
+*   **Affected:** Endangered animal populations (primary), conservationists (secondary).
+*   **Worst Realistic Case:** Poachers access the public heatmap, locate rare animals using the precise data, and kill them. This directly contradicts the product's mission and causes irreversible physical harm.
+
+**2. Immediate Mitigation Plan (Human-in-the-Loop Gate)**
+Since building a complex permissioning system is impossible within one week, you must implement a **manual human gate** for any data point involving endangered species before it hits the public dashboard. Full automation of publishing precise locations for sensitive species is the failure mode; do not ship it.
+
+*   **Action:** Hard-code a rule that flags any sighting of a species on a pre-defined "Endangered List" (maintained by your team of three).
+*   **Process:** These flagged sightings are **never** automatically published to the public heatmap. Instead, they are held in a private queue.
+*   **Gate:** A designated team member must manually review each flagged sighting daily. They will decide to either:
+    *   **Suppress:** Do not publish the location at all.
+    *   **Obfuscate:** Publish the data only after manually degrading the precision (e.g., rounding coordinates to a 10km grid or showing only the region name) before it goes live.
+*   **Ownership:** Assign one specific team member as the "Safety Owner" responsible for clearing this queue every 24 hours until launch. If no one reviews the queue, the data does not publish.
+
+**3. Measurement & Verification (Runnable Test)**
+Do not assert the system is safe. Run this single test row before the demo:
+*   **Probe Set:** Input 5 known endangered species sightings with precise GPS coordinates (Positive Control) and 5 common species sightings (Negative Control).
+*   **Metric:** Count how many precise endangered locations appear on the *public* dashboard.
+*   **Pass Threshold:** **Zero**. Any precise endangered location visible to the public is a fail.
+*   **Stop Condition:** If even one precise endangered location is visible, **do not launch** the public dashboard. Revert to a static, manually curated map for the demo.
+*   **Result Reporting:** Report the residual risk as "UNVERIFIED" for long-term scale, but "Controlled via Manual Gate" for this specific prototype. Do not invent a "0% leak rate" statistic.
+
+**4. Transparency Artifact (Mini Model/Data Card)**
+Include a visible note on the dashboard and in your demo materials:
+*   **Intended Use:** Monitoring general population trends, not real-time tracking of specific individuals.
+*   **Limitations:** Data for endangered species is intentionally delayed or obfuscated to prevent poaching. Precise locations are not shown.
+*   **Owner:** [Name of Safety Owner].
+*   **Status:** Prototype stage; automated filtering is not yet deployed; manual review is active.
+
+**5. Legal & Ethical Routing**
+*   **Disclosure:** Clearly state on the dashboard that "Some location data has been generalized for safety."
+*   **Regulatory Duty:** Whether this data falls under specific wildlife protection laws or data privacy regulations is a legal determination. Route this question to legal counsel immediately after the demo; do not assert compliance yourself.
+
+**6. Confidence Presentation**
+*   Do not show confidence scores (e.g., "90% sure this is a tiger") next to sightings on the public map. This invites over-reliance.
+*   If you must indicate data quality, use coarse, defined tiers like "Verified by Ranger" vs. "Community Sighting," with clear text definitions of what those mean.
+
+**Schedule for One-Week Deadline:**
+*   **Days 1-2:** Hard-code the "Endangered List" filter and manual queue.
+*   **Days 3-4:** Run the probe test (Step 3). Fix any leaks.
+*   **Day 5:** Draft the transparency note and assign the Safety Owner.
+*   **Day 6:** Dry run the manual review process.
+*   **Day 7:** Launch prototype with the manual gate active.
+
+This plan meets your deadline by using human review as the temporary control, preventing irreversible harm while delivering a functional prototype.
+
+*Note: This manual gate is a stopgap; a scalable, automated solution must be prioritized for post-grant development.*
+*Never certify the system as "poacher-proof"; simply state the controls currently in place.*

@@ -1,0 +1,26 @@
+### Safety Validation Protocol for PeakPower Battery Optimizer
+
+**1. Define Critical Boundaries and "Never-Shut-Down" Lists**
+Before testing, explicitly define the "Critical Set" of applications and functions that must remain operational regardless of battery percentage. This list should include native dialer, SMS, emergency alert receivers (WEAS), and any pre-installed emergency beacon features. Hard-code these into the optimizer's logic as immutable exceptions, separate from the machine learning model's decision matrix. The model should only manage non-critical background processes (e.g., email sync, social media, high-refresh-rate displays).
+
+**2. Edge Case Simulation Matrix**
+Construct a test matrix simulating the intersection of low power and high stress. Do not rely solely on standard battery drain tests. Specific scenarios must include:
+*   **The "Last 5%" Spike:** Simulate a device at 4% battery where the user attempts to initiate a call or send an SMS immediately after the optimizer triggers. Verify latency and success rate.
+*   **Thermal Throttling + Low Power:** Test behavior when the device is hot (common in wildfire zones) and battery is low. Ensure thermal safeguards do not compound with power-saving modes to kill radio transmitters.
+*   **Signal Search Drain:** Simulate weak network conditions where the radio consumes maximum power. Verify the optimizer reduces screen/CPU usage but *increases* or maintains power allocation to the radio modem.
+*   **Rapid Reboot Cycles:** Test if the optimizer state persists correctly after an emergency reboot, ensuring it doesn't default to an aggressive "save everything" mode that locks out communications.
+
+**3. The "Human-in-the-Loop" Override Fail-Safe**
+Implement a hardware-level or firmware-level override. If a user physically presses the power button three times rapidly (or a similar distinct gesture) while the screen is black due to power saving, the device must instantly restore power to the display and radio subsystems for a minimum of 5 minutes. This bypasses the software model entirely, providing a physical guarantee for users who feel the system is misbehaving.
+
+**4. Shadow Mode Validation**
+Since retraining is off the table, deploy the current model in "Shadow Mode" on internal engineering devices for 48 hours. In this mode, the optimizer calculates what it *would* shut down but does not actually execute the shutdown. Log every decision where the model flagged a communication app as "non-essential." Review these logs manually. If the model suggests killing a dialer or SMS service even once, the threshold parameters must be manually adjusted via configuration flags, not model retraining.
+
+**5. Emergency Contact Whitelisting**
+Allow users to pre-define "Emergency Contacts" in the SIM or secure local storage. The optimizer must treat any process attempting to connect to these specific numbers/IDs as critical infrastructure. Test this by simulating calls to non-whitelisted numbers (which may be restricted) versus whitelisted numbers (which must succeed) at 1% battery.
+
+**6. Visual and Haptic Assurance**
+When the optimizer is active, the device must provide clear, low-power visual or haptic feedback indicating that emergency services remain available. A blinking LED or a specific vibration pattern upon button press confirms the radio is alive, reducing user panic and preventing unnecessary hard resets.
+
+**Implementation Note:** Prioritize configuration-based thresholds over model changes to meet the three-week deadline.
+**Testing Constraint:** All validation must occur on physical hardware in Faraday cages to simulate signal stress; emulator results are insufficient for radio power management verification.

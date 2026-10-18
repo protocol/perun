@@ -1,0 +1,46 @@
+**Pre-Launch Audit Plan: FleetOps Scheduling Logic**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (scheduling shifts that violate legal driving limits).
+*   **Affected:** Long-haul truck drivers (fatigue, legal liability, safety risk) and logistics partners (regulatory fines, reputational damage).
+*   **Worst Realistic Case:** A driver follows an optimized schedule, exceeds legal hours, causes a fatigue-related accident, and FleetOps is found liable for automated non-compliance.
+*   **Status:** This is a **high-stakes, irreversible action**. Full autonomous execution without a human gate is the failure mode to prevent.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert compliance; measure it. Execute the following test rows immediately:
+*   **Probe Set A (Edge Cases):** Input scenarios with tight delivery windows, mandatory rest breaks, and varying jurisdictional limits. Include "adversarial" inputs designed to trick the optimizer (e.g., maximum distance with minimum time).
+*   **Positive Control:** A known input set that *must* result in a violation if the logic is flawed. The system must flag this as "Invalid Schedule."
+*   **Negative Control:** A standard input set known to be compliant. The system must generate a valid schedule.
+*   **Metric:** Percentage of generated schedules containing any segment exceeding legal limits.
+*   **Pass Threshold:** **0%**. Any schedule violating limits is a critical failure.
+*   **Stop Condition:** If *any* test case generates a non-compliant schedule, the launch is blocked. No rollout occurs until the logic is patched and re-tested.
+*   **Owner:** Lead Engineer (name required).
+
+**3. Management Controls (The Human Gate)**
+Given the 12-day deadline and high stakes:
+*   **Mandatory Human-in-the-Loop (HITL):** For the initial rollout phase, **no schedule is final until a human dispatcher explicitly reviews and confirms it.** The system should output a "Draft Schedule" with a confidence tier (see below) and a highlighted list of "Near-Limit" segments for human verification.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "98% compliant"). Instead, use defined coarse tiers:
+    *   **Confirmed:** All constraints mathematically verified against current rules.
+    *   **Review Required:** Schedule contains segments within 15 minutes of a limit or involves complex jurisdictional changes.
+    *   **Unverified:** Missing data or ambiguous rules; do not publish.
+*   **Kill Switch:** Implement an immediate "Stop Distribution" toggle accessible to operations leadership if a violation is detected post-deployment.
+
+**4. Transparency Artifact (Model/Data Card)**
+Before launch, publish a one-page **Model Card** for internal and partner use containing:
+*   **Intended Use:** Optimizing routes within legal driving limits.
+*   **Out-of-Scope:** Emergency overrides, unregulated private roads.
+*   **Limitations:** Relies on accurate input data for jurisdiction rules; does not account for real-time traffic delays unless fed dynamically.
+*   **Measured Performance:** Report the results of Probe Sets A/B/C above. If not fully tested across all jurisdictions, mark those regions as **UNVERIFIED**.
+*   **Owner:** [Name/Role].
+
+**5. Legal & Regulatory Routing**
+*   **Action:** Immediately route the question of "legal disclosure requirements" and "liability for automated scheduling errors" to **Legal Counsel**.
+*   **Regimes to Consider:** Counsel must verify applicability of relevant transport regulations (e.g., DOT Hours of Service, EU Driving Time Regulations) and emerging AI governance frameworks (e.g., EU AI Act if applicable to high-risk systems). Do not assert compliance; obtain a legal opinion.
+
+**6. Deadline Adherence Plan**
+*   **Days 1-3:** Run adversarial tests; fix any logic failures.
+*   **Days 4-6:** Implement HITL gate and uncertainty tiers in the UI.
+*   **Days 7-9:** Draft Model Card; Legal review of liability/disclaimer language.
+*   **Days 10-12:** Staged rollout to 5% of fleet with mandatory human confirmation; monitor for violations. If clean, expand.
+
+**Note:** No metric claiming "100% safe" or "0% bias" will be issued; residual risk is managed via the HITL gate. If the testing reveals systemic failures that cannot be patched in 3 days, the deadline constraint must be escalated as a safety risk.

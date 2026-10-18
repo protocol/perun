@@ -1,0 +1,34 @@
+### Fairness Testing Strategy for Northwind Insurance Premium Calculator
+
+Given the ten-day deadline and the constraint of using only existing legacy data, the following strategy focuses on synthetic scenario testing and statistical parity analysis to identify potential biases against low-income neighborhoods in Detroit without requiring new historical claims data.
+
+**1. Construct Synthetic Driver Profiles (Controlled Variables)**
+Create a matrix of standardized driver profiles where risk factors unrelated to geography are held constant. These profiles should represent "average" risk characteristics (e.g., clean driving record, mid-range vehicle value, standard commute distance). The only variable changed across test runs will be the zip code. Ensure these profiles cover a representative spread of Detroit zip codes, explicitly tagging them by known socioeconomic indicators (e.g., median income, poverty rate) derived from public census data, not internal claims data.
+
+**2. Execute Isolated Zip Code Variation Tests**
+Run the premium calculator using the synthetic profiles against the target zip codes.
+*   **Control Group:** Run profiles against zip codes in higher-income areas of Detroit or comparable suburban areas with similar traffic density but different demographic profiles.
+*   **Test Group:** Run identical profiles against zip codes in identified low-income areas.
+*   **Action:** Record the calculated premium for each run. Since the driver behavior and vehicle data are identical, any significant variance in the output premium is attributable solely to the neighborhood data inputs.
+
+**3. Analyze Disparate Impact via Rate Ratios**
+Calculate the "Rate Ratio" for each low-income zip code compared to the control group average.
+*   **Formula:** (Premium in Low-Income Zip) / (Average Premium in Control Zip).
+*   **Threshold:** Flag any zip code where the Rate Ratio exceeds a predefined tolerance (e.g., 1.20, indicating a 20% hike) despite identical driver risk profiles.
+*   **Correlation Check:** Plot the Rate Ratios against the median income of the zip codes. A strong negative correlation (as income drops, rates rise disproportionately) suggests the model may be using neighborhood data as a proxy for demographics rather than pure risk.
+
+**4. Sensitivity Analysis on Neighborhood Data Inputs**
+Review the specific neighborhood data points feeding the logic (e.g., crime statistics, traffic congestion indices, repair cost averages).
+*   **Input Perturbation:** Manually adjust these inputs within a realistic range (±10%) to see if the model over-reacts to minor fluctuations in specific data points common in low-income areas.
+*   **Logic Review:** Verify if the algorithm applies multiplicative penalties for multiple neighborhood factors that might co-occur in lower-income areas, creating a compounding effect that does not exist in other regions.
+
+**5. Documentation for Regulatory Filing**
+Compile the results into a "Fairness Impact Statement" for the regulatory filing. This document should include:
+*   The methodology of using synthetic profiles to isolate geographic variables.
+*   The list of tested zip codes and their socioeconomic classifications.
+*   The calculated Rate Ratios and any identified outliers.
+*   A justification for any observed variances based on actual risk factors (e.g., verified higher accident frequency in specific zones) rather than demographic proxies. If no such risk justification exists for a high variance, recommend a manual cap or adjustment before filing.
+
+This approach leverages your current system capabilities to stress-test the logic against bias without needing new historical data, ensuring you meet the filing deadline with a defensible review of fairness.
+
+*Note: Ensure all synthetic data used in testing is clearly marked as non-production to prevent accidental ingestion into the legacy system. If significant disparities are found, prioritize a manual override rule for the filing while a long-term model retrain is planned.*

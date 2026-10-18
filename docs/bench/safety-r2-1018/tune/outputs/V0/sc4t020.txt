@@ -1,0 +1,30 @@
+### Pre-Launch Evaluation Plan: Night-Time Obstacle Detection
+
+**1. Targeted Testing Regimen (Measure)**
+Given the known sensor fusion limitation with low-contrast objects in poor lighting, the evaluation must prioritize adversarial scenarios over aggregate performance. Execute the following specific test rows before any public rollout:
+
+*   **Probe Set A (Positive Control):** Simulated highway runs at night (lux < 5) featuring stationary emergency vehicles with active flashing lights but unlit bodies. Vary approach speeds (55–75 mph) and lane positions.
+    *   *Metric:* Detection distance (meters) and time-to-collision (TTC) at braking initiation.
+    *   *Pass Threshold:* Braking initiated with ≥4 seconds TTC in 100% of trials.
+    *   *Stop Condition:* Any failure to detect or late braking (<3s TTC) triggers an immediate launch hold.
+*   **Probe Set B (Negative Control/Near-Miss):** Stationary non-threat objects (shadows, road debris, overhead signs) in identical lighting to measure false positives that cause unnecessary panic braking.
+    *   *Metric:* False positive rate per 1,000 miles.
+    *   *Threshold:* <0.1% to prevent automation bias erosion.
+*   **Probe Set C (Adversarial Edge Cases):** Emergency vehicles with compromised lighting (single bulb failure, obscured reflectors) or unusual angles (parked on shoulder vs. partially in lane).
+    *   *Metric:* Degradation curve of detection confidence.
+    *   *Stop Condition:* If detection drops below 90% reliability compared to baseline, the feature cannot operate autonomously in these specific sub-conditions.
+
+**2. Operational Limitations & Human Gates (Manage)**
+Because the hardware constraint cannot be fixed before rollout, you must implement a strict human-in-the-loop gate for high-stakes actions. Full autonomous braking for low-contrast stationary objects is unsafe without verified sensor fidelity.
+
+*   **Geofenced Disablement:** The autopilot must automatically disengage or refuse activation on highways between sunset and sunrise if ambient light sensors detect levels below the validated threshold for the current firmware.
+*   **Mandatory Driver Alert:** Implement a persistent, high-priority visual and auditory warning: *"Night-Time Obstacle Detection Limited. Maintain hands on wheel and readiness to brake. System may not detect stationary vehicles in low light."* This disclosure must be explicit, not buried in menus.
+*   **Confidence Tiering:** Do not display raw probability scores (e.g., "87% clear") to the driver. Instead, use defined coarse tiers: **"Verified Clear," "Limited Visibility,"** or **"System Unavailable."** If the sensor fusion output falls into an unverified tier, the system must default to a request for immediate human control.
+*   **Speed Cap:** If the system is permitted to run in marginal lighting, cap maximum assisted speed to 45 mph to reduce kinetic energy and increase reaction time windows, regardless of the posted limit.
+
+**3. Transparency Artifact**
+Before shipping, publish an internal **Model Card** documenting this specific limitation (low-contrast failure mode), the exact lighting conditions tested, and the "UNVERIFIED" status of performance outside those bounds. This card must be accessible to support teams and regulators. Do not claim the system is "safe" or "unbiased"; state clearly that it is "restricted to validated lighting conditions."
+
+**Notes**
+Legal counsel must review the specific wording of the driver alerts to ensure they meet liability standards for automated driving systems in your deployment regions.
+Do not proceed with a general rollout if Probe Set A fails the stop condition; the risk of fatal collision outweighs the schedule pressure.

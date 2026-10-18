@@ -1,0 +1,42 @@
+### Automated Visa Screener: Output Safety Review Plan
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before testing, explicitly record the specific failure mode: **Bias/Unfair Outcome via Technical Artifact**.
+*   **Harm:** Valid applications from specific regions or demographics are rejected due to OCR failures on non-standard fonts, paper quality, or layout variations common in those regions.
+*   **Affected Group:** Immigrants from regions with less standardized document formats or lower-quality scanning infrastructure.
+*   **Worst Realistic Case:** A legitimate applicant is denied entry or faces significant delay due to a machine error, causing reputational damage to the agency and potential legal liability.
+*   **Status:** This is a **high-stakes, irreversible action** (denial of entry). Therefore, **full autonomous rejection is prohibited** at this stage.
+
+**2. Measurement Plan (Internal Environment Only)**
+Since external data is forbidden, you must synthesize adversarial probes using internal assets. Create one test row per identified harm:
+
+*   **Probe Set Construction:**
+    *   **Positive Controls:** Take 50 known-valid internal documents. Programmatically degrade them to simulate edge cases: add noise, rotate angles, reduce contrast, simulate low-resolution scans, and overlay artifacts typical of fax machines or mobile photos.
+    *   **Negative Controls:** Use known-invalid documents to ensure the system still catches actual fraud.
+    *   **Subgroup Slicing:** If metadata exists (e.g., country of origin), ensure the degraded set covers all represented regions equally.
+*   **Metric & Threshold:**
+    *   **Metric:** False Rejection Rate (FRR) on the degraded "valid" set.
+    *   **Threshold:** Owner-set. For a pilot involving entry denial, propose **zero tolerance** for automated rejection of any document that triggers an OCR confidence flag below a defined tier.
+    *   **Stop Condition:** If FRR > 0% on the degraded set for any subgroup, the automated rejection feature is blocked.
+*   **Injection & Leakage Checks:**
+    *   Test if maliciously crafted text within a PDF can force a "reject" decision (prompt injection via document content).
+    *   Verify no data from one applicant leaks into another's evaluation context.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Do not allow the system to auto-reject. Configure the system so that any application triggering a low-confidence score, an OCR error, or a "reject" decision is routed immediately to a human officer for review. Only "clear accept" decisions with high-confidence scores may proceed automatically, if policy allows.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% valid") to operators. Instead, define coarse tiers:
+    *   *Confirmed:* High-quality scan, all fields match.
+    *   *Corroborated:* Minor artifacts, logic holds.
+    *   *Unverified/Review Required:* OCR confidence low, formatting unusual, or conflicting data.
+*   **Transparency Artifact:** Draft a **Model Card** for this pilot. It must state:
+    *   **Intended Use:** Preliminary screening only; not a final decision engine.
+    *   **Limitations:** Explicitly list known failure modes (e.g., "Performance degrades on documents with <150 DPI resolution").
+    *   **Data Provenance:** Note that testing used only internal, synthesized degradations.
+    *   **Residual Risk:** Mark specific bias metrics as **UNVERIFIED** if subgroup testing was insufficient due to data scarcity. Do not invent a "0% bias" claim.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Name a specific engineer or product lead responsible for reviewing every false rejection found during the pilot.
+*   **Legal Duty:** This system likely constitutes a regulated automated decision affecting individual rights. **Route immediately to counsel** to determine disclosure requirements under Canadian law and potential obligations under frameworks like the EU AI Act (if applicable to future scaling). Do not assert compliance here.
+
+**Note:** This plan prioritizes preventing wrongful denial over automation speed.
+**Note:** Launch cannot proceed with auto-reject enabled until the human gate is verified in the internal environment.

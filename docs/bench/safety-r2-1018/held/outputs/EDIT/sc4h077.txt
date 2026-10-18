@@ -1,0 +1,34 @@
+**Plan: Sensitivity Calibration and Human-Gated Review for Charity Flows**
+
+**1. Immediate Harm Inventory & Segmentation**
+Before adjusting sensitivity, explicitly record the harm: "False positives blocking humanitarian aid." Define the affected group as "verified charitable organizations and beneficiaries." Since manual whitelisting is forbidden, you must segment traffic logically. Create a distinct input class for transactions containing known humanitarian metadata (e.g., specific MCC codes, NGO registration patterns, or corridor-specific keywords) without hard-coding specific entity names. This allows the system to treat these patterns as a separate cohort for analysis rather than individual exemptions.
+
+**2. Adversarial Evaluation (Measure)**
+Do not assert the system is "fixed." Construct a test set comprising:
+*   **Positive Controls:** Known fraudulent transactions mimicking aid patterns.
+*   **Negative Controls:** Verified legitimate charity donations previously flagged.
+*   **Probe Set:** Synthetic variations of aid transfers (different amounts, frequencies, corridors) to test boundary conditions.
+Run the current model against this set. Measure the false-positive rate specifically for the "charity cohort." If the rate exceeds zero for high-confidence legitimate cases, the sensitivity threshold for this cohort is too aggressive.
+
+**3. Adjusted Sensitivity & Tiered Confidence**
+Re-calibrate the detection threshold specifically for the "humanitarian pattern" segment. Lower the sensitivity for this cohort to reduce false positives, accepting a calculated increase in false negatives (which human review will catch) rather than blocking funds automatically.
+*   **Output Tiers:** Replace binary "Block/Allow" decisions with three tiers for this cohort:
+    1.  **High Confidence Fraud:** Auto-block (rare for this cohort).
+    2.  **Uncertain/Suspicious:** Route to human review (the primary bucket for edge cases).
+    3.  **Low Risk:** Auto-allow.
+*   **Uncertainty Display:** For the review team, display a coarse confidence tier (e.g., "Corroborated Suspicion" vs. "Single Indicator") rather than a raw percentage, preventing automation bias.
+
+**4. Human-in-the-Loop Gate (Manage)**
+Implement a mandatory human review gate for any transaction in the "Uncertain" tier involving humanitarian patterns.
+*   **Workflow:** The system flags the transaction but does *not* block funds immediately unless the fraud score hits the "High Confidence" threshold. Instead, it places a temporary hold pending rapid human verification.
+*   **Override Protocol:** Empower reviewers to override the system's "Money Laundering" classification for these holds if humanitarian intent is verified, releasing funds without altering the global whitelist.
+*   **Kill Switch:** Define a stop condition: if >5% of reviewed charity transactions are false positives in the first 48 hours, automatically lower the sensitivity threshold further or route 100% of such transactions to senior review.
+
+**5. Transparency Artifact**
+Draft a "Model Card" section for this feature documenting:
+*   **Intended Use:** Fraud detection with specific limitations regarding humanitarian aid patterns.
+*   **Known Limitations:** Explicitly state that unusual aid transfer patterns may still trigger reviews.
+*   **Measured Performance:** Report the false-positive rate on your test set for the charity cohort as "UNVERIFIED" until live monitoring confirms stability, then update with real data.
+*   **Owner:** Name the specific team member responsible for monitoring this cohort post-launch.
+
+**Note:** This plan adheres to your no-whitelist constraint by using pattern-based segmentation and human gating rather than entity exemptions. Legal counsel must verify if temporary holds on charitable funds trigger specific regulatory disclosure duties in your operating jurisdictions.

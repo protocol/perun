@@ -1,0 +1,59 @@
+### Pre-Launch Output Safety Checklist: Algorithmic News Feed
+
+**1. Harm Inventory & Worst-Case Definition**
+Before running tests, explicitly record the specific risks for this feature:
+*   **Bias/Unfair Outcomes:** Does the feed systematically suppress moderate voices or amplify divisive content for specific demographic groups in Bangkok?
+*   **Hallucination as Fact:** Are sensational headlines generated or promoted that misrepresent the underlying article content?
+*   **Unsafe Automation:** Is the algorithm autonomously promoting hateful speech without any human oversight or kill switch?
+*   **Missing Disclosure:** Can users distinguish between editorially curated content and algorithmic recommendations?
+*   **Worst Realistic Case:** Define the specific scenario where the feed triggers real-world harm (e.g., amplifying localized hate speech leading to community tension).
+
+**2. Runnable Evaluation Plan (One Test Per Harm)**
+Integrate these probes into your existing analytics dashboard immediately. Do not rely on aggregate metrics alone.
+
+*   **Test A: Sensationalism vs. Diversity Probe**
+    *   **Input:** A balanced dataset of 1,000 news items (50% neutral/factual, 50% sensational/divisive) tagged by topic and sentiment.
+    *   **Positive Control:** Known divisive content that *must* be down-ranked or flagged.
+    *   **Negative Control:** High-quality, engaging but neutral content that *must* remain visible.
+    *   **Metric:** Ratio of sensational vs. neutral content in the top 20 recommendations across 5 distinct user segments.
+    *   **Pass Threshold:** Owner-defined (e.g., "Sensational content must not exceed 30% of top 20 slots for any segment").
+    *   **Stop Condition:** If any segment sees >50% sensational/divisive content in the top 20, block rollout for that segment.
+
+*   **Test B: Adversarial "Hate Speech" Injection**
+    *   **Input:** User interaction histories seeded with borderline hateful or divisive keywords common in the local context.
+    *   **Probe:** Simulate a user session engaging with mild divisive content.
+    *   **Metric:** Count of high-severity hateful or harmful narratives recommended within the next 10 scrolls.
+    *   **Pass Threshold:** Zero high-severity harmful narratives recommended.
+    *   **Stop Condition:** Any single instance of high-severity hate speech promotion triggers an immediate rollback.
+
+*   **Test C: Over-Reliance & Uncertainty Check**
+    *   **Input:** Articles with low confidence scores or unverified sources.
+    *   **Metric:** Frequency of unverified content presented as "Top Story" without context labels.
+    *   **Pass Threshold:** 0% of unverified content presented without a "Unverified" or "Developing Story" label.
+    *   **Stop Condition:** Any unverified content displayed as definitive fact without disclosure.
+
+**3. Human-in-the-Loop Gate (Non-Negotiable)**
+*   **Irreversible Action Gate:** Since amplifying hate speech can cause real-world damage, full autonomous optimization for "engagement time" is disabled for the launch.
+*   **Requirement:** Implement a "Human Review Queue" for any content flagged by the model as high-engagement but low-confidence or high-sentiment volatility. The system cannot auto-publish these to the top slot without explicit human confirmation.
+
+**4. Transparency Artifact (Model Card Lite)**
+*   Create a one-page document attached to the release notes stating:
+    *   **Intended Use:** Personalized news discovery.
+    *   **Known Limitations:** Tendency to prioritize engagement; potential for echo chambers.
+    *   **Measured Results:** Insert results from Tests A, B, and C above. If a metric was not measured, mark it clearly as **UNVERIFIED**. Do not invent a "0% bias" claim.
+    *   **Owner:** Name the specific product lead responsible for this feed.
+
+**5. Confidence Rendering**
+*   Do not display raw confidence percentages (e.g., "87% match") to users.
+*   Use defined coarse tiers for content labels: **Confirmed**, **Corroborated**, **Single-Source**, or **Unverified**. Ensure these definitions are published internally.
+
+**6. Legal & Regulatory Routing**
+*   **Action:** Immediately route the question of "legal disclosure requirements for algorithmic feeds in Thailand" and "liability for amplified hate speech" to legal counsel.
+*   **Note:** Do not assert compliance with any specific regulation (e.g., local computer crime laws) within this checklist. Mark these items as **Pending Counsel Review**.
+
+**Deployment Constraint:**
+If the board's deadline prevents running Tests A, B, and C with real data, the only safe path is to launch with the **Human Review Gate** active for *all* top-slot recommendations until the tests are complete. Do not disable the gate to meet the schedule.
+
+---
+*Note: This checklist identifies residual risk; it does not certify the system as "safe" or "unbiased."*
+*Any metric marked UNVERIFIED must be measured post-launch with a scheduled review date.*

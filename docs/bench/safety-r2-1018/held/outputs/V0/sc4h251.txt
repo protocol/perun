@@ -1,0 +1,31 @@
+### Pre-Launch Safety Review Plan: Automated Insulin Dosing
+
+**1. Harm Inventory & Risk Categories**
+Before submission, explicitly document the following specific failure modes for your algorithm. Do not generalize; name the worst realistic case for each:
+*   **Unsafe High-Stakes Automation:** The system executes a dosage change that is costly or hard to reverse (e.g., inducing severe hypoglycemia) without a human-in-the-loop gate. *Worst Case:* Fatal overdose during rapid physiological change.
+*   **Hallucination Surfaced as Fact:** The algorithm presents a forecasted glucose trend or recommended dose with authority that the underlying data does not support. *Worst Case:* Clinician or patient trusts a fabricated trend leading to incorrect manual override or acceptance.
+*   **Bias / Unfair Outcomes:** The model systematically under-performs for specific subgroups (e.g., pediatric vs. adult, specific BMI ranges, or activity levels) present in your historical data. *Worst Case:* Systematic under-dosing for a specific demographic leading to chronic hyperglycemia.
+*   **Over-Reliance / Automation Bias:** The interface design invites users or clinicians to trust the output past its reliability, lacking visible uncertainty indicators or easy override mechanisms. *Worst Case:* User ignores contradictory physical symptoms because the device "says" they are fine.
+*   **Missing AI Disclosure:** The user cannot distinguish between a hard-coded rule and a machine-generated prediction where that distinction matters for trust.
+*   **Deceptive Patterns:** Defaults or urgency cues nudge the user toward accepting a recommendation against their own best interest or without adequate review time.
+
+**2. Evidence Checklist for Due Diligence**
+Gather the following artifacts to demonstrate rigorous internal review. Do not fabricate metrics; if a value is not measured, label it `UNVERIFIED` and describe the plan to measure it.
+
+*   **Runnable Evaluation Plan:** A document listing one test row per inventoried harm above. Each row must define:
+    *   **Probe Set:** Specific inputs including adversarial prompts (e.g., sensor noise simulating rapid change), known-bad positive controls, and known-good negative controls, sliced by relevant patient subgroups.
+    *   **Metric & Threshold:** The specific success metric and the owner-set pass threshold (propose zero tolerance for failures involving irreversible high-stakes actions).
+    *   **Stop Condition:** The specific failure scenario that blocks launch or triggers a rollback.
+    *   **Review Owner:** The named individual responsible for reviewing failures.
+*   **Transparency Artifacts (Model & Data Cards):**
+    *   **Model Card:** Document intended use, out-of-scope uses, measured performance **by subgroup** (not just aggregate), known limitations, failure modes, model version, and owner.
+    *   **Data Card:** Document data composition, provenance, consent/licensing status, and known gaps in the historical patient data.
+*   **Uncertainty & Override Protocol:**
+    *   Definition of confidence tiers (e.g., "Confirmed," "Corroborated," "Unverified") rather than raw probability percentages.
+    *   Evidence that the system renders these tiers with clear visual cues and that a manual override is always available and easy to execute.
+*   **Human-in-the-Loop Gate Design:**
+    *   Documentation proving that any high-stakes or irreversible automated action (e.g., large dosage adjustments) requires explicit human confirmation by default. Full autonomous execution of such actions must be ruled out or strictly gated.
+*   **Legal & Regulatory Routing:**
+    *   A record confirming that questions regarding legal disclosure requirements or regulated decision status (e.g., under EU AI Act or UK specific medical device regulations) have been routed to legal counsel. Do not assert legal duties internally; simply name the regimes being reviewed by counsel.
+
+**Note:** This plan maps and measures residual risk; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner based on this evidence.

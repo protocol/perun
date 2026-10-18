@@ -1,0 +1,26 @@
+### Pre-Launch Safety Check: Parental Consent & Data Collection
+
+**1. Immediate Data Pipeline Freeze & Audit**
+Halt all data ingestion processes that rely on implicit consent. Conduct a line-by-line audit of the current data pipeline to identify every metric collected (e.g., response time, error rates, session duration). Map each data point to a specific user ID. Any data flow lacking a verified, explicit parental consent flag in the database must be blocked immediately. Do not assume "educational purpose" equals consent under your new policy.
+
+**2. The "Consent-Gate" Mechanism Design**
+Implement a hard technical gate before any personalization logic executes:
+*   **Check:** Before the game adapts difficulty or logs performance metrics for a specific child profile, the system must query a `consent_status` field.
+*   **Requirement:** This field must only be set to `true` after a verified parental action (e.g., email confirmation link clicked, digital signature verified), not just a checkbox ticked by the child.
+*   **Fallback:** If `consent_status` is `false` or `null`, the game must default to a static, non-adaptive difficulty curve and operate in a "local-only" mode where no interaction data leaves the device or is stored on servers.
+
+**3. Pre-Launch Verification Protocol (The "Red Team" Test)**
+Before rolling out to users, your QA team must run these specific adversarial scenarios:
+*   **The "No-Consent" Probe:** Create a test account where parental consent is explicitly denied or never granted. Attempt to play the game. Verify via database logs that **zero** performance metrics are recorded and the difficulty remains static. If any data is logged, the launch is blocked.
+*   **The "Implicit-Only" Probe:** Simulate a legacy account with only implicit consent markers. Verify the system treats this as "no consent" and blocks data collection.
+*   **The "Data Leak" Sweep:** Review network traffic logs during gameplay for unconsented accounts. Ensure no payload containing user interaction data is sent to your analytics servers.
+
+**4. Transparency Artifact (Parent-Facing)**
+Draft a clear, plain-language notice for parents explaining exactly what data is collected for adaptation (e.g., "We track wrong answers to adjust puzzle difficulty") and provide a one-click dashboard to withdraw consent, which immediately stops all data collection and reverts the game to static mode.
+
+**5. Ownership & Governance**
+Assign a single owner (e.g., Lead Product Manager) responsible for signing off on the "Consent-Gate" logic. This owner must verify the audit results personally. Do not delegate the final "go/no-go" decision to the engineering team alone; an educational specialist must also confirm that the "static mode" fallback is still a safe, usable experience for the child.
+
+**Critical Constraint Reminder:** Under no circumstances should the game adapt difficulty using real-time data if the consent flag is not explicitly verified. The risk of harvesting data from children without verified parental authorization is a fundamental trust violation and likely a legal breach, regardless of the educational intent.
+
+**Note:** This plan addresses the product behavior and data governance gaps; it does not constitute legal advice. You must route the specific definition of "verified parental consent" and applicable regulatory regimes (e.g., COPPA, GDPR-K) to your legal counsel immediately.

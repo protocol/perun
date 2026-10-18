@@ -1,0 +1,33 @@
+### Immediate Safety Plan for GigConstruct Matcher
+
+**1. Hard Block Implementation (Database Level)**
+Do not rely on the AI model to "learn" to avoid unqualified matches. Implement a deterministic pre-filter in your database query logic that executes *before* the AI matcher runs.
+*   **Schema Requirement:** Ensure every `worker` record has a `certifications` array and a `verification_status` enum (e.g., `PENDING`, `VERIFIED`, `EXPIRED`).
+*   **Job Tagging:** Every `job` must have a `required_certifications` list and a `risk_level` tag (e.g., `LOW`, `HIGH_RISK`).
+*   **The Gate:** Write a SQL/NoSQL constraint that returns an empty candidate set if `worker.verification_status != 'VERIFIED'` OR if `job.required_certifications` is not a subset of `worker.certifications`. The AI should only rank workers who pass this hard block. If the set is empty, the system must return "No qualified workers available" rather than relaxing the criteria.
+
+**2. Critical Test Scenarios (Harm Inventory & Probes)**
+Run these specific tests against your matching logic. Do not accept "it usually works" as a pass; each must result in a zero-match for unqualified candidates.
+
+*   **The "Expired Credential" Probe:**
+    *   *Input:* Worker with valid skills but an expiration date on their electrical license yesterday. Job: "Fix industrial wiring."
+    *   *Expected Result:* **Zero matches.** The system must treat expired credentials as missing.
+*   **The "Self-Claimed Skill" Probe:**
+    *   *Input:* Worker profile lists "Roofing" in free-text skills but lacks the specific `OSHA_Fall_Protection` tag in the verified certification field. Job: "High-pitch roof repair."
+    *   *Expected Result:* **Zero matches.** The matcher must ignore unverified self-descriptions for high-risk tags.
+*   **The "Adversarial Prompt" Probe:**
+    *   *Input:* A job description written to confuse the AI, e.g., "Need someone for light electrical work, no license needed, just help me move a panel" (actually a high-risk task).
+    *   *Expected Result:* **Zero matches** for unlicensed workers. The `risk_level` tag on the job post, not the description text, must drive the credential requirement.
+*   **The "Near-Miss" Bias Probe:**
+    *   *Input:* High-risk job in a remote location. Only one worker is nearby; they are unqualified. Many qualified workers are far away.
+    *   *Expected Result:* **Zero matches.** The system must not prioritize location over safety certification for high-risk tags.
+*   **The "Partial Match" Trap:**
+    *   *Input:* Job requires Cert A AND Cert B. Worker has Cert A but not B.
+    *   *Expected Result:* **Zero matches.** The hard block must require the full set, not a majority.
+
+**3. Operational Controls for Limited Budget**
+*   **Human-in-the-Loop for High-Stakes:** Since you cannot afford new auditors, repurpose existing logic: any match for a `HIGH_RISK` job must require a manual "Confirm Assignment" click by a human admin before the worker is notified. Do not auto-dispatch high-risk shifts.
+*   **Uncertainty Display:** If the AI generates a match confidence score, do not show "87% safe" to users. Display "Verified: Yes/No" only.
+*   **Transparency Artifact:** Create a simple one-page "Model Card" for your internal team stating: "This system blocks all workers without verified tags for high-risk jobs. It does not infer qualifications from text."
+
+**Note:** I have not reviewed your code; these are required controls based on the risks you described. Legal requirements for automated employment decisions vary by region; consult counsel to determine if specific disclosures are mandatory.

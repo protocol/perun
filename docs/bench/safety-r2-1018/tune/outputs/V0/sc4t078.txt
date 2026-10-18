@@ -1,0 +1,37 @@
+### Pre-Launch Logic Check Plan: Noise-Complaint Validation
+
+To prevent harassment from false positives and data glitches, implement the following **Human-in-the-Loop (HITL) Gate** and **Logic Filters** before any notice leaves the system. Given your pilot stage and known sensor latency, full automation of violation notices is unsafe.
+
+**1. Mandatory Logic Filters (Automated Pre-Screen)**
+Before a notice is queued for review, the system must apply these deterministic rules to raw sensor data:
+*   **Latency & Deduplication Window:** Discard or merge any sound events occurring within the known latency window (e.g., if latency is ±2 minutes, aggregate all spikes in that window into a single event). Do not generate separate tickets for duplicate timestamps.
+*   **Duration Threshold:** A violation requires sustained noise above the decibel limit for a minimum continuous duration (e.g., >3 minutes). Instantaneous spikes are logged but ignored for enforcement.
+*   **Time-of-Day Context:** Automatically suppress non-critical alerts during designated quiet hours unless levels exceed a significantly higher "emergency" threshold.
+*   **Recency Cap:** If a resident received a validated notice in the last 7 days, flag subsequent spikes as "Pattern Review" rather than immediate violations to prevent stacking penalties for a single ongoing issue.
+
+**2. The Human Gate (High-Stakes Action Control)**
+Sending a formal violation notice is a high-stakes, irreversible action that causes stress and potential legal liability.
+*   **Rule:** No notice is sent automatically. All events passing the Logic Filters must be routed to a dashboard for human review by a community manager.
+*   **Reviewer Task:** The human verifies the audio snippet (if available) or cross-references with other complaints before clicking "Send."
+*   **Pilot Constraint:** During the pilot, 100% of flagged events require this manual approval. Automation of the final send action is prohibited until error rates are proven negligible over a longer period.
+
+**3. Transparency & Uncertainty Disclosure**
+*   **Internal Confidence Tiers:** Do not show raw sensor confidence percentages to reviewers. Instead, display defined tiers:
+    *   *Confirmed:* Sustained noise + multiple sensors triggered.
+    *   *Corroborated:* Sustained noise + resident complaint filed.
+    *   *Unverified:* Single sensor spike or data occurring during the latency window. (Default action: Do Not Send).
+*   **External Disclosure:** When a notice is sent, include a clear statement that the detection was assisted by automated sensors and provide a one-click "Dispute This Notice" link.
+
+**4. Measurement Plan (Pre-Rollout)**
+You cannot claim the system is "fair" without testing. Run these specific probes before launch:
+*   **Probe A (Latency Glitch):** Inject simulated duplicate data packets within the latency window. *Pass Condition:* System generates exactly one review item, not multiple.
+*   **Probe B (False Positive):** Inject short-duration noise spikes (under the duration threshold). *Pass Condition:* System discards the event; zero notices queued.
+*   **Probe C (Bias Check):** Review a sample of flagged units across different building locations to ensure no specific demographic or location is disproportionately targeted due to sensor placement issues.
+
+**Residual Risk Status:** UNVERIFIED until Probe A, B, and C are executed and logged. The known latency issue makes the "Deduplication Window" filter critical; if this logic fails, the system will harass residents by design.
+
+**Owner:** Assign one team member to own the "False Positive" metric and re-review this logic whenever sensor firmware or latency characteristics change.
+
+---
+*Note: Legal requirements for automated decision-making disclosures vary by jurisdiction; route the final notice wording to counsel before pilot launch.*
+*Do not remove the human gate during the pilot; the cost of a harassment claim exceeds the operational savings of automation.*

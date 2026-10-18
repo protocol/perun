@@ -1,0 +1,38 @@
+### Strategic Plan: Low-Light Breathing Detection Risk & Safeguards
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Negative (Missed Detection) in low-light conditions.
+*   **Affected Group:** Infants monitored in dimly lit rooms; parents relying on automated alerts.
+*   **Worst Realistic Case:** The device fails to alert during a breathing cessation event occurring in the dark, leading to delayed medical intervention and potential fatality.
+*   **Status:** This is a **high-stakes, irreversible risk**. The current model performance gap constitutes a critical failure mode that cannot be ignored.
+
+**2. Testing Protocol: Rigorous Low-Light Evaluation**
+Since you cannot acquire new data, your testing must aggressively probe the boundaries of your existing dataset to quantify the failure rate. Do not assert safety; measure the gap.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls:** Isolate every existing video segment containing "breathing cessation" that occurs in low-light or simulated low-light conditions. If none exist, synthetically darken high-light cessation clips to mimic your worst-case lighting threshold.
+    *   **Negative Controls:** Use normal breathing segments in identical low-light conditions to measure false positives (alarm fatigue).
+    *   **Adversarial Probes:** Introduce noise, shadows from moving objects (e.g., ceiling fans), and partial occlusions to the low-light segments to test robustness.
+*   **Metric & Threshold:**
+    *   **Primary Metric:** False Negative Rate (FNR) specifically sliced by lighting level.
+    *   **Pass Threshold:** For a life-safety device, the threshold for autonomous operation in low light must be **zero tolerated false negatives**. If the model misses even one event in the probe set, it fails the "autonomous" criteria for that condition.
+    *   **Reporting:** Report the specific FNR found. If unmeasured due to lack of data, label the risk **UNVERIFIED**. Do not invent a confidence score.
+
+**3. Immediate Operational Safeguards (The Human Gate)**
+Because the model is known to fail in low light and you cannot retrain it immediately, **fully autonomous monitoring in low-light conditions is unsafe to ship.** You must implement a "Human-in-the-Loop" or strict limitation gate.
+
+*   **Mandatory Fallback Mechanism:**
+    *   **Lighting Sensor Gate:** Integrate a lux sensor or image-analysis check. If ambient light falls below the model's validated threshold, the system must **automatically disable the AI breathing detection feature**.
+    *   **Explicit User Notification:** When disabled, the device must display a clear, unavoidable warning: *"Breathing monitoring unavailable due to low light. Please increase room lighting or rely on manual observation."*
+    *   **No Silent Degradation:** Never allow the system to run silently with reduced accuracy. It must either work within validated parameters or explicitly state it is offline.
+*   **Disclosure & Transparency:**
+    *   **Model Card Artifact:** Publish a versioned document stating: "Intended Use: Monitoring in adequate lighting." Explicitly list "Low-light environments" as an **Out-of-Scope** condition where the device does not guarantee detection.
+    *   **User Manual:** Prominently feature the lighting requirement on the first page of safety instructions.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific engineer as the "Safety Owner" for this feature who signs off on the lighting threshold definition.
+*   **Legal Routing:** Because this device makes automated decisions affecting health and safety, route the question of regulatory classification (e.g., medical device status) and mandatory disclosure laws to legal counsel immediately. Do not assume consumer electronics rules apply.
+*   **Launch Decision:** If the team cannot implement the "disable-in-low-light" gate before launch, the recommendation is to **delay the breathing detection feature** until sufficient data is gathered or the model is retrained. Shipping a known-failing safety sensor without a hard gate is a critical product failure.
+
+**Note:** This plan treats the low-light failure as a hard block on automation, not a statistical nuance.
+**Note:** All performance claims must be backed by the specific probe results above; do not market "99% accuracy" if it excludes low-light scenarios.

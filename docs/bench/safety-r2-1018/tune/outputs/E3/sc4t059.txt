@@ -1,0 +1,36 @@
+### Pre-Launch Safety Strategy for Refugee Translation Device
+
+**1. Harm Inventory: Define the Worst-Case Scenarios**
+Before testing, explicitly document the specific failures that lead to deportation. Do not assume "accuracy" is the only metric. Record these specific harms:
+*   **Negation Errors:** Translating "I was *not* tortured" as "I was tortured" (or vice versa), directly flipping the legal claim.
+*   **Agency Loss:** Converting active persecution ("They hunted me") to passive or vague phrasing ("There was trouble"), weakening the credibility of the account.
+*   **Hallucinated Details:** Inventing dates, locations, or group affiliations not present in the source statement, creating contradictions the officer can exploit.
+*   **Tone Degradation:** Shifting a fearful, coherent narrative into an aggressive or disjointed one, causing the officer to doubt the applicant's sincerity.
+
+For each harm, note that the affected party is the asylum seeker, and the worst case is immediate deportation to a zone of persecution.
+
+**2. Adversarial Evaluation (Measure, Don't Assert)**
+Since you cannot claim the system is "safe," you must measure residual risk using offline, adversarial testing. Build a local evaluation suite with the following components:
+*   **The "Life-or-Liberty" Probe Set:** Curate 500+ real-world edge cases from your linguists involving complex negation, idioms of fear, and culturally specific persecution terms. Include known failure modes from previous iterations.
+*   **Positive and Negative Controls:**
+    *   *Positive Control:* Inputs known to produce correct legal output (to ensure the device hasn't regressed).
+    *   *Negative Control:* Inputs designed to trigger hallucinations (e.g., ambiguous statements) to verify the model refuses to invent facts or flags uncertainty.
+*   **Segmented Testing:** Run probes across all supported language pairs and dialects. A pass in Spanish does not guarantee safety in Dari.
+*   **Stop Conditions:** Define a "zero-tolerance" threshold for critical errors (negation flips, hallucinated events). If *any* probe in this category fails, the launch is blocked. Do not accept an "average accuracy" score; a 99% rate is unacceptable if the 1% error causes deportation.
+
+**3. Manage Residual Risk: Human-in-the-Loop & Uncertainty**
+*   **Mandatory Human Gate:** Given the irreversible consequence (deportation), fully automated translation is unsafe. The device must function as a **drafting assistant**, not a final arbiter. The workflow must require a qualified human linguist to review and sign off on every translated statement before it reaches the processing officer. If offline constraints prevent real-time human review, the device must not be deployed for final legal submission.
+*   **Surface Uncertainty:** Do not display raw confidence percentages (e.g., "87% confident"). Instead, implement a coarse, defined tier system visible to the human reviewer:
+    *   *Verified:* High agreement across internal checks.
+    *   *Unverified/Low Confidence:* Ambiguous source or low-probability output. **Action:** Force human review before proceeding.
+*   **Disclosure:** Clearly label all output as "Machine-Assisted Draft – Requires Human Verification." Do not present the text as an official legal record until a human has validated it.
+
+**4. Governance and Transparency Artifacts**
+*   **Model & Data Card:** Create a versioned document included with the device. It must list: intended use (drafting aid only), known limitations (specific dialects or terms where performance is `UNVERIFIED`), data provenance, and the owner responsible for updates.
+*   **Owner Assignment:** Name one specific individual responsible for reviewing any reported errors post-deployment.
+*   **Legal Routing:** Since this device influences consequential legal decisions, route the question of regulatory compliance (e.g., EU AI Act implications if applicable, or local asylum laws) to legal counsel immediately. Do not assert compliance internally.
+
+**Deliverable Summary:** Halt full automation. Deploy only as a human-supervised drafting tool with a strict "stop-on-critical-error" eval gate and a mandatory human review step for every case.
+
+**Note:** Any metric claiming "bias-free" or "100% accurate" is fabricated and must be removed from all documentation.
+**Note:** If a human review loop cannot be guaranteed offline, the device cannot be ethically shipped for this use case.

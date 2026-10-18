@@ -1,0 +1,36 @@
+### Safety Validation Framework: Smart Water Quality Sensors
+
+**1. Harm Inventory & Risk Definition**
+Before testing, we define the primary harm: **False Negative on Lead Contamination**. A missed detection exposes students and staff to toxic water. Secondary harms include **Automation Bias** (administrators ignoring manual checks because they trust the sensor) and **Unsafe Automation** (alerts failing to reach humans due to network issues). The worst-case scenario is undetected lead levels exceeding EPA action limits in a school with no alternative water source.
+
+**2. Testing Protocol: Simulation & Measurement**
+We cannot certify "zero false negatives" without empirical evidence. The following protocol measures residual risk under your specific constraints (limited battery, network outages).
+
+*   **Probe Set A: Contamination Edge Cases (The "Missed Scan" Risk)**
+    *   *Inputs:* Simulate water samples with lead concentrations at 5ppb, 10ppb (action level), and 15ppb. Introduce intermittent scanning intervals (e.g., scan every 4 hours instead of hourly) to mimic battery-saving modes.
+    *   *Controls:* Known-good negative control (0ppb); Known-bad positive control (20ppb).
+    *   *Metric:* Detection Rate per concentration tier under reduced frequency.
+    *   *Stop Condition:* Any single false negative at ≥10ppb triggers an immediate halt to deployment.
+    *   *Owner:* Lead Engineer.
+
+*   **Probe Set B: Network Outage & Alert Delivery**
+    *   *Inputs:* Simulate total network loss for 24, 48, and 72 hours during a contamination event. Test local storage capacity and "store-and-forward" logic upon reconnection.
+    *   *Metric:* Time-to-Alert after network restoration; data integrity check (did the alert timestamp match the event?).
+    *   *Stop Condition:* Any contamination event not logged locally or not alerted within 1 hour of network restoration.
+
+*   **Probe Set C: Adversarial/Environmental Noise**
+    *   *Inputs:* Introduce common interferents (chlorine, turbidity, temperature spikes) alongside low-level lead to test for spectral masking.
+    *   *Metric:* False Positive vs. False Negative ratio.
+    *   *Stop Condition:* False negative rate > 0% for lead ≥10ppb.
+
+**3. Managing Residual Risk (The Human Gate)**
+Because battery limits reduce scanning frequency, **full autonomous reliance is unsafe**.
+*   **Mandatory Human-in-the-Loop:** Do not rely solely on automated alerts. Require facility managers to perform weekly manual spot-checks using independent test strips, regardless of sensor status. The system must explicitly disclose: *"This device scans intermittently to save power; it is not a real-time monitor."*
+*   **Uncertainty Disclosure:** If a scan is skipped due to low battery, the dashboard must show a defined status tier (e.g., "Status: Unverified – Next Scan Pending") rather than displaying a stale "Safe" reading. Never show a confidence percentage (e.g., "98% safe") as this implies precision the intermittent model cannot support.
+*   **Transparency Artifact:** Create a **Model/Data Card** for the school districts. It must list: intended use (spot-checking, not continuous monitoring), known limitations (blind spots during battery saving), and the results of the tests above. If a metric is unmeasured, label it `UNVERIFIED`.
+
+**4. Governance & Next Steps**
+Assign one owner to review test results before any unit goes live. If legal requirements for automated safety decisions in schools apply (e.g., specific state education codes), route this to legal counsel immediately; do not assume compliance based on engineering tests alone.
+
+**Note:** This framework measures risk; it does not certify the system as "safe." Deployment authorization rests with the product owner after reviewing the test data.
+**Note:** Ensure the "Model Card" is physically or digitally accessible to every school administrator before installation.

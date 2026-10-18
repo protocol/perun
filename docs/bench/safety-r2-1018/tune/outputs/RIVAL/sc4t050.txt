@@ -1,0 +1,34 @@
+### Pre-Launch Safety Review Strategy: Cancellation Logic Verification
+
+Given the three-week timeline, limited data access, and critical nature of cancer screenings, the following strategy focuses on logical verification, synthetic data modeling, and defensive architecture rather than broad statistical testing.
+
+**1. Construct High-Fidelity Synthetic Patient Profiles**
+Since real patient data is restricted, create a "Golden Set" of synthetic profiles that explicitly model edge cases relevant to oncology. These must include:
+*   **Recurrence Risk Flags:** Profiles tagged with "active treatment," "post-op monitoring," or "high-risk recurrence."
+*   **Complex Scheduling Patterns:** Patients with recurring appointments linked to specific treatment cycles (e.g., chemotherapy every 21 days) rather than simple weekly intervals.
+*   **Dependency Chains:** Appointments that logically depend on prior lab results or specialist consults.
+*   **Data Volume:** Generate enough synthetic records to cover every known rule variation in your cancellation logic, ensuring 100% code path coverage for the "cancel" function.
+
+**2. Implement Logic-Based "Hard Stop" Rules**
+Before testing execution, hard-code defensive guards into the cancellation module that operate independently of the calendar sync signal.
+*   **Classification Gate:** The system must classify an appointment as "Critical" (e.g., cancer screening) before evaluating any cancellation request.
+*   **The "Double-Veto" Mechanism:** If an appointment is tagged "Critical," the cancellation logic must require a secondary, explicit confirmation source (e.g., a direct provider override code) that bypasses automated calendar syncs. Automated sync errors alone must never trigger a cancellation for these tags.
+*   **Audit Trail Injection:** Every attempted cancellation of a critical appointment must log a distinct "Blocked Auto-Cancel" event, regardless of the outcome, creating an immediate alert stream for the dev team.
+
+**3. Execute Deterministic Scenario Testing**
+With no network or external tools, run local unit tests using the synthetic Golden Set against specific failure modes:
+*   **The "Ghost" Sync:** Simulate a calendar sync payload that indicates a conflict or deletion for a critical appointment. Verify the system ignores the sync and retains the appointment.
+*   **The "Double Book" Error:** Simulate a sync that claims the provider is unavailable. Verify the system flags a scheduling conflict for human review rather than auto-canceling the patient.
+*   **Time-Zone & Format Edge Cases:** Test sync payloads with malformed dates, leap year errors, or timezone mismatches to ensure the parser fails safely (retaining the appointment) rather than crashing or defaulting to "cancel."
+
+**4. Establish a "Shadow Mode" Deployment**
+For the initial launch with the hospital network:
+*   **Disable Auto-Cancel for Oncology:** Configure the production system to default to "No Action" for any appointment tagged as a cancer screening. If a sync error occurs, the appointment remains booked.
+*   **Human-in-the-Loop Queue:** Route all potential cancellations for critical care to a manual review dashboard. The system proposes a cancellation; a human must approve it.
+*   **Reconciliation Script:** Run a daily local script comparing the internal database against the calendar provider's read-only view. Flag any discrepancies where an internal "Critical" appointment is missing from the calendar, indicating an external deletion that the system failed to prevent.
+
+**5. Documentation and Handoff**
+Compile a "Safety Case" document detailing the specific synthetic scenarios passed, the hard-stop rules implemented, and the operational procedure for the manual review queue. This serves as the formal verification artifact for stakeholders.
+
+*Note: This strategy prioritizes fail-safe defaults over complex probabilistic testing given the data constraints.*
+*Immediate action should focus on tagging existing data schemas to identify "critical" appointments before code deployment.*

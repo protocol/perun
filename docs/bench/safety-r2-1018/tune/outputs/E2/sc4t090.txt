@@ -1,0 +1,35 @@
+### Pre-Launch Equity Assessment & Mitigation Plan
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Systematic exclusion of eligible students from specific neighborhoods due to biased zip-code boundaries.
+*   **Affected Group:** High school students in excluded zip codes; disproportionately impacts low-income and minority communities.
+*   **Worst Case:** Qualified students miss the application cycle entirely, losing access to funding and higher education opportunities.
+*   **Status:** Confirmed risk based on current logic.
+
+**2. Measurement Plan (MEASURE)**
+*   **Probe Set:** Construct a test dataset containing 50 known-eligible student profiles located specifically in the disputed/excluded zip codes (positive controls) and 50 profiles in clearly included zones (negative controls).
+*   **Metric:** "False Rejection Rate" for the excluded zones. Target: 0% for known-eligible profiles.
+*   **Stop Condition:** If the False Rejection Rate > 0% for the positive control set, the feature must not launch in its current state.
+*   **Execution:** Run this eval immediately against the current engine. Do not wait for full system regression; isolate the filtering logic.
+*   **Reporting:** Report the specific zip codes failing the test as `UNVERIFIED` for fairness until fixed. Do not claim the system is "unbiased."
+
+**3. Mitigation & Management (MANAGE)**
+Given the 10-day deadline and the constraint against modifying the core engine:
+*   **Immediate Override (Rule-Based Bypass):** Implement a lightweight pre-filter or post-filter layer *outside* the core engine. If a student's profile matches scholarship criteria *except* for the zip-code flag, and their zip code is on a newly defined "Review List" (based on the failed probes), route them to a manual review queue rather than auto-rejecting.
+*   **Human-in-the-Loop Gate:** For the 10-day cycle, all matches involving the disputed geographic boundaries require explicit human confirmation before finalizing the "no match" decision. This prevents irreversible exclusion.
+*   **Transparency Artifact:** Publish an internal "Matching Limitations" note for support staff listing the affected zip codes and the manual override process. Do not publish a false "99% accuracy" claim to students.
+*   **Disclosure:** Inform students in affected zones via the UI that their application is undergoing enhanced manual review to ensure fairness, managing expectations without admitting legal liability (route legal wording to counsel).
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Equity Gate Owner" responsible for reviewing the manual queue daily.
+*   **Re-review:** This manual gate remains mandatory until the core engine is refactored post-deadline.
+
+**Schedule:**
+*   **Day 1:** Build probe set; run eval; identify failed zip codes.
+*   **Day 2:** Deploy manual review queue and override logic.
+*   **Day 3-9:** Monitor queue; process overrides; daily check of rejection rates.
+*   **Day 10:** Final sweep of pending manual reviews before cycle close.
+
+This plan addresses the exclusion without destabilizing the core engine, adhering to the deadline while preventing irreversible harm.
+
+**Note:** This plan identifies residual risk; it does not certify the system as fair. Legal counsel must review the student-facing disclosure language.

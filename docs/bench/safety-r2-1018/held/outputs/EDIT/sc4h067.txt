@@ -1,0 +1,44 @@
+### Risk Assessment Plan: Fraud Detection Chatbot (São Paulo)
+
+**1. Harm Inventory (MAP)**
+Before launch, we explicitly name the primary harm: **Unsafe Automation of High-Stakes Actions**.
+*   **The Harm:** Automatic account freezes triggered by false positives on normal high-value transactions.
+*   **Affected Users:** Legitimate customers conducting large but valid transfers (e.g., real estate, business payments).
+*   **Worst Realistic Case:** A customer's livelihood is disrupted due to an irreversible freeze during a critical payment window, causing financial loss and reputational damage to the bank.
+*   **Secondary Harm:** **Over-reliance/Automation Bias**. The system presents a "fraud" score as absolute fact, inviting operators or users to trust the freeze without question.
+
+**2. Measurement Strategy (MEASURE)**
+Since real logs are unavailable, we must construct a rigorous evaluation using anonymized samples and synthetic adversarial cases. We will not assert a "safe" false-positive rate; we will measure residual risk.
+
+*   **Test Design (One Row Per Harm):**
+    *   **Probe Set A (Known Bad):** Anonymized samples of confirmed fraud. *Goal:* Ensure detection still works.
+    *   **Probe Set B (Known Good - High Value):** Synthetic transactions mimicking legitimate high-value behaviors (e.g., payroll, property sales) derived from domain expert knowledge, not just historical averages. *Goal:* Trigger false positives.
+    *   **Probe Set C (Edge Cases):** Transactions that look suspicious but are valid (e.g., travel spending, emergency medical payments).
+    *   **Metric:** False Positive Rate (FPR) specifically sliced by **transaction value tier** and **customer segment**. Aggregate accuracy is insufficient; we must know the FPR for the top 5% of transaction values.
+    *   **Threshold & Stop Condition:** The owner must define a maximum acceptable FPR for high-value transactions (e.g., <0.1%). If the eval exceeds this, the automated freeze feature **must not launch**.
+    *   **Injection/Leak Check:** Verify that prompt inputs (transaction descriptions) cannot manipulate the fraud score (prompt injection) and that no PII leaks in error logs.
+
+*   **Transparency Artifact:** Create a **Model Card** for this feature. It must state:
+    *   **Intended Use:** Real-time fraud monitoring.
+    *   **Limitations:** Explicitly note that testing relied on anonymized/synthetic data and that performance on rare, nuanced high-value events is `UNVERIFIED` until live monitoring confirms it.
+    *   **Subgroup Performance:** Report FPR by transaction size, not just overall.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the severity of an account freeze, **full autonomous execution is the failure mode.**
+    *   **Control:** The system must flag high-value or borderline cases for **human review** before freezing an account. Automatic freezes should only occur for low-value, high-confidence fraud patterns where the cost of error is minimal.
+    *   **Override:** Provide a clear, immediate path for customers or support staff to reverse a freeze.
+*   **Uncertainty Display:** Do not show a raw probability (e.g., "87% fraud") to operators or users, as this implies false precision. Instead, use defined coarse tiers:
+    *   **Confirmed Fraud:** (Multiple strong signals) → Auto-freeze (low value only) or Immediate Human Review.
+    *   **Suspicious/Unverified:** (Single signal or high-value ambiguity) → Human Review Required.
+    *   **Normal:** No action.
+*   **Rollout Plan:**
+    *   **Week 1-2:** Run evals on synthetic high-value probes. Tune thresholds to minimize FPR on Probe Set B.
+    *   **Week 3:** Shadow Mode. Run the model on live traffic but **disable all freezes**. Log what *would* have been frozen. Review these logs daily with human experts.
+    *   **Week 4:** Staged Launch. Enable auto-freeze only for low-value transactions. High-value flags continue to require human approval.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing false positive logs weekly.
+*   **Re-review Trigger:** Any change to the model, the anonymization method, or the fraud definition requires re-running the evals.
+*   **Legal Routing:** Whether specific automated decisions require explicit user disclosure under Brazilian regulations (LGPD) or Central Bank rules is a legal determination. Route this question to counsel immediately; do not assume compliance based on this technical plan.
+
+**Note:** Do not fabricate a "0% bias" or "99% accuracy" claim for the safety page; mark unmeasured metrics as `UNVERIFIED`. The decision to ship rests with the product owner, not this assessment.

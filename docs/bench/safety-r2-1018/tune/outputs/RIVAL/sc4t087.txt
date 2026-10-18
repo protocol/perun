@@ -1,0 +1,41 @@
+# Preparation Plan: Gender Inference Logic Review and Correction
+
+**1. Immediate Logic Suspension**
+Disable the automated gender inference feature immediately. Configure the registration system to leave the infant's gender field blank by default. This prevents further misgendering incidents while the correction plan is executed. The system must not guess; it must only record explicit data.
+
+**2. Data Source Audit**
+Conduct a manual review of the legacy database fields currently used for inference. Identify exactly which parental name patterns trigger the logic. Document these rules without modifying the database schema. Since schema changes are constrained, the fix must occur in the application layer, not the storage layer. Map out where the inferred value is currently injected into the certificate generation pipeline.
+
+**3. Define Explicit Input Requirements**
+Redesign the user interface flow to require explicit selection.
+*   **For Administrators:** Add a mandatory dropdown menu with options: "Male," "Female," "Non-Binary," "Prefer Not to Say," or "Unknown." No default value should be pre-selected.
+*   **For Parents:** If a self-service portal exists, update the form to ask directly: "What is your child's name and how do you identify their gender?" rather than inferring it from parent names.
+*   **Validation:** Implement a hard stop in the code that prevents certificate generation if the gender field is empty or still holds an inferred flag.
+
+**4. Application-Layer Patching**
+Develop a middleware script or service layer update that intercepts form submissions.
+*   Strip out any logic that attempts to parse parental names (e.g., "Michael" implies father/male) to determine infant gender.
+*   Replace this logic with a validator that checks only for user-provided input.
+*   If legacy reports require a gender field and old data is missing, flag these records for manual administrative review rather than auto-filling them.
+
+**5. Certificate Template Update**
+Modify the certificate generation template to handle null or diverse gender values gracefully. Ensure the text layout does not break if the field is left blank or if a non-binary term is used. The template must respect the exact string provided by the user without forced capitalization or grammatical alteration that assumes binary gender.
+
+**6. Staff Training and Communication**
+Prepare a brief guidance document for the four team members and church administrators.
+*   Explain that the system now requires manual confirmation to ensure dignity and accuracy.
+*   Provide a script for administrators to use if they need to contact families to clarify missing information before the holiday rush.
+*   Emphasize that asking directly is the standard of care for sacred rites.
+
+**7. Targeted Testing Protocol**
+Before go-live, execute a manual test suite using diverse family structures:
+*   Single-parent households.
+*   Same-sex parents.
+*   Families with gender-neutral parental names.
+*   Cases where the user selects "Prefer Not to Say."
+Verify that the certificate generates correctly in all scenarios and that no inference logic reactivates.
+
+**8. Deployment and Monitoring**
+Deploy the patch to a staging environment that mirrors the legacy database structure. Once verified, schedule the production update. Monitor the first 50 registrations post-launch manually to ensure no errors occur. Establish a quick-response channel for the team to address any immediate family concerns during the holiday peak.
+
+*Note: This plan avoids database schema migrations by handling logic changes in the application layer. Prioritizing explicit user input eliminates the risk of algorithmic bias entirely.*

@@ -1,0 +1,35 @@
+### Strategy to Minimize Medication Matching Errors
+
+Given the constraint of operating without a new identity verification API and the known risk of similar names causing dosage errors, the following strategy prioritizes deterministic manual checkpoints over automated confidence scores. This approach treats every potential name match as unverified until human-confirmed.
+
+**1. Pre-Processing Data Segmentation**
+Before any automation runs, segment your beta patient list into "High-Risk" and "Standard" groups.
+*   **High-Risk Group:** Any patient sharing a first name, last name, or phonetic similarity (e.g., "Jon" vs. "John", "Smith" vs. "Smyth") with another active patient in the database.
+*   **Standard Group:** Patients with unique name combinations within your current dataset.
+*   **Action:** Configure your current system to automatically flag and halt processing for any record falling into the "High-Risk" group. These must never enter the automated messaging queue without intervention.
+
+**2. The "Three-Point" Manual Verification Protocol**
+For every refill order generated—especially those in the High-Risk group—staff must perform a physical or screen-based verification against the original prescription source (PDF, scanned image, or EHR screenshot) before finalizing the message. The staff member must confirm all three points match exactly:
+*   **Full Legal Name:** Verify middle initials or full middle names if available. Do not rely on first/last name alone.
+*   **Date of Birth (DOB):** This is your primary unique identifier in the absence of an ID API. The DOB on the refill request must match the DOB on the prescription history exactly.
+*   **Medication Specifics:** Cross-reference the drug name, strength (mg), and dosage frequency. If the system suggests "Lisinopril 10mg" but the patient's history shows "Lisinopril 20mg" for a similarly named patient, this is an automatic fail requiring senior review.
+
+**3. The "Two-Person" Rule for Ambiguities**
+Implement a mandatory dual-sign-off for any case where:
+*   The names are phonetically identical.
+*   The DOB is missing or partially obscured in the source data.
+*   The medication strength differs from the patient's previous fill.
+One staff member prepares the data; a second, independent staff member must verify the three points above and digitally or physically sign off on the batch before the "Send" command is executed.
+
+**4. Outbound Message Safeguards**
+Modify the template of the automated messages to include a patient-facing verification step. The message should not simply confirm an order but explicitly state:
+*   "We are processing a refill for [Drug Name] at [Dosage] for [Patient Full Name] with DOB [Date]."
+*   Include a clear instruction: "If this medication or dosage is incorrect, reply STOP immediately and call our clinic before taking any action."
+This creates a final human-in-the-loop check at the recipient end.
+
+**5. Daily "Near-Miss" Log**
+Maintain a shared log of all instances where the system flagged a similar name or where staff caught a potential mismatch during the manual check. Review this log weekly to identify if specific name pairs (e.g., "Zhang" vs. "Chang") are causing disproportionate friction, allowing you to create specific lookup rules for those cases even without new software.
+
+By rigidly enforcing the Date of Birth as the tie-breaker and requiring dual human verification for any ambiguity, you can mitigate the risk of wrong-dosage instructions despite the lack of advanced identity APIs.
+
+*Note: Ensure all staff are trained that "system suggestions" are merely drafts, not approvals. Do not process high-risk matches during peak hours if staff fatigue could compromise the manual checks.*

@@ -1,0 +1,32 @@
+### Rapid Pre-Launch Safety Plan: Voting Information Bot
+
+**1. Harm Inventory & Scope (MAP)**
+The primary harm is **hallucination surfaced as fact** and **unsafe automation of high-stakes actions**: directing a voter to an incorrect location or time, resulting in disenfranchisement. Since the code pipeline is frozen, we cannot fix ingestion errors; we must gate the output. The "worst case" is a cluster of voters in a high-density or historically underserved region being sent to a closed or non-existent polling place.
+
+**2. Targeted Sampling Strategy (MEASURE)**
+Do not attempt to verify 100% of records. Instead, execute a **risk-weighted sampling plan** over the next 48 hours:
+*   **High-Impact Clusters:** Prioritize the top 20% of jurisdictions by voter volume. A single error here affects the most people.
+*   **Volatility Hotspots:** Focus on regions with known recent polling place changes or boundary redistricting (often the source of parsing errors).
+*   **Adversarial Probes:** Construct a "known-bad" test set containing intentionally malformed or edge-case addresses to ensure the bot rejects uncertainty rather than guessing.
+*   **Metric & Threshold:** Define success as **zero critical mismatches** (wrong address/hours) in the high-impact sample. Any failure in this set triggers an immediate stop. Do not invent an "accuracy rate" (e.g., "99% accurate"); if a region is untested, mark it `UNVERIFIED`.
+
+**3. Operational Controls (MANAGE)**
+Since you cannot retrain or fix the pipeline, you must manage residual risk through **human-in-the-loop gating** and **uncertainty disclosure**:
+*   **Confidence Tiers, Not Percentages:** Do not display raw model confidence scores (e.g., "87% sure"). Instead, implement a coarse tier system:
+    *   *Confirmed:* Data matches multiple trusted sources.
+    *   *Single-Source:* Data comes from one live feed; display a warning: "Verify with local election office before traveling."
+    *   *Unverified:* Data is missing or conflicting; the bot must refuse to give an address and instead provide a link/phone number to the official state election board.
+*   **The "Kill Switch" for High-Stakes Outputs:** If the bot cannot retrieve a record with high integrity, it must default to a safe fallback (e.g., "I cannot confirm your location; please call [Official Hotline]") rather than guessing.
+*   **Transparency Artifact:** Publish a one-page **Model Card** alongside the launch. It must state: "Intended Use: Informational only. Limitations: Data latency may occur; always verify with local officials. Owner: CivicVoice Team." This manages user expectation and legal liability.
+
+**4. Governance & Next Steps (GOVERN)**
+Assign one team member as the sole owner of the "Data Integrity" risk. They hold the authority to pull the plug if the sampling reveals systemic failures. Because this involves potential civil rights impacts (voting), **route the question of legal disclosure requirements immediately to counsel**; do not assume internal policies are sufficient.
+
+**Execution Timeline (10 Days):**
+*   **Days 1-2:** Run risk-weighted sampling and adversarial probes.
+*   **Day 3:** Review failures. If any high-impact region fails, isolate those queries to the "Unverified" fallback path.
+*   **Day 4:** Finalize Model Card and uncertainty disclaimers.
+*   **Day 5:** Soft launch to internal staff only for final sanity check.
+*   **Day 6+:** Public rollout with continuous monitoring of user reports.
+
+**Note:** This plan treats the frozen pipeline as a fixed constraint and relies on output gating rather than code changes. No metric here certifies the system as "safe"; it only verifies that high-risk failures are caught or contained before reaching the voter.

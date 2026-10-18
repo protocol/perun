@@ -1,0 +1,21 @@
+**Pre-Launch Safety Protocol: Autonomous Cooking Units (Pilot Phase)**
+
+**1. Rigorous Inspection Plan (Measurement & Verification)**
+Given the fixed hardware and the risk of undercooked poultry, the inspection plan must treat the computer vision output as unverified until proven otherwise by a secondary control.
+*   **Adversarial Probe Set:** Construct a test suite using images of poultry at varying stages of doneness, specifically focusing on the "borderline" cases where visual cues are ambiguous. Include "known-bad" controls (clearly raw meat) and "known-good" controls (thoroughly cooked meat).
+*   **Subgroup Analysis:** Test performance across different lighting conditions found in cafeterias (morning vs. noon sun, artificial light) and varying plate arrangements, as these may degrade vision accuracy.
+*   **Metric & Threshold:** Define the pass threshold as **zero false negatives** (no raw meat classified as cooked). If the model misclassifies even one instance of undercooked poultry in the probe set, the automated serving function for that specific class must remain blocked.
+*   **Residual Risk Reporting:** Do not assert a "99% safe" rate. If the edge cases cannot be perfectly distinguished by the current sensors, report the residual risk as **UNVERIFIED** for those specific conditions and mandate a human gate.
+
+**2. Software Fail-Safe Conditions (Management & Controls)**
+Since the hardware cannot be upgraded, the software logic must assume the sensor can be fooled. The following rules must be hard-coded:
+*   **The "Default-Deny" Logic:** The system must operate on a presumption of "undercooked" unless the confidence tier is explicitly "Confirmed." If the vision model outputs any uncertainty, ambiguity, or a confidence score below the absolute maximum tier, the unit must halt and flag the item for review.
+*   **Human-in-the-Loop Gate (Irreversible Action):** Serving food is a high-stakes, irreversible action with health consequences. Any item flagged as "uncertain," "borderline," or "low-confidence" by the vision system must **not** be served automatically. Instead, the unit must isolate the tray and alert a human staff member to perform a physical verification (e.g., using a calibrated probe thermometer) before release.
+*   **Uncertainty Rendering:** Do not display raw probability percentages (e.g., "87% done") to operators, as this invites over-reliance. Instead, display defined coarse tiers: **CONFIRMED SAFE** (green), **UNVERIFIED – CHECK REQUIRED** (yellow), or **UNSAFE – DO NOT SERVE** (red).
+*   **Kill Switch:** Implement an immediate software kill switch that disables the serving mechanism entirely if the system detects a sequence of ambiguous readings or a failure in the vision pipeline, forcing full manual operation until reset by a lead roboticist.
+
+**3. Transparency Artifact**
+Create a "Model Card" for this deployment documenting the intended use (poultry doneness), the known limitation (fixed sensor resolution), the measured performance on the probe set (specifically noting any failure modes), and the explicit owner of the safety decision. This card must travel with the unit; shipping without it is a transparency failure.
+
+**Note:** Legal requirements for automated food safety decisions in schools must be routed to counsel; this protocol recommends controls but does not assert regulatory compliance.
+**Note:** Do not certify the system as "safe"; the final ship decision rests with the district owner based on the residual risk reported above.

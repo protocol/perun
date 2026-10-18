@@ -1,0 +1,40 @@
+### Safety Review Protocol: Emergency Vehicle Exemption Validation
+
+**Objective:** Validate the parking-fine issuer's ability to correctly identify and exempt emergency vehicles (ambulances, fire trucks, police) during active duties using existing camera data, ensuring zero false positives before city-wide launch.
+
+**Phase 1: Data Stratification and Baseline Establishment**
+1.  **Dataset Segmentation:** Isolate all existing camera footage containing emergency vehicles. Categorize this data into:
+    *   *Active Duty:* Vehicles with lights/sirens active or responding to incidents.
+    *   *Inactive/Stationed:* Vehicles parked at stations or without emergency indicators.
+    *   *Edge Cases:* Vehicles partially obscured, in low light, or at extreme angles.
+2.  **Control Group Selection:** Select a comparable set of non-emergency vehicles (commercial trucks, vans) parked in restricted zones to ensure the system still issues fines correctly (preventing false negatives).
+
+**Phase 2: Targeted Simulation and Inference Testing**
+Since re-architecture is not permitted, testing must occur in a "shadow mode" where the system processes data without issuing real fines.
+1.  **Replay Testing:** Run the stratified emergency vehicle footage through the current algorithm.
+    *   *Success Metric:* 100% of "Active Duty" instances must result in a "No Fine" decision.
+    *   *Failure Analysis:* Log every instance where an active emergency vehicle is flagged. Capture the specific frame, confidence score, and detected attributes (e.g., did the system miss the light bar?).
+2.  **Stress Testing:** Introduce synthetic variations to the existing data if possible (digital overlay of emergency lights on standard vehicles in recorded footage) to test the robustness of the exemption logic without new camera deployments.
+
+**Phase 3: Rule Logic Verification**
+1.  **Threshold Calibration:** Review the confidence thresholds specifically for the "emergency vehicle" class. If the system requires 95% confidence to exempt, and the camera quality yields only 85%, the logic must be inverted or adjusted to "exempt on probable match" rather than "fine on uncertain match."
+2.  **Temporal Logic Check:** Verify if the system accounts for time-of-day or dispatch integration. If the system relies solely on visual cues, ensure the visual definition of "active duty" is broad enough to cover real-world scenarios (e.g., lights obscured by rain).
+
+**Phase 4: Human-in-the-Loop Safeguard (Immediate Mitigation)**
+Given the two-week deadline and inability to re-architect:
+1.  **Mandatory Review Queue:** Configure the system to route *any* potential fine involving a vehicle class resembling an emergency service (high roof, specific color profiles) to a human reviewer before issuance.
+2.  **Whitelist Integration:** If the system accepts license plate inputs, upload a static whitelist of known municipal emergency fleet plates to automatically bypass fine generation, serving as a hard fail-safe against visual recognition errors.
+
+**Phase 5: Final Go/No-Go Criteria**
+*   **Go:** Zero false positives in the "Active Duty" test set; human review queue successfully intercepts ambiguous cases.
+*   **No-Go:** Any confirmed false positive in the "Active Duty" set that cannot be mitigated by the whitelist or human review configuration.
+
+**Execution Timeline:**
+*   **Days 1-3:** Data segmentation and shadow mode setup.
+*   **Days 4-7:** Replay testing and threshold adjustment.
+*   **Days 8-10:** Implementation of human review queue and whitelist.
+*   **Days 11-14:** Final validation run and stakeholder sign-off.
+
+This protocol leverages existing assets to isolate risk without delaying the launch, prioritizing a defensive configuration that favors false negatives (missing a fine) over false positives (fining an ambulance).
+
+*Note: This plan assumes the current software allows for configuration changes to thresholds and routing logic without code recompilation. Immediate access to the raw camera logs is required to begin Phase 1.*

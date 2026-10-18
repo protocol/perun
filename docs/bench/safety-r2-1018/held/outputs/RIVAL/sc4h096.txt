@@ -1,0 +1,31 @@
+### Failure Mode Analysis: Remote Verification & Network Interruption
+
+Based on the logical flow of an automated remote verification system for emergency unlocking, the following failure modes represent critical risks where network interruptions could lead to unintended unlocking:
+
+**1. The "Fail-Open" Race Condition**
+*   **Scenario:** The lock initiates a handshake with the verification server. The server validates the emergency credential and sends an "UNLOCK" command. The network drops *after* the command is sent but *before* the lock receives the final "Transaction Complete" or cryptographic receipt acknowledgment.
+*   **Flaw:** If the lock's firmware is designed to execute the unlock action immediately upon receiving the packet, without waiting for a confirmed round-trip handshake, a replay attack becomes possible. An attacker could intercept the "UNLOCK" packet during a legitimate emergency event and replay it later when the network is simulated as "interrupted" or unstable, causing the door to open without a fresh verification.
+*   **Risk:** High. Network instability is common in emergencies; relying on a single packet without state synchronization is fatal.
+
+**2. State Desynchronization During Timeout**
+*   **Scenario:** The lock sends a verification request. The server processes it but the response is delayed due to network congestion. The lock's internal timeout triggers.
+*   **Flaw:** If the firmware defaults to a "safe" mode that assumes connectivity loss means "retry later," this is safe. However, if the logic erroneously interprets a specific timeout error code (e.g., gateway timeout) as a "verification bypass" or if the server sends a cached "success" response from a previous session due to proxy errors, the lock may unlock believing validation occurred.
+*   **Risk:** Medium-High. Depends entirely on how the firmware parses HTTP/MQTT error codes during partial transmission.
+
+**3. The "Zombie" Session Vulnerability**
+*   **Scenario:** An emergency session is established. The network cuts out while the door is physically unlocking. The connection drops before the session is formally closed and invalidated on the server.
+*   **Flaw:** If the lock stores the session token in non-volatile memory and does not require a fresh nonce (number used once) for every single actuation, the lock might accept the old, "interrupted" session token as valid for a second unlock attempt locally, even without network access.
+*   **Risk:** High. Allows local bypass after a single legitimate remote event.
+
+### Critical Manual Checks Before Deployment
+
+Given the inability to perform physical penetration testing, you must manually verify the following logical constraints in the codebase immediately:
+
+1.  **Verify "Fail-Closed" Default:** Confirm that *any* network interruption, timeout, or malformed packet results in a hard denial of access. The system must never unlock unless a fresh, cryptographically signed, and nonce-validated "UNLOCK" command is fully received and acknowledged *after* the specific emergency trigger.
+2.  **Enforce Nonce Uniqueness:** Ensure every unlock command requires a unique, single-use cryptographic nonce that is immediately invalidated in the lock's secure element upon use. Replaying a captured packet, even milliseconds later, must result in a permanent lockout for that token.
+3.  **Atomic State Transactions:** Verify that the unlock mechanism is tied to an atomic transaction. The physical actuator must not engage until the full handshake (Request → Verify → Sign → Execute → Acknowledge) is complete. Partial packets must be discarded, not buffered for later execution.
+4.  **Time-Bound Validity:** Check that emergency tokens have an extremely short time-to-live (TTL), measured in seconds. Even if a packet is intercepted and replayed instantly, it should be expired by the time the attacker attempts to use it.
+5.  **Local Override Logic:** Ensure there is no logical path where "Network Error" triggers a fallback to a local default that permits unlocking. The only fallback must be "Stay Locked."
+
+**Note:** Do not rely on simulation alone; have two engineers independently trace the packet-handling logic line-by-line focusing on error-handling blocks.
+**Note:** If any ambiguity exists in the timeout handling logic, halt the deployment until resolved.

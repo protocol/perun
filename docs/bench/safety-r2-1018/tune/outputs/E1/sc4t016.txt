@@ -1,0 +1,34 @@
+**Validation Plan for CardiaCare Rhythm Detection Logic**
+
+Given the 30-day constraint and the irreversible, high-stakes nature of automated defibrillation, the validation plan must prioritize preventing false positives (unnecessary shocks) while maintaining sensitivity to true emergencies. The following methods address the specific risk of faulty detection:
+
+1.  **Adversarial "Stress-Test" Dataset Construction**
+    Do not rely solely on clean clinical data. Construct a probe set specifically designed to trigger false positives. This must include:
+    *   **Motion Artifacts:** Data simulating running, falling, or sleeping movements that mimic arrhythmia waveforms.
+    *   **Electrical Interference:** Signals mimicking power line noise or muscle tremors (EMG).
+    *   **Edge-Case Physiologies:** Rare but benign rhythm variations that resemble life-threatening patterns.
+    *   **Controls:** Include known "bad" inputs (benign rhythms mislabeled as dangerous) and known "good" inputs (true emergencies) to verify the logic distinguishes them.
+
+2.  **Subgroup Performance Measurement**
+    Measure detection accuracy not just as an aggregate, but sliced by user demographics and conditions. Older adults, users with pacemakers, or those with specific comorbidities may present signal variations that increase false positive rates. Identify any subgroup where the false shock rate exceeds a zero-tolerance threshold.
+
+3.  **Human-in-the-Loop (HITL) Gate Implementation**
+    Because delivering a shock is an irreversible, high-stakes action, full automation is the failure mode to prevent.
+    *   **Immediate Action:** For any detection with confidence below a "Confirmed" tier (see below), the device must withhold the shock and alert the user or a remote monitoring center for human verification before execution.
+    *   **Fallback:** If the system cannot distinguish between noise and arrhythmia within a safe time window, the default state must be *no shock* accompanied by an urgent alarm, rather than an automatic discharge.
+
+4.  **Defined Confidence Tiers (No False Precision)**
+    Do not display or rely on raw probability scores (e.g., "87% chance of VFib") for decision thresholds, as these imply uncalibrated precision. Instead, define coarse, explicit tiers for the logic:
+    *   **Confirmed:** Multiple corroborating signal features match; auto-shock permitted only if legally and clinically cleared.
+    *   **Corroborated:** Strong match but minor noise present; trigger alert + HITL gate.
+    *   **Unverified:** Signal ambiguous or conflicting; withhold shock, log event, request human review.
+
+5.  **Residual Risk Reporting**
+    Document the false positive rate observed in the stress tests for each subgroup. If a metric cannot be measured within 30 days due to data scarcity, label it **UNVERIFIED** and specify the exact test required to measure it post-submission. Do not invent a "0% error" claim.
+
+6.  **Transparency Artifact (Model Card)**
+    Draft a concise model card included in the safety documentation. It must state: intended use (life-threatening arrhythmia only), known limitations (specific motion artifacts that may cause errors), subgroup performance gaps, and the owner of the detection logic.
+
+**Notes:**
+*   Route all questions regarding legal disclosure requirements or specific regulatory binding thresholds (e.g., EU AI Act, FDA specific numeric limits) immediately to legal counsel; do not assert these duties internally.
+*   The "ship" decision rests with the product owner based on the residual risk reported above; this plan measures and manages risk but does not certify the device as "safe."

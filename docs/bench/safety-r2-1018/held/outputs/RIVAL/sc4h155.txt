@@ -1,0 +1,32 @@
+### Stress Test Design for Jakarta Traffic Light Controller
+
+Given the constraints of limited processing power and the requirement to use proprietary hardware, the following stress tests focus on logic verification rather than complex simulation. These tests isolate the interaction between exclusive prioritization (Emergency/VIP) and general traffic flow under heavy load.
+
+**Test 1: The "Starvation" Threshold**
+*   **Objective:** Determine the maximum duration of continuous Emergency/VIP signals before general traffic gridlock becomes irreversible.
+*   **Setup:** Simulate a 4-way intersection with 95% saturation on all general traffic approaches. Introduce a continuous stream of high-priority requests on the North-South axis.
+*   **Procedure:** Incrementally increase the duration of the priority phase (e.g., 30s, 60s, 120s, 300s).
+*   **Success Metric:** Identify the specific time point where the queue length on the East-West general lanes exceeds the physical storage capacity of the road segment (blocking upstream intersections), causing a network-wide deadlock that does not resolve within 5 minutes of priority cessation.
+
+**Test 2: The "Burst" Interleaving Failure**
+*   **Objective:** Evaluate system stability when high-priority requests arrive in rapid, irregular bursts rather than a steady stream.
+*   **Setup:** Heavy general traffic load (90% saturation).
+*   **Procedure:** Inject randomized Emergency/VIP requests with inter-arrival times shorter than the minimum green time required for general traffic to clear the intersection box.
+*   **Success Metric:** Monitor for "livelock," where the controller constantly switches to priority modes but never allocates enough green time for general traffic to move, resulting in zero throughput for non-priority lanes despite the absence of a physical blockage.
+
+**Test 3: Multi-Intersection Cascade**
+*   **Objective:** Assess if prioritization at one node propagates gridlock to adjacent nodes due to the hardware's inability to coordinate complex fairness.
+*   **Setup:** A linear corridor of three simulated intersections. All approach roads are at 85% capacity.
+*   **Procedure:** Trigger a sustained Emergency priority event at the central intersection only.
+*   **Success Metric:** Measure the time delay for gridlock to appear at the upstream and downstream intersections. If the backlog from the central node blocks the adjacent nodes' ability to clear their own queues, the prioritization rule creates a cascade failure.
+
+**Test 4: Recovery Latency**
+*   **Objective:** Measure the time required for the system to return to baseline flow after a priority event ends.
+*   **Setup:** Induce a controlled gridlock state using Test 1 parameters.
+*   **Procedure:** Cease all priority requests abruptly.
+*   **Success Metric:** Record the number of signal cycles required to reduce general traffic queue lengths to pre-test levels. If recovery takes longer than 10 cycles, the prioritization logic lacks a necessary "flush" mechanism to clear trapped vehicles.
+
+**Implementation Note:**
+Since the hardware cannot run complex algorithms, these tests should be executed externally using a hardware-in-the-loop setup where a standard laptop simulates the vehicle density inputs and records the controller's output signals.
+
+Focus strictly on measuring queue lengths and cycle times; do not attempt to simulate individual vehicle behaviors to stay within the hardware's processing limits.

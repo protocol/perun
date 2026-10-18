@@ -1,0 +1,40 @@
+### Pre-Launch Safety Review Plan: Conflict-Zone Routing
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into active conflict zones).
+*   **Affected:** Driver partners in conflict-affected regions.
+*   **Worst Realistic Case:** Algorithm routes a driver through an active war zone due to 30-day lagged data, resulting in physical injury, kidnapping, or vehicle loss.
+*   **Constraint Acknowledgement:** The 30-day data lag creates a known "blind spot" that code alone cannot fix.
+
+**2. Measurement Strategy (Pre-Launch Eval)**
+Do not assert safety; measure residual risk using adversarial probes.
+*   **Probe Set:** Construct a test suite of 50+ known conflict scenarios where geopolitical status changed within the last 60 days.
+    *   *Positive Controls:* Inputs representing routes through zones that became active <30 days ago (simulating the data lag).
+    *   *Negative Controls:* Inputs representing stable routes and zones resolved >60 days ago.
+*   **Metric:** Percentage of positive control routes where the algorithm suggests entry without a hard block or human warning.
+*   **Pass Threshold:** **Zero tolerance.** Any route suggesting entry into a known active conflict zone (per open-source intelligence, not just map data) is a failure.
+*   **Stop Condition:** If *any* positive control results in an unsafe route recommendation, the launch is blocked.
+*   **Injection Check:** Test if user-supplied destination names can spoof safe zones in conflict areas.
+
+**3. Management Controls (The Human Gate & Fallbacks)**
+Since the data source is inherently stale, full automation is unsafe. Implement the following floors:
+*   **Hard Geofencing (The Gate):** Overlay a static, manually maintained "No-Go" list for high-risk regions identified by external intelligence (e.g., government travel advisories). The algorithm must treat these coordinates as non-routable, regardless of efficiency scores.
+*   **Mandatory Human-in-the-Loop:** For any route within 50km of a flagged region, the system must **not** auto-dispatch. Instead, trigger a manual review queue where a safety operator verifies the route against real-time news/intelligence before confirmation.
+*   **Uncertainty Disclosure:** If a route passes near a zone with data older than 15 days, display a prominent, colorblind-safe warning to the driver: *"Route proximity to reported instability. Data may be outdated. Proceed with extreme caution or decline."* Do not show a confidence percentage (e.g., "85% safe"); use defined tiers: **Verified Safe**, **Unverified/Check Manually**, **Avoid**.
+*   **Emergency Override:** Provide drivers a one-tap "Unsafe Route" report that immediately halts navigation and alerts the safety operations center.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific Safety Lead responsible for the weekly manual update of the "No-Go" list.
+*   **Transparency Artifact:** Publish an internal **Model Card** detailing:
+    *   *Intended Use:* Efficiency optimization in stable regions only.
+    *   *Limitations:* Explicitly state the 30-day data lag and the inability to detect sudden conflict outbreaks automatically.
+    *   *Residual Risk:* Mark the safety metric for sudden-onset conflicts as **UNVERIFIED** by automated means; reliance is on the manual gate.
+*   **Legal Routing:** Consult counsel regarding duty-of-care obligations in conflict zones and whether specific disclosures are legally mandated for drivers in these jurisdictions. Do not assume compliance based on this plan.
+
+**Definition of Done:**
+The feature ships only when the "No-Go" list is active, the human review queue is staffed, and the eval suite confirms zero automated routes into positive control conflict zones.
+
+***
+
+*Note: This plan treats the 30-day data lag as a critical failure mode requiring a non-automated control; do not attempt to "average out" this risk with probabilistic thresholds.*
+*Legal determination on liability in conflict zones must be routed to counsel before rollout.*

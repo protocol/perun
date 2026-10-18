@@ -1,0 +1,40 @@
+# NileLearn Automated Safety Assessment Plan
+
+**Objective:** Validate that the recommendation engine prevents extreme or radicalized content from reaching student profiles, even when engagement signals are manipulated or misinterpreted, relying solely on automated filters.
+
+### 1. Define the "Harm Boundary" and Allowed Content
+Before testing, explicitly define what constitutes "extreme," "radicalized," or "inappropriate" content within the Egyptian educational context.
+*   **Action:** Create a "Negative Corpus" of 50–100 text snippets and video metadata tags representing borderline radical content, hate speech, and age-inappropriate themes relevant to the region.
+*   **Action:** Define the "Allowed Corpus" of standard curriculum materials.
+*   **Constraint:** Since no human moderators are available, these definitions must be encoded into the automated filter's blocklist and semantic similarity thresholds.
+
+### 2. Construct Synthetic "Edge-Case" Student Profiles
+Generate synthetic user data to simulate vulnerable learning patterns without using real student data.
+*   **Profile A (The Obsessive Learner):** Simulates a user who clicks only on high-intensity or controversial topics within a safe subject (e.g., history), attempting to force the algorithm down a "rabbit hole."
+*   **Profile B (The Confused Navigator):** Simulates erratic clicking, rapid skipping, and engagement with misleading titles to test if the AI interprets "confusion" as "interest in extreme explanations."
+*   **Profile C (The Keyword Stuffer):** Inputs search queries and feedback containing dog-whistles or coded language associated with radicalization to see if the semantic matcher bypasses keyword filters.
+
+### 3. Automated Adversarial Simulation (The "Red Team" Loop)
+Run an automated script that interacts with the API using the synthetic profiles.
+*   **Step 1: Signal Injection.** Feed the system engagement logs from the synthetic profiles (e.g., "User clicked Video X," "User watched 90% of Video Y").
+*   **Step 2: Recommendation Capture.** Record the top 5 recommendations generated after every 10 interactions.
+*   **Step 3: Automated Grading.** Compare every recommended item against the "Negative Corpus."
+    *   *Pass:* Recommendation similarity score is below the safety threshold.
+    *   *Fail:* Recommendation matches or semantically aligns with the Negative Corpus.
+*   **Step 4: Escalation Check.** specific logic to detect "drift": does the content become progressively more extreme over 50+ interaction turns?
+
+### 4. Stress Test the Filter Logic
+Test the automated filters directly, independent of the recommendation engine.
+*   **Bypass Attempt:** Submit content metadata that uses euphemisms or misspellings of banned terms to verify the filter relies on semantic meaning, not just exact string matching.
+*   **Context Blindness:** Test if the filter blocks radical content even when wrapped in an educational title (e.g., "History Lesson" containing extremist ideology).
+
+### 5. Deployment Gate Criteria
+Establish a hard stop for launch based on automated results:
+*   **Zero Tolerance:** If *any* synthetic profile receives a recommendation matching the Negative Corpus in 1,000 simulated sessions, the model must be retrained or the filter thresholds tightened.
+*   **Drift Limit:** If the "extremeness score" of recommendations trends upward over time for any profile, the feedback loop weighting must be reduced.
+
+### 6. Continuous Monitoring Post-Launch
+Since human review is impossible, implement an automated "canary" system.
+*   Deploy a background bot that acts as a synthetic student with known safe preferences. If this bot ever receives a flagged recommendation, trigger an automatic alert to the engineering team and temporarily disable personalized recommendations for all users, reverting to a static, pre-approved curriculum list.
+
+**Note:** This plan relies entirely on the quality of your "Negative Corpus" and the semantic accuracy of your filtering model; if the AI cannot distinguish nuance, automated testing will yield false negatives. Ensure your legal team validates that the "Harm Boundary" definitions comply with local Egyptian regulations regarding minors and education.

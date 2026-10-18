@@ -1,0 +1,37 @@
+### Safety Review Protocol: Emergency Vehicle Exemption Validation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes irreversible actions (issuing fines to exempt emergency vehicles).
+*   **Affected Parties:** Emergency services (ambulances, fire trucks), patients relying on timely care, municipal credibility.
+*   **Worst Realistic Case:** An ambulance responding to a cardiac arrest is fined and delayed due to system error, causing patient harm and eroding public trust in the traffic reduction initiative.
+
+**2. Measurement Plan (Runnable Eval)**
+Execute the following test row immediately using existing camera data before launch:
+
+*   **Probe Set:**
+    *   *Positive Controls (Must Trigger Exemption):* 50+ clips of local ambulances and fire trucks in active duty (lights/sirens visible if possible) parked in restricted zones. Include edge cases: obscured plates, night vision, heavy rain, and partial occlusion.
+    *   *Negative Controls (Must Trigger Fine):* 50+ clips of civilian vehicles mimicking emergency patterns (e.g., hazard lights only) or parked illegally in similar conditions.
+    *   *Adversarial Probes:* Images with dirt on plates, unusual angles, and temporary construction signage confusing the zone boundary.
+*   **Metric:** False Positive Rate (FPR) specifically for verified emergency vehicle classes.
+*   **Pass Threshold:** **0%**. Any false positive on an active emergency vehicle is a critical failure.
+*   **Stop Condition:** If FPR > 0% on the positive control set, the automated issuance feature for these vehicle classes is **blocked** from launch.
+*   **Reviewer:** Independent safety officer (not part of the core dev team).
+
+**3. Risk Management & Human-in-the-Loop Gate**
+Given the strict deadline and zero-tolerance requirement for this specific harm:
+*   **Immediate Control:** Implement a hard rule-based filter. If the vision system classifies a vehicle as "Emergency" (based on plate prefix or visual markers), the system must **suppress fine issuance** automatically and flag the event for **mandatory human review**.
+*   **Operational Fallback:** Until the model achieves verified stability, route all detections involving emergency vehicle patterns to a human operator queue. Do not auto-issue fines for these classes.
+*   **Uncertainty Disclosure:** If the system confidence on vehicle type is below a defined "Confirmed" tier (e.g., ambiguous lighting), default to "No Fine" and log for review. Never output a precise confidence percentage (e.g., "87%") to operators; use defined tiers (Confirmed/Unverified).
+
+**4. Transparency Artifact**
+Create a one-page **Model Card** for the city leadership and operations team containing:
+*   **Intended Use:** Automated fine issuance for civilian vehicles in restricted zones.
+*   **Out-of-Scope/Exclusions:** Explicitly states that emergency vehicles in active duty are excluded from automated fines and require human verification.
+*   **Measured Performance:** Report the FPR on the emergency vehicle test set. If not fully tested by launch day, mark this metric as **UNVERIFIED** and maintain the human gate.
+*   **Owner:** Name the specific individual responsible for monitoring false positives post-launch.
+
+**5. Governance**
+*   **Owner:** Assign a specific product owner responsible for reviewing all flagged emergency vehicle events weekly.
+*   **Re-review Trigger:** Any update to the camera firmware, model weights, or changes in local emergency vehicle markings requires re-running the Positive Control test set.
+
+**Note:** This protocol does not certify the system as "safe" or "unbiased"; it establishes a control framework to manage residual risk. Legal requirements regarding automated administrative decisions in the EU must be confirmed by counsel immediately.

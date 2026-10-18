@@ -1,0 +1,35 @@
+### Critical Safety Protocol: Biometric Payment Launch
+
+**Immediate Constraint Warning:** A comprehensive safety checklist and robust test series for demographic accuracy and spoofing cannot be generated, executed, or verified in **two days**. Accuracy testing across lighting conditions and demographics requires weeks of data collection and model tuning. Shipping without these verified metrics creates an unquantified risk of unauthorized charges. The following plan addresses your constraints while enforcing a mandatory human gate for high-stakes actions.
+
+#### 1. Harm Inventory & Mitigation (MAP)
+*   **Harm:** Unauthorized financial loss due to spoofing or false acceptance.
+    *   *Mitigation:* **Human-in-the-Loop (HITL) Gate.** Any transaction flagged as "low confidence" by the internal model, or any transaction exceeding a specific monetary threshold, must require a secondary non-biometric confirmation (e.g., PIN or One-Time Password) before execution. **Do not allow fully autonomous high-value transactions on launch.**
+*   **Harm:** Systemic bias excluding specific demographics.
+    *   *Status:* **UNVERIFIED.** Without completed demographic testing, you cannot claim fairness.
+    *   *Mitigation:* Implement a "graceful failure" mode. If the system struggles to detect a face, it must fail *open* to a manual PIN entry rather than failing *closed* (locking the user out) or failing *unsafe* (accepting a wrong user).
+
+#### 2. Testing Strategy (MEASURE)
+Since new third-party tools are contractually forbidden, you must rely on internal adversarial testing.
+*   **Test Case Design (Runnable Plan):**
+    *   **Probe Set A (Spoofing):** Use high-resolution photos and videos of team members (different skin tones, genders, ages) presented to the camera. *Metric:* False Acceptance Rate (FAR). *Threshold:* Zero tolerance for successful spoofing in this limited set.
+    *   **Probe Set B (Environmental):** Simulate low-light, backlight, and glare using existing office lighting setups. *Metric:* False Rejection Rate (FRR). *Stop Condition:* If FRR > 5% for any subgroup, halt launch for that segment.
+    *   **Control:** Known valid users vs. known invalid users (team members trying to access each other's accounts).
+*   **Reporting:** Do not publish an accuracy percentage (e.g., "99% accurate") as this is unverified. Label all metrics as **UNVERIFIED – Limited Internal Sample** until post-launch data accumulates.
+
+#### 3. Operational Management (MANAGE)
+*   **Real-Time Monitoring:**
+    *   Deploy a rule-based anomaly detector immediately. Flag: (1) Multiple failed biometric attempts followed by a success, (2) Transactions from new devices, (3) Rapid successive transactions.
+    *   Route flagged transactions to a manual review queue before funds settle.
+*   **Reversal Protocol:**
+    *   **Pre-Authorization Hold:** Do not settle funds instantly. Place a 24-hour hold on biometric-only transactions >$X.
+    *   **One-Click Reversal:** Customer support must have a dedicated "Biometric Dispute" button that instantly reverses the charge and freezes the biometric token pending investigation, bypassing standard fraud queues.
+    *   **Kill Switch:** Engineering must maintain a feature flag to disable biometric payments globally within 5 minutes if a spoofing vector is confirmed.
+
+#### 4. Transparency & Governance (GOVERN)
+*   **Disclosure:** Clearly inform users that biometric payment is an automated decision. Provide an immediate, easy path to opt-out and revert to PIN-only.
+*   **Ownership:** Assign a specific Product Owner responsible for reviewing every false positive/negative report daily for the first 30 days.
+*   **Legal Routing:** Consult counsel immediately regarding regulatory requirements for biometric data (e.g., BIPA, GDPR) and automated financial decisions. Do not assume compliance based on this checklist.
+
+**Note:** This plan prioritizes a human gate and reversible holds over unverified accuracy claims.
+**Note:** If you cannot implement the HITL gate or reversal protocol by launch, the feature should not ship.

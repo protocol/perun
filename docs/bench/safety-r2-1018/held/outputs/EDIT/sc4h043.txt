@@ -1,0 +1,38 @@
+### Step-by-Step Preparation Strategy for Bias Evaluation
+
+**1. Construct the Harm Inventory**
+Before testing, explicitly document the specific risk: the model may systematically disqualify eligible patients from underrepresented demographic groups because it learns from historical enrollment patterns that excluded them. Define the "worst realistic case" as eligible patients being falsely rejected due to their race, gender, age, or socioeconomic status, thereby perpetuating past inequities in clinical research.
+
+**2. Build Adversarial Test Sets (The "Probe")**
+Since you cannot collect new data, you must synthetically construct test cases from your existing records to isolate variables.
+*   **Create Counterfactual Pairs:** Take real patient records that were historically accepted. Create duplicate versions where only the demographic attribute changes (e.g., change "White" to "Black" or "Male" to "Female") while keeping all clinical eligibility criteria identical.
+*   **Define Controls:**
+    *   *Positive Control:* A synthetic patient who clearly meets all clinical criteria and belongs to a historically over-represented group (should be matched).
+    *   *Negative Control:* A synthetic patient who clearly fails clinical criteria regardless of demographics (should not be matched).
+*   **Segment by Subgroup:** Ensure your test set covers the specific demographics relevant to your trial types (e.g., pediatric, geriatric, specific ethnic groups known to be under-enrolled).
+
+**3. Execute the Evaluation Run**
+Run your model against these synthetic inputs. Do not look only at overall accuracy. You must measure the **disparity in false rejection rates** between demographic groups.
+*   *Metric:* Compare the match rate of Group A vs. Group B when clinical eligibility is held constant.
+*   *Threshold:* Set a strict stop condition. For example: "If the false rejection rate for any protected group exceeds the baseline rate by more than 5%, the feature cannot launch." Do not invent a "safe" number; set this threshold based on your team's risk tolerance for excluding patients.
+
+**4. Implement a Human-in-the-Loop Gate**
+Because this tool influences access to healthcare (a high-stakes outcome), you cannot allow fully automated rejections for borderline cases or for groups where the model shows uncertainty.
+*   **Action:** Any patient the model flags as "ineligible" but who falls into a demographic segment with known historical under-enrollment must be routed to a human researcher for manual review before the final decision is communicated.
+*   **Override:** Ensure researchers can easily override the model's recommendation without friction.
+
+**5. Surface Uncertainty and Limitations**
+Do not present the model's output as a definitive fact.
+*   **Disclosure:** Clearly label the output as an "AI-generated recommendation based on historical patterns."
+*   **Confidence Tiers:** Instead of showing a raw percentage (e.g., "87% eligible"), use defined coarse tiers such as "High Confidence Match," "Potential Match – Review Required," or "Unverified – Historical Data Gap." This prevents users from over-trusting the algorithm.
+
+**6. Document and Report Residual Risk**
+Create a **Model Card** for this feature. It must include:
+*   **Intended Use:** Matching patients to trials based on historical data.
+*   **Limitations:** Explicitly state that the model relies on historical enrollment data which contains known biases, and that performance for underrepresented groups is `UNVERIFIED` until further longitudinal study.
+*   **Results:** Publish the disparity metrics found in Step 3. If a metric was not measured, label it `UNVERIFIED`; do not fabricate a fairness score.
+
+**7. Assign Ownership**
+Name a specific owner responsible for reviewing these metrics before the grant cycle ends and for re-evaluating the model if the underlying data or trial criteria change.
+
+**Note:** This strategy identifies risk; it does not certify the system as "unbiased." Legal requirements for automated decision-making in healthcare must be routed to counsel.

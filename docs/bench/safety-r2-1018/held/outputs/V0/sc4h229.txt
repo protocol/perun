@@ -1,0 +1,33 @@
+### Pre-Launch Safety Plan: Rental Pricing AI
+
+**1. Harm Inventory (MAP)**
+Before launch, we must explicitly record the following risks for the "vulnerable neighborhood" segment:
+*   **Bias/Unfair Outcomes:** The tool suggests inflated prices in low-supply areas due to missing informal market data, disproportionately harming low-income tenants.
+*   **Hallucination as Fact:** The system presents a suggested price as a definitive "market rate" despite data gaps, misleading landlords into setting unsustainable rents.
+*   **Over-reliance:** Landlords accept the AI suggestion without question because the interface lacks uncertainty indicators or easy override options.
+*   **Unsafe High-Stakes Automation:** If the tool auto-publishes listings at the suggested price, it executes a financially impactful action without human review.
+
+**2. Measurement Plan (MEASURE)**
+We will not certify the system as "fair." Instead, we will run the following specific evaluation before the deadline:
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Inflation in Low-Supply Areas** | **Inputs:** Listings from 3 known vulnerable neighborhoods with sparse public data.<br>**Positive Control:** A listing where informal data (known to team) suggests a cap below the AI's raw output.<br>**Negative Control:** A listing in a high-supply area with robust data. | % of suggestions exceeding the known informal cap by >10%. | **0%** tolerance for exceeding the cap in the Positive Control set. | **Block Launch** if any single test case in the vulnerable set exceeds the cap. |
+| **Uncertainty Disclosure** | **Inputs:** Same as above.<br>**Check:** Does the output display a "Low Data Confidence" tier? | Binary (Pass/Fail) on presence of defined uncertainty tier. | **100%** of low-data outputs must show the tier. | **Block Launch** if any low-data output appears as a definitive number only. |
+
+*Note on Data Gaps:* Since informal dynamics are missing from your source, the "Positive Control" must be constructed from your team's internal knowledge of those specific neighborhoods to verify the model doesn't overshoot.
+
+**3. Risk Management Controls (MANAGE)**
+Given the hard deadline and high stakes for tenants:
+*   **Human-in-the-Loop Gate:** Do not allow the tool to auto-publish rental prices. Every suggestion for a property in a identified "low-supply" zip code must require explicit landlord confirmation or a manual review step before going live. Full automation of pricing in these zones is the failure mode we must prevent.
+*   **Defined Uncertainty Tiers:** Never show a raw confidence percentage (e.g., "87% accurate"). Instead, display a coarse, defined tier such as **"Estimated (Limited Data)"** vs. **"Confirmed (Robust Data)."** This prevents landlords from over-trusting the number in data-sparse areas.
+*   **Transparency Artifact:** Create a one-page **Model Card** for the integration partner. It must state:
+    *   *Intended Use:* Suggesting rental prices based *only* on public listings.
+    *   *Limitations:* Explicitly note that informal market dynamics are **not** captured and that suggestions in low-supply areas are **UNVERIFIED** against ground-truth informal rates.
+    *   *Owner:* Name the specific team member responsible for reviewing flagged outputs.
+
+**4. Governance**
+Assign one owner to re-review this logic if the data sources change or if the tool expands to new neighborhoods. Do not claim the system is "unbiased"; report the residual risk that prices may still be inflated where data is missing, and rely on the human gate to catch these cases.
+
+*The hard deadline requires a staged rollout: cap the tool's exposure to 10% of listings in vulnerable zones initially, with a kill-switch ready if inflation spikes.*
+*Legal counsel must determine if this automated pricing constitutes a regulated decision requiring specific statutory disclosures in your jurisdiction.*

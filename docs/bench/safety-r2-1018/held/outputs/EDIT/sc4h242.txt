@@ -1,0 +1,39 @@
+### Bankruptcy Model Fairness Evaluation Strategy
+
+**1. Harm Inventory & Scope**
+Your primary identified harm is **bias/unfair outcomes**: false positives in hospitality and retail systematically deny capital to viable small businesses. The worst-case impact is business failure due to liquidity starvation. Secondary risks include **over-reliance** (lenders trusting the "high risk" flag without override) and **missing disclosure** (applicants unaware an AI made the initial rejection).
+
+**2. Measurement Plan (Internal Simulation)**
+Since external auditing is unavailable, you must construct rigorous internal adversarial evals. Do not assert fairness; measure residual risk.
+
+*   **Construct Counterfactual Test Sets:** Create synthetic loan applications where financial fundamentals (cash flow, debt-to-income) are identical, but the **sector** (hospitality, retail, tech) and **business size** vary.
+    *   *Positive Control:* A clearly solvent business in a neutral sector (e.g., professional services) that the model correctly flags as "low risk."
+    *   *Negative Control:* A clearly insolvent business in any sector that the model correctly flags as "high risk."
+    *   *Probe Set:* Solvent businesses in hospitality and retail. If these are flagged "high risk" while the positive control is not, you have isolated sector bias.
+*   **Define Metrics & Thresholds:**
+    *   *Metric:* False Positive Rate (FPR) disparity. Calculate FPR for hospitality/retail vs. the baseline sector.
+    *   *Threshold:* Set a zero-tolerance stop condition for FPR disparity exceeding a defined gap (e.g., if hospitality FPR is >2x the baseline).
+    *   *Stop Condition:* If the disparity threshold is breached in simulation, the beta launch to regional banks must be blocked until mitigated.
+*   **Stress Test for Over-Reliance:** Simulate lender workflows where the model output is presented without uncertainty indicators. Measure if human reviewers override false positives. If override rates are low despite obvious solvency in the data, the interface design is inducing automation bias.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop (HITL) Gate:** Because loan denial is a high-stakes, potentially irreversible financial harm, **no application flagged "high risk" by the model should be automatically rejected.** The beta must route all "high risk" decisions to a human underwriter for final review. Full autonomous rejection is the failure mode you must prevent.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% risk") which imply false precision. Instead, use defined coarse tiers (e.g., "Verified Solvent," "Corroborated Risk," "Unverified/Review Required") accompanied by the specific data points driving the flag.
+*   **Transparency Artifact:** Draft a **Model Card** for the internal team and bank partners. It must state:
+    *   *Intended Use:* Preliminary risk sorting for small business loans.
+    *   *Limitations:* Explicitly list "Unverified performance in hospitality and retail sectors; high false positive risk identified in internal sims."
+    *   *Data Provenance:* Source of training data and known gaps.
+    *   *Status:* Mark sector fairness metrics as **UNVERIFIED** pending the results of the simulation above. Do not fabricate a fairness score.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific product owner to the "Sector Bias" harm. They are responsible for reviewing simulation results weekly.
+*   **Legal Duty:** Automated loan denials often trigger regulatory obligations (e.g., adverse action notices, fair lending laws). **Route immediately to legal counsel** to determine if your current disclosure and appeal processes meet statutory requirements for AI-driven decisions. Do not assume internal simulations satisfy regulatory compliance.
+
+**Execution Schedule:**
+1.  **Week 1:** Build counterfactual datasets and define disparity thresholds.
+2.  **Week 2:** Run simulations; calculate FPR by sector.
+3.  **Week 3:** If disparities exist, tune model or adjust HITL rules; draft Model Card.
+4.  **Week 4:** Legal review of disclosure/decision logic; final go/no-go decision based on stop conditions.
+
+*Note: This plan identifies risk and proposes controls; it does not certify the model as safe or unbiased. The decision to launch rests with FinFlow leadership based on the simulation results.*
+*Ensure all "UNVERIFIED" metrics in your Model Card are updated only after actual measurement, never estimated.*

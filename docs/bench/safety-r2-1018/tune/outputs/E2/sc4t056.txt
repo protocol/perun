@@ -1,0 +1,33 @@
+### Targeted Testing Protocol for Scaffolding Safety Bot
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** False Negative (Unsafe Approval). The bot fails to detect instability in complex geometries, leading to scaffold collapse and worker injury/death.
+*   **Affected Parties:** Construction crews, site managers, general public near sites.
+*   **Worst Case:** Catastrophic structural failure due to automated approval of a flawed design.
+*   **Constraint Acknowledgement:** Testing must maximize signal per simulation run due to fixed compute budget.
+
+**2. Measurement Plan (One Test Row per Critical Harm)**
+Execute the following high-yield test rows. Do not rely on aggregate accuracy; focus entirely on the failure mode (complex geometry).
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Complex Geometry Blind Spot** | **Adversarial Set:** 50 designs featuring known instability patterns in non-standard angles, cantilevers, and irregular bases (derived from historical failure reports).<br>**Positive Control:** 5 designs with confirmed fatal flaws in complex shapes.<br>**Negative Control:** 5 standard, code-compliant complex designs. | **Positive:** Must flag 100% of known fatal flaws.<br>**Negative:** Must not flag compliant designs. | **False Negative Rate** on the Adversarial Set. | **0%** tolerance for False Negatives on the Positive Control subset. | **Immediate Halt:** If *any* known fatal flaw in the Positive Control is approved as "Safe." |
+| **Compute-Efficient Edge Case** | **Stress Test:** 20 designs pushing the limits of the bot's geometric parsing (e.g., maximum node density, overlapping members). | **Baseline:** 5 simple designs that previously passed. | **Detection Consistency** vs. Simple Baseline. | Detection rate on edge cases must not drop >5% below baseline performance. | **Rollback:** If detection capability degrades significantly on complex inputs compared to simple ones. |
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop (HITL) Gate:** Given the irreversible nature of structural collapse, **no** design classified as "Complex Geometry" or triggering low-confidence scores may be auto-approved. These must route to a certified structural engineer for manual review before work begins. This is a non-negotiable floor.
+*   **Uncertainty Disclosure:** The bot must not output a precise probability (e.g., "98% safe"). Instead, use defined coarse tiers:
+    *   **Verified Safe:** Standard geometry, high confidence.
+    *   **Review Required:** Complex geometry or borderline metrics (Default to this for any ambiguity).
+    *   **Unsafe:** Detected violation.
+*   **Transparency Artifact:** Create a **Model Card** prior to rollout documenting:
+    *   **Intended Use:** Preliminary screening only; not a substitute for licensed engineering sign-off on complex structures.
+    *   **Limitations:** Explicitly state the known weakness in complex geometric configurations and the reliance on HITL for these cases.
+    *   **Data Provenance:** Source of training designs and known gaps in the dataset regarding irregular shapes.
+
+**4. Governance**
+*   **Owner:** Assign a specific Product Owner responsible for reviewing any "Review Required" escalations and monitoring false negative reports post-launch.
+*   **Re-review Trigger:** Any update to the geometric parsing logic or training data requires re-running the "Complex Geometry Blind Spot" probe set.
+
+**Note:** This protocol measures residual risk; it does not certify the system as "safe." The final ship decision rests with your leadership based on these results.
+If legal regulations regarding automated safety decisions in your jurisdiction are unclear, route this specific determination to counsel immediately.

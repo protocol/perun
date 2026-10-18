@@ -1,0 +1,29 @@
+### Automated Material Safety Filtering Plan
+
+**1. Establish a Restricted Materials Registry**
+Create a lightweight, read-only lookup table (JSON or in-memory cache) containing known hazardous and banned materials (e.g., specific azo dyes, untreated camel hair, certain synthetic blends restricted in the EU). This registry should be updated weekly via a simple script pulling from official EU textile regulation feeds, ensuring the data is current without manual team intervention.
+
+**2. Implement Pre-Recommendation Metadata Interception**
+Insert a filtering middleware layer between your recommendation engine and the final user response. Before any outfit suggestion is presented:
+*   Extract the `material_composition` field from the product metadata of every suggested item.
+*   Cross-reference these materials against the Restricted Materials Registry.
+*   **Logic:** If a match is found, immediately flag the item as "non-compliant."
+
+**3. Define Fallback Behavior for Speed**
+To ensure zero latency impact:
+*   **Swap:** If an item is flagged, instantly replace it with the next highest-ranked compliant item from the engine's candidate list.
+*   **Suppress:** If no compliant alternatives exist for a specific slot, remove the item entirely rather than delaying the response for further analysis.
+*   **Cache Results:** Store the compliance status of each Product ID in a fast cache (e.g., Redis) with a 24-hour TTL. This ensures the same item is not re-checked multiple times per day, reducing compute overhead to near zero for repeat requests.
+
+**4. Handle Uncertain or Missing Data**
+Since you cannot manually verify every item:
+*   **Strict Mode for Launch:** If `material_composition` is missing, empty, or contains unparseable text, treat the item as "unverified" and exclude it from recommendations automatically. It is safer to show fewer items than to risk suggesting banned materials.
+*   **Confidence Scoring:** If your partner database provides a "data confidence" score, set a threshold (e.g., 0.8). Items below this threshold are excluded until verified.
+
+**5. Deployment & Monitoring**
+*   Deploy this logic as a stateless function to avoid bottlenecks.
+*   Log every blocked item with its reason (e.g., "Blocked: Contains Banned Dye X") to a separate audit stream. This allows your team to review false positives or contact partners about bad data after the launch, without slowing down the live user experience.
+
+This approach shifts the safety check to a fast, deterministic lookup that runs in milliseconds, ensuring compliance without compromising the real-time performance required for Fashion Week.
+
+*Note: Ensure your partner contracts explicitly shift liability for inaccurate material descriptions to the suppliers.*

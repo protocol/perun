@@ -1,0 +1,31 @@
+# Visa Screener Edge-Case Review Plan
+
+**Objective:** Identify formatting and OCR-induced false negatives using only internal synthetic data and existing engineering resources, ensuring zero legitimate rejections in the pilot expansion.
+
+### 1. Synthetic Data Generation (Days 1–2)
+Since external datasets are prohibited, the engineering team must generate a "Golden Set" of valid applications internally.
+*   **Base Templates:** Create 50 perfect digital PDFs representing valid visas for each supported nationality.
+*   **Format Variation Matrix:** Programmatically alter these base files to simulate real-world submission errors:
+    *   **Resolution/Compression:** Downsample images to 72 DPI, apply heavy JPEG compression, and introduce blur.
+    *   **Orientation & Crop:** Rotate documents 90/180/270 degrees, skew angles by ±5 degrees, and simulate partial scans (missing corners).
+    *   **Noise Injection:** Add digital noise, coffee-stain overlays, shadow gradients, and low-contrast text to mimic poor scanner hardware.
+    *   **Font/Encoding:** Re-render text layers using uncommon fonts or mixed character encodings to stress the OCR engine.
+
+### 2. Targeted Stress Testing (Days 3–4)
+Run the Golden Set through the internal screening environment with a focus on the rejection pipeline.
+*   **OCR Confidence Thresholding:** Log the confidence score for every extracted field. Identify the threshold where valid data begins to fail extraction.
+*   **Field-Specific Failure Analysis:** Isolate failures by data point (e.g., passport number vs. expiry date). Determine if a single low-confidence field triggers an automatic system-wide rejection.
+*   **Format-Specific Batching:** Group rejections by the type of distortion applied (e.g., "All rotated documents rejected" or "High compression causes date misread").
+
+### 3. Logic & Rule Calibration (Day 5)
+Analyze the rejection reasons to distinguish between data unreadability and policy violations.
+*   **Fallback Mechanism Verification:** Ensure that documents with low OCR confidence trigger a "Human Review" flag rather than an immediate "Reject" status.
+*   **Tolerance Adjustment:** If valid documents are rejected due to minor formatting deviations (e.g., slight skew), adjust the pre-processing normalization rules.
+*   **Negative Control Check:** Run a small set of clearly invalid documents to ensure that relaxing constraints for valid documents does not create a security gap by accepting fraudulent ones.
+
+### 4. Validation & Sign-off (Day 6)
+*   **Success Criteria:** The system must achieve 100% acceptance (or human-review routing) for the Golden Set of valid documents, regardless of introduced noise.
+*   **Documentation:** Record specific distortion types that previously caused failures and the configuration changes made to resolve them.
+*   **Pilot Go/No-Go:** Authorize expansion only if the false-negative rate on the synthetic valid set is zero.
+
+**Note:** This plan relies entirely on deterministic, internally generated artifacts to satisfy data sovereignty requirements. Immediate implementation requires only the existing seven engineers and the current staging environment.

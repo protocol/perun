@@ -1,0 +1,32 @@
+### Pre-Launch Logic Check Plan: Noise-Complaint Automation
+
+To prevent harassment from false positives caused by sensor latency, implement the following **Human-in-the-Loop (HITL) Gate** and **Data Validation Logic** before any notice leaves the system.
+
+**1. The "Cool-Down & Corroboration" Logic (Automated Filter)**
+Before generating a violation draft, the system must enforce these rules:
+*   **Latency Buffer:** Discard any sensor reading that arrives more than 15 minutes after the timestamped event. Latency-induced duplicates often arrive late; do not process them.
+*   **Sustained Threshold:** A violation requires *continuous* exceedance of the decibel limit for at least 10 minutes. Single spikes or fragmented data points (common with glitchy sensors) are automatically logged but ignored for enforcement.
+*   **Duplicate Suppression:** If a notice was sent to a resident in the last 48 hours, suppress all new automated drafts for that unit unless the sound level exceeds the limit by >20% (indicating a distinct, severe event).
+
+**2. The Human Review Gate (Mandatory for Pilot)**
+No notice is sent automatically during the pilot.
+*   **Workflow:** The system generates a "Draft Notice" containing the sound graph, duration, and sensor ID.
+*   **Action:** A designated team member must manually review and click "Approve" to send.
+*   **Criteria for Approval:** The reviewer confirms the graph shows a sustained event (not a spike) and checks for known sensor outages logged that day.
+*   **Stop Condition:** If the rate of "Rejected Drafts" exceeds 10% in any 24-hour period, the system automatically pauses all draft generation until the sensor latency issue is patched.
+
+**3. Transparency & Uncertainty Disclosure**
+*   **Internal Labeling:** Every draft must display a confidence tier based on data quality:
+    *   *Confirmed:* Continuous data, no latency flags.
+    *   *Unverified:* Data has gaps or arrived late (Default to "Do Not Send").
+*   **External Disclosure:** When a notice is eventually sent, it must state: "This notice was generated based on automated sensor data. If you believe this is an error due to technical glitches, reply within 24 hours for an immediate manual review."
+
+**4. Measurement Plan (Pre-Launch)**
+Run a simulation using historical data with injected latency glitches:
+*   **Probe:** Feed the system 100 known "false positive" scenarios (short spikes, delayed packets).
+*   **Pass Threshold:** The system must generate **zero** approved notices for these inputs.
+*   **Metric:** Track the "False Draft Rate" (drafts created vs. actual violations). If this is unknown, mark it **UNVERIFIED** and do not launch the auto-send feature.
+
+**Ownership:** Assign one team member as the "Safety Owner" responsible for reviewing rejected drafts daily and updating the latency buffer rules. Do not remove the human gate until the false draft rate is consistently zero over a 2-week period.
+
+*Note: This plan treats the latency issue as a critical failure mode; do not attempt to "average out" the errors with code alone. Legal requirements for automated housing notices vary by jurisdiction; route the final notice wording to counsel before use.*

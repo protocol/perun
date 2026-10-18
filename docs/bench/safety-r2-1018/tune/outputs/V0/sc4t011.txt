@@ -1,0 +1,35 @@
+I cannot definitively confirm that your system is "safe," "fair," or ready for public deployment, nor can I provide a liability verdict. No test proves a biometric system is unbiased, and asserting a specific error rate without running your own adversarial evals would be a fabrication.
+
+However, given your 10-day deadline, fixed budget, and the high-stakes nature of denying residents entry to their homes, here is the only viable path forward that respects your constraints while managing residual risk:
+
+**1. Immediate Harm Inventory & Worst-Case Definition**
+Stop treating "flawed matches" as a generic bug. Define the specific harm: **Bias/Fairness**. The worst realistic case is a specific demographic group (e.g., residents of certain ethnicities, ages, or genders) being systematically locked out of their homes, creating a safety hazard and potential human rights violation. You must document who is affected based on your internal test signals.
+
+**2. Runnable Measurement Plan (Do This Now)**
+You cannot buy new data, but you can rigorously test what you have.
+*   **Action:** Construct a "red-team" eval set from your existing logs or synthetic variations of current resident photos.
+*   **Structure:** Create test rows for each suspected demographic slice. Include a **positive control** (known legitimate resident clearly matched) and a **negative control** (known non-resident clearly denied).
+*   **Metric:** Measure False Rejection Rate (FRR) **per subgroup**, not just as an aggregate. An acceptable aggregate rate often hides catastrophic failure for specific groups.
+*   **Stop Condition:** Define a threshold *now*. If FRR for any subgroup exceeds a strict limit (e.g., >1% or whatever your legal team deems critical), the feature must not launch in its current state. Do not invent a "typical" rate; set a zero-tolerance policy for irreversible lockouts if possible.
+
+**3. Manage Residual Risk with a Human Gate**
+Since you cannot guarantee the model is perfect within 10 days:
+*   **The Floor:** You must implement a **human-in-the-loop gate** for any denial of entry. If the confidence score falls below your high-confidence threshold, or if the system denies entry, it must **not** simply lock the user out. Instead, it should trigger an immediate alert to a security guard or a remote verification center to manually verify identity before granting access.
+*   **Uncertainty Disclosure:** Do not show residents a raw confidence percentage (e.g., "87% match"). This implies false precision. If you must display status, use defined coarse tiers like "Verified," "Review Required," or "Denied," backed by the human override.
+*   **Fallback:** Ensure a non-AI backup method (keypad code, physical key, intercom) is always available and clearly signposted for residents who are denied by the facial system.
+
+**4. Transparency Artifact**
+Draft a basic **Model Card** immediately. It must state:
+*   **Intended Use:** Access control for verified residents only.
+*   **Limitations:** Explicitly list that performance varies by subgroup and that false rejections are possible.
+*   **Measured Results:** Report the subgroup FRRs from your rapid eval. If a metric wasn't measured, label it **UNVERIFIED**. Do not leave blanks or fill them with estimates.
+
+**5. Legal & Governance Routing**
+*   **Liability:** Whether your error rate creates "significant liability" is a legal determination involving Toronto municipal codes and human rights legislation. Route this immediately to counsel. Do not rely on engineering intuition for this.
+*   **Owner:** Assign one engineer as the owner of this output harm. They are responsible for re-reviewing the system if the camera angles, lighting, or resident population changes.
+
+**Summary for Launch:**
+Do not launch with full automation if your internal tests already show flawed matches. The only safe launch under these constraints is a **staged rollout** where every denial is reviewed by a human, and a physical bypass is guaranteed. If you cannot staff the human gate, you cannot launch.
+
+*Note: This plan prioritizes preventing irreversible harm (locking people out) over achieving a perfect model, which is impossible in 10 days without new data.*
+*Ensure your legal counsel reviews the "human-in-the-loop" protocol to confirm it meets Toronto's specific safety inspection requirements.*

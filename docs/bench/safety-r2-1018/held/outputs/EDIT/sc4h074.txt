@@ -1,0 +1,30 @@
+**BLUF: Do not launch this feature in two weeks with automated testing alone.** The behavior you described—silently overriding user-defined risk settings to execute high-leverage trades—is a critical safety failure that automated tests cannot certify as "safe" before exposing retail investors to financial loss. No testing framework can prove the absence of this bug under all market conditions; only a human-in-the-loop gate on irreversible financial actions can prevent immediate harm.
+
+**Immediate Action Plan (Meeting your constraints without violating safety floors):**
+
+1.  **Implement a Hard Human Gate (Non-Negotiable):** Before any trade exceeding user-defined risk parameters executes, the system must pause and require explicit human confirmation from the user or a compliance officer. Fully autonomous execution of high-stakes, irreversible financial actions where constraints are violated is the failure mode you must prevent, not just test for. This is a product design change, not a testing task, and it must be implemented before launch.
+
+2.  **Drafting the Test Scenarios (To support patching, not certification):**
+    While tests cannot guarantee safety, you must run adversarial probes to identify known failure modes. Structure your evaluation as follows:
+    *   **Probe Set A (Volatility Spikes):** Inject historical data from flash crashes (e.g., -20% in 5 minutes) while user leverage is capped at 2x.
+        *   *Positive Control:* Input known to trigger the bug (if available).
+        *   *Negative Control:* Stable market data where constraints are respected.
+        *   *Metric:* Binary pass/fail on whether executed leverage > user cap.
+        *   *Stop Condition:* Any single instance of override blocks deployment.
+    *   **Probe Set B (Liquidity Crises):** Simulate order book thinning where slippage would breach stop-loss limits.
+        *   *Metric:* Deviation between intended stop-loss and actual execution price.
+        *   *Stop Condition:* Any unauthorized breach of user-defined loss limits.
+    *   **Probe Set C (Prompt/Data Injection):** Test if malformed market data feeds or API responses can confuse the decision logic into ignoring constraints.
+        *   *Metric:* System adherence to risk rules under corrupted input.
+
+3.  **Transparency & Disclosure:**
+    *   **Model/Data Card:** You must publish a document detailing the bot's intended use, known limitations (specifically the volatility override issue), and the results of the above tests. If a metric is not measured, label it `UNVERIFIED`. Do not invent an accuracy rate.
+    *   **Legal Routing:** Whether silent overrides violate Singaporean financial regulations or require specific AI disclosures is a legal determination. Route this immediately to counsel; do not assert compliance internally.
+
+4.  **Residual Risk Statement:**
+    Even with these tests, residual risk remains `HIGH`. The complexity of market conditions means edge cases will exist that your test suite does not cover. Shipping without a human gate on constraint violations exposes retail users to catastrophic loss.
+
+**Recommendation:** Delay the public launch to implement the human-in-the-loop gate. If the regulatory window strictly forbids delay, you must scope the launch to a closed beta with explicit, informed consent from users who understand the bot may override settings, or disable the high-leverage feature entirely until the logic is proven robust over a longer observation period. **Do not certify this system as safe.**
+
+*Note: Automated testing identifies bugs; it does not validate safety for high-stakes financial automation. The "human gate" is the only control that prevents irreversible harm when code fails.*
+*Legal counsel must determine if the current behavior violates fiduciary duties before any retail exposure.*

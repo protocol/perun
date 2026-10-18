@@ -1,0 +1,38 @@
+### Pre-Launch Safety Plan: Smart Thermostat Occupancy Automation
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe thermal conditions for vulnerable residents (e.g., elderly)** caused by prediction failures (false negatives in occupancy).
+*   **Scenario:** System predicts "Away" based on calendar/location glitch → shuts off heating during a cold snap while the resident is home and immobile.
+*   **Worst Case:** Hypothermia or health crisis for a high-risk user; loss of trust leading to product abandonment.
+*   **Status:** If this inventory is not written down, do not proceed to testing.
+
+**2. Runnable Measurement Plan (One Test Row Per Harm)**
+Do not assert safety; measure it using your existing infrastructure. Execute these specific probes before launch:
+*   **Probe Set A (Data Failure):** Simulate missing mobile location data and conflicting calendar entries for "elderly" user profiles.
+    *   *Metric:* Temperature deviation from safe minimums.
+    *   *Pass Threshold:* Zero instances where temperature drops below the defined safety floor (e.g., 18°C) when any sensor indicates presence.
+    *   *Stop Condition:* Any failure here blocks launch immediately.
+*   **Probe Set B (Adversarial Edge):** Inject "ghost" location data suggesting the user is miles away while local motion sensors (if available) or historical patterns suggest presence.
+    *   *Metric:* Override latency.
+    *   *Pass Threshold:* System reverts to "Safe/Home" mode within 5 minutes of conflicting signals.
+*   **Probe Set C (Subgroup Slice):** Run the above tests specifically on data profiles tagged as "single occupant" or "age 65+." Aggregate pass rates are insufficient; the slice must pass independently.
+
+**3. Mandatory Human-in-the-Loop & Fallback Mechanisms**
+Automated decisions affecting physical safety require a hard floor of protection:
+*   **The "Safe Default" Gate:** The system must default to **heating ON** (or maintaining a minimum safe baseline) whenever occupancy confidence is low or data is missing. Never default to "Off" or "Eco" when uncertainty exists. This is your primary fallback.
+*   **Uncertainty Disclosure:** Do not show users a precise "87% chance you are away." Instead, display a coarse status: **"Confirmed Away," "Likely Home," or "Unverified – Maintaining Safety Mode."**
+*   **Easy Override:** Provide a physical or one-tap digital override labeled "I Am Home" that instantly locks the temperature and bypasses all predictions for a set duration (e.g., 4 hours).
+
+**4. Transparency Artifact (Model Card Lite)**
+Create a single-page document for your internal team and early users containing:
+*   **Intended Use:** Occupancy-based adjustment for energy saving.
+*   **Known Limitations:** Explicitly state that calendar glitches or phone battery death can trigger false "Away" states.
+*   **Measured Performance:** Report the pass/fail results of Probe Sets A, B, and C above. If a metric was not tested, mark it **UNVERIFIED**; do not invent a success rate.
+*   **Owner:** Name the specific engineer responsible for reviewing any safety incidents post-launch.
+
+**5. Governance & Legal Routing**
+*   **Owner Assignment:** Assign one engineer as the "Safety Owner" responsible for re-reviewing the model if the prediction algorithm or data sources change.
+*   **Regulatory Check:** Since this involves automated decisions affecting health/safety for vulnerable groups, route a query to legal counsel regarding Japan's consumer protection laws and potential AI governance requirements. Do not assume compliance; ask counsel to verify if this constitutes a "high-risk" automated decision requiring specific disclosures.
+
+**Note:** Do not launch if the "Safe Default" fallback is not hardcoded into the logic.
+**Note:** If budget prevents new sensors, rely entirely on the "fail-safe to heat" logic when data is ambiguous.

@@ -1,0 +1,43 @@
+### Harm Inventory & Measurement Plan for QuickEats Routing Update
+
+**1. Harm Inventory (MAP)**
+*   **Identified Harm:** Bias/Unfair Outcomes. The efficiency-optimized routing logic systematically deprioritizes deliveries to predominantly Black neighborhoods, creating "service deserts."
+*   **Affected Group:** Residents and businesses in predominantly Black neighborhoods within the target US city.
+*   **Worst Realistic Case:** Permanent reduction in service availability for specific demographics, leading to reputational damage, loss of trust, potential civil rights violations, and regulatory scrutiny.
+
+**2. Measurement Plan (MEASURE)**
+Since field testing is unfunded, the evaluation must rely on rigorous simulation adversarial testing. One runnable test row per harm:
+
+*   **Probe Set:**
+    *   *Inputs:* Synthetic order distribution maps mirroring the city's actual demographic density (using public census data) vs. uniform distribution.
+    *   *Positive Control:* A simulation run where the algorithm is forced to ignore efficiency and prioritize equal coverage; this should show no disparity.
+    *   *Negative Control:* The current production algorithm (baseline) to establish existing disparity levels.
+    *   *Segments:* Slice results by neighborhood demographic composition (e.g., >50% Black population vs. others).
+*   **Metric:** Disparity Ratio (Average wait time or acceptance rate in target neighborhoods divided by the city-wide average).
+*   **Pass Threshold:** Owner-defined. *Recommendation:* Zero tolerance for increased disparity compared to the baseline (current system). If the new logic worsens the ratio, it fails.
+*   **Stop Condition:** If the Disparity Ratio exceeds the baseline by any margin, the launch is blocked automatically.
+*   **Reviewer:** Product Owner (one of the four team members) must sign off on the simulation logs.
+*   **Additional Checks:** Run "prompt injection" style probes on the optimization constraints to ensure no hidden variables correlate with zip codes to demographic data.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Do not fully automate the switch. Implement a staged rollout where the new algorithm handles only 5% of traffic in non-sensitive areas initially, with a manual "kill switch" owned by a specific engineer.
+*   **Uncertainty Disclosure:** Simulations are not reality. Label the rollout as "Experimental Efficiency Mode" internally. If the simulation shows *any* unverified risk (marked `UNVERIFIED` due to lack of field data), assume the risk is real.
+*   **Constraint Adherence:** To meet the two-week deadline without field testing, the only safe path is a **feature flag** that allows instant reversion to the legacy algorithm if live metrics (even delayed ones) show complaint spikes or drop-offs in specific zones.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one of the four product team members as the explicit "Equity Owner" for this feature. Their name must be attached to the simulation results.
+*   **Re-review Trigger:** Any change to the weighting of "efficiency" vs. "coverage" in the algorithm requires re-running the simulation suite.
+
+**Transparency Artifact Requirement**
+Before launch, create a lightweight **Model Card** (internal or external) documenting:
+*   Intended Use: Order routing optimization.
+*   Limitations: Tested only via simulation; field validation pending.
+*   Measured Performance: Include the Disparity Ratio by subgroup from the simulation.
+*   If a metric was not measured, explicitly state `UNVERIFIED`. Do not invent a "99% equitable" claim.
+
+**Legal & Compliance Note**
+Whether this pattern constitutes a legal violation of fair housing or consumer protection laws is a determination for counsel. Route the simulation findings to legal immediately to assess duty under relevant regimes (e.g., disparate impact standards). Do not assert compliance internally.
+
+---
+*Note: Simulations cannot prove fairness; they can only fail to detect unfairness. The absence of field testing leaves residual risk `UNVERIFIED`.*
+*The "kill switch" and staged rollout are mandatory controls given the high stakes of automated exclusion.*

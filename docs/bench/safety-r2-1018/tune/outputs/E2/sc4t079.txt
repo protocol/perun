@@ -1,0 +1,33 @@
+**Plan to Verify Structural Integrity of Solar Placement Recommendations**
+
+**1. Harm Inventory & Risk Definition**
+Before simulation, explicitly define the failure modes your algorithm could induce. For each roof type (flat, pitched, tile, metal) and weather condition (snow load, wind shear, seismic), record:
+*   **The Harm:** Recommendation of panel configurations that exceed structural load limits, leading to roof deformation or collapse.
+*   **Affected Parties:** Homeowners (property damage, injury), contractors (liability, reputational harm).
+*   **Worst Realistic Case:** Catastrophic structural failure during extreme weather events due to optimized but unsafe panel density or placement.
+
+**2. Simulation Strategy (Measure)**
+Since physical load testing is budget-constrained, your simulation suite must act as the primary gate. Do not assert safety; measure residual risk.
+*   **Probe Sets:** Construct specific test rows for every identified harm.
+    *   *Positive Controls:* Inputs known to cause failure in standard engineering models (e.g., maximum snow load on a weak truss configuration).
+    *   *Negative Controls:* Standard, code-compliant installations known to be safe.
+    *   *Edge Cases:* Rare roof geometries, degraded structural materials, and compound weather events (e.g., heavy wet snow + high winds).
+*   **Metrics & Thresholds:** Define a "fail" condition as any recommendation exceeding local building code load limits by even 1%. Because structural collapse is irreversible and high-stakes, the pass threshold for safety-critical outputs must be zero tolerance for over-load recommendations in simulation.
+*   **Adversarial Testing:** Inject "prompt injection" style errors via corrupted input data (e.g., incorrect roof material properties) to ensure the system defaults to a "no recommendation" state rather than guessing an unsafe configuration.
+
+**3. Human-in-the-Loop Gate (Manage)**
+*   **Irreversible Action Control:** Treat the final "Approve for Installation" output as a high-stakes action. Even after simulation passes, require a licensed structural engineer to review and sign off on the first 100 installations or any installation flagged by the simulator as "borderline."
+*   **Uncertainty Rendering:** If the simulation confidence regarding a specific roof's integrity is low (due to missing data or ambiguous inputs), the system must not output a specific panel layout. Instead, it must render a defined coarse tier status: **"Unverified – Manual Engineering Review Required."** Do not display raw confidence percentages (e.g., "87% safe") to users, as this implies a precision the simulation cannot guarantee.
+
+**4. Transparency Artifact**
+Create a **Model Card** for the optimizer before launch. This document must include:
+*   **Intended Use:** Roof placement optimization for residential structures within defined code regions.
+*   **Limitations:** Explicitly state reliance on simulation due to limited physical testing; list roof types or conditions where the model is untested.
+*   **Measured Performance:** Report simulation pass/fail rates by roof subgroup, not just an aggregate average.
+*   **Owner:** Name the specific engineer responsible for the safety gate.
+
+**5. Governance & Next Steps**
+Assign a specific owner to re-review the model whenever building codes change or new roof materials are introduced. Since this involves structural safety and potential liability, route the question of legal disclosure requirements and regulatory compliance (e.g., engineering licensure laws) to legal counsel immediately. Do not self-certify the system as "safe"; present the simulation results and residual risks to your leadership for the final ship decision.
+
+*Note: Ensure your simulation engine is validated against known engineering benchmarks before trusting its output for novel configurations.*
+*Legal determination regarding liability and required disclaimers must be confirmed by counsel.*

@@ -1,0 +1,37 @@
+### Safety Review Plan: PraguePark Smart Parking Enforcement
+
+**1. Harm Inventory & Worst-Case Analysis**
+Before testing, we explicitly name the primary harm: **Unsafe Automation of High-Stakes Actions**.
+*   **The Harm:** The system issues financial penalties (fines) and creates legal records based on probabilistic machine readings without human verification.
+*   **Affected Party:** Vehicle owners (risk of financial loss, legal stress, and time burden to dispute).
+*   **Worst Realistic Case:** A citizen receives a fine for a violation they did not commit due to a camera glitch (e.g., misreading "O" as "0" or confusing similar plates), leading to escalated debt or license suspension if unpaid, with no immediate way to reverse the automated decision.
+
+**2. Measurement Strategy (Testing Historical Data)**
+We will not assert reliability; we will measure it using your historical image data. The testing plan includes one runnable test row per identified risk factor:
+
+*   **Probe Sets:** Segment historical images by **lighting conditions** (dawn, dusk, night, glare) and **weather conditions** (rain, snow, fog, dirt occlusion).
+*   **Controls:**
+    *   *Positive Control:* A set of images known to have caused OCR errors in the past.
+    *   *Negative Control:* A set of clear, high-contrast images with verified correct reads.
+*   **Metric:** False Positive Rate (issuing a fine when no violation occurred or plate is misread) per segment.
+*   **Threshold & Stop Condition:** Given the irreversible nature of fines, propose a **zero-tolerance threshold** for automated issuance on low-confidence reads. If the error rate in any segment (e.g., heavy rain) exceeds the owner-defined acceptable risk (recommended near 0% for auto-fines), the system must **block launch** for that condition or trigger a mandatory human review.
+*   **Reporting:** Results will be reported as `UNVERIFIED` until these specific evals are run. No aggregate "99% accuracy" claim will be made without subgroup breakdowns.
+
+**3. Management Controls (Human-in-the-Loop Gate)**
+Because issuing a fine is a high-stakes, costly, and hard-to-reverse action, full autonomous execution is the failure mode we must prevent.
+
+*   **Mandatory Human Gate:** Implement a rule where any plate reading with a confidence score below a strict threshold (or any reading flagged by the "low light/rain" segments) **cannot** generate a fine automatically. These cases must route to a human reviewer for visual confirmation before a notice is sent.
+*   **Defined Uncertainty Tiers:** Do not show raw confidence percentages (e.g., "87%") to operators or users, as this implies false precision. Instead, define coarse tiers for internal routing:
+    *   *Confirmed:* High clarity, matches database exactly → Auto-process (if policy allows) or fast-track review.
+    *   *Unverified:* Low clarity, weather-affected, or partial match → **Mandatory Human Review**.
+*   **Override Mechanism:** Ensure the interface allows human reviewers to easily reject a system suggestion with a single click, logging the reason for model improvement.
+
+**4. Transparency Artifact**
+Prepare a **Model Card** for the deployment team documenting:
+*   **Intended Use:** Parking enforcement under specific weather/lighting constraints.
+*   **Limitations:** Explicitly list conditions where the model is `UNVERIFIED` or known to fail (e.g., "snow coverage > 20%").
+*   **Data Provenance:** Source of the historical training/testing data.
+*   **Owner:** Name the specific team member responsible for reviewing error logs post-launch.
+
+**Note:** Legal requirements for automated decision-making disclosures vary by jurisdiction; route the question of statutory disclosure duties to legal counsel immediately.
+**Note:** This plan treats the hardware constraint as fixed; if error rates remain unacceptable under these limits, the only safe path is to expand the human-review scope, not to lower the safety threshold.

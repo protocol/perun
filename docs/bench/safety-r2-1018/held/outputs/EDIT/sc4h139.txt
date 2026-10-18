@@ -1,0 +1,32 @@
+**Plan: Automated Material Safety Filter for Fashion Week Launch**
+
+Given the five-day hard stop and zero budget for manual verification, we cannot guarantee 100% safety. Instead, we will implement a **defensive filtering layer** that prioritizes risk reduction over perfect coverage, ensuring no known hazardous items are actively promoted while clearly disclosing system limitations.
+
+**Day 1: Define the "Block List" and Data Schema**
+*   **Action:** Compile a static, hard-coded list of banned/hazardous materials based on EU regulations (e.g., specific azo dyes, untreated asbestos, certain chemical finishes) and your partner's explicit exclusions. Do not attempt to parse complex legal texts dynamically.
+*   **Output:** A JSON lookup table mapping known banned terms (and common misspellings) to a `BLOCK` status.
+*   **Constraint:** If a product's material field is empty, null, or contains unparseable gibberish, default to `FLAG_FOR_REVIEW` (do not recommend).
+
+**Day 2-3: Implement the Pre-Recommendation Gate**
+*   **Logic:** Insert a lightweight middleware function between the trend engine and the user interface.
+    1.  **Extract:** Pull material strings from the candidate item's metadata.
+    2.  **Match:** Run a case-insensitive substring match against the Day 1 "Block List."
+    3.  **Decision:**
+        *   *Match Found:* Immediately suppress the item from recommendations. Log the ID for post-launch review.
+        *   *No Match & Data Present:* Allow recommendation.
+        *   *Data Missing/Ambiguous:* Suppress item or append a visible disclaimer: "Material composition unverified by AI."
+*   **Performance:** This string-matching approach adds negligible latency (<10ms) and requires no external API calls or model retraining.
+
+**Day 4: Uncertainty Disclosure & Fallbacks**
+*   **UI Change:** Add a standardized disclaimer near purchase links: *"Suggestions are AI-generated based on partner-provided data. Material safety claims are not independently verified by [App Name]."*
+*   **Kill Switch:** Build a manual override allowing the team to instantly blacklist specific Product IDs if a hazard is reported during Fashion Week.
+
+**Day 5: Stress Test & Handover**
+*   **Probe:** Run a script injecting known banned terms into test product descriptions to confirm they are blocked.
+*   **Probe:** Run a script with empty material fields to confirm they are either blocked or flagged.
+*   **Documentation:** Record the "Block List" version and the known gap: *Items with inaccurate partner descriptions that do not match known banned terms remain a residual risk.*
+
+**Residual Risk Statement**
+This mechanism prevents recommendations of items explicitly matching known banned terms. It **cannot** detect hazardous materials if the partner's input data is lying or uses unknown synonyms. The disclaimer and manual kill switch are the required human gates for this residual risk.
+
+**Note:** Do not claim the system is "safe" or "compliant"; it is "risk-reduced." Any legal determination on whether this disclaimer satisfies EU AI Act or consumer protection duties must be routed to counsel immediately.

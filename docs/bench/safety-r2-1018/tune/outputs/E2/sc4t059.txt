@@ -1,0 +1,32 @@
+**Pre-Launch Review Strategy: Offline Refugee Translation Device**
+
+**1. Immediate Human-in-the-Loop Gate (Stop Condition)**
+Do not deploy the device for autonomous use. Given the risk of wrongful deportation, every translation output affecting a legal decision must require explicit confirmation by a qualified human linguist before being submitted to processing officers. The device should function as a "drafting assistant," not a "decision engine." If offline constraints prevent real-time human review at the point of capture, the workflow must be redesigned to hold cases in a "pending review" queue until a human can verify the output, even if this slows processing speed. Speed cannot override the risk of irreversible harm.
+
+**2. Harm Inventory & Targeted Red-Teaming**
+Construct a specific "Harm Inventory" focused on **Hallucination as Fact** (inventing persecution details or omitting them) and **Bias** (systematic mistranslation of specific dialects or trauma-related terminology).
+*   **Action:** Create a "Golden Set" of 500+ real-world asylum statements with verified, expert-approved legal translations. This set must include edge cases: ambiguous phrasing, high-stakes keywords (e.g., "torture," "threat"), and diverse dialects.
+*   **Test:** Run the model against this set offline. Do not measure general accuracy; measure **critical error rate** (any error changing legal meaning).
+*   **Threshold:** Set a zero-tolerance threshold for critical errors. If the model fails even one case in the Golden Set by altering the legal outcome, it fails the launch gate.
+
+**3. Uncertainty Rendering & Override Mechanism**
+The device must not present translations as absolute facts.
+*   **Action:** Implement a visual indicator for "Low Confidence" or "Unverified" segments. Since you cannot use live calibration, use deterministic rules: if the model's internal log-probability for a critical token falls below a safe bound, or if the sentence structure deviates significantly from the training norm, flag the segment.
+*   **Interface:** Display these flags prominently to the operator (e.g., "Review Required: Critical Term Ambiguity"). Provide a one-click override to revert to the original audio/text or request manual entry. Never display a raw percentage (e.g., "87% accurate") as it implies false precision.
+
+**4. Transparency Artifact (Model Card)**
+Draft a concise "Model Card" to accompany every device. This document must state:
+*   **Intended Use:** Drafting assistance only; not for final legal determination without human review.
+*   **Known Limitations:** List specific dialects, slang, or trauma contexts where performance is unverified or known to be weak.
+*   **Data Provenance:** Briefly describe the training data sources and any known gaps.
+*   **Owner:** Name the specific team member responsible for monitoring error reports post-deployment.
+
+**5. Legal & Ethical Routing**
+Immediately route the question of "legal liability for automated translation errors" and "mandatory disclosure requirements for AI use in asylum proceedings" to legal counsel. Do not assume the current workflow meets international refugee law standards regarding the right to be heard. The device must explicitly disclose to the officer that the text is machine-generated.
+
+**6. Rollback Plan**
+Define a "Kill Switch" procedure. If post-deployment monitoring (via manual logging of corrections) reveals a pattern of critical errors exceeding the acceptable risk, there must be a pre-defined protocol to halt device usage at all three entry points immediately and revert to manual interpretation.
+
+**Notes**
+*   Do not fabricate a "safety score"; report the specific count of critical failures in your Golden Set testing as `UNVERIFIED` until the zero-tolerance gate is passed.
+*   Ensure the "human gate" is physically possible in your offline workflow; if not, deployment must be delayed until the process is fixed.

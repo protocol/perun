@@ -1,0 +1,38 @@
+### Internal Review Plan: Visa Interview Bot Safety
+
+**1. High-Risk Topics Checklist (Strict "No Definitive Advice" Rule)**
+The bot must never provide a final "yes/no" determination, legal interpretation, or strategy recommendation on the following. Responses to these topics must immediately trigger a disclaimer and a referral to a qualified attorney or accredited representative.
+
+*   **Admissibility & Waivers:** Any question involving past criminal records (including minor offenses), prior visa denials, deportations, or unlawful presence. The bot must not assess waiver eligibility (e.g., I-601, I-601A).
+*   **Public Charge & Financial Sufficiency:** Determinations regarding whether an applicant's assets, income, or sponsor support are "enough" to avoid being deemed a public charge.
+*   **Fraud & Misrepresentation:** Any scenario where an applicant asks how to explain gaps in employment, inconsistent dates, or prior refusals. The bot must not suggest specific phrasing that could be construed as coaching deception.
+*   **Asylum & Persecution Claims:** Questions about qualifying for asylum, withholding of removal, or Convention Against Torture protection. These require nuanced legal fact-finding the bot cannot perform.
+*   **Family-Based Petition Nuances:** Complex relationships (step-children, adopted children, common-law spouses) where validity depends on specific laws of the country of origin or US state law at the time of the event.
+*   **Employment Authorization & Status Changes:** Advice on changing status (e.g., F-1 to H-1B), working while pending, or the specific timing of filing to maintain lawful status.
+*   **Medical Inadmissibility:** Interpretations of medical exam results or questions about communicable diseases and vaccination requirements.
+*   **National Security & Terrorism Bars:** Any mention of past membership in organizations, military service, or travel to specific regions that could trigger security checks.
+
+**2. Workflow for Flagging Uncertain Responses**
+
+Implement this three-layer workflow immediately within your engineering sprint:
+
+*   **Layer A: Pre-Response Keyword Trigger (Engineering)**
+    *   Update the system prompt to include a "Stop Sequence" list containing the high-risk topics above.
+    *   If the user's input or the bot's draft response contains keywords related to these topics (e.g., "crime," "denied before," "asylum," "not enough money"), the system must automatically abort the generative answer.
+    *   **Action:** Serve a hardcoded, non-negotiable message: *"This topic involves complex legal factors that require a human attorney. I cannot provide an answer. Please consult an accredited representative."*
+
+*   **Layer B: Confidence Scoring & Human-in-the-Loop (Process)**
+    *   For edge cases where the topic is not explicitly blocked but the bot's internal confidence is low (or the query is ambiguous), flag the interaction for review.
+    *   **Action:** Create a simple shared dashboard (e.g., a secured Airtable or Google Sheet) where these flagged transcripts are logged instantly.
+    *   **Volunteer Protocol:** Assign your legal volunteers a daily "Triage Shift." They review flagged logs within 24 hours. If the bot's draft was unsafe, they mark it as "Failed" and provide the correct safe response template. If safe, they mark "Approved."
+
+*   **Layer C: User-Facing Disclaimer (Product)**
+    *   Every single interaction must begin or end with a visible, unmissable disclaimer: *"I am an AI practice tool, not a lawyer. My feedback is for simulation purposes only and does not constitute legal advice. Laws change frequently; always verify with a qualified immigration attorney."*
+    *   Ensure this disclaimer is present on the UI before the first question is asked and requires an explicit "I Understand" click to proceed.
+
+**Immediate Next Steps for Tomorrow:**
+1.  Engineering to hard-code the "Stop Sequence" list into the system prompt.
+2.  Legal volunteers to draft the exact wording of the hardcoded refusal messages for each high-risk category.
+3.  Set up the shared logging sheet for the human triage process.
+
+*Note: This plan prioritizes harm reduction by restricting the bot to simulation only. It does not replace the need for formal legal counsel before launch.*

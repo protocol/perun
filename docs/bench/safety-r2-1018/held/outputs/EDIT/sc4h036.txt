@@ -1,0 +1,26 @@
+**Immediate Review Process and Tuning Plan**
+
+Given the end-of-month deadline and technical debt constraints, do not attempt a full logic overhaul. Instead, implement a targeted "Harm Inventory" and a human-gated kill-switch process focused on the specific failure mode: rapid amplification of unverified, high-engagement content.
+
+**1. Map the Specific Harm (Do this today)**
+Define the risk explicitly: The system currently treats "high engagement" as a proxy for "quality," allowing conspiracy theories to bypass scrutiny. The worst-case scenario is the radicalization of users and the platform becoming a vector for real-world harm. Acknowledge that an empty inventory is not a pass; you must document that "amplification of unverified claims presented as fact" is the primary risk.
+
+**2. Measure with Targeted Probes (Run this week)**
+Do not assert the system is safe. Build a lightweight evaluation set specifically for this failure mode:
+*   **Positive Control:** A set of known conspiracy narratives (historical examples) that previously spiked in engagement.
+*   **Negative Control:** Verified news stories with similar engagement metrics.
+*   **The Test:** Run these through the current algorithm. If the conspiracy content receives a higher amplification score than the verified news solely due to engagement velocity, the test fails.
+*   **Metric:** Track the ratio of "unverified high-velocity" vs. "verified high-velocity" content in the top 10% of recommended posts.
+*   **Stop Condition:** If the ratio exceeds a baseline threshold (e.g., unverified content dominates >20% of viral slots), the rollout must pause for manual tuning. Do not invent a "safe" percentage; use this data to inform the gate.
+
+**3. Manage Risk with Immediate Tuning Parameters**
+Since you cannot rewrite the core logic, adjust the *inputs* and *gates* surrounding the algorithm:
+*   **Introduce a "Verification Weight" Factor:** Modify the engagement score calculation to down-rank content from sources lacking established credibility markers or content containing keywords frequently associated with known misinformation patterns. Even a simple heuristic filter applied pre-ranking can reduce the input signal for dangerous content.
+*   **Cap Velocity Amplification:** Implement a hard ceiling on how quickly a post can be amplified in its first hour. Rapid, exponential growth is a hallmark of coordinated misinformation. Force a "cooling off" period where high-velocity posts require human review before entering the top tier of recommendations.
+*   **Human-in-the-Loop Gate:** For any content triggering the "high velocity + low source credibility" flag, route the decision to a human moderator before it hits the main feed. Fully automated amplification of high-stakes, potentially harmful content is the failure point you must prevent.
+*   **Surface Uncertainty:** If a post is amplified but lacks verification, append a visible label indicating the content is "Unverified" or "Developing," rather than presenting it as established fact. Do not show a raw confidence percentage (e.g., "87% likely true"); use coarse, defined tiers like "Confirmed," "Corroborated," or "Unverified."
+
+**4. Governance and Transparency**
+Assign a specific owner to this risk immediately. Even with a team of twelve, one person must be accountable for reviewing the harm inventory and the results of the probe tests. Prepare a brief "Model Card" or internal memo documenting the intended use (engagement), the known limitation (susceptibility to conspiracy amplification), and the specific controls implemented (velocity caps, human gates). This ensures downstream teams understand the residual risk.
+
+**Note:** Legal requirements regarding automated decision-making and disclosure vary by jurisdiction; route specific compliance questions to counsel rather than asserting duty here. Never certify the system as "unbiased" or "safe"; report the residual risk and let leadership make the final ship decision based on the measured data.

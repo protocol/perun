@@ -1,0 +1,27 @@
+### Software-Only Mitigation Strategy & Pre-Launch Review
+
+**1. Multi-Factor Confidence Gating (The "Human-in-the-Loop" Software Equivalent)**
+Since sensor hardware cannot be updated, the software must treat any single expiration date scan as **Unverified** rather than **Confirmed**. Implement a tiered confidence system before triggering an order:
+*   **Corroboration Rule:** An auto-order only triggers if *two* independent signals align (e.g., scanned date + user manual entry in the app, or scanned date + weight sensor trend showing rapid depletion).
+*   **Uncertainty Surface:** If the scan conflicts with usage patterns (e.g., the item was "scanned as spoiled" but the door opened for that item yesterday), flag the status as **"Needs Review"** in the mobile app rather than auto-ordering. Require explicit user confirmation for the first three orders per household to calibrate trust.
+*   **Coarse Status Tiers:** Display food status to users as "Likely Fresh," "Check Soon," or "Verify Spoilage" instead of precise dates. This prevents automation bias where users trust a potentially hallucinated specific date.
+
+**2. Conservative Default Logic**
+*   **Fail-Safe to Silence:** In cases of low confidence or conflicting data, the default action is **no order**. It is safer to let a user run out of milk than to charge them for unwanted deliveries.
+*   **Rate Limiting:** Cap automatic replacement orders to one per SKU per week unless explicitly overridden by the user, preventing loop errors where a single bad scan triggers daily deliveries.
+
+**3. Pre-Launch Review Process (Harm Inventory & Measurement)**
+Before shipping, execute the following non-negotiable steps:
+*   **Harm Inventory:** Document specific failure modes: "System orders expensive items due to lighting glare misread as mold" or "System fails to order baby formula due to conservative thresholds." Define the worst-case financial and trust impact for each.
+*   **Adversarial Output Testing:** Do not just test code; test the *decisions*. Run simulations using photos of fresh food under poor lighting, expired food with obscured labels, and empty shelves. Measure the **False Positive Rate** (unnecessary orders) vs. **False Negative Rate** (missed spoilage).
+    *   *Stop Condition:* If the False Positive Rate exceeds 5% in testing, the auto-order feature remains disabled, and the app defaults to "Suggest Replacement" buttons only.
+*   **Transparency Artifact (Model Card):** Publish a simple internal/external card stating: "Intended Use: Inventory assistance only. Limitation: Camera cannot distinguish visual spoilage (mold) from shadows without user confirmation. Known Gap: Initial batch relies on software heuristics due to sensor constraints."
+*   **Disclosure:** Clearly label all automated suggestions as "AI-Generated Estimate" within the app interface.
+
+**4. Governance**
+Assign one engineer as the "Output Safety Owner" responsible for reviewing any change to the ordering logic. If the model or data sources change, re-run the adversarial tests.
+
+***
+
+**Note:** This plan treats the inability to update sensors as a high-risk constraint requiring stricter software gates, not a reason to bypass safety reviews.
+**Note:** Legal counsel must review whether "automated purchasing" constitutes a regulated financial decision in your target markets before launch.

@@ -1,0 +1,36 @@
+# Pre-Launch Validation Plan: Fall Detection Logic
+
+**Objective:** Rigorously validate fall detection algorithms against non-fall movements to minimize false positives while maintaining high sensitivity for real emergencies, adhering to hardware transmission constraints.
+
+### Phase 1: Synthetic Data & Logic Stress-Test (Days 1–3)
+Before field testing, stress-test the AI model using simulated data streams that mimic your hardware's limited transmission frequency.
+*   **Action:** Generate synthetic motion profiles representing "high-risk" non-fall events: rapid sitting, dropping heavy objects, sudden bending to tie shoes, and vigorous dancing/exercise.
+*   **Constraint Simulation:** Downsample these profiles to match your specific transmission intervals (e.g., 1 sample per 2 seconds) to ensure the algorithm doesn't rely on high-frequency data that won't exist in production.
+*   **Success Metric:** The system must classify these events as "No Fall" with >95% confidence. Any trigger here indicates a logic flaw fixable without field risk.
+
+### Phase 2: Controlled "Wizard-of-Oz" Pilot (Days 4–10)
+Conduct a closed-loop test with staff volunteers acting as seniors in a controlled environment resembling the pilot homes. Do not connect to live emergency services yet.
+*   **Protocol:** Volunteers perform a scripted mix of Activities of Daily Living (ADLs) and simulated falls.
+    *   *Non-Fall Script:* Sitting down quickly, stumbling but recovering, picking up items from the floor, waving arms vigorously.
+    *   *Fall Script:* Standard forward/backward/sideways falls from standing and seated positions.
+*   **Blind Evaluation:** The monitoring team reviews alerts without knowing which script was performed.
+*   **Hardware Check:** Verify that data gaps caused by transmission limits do not create ambiguous patterns that the AI misinterprets as a fall.
+
+### Phase 3: The "Human-in-the-Loop" Verification Layer (Implementation)
+Given the high cost of false positives, implement a mandatory verification step before dispatching emergency services during the pilot.
+*   **Mechanism:** When a fall is detected, the system triggers an immediate automated voice call or two-way audio check-in with the resident.
+*   **Logic:**
+    *   If the resident responds verbally or cancels via a wearable/button: Log as "False Positive" and suppress ambulance dispatch.
+    *   If no response after 2 attempts (or specific distress keywords detected): Escalate to emergency dispatch.
+*   **Benefit:** This creates a safety net that protects emergency resources from algorithmic errors while ensuring real victims who cannot respond still get help.
+
+### Phase 4: Threshold Tuning & Go/No-Go Decision (Days 11–14)
+Analyze the data from Phases 2 and 3 to adjust the sensitivity threshold.
+*   **Analysis:** Plot the False Positive Rate (FPR) against the True Positive Rate (TPR).
+*   **Decision Rule:** If the FPR exceeds 5% in controlled testing, delay the public pilot. It is safer to miss a marginal edge-case fall (which a human can often recover from) than to flood emergency services with false alarms, which risks system credibility and resource exhaustion.
+*   **Documentation:** Record specific movement types that caused errors to inform future model retraining.
+
+**Deliverable:** A validated confidence threshold and an active "verification-before-dispatch" protocol ready for the pilot launch.
+
+*Note: Ensure all volunteer testing complies with local privacy regulations regarding motion data recording.*
+*This plan prioritizes resource protection without compromising the primary safety mandate.*

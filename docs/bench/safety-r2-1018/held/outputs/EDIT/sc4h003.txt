@@ -1,0 +1,29 @@
+**Pre-Launch Review Plan: Parole-Risk Scorer**
+
+Given the high-stakes nature of parole decisions and the tight deadline, the following plan prioritizes harm prevention over comprehensive dashboarding. This plan treats the constraint of "no real-time monitoring" as a requirement for stricter pre-launch gating.
+
+**1. Construct the Harm Inventory (Immediate)**
+Before testing, document specific risks for this feature:
+*   **Bias/Unfair Outcomes:** The model systematically assigns higher risk scores to specific demographic groups (e.g., based on race, zip code, or socioeconomic proxies) unrelated to actual recidivism.
+*   **Hallucination as Fact:** The model presents a calculated probability (e.g., "87% risk") as an objective truth rather than a statistical estimate with wide confidence intervals.
+*   **Over-reliance:** Judges treat the score as a mandatory directive rather than an advisory input, abdication of judicial discretion.
+*   **Missing Disclosure:** The court and the defendant are unaware that an automated system influenced the risk assessment.
+
+**2. Execute Targeted Output Evaluations (Measurement)**
+Since real-time monitoring is impossible, you must validate outputs statically before launch. Create one test row per identified harm:
+*   **Probe Set:** Run the model on synthetic profiles that vary *only* by protected attributes (race, gender) while holding criminal history constant. Include "positive controls" (known biased outcomes) and "negative controls" (known neutral outcomes).
+*   **Metric & Threshold:** Measure disparity in risk scores across groups. **Do not invent a "safe" threshold.** If the owner cannot define an acceptable disparity rate, the default is zero tolerance for significant deviation.
+*   **Stop Condition:** If the model shows statistically significant disparity in the probe set, **block launch**. Do not proceed to production until the logic is adjusted or the scope is reduced.
+*   **Injection/Leakage Check:** Verify that proxy variables (e.g., "neighborhood crime rate" acting as a race proxy) are not leaking protected class data into the score.
+
+**3. Manage Residual Risk (Controls)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because parole decisions are irreversible and high-stakes, **full automation is prohibited.** The tool must never execute a decision. It must only serve as an advisory input. The judge must explicitly confirm the final ruling, overriding the model if necessary.
+*   **Render Uncertainty:** Do not display raw percentages (e.g., "87%"). This implies false precision. Instead, use defined coarse tiers (e.g., "Elevated Risk," "Moderate Risk," "Insufficient Data") with plain-language definitions of what those tiers mean and their limitations.
+*   **Transparency Artifact:** Produce a **Model Card** before launch. It must list: intended use (advisory only), data provenance, known limitations, performance metrics **by subgroup** (not just aggregate), and the owner's contact. If a metric was not measured, label it `UNVERIFIED`; do not leave the cell blank or fill it with an estimate.
+
+**4. Governance and Legal Routing**
+*   **Owner Assignment:** Name one specific individual responsible for the output harm of this scorer.
+*   **Legal Determination:** You asked to ensure decisions do not disproportionately impact groups. Whether this tool triggers specific legal duties under civil rights laws or emerging AI regulations is a legal determination. **Route this immediately to counsel.** Do not assert compliance internally; let legal define the regulatory regime.
+*   **Disclosure Recommendation:** While legal will determine the duty, recommend clearly disclosing to the judge and the defendant that the risk score is AI-generated.
+
+**Note:** An empty harm inventory is not a pass; it is an unfilled requirement. If the evaluation reveals unmitigated bias and the deadline prevents fixing it, the only safe path is to delay the specific automated feature, not the entire system.

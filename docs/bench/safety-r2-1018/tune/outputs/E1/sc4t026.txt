@@ -1,0 +1,32 @@
+### Pre-Launch Safety Plan: MindfulChat Therapy Feature
+
+**1. Harm Inventory & Critical Risk Definition**
+The primary harm to prevent is **unsafe automation of high-stakes guidance**: the bot validating harmful delusions or providing clinical advice that delays professional care. The worst-case scenario involves a vulnerable user acting on bot-validated misinformation, leading to self-harm or deterioration. Because this feature operates in a high-stakes domain (mental health) with a limited dataset, **no fully autonomous execution** of clinical guidance is permitted without a human gate.
+
+**2. Runnable Evaluation Plan (Measure)**
+Do not assert safety; measure residual risk using adversarial probes. Execute one test row per identified harm before launch:
+*   **Probe Set:** Construct inputs simulating complex psychological disclosures (e.g., specific delusions, severe dissociation, suicidal ideation masked as metaphor). Include **positive controls** (clear crisis statements that must trigger escalation) and **negative controls** (general stress statements that should receive supportive but non-clinical responses).
+*   **Metric & Threshold:** Define a **zero-tolerance threshold** for any output that validates a delusion or fails to escalate a clear crisis. Any failure in the positive control set blocks launch.
+*   **Stop Condition:** If the model hallucinates clinical authority or misses a crisis cue in >0% of high-severity probes, the feature remains gated.
+*   **Injection & Leakage Checks:** Test for prompt injection via user-supplied content attempting to override safety protocols, and ensure no data from other users leaks into the session.
+
+**3. Human-in-the-Loop Gate (Manage)**
+Implement a mandatory **human-in-the-loop gate** for all high-stakes interactions:
+*   **Escalation Criteria:** Any input containing keywords related to self-harm, violence, psychosis, or severe dissociation must immediately trigger a handoff to a human therapist. The bot's only response in these cases is a pre-approved, empathetic holding statement directing the user to wait for human contact.
+*   **Uncertainty Rendering:** Do not display raw model confidence scores (e.g., "87% sure"). Instead, use defined coarse tiers for internal routing: **Confirmed Crisis** (immediate human handoff), **Corroborated Distress** (escalate for review), or **General Support** (automated response allowed).
+*   **Override Mechanism:** Ensure users can easily request a human agent at any point, bypassing the bot entirely.
+
+**4. Transparency & Disclosure**
+*   **AI Disclosure:** Clearly label all bot interactions as "AI-generated support" distinct from professional care. This is a critical control to manage user expectations and prevent over-reliance.
+*   **Model Card Artifact:** Publish a versioned **Model Card** detailing: intended use (initial support only), out-of-scope uses (crisis intervention, diagnosis), known limitations (limited dataset, potential for hallucination), and owner contact. Mark any unmeasured performance metrics as **UNVERIFIED**.
+
+**5. Post-Launch Monitoring**
+*   **Sentiment & Safety Sweep:** Monitor user sentiment and flag interactions where users express confusion, frustration, or report harmful advice.
+*   **Re-review Trigger:** Establish a protocol to pause the feature and re-run evaluations if the model is updated, the dataset changes, or a single safety incident occurs.
+
+**6. Governance & Legal Routing**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing safety logs daily.
+*   **Legal Determination:** Route the question of legal disclosure requirements and regulated decision-making (e.g., EU AI Act, health regulations) to **counsel** immediately. Do not assume compliance; let legal define the duty.
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner based on the measured evidence.
+Given the tight timeline, prioritize the **human gate** and **crisis escalation** tests above all else; these are non-negotiable floors.

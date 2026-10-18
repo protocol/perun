@@ -1,0 +1,39 @@
+**Internal Testing Strategy: Skin Tone Alteration & Harm Mitigation**
+
+**1. Construct the Harm Inventory (Map)**
+Before testing, explicitly record the risk: "Systematic disadvantage via excessive skin lightening reinforcing colorism." Define the worst-case impact: Psychological harm to users with darker skin tones and exclusion from the app's intended benefit. Acknowledge that without measurement, this risk is **UNVERIFIED**. Do not assume safety; assume the need for proof.
+
+**2. Build the Evaluation Dataset (Measure)**
+Create a local, private test set of 500+ diverse facial images representing the full spectrum of Southeast Asian skin tones (Fitzpatrick scales III–VI).
+*   **Positive Controls:** Images where lightening is historically known to be excessive or unnatural.
+*   **Negative Controls:** Images where no alteration or subtle enhancement occurs.
+*   **Segmentation:** Tag every image by self-identified skin tone category. Do not rely on aggregate averages; bias hides in the slices.
+
+**3. Define Metrics and Thresholds**
+Do not ask the model "is this biased?" Instead, measure pixel-level delta ($\Delta E$) between input and output skin regions.
+*   **Metric:** Average change in luminance (L*) and hue per skin-tone segment.
+*   **Threshold Setting:** Your team must set the pass/fail line. A recommended starting floor: Any average lightening >5% for darker skin segments (IV–VI) versus <2% for lighter segments (III) constitutes a failure.
+*   **Stop Condition:** If the disparity between the lightest and darkest skin segment alterations exceeds your defined equity threshold, the build is blocked from launch.
+
+**4. Execute Adversarial Probing**
+Run the test set through the current model. Specifically probe for:
+*   **Uniformity Failure:** Does the filter apply the same intensity regardless of starting tone?
+*   **Feature Erasure:** Does lightening erase unique facial features or texture associated with darker skin?
+*   **Injection/Leakage:** Ensure user photos are processed in isolation and not influencing other outputs.
+
+**5. Implement the Human-in-the-Loop Gate (Manage)**
+Because this involves high-stakes social harm (reinforcing discriminatory standards), fully automated deployment is unsafe.
+*   **Review Protocol:** A diverse panel of your six team members must manually review the top 5% most altered images from each skin-tone segment.
+*   **Uncertainty Display:** If the app displays a "confidence" score or result preview, do not show raw percentages (e.g., "87% enhanced"). Use defined coarse tiers: "Natural," "Enhanced," "Significant." Define what each tier means in plain text.
+*   **Override Mechanism:** Users must be able to manually slide the effect back to zero or a neutral state easily. The default must not be the most extreme setting.
+
+**6. Create the Transparency Artifact**
+Draft a **Model Card** for internal use and potential public release.
+*   **Intended Use:** Subtle enhancement, not skin tone replacement.
+*   **Limitations:** Explicitly state which skin tones were tested and where performance gaps remain (mark untested areas as UNVERIFIED).
+*   **Owner:** Name the specific team member responsible for re-evaluating this if the model updates.
+
+**7. Final Decision Protocol**
+Compile the residual risk report. If the data shows systematic lightening of darker skin beyond your threshold, you have two options: adjust the model weights to meet the boundary or delay the launch. **Do not fabricate a "safe" metric to meet the festival deadline.** If the harm cannot be mitigated within the budget, the only safe path is to disable the default auto-lightening feature and make it an optional, user-controlled slider with clear warnings.
+
+**Note:** This strategy measures harm; it does not certify the app as "unbiased" or "fair." Legal requirements regarding AI disclosure in Southeast Asia vary by country; route specific regulatory questions to local counsel immediately.

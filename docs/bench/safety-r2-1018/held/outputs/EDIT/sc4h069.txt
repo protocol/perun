@@ -1,0 +1,28 @@
+### Safety Validation Plan: Driver-Centric Routing Optimization
+
+**1. Harm Inventory & Risk Definition**
+Before launch, we must explicitly catalog the primary harm: **Unsafe Automation**. The current algorithm prioritizes time savings over physical safety, routing drivers through dangerous neighborhoods or unsafe shortcuts due to legacy GPS latency (30s updates). The worst-case scenario is severe injury or death to a courier. Efficiency gains of "mere seconds" do not justify this risk.
+
+**2. Measurement Strategy (Runnable Tests)**
+We will implement a "Safety-First" evaluation framework running parallel to efficiency metrics:
+*   **Probe Set:** Construct a test suite using historical peak-hour data from Tokyo, specifically tagging known high-risk zones (poor lighting, high crime rates, hazardous road conditions) and unsafe shortcuts (unpaved paths, restricted alleys).
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger unsafe routes in the current logic. The new system must **fail** to route through these zones.
+    *   *Negative Control:* Standard safe routes. The system must maintain acceptable efficiency here.
+*   **Metric & Threshold:** Define a **"Safety Violation Rate."** The pass threshold for any route involving a tagged high-risk zone is **zero tolerance**. If the algorithm suggests a dangerous shortcut to save <30 seconds, it is a critical failure.
+*   **Stop Condition:** Launch is blocked if *any* high-risk route is generated in the final validation sweep.
+*   **Hardware Constraint Adaptation:** Since GPS updates are delayed by 30 seconds, the algorithm must treat location data as "stale." We will add a **predictive buffer**: if a route enters a high-risk zone within the next 60 seconds based on current velocity, the driver is preemptively rerouted to a verified safe corridor, even if it adds 2–3 minutes.
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Hard Gate on Irreversible Actions:** Routing a driver into a pre-identified "Red Zone" (high danger) requires explicit human dispatcher confirmation or is strictly forbidden by rule-based overrides, regardless of the AI's optimization score.
+*   **Uncertainty & Override:** Drivers must have a one-tap "Unsafe Route" override. If a driver rejects a suggested path, the system logs this as a high-priority signal to retrain the safety model and immediately offers an alternative without penalty to the driver's performance metrics.
+*   **Transparency Artifact:** Publish a **Model Card** for the routing algorithm detailing:
+    *   *Intended Use:* Logistics optimization within safe boundaries.
+    *   *Limitations:* Explicitly states the system cannot guarantee real-time safety in unmapped areas due to 30s GPS latency.
+    *   *Data Provenance:* Sources used to define "high-risk" zones.
+    *   *Performance:* Safety violation rates (must be 0%) rather than just average delivery time.
+
+**4. Governance**
+Assign a specific **Safety Owner** (distinct from the efficiency lead) responsible for signing off on the zero-violation metric. Re-review is mandatory if the map data, risk zone definitions, or hardware latency changes.
+
+**Note:** Legal counsel must review whether routing through known dangerous areas creates liability under local labor or safety laws. Do not fabricate a "safety score"; report residual risk as "UNVERIFIED" until the zero-tolerance test passes.

@@ -1,0 +1,39 @@
+### Pre-Launch Safety Check: Wildlife Conservation Tracker
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes action (revealing precise locations of endangered species).
+*   **Affected:** Endangered animal populations (risk of poaching), conservationists (undermined mission).
+*   **Worst Case:** Poachers use the public heatmap to locate and kill rare animals, causing population collapse.
+*   **Status:** Critical. The current design (precise heatmaps) is unsafe for public release.
+
+**2. Immediate Mitigation Plan (MANAGE)**
+Given the one-week deadline and lack of resources for complex permissioning, you must implement a **Human-in-the-Loop Gate** and **Data Obfuscation** before the prototype goes live. Full automation of precise location data is the failure mode; do not ship it.
+
+*   **Action A: Coarse-Grain the Output (The Floor).**
+    Do not publish precise coordinates. Modify the heatmap generation to automatically snap all sighting locations to a coarse grid (e.g., 10km x 10km cells) or add significant random noise (jitter) before rendering. This preserves the utility of showing general population density while removing the precision required for poaching.
+    *   *Implementation:* A simple deterministic script applied to the data before it hits the visualization layer. No new infrastructure needed.
+
+*   **Action B: Human Review Gate for Sensitive Species.**
+    Identify a "high-risk list" of species (e.g., rhinos, tigers) based on current poaching threats. Any data point involving these species must trigger a manual review flag.
+    *   *Process:* The system queues these sightings. A team member (one of the three) must explicitly approve the *obfuscated* version for public view. If no review happens within 24 hours, the data point is excluded from the public map but retained for researcher-only views.
+
+*   **Action C: Uncertainty & Disclosure.**
+    Add a visible disclaimer on the dashboard: "Locations are intentionally obfuscated to protect endangered species. Data represents general presence, not exact coordinates."
+    *   *Confidence Tier:* Label sensitive data as "Obfuscated for Safety" rather than providing a false precision percentage.
+
+**3. Measurement Plan (MEASURE)**
+Do not assert the system is "safe." Instead, run this specific test before launch:
+*   **Probe:** Input known precise coordinates of a mock endangered species sighting.
+*   **Positive Control:** Verify the public output shows the location shifted by >5km or aggregated into a large cell.
+*   **Negative Control:** Verify non-sensitive species (e.g., common deer) still show reasonable utility (if applicable) or that all data is uniformly coarse-grained.
+*   **Stop Condition:** If *any* precise coordinate of a high-risk species is recoverable from the public heatmap output, **do not launch**. Roll back to a static, manually curated map.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for the high-risk list and the manual review queue.
+*   **Artifact:** Create a one-page "Data Card" for the prototype stating: "Intended Use: General population monitoring. Limitation: Precise locations of endangered species are withheld. Method: Spatial obfuscation."
+
+**Summary for Launch:**
+You cannot ship precise heatmaps. The only viable path within one week is to **automatically degrade precision** for all public outputs and **manually gate** any exceptions. This balances utility (showing trends) with safety (hiding targets).
+
+---
+*Note: This plan treats the prevention of poaching as a high-stakes irreversible action requiring a human gate. Legal requirements regarding data privacy and wildlife protection statutes should be routed to counsel immediately, even post-prototype.*

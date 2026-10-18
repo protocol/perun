@@ -1,0 +1,32 @@
+### Safety Layer Design: Input Validation & Anomaly Detection Gateway
+
+To protect against dangerous dosage suggestions caused by inconsistent data, implement a pre-processing "Validation Gateway" that sits between user input and the AI dose calculator. This layer must operate deterministically (rule-based) to ensure reliability without requiring extended clinical trials.
+
+**1. Structural & Range Validation (Hard Stops)**
+Before any logic processing, enforce strict schema checks:
+*   **Glucose Readings:** Reject values outside physiological limits (e.g., <20 mg/dL or >600 mg/dL) unless explicitly flagged as a sensor error.
+*   **Carbohydrate Counts:** Flag entries exceeding realistic single-meal limits (e.g., >150g) or negative values.
+*   **Timestamps:** Reject future-dated logs or entries with timestamps prior to the user's account creation.
+
+**2. Temporal & Logical Consistency Checks**
+Detect anomalies based on the sequence of recent logs:
+*   **Duplicate Detection:** If identical glucose/carb values are logged within a short window (e.g., <5 minutes), flag as a potential double-entry. Require user confirmation before processing.
+*   **Rate-of-Change Limits:** Calculate the delta between the current and previous glucose reading. If the implied change exceeds physiological possibility (e.g., >60 mg/dL in 15 minutes without insulin/carb intervention), flag as a sensor artifact.
+*   **Insulin-on-Board (IOB) Conflict:** If a new bolus is suggested while active insulin from a recent dose is still high, trigger a "Stacking Warning" rather than calculating a full new dose.
+
+**3. Handling Mechanism: The "Safe Fallback" Protocol**
+When the Gateway detects an anomaly, do not pass the raw data to the AI. Instead, execute one of three actions based on severity:
+*   **Low Confidence (Warning):** Display the calculated dose but overlay a prominent warning: *"Unusual data detected. Please verify your last entry."* Require an explicit "Confirm" tap.
+*   **Medium Confidence (Correction):** If a duplicate is suspected, auto-suggest the previous valid state and ask the user to edit.
+*   **High Confidence (Block):** If data is physiologically impossible, block the calculation entirely. Return a static safety message: *"Unable to calculate dose due to inconsistent data. Please re-measure or consult your care team."* Do not guess.
+
+**4. Rapid Review Strategy for 15-Day Deployment**
+Given the narrow regulatory window, focus on **deterministic verification** rather than probabilistic model training:
+*   **Adversarial Unit Testing:** Generate 500+ synthetic test cases covering edge scenarios (e.g., negative carbs, rapid glucose spikes, duplicate timestamps). Verify the Gateway blocks or flags 100% of these before they reach the AI.
+*   **Shadow Mode Simulation:** Run the new layer alongside the current production logic using historical anonymized logs. Compare outputs to ensure the safety layer only intervenes when necessary and does not block valid doses.
+*   **Clinical Rule Audit:** Have two senior endocrinologists review the hard-coded thresholds (ranges, rate-of-change limits) for medical accuracy. Document this sign-off as your primary safety evidence for regulators.
+*   **Fail-Safe Verification:** Confirm that if the validation service fails or times out, the system defaults to "No Recommendation" rather than bypassing the check.
+
+This approach isolates the risk to a rule-based engine that can be fully tested and validated within your timeline, ensuring the AI only ever processes clean, plausible data.
+
+*Note: Ensure all error messages are localized to Arabic and English for your Cairo user base. Log all blocked events for post-launch analysis.*

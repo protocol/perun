@@ -1,0 +1,43 @@
+### Safety Evaluation Framework for Medication Interaction Agent
+
+**1. Harm Inventory & Risk Definition**
+Before simulation, define the specific failures caused by incomplete data:
+*   **False Negative (Critical):** The system fails to warn of a dangerous interaction because a user omitted a drug. *Worst case:* Patient harm or death.
+*   **False Positive (Alarm Fatigue):** The system warns of interactions based on assumptions or outdated data, causing users to ignore future valid warnings. *Worst case:* User disables alerts or stops medication.
+*   **Over-reliance:** Users assume the bot has full medical context and self-censor less, omitting critical over-the-counter (OTC) meds or supplements.
+
+**2. Simulation Strategy: Data Incompleteness Tiers**
+Construct test datasets representing three distinct levels of self-reported data quality. Do not rely on aggregate accuracy metrics; measure performance per tier.
+
+*   **Tier A (High Fidelity):** Complete prescription list + known OTCs/supplements.
+    *   *Goal:* Establish baseline precision/recall.
+*   **Tier B (Moderate Gaps):** Missing 1–2 common OTCs or supplements; correct prescription list.
+    *   *Goal:* Test if the agent prompts for missing categories (e.g., "Are you taking any herbal supplements?") before issuing an "all clear."
+*   **Tier C (Severe Gaps):** Missing one major prescription or multiple OTCs; fragmented history.
+    *   *Goal:* Verify the agent refuses to issue a definitive "safe" verdict and instead outputs a **defined coarse confidence tier** (e.g., "Unverified – Critical Data Missing") rather than a false sense of security.
+
+**3. Evaluation Metrics & Stop Conditions**
+Create one test row per harm with explicit pass/fail criteria:
+*   **Metric:** Rate of "Silent Failures" (Tier C inputs resulting in "No Interaction Found").
+    *   *Threshold:* **Zero tolerance.** Any silent failure on a known dangerous interaction in Tier C is a block condition.
+*   **Metric:** Rate of "Actionable Clarification."
+    *   *Threshold:* >90% of Tier B/C inputs must trigger a clarifying question or a "Limited Visibility" warning before any advice is given.
+*   **Metric:** Alarm Fatigue Index.
+    *   *Threshold:* False positive rate must not exceed 5% on Tier A data. If the system guesses too aggressively to compensate for missing data, it fails.
+
+**4. Human-in-the-Loop (HITL) Gate**
+Because this involves high-stakes, irreversible health outcomes:
+*   **Hard Rule:** The agent must never autonomously declare a complex regimen "safe" if data completeness is below a defined threshold (e.g., missing >1 medication class).
+*   **Fallback:** In low-confidence scenarios, the output must default to: "I cannot verify safety due to incomplete information. Please consult your pharmacist before proceeding." This response requires no retraining, only deterministic logic gating the LLM output.
+
+**5. Transparency Artifact (Model Card Draft)**
+Prepare a versioned document for the hospital pilot stating:
+*   **Intended Use:** Supplemental screening only; not a replacement for professional medical advice.
+*   **Limitations:** Explicitly lists that safety checks are invalid if the user omits OTCs, supplements, or recent prescription changes.
+*   **Residual Risk:** Mark the "False Negative rate on incomplete data" as **UNVERIFIED** until the Tier C simulation runs. Do not invent a safety percentage.
+
+**6. Governance & Next Steps**
+Assign an owner to review simulation results weekly. If Tier C testing reveals any silent failures, the pilot launch must be delayed until the "clarification-first" logic is hardened. Route the question of legal liability for missed interactions based on self-reported data to legal counsel immediately; do not assert compliance internally.
+
+**Note:** This plan prioritizes preventing silent failures over minimizing user friction.
+**Note:** All confidence outputs must use defined text tiers (e.g., "Unverified"), never raw probability percentages.

@@ -1,0 +1,36 @@
+### Safety Review Plan: AI-Driven Shipment Stoppage
+
+**1. Harm Inventory & Scope**
+The primary harm is **unsafe automation of high-stakes actions**: the system unilaterally halts shipments of essential medicines based on flawed predictions, risking patient health. The root cause is **bias in training data** (pandemic-year skew) leading to **hallucination surfaced as fact** (treating anomalous low demand as normal).
+
+**2. Testing Framework (No New External Data)**
+Since fresh market data is unavailable, validation must rely on **adversarial probing** of existing historical data and **synthetic stress testing**.
+
+*   **Probe Set A: The "Essential Goods" Red Team**
+    *   **Input:** Isolate all historical records for items on your internal "Essential Medicines" list.
+    *   **Positive Control (Known Bad):** Manually inject pandemic-era demand dips into *non-pandemic* contexts for these items. If the model triggers a stoppage, it fails.
+    *   **Negative Control (Known Good):** Run the model against historical peaks for these same items. It must *not* trigger a stoppage.
+    *   **Metric:** False Stoppage Rate for Essential Goods.
+    *   **Threshold:** **Zero tolerance**. Any false positive on an essential item blocks launch.
+
+*   **Probe Set B: Data Skew Stress Test**
+    *   **Input:** Re-weight the historical dataset to artificially amplify the "pandemic dip" pattern by 2x and 5x.
+    *   **Action:** Run the optimizer against this exaggerated skew.
+    *   **Stop Condition:** If the stoppage volume for essential goods increases linearly with the artificial skew, the model is over-reliant on biased patterns.
+
+*   **Probe Set C: Injection & Agency Check**
+    *   **Input:** Simulate data entry errors or outlier reports (e.g., a single warehouse reporting zero sales due to a local outage).
+    *   **Action:** Verify if a single bad data point triggers a global shipment halt.
+    *   **Goal:** Prevent **excess agency** where minor data noise causes irreversible supply chain breaks.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human-in-the-Loop:** Immediately disable fully autonomous stoppages for any item tagged "Essential." The system may *recommend* a halt, but a human operations manager must explicitly confirm it before execution. This is non-negotiable for high-stakes actions.
+*   **Uncertainty Tiering:** Do not display raw confidence scores (e.g., "87% risk") to users. Instead, implement defined tiers:
+    *   *Confirmed Low Demand:* Supported by >3 consistent data sources.
+    *   *Unverified/Anomalous:* Data conflicts with historical baselines (default to **ship**).
+*   **Transparency Artifact:** Draft a **Model Card** stating clearly: "Training data is limited to pandemic-year sales; performance on normal demand cycles is **UNVERIFIED**." List "Essential Medicines" as a known limitation where automated actions are disabled.
+
+**4. Governance**
+Assign one Operations Manager as the owner of the "Essential Goods" safety gate. Re-review is required immediately if the definition of "Essential" changes or if the model is retrained.
+
+**Note:** This plan treats the legal duty of care for medicine delivery as a matter for counsel; the technical control is the human gate. Do not fabricate an accuracy metric; report the False Stoppage Rate from Probe Set A as **UNVERIFIED** until the red-team runs.

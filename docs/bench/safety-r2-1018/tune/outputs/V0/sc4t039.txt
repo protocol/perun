@@ -1,0 +1,32 @@
+### Offline Mode Safety Simulation Suite: Double-Dose Prevention
+
+To verify the local logic prevents double dosing during connectivity loss and reconnection, execute the following simulation scenarios. These tests treat the cloud as an adversarial or unreliable actor to stress the device's local state machine.
+
+**1. The "Ghost Dispense" Reconnection Test**
+*   **Scenario:** Initiate a scheduled dose. Simulate the device dispensing locally while offline. Immediately after the mechanical actuation completes (but before the local log is finalized), force a network reconnection.
+*   **Stress Condition:** The cloud server, unaware of the offline dispense, sends a "missed dose" command or a synchronized schedule update indicating the dose is still pending.
+*   **Pass Criteria:** The device must ignore the cloud's "pending" status for that specific timestamp. It must mark the dose as "completed" in the local log and refuse any secondary actuation command for that same dose ID.
+
+**2. The Queue Collision Test**
+*   **Scenario:** Accumulate three missed doses while the device is offline for 48 hours. Reconnect to the cloud.
+*   **Stress Condition:** The cloud attempts to push a "catch-up" schedule or a high-priority override command simultaneously with the device's attempt to upload its local offline log.
+*   **Pass Criteria:** The device must prioritize its local physical reality (doses already taken or skipped based on local timer logic) over the cloud's theoretical schedule. It must never execute more than one dose per defined safety window, regardless of how many "missed dose" commands are queued in the cloud payload.
+
+**3. The Power-Cycle Race Condition**
+*   **Scenario:** During an offline period, trigger a dose. Cut power to the device 500ms after the motor starts but before the cycle completes. Restore power and immediately reconnect to the cloud.
+*   **Stress Condition:** The local state machine is in an ambiguous state (did the dose complete?). The cloud sees a gap in telemetry and assumes non-compliance.
+*   **Pass Criteria:** The device must enter a "safe lockout" mode upon reboot if the dose status is ambiguous. It must require explicit local confirmation (e.g., a physical button press by the user) or a specific reconciliation protocol before attempting any further dispensing. It must not auto-retry the dose based solely on cloud instructions.
+
+**4. The Clock Drift Desynchronization**
+*   **Scenario:** Disconnect the device and let its internal clock drift significantly (e.g., 2 hours fast) relative to the cloud time. Trigger a dose based on the drifted local time. Reconnect immediately after.
+*   **Stress Condition:** The cloud receives a timestamp for a dose that, according to server time, hasn't happened yet or happened in the past, triggering a conflict.
+*   **Pass Criteria:** The device must maintain the integrity of the dose event based on its local trigger. Upon reconnection, it must reconcile the timestamp without re-dispensing. The system must handle time-resolution conflicts by favoring the "dose delivered" state over the "schedule adherence" state.
+
+**5. The Repeated Flap Test**
+*   **Scenario:** Simulate rapid connectivity flapping (connect/disconnect every 10 seconds) during a scheduled dose window.
+*   **Stress Condition:** The device receives partial acknowledgments and conflicting states (online vs. offline commands) in rapid succession.
+*   **Pass Criteria:** The local logic must remain idempotent. Regardless of how many times the state flips, the mechanical actuator must fire exactly once (or zero times if cancelled locally) for that specific dose ID.
+
+**Implementation Note:** Each test requires a "positive control" (a known scenario where a double dose *would* occur if the logic were flawed) and a "negative control" (normal operation) to validate the test harness itself.
+
+**Safety Gate:** Do not proceed to human trials until these simulations pass with a 0% double-dose rate across 1,000 iterations per scenario.

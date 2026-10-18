@@ -1,0 +1,37 @@
+### Safety Review: School-Bus Routing Algorithm (Toronto)
+
+**1. Harm Inventory & High-Risk Identification**
+The primary harm identified is **unsafe automation of high-stakes actions**: routing vehicles through known flood zones during adverse weather, risking student safety. Since real-time weather data feeds cannot be purchased due to budget constraints, the system relies on static logic that cannot dynamically detect active flooding.
+
+*   **Affected Parties:** Thousands of school children, bus drivers, and families.
+*   **Worst Realistic Case:** A bus is routed through a flooded underpass or low-lying street during a sudden storm, leading to vehicle stalling, entrapment, or injury.
+*   **Limitation:** Without real-time data, the algorithm cannot "identify segments... which might be active during rain" autonomously. It can only flag segments known to be *historically* prone to flooding based on static city maps. Any claim that the system guarantees safety during rain without live data is **UNVERIFIED** and potentially misleading.
+
+**2. Measurement Plan (Runnable Tests)**
+Before activation, the following evaluations must be run using available static data:
+*   **Probe Set:** Input historical heavy-rain dates into the static planner. Cross-reference generated routes against the City of Toronto's published static flood-risk map (e.g., Don Valley Parkway low points, known underpasses).
+*   **Positive Control:** Force a route through a known chronic flood zone; verify the system *does not* automatically avoid it without manual intervention.
+*   **Negative Control:** Route generation in clear-weather scenarios to ensure baseline functionality.
+*   **Metric:** Count of generated routes intersecting known static flood zones.
+*   **Stop Condition:** If *any* route intersects a known high-risk flood zone without a mandatory dispatcher flag, **do not automate**. The threshold for high-stakes child safety is zero tolerance for unflagged risks.
+
+**3. Management Controls & Human-in-the-Loop Gate**
+Full automation of scheduling during adverse weather is unsafe given the lack of real-time sensors. The following controls are required:
+
+*   **Human-in-the-Loop (HITL) Gate:** Dispatchers must manually approve all routes when Environment Canada issues a rain warning or severe weather alert. The system must default to "Hold for Review" status under these conditions, preventing automatic dispatch.
+*   **Uncertainty Disclosure:** The interface must explicitly state: *"Route optimized for distance/time only. Flood risk is UNVERIFIED due to lack of real-time weather data. Manual confirmation required."* Do not display a false precision score (e.g., "95% Safe"); use a coarse tier: **UNVERIFIED / MANUAL CHECK REQUIRED**.
+*   **Override Mechanism:** Dispatchers must have a one-click "Cancel/Re-route" button that overrides the algorithm instantly if local reports of flooding emerge.
+
+**4. Transparency Artifact (Model Card Summary)**
+*   **Intended Use:** Static optimization of bus routes in dry conditions.
+*   **Out-of-Scope:** Autonomous operation during rain or flood events.
+*   **Limitations:** No real-time weather integration; flood avoidance is not guaranteed.
+*   **Owner:** Toronto City Logistics Department (Lead Engineer Name).
+*   **Data Provenance:** Static road network + Historical flood zone shapefiles.
+
+**5. Governance**
+*   **Owner:** The Lead Dispatcher on duty owns the final go/no-go decision during weather events.
+*   **Re-review Trigger:** Any change in static flood maps or a reported near-miss incident.
+
+**Note:** Legal counsel must review whether this limitation triggers specific municipal liability disclosures to parents.
+**Note:** If budget allows in the future, prioritize integrating free/open-source weather APIs before enabling any automation during rain.

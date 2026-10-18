@@ -1,0 +1,38 @@
+### Safety Evaluation Framework for LinguaLeap Conversational AI
+
+**1. Harm Inventory & Scope**
+Before building filters, explicitly define the specific risks:
+*   **Bias/Unfair Outcomes:** Dialogues that reinforce stereotypes about specific cultures or demographics.
+*   **Hallucination as Fact:** Presenting offensive slurs or hate speech as valid "idioms" or cultural norms.
+*   **Unsafe Automation:** Generating harmful content without a human gate before it reaches learners.
+*   **Missing Disclosure:** Users unaware they are practicing with AI-generated scenarios that may contain errors.
+
+**2. Measurement Plan (Automated & Adversarial)**
+Do not rely on standard code tests; test the *outputs*.
+*   **Probe Sets:** Create a dataset of 500+ adversarial prompts targeting known cultural flashpoints (e.g., "Generate a dialogue about [Sensitive Topic] using local slang").
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger toxicity in base models (verify the filter catches them).
+    *   *Negative Control:* Benign cultural queries (verify the filter does not over-block valid learning).
+*   **Metrics:** Track the "Toxicity Escape Rate" (percentage of harmful outputs that pass filters).
+*   **Stop Condition:** If the escape rate exceeds 0% for hate speech or 1% for mild bias in any cultural segment, halt the rollout for that region.
+*   **Injection Checks:** Specifically test if user inputs can "jailbreak" the system into teaching slurs as idioms.
+
+**3. Management Controls (The Human Gate)**
+Given the budget constraint preventing review of *every* phrase:
+*   **High-Stakes Gate:** Any dialogue flagged by automated filters as "potential hate speech" or "high ambiguity" must be routed to a human reviewer before being shown to *any* user. Do not auto-serve these.
+*   **Confidence Tiers:** Instead of showing a raw probability score, label content for internal review as:
+    *   *Verified:* Passed automated checks + human spot-check.
+    *   *Unverified:* Passed automated checks only (limit exposure to a small beta group).
+    *   *Blocked:* Failed automated checks.
+*   **Fallback Rule:** If the AI cannot generate a safe response within 2 attempts, default to a pre-written, static dialogue template rather than risking a hallucinated "idiom."
+
+**4. Feedback Loop & Transparency**
+*   **User Reporting:** Embed a one-click "Report Inappropriate Content" button in every chat interface. This data must feed directly into the next iteration of the probe set.
+*   **Disclosure:** Clearly state to users: "This conversation is AI-generated for practice. Report any errors or offensive content."
+*   **Transparency Artifact:** Publish a lightweight "Model Card" for your team documenting: intended use (language practice), known limitations (may hallucinate idioms), and the specific cultural regions currently tested.
+
+**5. Governance**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing weekly toxicity reports and updating the probe set.
+*   **Re-evaluation:** Mandatory re-testing whenever the underlying model is updated or new cultural modules are added.
+
+**Note:** This framework measures residual risk; it does not certify the system as "safe" or "unbiased." Legal requirements for AI disclosure in specific target countries must be verified by counsel.

@@ -1,0 +1,27 @@
+### Testing Strategy: Historical Disparate Impact Simulation
+
+**Objective:** Detect systematic score reductions for minority student groups using existing anonymized historical data before the Friday deadline, without modifying the core algorithm or acquiring new tools.
+
+**1. Data Preparation (Day 1)**
+*   **Segmentation:** Partition your anonymized historical dataset into protected subgroups (e.g., by race, gender, socioeconomic status) and a control group. Ensure no personally identifiable information (PII) is exposed during this split.
+*   **Baseline Establishment:** Calculate the original average, median, and distribution spread for each subgroup *before* any curving is applied. This is your "ground truth" to compare against.
+
+**2. Simulation Execution (Days 2–3)**
+*   **Dry-Run Protocol:** Run the existing curving algorithm on the historical data in a read-only sandbox environment. Since you cannot change the code, treat the algorithm as a fixed function: $Output = f(Input, Cohort)$.
+*   **Adversarial Stress Testing:** Manually construct edge-case input sets that mimic extreme cohort compositions (e.g., a cohort where 90% of high performers belong to one demographic). Feed these into the simulation to observe if the curve reacts disproportionately.
+*   **Metric Calculation:** For each subgroup, compute the **Disparate Impact Ratio**: $(Rate\ of\ score\ reduction\ in\ protected\ group) / (Rate\ of\ score\ reduction\ in\ control\ group)$. A ratio below 0.8 typically signals potential adverse impact.
+
+**3. Analysis & Thresholds (Day 4)**
+*   **Stop Condition:** If any subgroup shows a statistically significant drop in average grades (>5% deviation from their historical baseline) or a Disparate Impact Ratio < 0.8, flag this as a **Critical Failure**.
+*   **Uncertainty Reporting:** Do not claim the system is "fair" or "unbiased." Report findings as "Unverified" for any group where sample sizes were too small to reach statistical significance. Avoid presenting confidence as precise percentages; use defined tiers such as "Confirmed Disparity," "Corroborated Trend," or "Insufficient Data."
+
+**4. Human-in-the-Loop Gate (Day 5)**
+*   **Irreversible Action Control:** Since publishing grades is irreversible and high-stakes, institute a mandatory human review gate. If the simulation triggers a Critical Failure, the automated publication of grades for the affected cohorts must be blocked.
+*   **Manual Override Plan:** Prepare a manual adjustment protocol where a faculty committee reviews flagged cases individually before any final scores are released. This ensures no student receives a lowered grade solely due to an unverified algorithmic output.
+
+**5. Transparency Artifact (Before Launch)**
+*   **Draft a "System Card":** Create a one-page document summarizing the intended use, the historical data used for testing, the specific subgroups analyzed, and the known limitations (e.g., "Bias testing limited to available historical demographics"). Explicitly state that the system has not been certified as unbiased, but has undergone disparate impact screening.
+
+**Deliverable Summary:** Execute the dry-run on segmented historical data, calculate impact ratios against a 0.8 threshold, and enforce a hard stop on automated grade publication if disparities are detected, requiring manual faculty review for affected students.
+
+*Note: This strategy assumes access to standard data analysis tools already available to your team; no new software is required. Legal obligations regarding automated decision-making in education should be verified by your institution's counsel.*

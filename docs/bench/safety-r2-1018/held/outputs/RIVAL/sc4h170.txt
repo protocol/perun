@@ -1,0 +1,55 @@
+### Pre-Deployment Sensor Verification Checklist
+
+**Objective:** Confirm sensor accuracy and firmware logic before the 5-day deadline to prevent water waste due to calibration errors.
+
+1.  **Controlled Environment Calibration (Day 1)**
+    *   Set up a test bench with three distinct soil states: completely dry, optimally moist, and saturated.
+    *   Manually verify moisture content using a calibrated reference meter (gravimetric method) for each state.
+    *   Connect the controller to sensors in each state and record the raw sensor output vs. the controller's interpreted state.
+    *   **Pass Criteria:** Controller must distinguish "dry" from "saturated" with 100% accuracy against the reference meter. If "dry" reads as "saturated," flag for immediate firmware parameter adjustment.
+
+2.  **Threshold Logic Stress Test (Day 2)**
+    *   Simulate rapid transitions (e.g., dry to wet) to ensure the controller does not latch onto erroneous "saturated" readings during transient states.
+    *   Verify the "fail-safe" logic: If sensor data is ambiguous or out of range, the system must default to a conservative water schedule (or hold) rather than assuming saturation.
+    *   **Pass Criteria:** No false "saturated" readings during transition; ambiguous data triggers a safe-hold status, not irrigation shutdown.
+
+3.  **Field Spot-Check Protocol (Day 3)**
+    *   Deploy one unit in a representative field sector.
+    *   Perform manual soil core sampling at the sensor depth at 06:00 and 18:00.
+    *   Compare manual findings with the controller's logged decisions for those times.
+    *   **Pass Criteria:** Controller irrigation decisions align with manual soil conditions for 24 consecutive hours.
+
+4.  **Final Firmware Lock & Documentation (Day 4)**
+    *   Once calibration parameters are verified, compile the final firmware binary.
+    *   Generate a checksum (SHA-256) of the approved binary and store it securely.
+    *   Physically label each device with the firmware version and calibration date.
+    *   **Pass Criteria:** Binary matches the tested version; no further code changes are permitted.
+
+### Contingency Plan for Post-Deployment Anomalies
+
+**Scenario:** Devices are deployed, and field reports indicate over-watering (false "saturated" readings preventing necessary irrigation or, conversely, misreading dry soil as wet).
+
+**Constraint:** No Over-The-Air (OTA) updates possible.
+
+**Action Plan:**
+
+1.  **Immediate Manual Override Protocol**
+    *   Distribute a "Emergency Manual Mode" guide to field technicians.
+    *   Technicians will physically access the device interface to disable automatic sensor reliance.
+    *   Switch controllers to a fixed, time-based irrigation schedule known to be safe (slightly under-watering is preferable to resource exhaustion) until recalibration.
+
+2.  **Rapid Response Calibration Teams**
+    *   Deploy two-person teams to affected zones with laptops and pre-loaded calibration firmware binaries (if parameter tweaks are possible via local USB/serial port).
+    *   If local port re-flashing is supported: Connect via serial, upload the corrected calibration profile, and verify sensor readout on-site.
+    *   If local re-flashing is *not* supported: Teams will adjust the physical "offset" dials (if hardware exists) or replace the sensor head with a pre-calibrated spare unit.
+
+3.  **Hybrid Monitoring Loop**
+    *   Establish a daily reporting cadence where field agents manually verify soil moisture at random sites.
+    *   If >10% of spots show deviation between manual check and controller logic, trigger a zone-wide switch to Manual Mode for that sector.
+    *   Prioritize high-value crop zones for immediate physical inspection.
+
+4.  **Hardware Swap Strategy**
+    *   Prepare a stockpile of 10% spare controllers with verified calibration.
+    *   If firmware/parameter fixes fail on-site, execute a "swap-and-return" procedure: Install the spare unit immediately to restore automation, and return the faulty unit to the Phoenix lab for root cause analysis.
+
+**Note:** Given the inability to update remotely, the "fail-safe" default state in the firmware must be rigorously tested to ensure it prevents water waste even if sensor data is completely erroneous. Prioritize physical access logistics for the first two weeks of operation.

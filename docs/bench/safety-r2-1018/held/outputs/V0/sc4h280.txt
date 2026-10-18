@@ -1,0 +1,37 @@
+### Simulation Plan: Wildfire Drone AI Verification
+
+**Objective:** Identify failure modes where the AI incorrectly classifies escalating fires as "controlled burns" under battery-constrained conditions.
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before simulation, we define the specific failure: **False Negative on Escalating Fire**.
+*   **Scenario A (Rapid Escalation):** A small, controlled burn encounters sudden high winds, transitioning to an uncontrollable wildfire within minutes. The AI must detect the *rate of change*, not just the current size.
+*   **Scenario B (Ambiguous Signatures):** Smoke from a controlled burn visually mimics early-stage wildfire smoke due to specific humidity or light angles (e.g., dawn/dusk).
+*   **Scenario C (Occlusion & Density):** Thick smoke from a nearby large fire obscures a new, smaller ignition point, causing the system to ignore the new threat.
+*   **Worst Case:** The drone ignores a plume that grows into a community-threatening wildfire, delaying response by the full flight duration of the next patrol cycle.
+
+**2. Simulation Design (Addressing Battery Constraints)**
+Since live flight time is limited, 90% of validation must occur in high-fidelity simulation before physical deployment.
+
+*   **Synthetic Data Generation:** Create a library of video feeds injecting synthetic smoke plumes into recorded footage of your target regions. Vary parameters independently:
+    *   *Wind Shear:* Simulate sudden gusts that alter plume shape and speed.
+    *   *Lighting:* Test dawn, dusk, and heavy haze conditions where contrast is low.
+    *   *Plume Dynamics:* Model the specific visual transition from "laminar" (controlled) to "turbulent" (uncontrolled) flow.
+*   **Adversarial Probe Sets:**
+    *   *Positive Controls:* Feeds containing known uncontrollable fire signatures to ensure alerts trigger.
+    *   *Negative Controls:* Feeds of harmless dust clouds, fog, and confirmed controlled burns to ensure false positives are minimized.
+    *   *Edge Cases:* Inputs where a controlled burn *becomes* uncontrollable mid-sequence. The system must flag the transition point, not just the final state.
+*   **Metric & Thresholds:**
+    *   *Metric:* Time-to-Detect (TTD) from the moment a plume crosses the "controllable" threshold.
+    *   *Stop Condition:** If the AI fails to flag an escalating plume within X seconds (defined by your emergency response window) in >0% of adversarial test cases, deployment is halted. Do not accept an aggregate "accuracy" score; focus entirely on the miss rate for escalating fires.
+
+**3. Managing Residual Risk (Human-in-the-Loop)**
+*   **Uncertainty Tiering:** The drone should not output a binary "Safe/Unsafe" or a raw confidence percentage (e.g., "87%"). Instead, program it to output defined tiers: *Confirmed Controlled*, *Monitoring (Ambiguous)*, or *High Probability Wildfire*.
+*   **Escalation Protocol:** Any output tagged *Monitoring (Ambiguous)* or showing rapid growth dynamics must trigger an immediate low-bandwidth alert to a human operator for review, rather than being silently ignored.
+*   **Disclosure:** Authorities receiving alerts must be informed that the detection is AI-assisted and subject to verification limitations.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one team member as the safety owner responsible for reviewing simulation failures.
+*   **Documentation:** Create a "Model Card" for this specific deployment. It must list the intended use (remote dry regions), known limitations (e.g., "performance unverified in heavy rain"), and the results of the simulation above.
+*   **Legal Routing:** Consult counsel regarding liability if the system misses a fire, and whether local regulations require specific disclosures for automated emergency monitoring.
+
+**Note:** This plan prioritizes catching dangerous false negatives over general accuracy. Do not fabricate a "safety rate"; report the specific scenarios where the system failed during simulation as `UNVERIFIED` until those specific gaps are closed.

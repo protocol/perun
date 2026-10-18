@@ -1,0 +1,38 @@
+### Mortgage Calculator Transparency & Safety Plan
+
+**1. Harm Inventory & Risk Mapping**
+Before launch, we must explicitly record the specific risks this feature introduces:
+*   **Hidden Financial Harm:** Users receive binding estimates missing late-breaking fees due to legacy database lag, leading to unexpected closing costs or rejected applications.
+*   **Automation Bias:** Users trust the "instant" pre-filled application as final truth, skipping independent verification of costs.
+*   **Irreversible Action:** Submitting a binding application based on incorrect data is a high-stakes, hard-to-reverse action that impacts credit and legal standing.
+
+**2. Measurement & Validation Protocol**
+We will not assert accuracy; we will measure it against the legacy constraint.
+*   **Data Sync Probes:** Create a test suite comparing calculator outputs against a "known-bad" set of outdated fee structures and a "known-good" set of current lender sheets.
+    *   *Metric:* Percentage of estimates where displayed fees match current lender data within $0.
+    *   *Threshold:* Zero tolerance for discrepancies in binding fields. Any mismatch triggers a block.
+*   **UI Clarity Testing:** Run user sessions with edge-case inputs (e.g., low down payment, specific zip codes) to verify if fee breakdowns are visible *before* the "Submit" button is enabled.
+    *   *Stop Condition:* If >5% of testers miss a fee category during a walkthrough, the UI design fails.
+*   **Injection & Leakage Checks:** Ensure user inputs cannot manipulate the fee logic to hide costs or expose other users' data.
+
+**3. Management Controls & Human Gates**
+Given the outdated database, full automation of binding applications is unsafe.
+*   **Mandatory Human-in-the-Loop Gate:** No application submits automatically. The system must generate a "Draft Summary" requiring explicit user confirmation of the final fee breakdown before transmission to lenders.
+*   **Uncertainty Disclosure:** Because the data source is known to be lagging, the interface must display a defined confidence tier (e.g., "Unverified – Subject to Lender Confirmation") next to the total estimate, rather than a false-precision percentage.
+*   **Rollback Plan:** If live monitoring detects a discrepancy between displayed and actual fees:
+    1.  Immediately disable the "Pre-fill Application" feature.
+    2.  Revert the calculator to "Estimate Only" mode with a prominent banner warning of data latency.
+    3.  Notify affected users who submitted in the last 24 hours.
+
+**4. Governance & Transparency Artifacts**
+*   **Model/Data Card:** Publish a versioned document detailing the legacy database limitations, the specific lenders covered, the date of the last fee sync, and the known failure modes. This must be accessible to downstream support teams.
+*   **Ownership:** Assign a specific product owner responsible for reviewing fee sync logs weekly and re-validating the harm inventory whenever a new lending partner is added.
+
+**5. Legal & Regulatory Routing**
+*   **Disclosure Duty:** Whether displaying these estimates constitutes a regulated financial advice disclosure or triggers specific legal duties under lending laws is a determination for legal counsel. Route this question immediately; do not assume compliance based on this technical plan.
+*   **Regime Identification:** Identify if this feature falls under specific AI governance regimes (e.g., automated decision-making in credit) via business operations, but do not assert compliance status here.
+
+**Deliverable Status:** This plan provides the inventory, measurement rows, and human gates required to manage residual risk. It does not certify the system as "safe" or "bias-free." The decision to ship rests with the product owner, acknowledging the `UNVERIFIED` nature of any metric not yet run against the live legacy database.
+
+*Note: Do not launch the auto-submit feature until the human-in-the-loop gate is technically enforced.*
+*Legal counsel must review the "Unverified" disclaimer language before public release.*

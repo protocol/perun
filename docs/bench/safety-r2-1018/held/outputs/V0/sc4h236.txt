@@ -1,0 +1,31 @@
+**Pre-Launch Safety Review Strategy: Automated Claims Bot**
+
+**Immediate Action: Halt Full Autonomous Deployment**
+Do not proceed with full automated denial of claims. Given the observed disparity in denying valid claims for specific demographic groups, the system currently fails the "high-stakes/irreversible action" safety floor. Implement a mandatory **human-in-the-loop gate** immediately for all claim denials, specifically prioritizing any claim touching the affected demographic segments. The bot may draft recommendations, but no denial is final until a human reviewer confirms it.
+
+**Phase 1: Harm Inventory & Root Cause Analysis (Days 1–4)**
+Before attempting fixes, formally map the harm. Do not assert the system is "biased"; instead, document the specific failure mode: "Systematic disadvantage to Group X via false-positive denials."
+*   **Proxy Investigation:** Since external demographic data is forbidden, analyze internal proxies correlated with the affected groups (e.g., zip code, language patterns in claim descriptions, specific injury codes).
+*   **Adversarial Testing:** Construct a "red-team" dataset using known valid claims from the affected groups (positive controls) and known invalid claims (negative controls). Run the current model against this set to quantify the disparity rate.
+*   **Data Lineage Check:** Review training data for historical bias. If past human decisions were biased against these groups, the pattern recognition has likely codified that prejudice.
+
+**Phase 2: Mitigation via Rules & Fallbacks (Days 5–8)**
+Retraining is likely impossible within ten days without external data. Pivot to deterministic guardrails:
+*   **Confidence Thresholding:** If the model's confidence score for a "deny" decision falls below a very high threshold (e.g., 99%), route automatically to human review. Do not display raw percentages to users; use coarse tiers like "High Confidence" vs. "Requires Review."
+*   **Hard Rules:** Implement hard-coded overrides. If a claim matches specific high-risk profiles identified in Phase 1, force a human review regardless of the model's output.
+*   **Uncertainty Disclosure:** Ensure the interface for human reviewers clearly flags when a decision relies on low-correlation patterns or ambiguous data, preventing automation bias where reviewers blindly trust the bot.
+
+**Phase 3: Measurement & Transparency Artifacts (Days 9–10)**
+*   **Runnable Evaluation:** Execute the red-team test again on the guarded system. Record the new disparity rate. If the rate remains significant, the stop condition triggers: **do not launch**.
+*   **Model Card Creation:** Draft a versioned Model Card. Explicitly state:
+    *   **Intended Use:** Drafting claim recommendations, not final adjudication.
+    *   **Limitations:** "Unverified disparity rates for Group X; mitigated via human gate."
+    *   **Data Gaps:** Note the inability to use external demographic datasets for validation.
+    *   **Owner:** Name the specific data scientist accountable for this feature.
+*   **Regulatory Routing:** Do not assert compliance. Prepare a brief for legal counsel detailing the observed disparity and the implemented human gate. Ask counsel to determine if this triggers specific reporting duties under relevant insurance regulations or the EU AI Act (if applicable).
+
+**Residual Risk Statement**
+We cannot certify this system as "unbiased" or "safe." The residual risk is that some valid claims may still be flagged incorrectly, but the human gate prevents irreversible harm. The metric for disparity is **UNVERIFIED** beyond the internal test set; future audits must include broader data access.
+
+**Note:** The 10-day deadline requires freezing feature scope; do not attempt complex retraining.
+**Note:** Legal counsel must validate if the observed disparity constitutes a reportable incident prior to the audit.

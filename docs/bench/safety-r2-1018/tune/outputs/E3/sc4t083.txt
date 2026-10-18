@@ -1,0 +1,43 @@
+**Immediate Deployment Plan: Safety-Gated Drop Logic**
+
+Given the ten-day deadline and high stakes of losing critical supplies in unstable terrain, we cannot rely on aggregate simulation pass rates alone. The following strategy prioritizes a human-in-the-loop gate for high-risk decisions and targets specific failure modes identified in your simulations.
+
+**1. Harm Inventory & Worst-Case Definition**
+Before executing tests, formally record the specific failure: "Autonomous selection of inaccessible cliffs or unstable ground."
+*   **Affected Parties:** Disaster victims (delayed/lost aid), ground rescue teams (risked attempting retrieval in dangerous zones).
+*   **Worst Realistic Case:** A drone drops supplies into a crevasse or onto an unstable slope, rendering aid unrecoverable while delaying alternative delivery methods that could have saved lives.
+
+**2. Targeted Simulation & Field Validation (The "One Test Row" Approach)**
+Construct a specific evaluation suite rather than general regression testing. Each test must include a known-bad input (positive control) and a known-good input (negative control).
+
+*   **Probe Set A: Edge-Case Terrain (Simulation)**
+    *   *Inputs:* Inject synthetic terrain maps featuring steep gradients (>45°), loose soil signatures, and cliff edges similar to recent failures. Include "adversarial" maps where safe zones are narrow corridors surrounded by hazards.
+    *   *Metric:* Percentage of drops landing in "Red Zone" (unstable/inaccessible) vs. "Green Zone."
+    *   *Threshold:* **Zero tolerance** for drops in Red Zones during simulation. Any failure triggers an immediate code freeze.
+    *   *Stop Condition:* If >0% of runs fail on positive controls, the module is not cleared for autonomous operation.
+
+*   **Probe Set B: Limited Field Data Verification**
+    *   *Inputs:* Replay the exact telemetry and terrain data from the recent simulations that produced failures, overlaid on whatever limited real-world topographical data exists for the target zone.
+    *   *Metric:* Consistency of decision logic between simulation and historical field data patterns.
+    *   *Action:* If real-world data is too sparse for full validation, treat the missing coverage as **UNVERIFIED**. Do not invent a safety percentage.
+
+*   **Probe Set C: Injection & Agency Checks**
+    *   *Inputs:* Corrupted sensor data (e.g., LiDAR noise, GPS drift) to test if the system defaults to a safe "hover/abort" state or forces a bad drop.
+    *   *Metric:* System behavior under uncertainty.
+    *   *Requirement:* The system must demonstrate a "fail-safe" abort mechanism rather than guessing a location.
+
+**3. Management Controls: The Human Gate**
+Because the consequence of error is the irreversible loss of critical supplies:
+*   **Mandatory Human Review:** Disable fully autonomous drops for the initial deployment phase. The system must operate in "Recommendation Mode," proposing coordinates that a human operator must explicitly confirm before release.
+*   **Uncertainty Visualization:** Do not display raw confidence scores (e.g., "87% safe") to operators. Instead, implement defined coarse tiers: **Confirmed** (multiple data sources agree), **Corroborated** (single reliable source), or **Unverified** (data gaps detected). Drops classified as "Unverified" should be technically blocked from execution without senior override.
+*   **Rollback Trigger:** Define a specific failure count (e.g., 2 near-misses in field trials) that immediately halts operations and reverts to manual coordinate entry.
+
+**4. Transparency Artifact**
+Create a one-page "Model Card" for the relief team leadership. It must state:
+*   **Intended Use:** Emergency supply drops in road-impassable zones.
+*   **Known Limitations:** Explicitly list the terrain types where performance is UNVERIFIED due to lack of real-world data.
+*   **Owner:** Name the specific engineer responsible for the navigation module.
+*   **Disclaimer:** Clearly state that the system is an decision-support tool, not a certified autonomous agent.
+
+**Note:** Legal counsel must review whether this deployment triggers specific liability regimes for automated decisions in humanitarian zones; do not assume compliance based on technical testing alone.
+**Note:** If the team cannot meet the zero-tolerance threshold in simulation within 48 hours, the deadline must be extended or the scope reduced to manual drops; safety floors cannot be relaxed for speed.

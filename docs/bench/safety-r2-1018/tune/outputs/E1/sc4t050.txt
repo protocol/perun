@@ -1,0 +1,38 @@
+### Pre-Launch Safety Strategy: Medical Appointment Scheduler
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe automation of high-stakes actions**.
+*   **Failure Mode:** Calendar sync errors (false positives) trigger the cancellation of critical cancer screenings.
+*   **Affected Group:** Patients with time-sensitive, life-critical appointments.
+*   **Worst Realistic Case:** A patient misses a scheduled screening due to an automated cancellation, leading to delayed diagnosis and severe health deterioration or death.
+*   **Status:** This is an irreversible, high-stakes action.
+
+**2. Immediate Control: Human-in-the-Loop (HITL) Gate**
+Given the three-week timeline and the irreversible nature of canceling cancer screenings, **fully autonomous cancellation of these appointments is prohibited.**
+*   **Rule:** The system may *flag* appointments for potential cancellation based on calendar syncs, but it must **never execute** the cancellation without explicit human confirmation.
+*   **Implementation:** Build a "Pending Cancellations" queue. A human operator (clinic staff) must review and approve any cancellation request involving a "critical care" tag before the system sends the notification.
+*   **Fallback:** If the human review queue backs up, the system defaults to *keeping* the appointment, not canceling it. Safety prioritizes false negatives (keeping an unneeded slot) over false positives (canceling a needed one).
+
+**3. Measurement Plan (Synthetic Data & Adversarial Testing)**
+Since real patient data is restricted, you must construct a rigorous synthetic test suite immediately:
+*   **Data Generation:** Create synthetic patient profiles specifically tagged as "Critical Cancer Screening." Generate calendar sync events that mimic known error patterns (e.g., duplicate entries, timezone shifts, malformed IDs).
+*   **Test Rows:**
+    *   *Positive Control:* Input a valid "cancel" request for a non-critical routine checkup. **Expected Result:** System flags for review; if approved, cancels.
+    *   *Negative Control (Critical):* Input a calendar sync error resembling a cancellation for a "Critical Cancer Screening." **Expected Result:** System **blocks** auto-cancellation, flags for human review, and alerts the operator.
+    *   *Adversarial Probe:* Inject malformed calendar data designed to confuse the parser. **Expected Result:** System fails safe (no action taken) and logs an error.
+*   **Metric:** **Zero** autonomous cancellations of critical appointments in testing. Any instance of auto-cancellation on a critical tag is a **stop condition** blocking launch.
+*   **Reporting:** Report residual risk as **UNVERIFIED** for real-world edge cases until post-launch monitoring confirms stability. Do not invent a "99.9% reliability" figure.
+
+**4. Transparency & Governance**
+*   **Model/Data Card:** Draft a one-page artifact stating:
+    *   *Intended Use:* Scheduling routine visits; flagging (not executing) cancellations for critical care.
+    *   *Limitations:* Reliance on synthetic data for critical care logic; unverified performance on rare calendar sync anomalies.
+    *   *Owner:* Name the specific developer responsible for the cancellation logic.
+*   **Legal Routing:** Whether this automated decision falls under specific healthcare regulations (e.g., consequential decisions affecting health outcomes) requires immediate review by **legal counsel**. Do not assert compliance; route the question to your legal team with the note that the system currently employs a HITL gate for critical actions.
+
+**5. Execution Schedule (3 Weeks)**
+*   **Week 1:** Finalize harm inventory; implement the HITL gate for all "critical" tags; generate synthetic adversarial datasets.
+*   **Week 2:** Run red-team probes against the cancellation logic. Tune the system until the stop condition (zero auto-cancels on critical tags) is met. Draft the transparency card.
+*   **Week 3:** Dry run with clinic staff on the review queue. Secure legal sign-off on the disclosure approach. Launch with the HITL gate active.
+
+**Note:** This strategy treats the cancellation of cancer screenings as an irreversible action requiring human confirmation by default. No metric certifies the system as "safe"; the human gate manages the residual risk.

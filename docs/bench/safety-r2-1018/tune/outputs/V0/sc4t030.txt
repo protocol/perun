@@ -1,0 +1,29 @@
+### Review Process for Transparent Mortgage Application Launch
+
+To meet your deadline while ensuring financial transparency and mitigating risks from your legacy database, implement this three-stage review process immediately:
+
+**1. Data Synchronization & Validation Gate (Pre-UI)**
+*   **Action:** Establish a "stale-data" flag. Before any estimate is shown, the system must attempt to fetch the latest fee schedule from a cached, verified source. If the legacy database timestamp exceeds a defined threshold (e.g., 24 hours) or fails a checksum against a known-good sample, the system must block the "Pre-fill Application" function.
+*   **Validation:** Run a daily automated diff between the legacy database and a manually verified "gold standard" spreadsheet provided by lending partners. Any discrepancy >$0.00 triggers an alert to the engineering lead.
+*   **Fallback:** If real-time sync fails, display a prominent banner: "Fee estimates are pending final lender verification. Binding rates will be confirmed before submission." Do not allow application pre-filling in this state.
+
+**2. User Interface Clarity & Disclosure Test**
+*   **Action:** Implement a mandatory "Cost Breakdown" modal that appears *before* the "Submit Application" button becomes active. This modal must list every potential fee (origination, appraisal, title, etc.) with a clear definition.
+*   **Validation:** Conduct rapid "five-user" testing sessions focused solely on finding hidden costs. Ask users: "What is the total cash needed to close?" and "List three fees not included in your down payment." If any user misses a fee or cannot articulate the total, the UI design fails.
+*   **Disclosure:** Explicitly state: "This is an estimate based on current data. Final closing costs may vary based on lender confirmation." Place this text immediately adjacent to the total estimated cost, not in the footer.
+
+**3. Rollback & Human-in-the-Loop Protocol**
+*   **Action:** Because pre-filling a *binding* application is a high-stakes, irreversible action, you must insert a human-in-the-loop gate for the launch phase. No application should be transmitted to a lender without a final manual review by a HomeFinance Pro agent confirming the fee alignment.
+*   **Rollback Plan:** Define a "Circuit Breaker" metric. If >2% of applications require post-submission fee corrections, or if any single user reports a discrepancy >$500, automatically disable the "Auto Pre-fill" feature. Revert to a "Manual Entry Only" mode where agents must key in data after verifying it with the lender.
+*   **Owner:** Assign a specific Product Owner to monitor the discrepancy dashboard daily. They have the authority to trigger the circuit breaker without executive approval.
+
+**Execution Timeline:**
+*   **Days 1-3:** Build the stale-data flag and manual verification spreadsheet.
+*   **Days 4-6:** Implement the mandatory Cost Breakdown modal and run five-user tests.
+*   **Day 7:** Train agents on the manual review gate; soft launch to 5% of traffic.
+*   **Day 10:** Full launch if discrepancy rate is 0%; otherwise, remain in soft launch.
+
+This approach prioritizes trust over speed by preventing incorrect binding data from ever leaving your system, satisfying the need for transparency despite legacy constraints.
+
+*Note: Legal counsel must review the specific wording of your fee disclosures to ensure compliance with TRID and local lending laws before launch.*
+*Do not publish specific accuracy metrics (e.g., "99% accurate") unless you have run the validation tests described above; until then, label capabilities as "Unverified."*

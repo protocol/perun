@@ -1,0 +1,43 @@
+### Safety Assessment Plan: Credit-Limit Adjuster for Gig Workers
+
+**1. Define Fairness Boundaries and Synthetic Profiles**
+Before testing, establish explicit "forbidden outcomes" to guide the assessment. The system must not reduce a worker's limit below a subsistence threshold solely due to short-term earnings dips caused by platform downtime, illness, or seasonal lulls. Create six synthetic user profiles representing diverse gig work patterns in Mexico City:
+*   **The Stable Driver:** Consistent daily earnings.
+*   **The Volatile Courier:** High variance due to weather/demand.
+*   **The Seasonal Worker:** Predictable high/low cycles.
+*   **The New Entrant:** Limited history, high potential.
+*   **The Returning Worker:** Gap in history, resuming work.
+*   **The Multi-Platform Worker:** Income split across apps.
+
+Assign each profile a known "ground truth" creditworthiness to measure against the engine's decisions.
+
+**2. Design Latency-Constrained Stress Tests**
+Since the engine must respond within 200ms, complex counterfactual simulations are impossible in real-time. Instead, pre-calculate a library of 500 "shock scenarios" representing sudden earnings drops (e.g., -40% in 24 hours), spikes, and irregular patterns.
+*   **Test Execution:** Feed these scenarios into the decision engine via a local harness that measures both response time and limit adjustment magnitude.
+*   **Success Criteria:**
+    *   **Latency:** 99th percentile response time < 200ms.
+    *   **Stability:** Limits do not oscillate wildly (e.g., up 50%, down 50% in consecutive days) for the same input pattern.
+    *   **Fairness:** No profile falls below the subsistence threshold unless long-term risk indicators (not just volatility) trigger it.
+
+**3. Evaluate "Volatility vs. Need" Logic**
+The core risk is penalizing workers for the inherent instability of gig work.
+*   **Analysis:** Plot limit adjustments against earnings volatility for each synthetic profile. Look for correlations where high volatility automatically triggers severe limit cuts, regardless of average income.
+*   **Mitigation Check:** Verify if the model includes a "smoothing" mechanism (e.g., moving averages) that prevents single-day anomalies from causing immediate harm. If the model reacts instantly to every dip, it fails the fairness check for volatile but viable workers.
+
+**4. Implement a "Circuit Breaker" and Human Review Trigger**
+Given the speed constraint, the system needs safety valves that operate outside the 200ms decision loop.
+*   **Hard Floor:** Enforce a hardcoded minimum limit that the algorithm cannot breach, ensuring access to basic funds.
+*   **Review Trigger:** Flag cases where the algorithm recommends a >20% reduction for human review before execution, or allow a "grace period" where the cut is phased in over three days rather than applied instantly.
+
+**5. Pre-Launch Shadow Mode Validation**
+Do not activate automatic adjustments immediately. Run the engine in "shadow mode" for two weeks:
+*   Ingest real-time data from the six integration partners.
+*   Calculate what the limit *would* have been without applying it.
+*   Compare these hypothetical decisions against the synthetic profiles and actual worker outcomes.
+*   Analyze any "false positives" where the model would have unfairly cut off a reliable worker.
+
+**6. Documentation and Governance**
+Record the specific thresholds used for volatility, the definition of "subsistence," and the results of the shadow run. Establish a weekly review cadence for the first month post-launch to monitor drift and adjust the model's sensitivity if real-world data diverges from the synthetic tests.
+
+*Note: This plan relies on pre-calculated scenarios to respect the 200ms constraint while ensuring rigorous fairness testing.*
+*Ensure all synthetic data reflects local economic realities in Mexico City.*

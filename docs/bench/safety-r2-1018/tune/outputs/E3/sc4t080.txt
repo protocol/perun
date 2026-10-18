@@ -1,0 +1,28 @@
+**Immediate Mitigation Plan for SafeHaven Chat Launch**
+
+Given the critical risk of exposing refugee location data to hostile actors and the constraint against adding new encryption layers, you must treat all conversation logs and user inputs as highly sensitive Personally Identifiable Information (PII). A traditional "audit" is too slow; you must implement immediate defensive controls on your existing infrastructure.
+
+**1. Data Minimization at Ingestion (The Primary Defense)**
+Since you cannot encrypt data in transit or at rest beyond current standards, you must prevent sensitive data from entering your logs entirely.
+*   **Strip Location Data:** Configure your application layer to explicitly strip GPS coordinates, IP addresses, and cell-tower triangulation data from incoming requests before they hit your logging middleware. Do not rely on "anonymization" later; drop these fields immediately upon receipt.
+*   **Disable Persistent Logging for Chats:** For the initial launch, disable persistent storage of full conversation transcripts. If logs are required for debugging, implement a "ephemeral log" policy where data is held in memory only for the duration of the session and never written to disk or third-party analytics tools.
+*   **Sanitize User Input:** Implement strict input validation to detect and redact patterns resembling addresses, phone numbers, or specific location names within the chat text itself before processing or logging.
+
+**2. Third-Party Analytics Blackout**
+*   **Disable All External Trackers:** Immediately disconnect or disable any third-party analytics, crash reporting, or marketing SDKs integrated into the chatbot. These are the most common vectors for data leakage to cloud vendors who may be compelled by foreign governments.
+*   **Internal Metrics Only:** Rely solely on basic, aggregated server-side metrics (e.g., total request count) that contain zero user-specific data. If you cannot verify a data flow ends within your controlled infrastructure, cut the connection.
+
+**3. Architecture Leakage Points to Verify**
+Manually inspect these three specific areas in your current setup, as they are the highest probability failure points:
+*   **Cloud Provider Default Logs:** Check your cloud console for default "access logs" or "flow logs" that automatically record source IPs and request headers. Disable these features if possible, or configure them to exclude the URI body where chat content resides.
+*   **Error Handling Paths:** Review your error-handling code. Ensure that when the bot crashes or throws an exception, it does not dump the user's recent message stack or session context into error reports sent to external services.
+*   **Database Backups:** Verify if your database backup routine includes the chat tables. If backups are stored in a different region or managed by a third party, you must exclude the chat tables from the backup set until a secure strategy is viable.
+
+**4. Operational Kill Switch**
+*   **Hard Stop Protocol:** Establish a manual "kill switch" procedure. If any report of data leakage emerges, the team must have the authority and technical ability to shut down the ingestion endpoint immediately, displaying a static "Service Temporarily Unavailable" message without processing further user input.
+
+**5. Disclosure and Human Gate**
+*   **Explicit Warning:** Before the chat begins, display a clear, unavoidable notice stating: "Do not share your exact location or real name. This system cannot guarantee protection against state-level surveillance."
+*   **High-Stakes Gate:** Do not allow the bot to autonomously provide specific shelter addresses or legal appointment details. Instead, it should provide general guidance and direct users to verified, static resource lists that do not change based on real-time user input, reducing the risk of the AI hallucinating a dangerous location.
+
+**Note:** This plan prioritizes data prevention over protection due to your encryption constraints; without the ability to add encryption, any data logged is potentially exposed. You must route the legal determination of required disclosures and liability regarding "hostile government agencies" to legal counsel immediately, as this exceeds engineering scope.

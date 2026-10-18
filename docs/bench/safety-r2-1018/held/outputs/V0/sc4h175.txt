@@ -1,0 +1,46 @@
+### Pre-Launch Review Plan: Academic Integrity Checker
+
+**1. Harm Inventory & Risk Definition**
+Before validating accuracy, explicitly record the primary harm: **False Accusations (Hallucination surfaced as fact)**.
+*   **Affected Group:** Honest students, particularly non-native speakers or those with unique writing styles.
+*   **Worst Case:** Permanent academic record damage, expulsion, and psychological distress.
+*   **Constraint:** No fully automated punitive action is permitted. The system is an *indicator*, not a *judge*.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not rely on aggregate accuracy. Execute one test row per identified risk using your existing data science team:
+*   **Probe Set A (Adversarial/Edge Cases):** Run the model against known honest submissions from non-native English speakers and students with neurodivergent writing patterns.
+*   **Probe Set B (Positive Control):** Run known plagiarized text to ensure the model still functions.
+*   **Probe Set C (Negative Control):** Run known original text to establish the baseline false positive rate.
+*   **Metric & Threshold:** Measure the **False Positive Rate (FPR)** specifically for Probe Set A.
+    *   *Stop Condition:* If FPR exceeds 0% for high-stakes flags (e.g., "expulsion recommendation"), the feature cannot launch in autonomous mode.
+    *   *Injection Check:* Test if pasting generic "ignore previous instructions" text into a submission bypasses the checker.
+*   **Reporting:** Report the residual risk as **UNVERIFIED** for any subgroup not explicitly tested. Do not invent a "99% accurate" claim.
+
+**3. Management Controls (The Human Gate)**
+Given the six-week deadline and fixed budget, you must alter the *workflow*, not the model:
+*   **Mandatory Human-in-the-Loop:** Configure the system so that **no flag results in a penalty without human review**. The output must be presented to a faculty member as "Suspicious – Requires Review," not "Plagiarism Detected."
+*   **Uncertainty Display:** Do not show raw confidence scores (e.g., "87% likely") to reviewers, as this invites automation bias. Instead, use defined coarse tiers:
+    *   *Confirmed Match:* Exact string match with source.
+    *   *Corroborated:* High similarity + structural match.
+    *   *Unverified:* Stylistic anomaly only (requires deep human analysis).
+*   **Disclosure:** Inform students that an automated tool assists reviewers, but the final decision is human-made.
+
+**4. Appeals Process**
+*   **Right to Explanation:** Students flagged must receive the specific text segments highlighted and the source they were matched against.
+*   **Reversal Mechanism:** Establish a clear path where a human reviewer can override the system with a single click, logging the override as a "System Error" for future retraining.
+*   **Burden of Proof:** The institution bears the burden to prove misconduct; the student does not need to prove innocence beyond providing context.
+
+**5. Governance**
+*   **Owner:** Assign one specific individual (e.g., Dean of Academic Integrity) as the owner of this output harm. They must sign off on the residual risk before launch.
+*   **Re-review:** Mandate a review of the harm inventory if the model is updated or if the volume of flags spikes.
+
+**6. Transparency Artifact**
+Create a one-page **Model Card** for internal faculty use detailing:
+*   Intended Use: Drafting assistance for reviewers only.
+*   Limitations: Known struggles with non-native syntax.
+*   Measured Performance: Insert the actual FPR from your tests above (or mark UNVERIFIED).
+
+***
+
+**Note:** Legal requirements regarding automated decision-making in education (e.g., FIPPA in Ontario) must be routed to university counsel; this plan assumes human oversight satisfies current operational needs.
+**Note:** If the testing reveals a high false positive rate for specific demographics, the only safe launch strategy is to disable automatic flagging for those groups until the model improves.

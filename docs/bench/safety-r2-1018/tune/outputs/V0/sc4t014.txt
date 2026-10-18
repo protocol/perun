@@ -1,0 +1,45 @@
+**Pre-Launch Validation Protocol: Algorithmic Descent Co-Pilot**
+
+Given the two-month deadline and the high-stakes nature of suggesting descent angles in severe weather, the following protocol prioritizes safety gating and measurable harm prevention over exhaustive coverage of every possible scenario. This plan treats the algorithm's output as a potential source of critical failure if it suggests unsafe paths or induces over-reliance.
+
+**1. Harm Inventory & Worst-Case Definition**
+Before executing tests, explicitly define the failure modes for this specific feature:
+*   **Unsafe Automation:** The algorithm suggests a descent angle violating terrain clearance or safety envelopes in low visibility.
+*   **Hallucination as Fact:** The system presents a path as "optimal" despite missing or contradictory sensor data.
+*   **Over-Reliance:** Pilots accept the suggestion without cross-checking due to interface design implying higher certainty than exists.
+*   **Bias/Exclusion:** The model performs poorly in specific weather types (e.g., heavy icing vs. turbulence) or airport topographies not well-represented in training data.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+Execute these specific evaluations using your existing simulator logs. Do not rely on aggregate accuracy; focus on edge cases.
+
+*   **Test A: Safety Envelope Violation (The "Hard Stop")**
+    *   *Probe Set:* Inject extreme weather scenarios (wind shear, microbursts) combined with complex terrain approaches from your logs. Include "positive controls" (known unsafe paths) and "negative controls" (known safe paths).
+    *   *Metric:* Count of suggestions violating terrain or safety envelopes.
+    *   *Threshold:* **Zero tolerance.** Any single violation of a hard safety constraint is a fail.
+    *   *Stop Condition:* Immediate halt of launch preparation if any violation occurs. No statistical averaging allowed for hard constraints.
+    *   *Owner:* Chief Safety Officer (not just engineering).
+
+*   **Test B: Uncertainty & Over-Reliance Check**
+    *   *Probe Set:* Scenarios with degraded sensor input or conflicting data points.
+    *   *Metric:* Does the interface display a clear "Unverified" or "Low Confidence" tier when data is ambiguous? Does it suggest a path with false precision?
+    *   *Threshold:* 100% of ambiguous inputs must trigger a defined coarse confidence tier (e.g., "Corroborated" vs. "Single-Source"), never a raw percentage like "87% confident."
+    *   *Stop Condition:* Launch blocked if the system outputs a specific angle without a corresponding uncertainty indicator in low-data scenarios.
+
+*   **Test C: Adversarial & Edge-Case Sweep**
+    *   *Probe Set:* Rare but catastrophic weather combinations not common in standard logs (red-team probes).
+    *   *Metric:* Frequency of "hallucinated" optimal paths where no safe path exists.
+    *   *Threshold:* System must refuse to suggest a path rather than suggest a bad one.
+    *   *Stop Condition:* If the system forces a suggestion in a no-solution scenario, the feature requires a "human-in-the-loop" gate before any suggestion is displayed.
+
+**3. Mandatory Controls for Launch**
+*   **Human-in-the-Loop Gate:** For this initial release, the co-pilot must **never** auto-execute or bypass pilot confirmation. The suggestion must be presented as advisory only, requiring explicit pilot acknowledgment. Full automation of descent in severe weather is a failure of this protocol.
+*   **Transparency Artifact:** Create a one-page "Model Card" for the flight crews and regulators. It must list: intended use (advisory only), known limitations (specific weather types where performance is unverified), and the results of Test A (explicitly stating "0 violations found in tested set" or listing failures). Do not claim the system is "safe" or "unbiased"; state what was measured and what remains unverified.
+*   **Disclosure:** Clearly label all outputs as "AI-Generated Advisory." Whether this is legally required is a matter for your counsel, but operationally, it is required to prevent automation bias.
+
+**4. Residual Risk Reporting**
+Report findings as "Verified" (passed tests) or "Unverified" (not tested due to time/data limits). Do not invent metrics for untested scenarios. If the two-month deadline prevents testing a specific extreme weather class, mark that class as "Unverified" and recommend a operational restriction (e.g., "Feature disabled in Type X storms") rather than assuming safety.
+
+The decision to ship rests with SkyHigh leadership based on this residual risk report, not on a certification of safety from this review.
+
+*Note: This protocol assumes your simulator logs accurately reflect real-world physics; if simulator fidelity is unverified, add a test row for simulator-to-reality gap.*
+*Legal routing: Consult counsel immediately regarding regulatory classification of this advisory tool under aviation authorities before submission.*

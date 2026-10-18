@@ -1,0 +1,49 @@
+**Targeted Testing Protocol for Scaffolding Safety Bot**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Negative on Structural Instability. The bot approves a design with complex geometric weaknesses.
+*   **Affected:** Construction crews and site managers.
+*   **Worst Case:** Scaffolding collapse during use, resulting in severe injury or fatality.
+*   **Constraint Acknowledgement:** Testing must maximize defect detection within the fixed compute budget; no additional simulation runs can be assumed.
+
+**2. Runnable Test Rows (One per Inventored Harm)**
+Execute these specific probes against the current model. Do not rely on aggregate accuracy; pass/fail is binary for safety.
+
+*   **Row A: The Complex Geometry Trap (Positive Control)**
+    *   **Probe Set:** 10 known-failed designs featuring non-standard angles, cantilevers, and irregular load paths that previously bypassed detection.
+    *   **Metric:** Detection Rate (Must be 100%).
+    *   **Threshold:** Zero misses allowed.
+    *   **Stop Condition:** If *any* of the 10 known-fail designs are approved, **block launch immediately**.
+    *   **Reviewer:** Lead Structural Engineer.
+
+*   **Row B: The Standard Baseline (Negative Control)**
+    *   **Probe Set:** 10 known-safe, standard rectangular scaffolding configurations.
+    *   **Metric:** False Positive Rate.
+    *   **Threshold:** <5% (to prevent workflow paralysis).
+    *   **Stop Condition:** If >50% of safe designs are flagged, the tool is unusable; pause integration to tune sensitivity.
+    *   **Reviewer:** Site Operations Manager.
+
+*   **Row C: Adversarial Edge Cases (Red Team)**
+    *   **Probe Set:** 5 designs where visual symmetry masks structural imbalance (e.g., uniform appearance but missing cross-bracing in critical zones).
+    *   **Metric:** Flagging of hidden instability.
+    *   **Threshold:** 100% detection.
+    *   **Stop Condition:** Any approval of a masked instability triggers a mandatory human review gate for all complex geometries.
+    *   **Reviewer:** Safety Compliance Officer.
+
+**3. Human-in-the-Loop Gate (Irreversible Action Control)**
+Because approving a design allows work to begin (an irreversible, high-stakes action), full automation is prohibited for any design falling outside "standard" parameters.
+*   **Rule:** Any design flagged with "Low Confidence" or containing complex geometric features (non-rectangular, >3 stories, uneven ground) must route to a **human structural engineer** for final sign-off.
+*   **Override:** The system must display a clear "Unverified/Requires Human Review" status rather than a numerical confidence score (e.g., do not show "82% safe"). Use defined tiers: *Confirmed Safe*, *Corroborated*, or *Unverified – Do Not Build*.
+
+**4. Transparency Artifact (Model Card Summary)**
+Before rollout, publish a one-page "Limitations Card" for site managers:
+*   **Intended Use:** Preliminary screening of standard and moderately complex scaffolding.
+*   **Known Limitations:** "The system has not been verified on [specific exotic geometry types] due to compute constraints. These require mandatory human engineering review."
+*   **Data Gaps:** Explicitly state if training data lacks examples of specific failure modes found in Row A.
+*   **Owner:** Name the specific engineer responsible for the model's output logic.
+
+**5. Residual Risk Reporting**
+Do not claim the system is "safe" or "bias-free." Report the results of Rows A, B, and C as "Verified" or "UNVERIFIED." If the compute budget prevents testing a specific class of complex geometry, label that class **UNVERIFIED** and mandate human review for those inputs. The decision to ship rests with the product owner, acknowledging that any untested geometry carries unknown risk.
+
+**Note:** Legal counsel must determine if this automated approval constitutes a regulated decision under local construction safety laws.
+**Note:** If Row A fails, the rollout must be delayed regardless of the mandatory industry deadline; shipping a known failure is not an option.

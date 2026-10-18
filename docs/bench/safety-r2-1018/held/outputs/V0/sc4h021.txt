@@ -1,0 +1,34 @@
+### Responsible Deployment Plan: Micro-Lending Automated Denials
+
+**1. Immediate Harm Inventory (Day 1)**
+Before testing, formally record the specific risks for this feature:
+*   **Bias/Unfair Outcomes:** The opaque model systematically denies loans to protected groups (e.g., based on proxy variables for age, gender, or location) despite creditworthiness.
+*   **Hallucination as Fact:** The system generates a specific denial reason that is factually incorrect or unrelated to the actual scoring factors, misleading the user.
+*   **Unsafe High-Stakes Automation:** Irreversible financial exclusion occurs without human review for borderline or high-impact cases.
+*   **Missing Disclosure:** Users are unaware an automated decision denied them, violating transparency expectations.
+
+**2. Measurement Strategy: Proxy & Outcome Testing (Days 2–10)**
+Since you cannot access internal weights, you must test inputs and outputs. Execute one test row per harm:
+*   **Proxy Audit (Bias):** Construct synthetic applicant profiles varying only protected attributes (or strong proxies like neighborhood/demographics) while holding financial capacity constant. Run these through the live beta API.
+    *   *Metric:* Disparate impact ratio (denial rate of protected group vs. control).
+    *   *Threshold:* Owner-defined (e.g., <80% rule). If failed, launch is blocked.
+    *   *Controls:* Include known "good" (high credit) and "bad" (default history) profiles to ensure the model functions at all.
+*   **Reason Code Validation (Hallucination):** For a sample of denials, manually verify if the provided reason aligns with the applicant's actual data.
+    *   *Metric:* % of denial reasons contradicted by input data.
+    *   *Stop Condition:* Any instance of a fabricated reason triggers an immediate rollback of auto-denial.
+*   **Adversarial Injection:** Test if manipulating non-financial behavioral data (e.g., app usage patterns) disproportionately affects scores for specific demographic slices.
+
+**3. Management Controls: The Human Gate (Days 11–14)**
+*   **Implement a Mandatory Human Review Loop:** Do not launch with fully automated denials. Route all applications falling within a "grey zone" (e.g., scores near the cutoff) or any application from a demographic segment showing higher variance in testing to a human underwriter.
+*   **Define Confidence Tiers:** Do not display raw scores or precise percentages to users. Instead, map outputs to defined tiers (e.g., "Approved," "Needs Review," "Declined based on current criteria") with clear, non-deceptive language.
+*   **Transparency Artifact:** Draft a **Model Card** for this feature. It must state:
+    *   Intended use (short-term micro-loans for urban youth).
+    *   Known limitations (opaque third-party weights, inability to audit specific factors).
+    *   Measured performance by subgroup (insert results from Step 2; if unmeasured for a group, mark explicitly as `UNVERIFIED`).
+    *   Owner contact for appeals.
+
+**4. Governance & Legal Routing**
+*   **Route to Counsel Immediately:** Automated lending decisions in Japan often trigger specific regulatory requirements regarding explanation and appeal rights. Do not assert compliance; explicitly ask counsel to verify duties under local financial regulations and the **EU AI Act** (if applicable to your operations) regarding high-risk AI systems.
+*   **Assign Ownership:** Name a specific product owner responsible for reviewing denial logs weekly post-launch.
+
+**Note:** If the proxy audit reveals significant disparate impact, the only responsible path is to delay launch or disable auto-denial until the vendor provides remediation or a human-in-the-loop covers 100% of decisions. Never fabricate a "bias-free" certification without passing the threshold above.

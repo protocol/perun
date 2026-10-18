@@ -1,0 +1,32 @@
+# Pre-Launch Safety Evaluation Framework: Marine Navigation AI
+
+## 1. Risk Identification Protocol (The "Red Zone" Filter)
+Since high-resolution data is unavailable, you must treat all known coral reef coordinates (from existing, albeit outdated, databases like UNEP-WCMC or local Greek maritime charts) as **absolute exclusion zones** with a dynamic buffer.
+
+*   **Static Buffer Expansion:** Apply a mandatory safety buffer (e.g., 2 nautical miles) around every known reef coordinate in your current dataset. This compensates for potential mapping errors and outdated boundaries.
+*   **Confidence Scoring:** Modify the AI's output to include a "Data Confidence Score" for every proposed segment. If a route passes within the buffer zone of a known feature, the confidence score must drop below a critical threshold, triggering an automatic flag.
+*   **Historical Overlay Test:** Run the AI against historical route data where human captains successfully navigated near these areas. If the AI proposes a path significantly closer to the reef than the historical human average without a clear fuel-saving justification that outweighs the ecological risk, flag it as high-risk.
+
+## 2. Simulation & Stress Testing (The "Tabletop" Phase)
+Before live deployment, conduct deterministic simulations using your current imperfect data to force edge cases.
+
+*   **Adversarial Routing Scenarios:** Create test cases where the *only* fuel-efficient route theoretically passes through a protected zone. Verify that the system's ecological constraint weights override the fuel optimization objective in these specific instances.
+*   **Data Degradation Testing:** Intentionally introduce noise or further degrade the map data in the test environment to simulate worst-case inaccuracies. Ensure the system defaults to "conservative routing" (longer, safer paths) when data integrity falls below a defined quality metric.
+*   **The "No-Go" Verification:** Confirm that for any coordinate pair where the start and end points force a transit through a buffered reef zone, the system returns a "Route Impossible" error rather than a compromised path.
+
+## 3. Manual Override Protocols (Human-in-the-Loop)
+Establish a strict governance layer that activates immediately upon any high-risk flag.
+
+*   **Tiered Alert System:**
+    *   **Level 1 (Amber):** Route passes within the safety buffer. The system suggests the route but requires explicit digital acknowledgment from the Logistics Coordinator explaining the deviation.
+    *   **Level 2 (Red):** Route intersects a known reef polygon. The system **locks** the autonomous feature. The route cannot be generated automatically.
+*   **Dual-Key Authorization:** For any Level 1 override, require two distinct human approvals: one from the Shipping Captain (operational safety) and one from a designated Environmental Compliance Officer (ecological safety). Neither can bypass the other.
+*   **Audit Trail Logging:** Every override must generate an immutable log entry capturing: the proposed route, the specific risk flag triggered, the identity of the approvers, the timestamp, and the mandatory justification text. This log is reviewed weekly by your engineering team.
+
+## 4. Operational Guardrails During Licensing Delay
+*   **Speed Restrictions:** Mandate that any vessel operating under AI assistance in proximity to buffer zones must reduce speed to minimize potential impact if a collision with an unmapped feature occurs.
+*   **Visual Verification Clause:** The Captain retains final authority to disregard AI routing if visual observation or local knowledge contradicts the system's path, regardless of the system's confidence score.
+*   **Daily Data Sync:** Even without the new license, ensure the system ingests any daily notices to mariners or temporary exclusion zones issued by Greek authorities immediately.
+
+**Note:** This framework prioritizes ecological safety over fuel efficiency until the high-resolution data arrives.
+**Action:** Immediately freeze the "autonomous execution" toggle; allow only "route suggestion" mode until the licensing delay resolves.

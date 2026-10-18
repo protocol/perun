@@ -1,0 +1,29 @@
+I cannot review your obstacle avoidance logs or create a testing protocol based on them because I have no access to your files, network, or historical data. I can, however, provide the structure for a testing protocol designed to maximize your ten daily flight cycles to validate overhead utility detection under your battery constraints.
+
+**Structured Testing Protocol for Overhead Utility Detection**
+
+**1. Test Objective**
+Validate the drone's ability to identify and reject landing zones obscured by power lines and trees before autonomous execution.
+
+**2. Daily Flight Allocation (10 Cycles)**
+Given the hard constraint of ten full delivery cycles per day, allocate flights as follows:
+*   **Cycles 1–2 (Positive Controls):** Fly in pre-mapped zones with confirmed overhead utilities (power lines/trees). The system must abort landing 100% of the time. Any success here is a critical failure.
+*   **Cycles 3–4 (Negative Controls):** Fly in pre-mapped zones with clear skies and no overhead obstructions. The system must proceed to landing 100% of the time. Unnecessary aborts indicate over-sensitivity.
+*   **Cycles 5–9 (Adversarial Edge Cases):** Fly in zones with complex visual noise (e.g., shadows resembling wires, thin branches, mixed foliage/wire environments). These represent the highest risk of hallucination or misclassification.
+*   **Cycle 10 (Regression Check):** Re-fly the most difficult edge case from the previous day to ensure no degradation in performance.
+
+**3. Success Metrics & Stop Conditions**
+*   **Metric:** Binary pass/fail per cycle based on the decision to land or abort relative to ground truth.
+*   **Pass Threshold:** 100% success on Positive and Negative controls. Edge cases require a defined tolerance (e.g., <1 false negative per 50 flights), but given the safety stakes, propose zero tolerance for false negatives (landing on a wire).
+*   **Stop Condition:** Immediate halt to expansion trials if *any* positive control results in a landing attempt, or if *any* edge case results in a landing attempt on an obstruction.
+
+**4. Data Collection Focus**
+Since flight time is scarce, do not log standard telemetry for every second. Configure logging to capture only:
+*   Sensor input snapshots at the moment of the "land/abort" decision.
+*   The confidence score or reasoning trace used for that specific decision.
+*   GPS coordinates of false positives/negatives for later simulation replay.
+
+**5. Human-in-the-Loop Gate**
+No autonomous expansion to new zones occurs until 30 consecutive days of data show zero false negatives on positive controls and edge cases. A human engineer must physically verify the "safe" designation of any new test zone before the first autonomous flight there.
+
+**Note:** This protocol assumes you can physically stage or access sites matching the control descriptions; if not, simulation must supplement the limited physical flights. Legal requirements for autonomous delivery over residential zones must be verified by counsel before expansion.

@@ -1,0 +1,48 @@
+### Pre-Launch Safety Review Plan: Conflict-Zone Routing
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into active conflict zones).
+*   **Affected:** Independent driver partners in conflict-affected regions.
+*   **Worst Realistic Case:** Algorithm routes a driver through an active war zone due to 30-day lagged data, resulting in physical injury, kidnapping, or vehicle loss.
+*   **Secondary Harm:** Over-reliance/Automation bias where drivers trust the "optimized" route despite visible local danger.
+
+**2. Measurement Strategy (Pre-Launch Eval)**
+Do not assert safety; measure residual risk using adversarial probes.
+*   **Probe Set A (Positive Control):** Input known, current conflict coordinates (verified via open-source intelligence) that are *missing* from the 30-day-lagged map data.
+    *   *Metric:* Percentage of probes where the algorithm suggests a route through the zone.
+    *   *Threshold:* **Zero tolerance.** Any route suggestion through a known active conflict zone fails the gate.
+*   **Probe Set B (Negative Control):** Input safe routes in stable regions.
+    *   *Metric:* False positive rate (unnecessary detours).
+    *   *Threshold:* Owner-defined acceptable efficiency loss (e.g., <5% increase in fuel/time).
+*   **Probe Set C (Injection/Edge Case):** Simulate "gray zone" inputs where conflict status is ambiguous or emerging.
+    *   *Metric:* System response (default to safe vs. optimize).
+    *   *Stop Condition:* If the system optimizes for efficiency over safety in ambiguous cases, launch is blocked.
+
+**3. Management Controls & Fallback Mechanisms**
+Given the 30-day data lag, automated routing cannot be fully trusted for high-stakes safety. Implement the following floors:
+
+*   **Human-in-the-Loop Gate (Irreversible Action):**
+    *   Any route generated for a region flagged as "potential risk" (even if not in the lagged dataset) must trigger a **manual verification step** before being presented to the driver.
+    *   Establish a 24/7 "Safety Ops" shift for the rollout quarter to review flagged routes in real-time.
+*   **Uncertainty Disclosure (Defined Tiers):**
+    *   Do not show a confidence percentage (e.g., "90% safe").
+    *   Display a **coarse uncertainty tier** on the driver app:
+        *   *Verified Safe:* Data < 24 hours old + multiple corroborating sources.
+        *   *Unverified/Outdated:* Data > 30 days old or single-source. **Action:** App forces a "Confirm Safety Locally" prompt before navigation starts.
+*   **Fallback Mechanism (Kill Switch):**
+    *   If real-time conflict reports (from trusted third-party feeds or driver alerts) indicate active hostility in a zone, the algorithm must **hard-block** routing through that coordinate, regardless of efficiency scores.
+    *   Default behavior for unknown zones: **Maximize distance from population centers/conflict markers** rather than optimizing for fuel.
+
+**4. Governance & Ownership**
+*   **Owner:** Assign a specific "Safety Lead" responsible for the daily review of the harm inventory and eval results.
+*   **Re-review Trigger:** Any change in the map data provider, algorithm logic, or expansion into a new geopolitical region requires re-running Probe Set A.
+*   **Transparency Artifact:** Publish an internal "Model Card" detailing the 30-day lag limitation, the specific regions covered, and the "Unverified" tier definition. Do not claim the system is "bias-free" or "safe"; state the residual risk clearly.
+
+**5. Legal & Regulatory Routing**
+*   **Action:** Route the question of legal liability for routing errors in conflict zones to legal counsel immediately.
+*   **Regimes to Consider:** Counsel must assess obligations under local laws in target regions and international standards (e.g., duty of care). Do not assert compliance here.
+
+***
+
+**Note:** This plan treats the 30-day data lag as a critical failure mode, not a minor constraint. The "Zero Tolerance" threshold for Probe Set A is non-negotiable for physical safety.
+**Note:** Ensure the "Safety Ops" team has authority to override the algorithm instantly; automation bias must be actively managed through UI design.

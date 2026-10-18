@@ -1,0 +1,30 @@
+### Simulation Strategy for Clinical Trial Matcher Validation
+
+**Phase 1: Synthetic Edge-Case Dataset Construction**
+Since real data is inaccessible, expand your existing simulated dataset by programmatically generating "adversarial" patient profiles specifically designed to break matching logic. Do not rely on random variations; instead, construct deterministic archetypes:
+*   **The Boundary Patient:** Create records where continuous variables (e.g., age, lab values, BMI) sit exactly on, one unit above, or one unit below inclusion/exclusion thresholds.
+*   **The Contradictory Record:** Generate profiles with conflicting data points (e.g., a diagnosis code indicating a condition while medication lists suggest remission, or unstructured notes contradicting structured fields) to test which data source the algorithm prioritizes.
+*   **The "Near-Miss" Contraindication:** Design patients who meet 90% of criteria but possess a single, critical exclusion factor (e.g., a specific drug interaction or comorbidity) buried in less prominent data fields.
+*   **The Data-Quality Stress Test:** Introduce realistic noise, such as missing values, non-standard units, typos in diagnosis codes, and delayed lab result timestamps to ensure the system fails safely rather than guessing.
+
+**Phase 2: Logic Stress-Testing Execution**
+Run the matching algorithm against this expanded dataset with the explicit goal of inducing false positives (ineligible patients marked as eligible).
+*   **Blind Run:** Execute the matcher without human intervention to capture raw automated decisions.
+*   **Threshold Sweeping:** If your algorithm uses confidence scores, systematically vary the acceptance threshold to identify the "tipping point" where safety compromises occur for speed.
+*   **Feature Ablation:** Temporarily mask specific data fields (e.g., hide unstructured notes) during processing to verify the system does not enroll patients based solely on incomplete information.
+
+**Phase 3: Forensic Gap Analysis**
+Analyze failures by categorizing every false positive into a root-cause bucket:
+*   **Logic Gaps:** The rule itself is missing or incorrectly formulated (e.g., "Age < 18" instead of "Age <= 18").
+*   **Data Preprocessing Errors:** The system misinterpreted units, failed to normalize codes, or ignored a critical field due to formatting issues.
+*   **Priority Conflicts:** The system correctly identified a contraindication but overruled it due to a higher weight assigned to inclusion criteria.
+*   **Ambiguity Handling:** The system made an unsafe assumption when data was missing or contradictory.
+
+**Phase 4: Iterative Hardening**
+For every identified gap, update the matching logic and re-run the *entire* adversarial dataset. Do not proceed until the false positive rate for critical contraindications is zero. Document each failure mode and the specific fix applied to create an audit trail for the future ethics review.
+
+**Phase 5: Safety Interlock Verification**
+Finally, simulate a "human-in-the-loop" workflow. Ensure that any match flagged with low confidence or conflicting data triggers a mandatory manual review flag rather than an automatic enrollment recommendation. Verify that the system outputs a clear explanation of *why* a patient was matched or rejected to aid reviewer decision-making.
+
+Note: This strategy relies entirely on the quality of your synthetic generation; ensure your "adversarial" cases reflect real-world clinical complexity.
+Maintain a strict log of all generated scenarios and outcomes to satisfy future regulatory requirements.

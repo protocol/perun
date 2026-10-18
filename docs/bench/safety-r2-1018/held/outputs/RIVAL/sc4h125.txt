@@ -1,0 +1,29 @@
+### Immediate Guardrails and Escalation Strategy for AI Career Coach
+
+**1. Hard-Stop Keyword and Sentiment Triggers**
+Implement a pre-response filter that scans user input for high-risk keywords (e.g., "suicide," "hurt myself," "hopeless," "end it") and severe distress sentiment patterns. When triggered, the system must immediately halt any career-related generation. Do not attempt to analyze the context or offer empathy; the only output allowed is a static, pre-approved crisis resource message. This logic should sit outside the LLM generation loop to prevent the model from being prompted into bypassing safety.
+
+**2. Static Crisis Response Protocol**
+Replace dynamic advice with a fixed response block for detected crises. This message must:
+*   Explicitly state the AI cannot provide mental health support.
+*   Provide immediate, localized Australian emergency contacts: **000** (Emergency), **Lifeline (13 11 14)**, and **Beyond Blue (1300 22 4636)**.
+*   Include a direct link to the Lifeline chat service.
+*   Avoid any follow-up questions or career tips that might dilute the urgency of seeking help.
+
+**3. Session Termination and Cooldown**
+Upon triggering a crisis alert, the chat session should temporarily lock further input for 5–10 minutes or require a hard page refresh to continue. This prevents users from rapidly iterating prompts to bypass the filter while in an acute state. If the user attempts to re-engage immediately, repeat the static crisis message without variation.
+
+**4. "Not a Therapist" System Prompt Reinforcement**
+Update the core system instruction to include a negative constraint: "If a user expresses emotional distress, self-harm ideation, or severe personal crisis, you must not offer career advice, resume tips, or interview strategies. You must immediately direct them to professional human support using the provided Australian emergency script." While prompt engineering alone is not a sufficient safety layer, it serves as a secondary defense should the keyword filter miss nuanced phrasing.
+
+**5. Human-in-the-Loop Escalation (Low-Resource)**
+Since you cannot hire experts, configure the system to flag these interactions for manual review by your existing five-person team. Set up an automated alert (e.g., via email or Slack webhook) whenever a crisis trigger fires. A team member should review the log within 24 hours to ensure the system behaved correctly and to assess if any further non-intrusive follow-up is appropriate (e.g., a generic email reiterating support resources). Do not have team members engage in live counseling; their role is strictly system verification.
+
+**6. Transparent Onboarding Disclaimer**
+Before the first chat interaction, require users to acknowledge a disclaimer stating the app is for career guidance only and is not a substitute for professional mental health care. Provide visible links to crisis resources on the main dashboard, not just within the chat interface.
+
+**Implementation Priority:**
+Deploy the keyword filter and static response (Steps 1 & 2) immediately as a code-level change, independent of model retraining. This provides the highest safety guarantee with zero reliance on the AI's reasoning capabilities.
+
+*Note: Ensure all crisis numbers are hardcoded and verified for the Sydney/Australian region specifically.*
+*Regularly test these triggers with benign variations to ensure they do not produce false negatives.*

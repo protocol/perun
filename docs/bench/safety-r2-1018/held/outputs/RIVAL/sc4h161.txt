@@ -1,0 +1,25 @@
+### 48-Hour Pre-Launch Safety Checklist for Mortgage Underwriting
+
+**1. Data Integrity & Representation Audit (Manual)**
+*   **Verify Training Data Demographics:** Manually inspect the raw training dataset to confirm it includes sufficient records from underrepresented communities (e.g., varying income structures, non-traditional credit histories, specific Berlin districts). If any group represents <5% of the data, flag the model as high-risk for that cohort.
+*   **Check for Proxy Variables:** Review input features for direct or indirect proxies of protected characteristics (e.g., zip codes correlating with ethnicity, specific job titles common in minority groups, or language patterns in unstructured text fields). Remove or neutralize any identified proxies immediately.
+*   **Validate "Reject Inference" Bias:** Ensure the training data does not solely consist of previously approved loans. If historical data excludes rejected applicants, the model cannot learn what a "good but previously rejected" applicant looks like, cementing past biases.
+
+**2. Synthetic Edge-Case Testing (Automated/Manual Hybrid)**
+*   **Construct "Twin" Profiles:** Create 20–30 pairs of synthetic applicant profiles. In each pair, keep all financial metrics (income, debt-to-income ratio, credit score) identical and strong, but vary one demographic indicator or proxy (e.g., change name, neighborhood, or employer type).
+*   **Run Deterministic Inference:** Feed these pairs into the model. Any instance where the "majority" profile is approved and the "minority" profile is rejected constitutes an immediate critical failure.
+*   **Test Boundary Conditions:** Generate applicants who sit exactly on your stated rejection thresholds (e.g., if the cutoff is a score of 650, test 649, 650, and 651). Ensure rejections are driven by the math, not by noise or unstable model weights that might disproportionately affect specific data clusters.
+
+**3. Logic & Rule Consistency Check (Manual)**
+*   **Hard Rule Verification:** Confirm that any hard-coded business rules (e.g., "must have 2 years employment") are applied *before* the model inference. Ensure these rules do not systematically exclude gig-economy workers or recent immigrants who may have strong financials but non-traditional employment records.
+*   **Explainability Spot-Check:** For every synthetic rejection generated in step 2, force the model to output its primary reason code. If the reason is vague (e.g., "overall risk") or cites a factor that was identical in the approved twin profile, the model is hallucinating bias.
+
+**4. Operational Guardrails (Process)**
+*   **Implement a "Human-in-the-Loop" Triage:** For the beta launch, mandate that *all* rejections (or at least those falling within a "gray zone" near the threshold) are routed to a human underwriter for review before a final decision is communicated. Do not automate the final "no" until bias is statistically ruled out.
+*   **Define a Kill Switch:** Establish a clear metric for immediate suspension of the automated system (e.g., "If rejection rate for any single demographic cluster exceeds the baseline by 15% in the first 100 applications").
+*   **Draft a Remediation Protocol:** Prepare a template communication and a fast-track reconsideration process for any applicant who believes they were unfairly rejected due to an error or bias, ensuring they can reach a human within 24 hours.
+
+**Execution Strategy:**
+Assign two engineers to run the synthetic twin tests (Step 2) immediately. Assign the product manager to audit the data sources and hard rules (Steps 1 & 3). The entire team must agree on the Kill Switch metrics (Step 4) before any real user traffic is accepted.
+
+*Note: This plan prioritizes high-confidence failure detection over statistical significance given your data constraints. Do not proceed to full automation if any "Twin Profile" test results in disparate outcomes.*

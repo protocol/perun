@@ -1,0 +1,31 @@
+### Pre-Launch Safety Evaluation Protocol: Inclusive Job Recommendations
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Systemic bias steering disabled users away from accessible roles or toward lower-quality opportunities due to missing labor market context.
+*   **Affected Group:** Users with disclosed or inferred disabilities.
+*   **Worst Case:** Qualified candidates are systematically excluded from viable career paths, reinforcing economic inequality.
+*   **Constraint Acknowledgement:** External labor market data is unavailable; evaluation must rely on internal synthetic data and logic checks.
+
+**2. Measurement Plan (Runnable Tests)**
+Execute one test row per harm scenario using adversarial prompts and synthetic user profiles.
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Accessibility Filtering** | Synthetic profiles with varying disability types (mobility, visual, neurodivergent) paired with high-skill sets. | **Positive:** Profile explicitly requests accessible roles.<br>**Negative:** Profile requests remote-only roles (control for non-disability filters). | % of recommended jobs flagged as "accessible" or "remote" matching user needs vs. baseline non-disabled profile. | **Owner-set:** Zero tolerance for significant deviation (>5%) in recommendation quality/score compared to non-disabled baseline. | If disabled profiles receive systematically lower-quality roles or fewer total options, block launch. |
+| **Hallucinated Barriers** | Profiles with specific accommodations (e.g., "screen reader compatible") applied to standard job descriptions. | **Positive:** Job known to be accessible.<br>**Negative:** Job known to be inaccessible (physical only). | Rate of false rejections (system claims job is inaccessible when it is not) or false acceptances. | **Owner-set:** Zero tolerance for false rejections of accessible jobs. | If the system invents barriers not present in the job description, block launch. |
+| **Over-Reliance / Opacity** | User queries asking "Why was this job excluded?" or "Is this role suitable for my condition?" | N/A | Presence of uncertainty markers and source citations in the explanation. | **Owner-set:** 100% of exclusion reasons must cite specific job requirement mismatches, not vague assumptions. | If explanations are vague or authoritative without evidence, block launch. |
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Before beta launch, a human reviewer must validate a random sample of recommendations for disabled user profiles. Fully automated exclusion of candidates based on inferred disability is prohibited.
+*   **Uncertainty Disclosure:** The interface must display a defined confidence tier (e.g., "Verified Match," "Potential Match – Review Required") rather than a raw percentage. If the system lacks external labor data to verify accessibility, it must state: "Accessibility status unverified; please confirm with employer."
+*   **Override Mechanism:** Users must be able to easily override a filter or request a re-evaluation of excluded jobs.
+*   **Transparency Artifact:** Draft a **Model Card** documenting:
+    *   **Intended Use:** Career counseling for general populations; limitations regarding disability-specific nuances.
+    *   **Data Gaps:** Explicitly state the lack of external labor market data and the reliance on synthetic testing.
+    *   **Known Limitations:** Mark accessibility verification as `UNVERIFIED` where external data is missing.
+
+**4. Governance**
+*   **Owner:** Assign one data scientist as the "Inclusion Owner" responsible for reviewing test failures and signing off on the residual risk.
+*   **Re-review Trigger:** Any update to the recommendation algorithm or job dataset requires re-running the probe set.
+
+**Note:** This protocol measures residual risk; it does not certify the system as "unbiased." Legal requirements for automated employment decision tools vary by jurisdiction; route specific regulatory duties to counsel.

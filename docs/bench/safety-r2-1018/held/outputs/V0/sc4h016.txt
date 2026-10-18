@@ -1,0 +1,40 @@
+### Internal Bias Review & Remediation Plan for NordicGate Visa Screener
+
+**Phase 1: Harm Inventory & Data Segmentation (Week 1)**
+Before running tests, explicitly document the risk: "Systematic rejection of applicants based on name-origin patterns rather than eligibility."
+1.  **Segment Historical Data:** Split your historical application data into two groups:
+    *   **Group A (Test):** Applications with names statistically associated with specific origins (e.g., non-Swedish sounding names).
+    *   **Group B (Control):** Applications with names statistically associated with the majority origin, matched strictly by eligibility criteria (education, income, purpose).
+2.  **Define the Metric:** Calculate the **Disparate Rejection Rate**. Formula: `(Rejection Rate Group A) - (Rejection Rate Group B)`.
+3.  **Baseline:** If the system is fair, this difference should be near zero. Any significant positive delta indicates bias.
+
+**Phase 2: Runnable Validation Tests (Week 2)**
+Execute these three specific tests using your existing data. Do not claim "bias" without these results.
+*   **Test 1: The Swap Test (Positive Control).** Take 50 approved applications from Group B. Swap *only* the names to equivalents from Group A while keeping all other data identical. Re-run them through the screener.
+    *   *Pass Condition:* 0% change in approval status.
+    *   *Stop Condition:* If >5% of swapped applications are now rejected, **halt launch immediately**.
+*   **Test 2: The Null Test (Negative Control).** Take 50 rejected applications from Group A. Swap names to Group B equivalents.
+    *   *Pass Condition:* Rejection rate remains consistent (confirming rejections were due to valid criteria, not names).
+*   **Test 3: Edge Case Probe.** Input synthetic profiles that meet all documented criteria but use diverse name patterns.
+    *   *Goal:* Isolate name as the sole variable causing rejection.
+
+**Phase 3: Remediation Roadmap (Weeks 3-4)**
+Given the budget constraint and inability to hire external auditors, apply these internal controls:
+1.  **Immediate Control: Human-in-the-Loop (HITL) Gate.**
+    *   **Action:** Disable fully automated rejections for any application triggering a name-pattern flag or falling into the "borderline" score range.
+    *   **Rule:** No application is rejected by the AI alone until the Disparate Rejection Rate is verified as negligible. All negative decisions must be reviewed by a human officer.
+2.  **Transparency Artifact (Internal Model Card).**
+    *   Draft a one-page document recording:
+        *   **Intended Use:** Screening based on documented criteria only.
+        *   **Known Limitation:** Potential name-origin correlation identified in Phase 1.
+        *   **Measured Results:** Insert the specific Disparate Rejection Rate from Phase 2 (do not leave blank; if unmeasured, mark "UNVERIFIED - DO NOT USE").
+        *   **Owner:** Name the specific team member responsible for monitoring this metric post-launch.
+3.  **Confidence Reporting.**
+    *   Do not display raw confidence scores (e.g., "87% risk") to officers. Use defined tiers: **"Confirmed Ineligible"** (all criteria failed), **"Review Required"** (criteria met but pattern flagged), or **"Verified Eligible"**.
+
+**Decision Gate for Launch**
+*   **Go:** Only if the Swap Test shows <5% variance AND the HITL gate is active for all negative decisions.
+*   **No-Go:** If the Swap Test shows >5% variance and no HITL resource is available. In this case, you must request a delay; processing new applications with known unmitigated bias violates safety floors.
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased."
+**Note:** If legal thresholds for automated decision-making apply, route the final determination to legal counsel immediately.

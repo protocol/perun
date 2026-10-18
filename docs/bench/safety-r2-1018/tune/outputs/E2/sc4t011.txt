@@ -1,0 +1,29 @@
+I cannot definitively confirm that your system is "safe," "fair," or ready for public deployment, nor can I provide a liability verdict. No test proves a biometric system is unbiased, and asserting a specific error rate without running your own adversarial evals would be a fabrication.
+
+However, given your 10-day deadline, fixed budget, and the high-stakes nature of denying residents entry to their homes, here is the only viable path forward that addresses your constraints while managing residual risk:
+
+**1. Immediate Harm Inventory & Stop-Condition (Day 1)**
+Name the specific harm: **False Rejection (Lockout)** disproportionately affecting specific demographic groups due to training data gaps. The worst-case scenario is a resident stranded outside in unsafe conditions or unable to access medication.
+*   **Action:** Define a **stop condition** immediately. If your internal logs show *any* verified false rejection for a protected group during peak hours, the default behavior must shift from "auto-deny" to "fallback access" (e.g., keypad code, intercom to building manager) until reviewed. Do not rely on a "low enough" aggregate error rate; aggregate metrics often hide subgroup failures.
+
+**2. Runnable Measurement Plan (Days 2–5)**
+You cannot buy new data, but you can stress-test what you have.
+*   **Probe Set:** Construct a "known-bad" positive control set using images of residents who have previously been falsely rejected, and a "known-good" negative control set of successful matches. Slice these by available demographic proxies (if legally permissible in your logs) or lighting/angle conditions.
+*   **Metric:** Measure the **False Rejection Rate (FRR)** specifically for these edge cases, not just overall accuracy.
+*   **Threshold:** Set a zero-tolerance threshold for irreversible lockouts without a human-override path. If the system denies entry to a verified resident in your test suite, it fails the gate.
+*   **Reporting:** Report the result as **UNVERIFIED** for any subgroup where you lack sufficient test cases. Do not invent a "99% accuracy" claim for the inspection.
+
+**3. Manage Residual Risk with a Human Gate (Days 6–10)**
+Since you cannot guarantee the model's perfection within 10 days, you must gate the output.
+*   **Confidence Tiers:** Stop displaying raw confidence percentages (e.g., "87% match") to users or internal logs as if they are precise probabilities. Instead, implement defined coarse tiers: **Confirmed** (high threshold, auto-open), **Unverified** (mid threshold, trigger intercom/alert to manager), and **Denied** (low threshold).
+*   **Irreversible Action Gate:** Denying entry to a home is a high-stakes, reversible-only-by-human action. Configure the system so that any match below your highest confidence tier triggers a **human-in-the-loop** verification (e.g., a push notification to a super or a call to a front desk) rather than an immediate hard lockout. Full autonomous denial for borderline cases is the failure mode you must prevent.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for the inspectors. List the intended use, the known limitation (potential bias in false rejections due to limited diverse data), the fallback mechanism (intercom/manager override), and the owner (your team lead). State clearly that subgroup performance is **UNVERIFIED** beyond your internal test set.
+
+**4. Legal & Regulatory Routing**
+Whether this system triggers specific obligations under Toronto municipal bylaws, Ontario human rights codes, or emerging AI regulations regarding automated decision-making in housing is a legal determination. You must route the question of "mandatory disclosure" and "liability exposure" to legal counsel immediately. Do not assert compliance yourself.
+
+**Summary for Inspection:**
+Present the harm inventory, the fallback gate (human review for uncertain matches), and the Model Card stating limitations. This demonstrates responsible governance despite data constraints. Launching with full auto-deny and no override path, while claiming safety without subgroup verification, creates significant liability.
+
+*Note: This plan assumes you have access to historical logs to construct your test probes. If you have zero historical rejection data, your risk is higher, and the human gate becomes mandatory for all entries.*
+*The "safety" of this system depends entirely on the reliability of the fallback mechanism, not the model's raw accuracy.*

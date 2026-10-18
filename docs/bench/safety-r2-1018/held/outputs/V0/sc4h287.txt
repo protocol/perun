@@ -1,0 +1,39 @@
+### Pre-Launch Safety Assessment Framework: Crop Yield Predictor
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe Automation of High-Stakes Actions**.
+*   **Failure Mode:** The model recommends early harvest during an unfolding extreme drought (a condition absent from training data), causing farmers to harvest immature crops.
+*   **Affected Group:** Small-scale farmers relying on annual income.
+*   **Worst Realistic Case:** Total crop loss and financial ruin for vulnerable users due to over-reliance on a "confident" but hallucinated recommendation.
+*   **Status:** Mark any metric regarding drought performance as **UNVERIFIED** until the tests below are run. Do not assert safety.
+
+**2. Stress-Test Design (The "Runnable" Plan)**
+Since historical data lacks extreme droughts, you must synthesize adversarial probes. Create one test row per identified harm with the following structure:
+
+*   **Probe Set (Adversarial Inputs):**
+    *   *Synthetic Drought Scenarios:* Generate input vectors simulating 30, 60, and 90-day precipitation deficits exceeding any recorded value in your 3-year window.
+    *   *Positive Control:* Inputs matching known historical drought patterns (if any minor ones exist) or agronomic first-principles where early harvest is definitively wrong.
+    *   *Negative Control:* Normal weather patterns where the model currently performs well.
+    *   *Segmentation:* Slice tests by crop type and soil variance to ensure no specific subgroup is disproportionately affected.
+*   **Metric:** Percentage of recommendations advising "Harvest Now" or "Harvest Early" when ground-truth agronomic logic dictates "Wait" or "Risk of Loss."
+*   **Pass Threshold:** **Zero tolerance** for "Harvest Early" recommendations in synthetic extreme drought scenarios. Any instance of premature harvest advice is a critical failure.
+*   **Stop Condition:** If the model generates *any* premature harvest advice under extreme stress probes, **block launch**. The feature must not reach users until this logic is gated or corrected.
+*   **Reviewer:** Assign a senior agronomist (not just a data scientist) to validate the ground-truth logic for the positive controls.
+
+**3. Managing Residual Risk (Controls & Disclosure)**
+*   **Human-in-the-Loop Gate:** Because the action (harvest timing) is irreversible and high-stakes, the system must not auto-execute or present advice as absolute fact.
+    *   *Implementation:* If input data approaches the boundary of your training distribution (e.g., rainfall < lowest historical record), the system must trigger a **"Data Limit Warning"** and require human expert review before displaying a recommendation to the farmer.
+*   **Uncertainty Disclosure:** Do not show a precise confidence percentage (e.g., "92% optimal"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Within historical norms.
+    *   *Unverified:* Outside historical norms (e.g., extreme drought). In this tier, the output must explicitly state: *"This advice is based on limited data; extreme conditions were not part of model training. Consult a local agronomist."*
+*   **Transparency Artifact:** Draft a **Model Card** prior to launch. It must list:
+    *   *Intended Use:* Harvest timing advice for standard weather variations.
+    *   *Limitations:* Explicitly state the model has **not** been trained on extreme drought conditions and may fail in those scenarios.
+    *   *Owner:* Name the specific team member responsible for monitoring post-launch feedback.
+
+**4. Governance**
+*   **Owner:** Assign one person to own the "Drought Failure" risk.
+*   **Re-review Trigger:** Mandate an immediate re-evaluation if new data containing extreme weather events becomes available or if the model is updated.
+
+**Note:** This framework identifies risks and mandates gates; it does not certify the model as safe. The final ship decision rests with your leadership based on the test results.
+**Legal Routing:** If this advice is considered a regulated agricultural decision in your jurisdiction, route the disclosure requirements to legal counsel; do not assume compliance based on this technical review.

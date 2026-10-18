@@ -1,0 +1,46 @@
+### Safety Validation Framework for Smart Water Sensors
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negative on Lead Contamination**.
+*   **Affected Parties:** Students, staff, and parents consuming water.
+*   **Worst Realistic Case:** Undetected lead levels exceed safety thresholds, causing long-term health damage before the next manual check.
+*   **Secondary Harm:** **Automation Bias**. Facility managers may stop manual testing entirely, trusting the "all clear" signal implicitly.
+
+**2. Measurement Protocol (Simulated Red-Team)**
+Do not rely on aggregate accuracy. You must construct a runnable test matrix with specific pass/fail criteria for the "no false negative" goal.
+
+*   **Test Row A: Edge-Case Contamination (The "Just Under" Probe)**
+    *   **Input:** Water samples with lead concentrations at 90%, 100%, and 110% of the regulatory action limit.
+    *   **Control (Positive):** Samples known to be dangerously high (must trigger alert).
+    *   **Control (Negative):** Clean water samples (must not trigger alert).
+    *   **Constraint Simulation:** Run these samples using the *reduced* scanning frequency dictated by battery limits.
+    *   **Metric:** False Negative Rate.
+    *   **Pass Threshold:** **Zero tolerance.** Any single false negative on a sample above the limit blocks deployment.
+    *   **Stop Condition:** If *any* false negative occurs in the positive control or edge-case group, halt the field trial immediately.
+
+*   **Test Row B: Network & Power Stress**
+    *   **Input:** Simulated network outages occurring exactly when a contamination event is detected.
+    *   **Probe:** Device detects lead -> Network cuts -> Power saves mode engages.
+    *   **Metric:** Data Persistence & Retry Logic.
+    *   **Pass Threshold:** The alert must be stored locally and transmitted immediately upon reconnection, or trigger a local visual/audible warning if connectivity fails for >X hours.
+    *   **Stop Condition:** Loss of alert data due to power cycling or network timeout.
+
+*   **Test Row C: Adversarial/Interference Inputs**
+    *   **Input:** Water with high turbidity or other metals (iron, copper) that might confuse the spectral analysis.
+    *   **Metric:** Specificity vs. Sensitivity trade-off.
+    *   **Requirement:** Ensure the system favors **false positives** (crying wolf) over false negatives (silence) given the stakes.
+
+**3. Risk Management & Human Gate**
+*   **No Full Automation:** Do not allow the system to declare water "Safe" autonomously without a human-in-the-loop verification protocol during the trial phase. The default state for "no reading" or "uncertain reading" must be **"Assume Contaminated"** until proven otherwise.
+*   **Uncertainty Disclosure:** If the reduced scan frequency lowers confidence, the system must report status as **"Unverified"** rather than a precise "0ppb" or "Safe." Do not display raw confidence percentages (e.g., "87% safe") to parents; use defined tiers: *Confirmed Safe*, *Monitoring*, *Alert*.
+*   **Fallback Plan:** Define the manual testing schedule that runs parallel to the sensors. If the sensor fails a test row, the manual schedule becomes the primary safety gate.
+
+**4. Transparency Artifact (Model/Data Card)**
+Create a one-page document for the school districts containing:
+*   **Intended Use:** Screening tool, not a replacement for certified lab testing.
+*   **Limitations:** Explicitly state the detection limits under reduced scan frequency.
+*   **Measured Performance:** Report results from Test Rows A, B, and C. If a metric was not tested, mark it **UNVERIFIED**. Do not invent a reliability score.
+*   **Owner:** Name the specific engineer responsible for reviewing alerts.
+
+**Note:** Legal requirements for disclosing automated decisions in public health infrastructure must be routed to counsel; this framework addresses technical safety controls only.
+**Note:** Do not proceed to the 50-school rollout until Test Row A achieves a 0% false negative rate under battery-constrained conditions.

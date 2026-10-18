@@ -1,0 +1,36 @@
+### Pre-Launch Validation Framework for Mobile-Home Damage Assessment
+
+Given the constraints of no additional data sources and a rigid deadline, your validation must focus on stress-testing the existing satellite imagery logic against known mobile-home failure modes. The following internal tests use synthetic scenarios and edge-case analysis to identify underestimation gaps.
+
+**1. Synthetic "Anchor Failure" Scenario Testing**
+Mobile homes often suffer catastrophic displacement due to anchor failure, which may not look like structural collapse from satellite view if the unit remains intact but shifted.
+*   **Action:** Create a synthetic test set of imagery where the roof and walls appear visually intact, but the foundation anchors are sheared or the unit is displaced by 2–5 feet from its pad.
+*   **Validation Goal:** Ensure the model flags "foundation compromise" or "displacement" as a total loss or high-damage event, rather than assigning a low "cosmetic damage" score based solely on roof integrity.
+
+**2. Skirting and Undercarriage Obscuration Analysis**
+Debris accumulation under mobile homes (skirting blowout) is a major cost driver but is often shadowed or low-resolution in satellite data.
+*   **Action:** Generate test cases with varying degrees of skirting removal and undercarriage debris exposure, simulating different sun angles and shadow conditions typical of Florida.
+*   **Validation Goal:** Verify the model does not default to "no damage" when the main structure is visible but the undercarriage is obscured. The logic should trigger a "manual review required" flag for obscured undercarriages in high-wind zones rather than assuming zero loss.
+
+**3. Material-Specific Reflectivity Stress Tests**
+Mobile home roofing materials (thin metal, vinyl) reflect light differently than site-built shingles, potentially confusing models trained on general housing data.
+*   **Action:** Input imagery simulating specific mobile-home roof textures with varying degrees of denting, peeling, or partial tearing that alters reflectivity without creating large holes.
+*   **Validation Goal:** Confirm the model distinguishes between normal weathering and wind-induced deformation specific to thin-gauge metals. If the model underestimates damage on dented-but-unpierced roofs, adjust the threshold for "structural compromise" to include severe deformation.
+
+**4. Cluster Density and Debris Shadowing**
+Mobile home parks have high density; damage to one unit often involves debris impacting neighbors, which satellite AI might misclassify as a single isolated event.
+*   **Action:** Test scenarios where debris from a destroyed Unit A covers the roof of Unit B.
+*   **Validation Goal:** Ensure the model attributes damage correctly to Unit B even if its own structure didn't fail initially. The payout logic must account for "debris impact damage" separate from "direct wind damage."
+
+**5. Adversarial "Look-Alike" Negative Testing**
+*   **Action:** Feed the model images of non-mobile structures (e.g., sheds, garages) that resemble damaged mobile homes, and undamaged mobile homes that look damaged due to shadows or tarps.
+*   **Validation Goal:** Measure the false positive and false negative rates specifically for mobile-home geometries. High false negatives here indicate a risk of underpayment.
+
+**Implementation Plan for Immediate Launch:**
+1.  **Run the five test suites** above using your current model.
+2.  **Establish a "High-Risk Flag"**: If any test case results in a payout estimate below 50% of the expected value for that specific failure mode, automatically route those real-world claims to human review.
+3.  **Dynamic Threshold Adjustment**: Lower the confidence threshold required to trigger a "Total Loss" classification for mobile-home geometries until ground-truth data can be integrated post-season.
+
+This approach isolates logic gaps without new data, prioritizing the protection of vulnerable claimants through aggressive human-in-the-loop triggers for ambiguous cases.
+
+*Note: This framework relies on synthetic data generation within your existing environment. Ensure all synthetic imagery mimics the specific resolution and spectral bands of your current satellite provider.*

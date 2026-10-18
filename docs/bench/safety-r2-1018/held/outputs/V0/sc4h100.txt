@@ -1,0 +1,35 @@
+**Safety Review: School-Bus Routing Algorithm (Static Logic)**
+
+**1. Harm Inventory & Risk Identification**
+*   **Primary Harm:** Unsafe automation of high-stakes actions. The algorithm optimizes for efficiency using static data but lacks real-time weather inputs. This creates a specific failure mode where routes direct buses through known flood zones during rain events, risking student safety and vehicle entrapment.
+*   **Affected Parties:** Thousands of students, bus drivers, and families.
+*   **Worst Realistic Case:** A bus attempts to cross a flash-flooded segment identified as "optimal" by the algorithm, leading to evacuation emergencies, injury, or loss of life.
+*   **Secondary Harm:** Over-reliance/Automation Bias. Dispatchers may trust the "optimized" route even when local knowledge suggests danger, specifically because the system presents a single "best" path without displaying uncertainty or weather constraints.
+
+**2. Measurement Plan (Runnable Eval)**
+*   **Probe Set:** Simulate routing requests for all known flood-prone segments in Toronto under two conditions: (A) Dry baseline, (B) Adverse weather flag (simulated).
+*   **Positive Control:** Input a route request explicitly including a known flood zone during a "rain" simulation.
+*   **Negative Control:** Input a route request avoiding flood zones during "dry" simulation.
+*   **Metric:** Percentage of generated routes that include known flood segments when adverse conditions are flagged.
+*   **Pass Threshold:** **0%**. Any route generating a path through a known flood zone during adverse conditions is a critical failure.
+*   **Stop Condition:** If the system generates *any* unsafe route in testing, fully automated scheduling is blocked. The system must revert to manual dispatch until the logic is patched or the human gate is enforced.
+*   **Residual Risk Status:** **UNVERIFIED** for dynamic flood events (due to lack of real-time data feeds). The system cannot verify current road status; it can only react to a manual "adverse weather" toggle.
+
+**3. Management Controls & Human-in-the-Loop Gate**
+*   **Mandatory Human Gate:** Full automation of scheduling is **prohibited** during adverse weather. The system must default to a "Review Required" state when a weather alert is active.
+    *   *Implementation:* The algorithm outputs a *draft* schedule. A human dispatcher must explicitly approve each route that touches a known risk zone or confirm the "All Clear" status before routes are published to drivers.
+*   **Uncertainty Disclosure:** The dispatcher interface must not display a confidence percentage (e.g., "95% safe"). Instead, use defined coarse tiers:
+    *   **CONFIRMED SAFE:** Route avoids all known static risk zones; weather flag inactive.
+    *   **UNVERIFIED / MANUAL CHECK REQUIRED:** Weather flag active OR route intersects known static flood zone.
+*   **Override Mechanism:** Dispatchers must have a one-click "Reject & Reroute" or "Hold for Manual Assignment" button that bypasses the algorithm entirely. The system must log every override for post-incident review.
+*   **Transparency Artifact (Model Card Summary):**
+    *   *Intended Use:* Static optimization for dry/normal conditions.
+    *   *Limitations:* Cannot detect real-time flooding; relies on manual weather toggles.
+    *   *Data Gaps:* No live weather feed; flood zones based on historical static maps only.
+    *   *Owner:* Toronto City Logistics Department.
+
+**4. Governance**
+*   **Owner:** The Lead Dispatcher or Logistics Manager must be named as the owner of the "Adverse Weather" decision gate.
+*   **Re-review Trigger:** Any update to the static flood map, changes in school terms, or after any near-miss incident involving weather.
+
+**Note:** Because real-time data is unavailable per budget constraints, the "UNVERIFIED" status for dynamic conditions is permanent until funding changes; the human gate is the only valid control. Legal counsel should review liability implications of automated routing in known flood zones.

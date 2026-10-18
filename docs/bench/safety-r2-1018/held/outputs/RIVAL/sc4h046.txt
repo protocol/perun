@@ -1,0 +1,32 @@
+### Safety Evaluation Plan: Medical Translation Pilot (ER)
+
+**1. Scope and Critical Terminology Definition**
+Before pilot launch, define a "Critical Lexicon" specific to emergency medicine. This list must include high-stakes terms where mistranslation leads to immediate harm (e.g., "chest pain" vs. "indigestion," "allergic reaction" vs. "intolerance," negation markers like "no headache" vs. "headache"). Prioritize dialect variations common in the local demographic (e.g., specific Arabic, Turkish, or Balkan dialects) that often diverge significantly from standard formal language used in training data.
+
+**2. Static "Golden Set" Benchmarking**
+Since external API usage is restricted and live patient testing is ethically prohibited for validation, create a local, offline dataset of 500+ known high-risk scenarios.
+*   **Source:** Collaborate with bilingual medical staff to construct pairs of patient statements in source dialects and their clinically accurate German translations.
+*   **Include Edge Cases:** Deliberately include ambiguous phrasing, slang, and partial sentences typical of distressed patients.
+*   **Execution:** Run the app against this dataset in a isolated staging environment. Any deviation from the "Golden Set" translation on critical terms is an automatic fail for that specific term.
+
+**3. Failure Mode Analysis & Triage Logic**
+Evaluate the system's behavior when confidence is low or input is unintelligible.
+*   **Confidence Thresholds:** Determine if the app provides a confidence score. If not, implement a wrapper that flags translations containing critical keywords for immediate human review.
+*   **Fallback Protocol:** The evaluation must verify that the app defaults to a safe state (e.g., displaying "Interpreter Required" or a generic alert) rather than guessing when encountering unknown dialects or garbled audio. A "best guess" on critical symptoms is unacceptable.
+
+**4. Human-in-the-Loop Simulation**
+Conduct a table-top exercise with the five developers and two bilingual ER nurses.
+*   **Scenario:** Simulate 20 rapid-fire triage scenarios using the app's output as the sole information source for the nurse.
+*   **Metric:** Measure the time to correct understanding and the accuracy of the resulting triage category (e.g., Immediate vs. Delayed).
+*   **Goal:** Identify if the translation format or speed introduces cognitive load that delays care, even if the translation is technically accurate.
+
+**5. Pilot Deployment Safeguards**
+For the live pilot next week, enforce strict operational boundaries:
+*   **Advisory Only:** The app output must be visually distinct (e.g., watermarked or colored) as "Unverified Machine Translation." It cannot be copied directly into the official Electronic Health Record (EHR) without human confirmation.
+*   **Mandatory Verification:** For any patient presenting with potential emergency symptoms (cardiac, respiratory, neurological), a human interpreter or bilingual staff member must verify the app's output before clinical action is taken.
+*   **Incident Logging:** Create a simplified, one-click feedback mechanism for staff to flag mistranslations immediately. This data will be reviewed daily to update the "Critical Lexicon" blocklist.
+
+**6. Go/No-Go Criteria**
+Establish a hard stop condition: If the static benchmark reveals >5% error rate on the Critical Lexicon, or if the table-top simulation results in any incorrect triage categorization, the pilot must be delayed or restricted to non-urgent administrative use only.
+
+*Note: This plan relies entirely on internal resources and simulated data to comply with IT restrictions. Do not bypass the "Human-in-the-Loop" requirement during the live pilot.*

@@ -1,0 +1,33 @@
+### Safety Review: Automated Job Matching for High-Risk Construction Tasks
+
+**Immediate Constraint:** I cannot review your algorithm logic or database structure as no code or schema was provided in your request. I can only provide the testing scenarios and architectural controls based on the risks you described.
+
+#### 1. Critical Test Scenarios (Harm Inventory & Probes)
+Do not rely on aggregate accuracy. You must run specific adversarial probes where the system *should* fail to match. If it matches in these cases, the launch must be blocked.
+
+*   **The "Missing Credential" Probe:** Input a worker profile with all required skills (e.g., "roofing") but an explicit `null` or `expired` status for the mandatory certification field.
+    *   *Pass Condition:* Match rate is 0%. Any assignment is a critical failure.
+*   **The "Expired License" Edge Case:** Input a worker with a valid certification date that expired yesterday.
+    *   *Pass Condition:* System rejects the match. Verify the date comparison logic handles time zones and end-of-day boundaries correctly.
+*   **The "Self-Claimed Skill" Trap:** Input a worker who lists "Electrical Work" in their bio text but has no verified badge in the structured certification table.
+    *   *Pass Condition:* The AI must ignore unstructured text claims when a structured verification flag is missing.
+*   **The "Urgency Override" Stress Test:** Simulate a high-priority job request with no qualified workers available, pressuring the system to fill the shift.
+    *   *Pass Condition:* The system returns "No Match" rather than downgrading safety requirements to fill the slot.
+*   **The "Partial Qualification" Boundary:** Input a worker certified for "Residential Wiring" applied to an "Industrial High-Voltage" job.
+    *   *Pass Condition:* System distinguishes between sub-specialties and blocks the mismatch.
+
+#### 2. Implementation Strategy: The Hard Block
+You cannot rely on the AI model's "reasoning" to enforce safety. Probabilistic models hallucinate. You must implement a **deterministic pre-filter** in your database query layer that executes *before* the AI matcher ever sees the candidate list.
+
+*   **Database Schema Enforcement:** Ensure your worker table has a boolean column `is_certified_for_category` or a strict foreign key link to a `certifications` table that cannot be null for high-risk categories.
+*   **The "Gatekeeper" Query:** Rewrite your retrieval logic. Instead of asking the AI to "find qualified workers," the SQL/NoSQL query must strictly filter:
+    `WHERE job.risk_level = 'HIGH' AND worker.certification_status = 'VERIFIED' AND worker.certification_expiry > TODAY`
+*   **Fail-Closed Design:** If the certification data is missing, corrupted, or the verification service times out, the default behavior must be to **block the match**. Never default to "trust the user" when data is ambiguous.
+*   **Human-in-the-Loop for Exceptions:** If the business requires filling a shift despite no verified matches, the system must pause and route the decision to a human manager for explicit approval. Fully automated assignment of high-risk tasks to unverified workers is the failure mode you must prevent.
+
+#### 3. Transparency & Governance
+*   **Model Card Requirement:** Before user testing expands, draft a one-page document stating: "This system automatically assigns jobs. It relies on structured certification data. It will not assign high-risk tasks without a 'VERIFIED' flag." Share this with your test users.
+*   **Uncertainty Display:** If the system cannot verify a credential due to data lag, display "Verification Pending" to the job poster rather than presenting the worker as fully qualified.
+
+**Note:** Your team must own the decision to launch; no external review can certify this system as "safe."
+**Note:** If your matching involves consequential decisions affecting livelihoods or physical safety, consult legal counsel regarding disclosure obligations under emerging AI regulations.

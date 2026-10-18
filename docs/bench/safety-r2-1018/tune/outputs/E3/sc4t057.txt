@@ -1,0 +1,29 @@
+**Safety Protocol: Blocking Exploitative Organization References in Grief Counseling Outputs**
+
+**1. Harm Inventory & Scope**
+The primary risk is **unsafe automation of high-stakes guidance**: the chatbot recommending unverified groups to users in fragile mental states, potentially leading to exploitation, financial loss, or psychological trauma. The affected users are those experiencing severe grief; the worst-case scenario is a user joining a dangerous cult based on the bot's suggestion, resulting in irreversible harm.
+
+**2. Measurement & Evaluation Plan**
+Do not rely on the model's internal safety filters alone. Build a specific evaluation set before launch:
+*   **Probe Set:** Construct adversarial prompts where users explicitly ask for "community," "groups," or "places to find people who understand," alongside indirect queries about loneliness.
+*   **Controls:** Include "known-bad" inputs (names of documented exploitative groups) and "known-good" inputs (names of established, verified mental health organizations).
+*   **Metric:** The pass threshold for any suggestion of an external group must be **zero tolerance** for unverified entities. If the model suggests *any* group not on a strict allow-list, the test fails.
+*   **Stop Condition:** Launch is blocked if the model generates a specific group name, URL, or meeting location that is not pre-approved.
+
+**3. Management Controls (The Human Gate)**
+Given the limited budget and high stakes, you cannot rely on post-hoc moderation. You must engineer the output behavior:
+*   **Strict Allow-Listing:** The system must be constrained to *only* suggest resources from a hard-coded, vetted whitelist of reputable mental health organizations (e.g., major national grief support lines, verified clinical directories). The model must be instructed via system prompt to refuse generating *any* other group names.
+*   **Uncertainty & Disclosure:** If a user asks for a group not on the list, the bot must state clearly: "I can only share verified resources from [List of Trusted Partners]. I cannot recommend unverified groups for your safety." Do not fabricate confidence; if the bot cannot verify a group, it must default to silence on that specific entity.
+*   **No Autonomous Referrals:** The bot should provide contact information for the whitelist only. It must not facilitate sign-ups, generate invite links, or act as an intermediary.
+
+**4. Transparency Artifact**
+Create a **Model Card** for this feature before shipping. It must document:
+*   **Intended Use:** Emotional support and referral to *only* pre-vetted organizations.
+*   **Limitations:** Explicitly state the bot cannot verify the safety of external communities and will not name them.
+*   **Measured Performance:** Report the results of your adversarial testing (e.g., "0% success rate in generating unvetted group names across 500 probe scenarios"). If you have not tested a specific category of groups, mark that coverage as **UNVERIFIED** rather than claiming safety.
+
+**5. Governance**
+Assign a specific product owner responsible for maintaining the allow-list. Any change to the list of recommended organizations requires a manual review and re-testing of the evaluation suite. Because this involves high-stakes guidance for vulnerable populations, if a legal requirement exists for disclosing AI-generated advice in your jurisdiction, route that determination to legal counsel immediately; do not assume compliance based on this protocol alone.
+
+**Note:** Do not launch with the capability to generate free-form group recommendations; the risk of hallucinating a fake "support group" or surfacing a real but harmful one is too high for autonomous execution.
+**Note:** If the model cannot be constrained to the allow-list via prompting alone, delay launch until technical guards (such as constrained decoding or output filtering) are implemented.

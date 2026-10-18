@@ -1,0 +1,45 @@
+### Pre-Launch Safety Review Plan: Conflict-Zone Routing
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into active conflict zones).
+*   **Affected:** Driver partners in conflict-affected regions.
+*   **Worst Realistic Case:** Algorithm routes a driver through an active war zone due to 30-day lagged data, resulting in physical injury, kidnapping, or vehicle loss.
+*   **Constraint Acknowledgement:** The 30-day data lag is a known single point of failure; the system cannot rely on map data alone for safety decisions in these regions.
+
+**2. Measurement Strategy (Pre-Launch Eval)**
+Do not assert safety; measure residual risk via adversarial testing.
+*   **Probe Set:** Construct a "Red Team" dataset containing:
+    *   *Positive Controls:* Known historical conflict coordinates overlaid with "safe" labels in the 30-day lagged map data.
+    *   *Negative Controls:* Safe routes in stable regions.
+    *   *Edge Cases:* Routes bordering newly declared conflict zones (within 5km).
+*   **Metric:** Percentage of test routes where the algorithm suggests a path through a known conflict zone present in real-world intelligence but absent in the lagged map data.
+*   **Pass Threshold:** **Zero tolerance.** Any route suggesting entry into a known conflict zone based on outdated data is a critical failure.
+*   **Stop Condition:** If *any* positive control triggers a unsafe route recommendation, the launch is blocked immediately.
+*   **Reporting:** Report results as `UNVERIFIED` for any region where real-time ground truth cannot be simulated. Do not fabricate a "safety score."
+
+**3. Risk Management Controls (The Human Gate)**
+Since the data source is inherently unreliable for real-time safety, full automation is prohibited for this specific risk.
+*   **Mandatory Human-in-the-Loop (HITL) Gate:**
+    *   For any route intersecting a region flagged as "potential risk" or within a defined radius of a conflict zone (even if the map says "safe"), the system must **not** auto-dispatch.
+    *   The route must be held for manual verification by a regional safety operator who has access to real-time intelligence feeds (news, government alerts) not available in the map API.
+*   **Fallback Mechanism (The "Hard Stop"):**
+    *   If real-time verification is unavailable (e.g., off-hours, comms down), the system must default to **refusing the trip** or restricting the driver to a pre-approved "safe corridor" list, rather than optimizing for efficiency.
+    *   **Driver Override:** Drivers must have a prominent, one-tap "Unsafe Route" flag that immediately halts navigation and alerts the safety team, bypassing algorithmic re-calculation.
+*   **Uncertainty Disclosure:**
+    *   The driver app must explicitly state: *"Route optimization is limited by data delays. Do not rely solely on this map for safety in conflict zones."*
+    *   Display confidence as a coarse tier: **"Unverified / Check Locally"** instead of a false-precision percentage.
+
+**4. Governance & Artifacts**
+*   **Owner:** Assign a specific "Regional Safety Lead" accountable for the HITL gate in each conflict zone.
+*   **Transparency Artifact:** Publish a **Model Card** for this routing update detailing:
+    *   *Intended Use:* Efficiency optimization in stable regions only.
+    *   *Out-of-Scope:* Real-time safety assurance in conflict zones.
+    *   *Limitations:* Explicitly document the 30-day data lag and the reliance on human review.
+    *   *Data Provenance:* Name the map provider and the lag constraint.
+*   **Legal Routing:** Determine if routing into conflict zones constitutes a regulated high-risk decision under local laws or the EU AI Act. Route this determination to legal counsel; do not assume compliance.
+
+**Definition of Done:**
+The feature ships only when the HITL gate is technically enforced, the "Zero Tolerance" eval passes, and the Model Card clearly states the data lag limitation.
+
+***
+*Note: This plan treats the 30-day lag as a critical failure mode requiring a human gate, not a statistical error to be averaged out. No metric certifies the system "safe"; it only verifies the controls are active.*

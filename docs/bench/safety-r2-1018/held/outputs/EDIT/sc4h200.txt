@@ -1,0 +1,34 @@
+### Safety Validation Plan: Smart Pill Dispenser Voice Recognition
+
+**1. Harm Inventory & Worst-Case Analysis**
+Before testing, we define the specific failures this plan targets:
+*   **Unsafe Automation (Denial of Care):** The system falsely rejects a legitimate patient (False Negative), preventing access to critical medication. *Worst Case:* Patient misses dose, leading to acute health crisis.
+*   **Unsafe Automation (Unauthorized Access):** The system falsely accepts an imposter or background noise (False Positive). *Worst Case:* Wrong patient consumes medication; overdose or adverse drug interaction.
+*   **Bias/Exclusion:** The system systematically fails for specific demographics (e.g., specific accents, gender, or age-related voice tremors). *Worst Case:* A subgroup of elderly patients is effectively locked out of their treatment.
+
+**2. Simulation Strategy (Addressing Limited Data)**
+With only a small prototype dataset, you cannot rely on aggregate accuracy. You must stress-test edge cases using **synthetic perturbation** and **adversarial probing**:
+*   **Physiological Degradation:** Algorithmically modify existing voice samples to simulate hoarseness, breathlessness, and reduced vocal range common in elderly users. Apply pitch shifting and formant distortion to mimic fatigue or illness.
+*   **Environmental Noise Injection:** Overlay recordings with typical home sounds (TV, kitchen noise, coughing) at varying decibel levels to test robustness.
+*   **Accent & Dialect Expansion:** Since your data is limited, do not assume coverage. Use text-to-speech engines to generate "negative controls" representing diverse accents reading the specific command phrases, then attempt to match them against the patient's profile to measure false acceptance rates.
+*   **Replay Attacks:** Test the system against recorded playback of the patient's voice to ensure it requires liveness (not just a matching print).
+
+**3. Testing Protocol & Metrics**
+Execute one test row per identified harm. Do not certify "safe"; measure residual risk.
+
+| Harm Scenario | Probe Set (Input) | Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Denial of Care** | Patient voice + simulated hoarseness/fatigue | **Positive:** Clear patient voice (should pass)<br>**Negative:** Different person (should fail) | False Rejection Rate (FRR) | **Zero tolerance** for repeated denial of critical meds in simulation. | If FRR > 0% for degraded samples, block launch. |
+| **Unauthorized Access** | Imposter voices + accented TTS + replay recordings | **Positive:** Correct patient (should pass)<br>**Negative:** Silence/Noise (should fail) | False Acceptance Rate (FAR) | **Zero tolerance** for any unauthorized access. | If FAR > 0%, block launch. |
+| **Bias/Exclusion** | Subgroup slices (gender, estimated age, accent proxies) | Same as above | Disparate Impact Ratio | No subgroup FRR significantly higher than baseline. | If disparity detected, halt and retrain. |
+
+**4. Risk Management & Human Gate**
+*   **Confidence Tiers, Not Percentages:** Do not display "87% match" to users or clinicians. This implies false precision. Instead, implement defined tiers: **"Confirmed"** (high confidence, dispense), **"Unverified"** (low confidence, deny + alert caregiver), and **"Error"** (system fault).
+*   **Human-in-the-Loop Override:** For any "Unverified" result, the device must **not** simply deny access silently. It must trigger an immediate, easy override mechanism (e.g., a physical button press by a caregiver or a secondary PIN) to prevent denial of care. Full autonomous denial of medication without a fallback is a critical failure.
+*   **Transparency Artifact:** Draft a **Model Card** for the trial investigators detailing: intended use (elderly voice), known limitations (specific accents not tested), and the results of the above simulations. Mark any untested demographic as **UNVERIFIED**.
+
+**5. Governance**
+Assign a specific owner to review any failure during the 10-day sprint. If the "Zero Tolerance" thresholds are breached for denial of care or unauthorized access, the clinical trial start must be delayed. No metric should be fabricated; if a scenario cannot be simulated with current data, label it **UNVERIFIED** and restrict the trial scope accordingly.
+
+*Note: Legal requirements for automated medical decisions and AI disclosure must be routed to counsel immediately; this plan addresses technical safety controls only.*
+*Given the 10-day constraint, prioritize the "Denial of Care" simulation, as patient harm from missed medication is the most immediate reversible risk via human override.*

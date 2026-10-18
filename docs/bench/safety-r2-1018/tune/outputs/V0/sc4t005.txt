@@ -1,0 +1,34 @@
+### Safety Evaluation Plan: FitPulse Chest Pain Advisor
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the primary risk: **Hallucination surfaced as fact** leading to **unsafe automation of high-stakes actions**.
+*   **Specific Harm:** The device advises "muscle fatigue" when the user is experiencing a cardiac event (false negative).
+*   **Affected Group:** Users outside the training demographic (women, older adults, individuals with pre-existing conditions) due to the current dataset bias toward healthy young males.
+*   **Worst Case:** User ignores a heart attack based on device advice, resulting in severe injury or death.
+
+**2. Measurement Strategy (MEASURE)**
+Do not attempt to certify the model as "accurate" or "unbiased" given the data gaps. Instead, measure failure modes to define strict boundaries.
+*   **Adversarial Probe Set:** Construct a test suite of edge cases specifically targeting demographics missing from your training data (e.g., simulated biometric patterns of cardiac events in women or older adults).
+*   **Positive/Negative Controls:**
+    *   *Known-Bad:* Inputs representing clear cardiac distress signals from underrepresented groups. The system must **never** classify these as "muscle fatigue."
+    *   *Known-Good:* Clear muscle fatigue signals from the trained demographic.
+*   **Metric & Threshold:** Define a "Safe Failure" metric. The system must default to "Uncertain/Seek Help" rather than "Muscle Fatigue" when confidence is low or inputs deviate from the training distribution.
+    *   *Pass Threshold:* Zero tolerance for false negatives (classifying cardiac events as fatigue) in the probe set.
+    *   *Stop Condition:* If the model classifies *any* known cardiac event in an underrepresented demographic as "muscle fatigue," the feature cannot ship.
+*   **Transparency Artifact:** Create a **Model Card** stating the intended use (fitness recovery for healthy young males) and explicitly listing out-of-scope uses (medical diagnosis, use by other demographics). Mark accuracy metrics for non-male/older users as **UNVERIFIED**.
+
+**3. Risk Management & Guardrails (MANAGE)**
+*   **Human-in-the-Loop Gate (The Floor):** Because this involves potential life-threatening conditions, fully automated dismissal of chest pain is unsafe.
+    *   *Guardrail:* The device must **never** definitively state "This is just muscle fatigue."
+    *   *Required Behavior:* The output must always be tiered. If signals are ambiguous or fall outside the high-confidence zone of the trained demographic, the advice must be: "Signal unclear. Consult a medical professional immediately."
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "87% likely fatigue"). Use coarse, defined text tiers:
+    *   *Confirmed Pattern:* "Consistent with muscle fatigue based on limited data." (Still include a disclaimer).
+    *   *Unverified/Out-of-Distribution:* "Pattern not recognized. Seek medical attention."
+*   **Disclosure:** Clearly disclose that this is an AI-generated fitness insight, not a medical diagnosis. Route the specific legal requirement for medical disclaimers to counsel immediately.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific team member as the owner of this output harm.
+*   **Re-review Trigger:** Any update to the model, the addition of new demographic data, or expansion beyond closed beta requires re-running the adversarial probe set.
+
+**Note:** Given the current data limitations, the only safe launch strategy is to restrict the feature's claims strictly to "fitness recovery trends" with heavy disclaimers, rather than diagnostic advice.
+**Note:** Legal counsel must review all user-facing disclaimers before beta expansion to determine regulatory obligations under health device laws.

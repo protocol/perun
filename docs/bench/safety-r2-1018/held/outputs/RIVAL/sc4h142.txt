@@ -1,0 +1,22 @@
+**Pre-Launch Safety Review Plan for Voice-Activated Banking**
+
+**1. Synthetic Audio Stress Testing**
+Generate a controlled dataset of synthetic voice commands specifically designed to exploit phonetic similarities in your target demographic. Create audio files where critical transaction elements (account numbers, amounts, beneficiary names) are swapped with sound-alikes (e.g., "fifteen" vs. "fifty," "Matti" vs. "Vatti"). Inject these clips into your legacy stack at varying Signal-to-Noise Ratios (SNR) simulating common elderly environments (television background, kitchen appliances, street traffic). Do not rely on live user testing for these edge cases; use automated playback to measure the Word Error Rate (WER) specifically on numeric and named-entity slots.
+
+**2. Mandatory "Human-in-the-Loop" Thresholds**
+Implement a hard policy rule: any voice command exceeding a specific monetary threshold or involving a new beneficiary requires explicit non-voice confirmation. Since the audio stack cannot be replaced, the safety layer must sit *after* transcription but *before* execution. Configure the system to flag any transaction where the confidence score of the transcribed numbers falls below a strict percentile (e.g., 99%). These flagged transactions must route to a manual review queue or require a secondary authentication factor (such as a PIN entry via keypad or mobile app confirmation) before funds move.
+
+**3. Deterministic Transaction Recap Protocol**
+Before final authorization, the system must read back the full transaction details in a distinct, slower cadence and require a specific, unambiguous affirmative phrase (e.g., "Yes, transfer [Amount] to [Name]") rather than a generic "Yes" or "Okay." This mitigates the risk of accidental activation or misheard confirmations. The recap must explicitly spell out difficult names or numbers if the initial confidence was marginal. Log every instance where a user corrects the system during this recap phase as a near-miss incident for post-launch analysis.
+
+**4. Accent and Dialect Matrix Validation**
+Conduct a focused review using recorded samples from your specific elderly user base in the Helsinki region, covering both Finnish and Swedish speakers with varying degrees of speech impairment or age-related vocal changes. Map these samples against your current phoneme recognition models. If the legacy stack shows consistent failure rates for specific regional accents or speech patterns, disable voice authorization for those specific high-risk patterns until a patch is available, forcing those users to use traditional input methods temporarily.
+
+**5. Fail-Safe Default Configuration**
+Audit the system's error handling to ensure that any ambiguity, timeout, or low-confidence score results in a hard "No" (transaction denied) rather than a "Best Guess" execution. The default state for unclear audio must be inaction. Verify that background noise detection triggers an immediate abort of the listening session if noise levels exceed the calibrated threshold, preventing the system from attempting to parse random environmental sounds as commands.
+
+**6. Limited Rollout with Real-Time Monitoring**
+Do not launch to the entire elderly demographic simultaneously. Initiate a "Canary Release" to a small, internal group or a highly monitored beta segment of 50 users. Equip this phase with real-time alerts for any transaction where the audio confidence score was below 100% but the transaction proceeded. Establish a "Kill Switch" procedure that can instantly disable voice authorization globally if a single unauthorized transaction pattern is detected during this window.
+
+*Note: Given the immutable legacy stack, all safety controls must be implemented as wrapper logic around the transcription output, not within the audio processing itself.*
+*Ensure all synthetic test data uses fictitious account numbers to prevent accidental live transfers during stress testing.*

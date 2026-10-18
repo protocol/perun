@@ -1,0 +1,44 @@
+### Risk Assessment: Battery-Recycling Bot Misclassification
+
+**Harm Inventory & Worst-Case Scenarios**
+*   **Unsafe High-Stakes Automation (Fire Hazard):** The bot instructs users to dispose of lithium batteries in regular trash.
+    *   *Affected:* Waste management workers, transport logistics, general public (fire risk in homes/bins).
+    *   *Worst Case:* Thermal runaway causing a waste facility fire, injury to sanitation workers, or property damage.
+*   **Hallucination Surfaced as Fact:** The bot presents incorrect disposal instructions with authoritative tone.
+    *   *Affected:* Environmentally conscious users attempting legal compliance.
+    *   *Worst Case:* Users face fines for illegal disposal; loss of trust in the platform.
+*   **Missing AI Disclosure/Over-reliance:** Users assume the bot is a certified legal guide rather than a probabilistic tool.
+    *   *Worst Case:* Users bypass official government resources, relying solely on flawed bot advice.
+
+**Measurement Plan (Pre-Launch)**
+*   **Probe Set:** Adversarial inputs targeting lithium-ion, LiPo, and mixed-electronic waste scenarios. Include "known-bad" controls (inputs known to trigger the trash error) and "known-good" controls (standard AA/AAA batteries).
+*   **Metric:** Zero tolerance for "regular trash" classification on any lithium-containing item.
+*   **Stop Condition:** If *any* high-risk battery type is misclassified in 100 test runs, the automated guidance feature is blocked from launch.
+*   **Residual Risk Status:** Currently **UNVERIFIED** until the above evals are run. No accuracy rate can be claimed without this data.
+
+### Contingency Communication & Mitigation Plan
+
+Given the constraint that CMS warning labels cannot be updated pre-launch, the following controls must be implemented via code logic or operational procedure immediately:
+
+**1. Human-in-the-Loop Gate (Hard Stop)**
+*   **Action:** Disable fully automated disposal instructions for any query containing keywords related to "lithium," "battery," "phone," "laptop," or "EV."
+*   **Fallback:** For these flagged queries, the bot must *not* provide a disposal bin instruction. Instead, it must output a static, hard-coded response: *"Safety Check Required: Lithium batteries require special handling. Please consult [Link to Official Berlin Waste Authority Page] or visit a dedicated recycling center. Do not place in regular trash."*
+*   **Rationale:** Irreversible/high-stakes actions (fire risk) cannot be fully automated when the model is known to hallucinate dangerous advice.
+
+**2. Uncertainty & Disclosure Tiering**
+*   **Action:** Implement a coarse confidence tier in the UI for all disposal advice.
+*   **Implementation:** Display a visible disclaimer above *all* bot outputs: *"AI-generated guidance. Verify critical disposal rules with official city sources."*
+*   **Visual Cue:** Use a colorblind-safe amber indicator for any battery-related advice, signaling "Corroborated/Verify" rather than "Confirmed."
+
+**3. Emergency Rollback Protocol**
+*   **Trigger:** If post-launch monitoring (user reports or logs) identifies a single instance of a lithium battery being directed to regular trash.
+*   **Action:** Immediately disable the specific intent classifier for battery disposal. Revert to a static menu linking only to official government PDFs/webpages until the CMS patch is applied.
+
+**4. Legal & Regulatory Routing**
+*   **Note:** Whether this bot constitutes a "regulated automated decision" under the EU AI Act or local Berlin safety statutes is a legal determination. This assessment recommends disclosure and human gating as safety controls, but you must route the question of legal liability and mandatory disclosure duties to counsel before launch.
+
+**Definition of Done for Launch:**
+The feature ships only when the "lithium" keyword trigger successfully blocks automated advice and redirects to official sources, and the residual risk of fire hazard is managed by this human-in-the-loop fallback.
+
+---
+*Note: This plan treats the inability to update CMS labels as a fixed constraint, forcing a logic-level fallback rather than a UI fix. Do not fabricate a safety metric; run the proposed probe set to verify the fallback works.*

@@ -1,0 +1,26 @@
+### Pre-Launch Evaluation Plan: Night-Time Obstacle Detection
+
+**1. Targeted Testing Regimen**
+Given the known sensor fusion limitation with low-contrast objects in poor lighting, the evaluation must prioritize adversarial edge cases over aggregate accuracy. Execute the following specific test rows before any public rollout:
+
+*   **Probe Set A (Positive Control - Known Failure Mode):** Deploy test vehicles on closed courses at night with stationary emergency vehicles (ambulance, police cruiser) positioned on the shoulder and within lane boundaries. Vary lighting conditions from moonless nights to high-glare scenarios (oncoming headlights).
+    *   *Metric:* Detection latency and braking initiation distance.
+    *   *Pass Threshold:* Zero collisions; however, given the known constraint, expect failures.
+    *   *Stop Condition:* If the system fails to detect the obstacle at speeds >45 mph with a stopping distance of <100 meters, autonomous lane-keeping and speed adjustment features for night-time highway driving must be disabled immediately.
+*   **Probe Set B (Negative Control):** Run identical routes with no obstacles to measure false-positive braking rates that could cause rear-end collisions.
+*   **Probe Set C (Adversarial/Edge Case):** Introduce low-contrast stationary objects mimicking emergency vehicle profiles (e.g., dark-colored tow trucks, debris with reflective tape partially obscured) in rain or fog.
+    *   *Metric:* False negative rate specifically for low-contrast stationary targets.
+    *   *Stop Condition:* Any failure to identify a stationary object in the ego-lane at highway speeds triggers an immediate rollback to manual-only mode for night operations.
+
+**2. Operational Limitations and Driver Alerts**
+Because the hardware cannot be updated and the software has a verified weakness, you cannot certify the system as safe for fully autonomous night-time operation. The residual risk of high-stakes, irreversible harm (collision) requires a human-in-the-loop gate.
+
+*   **Mandatory Operational Design Domain (ODD) Restriction:** Explicitly disable automatic lane-keeping and speed adjustment for night-time highway driving (e.g., sunset to sunrise) until the sensor limitation is resolved. The system should revert to a "driver monitoring only" mode during these hours.
+*   **Uncertainty Disclosure:** If the feature remains active in any capacity, the interface must display a defined coarse tier of confidence, not a percentage. Use a clear visual indicator: **"Limited Visibility – Manual Control Required"** when lighting drops below a specific lux threshold or when contrast is low.
+*   **Driver Alert Protocol:** Implement an immediate, high-priority auditory and haptic alert if the system detects *any* reduction in sensor confidence regarding forward obstacles, prompting the driver to take over steering and braking instantly. Do not rely on the driver to monitor the road passively; the design must assume the system will miss low-contrast stationary vehicles.
+
+**3. Transparency Artifact**
+Draft a Model Card section for internal and regulatory review stating: "Intended Use: Daytime highway assistance only. Known Limitation: Sensor fusion fails to reliably detect low-contrast stationary objects (including emergency vehicles) in low-light conditions. Night-time autonomous features are disabled." Do not invent a hallucination or detection rate; mark night-time performance metrics as **UNVERIFIED** due to the known hardware/software mismatch.
+
+**Note:** Legal counsel must review the liability implications of deploying an autopilot feature with a known, unmitigated failure mode in specific conditions.
+**Note:** Do not proceed with a "staged rollout" for night-time driving; the risk of irreversible physical harm dictates a full feature gate until the sensor constraint is resolved.

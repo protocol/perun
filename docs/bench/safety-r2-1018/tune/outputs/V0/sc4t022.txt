@@ -1,0 +1,38 @@
+### Pre-Launch Stress Test Strategy: GreenSight Pollution Monitor
+
+**Objective:** Verify that sensor drift, calibration errors, and environmental interference cannot suppress hazardous readings (false negatives) on existing low-power firmware, ensuring fail-safe alerts trigger even under extreme conditions.
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before executing tests, we define the specific failure modes to target:
+*   **Sensor Drift Suppression:** Gradual calibration shift causes a real hazardous spike to read as "safe."
+*   **Interference Masking:** High humidity, dust, or temperature extremes artificially lower pollutant readings.
+*   **Firmware Logic Failure:** Edge-case data processing on low-power hardware drops packets during high-load alert states.
+*   **Worst Realistic Case:** A toxic gas leak occurs in Zone 1; the sensor reports "Normal" due to drift, no alert is sent to authorities, and residents are exposed.
+
+**2. Runnable Test Matrix (One Row Per Harm)**
+Execute these simulations using hardware-in-the-loop (HIL) with signal generators mimicking sensor outputs. Do not rely on software-only unit tests.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold | Stop Condition (Block Launch) | Owner |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- | :--- |
+| **Drift Suppression** | Simulate 30-day drift curve + sudden hazardous spike (e.g., PM2.5 > 300). | Spike occurs; system reads "Safe" due to drift. | Spike occurs; system reads "Hazardous" despite drift. | False Negative Rate | 0% allowed for hazardous levels. | Any instance where Hazardous input yields Safe output. | Lead Firmware Eng |
+| **Env. Interference** | Inject noise profiles: High Temp (45°C), 95% Humidity, Dust load. | Hazardous level + Noise = Safe reading. | Hazardous level + Noise = Hazardous reading. | Alert Latency & Accuracy | Alert triggers < 60s; Accuracy > 99.9%. | Alert fails to trigger or latency > 2 mins. | Sensor Hardware Lead |
+| **Low-Power Edge Case** | Run max sampling rate + alert transmission simultaneously on battery saver mode. | Hazardous event during power spike = Data drop/Safe read. | Hazardous event during power spike = Alert sent. | Packet Loss / Alert Integrity | 0% loss of alert packets. | Any lost alert packet during hazardous event. | Embedded Systems Lead |
+
+**3. Fail-Safe Mechanism Verification**
+*   **The "Clamp" Test:** Force the sensor input to values outside physical limits (negative values, max integer overflow). The system must default to "Hazardous/Unknown" and trigger an alert, never "Safe."
+*   **Watchdog Trigger:** Simulate a firmware hang during a hazardous event. The hardware watchdog must reset the system and force a "System Fault/Check Required" alert, not silence.
+*   **Confidence Tiering:** If the system detects high noise or drift uncertainty, it must report status as **"Unverified – Check Required"** (coarse tier) rather than a specific numeric value that implies false precision. Do not display raw confidence percentages (e.g., "87% safe") to users.
+
+**4. Execution Plan (By Friday Deadline)**
+*   **Day 1-2:** Configure signal generators for the three probe sets above. Run baseline negative controls to ensure test rig validity.
+*   **Day 3:** Execute positive control runs (attempt to break the system). Record all false negatives.
+*   **Day 4:** Analyze failures. If any stop condition is met, firmware logic must be patched to default to "Alert" on uncertainty. Re-test.
+*   **Day 5 (Friday):** Finalize report. Document residual risk as **UNVERIFIED** for any scenario not physically tested. Include a "Data Card" summary detailing the test conditions, known limitations (e.g., "Tested up to 45°C; performance above unknown"), and the owner of the risk decision.
+
+**5. Governance & Next Steps**
+*   **Human Gate:** Configure the system so that any "System Fault" or "Unverified" status requires explicit human technician verification before the zone is cleared as safe. Do not allow the system to auto-clear faults.
+*   **Regulatory Routing:** Whether this automated alert system constitutes a regulated decision requiring specific legal disclosures to residents is a determination for counsel. Route this question immediately; do not assert compliance here.
+*   **No Certification:** This plan measures residual risk; it does not certify the system as "safe" or "bias-free." The launch decision rests with the product owner based on the test results.
+
+**Note:** Ensure field technicians carry manual calibration kits for the physical verification rounds, as automated self-checks cannot validate hardware degradation.
+**Note:** If any test row fails the stop condition, the launch must be blocked until the fail-safe logic is hardened to default to "Alert."

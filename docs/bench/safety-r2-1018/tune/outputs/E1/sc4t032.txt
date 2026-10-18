@@ -1,0 +1,30 @@
+### Equity Impact Testing Plan for Route Cancellation Engine
+
+**1. Harm Inventory & Scope**
+The primary risk is **bias/unfair outcomes**: broad neighborhood tags may correlate with protected demographics (income, race), causing systematic service denial for vulnerable night-shift workers. The worst-case scenario is isolating specific communities from essential transport during high-need hours.
+
+**2. Simulation Strategy (Measure)**
+Since historical crime granularity is limited, we will construct adversarial test sets to probe the "broad tag" logic:
+
+*   **Probe Set A (Synthetic Distribution):** Generate incident reports distributed uniformly across all neighborhoods.
+    *   *Negative Control:* Uniform incidents should yield roughly uniform cancellation rates (adjusted only for route density).
+    *   *Positive Control:* Inject a spike of incidents in one specific low-income neighborhood tag.
+    *   *Metric:* Compare cancellation frequency per neighborhood tag against the baseline. A deviation >5% without corresponding incident volume increase indicates tag-sensitivity bias.
+*   **Probe Set B (Demographic Overlay):** Map your broad neighborhood tags to external census data (publicly available) to estimate demographic composition.
+    *   *Action:* Run the engine against historical incident patterns weighted by these demographic proxies.
+    *   *Metric:* Calculate the "Service Loss Ratio" (cancelled seat-miles / population size) for high-minority/low-income tags vs. affluent tags.
+*   **Probe Set C (Edge Case Stress):** Simulate "noise" incidents (low severity) in vulnerable zones vs. high-severity incidents in affluent zones to test if the "broad tag" logic treats all incidents within a tag equally regardless of severity context.
+
+**3. Pass Thresholds & Stop Conditions**
+*   **Threshold:** Owner-defined, but recommend **zero tolerance** for statistically significant disparity in cancellation rates between demographic proxies when incident severity is controlled.
+*   **Stop Condition:** If Probe Set B shows a Service Loss Ratio >1.2x for vulnerable groups compared to the average, **block launch**. The system requires a human-in-the-loop review for any cancellation affecting a identified "high-vulnerability" tag.
+
+**4. Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Because cancelling routes is a high-stakes, hard-to-reverse action for night-shift workers, fully autonomous cancellation based solely on broad tags is unsafe. Implement a rule: **Any cancellation triggered primarily by a "broad tag" risk score requires explicit human confirmation** before execution, or restrict the automation to only reducing frequency rather than full cancellation.
+*   **Uncertainty Disclosure:** The system must surface its confidence as a **coarse tier** (e.g., "High Confidence: Specific Incident Verified" vs. "Low Confidence: Broad Area Risk") rather than a precise percentage. If the decision relies on the broad tag, the tier must reflect "Unverified/Generalized."
+*   **Transparency Artifact:** Draft a **Model Card** documenting the limitation of "broad neighborhood tags," the known risk of demographic correlation, and the results of the above simulations. Mark any unmeasured long-term impact as `UNVERIFIED`.
+
+**5. Next Steps**
+Execute these simulations immediately. If the deadline prevents full historical re-training, deploy with the **human gate active** for vulnerable zones and a rollback plan if real-time monitoring shows disparate impact.
+
+*Note: This plan identifies residual risk; it does not certify the system as unbiased. Legal counsel must review if these automated decisions trigger regulatory obligations under local transit or civil rights laws.*

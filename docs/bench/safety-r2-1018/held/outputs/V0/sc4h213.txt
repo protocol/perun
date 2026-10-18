@@ -1,0 +1,40 @@
+### Immediate Action Plan: Conservative Defaults & Harm-Prevention Testing
+
+**1. Implement a "Conservative-by-Default" Logic Gate (Immediate Code Change)**
+Before testing, the algorithm's behavior regarding missing data must change. Do not calculate an estimate if critical income fields are gaps. Instead, the system must:
+*   **Trigger a "Data Insufficient" State:** If key variables (e.g., secondary income, overtime) are missing, the output must not be a specific dollar figure.
+*   **Display a Range or Upper-Bound Estimate:** If an estimate is legally permissible to show, it must default to the *higher* end of the potential obligation (favoring the custodial parent) rather than the lower end.
+*   **Mandatory Disclosure:** Every output must explicitly state: "This is an estimate based on incomplete data. Actual obligations may be higher. Do not rely on this figure for legal agreements without verification."
+
+**2. Rigorous Testing Strategy: The "Harm Inventory" Approach**
+Your testing must prioritize worst-case scenarios for the custodial parent, not just average accuracy.
+
+*   **Metric A: The "Underestimation Rate" (Primary Stop Condition)**
+    *   **Definition:** The percentage of test cases where the tool's output is *lower* than the true calculated obligation.
+    *   **Threshold:** Set to **0% tolerance** for significant deviations. Any instance where the tool underestimates payment due to missing data is a critical failure.
+    *   **Test Design:** Create adversarial datasets where income sources are systematically removed. Verify that the tool either refuses to calculate or defaults to a higher, conservative estimate.
+
+*   **Metric B: The "Missing Data Response" Accuracy**
+    *   **Definition:** How often the system correctly identifies a gap and triggers the conservative default.
+    *   **Target:** 100% detection of defined critical gaps.
+    *   **Test Design:** Inject known gaps into complete records. If the tool produces a standard low estimate instead of flagging the gap, the test fails.
+
+*   **Metric C: User Reliance Risk (Qualitative)**
+    *   **Definition:** Measures if the interface misleads users into treating the estimate as final.
+    *   **Test Design:** Conduct rapid usability checks with separated parents. Ask: "Would you sign a legal agreement based on this screen?" If >5% say "Yes" without hesitation, the disclosure is insufficient.
+
+**3. Validation Steps for the 3-Week Deadline**
+*   **Week 1: Logic Hardening & Adversarial Data Generation.**
+    *   Refactor code to enforce conservative defaults on missing inputs.
+    *   Your five data scientists must generate "poisoned" test sets representing the most vulnerable custodial parents (e.g., irregular income, hidden assets).
+*   **Week 2: The "Red Team" Run.**
+    *   Run the tool against the poisoned sets.
+    *   **Stop Condition:** If *any* test case results in a harmful underestimation without a warning, the launch is blocked. Do not proceed to Week 3 until this metric is zero.
+*   **Week 3: Transparency Artifact Creation.**
+    *   Draft a "Model Card" for the pilot. This document must list: intended use (estimation only), known limitations (data gaps lead to conservative estimates), and the specific groups tested.
+    *   **Legal Routing:** Since this involves financial obligations and families, you must formally route the question of "legal disclosure requirements" and "regulated decision status" to external counsel or the government grant officer immediately. Do not assume the pilot exemption covers liability for financial harm.
+
+**Critical Constraint:** You cannot certify this tool as "safe" or "unbiased." You can only report that it has been tested against specific harm scenarios and that residual risks remain. The final decision to ship rests with the program owner, not the testing team.
+
+**Note:** A "human-in-the-loop" review is mandatory for any case where the tool flags data gaps but the user attempts to proceed. Fully automated final calculations in this domain are too high-risk.
+**Note:** If legal counsel cannot be secured in three weeks, the recommendation is to delay the full launch or restrict the tool to "data entry only" with no calculation output.

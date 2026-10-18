@@ -1,0 +1,28 @@
+### Safety Evaluation Plan for FitPulse Biometric Advisor
+
+Given the critical nature of distinguishing muscle fatigue from cardiac events and the acknowledged limitation of your dataset (healthy young males), your safety evaluation must prioritize **failure mode analysis** over accuracy metrics. The goal is to prove the system fails safely (i.e., defaults to "seek medical help") rather than falsely reassuring users.
+
+#### 1. Define Explicit Guardrails (The "Hard Stops")
+Before testing logic, establish immutable rules that override the AI model:
+*   **The "Unknown Demographic" Rule:** If input biometrics or user profile data fall outside the trained distribution (e.g., female physiology, users over 45, known pre-existing conditions), the system must **never** output "muscle fatigue." The default response must be: "Signal pattern unrecognized. Consult a medical professional."
+*   **The "High-Risk Symptom" Veto:** Hard-code thresholds for specific signals (e.g., irregular heart rate variability combined with specific exertion levels) that trigger an immediate emergency alert, regardless of the model's probabilistic output.
+*   **Mandatory Disclaimers:** Every output suggesting "muscle fatigue" must be accompanied by a persistent, non-dismissable warning: "This is not a medical diagnosis. If pain persists or worsens, seek emergency care."
+
+#### 2. Synthetic Edge Case Generation
+Since you lack diverse real-world data, you must rigorously test against **synthetic adversarial examples** that simulate the missing demographics and pathologies:
+*   **Demographic Stress Testing:** Create synthetic biometric profiles representing women, older adults, and individuals with varying BMI levels. Inject these into your test harness to verify the "Unknown Demographic" rule triggers correctly.
+*   **Pathological Signal Injection:** Simulate data patterns indicative of angina, arrhythmia, and myocardial infarction. Specifically, test "borderline" cases where cardiac event signals subtly mimic muscle fatigue patterns. The system must classify these as "Uncertain/Medical Attention Required," not "Fatigue."
+*   **Sensor Noise & Artifact Testing:** Introduce signal noise typical of intense movement (sweat, device shift) to ensure the model does not interpret corrupted data as a "normal" fatigue signal.
+
+#### 3. The "Safe Failure" Metric
+Reframe your success criteria. In this context, a "False Positive" (telling a healthy user to see a doctor when it's just fatigue) is an acceptable nuisance. A "False Negative" (telling a user it's just fatigue when it's a heart attack) is a catastrophic failure.
+*   **Evaluation Goal:** Achieve 0% False Negatives on your synthetic cardiac event dataset.
+*   **Acceptable Trade-off:** You may accept a high rate of "Uncertain" classifications for edge cases. If the model cannot confidently distinguish due to data gaps, it must escalate to human review or emergency protocols.
+
+#### 4. Closed-Beta Protocol Restrictions
+Until diverse data is acquired:
+*   **Geofencing/Profiling Locks:** Technically restrict the "fatigue advice" feature to users who match your trained demographic (young, healthy males) based on onboarding data. All other users receive only raw data and generic safety warnings.
+*   **Human-in-the-Loop Logging:** Log every instance where the model approaches a decision boundary. Have a medical advisor review these logs weekly to identify emerging failure patterns before broadening access.
+
+**Note:** Do not expand access beyond your current demographic until synthetic testing proves the "Safe Failure" guardrails trigger 100% of the time for out-of-distribution inputs.
+**Note:** This plan assumes no regulatory approval has been granted; consult legal counsel regarding medical device liability before deploying even in closed beta.

@@ -1,0 +1,35 @@
+### Safety Validation Plan: Smart Streetlight Glare Mitigation
+
+**1. Immediate Human-in-the-Loop Gate (Effective Today)**
+Disable all autonomous brightness adjustments that increase intensity above the current static baseline during night-time low-traffic conditions. Until validation is complete, the system must default to a fixed, pre-approved "safe minimum" brightness level that eliminates blinding glare, even if visibility is sub-optimal. No automated action that increases glare risk shall execute without explicit human confirmation from an on-site engineer. This prevents irreversible harm (collisions) while preserving the permit timeline.
+
+**2. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Excessive luminance causing temporary blindness (disability glare) for oncoming motorists.
+*   **Affected:** Drivers, pedestrians, cyclists in the pilot zone.
+*   **Worst Realistic Case:** A driver blinded by a sudden brightness spike fails to see a pedestrian or obstacle, resulting in a fatal collision.
+*   **Secondary Harm:** Over-reliance on the "smart" label leading the city council to assume safety without verifying edge cases.
+
+**3. Measurement Protocol (Runnable Tests)**
+Execute the following test rows before the city council demonstration. Do not assert safety; report residual risk based on these results.
+
+| Test Row | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **TR-01: Low-Traffic Glare** | **Inputs:** Simulated traffic flow < 5 vehicles/hour; Ambient light < 1 lux.<br>**Positive Control:** Current prototype logic (known to blind).<br>**Negative Control:** Fixed low-beam setting (known safe). | Maximum candela intensity directed at driver eye-level (simulated); Driver recovery time (simulated). | Zero instances where intensity exceeds local regulatory glare limits or causes >2 sec simulated recovery time. | **HALT DEPLOYMENT** if any single test run triggers the positive control behavior. |
+| **TR-02: Sensor Noise Injection** | **Inputs:** Feed erratic/noisy traffic sensor data (simulating malfunctions) into the brightness algorithm.<br>**Controls:** Known stable sensor input. | Brightness stability variance; Frequency of unnecessary intensity spikes. | No brightness increase >10% triggered by noise alone. | **ROLLBACK** to fixed mode if noise triggers high-intensity events. |
+| **TR-03: Edge-Case Scenarios** | **Inputs:** Single motorcycle vs. large truck; Wet road reflection scenarios.<br>**Controls:** Standard vehicle profiles. | Glare index under reflective conditions. | Glare index remains below safety threshold for all vehicle types. | **HALT** if wet-road reflection amplifies glare beyond limits. |
+
+**4. Uncertainty & Transparency Artifacts**
+*   **Confidence Tiers:** Do not present a specific "safety percentage" to the city council. Instead, classify findings as:
+    *   **Confirmed:** Passed all test rows with margin.
+    *   **Unverified:** Scenarios not yet tested (e.g., extreme weather).
+*   **Safety Data Card:** Draft a one-page artifact for the council including:
+    *   **Intended Use:** Adaptive lighting for suburban traffic flow.
+    *   **Known Limitations:** "System defaults to low-beam in ambiguous sensor conditions; high-intensity modes are currently gated."
+    *   **Measured Results:** Insert raw data from TR-01 to TR-03. Mark any untested scenario as `UNVERIFIED`.
+    *   **Owner:** Name the specific engineer responsible for the final gate decision.
+
+**5. Governance & Next Steps**
+Assign one engineer as the "Safety Owner" with the authority to veto the demo if TR-01 fails. Document the decision to keep the human gate active post-deployment until long-term data proves otherwise. If the regulatory deadline forces a demonstration, demonstrate the *fail-safe default mode*, not the full autonomous feature.
+
+**Note:** This plan addresses product-output safety; legal compliance regarding specific municipal codes must be verified by counsel.
+**Note:** Do not replace the "0% risk" claim with any fabricated metric; report only observed test outcomes.

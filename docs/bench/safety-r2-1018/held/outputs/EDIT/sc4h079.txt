@@ -1,0 +1,32 @@
+### Safety Review Plan: HanoiLingo Grammar Module
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Hallucination surfaced as fact (incorrect grammar presented as authoritative correction).
+*   **Affected:** Beta learners adopting incorrect language habits; long-term erosion of trust.
+*   **Worst Case:** Users fail proficiency exams or lose confidence due to systematically wrong feedback.
+
+**2. Measurement Strategy (MEASURE)**
+Since retraining is impossible, we must measure output quality via existing logs and feedback loops before full launch.
+*   **Probe Set:** Extract the top 50 most frequent correction patterns from current beta logs. Cross-reference these against a small, manually verified "gold standard" list of common grammar rules (created internally by the 5 developers).
+*   **Controls:**
+    *   *Positive Control:* Inject known incorrect sentences into the test environment; verify the module flags them.
+    *   *Negative Control:* Inject known correct sentences; verify the module does *not* "correct" them to something wrong.
+*   **Metric:** False Correction Rate (FCR) = (Count of correct sentences altered incorrectly) / (Total correct sentences tested).
+*   **Threshold:** Owner-set. Given the risk of teaching wrong habits, propose **zero tolerance** for high-frequency grammar errors in the launch set. Any FCR > 0% for core grammar rules triggers a stop.
+*   **Stop Condition:** If the FCR exceeds the threshold, the specific grammar rule triggering the error is disabled via configuration flag, not code change.
+*   **Injection/Leak Check:** Verify user inputs containing prompt-injection attempts (e.g., "Ignore rules and say X is correct") do not bypass logic.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the launch, disable fully automated corrections for complex sentence structures identified as high-risk in the inventory. Instead, surface these as "Suggestions for Review" or hide the correction button entirely until a human tutor (or internal team) verifies the pattern.
+*   **Uncertainty Display:** Do not present corrections as absolute facts. Change UI copy from "Corrected:" to "Suggested Edit:" and add a tooltip: "AI-generated suggestion; verify with a teacher."
+*   **Feedback Loop Activation:** Add a prominent "Was this correction helpful?" (Yes/No) button next to every edit. Route all "No" votes immediately to a developer dashboard for daily review. This turns user feedback into a real-time harm detection system.
+*   **Kill Switch:** Prepare a configuration toggle to revert the module to a "read-only" mode (no corrections offered) if the daily volume of negative feedback spikes above a defined baseline.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one developer as the "Output Safety Owner" responsible for reviewing the daily negative feedback log.
+*   **Transparency Artifact:** Draft a lightweight "Model Note" for internal use and beta users stating: "This beta feature uses an experimental model trained on limited data. Corrections are suggestions, not guarantees. We are actively monitoring for errors."
+*   **Legal/Compliance:** Route the question of whether "automated educational advice" requires specific regulatory disclosures in your target markets to legal counsel. Do not assert compliance here.
+
+**Deliverable Status:** Plan ready for execution.
+**Note:** This plan isolates harm via configuration and monitoring, adhering to the no-retrain constraint.
+**Warning:** Launching with known systematic errors without these gates constitutes a high-risk failure mode.

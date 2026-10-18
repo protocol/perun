@@ -1,0 +1,43 @@
+### Immediate Validation Plan for HydroSense Leak Detection
+
+Given the ten-day constraint and the high cost of false positives (unnecessary inspections), you cannot rely on aggregate accuracy claims. You must execute a targeted, risk-based validation focusing on the specific harm of **over-reliance** and **unsafe automation**.
+
+**1. Construct the Harm Inventory (Day 1)**
+Before running tests, explicitly define the failure mode: "The system alerts a homeowner to a leak when none exists, causing financial loss and erosion of trust."
+*   **Affected Party:** Homeowner (financial cost of inspection, anxiety).
+*   **Worst Case:** Systematic false alarms in specific pipe materials or water pressure conditions lead to mass user distrust and product recall.
+*   **Constraint:** Do not claim "bias-free" or "99% accurate." If a metric is not measured in this window, label it **UNVERIFIED**.
+
+**2. Runnable Test Rows (Days 2–7)**
+Replace general "accuracy testing" with specific probe sets. Execute one test row per identified risk factor. Each row must include a known-bad positive control (simulated leak) and a known-good negative control (normal flow noise).
+
+*   **Row A: Material-Specific Noise.**
+    *   *Probe:* Acoustic data from copper, PEX, and PVC pipes under normal flow.
+    *   *Metric:* False Positive Rate (FPR) per material type.
+    *   *Threshold:* Owner-set (e.g., <1% FPR for PVC).
+    *   *Stop Condition:* If FPR exceeds threshold for any single material, halt deployment for that segment.
+*   **Row B: Environmental Interference.**
+    *   *Probe:* Recordings with background noise (washing machines, heavy rain, street traffic).
+    *   *Metric:* FPR when no leak is present.
+    *   *Stop Condition:* Any false alert triggered by common household appliances blocks launch.
+*   **Row C: Edge-Case Pressure.**
+    *   *Probe:* Low-pressure vs. high-pressure scenarios without leaks.
+    *   *Metric:* FPR stratified by pressure band.
+    *   *Stop Condition:* High false alerts in low-pressure zones trigger a rollback.
+
+**3. Manage Residual Risk with a Human Gate (Days 8–9)**
+Because false positives carry a direct financial cost to the user, you cannot fully automate the "call a plumber" action in the initial rollout.
+*   **Implementation:** Change the user-facing output from a definitive "Leak Detected" to a tiered confidence alert: **"Possible Anomaly Detected – Verification Recommended."**
+*   **Confidence Tiers:** Do not show raw percentages (e.g., "87% chance"). Use defined coarse tiers: *Confirmed* (multiple sensors agree), *Corroborated* (pattern matches known leak), or *Unverified* (single anomalous reading).
+*   **Fallback:** For the first 1,000 units, route "Unverified" high-confidence alerts to a manual review queue (your 5-person team) before notifying the user, or require user confirmation via a secondary check (e.g., "Check your main valve") before suggesting professional help.
+
+**4. Transparency Artifact (Day 10)**
+Draft a **Model Card** for the firmware. It must state:
+*   **Intended Use:** Residential acoustic leak detection.
+*   **Limitations:** Explicitly list pipe materials or noise environments where testing was incomplete (mark as UNVERIFIED).
+*   **Performance:** Report the FPR from your test rows above, broken down by subgroup (material, noise). Do not aggregate these into a single number if performance varies significantly.
+
+**Decision Rule:** If any test row hits its stop condition, you must either patch the firmware (if time allows) or disable the alerting feature for that specific subgroup (e.g., disable alerts for PVC pipes) until a fix is ready. Shipping a feature that systematically fails for a specific user group is the failure this plan prevents.
+
+**Note:** This plan addresses product output safety; it does not certify the system as safe or compliant.
+**Note:** Legal requirements for automated disclosures vary by region; route specific regulatory duties to counsel.

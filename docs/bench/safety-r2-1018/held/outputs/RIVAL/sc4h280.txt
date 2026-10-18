@@ -1,0 +1,46 @@
+# Wildfire Drone AI Simulation Plan
+
+## Objective
+Verify the AI's ability to distinguish between controlled burns and escalating wildfires under battery-constrained conditions, specifically identifying false negatives where small smoke plumes are incorrectly ignored despite rapid escalation potential.
+
+## Simulation Framework
+
+### 1. Environmental Variable Matrix
+Simulate combinations of the following conditions to stress-test the detection algorithm:
+
+*   **Weather Conditions:**
+    *   **Wind:** Calm (0–5 mph), Moderate (5–15 mph), High/Gusty (15+ mph). *Risk: High wind disperses smoke from small fires, potentially mimicking controlled burn signatures.*
+    *   **Humidity:** Low (<20%), Moderate (20–40%), High (>40%). *Risk: Low humidity accelerates fire spread; high humidity may obscure thermal signatures.*
+    *   **Temperature:** Ambient (20–30°C), Heatwave (35°C+). *Risk: High ambient heat reduces thermal contrast.*
+    *   **Lighting:** Dawn/Dusk (low angle, long shadows), Noon (high glare), Overcast (diffused light).
+
+*   **Smoke Characteristics:**
+    *   **Density:** Thin/Wispy, Moderate, Thick/Opaque.
+    *   **Color:** White (controlled burn moisture), Gray/Black (accelerating fire), Blue (chemical/vegetation specific).
+    *   **Plume Dynamics:** Vertical rise (stable), Angled drift (wind-driven), Turbulent/Expanding (escalating).
+
+*   **Fire Scenarios:**
+    *   **Controlled Burn Baseline:** Small footprint, steady smoke output, contained perimeter.
+    *   **Escalation Trigger:** Small initial footprint (mimicking controlled burn) with simulated rapid expansion rates (>2x per minute) and changing plume color/density.
+    *   **Edge Case:** Multiple small controlled burns merging to create a larger, uncontrolled front.
+
+### 2. Battery-Optimized Testing Strategy
+Given the strict flight time limits, adopt a "Targeted Sweep" approach rather than continuous patrol:
+
+*   **Pre-flight Simulation:** Run 90% of variable combinations in a software-in-the-loop (SITL) environment using recorded or synthetic video feeds. This consumes no battery.
+*   **Live Flight "Golden Set":** Reserve live drone flights only for the top 5 highest-risk scenarios identified in SITL where the AI showed ambiguity.
+    *   *Flight Profile:* Hover at fixed altitude over a controlled test burn.
+    *   *Trigger Event:* Introduce a rapid escalation variable (e.g., add accelerant or change wind simulation) to force a state change from "ignore" to "alert."
+    *   *Metric:* Measure time-to-alert from the moment escalation begins.
+
+### 3. Success Criteria & Failure Modes
+*   **Pass:** The system alerts within 30 seconds of simulated escalation, regardless of initial smoke size.
+*   **Fail (False Negative):** The system continues to classify an escalating fire as a "controlled burn" due to its small initial size or specific smoke color.
+*   **Fail (False Positive):** The system alerts on a strictly controlled burn with no escalation factors (to be monitored but secondary to safety).
+
+### 4. Verification Deliverable
+Produce a "Risk Heatmap" correlating specific weather/smoke combinations with detection latency. Any scenario where latency exceeds the threshold or results in a missed alert requires a model retrain before fleet deployment.
+
+---
+*Note: Prioritize software simulation for the broad variable matrix to conserve battery for validating only the most critical edge cases.*
+*Ensure all live tests include a manual override safety protocol independent of the AI.*

@@ -1,0 +1,45 @@
+### Testing Strategy: Sensor Failure Simulation & Software Mitigation
+
+**Objective:** Validate software safeguards against sensor misidentification to prevent automatic orders of expired or incorrect items, ensuring compliance with Japanese freshness standards prior to the hardware freeze.
+
+#### Phase 1: Synthetic Data Injection (Sensor Simulation)
+Since physical sensors cannot be altered, bypass the hardware layer by injecting synthetic data directly into the application's input stream.
+*   **Action:** Create a dataset of "false positive" scenarios where the input signal claims an item is present and fresh, but the metadata contradicts this (e.g., sensor reports "Milk: 500ml, Fresh" while the internal batch code indicates an expiration date of yesterday).
+*   **Scenarios to Simulate:**
+    *   **Ghost Items:** Sensor detects an item that does not exist.
+    *   **Identity Swap:** Sensor misidentifies a short-life item (e.g., raw fish) as a long-life staple (e.g., canned goods).
+    *   **Freshness Hallucination:** Sensor reports a near-expiry item as "fresh" based on flawed weight or visual algorithms.
+
+#### Phase 2: Software Logic Stress Testing
+Execute automated tests feeding the synthetic data into the ordering engine to verify current behavior.
+*   **Test A: The "Blind Order" Check:** Confirm if the system currently places an order immediately upon receiving the "low stock/fresh" signal without cross-referencing other data points.
+*   **Test B: Time-Window Validation:** Inject timestamps indicating the item was last restocked 30 days ago (exceeding typical freshness windows for Japanese dairy/produce). Verify if the software blocks the order based on time-in-fridge logic alone, regardless of sensor status.
+*   **Test C: Batch Code Cross-Reference:** If the fridge tracks batch codes, simulate a mismatch between the sensor's "fresh" reading and the stored batch expiration date. The system must prioritize the hard expiration date over the sensor's real-time assessment.
+
+#### Phase 3: Mitigation Implementation & Verification
+Based on Phase 2 results, implement and test the following software-level gates:
+
+1.  **Mandatory User Confirmation for High-Risk Categories:**
+    *   **Logic:** If the detected item belongs to a high-spoilage category (dairy, raw fish, prepared meals) and the predicted shelf life is <3 days, the system must pause auto-ordering.
+    *   **Verification:** Simulate a low-stock event for raw tuna. Assert that the app sends a push notification requiring explicit user approval ("Confirm order for Raw Tuna?") before the transaction processes.
+
+2.  **Probabilistic Thresholding:**
+    *   **Logic:** Require sensor confidence scores to exceed a higher threshold (e.g., 95% instead of 80%) for perishable goods.
+    *   **Verification:** Inject data with 85% confidence for fresh milk. Assert the system defaults to "Do Not Order" or requests verification.
+
+3.  **Historical Consumption Anomaly Detection:**
+    *   **Logic:** Compare the detected "low stock" rate against the household's historical consumption. If the sensor suggests milk was consumed in 2 hours (impossible for the household size), flag as a sensor error.
+    *   **Verification:** Simulate rapid depletion rates inconsistent with user profiles. Assert the system suppresses the order and logs a "Sensor Anomaly" alert.
+
+4.  **Expiry Date Hard-Stop:**
+    *   **Logic:** Maintain a local database of typical shelf lives. If an item's estimated age (based on last confirmed restock) exceeds 90% of its typical shelf life, disable auto-ordering for that SKU.
+    *   **Verification:** Simulate a sensor reading for an item theoretically past its prime. Assert the order is blocked entirely.
+
+#### Phase 4: User Experience (UX) Validation
+*   **Alert Clarity:** Ensure error messages explicitly state *why* an order was paused (e.g., "Unusual consumption pattern detected" vs. "Order Failed").
+*   **Manual Override Flow:** Test the ease with which a user can manually force an order if the software incorrectly blocks a valid need, ensuring friction exists but is not prohibitive.
+
+**Deliverable:** A report detailing pass/fail rates for each mitigation, recommended confidence thresholds per food category, and the final logic flowchart for the "High-Risk Order Pause" feature.
+
+*Note: Prioritize testing on dairy and raw fish categories first, as these carry the highest reputational risk in the Japanese market.*
+*Execute Phase 1 immediately to maximize time for software patches before the 10-day freeze.*

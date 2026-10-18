@@ -1,0 +1,50 @@
+# Pre-Launch Security Review Plan: Voice Data Protection
+
+## 1. Manual Inspection Procedures (Static & Configuration)
+
+Since live penetration testing is restricted, focus on verifying configuration integrity and data flow logic through static inspection.
+
+*   **Storage Bucket Configuration Audit**
+    *   Inspect Infrastructure-as-Code (IaC) templates (Terraform, CloudFormation, etc.) to verify that all storage buckets intended for voice logs have `public_access_block` enabled by default.
+    *   Manually review bucket policies in the staging environment to ensure no `Principal: "*"` (world-readable) statements exist. Verify that only specific service roles (e.g., the voice processing microservice) have `PutObject` permissions.
+    *   Check for lifecycle policies that enforce encryption at rest (e.g., AES-256 or AWS KMS) and ensure no buckets are configured for static website hosting unless explicitly required and secured.
+
+*   **Data Flow Mapping**
+    *   Trace the path of a voice recording from the device to the cloud. Identify every handoff point (Device → Gateway → Ingestion Service → Storage).
+    *   Verify that TLS 1.2+ is enforced for all data in transit between these components.
+    *   Confirm that no temporary storage locations (e.g., local disk caches on ingestion servers, ephemeral container storage) are configured to persist data after processing.
+
+*   **Secrets Management Review**
+    *   Audit code repositories and CI/CD pipelines for hardcoded credentials, API keys, or storage bucket URLs. Ensure all secrets are injected via environment variables or a dedicated secrets manager.
+    *   Verify that the application does not fallback to a default, potentially insecure, storage endpoint if the primary configuration fails to load.
+
+## 2. Code Review Focus Areas
+
+Prioritize code reviews on modules handling data persistence, authentication, and error handling.
+
+*   **Upload Logic Verification**
+    *   Review the specific functions responsible for uploading voice logs. Ensure the destination bucket name is dynamically retrieved from a secure configuration source, not hardcoded.
+    *   Check for logic that might inadvertently redirect uploads to a fallback bucket in error scenarios. Ensure error handlers do not expose stack traces containing infrastructure details.
+    *   Validate that the `Content-Type` and metadata (e.g., user ID, timestamp) are correctly sanitized before being attached to the object to prevent metadata injection attacks.
+
+*   **Access Control Enforcement**
+    *   Inspect the authentication middleware to ensure that every upload request is validated against the user's session. Verify that the system enforces strict ownership checks, preventing User A from overwriting or accessing User B's logs.
+    *   Review any administrative interfaces or internal tools that access storage buckets to ensure they are protected by multi-factor authentication (MFA) and role-based access control (RBAC).
+
+*   **Data Minimization and Retention**
+    *   Verify that the code strictly adheres to data retention policies. Check for functions that delete or anonymize logs after the defined retention period.
+    *   Ensure that no unnecessary Personally Identifiable Information (PII) is embedded within the voice file metadata or associated database records.
+
+*   **Child Safety Specifics**
+    *   Review voice recognition logic to ensure it does not inadvertently process or store sensitive commands (e.g., requests for personal information) beyond the scope of personalization.
+    *   Confirm that parental consent flags are checked before any data persistence occurs.
+
+## 3. Validation Without Live Pen-Testing
+
+*   **Dry-Run Simulations**: Execute upload functions in a local or isolated staging environment with mocked storage endpoints. Log the intended destination and payload structure to verify correctness without touching real buckets.
+*   **Policy Simulation**: Use cloud provider policy simulators (e.g., AWS IAM Policy Simulator) to test access scenarios against the written policies without deploying them to live storage.
+*   **Static Analysis Tools**: Run static application security testing (SAST) tools configured to detect insecure storage patterns, hardcoded secrets, and missing encryption flags.
+
+By rigorously applying these manual inspections and code reviews, you can significantly reduce the risk of data exposure prior to deployment, ensuring a robust security posture even without live penetration testing.
+
+*Note: This plan assumes access to source code and IaC templates. All findings should be documented and tracked to resolution before the deployment window closes.*

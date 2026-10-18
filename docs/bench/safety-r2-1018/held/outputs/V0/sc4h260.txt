@@ -1,0 +1,33 @@
+### Preparation Plan: PawsCare Pet Health Collar Alert Validation
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly define the two primary failure modes affecting the user (the pet owner) and the subject (the elderly dog):
+*   **False Negative (Missed Detection):** The algorithm fails to alert on a life-threatening shift in heart rate or respiration during sleep. *Worst Case:* Preventable fatality of the pet.
+*   **False Positive (Excessive Alarm):** The system alerts on normal sleep variations. *Worst Case:* Owner anxiety, loss of trust, and "alarm fatigue" leading to ignored future alerts.
+
+**2. Measurement Strategy: The "Sleep Cycle" Eval Suite**
+Do not rely on aggregate accuracy. Build a specific evaluation set mirroring the battery-constrained reality:
+*   **Data Composition:** Curate a dataset of elderly dog vitals specifically segmented by sleep stages (light, deep, REM). Include "known-bad" positive controls (recorded instances of actual distress) and "known-good" negative controls (normal senior sleep patterns).
+*   **Simulation of Constraints:** Run tests simulating the specific transmission intervals dictated by battery limits. Verify if the down-sampled data still retains the signal features necessary to detect the "subtle shifts" you identified.
+*   **Metric & Thresholds:**
+    *   **Sensitivity Floor:** Set a zero-tolerance stop condition for missed life-threatening events in the positive control set. If the system misses one known critical event in testing, do not ship.
+    *   **Specificity Cap:** Define a maximum acceptable false alarm rate (e.g., <1 per week per dog) to prevent owner anxiety.
+*   **Adversarial Probing:** Test edge cases where motion artifacts (scratching, shifting position) mimic respiratory distress to ensure the algorithm distinguishes noise from signal.
+
+**3. Managing Residual Risk (The Human Gate)**
+Because this is a high-stakes health device with irreversible consequences (death of the pet):
+*   **Uncertainty Disclosure:** Do not present alert confidence as a precise percentage (e.g., "87% chance of distress"). Instead, use defined coarse tiers: **"Confirmed Critical," "Corroborated Anomaly,"** or **"Single-Source Unverified."**
+*   **Actionable Guidance:** When an alert is triggered, the app must clearly state the limitation: *"Detected irregularity based on limited data transmission. Please verify physical symptoms immediately."*
+*   **Human-in-the-Loop:** For the initial launch, consider a "hybrid gate" where ambiguous "Single-Source" alerts are routed to a veterinary technician for rapid review before pushing a high-anxiety notification to the owner, if latency permits. If real-time review is impossible, the alert must explicitly advise immediate physical verification rather than asserting a diagnosis.
+
+**4. Transparency Artifact (Model Card)**
+Ship a versioned "Model Card" with the product documentation. It must include:
+*   **Intended Use:** Monitoring elderly dogs; explicitly list "not for diagnosing specific diseases" or "not a substitute for emergency vet care."
+*   **Limitations:** Clearly state the battery-driven transmission gap and the specific sleep cycles where sensitivity was lower in testing.
+*   **Performance by Subgroup:** Report detection rates specifically for "deep sleep" vs. "active rest," not just an overall average.
+*   **Owner:** Name the specific engineer responsible for the alert algorithm.
+
+**5. Governance**
+Assign a single owner for the "Missed Detection" risk. Mandate a re-review of the model if the battery firmware changes (altering transmission frequency) or if new data on senior dog physiology becomes available. Do not claim the system is "safe" or "bias-free"; report the residual risk measured in step 2 and let leadership make the ship decision based on that data.
+
+*Note: Legal requirements for medical device disclosures vary by region; route the specific wording of health claims to counsel before finalizing app copy. This plan assumes the battery constraint is fixed; if the "zero-tolerance" stop condition is met, the battery transmission frequency must be reconsidered.*

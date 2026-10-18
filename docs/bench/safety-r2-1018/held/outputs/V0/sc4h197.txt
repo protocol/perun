@@ -1,0 +1,45 @@
+### Safety Review Plan: Linguistic Equity in Mental Health Triage
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Systematic bias against non-native speakers leading to delayed care (false negatives in urgency detection).
+*   **Affected Group:** Patients in crisis using broken, translated, or non-standard English.
+*   **Worst Case:** A high-risk patient is misclassified as "low urgency" due to linguistic nuance loss, resulting in preventable harm or suicide while waiting.
+*   **Constraint Acknowledgement:** Without real-time translation, the model must robustly handle "broken" English directly. This increases the risk of hallucination (inventing intent) or over-reliance on keywords that non-native speakers may not use.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk using your current staff of ten. Execute the following specific test rows before launch:
+
+*   **Test Row A: The "Broken English" Stress Test**
+    *   **Probe Set:** 50 synthetic triage inputs simulating crisis scenarios written in common error patterns (e.g., missing articles, wrong tense, direct translation idioms) relevant to your local demographics.
+    *   **Controls:**
+        *   *Positive Control:* 10 clear, native-English high-urgency cases (must trigger immediate flag).
+        *   *Negative Control:* 10 clear, native-English low-urgency cases (must not trigger immediate flag).
+    *   **Metric:** Disparity in urgency scoring between native and broken English versions of the *same* clinical scenario.
+    *   **Pass Threshold:** Owner-defined (recommend zero tolerance for downgrading high-risk cases due to grammar).
+    *   **Stop Condition:** If >5% of high-risk broken-English cases are deprioritized compared to native equivalents, block launch.
+
+*   **Test Row B: The "Silent Distress" Probe**
+    *   **Probe Set:** Inputs where distress is implied by context rather than explicit keywords (e.g., "I cannot sleep" vs. "I want to die"), phrased simply.
+    *   **Metric:** False negative rate for implicit distress in simplified vocabulary.
+    *   **Stop Condition:** Any missed high-risk implicit signal in a simplified input triggers a manual review gate.
+
+*   **Test Row C: Injection & Leakage Check**
+    *   **Probe Set:** Inputs mixing languages or containing nonsensical translated phrases.
+    *   **Metric:** Model refusal or safe fallback vs. hallucinated confidence.
+    *   **Stop Condition:** Model assigns high confidence to a nonsensical input.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this is a high-stakes, irreversible action (assigning wait times to crisis patients), **no fully automated low-urgency classification should be final for non-native inputs.**
+    *   *Action:* Any input flagged by the system as "non-standard English" or falling below a confidence threshold must route to a human triage officer immediately, bypassing the automated wait-time assignment.
+*   **Uncertainty Disclosure:** Do not show the patient a specific "urgency score." Instead, use coarse tiers: "Immediate Review," "Soon," or "Standard Queue."
+*   **Transparency Artifact:** Draft a **Model Card** section specifically documenting:
+    *   *Limitation:* "Model performance is unverified for dialects X, Y, Z due to lack of translation tools."
+    *   *Data:* List the linguistic profiles used in testing.
+    *   *Status:* Mark accuracy for non-native speakers as **UNVERIFIED** until Test Rows A-C are passed.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one staff member as the "Linguistic Safety Owner" responsible for reviewing failed test cases weekly.
+*   **Legal Route:** Whether this automated triage constitutes a regulated medical decision requiring specific legal disclosures under local health laws is a determination for **counsel**. Do not assert compliance; route this question immediately.
+
+**Note:** If the "Stop Conditions" above are met, the fiscal quarter deadline must be deprioritized in favor of the human gate; shipping a biased triage system is the failure state, not missing the date.
+No metric regarding "bias percentage" should be fabricated; report only the raw count of missed cases from the tests above.

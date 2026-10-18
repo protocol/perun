@@ -1,0 +1,28 @@
+**Testing Strategy for Fairness in Dynamic Premium Calculator**
+
+Given the 10-day deadline and the constraint of using only existing legacy data, we cannot certify the system as "unbiased" or "fair." Instead, we must execute a rapid harm inventory and measurement plan to identify residual risks before the regulatory filing.
+
+**1. Harm Inventory (Map)**
+We explicitly name the primary risk: **Bias/Unfair Outcomes**. The specific failure mode is that the model correlates "neighborhood data" (zip code) with "risk" in a way that proxies for protected characteristics (e.g., income, race) rather than actual driving behavior, leading to disproportionate rate hikes for low-income areas in Detroit. The worst-case scenario is regulatory rejection and reputational damage from systematically overcharging protected groups.
+
+**2. Measurement Plan (Measure)**
+Since we cannot gather new historical claims data, we must stress-test the *current* logic against known demographic proxies. We will run one specific test row per identified harm:
+
+*   **Probe Set:** Construct synthetic driver profiles with identical driving behaviors (speed, braking, mileage) but varying only by zip code. Select a balanced set of Detroit zip codes stratified by median income (using public census data, not internal claims data).
+*   **Controls:**
+    *   *Positive Control:* A profile in a high-income zip code with average driving behavior.
+    *   *Negative Control:* A profile in a low-income zip code with identical average driving behavior.
+*   **Metric:** "Rate Disparity Ratio" — the percentage difference in premium between the negative and positive controls for identical behavior.
+*   **Pass Threshold:** Owner-defined. Given the high stakes of financial discrimination, propose a near-zero tolerance for disparity driven solely by location when behavior is constant.
+*   **Stop Condition:** If the Rate Disparity Ratio exceeds the threshold for any low-income zip code, the automated rate adjustment for those zones must be blocked or capped pending human review. Do not file until this gap is explained or mitigated.
+*   **Injection/Leakage Check:** Verify that no external data sources inadvertently injected protected class data during the legacy data merge.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Any rate adjustment resulting in a premium increase >10% for a specific zip code must trigger a mandatory human underwriter review before being quoted to the user. Fully automated high-impact financial decisions are too risky without this gate.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" section for the filing. It must state the intended use, the limitation of using legacy data without fresh claims validation, and the results of the synthetic probe test above. If the disparity metric was not fully run due to time, label it **UNVERIFIED** rather than inventing a safety percentage.
+*   **Uncertainty Disclosure:** If the system outputs a specific risk score, do not present it as a precise percentage (e.g., "87% risk"). Use coarse, defined tiers (e.g., "Standard," "Elevated," "High") with clear definitions to prevent over-reliance on uncalibrated numbers.
+
+**4. Governance**
+Assign a specific owner to sign off on the residual risk of the disparity findings. Note that determining whether this logic violates specific anti-discrimination laws (e.g., disparate impact statutes) is a legal determination. Route the final filing and the "regulated decision" status to legal counsel immediately; do not assert compliance internally.
+
+**Note:** This strategy identifies risk; it does not eliminate it. If the probe test reveals high disparity, the only safe path is to decouple zip code from the real-time calculation or apply a hard cap, even if this reduces model precision.

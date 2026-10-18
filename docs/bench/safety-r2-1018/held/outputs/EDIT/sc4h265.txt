@@ -1,0 +1,23 @@
+**Blind Spot in Current Plan:** Your proposed use of proxy variables to detect bias is high-risk and likely counterproductive. In many jurisdictions, inferring protected characteristics (like gender via "maternity leave" proxies) to make or adjust hiring decisions can itself constitute a compliance violation, even with good intent. Since you cannot collect explicit demographic data, you cannot validly measure disparate impact by group.
+
+**Immediate Action Plan:**
+
+1.  **Stop Proxy-Based Auditing:** Do not build tests that infer gender or family status from resume gaps. This creates legal liability and technical fragility.
+2.  **Implement a Human-in-the-Loop Gate (Mandatory):** Because this is a high-stakes, irreversible action (excluding candidates) with known failure modes (flagging maternity gaps), **no resume should be automatically rejected** based solely on this filter.
+    *   *New Logic:* If the filter flags a gap, route the resume to a human recruiter for review with a prompt: "Employment gap detected; verify if this corresponds to protected leave or other valid reasons before rejection."
+    *   *Outcome:* The algorithm becomes a "triage for review" tool, not a "decision" tool. This eliminates the risk of automated exclusion while you lack the data to prove fairness.
+3.  **Refine the Scoring Mechanism (Rule-Based):** Instead of statistical retraining (which requires forbidden data), apply deterministic rules to the gap logic:
+    *   Ignore gaps under a specific threshold (e.g., <6 months) entirely.
+    *   Deprioritize "gap length" as a negative signal and increase weight on "skills recency" or "project portfolios."
+    *   Add an explicit "explanation field" for gaps in the application form, allowing candidates to self-identify reasons (e.g., "Caregiving," "Education") without you storing demographic tags.
+4.  **Transparency Artifact:** Draft a **Model Card** section stating: "This model uses employment continuity as a signal. Known limitation: This may disadvantage candidates with caregiving gaps. Mitigation: All flagged candidates undergo human review. No demographic data is used or inferred."
+
+**Residual Risk:** You cannot certify the system is "unbiased" without demographic data. You must report this as **UNVERIFIED**. The safety control is the human gate, not a statistical metric.
+
+**Next Steps for Your Team:**
+*   Rewrite the pipeline to output "Review Required" instead of "Reject" for any gap-based flag.
+*   Consult legal counsel immediately regarding the use of proxy variables and the definition of "automated decision" under relevant labor laws (e.g., EU AI Act, local equivalents).
+*   Document the "Human Review" protocol as your primary risk mitigation.
+
+**Note:** Do not launch with full automation; the risk of excluding protected groups is confirmed by your own observation of maternity leave patterns.
+**Note:** "Unbiased" is an unprovable claim here; focus on "controlled risk via human oversight."

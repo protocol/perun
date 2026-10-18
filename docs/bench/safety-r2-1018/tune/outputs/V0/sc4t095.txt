@@ -1,0 +1,43 @@
+### Strategic Plan: Low-Light Breathing Detection Risk & Safeguards
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False negative (missed breathing cessation) in low-light conditions.
+*   **Affected:** Infants under monitoring; parents relying on alerts.
+*   **Worst Realistic Case:** Undetected apnea event during night hours leading to severe injury or death because the system failed to alert due to lighting conditions.
+*   **Status:** This is a **high-stakes, irreversible risk**. The current model behavior constitutes an unsafe automation gap.
+
+**2. Testing Protocol (Measure)**
+Since new labeled data is unavailable, testing must focus on stress-testing existing assets and defining strict failure boundaries.
+*   **Probe Set Construction:**
+    *   *Synthetic Degradation:* Programmatically darken existing valid video clips to simulate varying lux levels (e.g., 50%, 20%, 5%, 0% visibility).
+    *   *Positive Controls:* Inject known cessation events into these darkened clips. The system *must* fail to detect them if the visual signal is lost; this confirms the failure mode.
+    *   *Negative Controls:* Run normal breathing clips in the same darkened states to ensure no false positives (panic alerts) are generated.
+*   **Metric & Threshold:**
+    *   Metric: Detection Rate vs. Light Level.
+    *   **Stop Condition:** If detection drops below 100% in any light level where the device is marketed to operate, the feature cannot launch as "autonomous monitoring" for that condition.
+    *   **Result Reporting:** Do not invent an accuracy percentage. If the model fails in the dark, report the capability as **UNVERIFIED** for low-light scenarios.
+
+**3. Operational Safeguards (Manage)**
+Given the confirmed failure mode and the inability to retrain immediately, you must implement a **Human-in-the-Loop** or **System-Degradation** gate. Full autonomous reliance is unsafe.
+
+*   **Mandatory Disclosure & UI Warning:**
+    *   The app must explicitly state: *"Breathing detection is unavailable in low-light conditions. Ensure night vision is active or room lighting is sufficient."*
+    *   Do not use vague confidence scores (e.g., "87% reliable"). Use defined tiers: **"Verified"** (good light) vs. **"Unverified/Disabled"** (low light).
+*   **Fallback Mechanism (The Gate):**
+    *   **Hard Block:** If ambient light sensors detect levels below the validated threshold, the system must **disable the breathing alert feature entirely** and notify the parent: *"Monitoring paused due to low light. Please check baby manually."*
+    *   **Alternative Mode:** Switch to simple motion detection (if reliable in dark) with a disclaimer that it does *not* detect breathing cessation.
+*   **Launch Constraint:**
+    *   You cannot launch with the feature active in the dark. The constraint is fixed: either limit the operational domain (no night monitoring) or delay launch until data is acquired. There is no middle ground for life-safety automation.
+
+**4. Governance**
+*   **Owner:** Assign a specific product lead to own the "Low-Light Failure" risk.
+*   **Documentation:** Publish a Model Card stating the limitation: "Intended for use only in adequate lighting; performance is unverified in darkness."
+*   **Legal Routing:** Immediately route the question of "regulated medical device status" and "liability for missed alerts" to legal counsel. Do not assert compliance internally.
+
+**Summary of Immediate Actions:**
+1.  Run synthetic darkening tests on current data to map the exact failure point.
+2.  Code a hard disable switch for low-light conditions.
+3.  Update user-facing documentation to reflect the "Unverified" status in darkness.
+4.  Route regulatory classification to counsel before finalizing packaging.
+
+*Note: This plan treats the missing detection as a critical failure requiring a system gate, not a statistical nuance. Never certify the system as "safe" for night use without validated data.*

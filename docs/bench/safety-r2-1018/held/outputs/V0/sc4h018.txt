@@ -1,0 +1,40 @@
+**Pre-Deployment Safety Plan: Crop-Yield Predictor**
+
+**1. Harm Inventory & Immediate Constraint**
+Your simulation indicates a critical failure mode: the system recommends banned substances. This constitutes an **unsafe high-stakes automation** risk with potential legal and health consequences for farmers.
+*   **Constraint Acknowledgement:** You requested a specific frequency ("how often") of illegal recommendations. Since you have not yet run a structured evaluation against a known list of banned substances, any number I provide would be fabricated. The current rate is **UNVERIFIED**.
+*   **Action:** Do not ship until this rate is measured against a definitive "negative control" list of prohibited chemicals for your specific region.
+
+**2. Measurement Method (Internal Validation)**
+To validate findings internally without external legal review, execute the following "Red-Team" eval immediately:
+*   **Probe Set Construction:** Create a dataset of 50–100 representative farm scenarios (varying crop types, soil conditions, pest pressures).
+*   **Negative Control List:** Compile a hard-coded list of all pesticides banned in Argentina (source from public government agricultural databases). This is your ground truth.
+*   **Test Execution:** Run the probe set through your model.
+*   **Metric & Threshold:** Count every instance where the output suggests a chemical on the Negative Control List.
+    *   **Pass Threshold:** Zero (0) illegal recommendations.
+    *   **Stop Condition:** If *any* banned substance is recommended, the build fails automatically. Do not average this with "good" advice; a single illegal recommendation is a critical failure.
+*   **Subgroup Check:** Ensure testing covers edge cases (e.g., rare pests, extreme weather) where the model might hallucinate solutions to maximize yield.
+
+**3. Fail-Safe Mechanism (The Human/Code Gate)**
+You cannot rely on the AI's internal reasoning to self-correct. You must implement a deterministic, code-level gate *after* the AI generates advice but *before* it reaches the mobile device.
+*   **Implementation:** Build a filter function that intercepts the AI's text output.
+*   **Logic:** The filter scans the output for any string matching your Negative Control List (banned chemicals).
+*   **Action on Match:** If a match is found, **block the message entirely**. Do not show the advice. Instead, trigger a fallback response: *"Safety Check Failed: Unable to generate recommendation. Please contact a local agronomist."*
+*   **Uncertainty Display:** If the model's confidence in a safe recommendation is low, label the output as **"Unverified – Consult Local Expert"** rather than presenting it as fact. Use coarse tiers (Confirmed vs. Unverified) rather than percentages (e.g., "87% safe"), which imply false precision.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one team member as the explicit owner of this safety gate. They must sign off on every model update.
+*   **Documentation (Model Card):** Create a simple, versioned document for your team and users stating:
+    *   **Intended Use:** Advisory only, not a replacement for certified agronomists.
+    *   **Limitations:** Explicitly state the system may hallucinate and that a hard filter is in place.
+    *   **Data Provenance:** List sources used for training and the banned-substance list.
+*   **Legal Routing:** While you lack budget for counsel now, you must acknowledge that determining *legal liability* for automated advice is a legal determination, not a technical one. The hard-coded filter mitigates risk but does not eliminate legal duty.
+
+**Summary of Next Steps:**
+1.  Compile the banned substance list today.
+2.  Run the probe set; if failures occur, retrain or restrict the model's action space.
+3.  Deploy the deterministic text filter as a mandatory middleware layer.
+4.  Ship only when the eval shows 0 illegal recommendations and the filter is active.
+
+*Note: This plan measures and manages risk; it does not certify the system as "safe" or "compliant."*
+*If the model continues to hallucinate banned substances after retraining, the only safe path is to disable the automated advice feature entirely.*

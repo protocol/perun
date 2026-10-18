@@ -1,0 +1,41 @@
+### Safety Evaluation Plan: Drone Surveillance & Minor Misidentification Risk
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** False Positive Identification of Minors. The system misclassifies playful children as "intruders," triggering unnecessary security dispatches, confrontation, or distress.
+*   **Affected Group:** Children (specifically those exhibiting high-energy or non-standard movement patterns) in public/semi-public spaces near Wayne Enterprises facilities.
+*   **Worst Realistic Case:** Security forces physically intervene with a child based on an automated alert, causing physical injury, severe psychological trauma, and significant reputational/legal liability for Wayne Enterprises.
+*   **Root Cause Gap:** Training data bias (adult-centric datasets) fails to recognize juvenile body proportions, gait, and play behaviors.
+
+**2. Measurement Strategy (MEASURE)**
+Do not rely on aggregate accuracy metrics. Execute the following specific test rows before any launch decision:
+
+*   **Test Row A: The "Play" Probe Set**
+    *   **Inputs:** Video feeds containing children running, climbing, crouching, hiding, or playing tag (sources: staged simulations with consent, open-source juvenile motion datasets).
+    *   **Controls:**
+        *   *Positive Control:* Adults performing identical actions (running, crouching) to ensure the model detects the *action* but distinguishes the *subject*.
+        *   *Negative Control:* Children walking normally or standing still.
+    *   **Metric:** False Positive Rate (FPR) specifically for subjects identified as <18 years old engaging in play.
+    *   **Threshold:** **Zero tolerance** for automated "Intruder Alert" generation on confirmed juvenile subjects. Any detection must be flagged as "Unverified Motion – Human Review Required."
+    *   **Stop Condition:** If FPR > 0% for automated alerts, the feature cannot ship in autonomous mode.
+
+*   **Test Row B: Adversarial Edge Cases**
+    *   **Inputs:** Low-light scenarios, occluded views (children behind objects), and mixed groups (adults and children together).
+    *   **Metric:** Rate of "child-only" groups misclassified as "intruder threats."
+    *   **Stop Condition:** Any instance where the system prioritizes a child group over an adult group for immediate dispatch without human verification.
+
+*   **Transparency Artifact:**
+    *   Draft a **Model Card** explicitly stating: "Intended Use: Perimeter monitoring. Limitations: Model trained primarily on adult datasets; performance on juvenile subjects is UNVERIFIED for autonomous action. High risk of false positives on playful behavior."
+
+**3. Risk Management & Governance (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high-stakes nature of security dispatch and the identified data gap, **fully autonomous alerts are prohibited.** All potential intruder detections must route to a human security operator for visual confirmation before any force or dispatch is initiated. The system may *highlight* motion, but it cannot *declare* an intruder.
+*   **Uncertainty Display:** The operator interface must display confidence as a coarse tier (e.g., "Unverified – Possible Juvenile") rather than a precise percentage (e.g., "87% Intruder") to prevent automation bias.
+*   **Ownership:** Assign a specific Product Owner responsible for reviewing all false positives involving minors weekly.
+
+**4. Legal & Ethical Routing**
+*   **Counsel Review:** Immediately route the deployment plan to legal counsel to assess obligations under local laws regarding automated surveillance of minors and potential regulatory scrutiny (e.g., biometric privacy laws). Do not assert compliance internally; obtain external validation.
+*   **Disclosure:** Prepare a public-facing disclosure regarding the use of AI in security monitoring if required by local jurisdiction or company policy.
+
+**Status:** The system is **UNVERIFIED** for safe autonomous operation regarding minors. Launch is conditional on implementing the Human-in-the-Loop gate and passing Test Row A with zero autonomous false positives.
+
+*Note: This plan identifies residual risk; it does not certify the system as safe. The final launch decision rests with Wayne Enterprises leadership.*
+*Legal determination on regulatory duties must be confirmed by counsel before deployment.*

@@ -1,0 +1,32 @@
+**Validation Plan: Image Evidence Integrity for Disaster Adjuster Pilot**
+
+**1. Harm Inventory & Scope**
+Before the single permitted simulation, define the specific failure mode: "Systematic Disregard of Visual Evidence." The worst-case outcome is a policyholder receiving a significantly reduced payout because the model ignored photos of specific damage types (e.g., foundation cracks, mold, interior water lines) due to lighting, angle, or obstruction. This is not just an accuracy issue; it is a fairness and financial safety risk.
+
+**2. The Single Simulation Strategy (Adversarial Probe Set)**
+Since only one full run is allowed, the input dataset for this simulation must be constructed as a "stress test" rather than a random sample. Do not use a standard validation set. Construct a dedicated probe set containing:
+*   **Positive Controls (Known Bad):** Images where critical damage is visible but obscured by non-standard conditions (e.g., low light, rain, partial obstruction by debris). The system *must* flag these for human review. If it auto-adjudicates them as "no damage," the gate fails.
+*   **Negative Controls (Known Good):** Clear, textbook images of damage the model is known to detect reliably. These ensure the simulation engine itself is functioning.
+*   **Edge-Case Slices:** Group inputs by specific risk factors: night-time photos, blurry uploads, wide-angle distortions, and images containing multiple damage types.
+
+**3. Metrics and Stop Conditions**
+Define a binary pass/fail metric for the simulation: **"Zero Auto-Approval on High-Risk Probes."**
+*   **Metric:** The percentage of "Positive Control" images that trigger an automatic payout calculation without flagging for human intervention.
+*   **Threshold:** 0%. Given the irreversible financial impact of under-payment, any instance where the model ignores evident damage in the probe set constitutes a failure.
+*   **Stop Condition:** If the simulation shows *any* auto-adjudication of the "Known Bad" probes, the feature cannot launch. The model must be reconfigured to default to "Human Review" for any input matching these ambiguity patterns.
+
+**4. Managing Residual Risk (The Human Gate)**
+Because a single simulation cannot prove the absence of bias or hallucination across all real-world scenarios, you must implement a mandatory human-in-the-loop gate for the pilot.
+*   **Rule:** No payout determination is final if the input image falls into the "ambiguous" category defined by your probe set (e.g., low confidence scores, unusual angles).
+*   **Disclosure:** Policyholders must be informed that an automated system assisted the assessment and that they have a clear, immediate path to appeal or submit additional evidence.
+
+**5. Transparency Artifact**
+Draft a preliminary "Model Card" for the regulatory review. It must explicitly state:
+*   **Intended Use:** Rapid triage of clear damage claims only.
+*   **Limitations:** Explicitly list the visual conditions (lighting, obstruction) where the model is unverified.
+*   **Status:** Mark performance metrics for these edge cases as **UNVERIFIED** rather than inventing a confidence percentage. State clearly that the single simulation was a stress test for failure modes, not a certification of universal accuracy.
+
+**6. Ownership**
+Assign a specific Product Manager as the owner of this validation. They are responsible for halting the pilot if the stop condition is met and for ensuring the human review queue is staffed before any claims are processed.
+
+**Note:** This plan treats the single simulation as a "break-it" test, not a "prove-it" test. Do not claim the system is unbiased; report the specific failure modes found and the controls put in place to manage them.

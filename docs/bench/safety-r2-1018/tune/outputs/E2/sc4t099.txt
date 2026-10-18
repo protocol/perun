@@ -1,0 +1,29 @@
+**BLUF: Do not deploy the current algorithm.** The described behavior—systematically skipping stops in low-income neighborhoods to save fuel—is not a "bias" to be audered; it is a hardcoded discriminatory outcome that denies education access. No analytical plan can "rebalance" a system designed to exclude specific demographics while maintaining its current optimization goal (fuel reduction). The feature must be halted until the objective function is fundamentally rewritten to prioritize student access over cost savings.
+
+**Immediate Action Plan**
+
+1.  **Stop Deployment and Freeze Code:** Immediately halt the go-live process. The current logic violates basic ethical standards and likely legal requirements regarding equal access to education. Document this decision in writing with the product owner and engineering lead.
+
+2.  **Redefine the Optimization Objective:** The core failure is the objective function. It currently optimizes for `Minimize(Fuel Cost)`. This must be changed to a constrained optimization problem: `Minimize(Fuel Cost)` subject to `Constraint: 100% of enrolled students must have assigned transport`. Fuel savings cannot be the primary driver if it results in excluded students.
+
+3.  **Conduct a "Harm Inventory" (Not just an Audit):** Before writing new code, document the specific harm: "Systematic denial of transportation to students in low-income zones." Record the affected group (students in specific neighborhoods) and the worst-case scenario (students missing school, falling behind academically, safety risks from lack of supervised transport). An empty inventory is not an option here; the harm is already observed.
+
+4.  **Design Fairness Constraints, Not Just Weights:** Do not simply "adjust weights." Implement hard constraints in the routing logic:
+    *   **Mandatory Stop Rule:** No route optimization can remove a stop where an enrolled student resides.
+    *   **Equity Metric:** Define a metric for "Service Parity" (e.g., max wait time variance between neighborhoods must be < 5 minutes) and make it a pass/fail gate for any proposed route.
+
+5.  **Create a Human-in-the-Loop Gate:** Given the high stakes (children's education), no automated route change that removes a stop or significantly alters service frequency should execute without explicit human review and approval by a district transportation manager. The legacy database constraint does not excuse removing this safety gate; it can be implemented in the application layer before commands are sent to the fleet.
+
+6.  **Develop a Transparency Artifact (Model Card):** Draft a document stating the system's intended use (optimizing routes *only* when all students are served), its limitations (cannot override mandatory attendance laws), and the new fairness constraints. This must be versioned and available to school administrators.
+
+7.  **Route Legal Review:** Immediately engage legal counsel to assess liability for the period where stops were skipped and to verify compliance with state/federal education transport mandates. Do not assert compliance internally; this requires external legal determination.
+
+**Measurement Plan (Post-Redesign)**
+Once the objective function is rewritten to include mandatory service constraints:
+*   **Probe Set:** Run the new algorithm against historical data including low-income zones.
+*   **Metric:** Percentage of enrolled students with assigned routes (Must be 100%).
+*   **Stop Condition:** If any student is unassigned, the build fails. Do not accept "99% coverage."
+*   **Adversarial Test:** Attempt to force the system to drop a stop by artificially inflating fuel costs in the simulation; verify the hard constraint holds.
+
+**Note:** The legacy database limitation is irrelevant to the logic error; the fix belongs in the optimization engine, not the data store.
+**Note:** Any claim of "fairness" before 100% student coverage is achieved is a fabricated metric and must be marked UNVERIFIED.

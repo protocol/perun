@@ -1,0 +1,42 @@
+### Safety Evaluation Plan: Wildlife-Poaching Prediction System
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False positive accusations against local villagers based on innocent anomalies (cultural activities, livestock movement).
+*   **Affected Group:** Local community members near park boundaries.
+*   **Worst Realistic Case:** Rangers confront innocent villagers based on algorithmic flags, leading to physical conflict, legal detention, or erosion of community trust essential for conservation.
+
+**2. Measurement Strategy (The "Innocent Pattern" Eval)**
+Since new data collection is impossible, you must construct a **Negative Control Set** from your existing data and local knowledge before running the model.
+
+*   **Probe Set Construction:**
+    *   **Known-Good Negatives:** Manually label a subset of your existing data representing specific innocent patterns: livestock grazing routes, seasonal farming movements, cultural ceremonies, and school paths. These are your "known-good negative controls."
+    *   **Known-Bad Positives:** Use confirmed historical poaching incidents as your "known-bad positive controls."
+    *   **Adversarial Probes:** Simulate "edge cases" where innocent behavior looks suspicious (e.g., a herder moving at night due to heat, or taking a shortcut during rain).
+
+*   **Test Execution:**
+    *   Run the algorithm strictly against the **Known-Good Negatives**.
+    *   **Metric:** False Positive Rate (FPR) specifically for the "Community" segment, not just overall accuracy.
+    *   **Pass Threshold:** Define a zero-tolerance or near-zero threshold for high-confidence flags on the "Known-Good" set. If the model flags a known cultural path as "high risk," it fails.
+    *   **Stop Condition:** If the FPR on innocent patterns exceeds your threshold, **block the launch** of any automated alerting. Do not proceed to field testing until this is resolved.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   **Rule:** The system must **never** auto-dispatch rangers or generate an "accusation."
+    *   **Implementation:** The output must be framed as "Anomaly Detected – Requires Verification," not "Poaching Detected." A human analyst (preferably one with local cultural knowledge) must review the flag against the context before any ranger is sent.
+    *   **Irreversible Action Block:** Confrontation is a high-stakes, hard-to-reverse action. Full automation of this step is the failure mode you must prevent.
+
+*   **Uncertainty & Transparency:**
+    *   **Confidence Tiers:** Do not show rangers a percentage (e.g., "87% likely poacher"). Use defined coarse tiers:
+        *   *Confirmed:* Multiple sensors + known poaching signature.
+        *   *Corroborated:* Sensor + historical pattern match.
+        *   *Unverified/Anomaly:* Deviation from norm, but high chance of innocent cause (Default to this for ambiguous data).
+    *   **Disclosure:** Rangers must be trained that the tool identifies *movement anomalies*, not *criminals*. They must understand the high risk of false positives regarding villagers.
+
+*   **Documentation (Model Card):**
+    *   Create a one-page "System Limitations" document for the rangers. Explicitly list the innocent activities (grazing, ceremonies) the system struggles to distinguish from poaching. State clearly: **"This tool has not been verified to distinguish between [Specific Cultural Activity] and poaching."** Mark these metrics as `UNVERIFIED` if your current data cannot prove otherwise.
+
+**4. Governance**
+*   **Owner:** Assign one data scientist as the "Community Safety Owner" responsible for reviewing every false positive during the one-month window.
+*   **Review Cycle:** Re-evaluate the model immediately if the type of innocent movement changes (e.g., start of harvest season).
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased." If the False Positive Rate on innocent patterns remains high after testing, the only safe path is to restrict the system's operational zone away from community areas.

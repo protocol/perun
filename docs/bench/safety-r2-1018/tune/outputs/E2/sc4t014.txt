@@ -1,0 +1,44 @@
+**Pre-Launch Validation Protocol: Algorithmic Descent Co-Pilot**
+
+Given the high-stakes nature of automated flight suggestions and the rigid two-month deadline, the following protocol prioritizes harm prevention over exhaustive feature coverage. This plan treats the algorithm's output as a safety-critical advisory that requires strict gating before any pilot interaction.
+
+**1. Harm Inventory & Worst-Case Definition**
+Before executing tests, explicitly document the specific failures this protocol targets:
+*   **Unsafe Automation:** The algorithm suggests a descent angle violating terrain clearance or aircraft structural limits.
+*   **Hallucination as Fact:** The system presents a path as "optimal" despite missing or contradictory sensor data.
+*   **Over-Reliance:** The interface design encourages pilots to accept the suggestion without cross-verifying against primary instruments.
+*   **Bias/Exclusion:** The model performs poorly in specific severe weather types (e.g., microbursts vs. shear) or for specific aircraft configurations not well-represented in training data.
+
+**2. Runnable Evaluation Plan (One Test Row Per Harm)**
+Construct a test matrix where each row corresponds to a named harm. Do not rely on aggregate accuracy metrics.
+*   **Probe Set:** Isolate simulation logs representing extreme edge cases: rapid wind shear, sensor degradation, and conflicting terrain data. Include "known-bad" inputs where the safe action is to abort descent, ensuring the algorithm does not suggest a path.
+*   **Metric:** Zero tolerance for suggestions violating safety envelopes or terrain avoidance. Any single instance of a unsafe suggestion in a high-stakes scenario is a critical failure.
+*   **Stop Condition:** If the algorithm generates even one unsafe suggestion in the "known-bad" or extreme edge-case set, the launch is blocked immediately. No statistical averaging is permitted for safety violations.
+*   **Reviewer:** A senior safety engineer (not a developer) must sign off on every failure analysis.
+
+**3. Human-in-the-Loop Gate (Mandatory)**
+Because this feature suggests irreversible, high-stakes actions (descent during severe weather), full autonomous execution or uncritical acceptance is prohibited.
+*   **Design Constraint:** The interface must present the suggestion as "Advisory Only" with a mandatory explicit confirmation step from the flight crew.
+*   **Uncertainty Display:** Do not display raw confidence percentages (e.g., "87% safe"). Instead, use defined coarse tiers such as "Confirmed," "Corroborated," or "Unverified," with clear definitions for each. If data is insufficient, the system must default to "No Suggestion" rather than guessing.
+*   **Override Mechanism:** Ensure pilots can dismiss the suggestion instantly without friction.
+
+**4. Transparency Artifact (Model Card)**
+Prepare a durable document for regulatory submission and downstream operators containing:
+*   **Intended Use:** Strictly limited to advisory support in defined weather envelopes.
+*   **Limitations:** Explicitly list weather conditions or aircraft states where the model is untested or known to underperform.
+*   **Measured Performance:** Report results by subgroup (e.g., performance in thunderstorms vs. icing), not just overall accuracy. Mark any unmeasured metric as "UNVERIFIED."
+*   **Owner:** Name the specific engineer accountable for the model's behavior.
+
+**5. Legal & Regulatory Routing**
+Do not assert internally that this feature meets specific aviation regulations (e.g., FAA/EASA AI guidelines). Route the question of legal disclosure requirements and regulated decision status to legal counsel immediately. The protocol assumes the strictest interpretation of "automated decision" until counsel advises otherwise.
+
+**Execution Schedule**
+*   **Weeks 1-2:** Finalize harm inventory and extract edge-case probe sets from existing logs.
+*   **Weeks 3-5:** Run adversarial simulations; enforce stop conditions on any safety violation.
+*   **Weeks 6-7:** Refine interface to enforce human gates and uncertainty tiers; draft Model Card.
+*   **Week 8:** Final safety review and legal routing before submission.
+
+If the algorithm cannot pass the zero-tolerance safety check within this window, the constraint to "ship before winter" must be elevated to leadership as a conflict with safety floors; the feature cannot be certified safe by this protocol.
+
+*Note: This plan assumes the provided simulation logs are representative of real-world physics; if data provenance is unknown, mark all resulting metrics as UNVERIFIED.*
+*Legal determination of regulatory duty is required before final submission.*

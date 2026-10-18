@@ -1,0 +1,39 @@
+### Pre-Launch Safety Evaluation Protocol: Smart-Home Security (Cairo Pilot)
+
+**1. Harm Inventory & Measurement Plan**
+Before scaling, we must quantify the risk of **unsafe automation**: falsely dispatching police to residential homes. This creates physical risk for families and officers, erodes trust, and wastes emergency resources. Given the hardware constraint (fixed edge chips), we cannot improve the model's internal accuracy via software updates. Therefore, the evaluation must focus on **system-level gating** rather than model retraining.
+
+*   **Test Probe Set:** Construct a dataset specific to the Cairo environment containing:
+    *   *Positive Controls:* Verified intruder scenarios (human entry, glass break).
+    *   *Negative Controls (High-Risk):* Stray animals (cats, dogs), wind-induced motion (trees, loose debris), and local ambient audio (calls to prayer, street noise).
+    *   *Subgroup Slicing:* Test performance across different times of day (lighting changes) and weather conditions common to Cairo (sandstorms, high winds).
+*   **Metric & Threshold:** Calculate the **False Positive Rate (FPR)** specifically for police-dispatch-level confidence.
+    *   *Stop Condition:* If the FPR for negative controls exceeds **0.1%** (or a threshold set by local police agreement), the automated dispatch feature **must not launch**.
+    *   *Reporting:* Report the residual risk as `UNVERIFIED` for any scenario not explicitly tested. Do not invent a "99% accurate" claim based on limited data.
+
+**2. Operational Safeguards (Manage Residual Risk)**
+Since the edge chips cannot support complex filtering, you must implement a **Human-in-the-Loop (HITL) gate** for all high-stakes actions. Full automation of police dispatch is the failure mode here.
+
+*   **Mandatory Human Verification:** Redefine the system workflow. The device detects motion/audio → sends an alert with video/audio clip to a **24/7 monitoring center** (or a verified homeowner app with immediate response SLA) → **Human confirms** intruder → Police are alerted.
+    *   *Constraint Adherence:* This requires no chip upgrade; it shifts the compute load to the human reviewer.
+*   **Confidence Tiering (Not Percentages):** Do not display raw confidence scores (e.g., "87% chance") to users or operators, as this implies false precision. Instead, use defined coarse tiers:
+    *   *Confirmed:* Multiple sensors triggered + human verification.
+    *   *Unverified:* Single sensor trigger (motion OR audio) → Requires review.
+*   **Deceptive Pattern Check:** Ensure the user interface does not nudge users to "auto-approve" alerts to save time. The default must be "review required."
+
+**3. Governance & Transparency**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing false positive logs weekly.
+*   **Transparency Artifact:** Create a **Model Card** for the pilot stakeholders. It must state:
+    *   *Intended Use:* Intruder detection in residential Cairo settings.
+    *   *Limitations:* Known susceptibility to stray animals and wind; cannot distinguish these without human review.
+    *   *Measured Performance:* Insert the actual FPR from the test probe set above. If unmeasured for a specific condition (e.g., sandstorms), mark it `UNVERIFIED`.
+*   **Legal Routing:** Consult local Egyptian counsel regarding regulations on automated emergency dispatches and liability for false alarms. Do not assume compliance; verify duties.
+
+**Definition of Done for Pilot:**
+1.  Harm inventory completed with worst-case scenarios documented.
+2.  Automated police dispatch is **disabled**; a human gate is active.
+3.  Eval runs show specific FPR numbers for local negative controls; no metrics are fabricated.
+4.  Model Card distributed to pilot users disclosing limitations.
+
+**Note:** The hardware constraint makes a human gate mandatory, not optional.
+**Note:** Never certify the system as "safe"; only report measured residual risks.

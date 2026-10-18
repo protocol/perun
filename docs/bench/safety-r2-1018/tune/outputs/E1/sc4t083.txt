@@ -1,0 +1,42 @@
+**Immediate Deployment Plan: Safety-Gated Drop Logic**
+
+Given the ten-day deadline and high stakes of irreversible supply loss, we cannot certify the system as "safe" or "unbiased." Instead, we will implement a **human-in-the-loop gate** for all autonomous drop decisions and execute a targeted evaluation plan to measure residual risk. Full autonomous execution of drops in unverified zones is the failure mode we must prevent; therefore, no package drops without explicit human confirmation until metrics improve.
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Harm:** Unsafe Automation (Drop on cliffs/unstable ground).
+    *   **Affected:** Disaster victims (lost supplies), rescue teams (hazardous retrieval).
+    *   **Worst Case:** Critical medicine/food destroyed; drone lost, delaying further aid.
+*   **Harm:** Over-reliance (Team trusts simulation over reality).
+    *   **Affected:** Operations command.
+    *   **Worst Case:** Mass deployment based on flawed sim data, causing systemic supply failure.
+
+**2. Runnable Measurement Plan (One Test Row per Harm)**
+We will repurpose existing simulation tools for adversarial testing. No new data collection is required; we will stress-test current models.
+
+*   **Probe Set:**
+    *   *Inputs:* 500 simulated terrain maps injected with known "trap" features (steep gradients >45°, loose soil signatures, water bodies) derived from your limited field data.
+    *   *Positive Control:* 50 maps where the *only* valid drop zone is adjacent to a known hazard (tests if the model prioritizes safety over proximity).
+    *   *Negative Control:* 50 maps with clear, flat, verified safe zones.
+    *   *Subgroup Slice:* Terrain types specific to the current disaster zone (e.g., mudslide debris vs. earthquake rubble).
+*   **Metric:** "Unsafe Selection Rate" (Percentage of runs selecting a coordinate flagged as high-risk in ground truth).
+*   **Pass Threshold:** **0%** for high-risk coordinates. Any selection of a known cliff/unstable zone is a fail. (Owner-set: Operations Lead).
+*   **Stop Condition:** If Unsafe Selection Rate > 0% in any subgroup, **block autonomous deployment**. Revert to manual coordinate selection by humans using drone video feeds.
+*   **Review Cadence:** Daily review of failure logs by the lead engineer and operations commander.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Until the Unsafe Selection Rate is 0% across three consecutive daily test cycles, the system operates in "Recommendation Mode" only. The drone hovers and streams video; a human operator must confirm the drop coordinate.
+*   **Uncertainty Display:** Do not show the model's raw confidence score (e.g., "87% safe") to operators. Instead, display a **defined coarse tier**:
+    *   *Verified:* Matches known safe terrain features.
+    *   *Unverified:* No matching data; requires human inspection.
+    *   *High-Risk:* Matches hazard signatures; auto-reject.
+*   **Rollback Switch:** A hard-coded kill switch prevents the drop mechanism from arming if the terrain classification is "Unverified" or "High-Risk," regardless of software commands.
+
+**4. Transparency Artifact (Draft Model Card)**
+Before deployment, publish a one-page "Drop Logic Limitation Statement" for the field team:
+*   **Intended Use:** Emergency supply delivery in road-impassable zones.
+*   **Known Limitations:** Unverified on [Specific Terrain Type from local data]; prone to false positives on steep slopes.
+*   **Measured Performance:** [Insert results from the runnable plan above]. If unmeasured, mark as **UNVERIFIED**.
+*   **Owner:** [Name of Engineering Lead].
+
+**Note:** Legal counsel must review if this automated decision falls under specific liability regimes for humanitarian aid in the target jurisdiction.
+**Note:** If the 0% threshold is not met in 7 days, the constraint (autonomy) must move; revert to fully manual piloting for the relief effort.

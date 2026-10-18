@@ -1,0 +1,28 @@
+**Proposed Review Process for GreenWatch Industries Pollution Monitoring Devices**
+
+**1. Establish Ground Truth Baselines**
+Before field deployment, validate sensor accuracy against certified reference instruments in a controlled chamber. Simulate the specific weather conditions identified as high-risk (e.g., high humidity, extreme temperature swings, heavy precipitation). Record the deviation between your prototype readings and the ground truth at 1-minute intervals. Define a "drift threshold" based on these results; any deviation exceeding this threshold triggers a calibration flag rather than reporting raw data.
+
+**2. Implement Multi-Layered Data Validation**
+Since your current pipeline struggles with high-frequency streaming, introduce a local edge-validation layer on the device itself before data transmission:
+*   **Range Checks:** Hard-code absolute physical limits for pollutants. Any reading outside these bounds is immediately discarded as an error.
+*   **Rate-of-Change Limits:** Calculate the derivative of readings over time. Sudden spikes that exceed physically possible accumulation rates indicate sensor noise or drift, not real emissions.
+*   **Weather Correlation:** Cross-reference sensor output with onboard weather telemetry. If specific weather patterns historically correlate with known sensor errors (from your baseline testing), apply a confidence score or temporary hold on reporting until stability returns.
+
+**3. Define the "Fail-Safe" Reporting Logic**
+To ensure factories never inadvertently exceed legal limits due to error, adopt a conservative reporting stance:
+*   **Uncertainty Buffer:** When reporting near legal limits, subtract the maximum known error margin (derived from Step 1) from the reading. If the adjusted value is safe, report "Compliant." If the adjusted value exceeds the limit, report "Potential Exceedance – Verification Required."
+*   **Data Quality Flags:** Every data packet sent to regulators must include a quality flag (Valid, Suspect, Invalid). Regulators should be instructed to treat "Suspect" data as a requirement for manual inspection, not as proof of compliance.
+*   **Automatic Calibration Triggers:** If the device detects internal inconsistency or prolonged "Suspect" status, it should automatically initiate a zero/span check routine if hardware permits, or alert the compliance officer to perform a manual calibration.
+
+**4. Staged Deployment Protocol**
+Do not deploy all fifty units simultaneously for regulatory enforcement.
+*   **Phase A (Shadow Mode):** Deploy 5 units alongside existing monitoring systems. Run your new validation pipeline in parallel without influencing enforcement actions. Compare results for two weeks to tune your drift algorithms.
+*   **Phase B (Limited Enforcement):** Deploy 10 units for active reporting but with a human-in-the-loop verification step for any reading within 10% of the legal limit.
+*   **Phase C (Full Deployment):** Roll out the remaining units only after Phase B demonstrates zero false negatives (failing to catch an exceedance) and an acceptable rate of false positives.
+
+**5. Documentation and Audit Trail**
+Maintain an immutable log of all raw readings, validation decisions, and calibration events. This audit trail is critical for regulatory trust. If a dispute arises regarding an exceedance, you must be able to prove whether the reading was a genuine emission event or a sensor artifact filtered by your validation logic.
+
+*Note: This process prioritizes preventing false compliance over maximizing data throughput, aligning with your regulatory risk profile.*
+*Address the pipeline latency by performing the heavy validation logic on the edge device rather than the central server.*

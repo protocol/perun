@@ -1,0 +1,42 @@
+### Pre-Launch Safety Review: Credit-Limit Augmenter
+
+**Critical Finding:** Your current plan to fully automate high-stakes financial decisions (increasing debt limits) for a vulnerable population without a human-in-the-loop gate constitutes an unsafe deployment. Fully autonomous execution of irreversible financial actions is the primary failure mode this review prevents. You cannot "audit" your way out of this post-launch; the control must be architectural before release.
+
+#### 1. Harm Inventory & Immediate Constraints
+*   **Bias/Unfair Outcomes:** Using "social connectivity" as a proxy for creditworthiness systematically disadvantages isolated individuals, potentially excluding those most in need or penalizing marginalized groups.
+*   **Unsafe Automation:** Granting credit limits that users cannot repay creates immediate, hard-to-reverse financial harm.
+*   **Over-reliance:** Users may trust the automated limit as an endorsement of affordability rather than a maximum capacity.
+
+**Constraint Reality:** With a fixed budget and no external audit, you cannot certify the model is "unbiased" or "safe." Any claim of 0% bias or specific safety metrics without prior adversarial testing is **UNVERIFIED** and must not be stated to users or regulators.
+
+#### 2. Required Human Gate (Non-Negotiable)
+Before launch, you must implement a **Human-in-the-Loop (HITL) gate** for any credit limit increase above a minimal threshold (e.g., >10% of current income or a fixed currency amount).
+*   **Action:** Do not auto-approve. Route high-value increases to a human reviewer or require explicit, friction-heavy user confirmation that details the repayment cost.
+*   **Rationale:** Full automation of costly, irreversible actions is the failure this skill prevents. If engineering resources prevent this, you must delay the feature or cap the auto-increase at a negligible amount.
+
+#### 3. Post-Launch Metrics Checklist (Daily Tracking)
+Do not track aggregate approval rates alone. You must slice data by subgroup to detect disparate impact.
+*   **Delinquency Rate by Cohort:** Track missed payments specifically for users who received an *automated* increase vs. those who did not.
+*   **Utilization Spike:** Percentage of users maxing out their new limit within 48 hours (indicates distress, not health).
+*   **Subgroup Disparity:** Compare approval and default rates across inferred demographic segments (if legally permissible in Brazil) or behavioral clusters (e.g., "social connectivity score" deciles).
+*   **Reversal/Complaint Rate:** Frequency of users manually lowering their limit or contacting support regarding unaffordable debt.
+*   **Stop Condition:** If the delinquency rate for the "new limit" cohort exceeds the baseline by >2% (or a threshold you define as catastrophic), **automatic rollback** of the feature must trigger.
+
+#### 4. Mitigation Strategies for Payment Spikes
+If missed payments spike among the newest cohort:
+1.  **Immediate Freeze:** Automatically halt all further automated limit increases.
+2.  **Proactive Down-adjustment:** Do not wait for default. If a user misses one payment, automatically revert their limit to the pre-increase level and notify them clearly.
+3.  **Hard Disclosure:** Insert a prominent warning in the app: "This limit was suggested by an automated system. It does not guarantee you can afford this debt."
+4.  **Root Cause Triage:** Manually review the top 50 failed accounts to identify if "social connectivity" or a specific transaction pattern caused the error.
+
+#### 5. Transparency Artifacts
+You must produce a **Model Card** before launch, even for internal use. It must state:
+*   **Intended Use:** Credit limit suggestions only (not financial advice).
+*   **Limitations:** Explicitly state that "social connectivity" is an unproven proxy and may introduce bias.
+*   **Performance:** Mark all bias and fairness metrics as **UNVERIFIED** until internal red-teaming is complete. Do not fabricate accuracy numbers.
+
+**Legal Note:** Whether this automated decision falls under specific Brazilian consumer protection laws or requires mandatory disclosure is a legal determination. Route this immediately to counsel; do not assert compliance based on this review.
+
+---
+*Note: This review identifies residual risk; it does not certify the system as safe. The decision to ship rests with the product owner.*
+*Ensure your "social connectivity" data usage complies with LGPD (Brazil's GDPR equivalent) regarding consent and purpose limitation.*

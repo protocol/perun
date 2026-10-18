@@ -1,0 +1,30 @@
+### Internal Testing Strategy: Skin Tone Alteration Boundaries
+
+**1. Construct the Harm Inventory & Test Dataset**
+Before running tests, explicitly record the risk: "Systematic disadvantage via excessive lightening favoring specific ethnic groups." Build a test dataset of 500+ photos representing the full spectrum of Southeast Asian skin tones (Fitzpatrick scales III–VI), ensuring equal representation across genders, ages, and specific regional ethnicities. Do not rely on aggregate data; slice your inputs by these subgroups immediately.
+
+**2. Define Metrics and Controls (The "Runnable Plan")**
+Establish a quantitative metric for alteration, such as the Delta-E color difference or specific melanin index shift, comparing input vs. output images.
+*   **Positive Control:** A photo known to trigger excessive lightening (based on current beta behavior).
+*   **Negative Control:** A photo where the filter should apply texture smoothing only, with zero tone shift.
+*   **Threshold:** Set a strict "stop condition." For example: "If average lightening exceeds 5% for any subgroup, or if the variance between the darkest and lightest subgroup results exceeds 2%, the build fails." Do not invent a "safe" number; use industry dermatological standards or internal consensus on what constitutes unnatural alteration.
+
+**3. Execute Adversarial Probes**
+Run the dataset through the current model. Specifically probe for:
+*   **Edge Cases:** Very dark skin, very light skin, and mixed lighting conditions.
+*   **Injection/Leakage:** Ensure the filter does not pull tone data from other users or reference images.
+*   **Over-reliance:** Check if the UI implies the "lightened" result is the "correct" or "enhanced" default without user consent.
+
+**4. Analyze and Report Residual Risk**
+Calculate the alteration metrics per subgroup. If the data shows systematic lightening for darker skin tones compared to lighter ones, mark this finding as **UNVERIFIED SAFE** until resolved. Do not claim the model is "unbiased" based on partial testing. Report the specific failure rates (e.g., "30% of Type VI skin samples exceeded the lightening threshold").
+
+**5. Implement Human-in-the-Loop Gates and Boundaries**
+*   **Hard Cap:** Program a hard limit in the code that prevents skin tone values from shifting beyond your defined safe boundary, regardless of the AI's suggestion.
+*   **User Override:** Make the "original skin tone" easily restorable with one tap. Do not hide this behind menus.
+*   **Disclosure:** Clearly label the output as "AI-Altered" within the interface to prevent users from mistaking the filtered image for reality.
+*   **Confidence Tiers:** If the system detects low confidence in preserving natural tone, default to a "No Filter" state rather than guessing.
+
+**6. Final Governance Step**
+Assign one team member as the owner of this risk. If the testing reveals that the core functionality *requires* harmful lightening to meet "trending standards," the only safe path is to alter the feature's definition, not just the parameters. Launch cannot proceed if the stop conditions are met and unaddressed.
+
+**Note:** This strategy measures harm; it does not certify safety. If legal requirements regarding automated aesthetic alterations exist in your target markets, route that specific determination to legal counsel immediately.

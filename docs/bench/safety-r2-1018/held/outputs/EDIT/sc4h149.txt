@@ -1,0 +1,33 @@
+### Targeted Human-in-the-Loop Workflow for High-Risk Safety Translations
+
+Given the severe injury risk from mistranslated safety warnings and your constraint to use a single multi-language model, you must implement a **mandatory human gate** for all high-stakes outputs. Full automation of safety-critical instructions is the failure mode to prevent. The following workflow integrates directly into your current beta process without requiring model retraining or additional cloud budget.
+
+**1. Define the "Critical Safety Lexicon" (Harm Inventory)**
+Before translation begins, your nine linguists must collaboratively define a static list of high-risk concepts specific to heavy machinery. Do not rely on the AI to identify these. Examples include: "Do not operate," "High voltage," "Crush hazard," "Lockout/Tagout," and "Emergency stop." This list serves as the trigger for the human gate.
+
+**2. Automated Flagging Layer (Pre-Processing)**
+Implement a lightweight, deterministic script (low compute cost) that scans the source English manuals for any phrase matching your Critical Safety Lexicon or containing imperative verbs near hazard nouns.
+*   **Action:** If a match is found, tag the segment as `HIGH_RISK`.
+*   **Output:** Generate a queue containing only these tagged segments across all 20 languages. Non-tagged general text can proceed through standard automated translation to save resources.
+
+**3. Mandatory Dual-Linguist Verification (The Human Gate)**
+No `HIGH_RISK` segment may be printed until it passes this specific review:
+*   **Step A:** The AI generates the translation for all 20 languages.
+*   **Step B:** Assign two linguists per language pair (or one senior linguist with a specialized safety checklist) to review *only* the flagged segments.
+*   **Verification Criteria:** The reviewer must confirm the translation conveys the exact prohibitive or warning intent. Ambiguity is treated as a failure.
+*   **Uncertainty Protocol:** If a linguist is unsure, the status is set to `UNVERIFIED`. These segments must not be printed. Escalate to a subject matter engineer to rewrite the source English for clarity, then re-translate.
+
+**4. Confidence Tiering, Not Percentages**
+Do not display or rely on the model's internal confidence scores (e.g., "87% accurate") for decision-making, as these are uncalibrated and invite over-reliance. Instead, use a coarse, defined tier system for the final output status:
+*   **Confirmed:** Verified by human against the safety lexicon.
+*   **Unverified:** Failed human review or flagged for ambiguity (Block printing).
+
+**5. Final Assembly and Audit Trail**
+Merge the verified `HIGH_RISK` segments with the standard automated translations. Maintain a log linking every printed safety warning to the specific linguist who approved it. This creates an audit trail for accountability.
+
+**6. Rollback Condition**
+If the error rate in the human review exceeds a threshold you define (e.g., >5% of flagged items require rewriting), halt the launch for that language pair immediately. Do not ship until the failure mode is understood and the review capacity is increased.
+
+This approach respects your budget and timeline by limiting expensive human review to the small fraction of text that poses physical danger, while strictly enforcing a human gate on irreversible, high-stakes actions.
+
+**Note:** This workflow addresses product output safety; it does not certify the system as "unbiased" or "safe," but rather manages residual risk through targeted human oversight. Legal requirements for safety warnings in specific jurisdictions should be routed to counsel.

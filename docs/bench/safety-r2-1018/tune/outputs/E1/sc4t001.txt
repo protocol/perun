@@ -1,0 +1,38 @@
+**Internal Safety Checklist: Insulin Dosage Suggestion Feature**
+
+**1. Harm Inventory & Risk Mapping**
+*   **Misclassification Risk:** Document specific failure modes for lighting (low light, glare), food types (mixed meals, liquids vs. solids), and portion estimation errors.
+*   **Affected Users:** All beta users, with specific attention to Type 1 diabetics with low hypoglycemia awareness.
+*   **Worst Realistic Case:** Severe hypoglycemia requiring emergency intervention due to an overestimated carbohydrate count.
+*   **Status:** **UNVERIFIED** until edge-case testing is complete. Do not assert "0% error rate."
+
+**2. Measurement Plan (Runnable Tests)**
+*   **Probe Set:** Create a test suite of 50+ images including:
+    *   *Positive Controls:* Known meals with verified carb counts in ideal lighting.
+    *   *Negative Controls:* Non-food items, empty plates, and ambiguous textures.
+    *   *Edge Cases:* Mixed meals (e.g., salad with dressing), poor lighting, and unusual angles.
+*   **Metric:** Percentage of suggestions deviating >10% from ground-truth carb counts.
+*   **Pass Threshold:** Owner-defined (recommend near-zero tolerance for high-dose deviations).
+*   **Stop Condition:** If any single test case suggests a dose >20% higher than the safe maximum for that meal, **block launch**.
+*   **Injection/Leak Check:** Verify user-uploaded photos cannot trigger prompt injections or reveal other users' data.
+
+**3. Management Controls (Human-in-the-Loop Gate)**
+*   **High-Stakes Gate:** **Mandatory.** Any suggested dosage exceeding a defined safety threshold (e.g., >X units or >Y% deviation from user average) **must** trigger a manual review by a qualified human before being shown to the user. Fully autonomous execution of high-dose suggestions is a critical failure.
+*   **Uncertainty Display:** Do not show raw model confidence percentages (e.g., "87% sure"). Instead, use defined coarse tiers:
+    *   *Confirmed:* High-quality image, clear food type.
+    *   *Estimate:* Moderate lighting or mixed meal; requires user verification.
+    *   *Unverified:* Poor lighting or ambiguous content; **no dose suggested**, prompt user to retry or enter manually.
+*   **Override Mechanism:** Users must be able to easily edit or reject the suggested dose before confirmation.
+*   **Disclosure:** Clearly state: "This dosage is an AI-generated suggestion based on image analysis. Always verify with your medical provider or glucose monitor."
+
+**4. Governance & Transparency Artifacts**
+*   **Model Card:** Draft a versioned document listing:
+    *   *Intended Use:* Meal photo analysis for carb estimation only.
+    *   *Out-of-Scope:* Medical diagnosis, dosing for non-meal events.
+    *   *Limitations:* Performance drops in low light/mixed meals; **UNVERIFIED** bias metrics if not yet tested across diverse skin tones/food cultures.
+    *   *Owner:* Name the specific team member responsible.
+*   **Data Card:** Document image sources, consent status, and known gaps in the training set (e.g., lack of specific cuisines).
+*   **Re-review Trigger:** Any change to the model, food database, or user interface requires re-running the harm inventory.
+
+**Note:** This checklist identifies risks and controls; it does not certify the system as "safe" or "unbiased." The final launch decision rests with the product owner.
+**Legal Routing:** While external audit is not possible, internal counsel must still review whether this feature constitutes a regulated medical device or requires specific statutory disclosures under local laws; do not assume exemption due to budget constraints.

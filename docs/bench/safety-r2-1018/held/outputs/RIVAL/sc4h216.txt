@@ -1,0 +1,29 @@
+# Safety Validation Roadmap: Smart-Home Energy Optimizer
+
+## Phase 1: Synthetic Data & Logic Simulation (Weeks 1-2)
+Since hardware integration is restricted, we will build a high-fidelity software simulation environment using historical Phoenix grid load data and synthetic home profiles.
+
+*   **Device Signature Library:** Create a database of power consumption signatures for 50+ common appliances versus critical medical devices (e.g., oxygen concentrators, CPAP machines, dialysis units). Focus on transient spikes, steady-state draws, and duty cycles that differentiate them without extra sensors.
+*   **"Golden Record" Scenarios:** Define 20 canonical test cases where the distinction is ambiguous (e.g., a high-power air purifier vs. a home oxygen generator). Manually label the expected outcome (Shed vs. Exempt) for each.
+*   **Algorithm Stress Testing:** Run the optimization algorithm against these scenarios under simulated extreme grid loads (115% of peak capacity). Verify that the logic flags medical equipment based solely on software-identifiable patterns.
+
+## Phase 2: Configuration Matrix & Edge Case Injection (Weeks 3-4)
+We will simulate diverse household configurations to ensure the algorithm does not rely on static assumptions.
+
+*   **Variable Home Topologies:** Generate 100 random home configurations varying in size, device count, and total load. Inject "hidden" medical devices into non-medical contexts (e.g., an oxygen concentrator in a bedroom shared with high-draw gaming PCs).
+*   **Adversarial Load Patterns:** Simulate "attack" scenarios where non-essential devices mimic medical signatures (e.g., a heater cycling to look like a life-support pump). The system must fail safe (keep power on) if confidence is below 99%.
+*   **Grid Instability Modeling:** Introduce rapid grid frequency fluctuations and voltage sags typical of Phoenix summer peaks to ensure the classifier doesn't misinterpret noise as a device type change.
+
+## Phase 3: Hardware-in-the-Loop Verification (Week 5)
+Utilize the team's existing development kits to validate the software decisions against real electrical signals, without new sensors.
+
+*   **Benchtop Emulation:** Connect the optimizer controller to a programmable power load bank. Emulate the exact current/voltage waveforms of critical medical devices recorded in Phase 1.
+*   **Fail-Safe Trigger Test:** Physically measure the relay output during simulated peak events. Confirm that when a medical signature is detected, the cut-off relay remains closed, regardless of the grid stress level.
+*   **Latency Measurement:** Ensure the identification and exemption decision happens within the required control loop timeframe (<200ms) to prevent momentary blips.
+
+## Phase 4: Operational Readiness & Human Review (Week 6)
+*   **Blind Audit:** Have two engineers independently review the decision logs from 50 random simulated runs. They must verify the "Exempt" classification for medical devices without seeing the ground truth labels first.
+*   **Manual Override Protocol:** Define and test the user-facing mechanism for customers to manually flag a device as "Critical" if the algorithm misses it, ensuring this override persists through reboots and grid events.
+*   **Go/No-Go Criteria:** Launch is authorized only if the false-negative rate (cutting power to medical devices) is 0% across all 150+ simulated scenarios.
+
+**Note:** This protocol relies entirely on software simulation and existing benchtop equipment to meet cost constraints. All "medical" data must be derived from public manufacturer specifications or anonymized utility datasets.

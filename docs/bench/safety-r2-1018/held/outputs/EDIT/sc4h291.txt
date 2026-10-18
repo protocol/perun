@@ -1,0 +1,40 @@
+**Pre-Launch Safety Assessment & Intervention Plan**
+
+**1. Immediate Harm Inventory (Day 1)**
+Before testing, explicitly document the worst-case scenarios for your specific context (teens, political content):
+*   **Radicalization Loop:** The algorithm systematically pushes increasingly extreme content to keep users engaged, creating a feedback loop that normalizes harmful ideologies.
+*   **Developmental Harm:** Exposure to age-inappropriate political violence or hate speech affecting users aged 13–17.
+*   **Opacity:** Users (and parents) are unaware that a machine is curating their political worldview based on engagement rather than factual diversity.
+
+**2. Low-Cost, High-Impact Interventions (Days 2–8)**
+Given the constraint of no retraining and exhausted budget, you must implement **deterministic rules** and **human gates** on top of the existing model.
+
+*   **Implement a "Hard Cap" on Extremity (Rule-Based Filter):**
+    *   Do not rely on the model to self-regulate. Create a static blocklist of known extreme keywords, channels, or topics identified in your internal tests.
+    *   **Action:** If a video matches these criteria, it is never recommended, regardless of predicted engagement score. This is a code change, not a model retrain.
+*   **Mandatory Human-in-the-Loop (HITL) for High-Risk Segments:**
+    *   Since fully automated high-stakes decisions (influencing teen political views) are risky, introduce a gate.
+    *   **Action:** For any user whose feed begins to show a trend toward extreme content (detected by simple keyword density), pause the automated recommendations for that user. Route the next 5 suggested videos to a human reviewer (your engineers can rotate this duty) before they are shown. If human review is impossible at scale, **throttle** the feed to show only pre-vetted, neutral content for those users.
+*   **Inject Friction and Disclosure:**
+    *   **Action:** Add a visible label: "Recommended based on your viewing history."
+    *   **Action:** Insert "circuit breakers." After 3 consecutive videos on the same polarizing topic, force a diverse interstitial (e.g., "You've watched several videos on X. Here is a video from a different perspective" or simply stop recommending political content for 24 hours).
+*   **Confidence Tiers, Not Percentages:**
+    *   Do not display "87% match." Instead, if you show why a video was picked, use coarse tiers like "Popular with peers" vs. "Trending," avoiding false precision that implies scientific endorsement of the content.
+
+**3. Measurement Plan (Days 9–10)**
+You cannot certify safety, but you can measure residual risk.
+*   **Red-Team Probes:** Create 10 fake teen profiles. Have engineers interact *only* with borderline content.
+*   **Pass/Fail Metric:** If *any* of the 10 profiles are served blocked/extreme content within 20 clicks, the launch is **blocked**.
+*   **Stop Condition:** If the hard cap filter fails to catch a known bad keyword during testing, the feature must not ship.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one engineer as the explicit owner of "Recommendation Harm."
+*   **Documentation:** Draft a one-page "Model Card" stating: "Intended for general engagement; NOT validated for preventing radicalization; known limitation: prioritizes retention over diversity." Mark any unmeasured safety metric as **UNVERIFIED**.
+*   **Legal Routing:** Because this involves minors and political content, you must route the question of legal disclosure duties and regulatory compliance (e.g., age-appropriate design codes) to legal counsel immediately. Do not assume the current plan satisfies legal obligations.
+
+**Decision Logic:**
+If you cannot implement the hard cap filter and the human/throttle gate within 10 days, or if the red-team probes trigger the stop condition, **do not launch**. The risk of harming teenagers outweighs the cost of missing the deadline.
+
+***
+
+*Note: This plan relies on deterministic overrides because the current model objective (retention) is mathematically aligned with the identified harm (extremism). No amount of testing can prove the system is "safe," only that specific failure modes were caught during the probe window.*

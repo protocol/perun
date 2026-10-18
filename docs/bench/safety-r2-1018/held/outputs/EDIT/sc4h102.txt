@@ -1,0 +1,43 @@
+### Pre-Launch Safety Review: Automated Drone Supply Dropper
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (dropping critical medical aid).
+*   **Failure Mode:** Wind gusts cause coordinate drift; kits miss victims in disaster zones.
+*   **Worst Case:** Victims denied life-saving aid due to inaccessible terrain or time sensitivity; resources wasted on unrecoverable drops.
+*   **Affected:** Disaster survivors in Manila monsoon zones.
+
+**2. Measurement Plan (Low-Bandwidth Compatible)**
+Do not attempt to upload new model weights. Instead, validate the current system against edge cases using lightweight data probes.
+*   **Probe Set:** Simulate "strong gust" scenarios exceeding historical Manila monsoon averages. Include positive controls (known failure inputs) and negative controls (stable wind inputs).
+*   **Metric:** Drop accuracy radius (meters) vs. wind speed (km/h).
+*   **Threshold:** Owner-defined maximum drift distance before abort (e.g., >5m drift = No Drop).
+*   **Stop Condition:** If drift exceeds the threshold in >0% of strong-gust simulations, the autonomous drop function is blocked.
+*   **Injection/Leak Check:** Verify wind sensor inputs cannot be spoofed by malicious actors or corrupted data packets.
+*   **Reporting:** Report residual risk as **UNVERIFIED** for any wind condition not explicitly tested. Do not invent an accuracy percentage.
+
+**3. Management Controls & Contingency**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the irreversible nature of dropping supplies in inaccessible zones, **full autonomous execution is prohibited** under high-wind conditions.
+    *   *Protocol:* If wind speed exceeds the safe threshold defined in testing, the drone must **hold position** or **return to base** rather than attempt a risky drop.
+    *   *Override:* A human operator must explicitly confirm the drop coordinates and risk acceptance via the low-bandwidth channel before release in marginal conditions.
+*   **Uncertainty Disclosure:** The drone's status interface must not display false precision (e.g., "98% accuracy"). Instead, use defined coarse tiers:
+    *   **CONFIRMED:** Wind within safe limits; auto-drop permitted.
+    *   **UNVERIFIED/HIGH RISK:** Wind gusts detected; auto-drop blocked; human review required.
+*   **Rollback Plan:** If live telemetry indicates drift during the pilot, immediately disable the auto-drop feature and revert to manual release confirmation for all subsequent missions.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one engineer as the explicit owner of the "Drop Accuracy" risk.
+*   **Artifact:** Create a lightweight **Model Card** text file (compatible with low bandwidth) summarizing:
+    *   Intended Use: Medical kit delivery in monsoon conditions.
+    *   Limitations: Performance unverified for gusts exceeding [X] km/h.
+    *   Measured Results: Pass/Fail status of the specific gust simulations run.
+    *   Owner Contact: [Name/Role].
+*   **Legal Routing:** Whether this automated decision falls under specific humanitarian or aviation regulations requiring external disclosure is a legal determination. Route this question to counsel; do not assert compliance internally.
+
+**5. Execution Schedule**
+*   **Day 1:** Finalize harm inventory and define "strong gust" thresholds based on local meteorological data.
+*   **Day 2:** Run lightweight simulations; document pass/fail per threshold.
+*   **Day 3:** Implement hard-coded "No Drop" logic for failed conditions; test human-override channel.
+*   **Day 4:** Draft and compress the Model Card; brief the 8-engineer team on the "Hold/Return" default behavior.
+*   **Day 5:** Pilot launch with human gate active for all drops.
+
+**Note:** This plan treats the deadline and bandwidth constraints as fixed, prioritizing a "Hold/Return" default over risky automation. No safety certification is claimed; the ship decision rests with the assigned owner.

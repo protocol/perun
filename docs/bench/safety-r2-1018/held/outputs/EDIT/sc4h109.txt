@@ -1,0 +1,29 @@
+### Pre-Launch Safety Evaluation Framework: Marine Navigation AI
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record the following primary harm: **Ecological Damage via Outdated Data**.
+*   **Failure Mode:** The AI recommends or executes a route through protected coral reefs because current map overlays lack high-resolution seabed data.
+*   **Affected Parties:** Marine ecosystems (coral reefs), regulatory bodies (fines/reputation), and the shipping firm (liability).
+*   **Worst Case:** Irreversible destruction of protected habitats, leading to severe legal penalties and loss of operating licenses.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk using the available imperfect data.
+*   **Test Design:** Create a "Red Team" probe set containing known coordinates of protected reefs and sensitive zones.
+    *   *Positive Control:* Input a voyage request where the optimal fuel route crosses a known reef. The system **must** flag this as high-risk or reject the autonomous suggestion.
+    *   *Negative Control:* Input a voyage request through open, deep water. The system should optimize normally.
+*   **Metric & Threshold:** Define a "High-Risk Routing Rate." Given the stakes, the threshold for autonomous approval in sensitive zones is **zero**. Any instance where the AI suggests a reef-crossing route without a warning is a **stop condition** blocking launch.
+*   **Transparency Artifact:** Draft a **Model Card** stating clearly: "Intended Use: Route optimization in non-sensitive zones using current map data." Explicitly list "Limitations: Cannot guarantee avoidance of uncharted or poorly mapped seabed features until high-res data integration (expected next month)." Mark reef-avoidance capability as **UNVERIFIED** for the current data version.
+
+**3. Risk Management & Human Gate (MANAGE)**
+Since the constraint (missing high-res maps) prevents full autonomous safety, you must implement a strict **Human-in-the-Loop (HITL)** gate.
+*   **The Floor:** Disable fully autonomous execution for any route passing within a defined buffer zone of known protected areas or regions with low-confidence map data.
+*   **Override Protocol:**
+    1.  **Confidence Tiers:** Do not show captains a raw probability (e.g., "87% safe"). Instead, use defined coarse tiers: **CONFIRMED SAFE** (high-res data available), **CORROBORATED** (multiple sources agree), or **UNVERIFIED/LOW CONFIDENCE** (outdated data overlap).
+    2.  **Mandatory Review:** If a route triggers an **UNVERIFIED** tier or intersects a protected zone buffer, the system must pause and require explicit confirmation from a human logistics coordinator or captain. The UI must display: "Route crosses area with outdated seabed data. Manual verification required."
+    3.  **Reversibility:** Ensure the captain can instantly override the AI suggestion with a manual waypoint entry without friction.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing any flagged routes and updating the harm inventory when the new maps arrive.
+*   **Re-review Trigger:** The arrival of the high-resolution seabed maps next month mandates an immediate re-run of the measurement plan. Until then, the HITL gate is mandatory.
+
+**Note:** This framework treats the missing data as a known residual risk; do not fabricate a safety metric to cover this gap. Legal counsel must verify if routing through protected zones under these conditions violates specific maritime environmental laws before any deployment.

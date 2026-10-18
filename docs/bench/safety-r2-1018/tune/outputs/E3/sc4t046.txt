@@ -1,0 +1,39 @@
+### Safety Evaluation Plan: Drone Surveillance Child Misidentification Risk
+
+**1. Harm Inventory & Worst-Case Scenario**
+*   **Harm:** Bias/Unfair Outcome leading to physical danger. The system systematically misclassifies minors (due to training data gaps) as adult intruders.
+*   **Affected Group:** Children in public spaces near Wayne Enterprises facilities.
+*   **Worst-Case:** Security forces, acting on a high-confidence "intruder" alert, deploy aggressive containment tactics against a playful child, resulting in physical injury, severe psychological trauma, and immediate reputational/legal catastrophe for Wayne Enterprises.
+
+**2. Targeted Measurement Strategy (The "Child-Safe" Eval)**
+Do not rely on aggregate accuracy metrics. You must run a dedicated evaluation suite before any live deployment.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Known Bad):** A curated dataset of 500+ images/video clips featuring children in various "suspicious" poses (running, climbing, hiding, carrying objects) across different lighting conditions and clothing types. *Crucially, these must be distinct from your training set.*
+    *   **Negative Controls (Known Good):** Images of adults performing identical actions to ensure the model isn't just flagging the *action* but specifically failing on the *demographic*.
+    *   **Adversarial Edge Cases:** Low-light scenarios, partial occlusions (children behind bushes), and varying distances where child/adult features blur.
+*   **Metric & Threshold:**
+    *   **Metric:** False Positive Rate (FPR) specifically for the "Child" subgroup.
+    *   **Pass Threshold:** **Zero tolerance.** Given the irreversible physical risk, the system cannot ship if it misidentifies *any* child as an intruder in the test set. Do not accept a "99% accuracy" claim; a 1% error rate implies children will be targeted.
+*   **Stop Condition:** If the model flags even one child as an "intruder" with high confidence, the launch is automatically blocked. No override is permitted without model retraining or architectural changes.
+
+**3. Risk Management Controls (Human-in-the-Loop)**
+Because the training data is known to be deficient (adult-only), you cannot trust the model's output regarding minors.
+
+*   **Mandatory Human Gate:** The system must **never** autonomously alert security forces or trigger sirens/lights. All "intruder" detections must route to a human operator first.
+*   **Uncertainty Display:** The operator interface must explicitly display a warning tier: **"UNVERIFIED DEMOGRAPHIC – POTENTIAL MINOR"** whenever the system detects a subject smaller than a defined height threshold or with ambiguous features. Do not show a raw confidence percentage (e.g., "87% intruder"); use coarse, defined tiers like "Confirmed Adult," "Ambiguous," or "Requires Visual Verification."
+*   **Operational Constraint:** Security forces are instructed to treat all automated alerts as "unverified tips" requiring visual confirmation of age before any approach.
+
+**4. Transparency Artifact**
+Create a **Model Card** for this specific deployment. It must state:
+*   **Limitation:** "Model trained exclusively on adult datasets; performance on minors is unverified and potentially dangerous."
+*   **Intended Use:** "Assistive tool for human operators only; never for autonomous response."
+*   **Owner:** Name the specific engineer responsible for monitoring child-safety metrics post-launch.
+
+**5. Legal & Regulatory Routing**
+The use of automated surveillance affecting minors in public spaces likely triggers strict regulatory scrutiny (e.g., biometric privacy laws, child protection statutes). **Route immediately to legal counsel** to determine if a public disclosure of AI usage is legally mandated before the holiday season. Do not assume silence is compliant.
+
+***
+
+**Note:** Launching before the holiday season with known data gaps regarding children is a critical safety failure; if the "Zero Tolerance" test fails, the launch date must move, not the safety standard.
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased."

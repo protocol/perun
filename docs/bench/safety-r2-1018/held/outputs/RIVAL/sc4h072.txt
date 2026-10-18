@@ -1,0 +1,28 @@
+### SydneySure Claim Processor Safety Protocol & Threshold Review Plan
+
+**1. Immediate Threshold Adjustment Strategy**
+Replace the binary "blurry = reject" logic with a tiered confidence scoring system. Instead of an automatic denial, classify images into three categories:
+*   **High Confidence:** Clear images processed for instant approval/denial.
+*   **Low Confidence (Blurry/Storm Conditions):** Flag for "Expedited Human Review" rather than automatic rejection. These claims bypass the instant decision engine and enter a priority queue for your existing staff.
+*   **Unprocessable:** Only reject images that are completely corrupted or empty, not merely out of focus.
+
+Given the constraint of using the legacy database without upgrades, implement this logic in the application layer (the code sitting between the image analysis tool and the database). The application should write the claim status as "PENDING_REVIEW" instead of "DENIED" for low-confidence scores, requiring no schema changes to the legacy system.
+
+**2. Dynamic Environmental Triggers**
+Implement a simple weather API check or a time-based rule during known storm events. When severe weather is detected in a specific region, automatically lower the image quality threshold for claims originating from those zip codes. This ensures that during storms, the system defaults to human review rather than automated rejection, acknowledging that valid claims often have imperfect photo evidence during emergencies.
+
+**3. Safety Protocol: The "Fail-Safe" Workflow**
+Establish a mandatory human-in-the-loop protocol for all claims flagged by the image analyzer as uncertain.
+*   **Triage Queue:** Create a dedicated view in your existing internal tools that lists all "PENDING_REVIEW" claims sorted by urgency (e.g., water damage keywords).
+*   **Reviewer Guidelines:** Train the review team to accept slightly blurry images if the core damage is discernible. Explicitly instruct them that the cost of a false negative (denying a valid claim) is currently higher than the cost of a manual review.
+*   **Audit Trail:** Log every instance where the AI suggested a rejection due to blur but a human approved the claim. This data will be critical for retraining or fine-tuning thresholds post-release.
+
+**4. Pre-Release Validation Steps**
+Before releasing to customers, run a simulation using historical claim data:
+*   **Retrospective Testing:** Re-process a sample of previously denied "blurry" claims through the new tiered logic. Estimate how many would have been routed to human review and potentially approved.
+*   **Load Testing:** Ensure the "Expedited Human Review" queue does not overwhelm your eight-person team. Calculate the maximum volume of storm-day claims and verify that the manual review capacity can handle the expected surge. If the volume exceeds capacity, define a triage rule (e.g., "process highest estimated payout first") to manage the backlog.
+
+**5. Communication Plan**
+Update user-facing error messages. Instead of telling customers their claim is "Denied due to image quality," state: "Your image requires a quick manual check due to quality. A specialist will review it within [X] hours." This manages expectations and reduces frustration while maintaining the safety net.
+
+**Note:** This plan relies entirely on application-layer logic changes and workflow adjustments, respecting the legacy database constraint. Immediate implementation of the "Expedited Human Review" queue is the most critical step to prevent valid claim denials.

@@ -1,0 +1,41 @@
+### Software-Only Mitigation Strategy & Pre-Launch Review
+
+**1. Multi-Factor Confidence Gating (The "No Single Point of Failure" Rule)**
+Do not trigger an automatic order based solely on the camera's expiration date scan. Implement a logic gate requiring **two out of three** signals to confirm spoilage before an order is placed:
+*   **Signal A:** Camera scan indicates "Expired."
+*   **Signal B:** User manual confirmation via the app ("Is this item spoiled?") OR a secondary sensor input (e.g., door-open frequency correlating with usage, if available).
+*   **Signal C:** Temporal consistency (the item has been flagged as expired for >24 hours across multiple scans).
+*   **Action:** If only Signal A is present, change the system behavior from "Auto-Order" to "Send Notification." The user must explicitly approve the replacement. This inserts a human-in-the-loop for the irreversible action of spending money and shipping goods.
+
+**2. Defined Uncertainty Tiers (Replace Precision with Clarity)**
+Do not display raw confidence scores (e.g., "87% likely spoiled") to users, as this implies a calibration the current sensors cannot support. Instead, surface defined coarse tiers in the app:
+*   **"Confirmed Spoilage":** Multiple signals align. Auto-order proceeds (if user opted in).
+*   **"Unverified Scan":** Camera detected an issue, but no secondary signal exists. Status shows "Needs Review."
+*   **Action:** Clearly label the source of the alert (e.g., "Camera scan suggests expiration; please verify"). This prevents automation bias where users trust the machine over their own judgment.
+
+**3. Pre-Launch Harm Inventory & Evaluation Plan**
+Before shipping, document the specific harms and run targeted tests. Do not certify the system as "safe"; measure residual risk.
+*   **Harm Inventory:**
+    *   *False Positive:* Good food marked bad, triggering unwanted cost/waste. (Worst case: User financial loss, loss of trust).
+    *   *False Negative:* Spoiled food marked good, causing illness. (Worst case: Health impact).
+    *   *Over-reliance:* Users stop checking dates entirely.
+*   **Runnable Test Rows (Execute these before launch):**
+    *   *Probe Set:* 50 images of expired items + 50 images of fresh items with similar packaging + 50 images of damaged/obscured labels.
+    *   *Controls:* Known-bad positive (clearly expired milk); Known-good negative (fresh milk).
+    *   *Metric:* False Positive Rate (FPR) specifically for the "Auto-Order" path.
+    *   *Stop Condition:* If FPR > 0% for the auto-order path (given the financial impact), the auto-feature is blocked. The threshold for "Notification Only" may be higher but must be owner-defined.
+    *   *Injection Check:* Test if placing a sticker over a date or using a photo of a label tricks the system.
+
+**4. Transparency Artifact (Model Card Lite)**
+Create a one-page internal/external document stating:
+*   **Intended Use:** Assistance in inventory tracking, not a guarantee of food safety.
+*   **Limitations:** "Camera accuracy is limited by lighting and label visibility; do not consume food solely based on app status."
+*   **Measured Performance:** Report the FPR from the tests above. If unmeasured for a specific food type, mark it `UNVERIFIED`.
+
+**5. Governance**
+Assign one engineer as the owner of the "Spoilage Detection" output. Any change to the scanning algorithm or the threshold logic requires a re-run of the evaluation plan.
+
+***
+
+**Note:** Legal counsel must review whether "automated grocery purchasing" constitutes a regulated automated decision in your target markets; this plan assumes it is a consumer convenience feature.
+**Note:** The supply chain constraint makes the human-in-the-loop gate mandatory, not optional, for the initial batch.

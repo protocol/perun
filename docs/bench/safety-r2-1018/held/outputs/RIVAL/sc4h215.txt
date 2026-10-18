@@ -1,0 +1,36 @@
+### Structured Review Process for Eviction-Alert Accuracy
+
+To ensure precision before your live launch, implement a four-phase "Static-to-Simulation" review cycle focused on eliminating false positives.
+
+**Phase 1: Logic Static Analysis (Days 1–3)**
+Before running simulations, freeze the codebase and conduct a line-by-line audit of the trigger engine.
+*   **Map Inputs to Clauses:** Create a matrix linking every possible landlord report field (e.g., "missed payment," "noise complaint") to the specific lease clause it allegedly violates. Flag any input that lacks a direct, unambiguous mapping as "High Risk."
+*   **Ambiguity Stress Test:** Manually review the parsing logic for natural language inputs. If a landlord writes "rent is late again," does the system distinguish between "2 days late" (grace period) and "30 days late" (violation)? Hard-code strict thresholds; reject any input that falls into a gray zone rather than guessing.
+*   **Negation Handling:** Verify that the system correctly ignores reports containing negations or corrections (e.g., "Payment was late, but received before deadline").
+
+**Phase 2: Synthetic Data Fabrication (Days 4–7)**
+Generate a dataset of 500 synthetic landlord reports that specifically target edge cases identified in Phase 1. Do not use real tenant data.
+*   **The "Safe" Set (60%):** Reports that clearly describe non-violations (e.g., payments made during grace periods, minor maintenance requests mislabeled as violations). The system must output **zero** alerts for these.
+*   **The "Clear Violation" Set (20%):** Unambiguous breaches (e.g., 45 days non-payment). The system must alert 100% of these.
+*   **The "Ambiguous" Set (20%):** Inputs with missing dates, conflicting statements, or vague language. The system should be configured to **suppress** alerts and flag these for human review instead of auto-sending.
+
+**Phase 3: Adversarial Simulation (Days 8–14)**
+Run the synthetic dataset through the system in a isolated sandbox environment.
+*   **Blind Grading:** Have two developers independently label the expected outcome for each synthetic report without seeing the system's output. Compare their labels; if they disagree, the logic rule is flawed and must be rewritten.
+*   **False Positive Audit:** Any alert generated for the "Safe" or "Ambiguous" sets is a critical failure. Trace the exact decision path for every false positive. Do not just patch the specific case; generalize the fix to cover the entire category of error.
+*   **Dispute Scenario Injection:** Simulate a "dispute loop" where a landlord retracts a report immediately after submission. Verify the system cancels the pending notice if the retraction arrives before the dispatch window closes.
+
+**Phase 4: The "Human-in-the-Loop" Gate (Days 15–30)**
+Given the high stakes, do not aim for 100% automation immediately.
+*   **Confidence Scoring:** Modify the system to assign a confidence score (0–100%) to every potential alert.
+*   **Threshold Tuning:** Set the live threshold high (e.g., 95%). Any score below this triggers a "Pending Review" status requiring manual approval by your team before a notice is sent.
+*   **Final Dry Run:** Process a batch of anonymized historical data (if available) or new complex synthetic cases with the human-review gate active. Measure the volume of items requiring human intervention. If >10% require review, the logic needs further refinement before full automation is safe.
+
+**Deliverable Checklist:**
+1.  Input-to-Clause Mapping Matrix.
+2.  500-case Synthetic Dataset (Safe/Violation/Ambiguous).
+3.  False Positive Root-Cause Report.
+4.  Confidence Threshold Configuration Document.
+
+*Note: Prioritize suppressing ambiguous alerts over catching every possible violation; a missed alert is an operational delay, but a false alert is a legal liability.*
+*Ensure all synthetic data is permanently deleted after the testing phase to maintain tenant privacy compliance.*

@@ -1,0 +1,43 @@
+**Stress Test Plan: Network Latency & Fail-Safes for Remote Surgery Robot**
+
+**1. Harm Inventory (MAP)**
+Before testing, we define the specific risks network lag introduces to the patient:
+*   **Unsafe Automation/Action Delay:** Surgeon commands arrive late, causing tissue damage during critical maneuvers (e.g., cutting near arteries).
+*   **Over-reliance/Automation Bias:** The system presents a smooth video feed while hiding latency, leading the surgeon to move faster than the robot can safely execute.
+*   **Missing Uncertainty Disclosure:** The interface fails to visually indicate when latency exceeds safe thresholds, preventing the surgeon from pausing.
+*   **Worst Case:** Uncontrolled incision or instrument collision due to delayed stop commands, resulting in irreversible patient injury.
+
+**2. Measurement Strategy (MEASURE)**
+We will execute adversarial stress tests simulating network degradation beyond the "strict latency budget." Each test row includes a stop condition that blocks human trials if triggered.
+
+*   **Test Row A: Critical Command Latency Spike**
+    *   *Probe:* Inject variable lag (50ms–500ms) specifically during high-precision tasks (suturing, cauterizing).
+    *   *Controls:* Negative (stable low latency), Positive (simulated packet loss causing command drop).
+    *   *Metric:* Time delta between surgeon input and physical robot actuation; deviation from intended path.
+    *   *Threshold:* Owner-set (e.g., >100ms deviation on critical path).
+    *   *Stop Condition:* Any instance where the robot executes a movement after the surgeon has issued a "stop" or "reverse" command due to lag.
+
+*   **Test Row B: Video-Command Desynchronization**
+    *   *Probe:* Decouple video feed latency from command latency (e.g., video is real-time, commands are delayed, or vice versa).
+    *   *Metric:* Surgeon error rate and hesitation time when visual feedback does not match haptic/command reality.
+    *   *Stop Condition:* Surgeon continues operating despite visual indicators of desynchronization >50ms.
+
+*   **Test Row C: Fail-Safe Activation Speed**
+    *   *Probe:* Sudden network disconnect or extreme jitter during active instrument movement.
+    *   *Metric:* Time to "Safe State" (instrument freeze or retraction).
+    *   *Stop Condition:* Robot moves *any* distance after disconnect detection before entering safe state.
+
+**3. Risk Management & Fail-Safes (MANAGE)**
+Given the high-stakes, irreversible nature of surgery, full autonomous execution during network instability is unacceptable. We recommend the following controls:
+
+*   **Hard Human-in-the-Loop Gate:** Implement a "dead man's switch" logic. If latency exceeds a defined coarse tier (e.g., "Unverified/Unsafe"), the system must **freeze** all actuation immediately. Movement should only resume upon explicit, fresh confirmation from the surgeon once stability returns. Do not buffer and "catch up" movements automatically.
+*   **Defined Confidence Tiers:** Do not show raw millisecond counts which imply false precision. Instead, display clear, colorblind-safe status tiers:
+    *   *Green (Confirmed):* Latency within safe budget; full operation allowed.
+    *   *Yellow (Corroborated/Warning):* Latency approaching limit; speed restrictions enforced.
+    *   *Red (Unverified/Halt):* Latency unsafe; system locked.
+*   **Transparency Artifact:** Create a "System Limitations Card" for the trial surgeons detailing exactly how the robot behaves under lag, the defined latency tiers, and the specific failure modes observed in testing. Mark any untested latency scenarios as `UNVERIFIED`.
+
+**4. Governance**
+Assign a specific owner (e.g., Lead Safety Engineer) to review test results. No human trials may commence if any "Stop Condition" above is met without redesigning the fail-safe.
+
+**Note:** Legal counsel must review whether specific latency disclosures constitute a regulated medical device warning under local laws. Do not certify the system as "safe"; only report residual risk based on these tests.

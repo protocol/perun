@@ -1,0 +1,41 @@
+### Testing Framework for Billing Aggregation Logic
+
+To prevent incorrect peak-hour charges given your hardware constraints and user sensitivity, execute the following harm-focused evaluation plan. This framework treats billing errors as a high-stakes irreversible action requiring a human-in-the-loop gate before full automation.
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Financial loss due to "Hallucinated Consumption" (charging for energy not used) or "Time-Shift Errors" (misclassifying off-peak usage as peak).
+*   **Affected Group:** Low-income households in Santiago suburbs; a single error could represent a significant percentage of monthly income.
+*   **Worst Realistic Case:** A systematic firmware bug misaligns local time zones or daylight saving transitions, charging an entire neighborhood peak rates for a week, triggering mass disconnections or inability to pay.
+
+**2. Runnable Test Rows (Measure)**
+Do not rely on aggregate accuracy metrics. Run these specific adversarial probes against your aggregation logic using simulated data streams:
+
+*   **Probe A: The "Zero-Usage" Boundary**
+    *   *Input:* 24 hours of zero-consumption data interspersed with noise spikes (sensor jitter) exactly at peak/off-peak transition times.
+    *   *Positive Control:* Inject one known valid peak event; verify it is charged.
+    *   *Negative Control:* Inject noise spikes only; verify total charge is $0.00.
+    *   *Stop Condition:* Any non-zero charge on the negative control blocks launch.
+
+*   **Probe B: The Time-Drift Simulation**
+    *   *Input:* Data streams where the device clock drifts +5 minutes/day over a month, crossing multiple peak windows.
+    *   *Metric:* Percentage of kWh misclassified as "peak" due to clock skew.
+    *   *Threshold:* Owner-set (recommend 0% tolerance for unverified drift).
+    *   *Stop Condition:* >0% misclassification without an automatic self-correction mechanism triggers a rollback.
+
+*   **Probe C: The "Sawtooth" Attack (Logic Stress)**
+    *   *Input:* Rapid on/off cycling (e.g., a fridge compressor) occurring precisely at the peak rate switch-over minute.
+    *   *Metric:* Discrepancy between raw sum of intervals and the billed aggregate.
+    *   *Stop Condition:* Discrepancy exceeds the smallest currency unit.
+
+**3. Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** For the pilot, **no bill is automatically finalized.** The system must generate a "Draft Bill" flagged for engineer review if:
+    *   Usage deviates >20% from the household's 30-day moving average.
+    *   Peak-hour consumption exceeds a defined absolute threshold for that home size.
+*   **Uncertainty Disclosure:** If the device detects clock synchronization failure or data gaps, the output must not guess. It must render a status of **"Unverified – Manual Review Required"** rather than estimating usage. Do not display a precise confidence percentage (e.g., "95% accurate") to users; this implies a calibration you cannot verify on-device.
+*   **Transparency Artifact:** Create a one-page "Billing Logic Card" for the pilot participants. It must state: "This meter calculates bills based on local time. If the device loses power, usage during the outage is marked 'Unverified' and will not be billed until manually checked."
+
+**4. Governance**
+*   **Owner:** Assign one specific engineer as the "Billing Safety Owner" responsible for reviewing every flagged draft bill during the pilot.
+*   **Re-review Trigger:** Any change to the time-sync protocol or rate-table updates requires re-running Probes A, B, and C.
+
+**Note:** Since you cannot afford cloud processing, perform these tests on a standard laptop using recorded device logs before flashing new firmware. Never assert the system is "bias-free"; report the residual risk of any untested edge cases to your leadership before expanding the pilot.

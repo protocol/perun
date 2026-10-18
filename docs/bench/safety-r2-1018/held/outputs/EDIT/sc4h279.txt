@@ -1,0 +1,17 @@
+You cannot guarantee unauthorized transfers will never occur by mapping decision paths alone, and you cannot rely on the algorithm to enforce the "no crypto without consent" rule if the consent interface is frozen and potentially incomplete. Because moving retiree savings into volatile assets is a high-stakes, irreversible financial action, the only safe pre-launch process is a **mandatory human-in-the-loop gate** that blocks any allocation to alternative assets until explicit, documented consent is verified by a person, not just code.
+
+**Pre-Launch Review Process Design**
+
+1.  **Harm Inventory & Stop Condition**: Define the specific failure as "any transfer to an alternative asset (including crypto) lacking verified, documented user consent." The worst-case scenario is permanent loss of retiree savings due to volatility. The stop condition for launch is the absence of a hard block on autonomous execution of these transfers.
+2.  **Architectural Gate (The Floor)**: Modify the execution pipeline, not the user interface. Insert a mandatory pause before any trade involving "alternative assets" is settled. The system must generate a pending transaction record and route it to a human reviewer.
+    *   **Reviewer Task**: The human must manually verify the presence of a signed, versioned consent form in the user's file that explicitly covers the specific asset class being purchased.
+    *   **Execution**: Only upon human confirmation ("Consent Verified") does the system release the funds. Automatic execution of this specific action type must be disabled in the code.
+3.  **Decision Path Audit (Red Team)**: Instead of trying to map every path to "guarantee" safety (which is impossible with complex models), run adversarial tests.
+    *   **Probe**: Feed the system market data triggering a strong "buy crypto" signal for users with *no* consent, *expired* consent, or *ambiguous* consent.
+    *   **Pass Criteria**: The system must *never* execute the trade autonomously in these scenarios. It must always trigger the human gate. If it executes even once without human approval, the feature fails the review.
+4.  **Transparency Artifact**: Create a "Model Card" for this module stating its intended use (asset allocation), its specific limitation (cannot verify consent autonomously), and the measured result of the red-team tests (e.g., "0 autonomous executions on non-consented accounts in 500 trials"). Mark any untested asset classes as "UNVERIFIED."
+5.  **Ownership**: Assign a specific individual as the owner of this gate. They are responsible for reviewing any flagged transactions and re-validating the process if the model or asset list changes.
+
+**Notes**
+Mapping decision paths provides a false sense of security; only a hard architectural block on execution prevents harm.
+The regulatory constraint on the UI does not prevent you from adding backend safety checks or human review steps.

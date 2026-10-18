@@ -1,0 +1,32 @@
+### Offline Mode Safety Simulation Plan
+
+To verify the local logic prevents double dosing during connectivity loss and reconnection, execute the following simulation scenarios. Each scenario must be run against the prototype firmware with the legacy Wi-Fi modules to validate backward compatibility.
+
+**1. The "Pending Sync" Reconnection Stress Test**
+*   **Setup:** Schedule a dose time $T$. Simulate internet loss at $T-5$ minutes. Allow the device to dispense the dose locally at $T$ (logged as "pending sync").
+*   **Action:** Restore internet connectivity at $T+1$ minute, $T+10$ minutes, and $T+60$ minutes in separate runs.
+*   **Verification:** Confirm the cloud receives the "dispensed" log exactly once upon reconnection. Crucially, verify the cloud does *not* send a "missed dose" command back to the device that triggers a second dispensing event. The device must mark the local log as "synced" and ignore any retrospective cloud commands for time $T$.
+
+**2. The Rapid Flicker Sequence**
+*   **Setup:** Schedule consecutive doses (e.g., Morning and Noon).
+*   **Action:** Induce a rapid connect/disconnect cycle (flicker) starting 10 minutes before the first dose and continuing through the second dose window. Simulate 10+ state changes within a 30-minute window.
+*   **Verification:** Ensure the local state machine locks the dispensing mechanism after the first successful actuation. No amount of network state toggling should reset the "dose delivered" flag for that specific time window. Verify the device queues all status updates locally and flushes them in order once stable, without duplicating execution commands.
+
+**3. The Clock Drift & Re-sync Collision**
+*   **Setup:** Manually drift the device's internal real-time clock (RTC) forward by 15 minutes while offline.
+*   **Action:** Dispense a dose based on the drifted local time. Reconnect to the cloud, forcing an NTP (Network Time Protocol) synchronization that snaps the clock back to the correct time.
+*   **Verification:** Verify that the time correction does not trigger a "catch-up" routine that interprets the corrected time as a missed window requiring immediate dispensing. The system must recognize the dose was physically delivered, regardless of the timestamp correction.
+
+**4. The Power-Cycle During Ambiguity**
+*   **Setup:** Initiate a dose dispensing sequence while offline.
+*   **Action:** Cut power to the device mid-cycle (simulating a battery pull or outage) before the motor completes its rotation, then restore power.
+*   **Verification:** Upon reboot (still offline), the device must query its non-volatile memory. If the dose is marked "in-progress" or "completed," it must not restart the cycle. If marked "not started," it may attempt completion. The test passes only if a partial cycle never results in a full double dose upon reboot.
+
+**5. The Queue Overflow Edge Case**
+*   **Setup:** Keep the device offline for a duration covering 5+ scheduled doses.
+*   **Action:** Allow the device to dispense locally according to its schedule. Then reconnect.
+*   **Verification:** Ensure the local buffer correctly tracks multiple pending syncs. When the cloud syncs, verify it acknowledges the batch without sending individual "urgent dispense" commands for each missed slot that could override the local "already dispensed" flags.
+
+**Execution Note:** Log every motor actuation and network state change with millisecond precision to reconstruct the sequence of events during failure analysis.
+
+**Safety Gate:** Any scenario resulting in >1 physical actuation for a single scheduled dose is a critical failure; do not proceed to regulatory submission until the local state-locking logic is refactored.

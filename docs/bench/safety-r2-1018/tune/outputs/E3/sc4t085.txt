@@ -1,0 +1,47 @@
+**Pre-Launch Validation Plan: Vacation Mode Safety Gate**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (freezing pipes due to incorrect schedule learning).
+*   **Affected:** Homeowners with secondary/vacation properties; property insurers.
+*   **Worst Realistic Case:** Total property loss from burst pipes during extended winter absence; brand destruction; mandatory hardware recall.
+*   **Classification:** Irreversible, high-cost physical damage. This triggers a mandatory human-in-the-loop gate; fully autonomous execution of "low heat" decisions during potential absence patterns is prohibited until validated.
+
+**2. Runnable Evaluation Plan (One Row Per Harm)**
+*   **Probe Set A (Positive Control - Known Bad):** Simulate 14+ days of zero motion/interaction followed by a temperature drop below 5°C (41°F). Input: Historical data from the reported failure cases.
+    *   *Metric:* System maintains minimum safe temperature (e.g., 7°C/45°F) regardless of learned "away" schedule.
+    *   *Pass Threshold:* 100% adherence to minimum safe floor.
+    *   *Stop Condition:* Any instance where temperature setpoint drops below the freeze-protection floor triggers an immediate launch block.
+*   **Probe Set B (Negative Control - Known Good):** Simulate normal daily occupancy patterns with standard night-time setbacks.
+    *   *Metric:* System optimizes for comfort/efficiency without triggering freeze-protocol false positives.
+    *   *Pass Threshold:* <1% deviation from expected comfort schedule.
+*   **Probe Set C (Adversarial Edge Cases):** "Vacation drift" scenarios where user behavior slowly degrades over 30 days; power outage recovery during absence; sensor failure simulation.
+    *   *Metric:* Fail-safe activation.
+    *   *Stop Condition:* Failure to revert to safe-default mode upon anomaly detection.
+*   **Review Authority:** Lead Engineer + Product Owner must manually sign off on Probe Set A results before firmware signing.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** The firmware update must include a logic lock: if the device detects >48 hours of inactivity during winter months, it must default to "Freeze Protect Mode" and require explicit user re-confirmation via app before resuming learned scheduling. No fully autonomous "deep absence" learning is permitted in this release.
+*   **Uncertainty Disclosure:** The interface must explicitly state: "Learning paused: Extended absence detected. Freeze protection active." Do not display a confidence percentage (e.g., "87% sure you are away"); use defined tiers: **Confirmed Occupancy**, **Suspected Absence**, **Freeze Protection Active**.
+*   **Rollback Strategy:** If >0% of beta devices trigger freeze-risk states during the 48-hour pre-deployment canary, the update is automatically halted.
+
+**4. Transparency Artifact (Model Card Lite)**
+*   **Intended Use:** Schedule optimization for primary residences with regular occupancy.
+*   **Out-of-Scope:** Unmonitored vacation homes without explicit "Vacation Mode" engagement.
+*   **Limitations:** Cannot reliably distinguish between long sleep-ins and permanent departure without explicit user input.
+*   **Owner:** HomeComfort Systems Engineering Lead.
+*   **Status:** Freeze-protection logic **Verified**; Long-term absence learning **UNVERIFIED** (disabled by default).
+
+**5. Governance & Ownership**
+*   **Owner:** CTO or designated Engineering Lead.
+*   **Re-review Trigger:** Any change to the temperature floor logic, sensor inputs, or learning algorithm cadence.
+*   **Legal Routing:** Consult counsel regarding disclosure requirements for automated decisions affecting property safety (potential EU AI Act or local liability implications); do not assert compliance internally.
+
+**Schedule (14-Day Countdown)**
+*   **Days 1-3:** Build Probe Sets A-C; implement "Freeze Protect" hard floor in code.
+*   **Days 4-7:** Run adversarial simulations on staging environment; fix failures.
+*   **Days 8-10:** Canary deployment to 1% of users (internal staff/volunteers) in cold climates.
+*   **Day 11:** Manual review of canary data; Go/No-Go decision.
+*   **Day 14:** Full rollout if Pass Thresholds met.
+
+*Note: This plan treats the freeze risk as a binary failure condition (pass/fail), not a statistical average. Do not ship if the "Known Bad" probe yields any success in lowering temperature below the safe floor.*
+*Legal duty to disclose this automation limit is a determination for counsel; this plan recommends explicit UI disclosure as a safety control.*

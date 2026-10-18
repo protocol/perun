@@ -1,0 +1,41 @@
+**Vaccine Eligibility Checker Validation Plan**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** False Negative (Incorrect Denial). A high-risk individual (elderly/immunocompromised) is told they are ineligible.
+*   **Worst Case:** An immunocompromised user relies on the denial, foregoes vaccination, contracts the virus, and suffers severe health outcomes or death.
+*   **Secondary Harm:** Over-reliance. Users assume a "Eligible" result is a medical guarantee rather than a scheduling pre-check.
+
+**2. Runnable Validation Steps (Measure)**
+Execute these specific probes before launch. Do not rely on aggregate accuracy; focus on edge cases for vulnerable groups.
+
+*   **Probe Set A: The "High-Risk" Edge Cases**
+    *   *Inputs:* Create 50 synthetic profiles representing complex comorbidities (e.g., "70yo + dialysis," "45yo + organ transplant + recent chemo"). Include variations in how conditions are listed (medical codes vs. plain text).
+    *   *Controls:* Include known-bad inputs (clearly ineligible healthy adults) and known-good inputs (clearly eligible high-risk profiles).
+    *   *Metric:* False Negative Rate specifically for the "High-Risk" segment.
+    *   *Threshold:* **Zero tolerance** for false negatives in the high-risk segment. Any single failure blocks launch.
+    *   *Stop Condition:* If any high-risk profile is denied, the system halts. No "99% accuracy" is acceptable here.
+
+*   **Probe Set B: Ambiguity & Missing Data**
+    *   *Inputs:* Profiles with partial data (e.g., age listed but condition missing, or vague descriptions like "weak immune system").
+    *   *Action:* Verify the system does not default to "Ineligible" when data is ambiguous.
+    *   *Requirement:* The system must route ambiguous high-stakes cases to a human reviewer or display a "Cannot Determine – Call Clinic" message, never an automatic denial.
+
+*   **Probe Set C: Adversarial/Injection Testing**
+    *   *Inputs:* Try to trick the logic with contradictory statements or formatting errors to see if it bypasses safety checks.
+    *   *Goal:* Ensure the logic doesn't crash or default to "Eligible" for everyone due to an error (which causes resource strain) or "Ineligible" due to rigid parsing.
+
+**3. Human-in-the-Loop Gate (Manage)**
+*   **Irreversible Action Control:** A "Not Eligible" result is a high-stakes, potentially harmful decision.
+    *   *Requirement:* Do not show a hard "Denied" message. Instead, show "Preliminary Result: Not Eligible based on entered data. **Click here to speak with a nurse** to verify."
+    *   *Rationale:* Fully automated denial of healthcare access without a human override is unsafe. The "No" must always have a human escape hatch.
+
+**4. Transparency & Disclosure**
+*   **Output Labeling:** Clearly state: "This is an automated screening tool, not a medical diagnosis. Final eligibility is determined at the clinic."
+*   **Uncertainty Display:** If the confidence in a decision is not absolute (e.g., based on self-reported text), label the result as "Unverified – Review Required" rather than giving a false sense of precision (avoid percentages like "87% eligible").
+*   **Documentation:** Publish a one-page "Model Card" on the portal footer explaining: intended use (scheduling triage), limitations (not a doctor), and who to contact for errors.
+
+**5. Governance**
+*   **Owner:** Name one specific health official responsible for reviewing any reported errors daily post-launch.
+*   **Rollback Plan:** Define the exact trigger for taking the site offline (e.g., >0 false negatives detected in post-launch monitoring).
+
+**Note:** Legal counsel must confirm if this tool triggers specific regulatory disclosures for automated health decisions in your jurisdiction. Do not assert the tool is "bias-free"; report the results of the probes above as the evidence for launch.

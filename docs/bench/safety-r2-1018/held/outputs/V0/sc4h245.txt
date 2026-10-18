@@ -1,0 +1,38 @@
+### Testing Strategy: Emergency Siren Masking Risk (Simulation-Only)
+
+Given the constraint of simulation-only validation for the next two weeks, the testing strategy must focus on adversarial audio probing within your digital twin environment. You cannot certify the feature as "safe," but you can measure residual risk and enforce gates.
+
+**1. Adversarial Probe Set Construction**
+Build a simulation suite that does not rely on average noise profiles. Instead, construct specific "red-team" audio scenarios:
+*   **Positive Controls (Known Bad):** Mix emergency sirens (police, ambulance, fire) at varying distances (10m to 100m) and angles with heavy urban noise (traffic, construction, wind). The ground truth is that the siren must remain audible above a specific decibel threshold after cancellation.
+*   **Negative Controls (Known Good):** Run standard urban noise without sirens to ensure the system does not falsely inject noise or degrade speech intelligibility unnecessarily.
+*   **Edge Cases:** Test sudden onset sirens (pop-in events) versus approaching sirens, and sirens masked by frequencies that match the cancellation algorithm's primary target range.
+
+**2. Metric and Stop Condition**
+Define a single pass/fail metric: **Siren Preservation Ratio (SPR)**. This measures the output volume of the siren relative to the input volume after processing.
+*   **Threshold:** Set a zero-tolerance threshold for irreversible harm. If the SPR drops below a level where a typical human ear would miss the cue in a busy street (e.g., siren output is attenuated by more than 3dB relative to ambient reduction), the test fails.
+*   **Stop Condition:** If any positive control scenario results in the siren being rendered inaudible or significantly delayed, the firmware build is blocked from release candidates immediately. Do not average results; a single failure in a high-stakes scenario is a hard stop.
+
+**3. Injection and Agency Checks**
+Simulate prompt-injection-style attacks where ambient noise is engineered to trick the adaptive algorithm into over-canceling specific frequency bands used by emergency vehicles. Verify that the system does not exhibit "excess agency" by aggressively nullifying sounds it cannot positively identify as non-critical.
+
+### Mitigation Tactics for Firmware
+
+Since the risk involves irreversible physical harm (pedestrian safety), full autonomous automation of aggressive cancellation in all contexts is the failure mode. Implement these controls before shipping:
+
+**1. Human-in-the-Loop via "Transparency Mode" Gate**
+Do not allow the "Aggressive Cancel" mode to engage automatically when motion sensors detect walking speeds or GPS locates the user in a pedestrian zone. Instead, default to a "Transparency" or "Awareness" mode that passes external audio through unchanged. Require explicit, deliberate user action to engage aggressive cancellation while moving. This acts as a human gate on the high-stakes action.
+
+**2. Defined Confidence Tiers, Not False Precision**
+Do not display a percentage confidence score (e.g., "90% safe") to the user, as this implies a calibration you cannot verify in simulation. Instead, use coarse, defined states:
+*   **Confirmed Safe:** Low ambient noise, stationary user.
+*   **Unverified/High Risk:** High ambient noise, moving user.
+In the "Unverified" state, the firmware must automatically degrade cancellation intensity or force transparency mode.
+
+**3. Hard-Coded Frequency Guardrails**
+Implement a deterministic filter in the firmware that explicitly exempts known emergency siren frequency ranges from cancellation algorithms, regardless of the AI's adaptive decision. This ensures that even if the model hallucinates that a siren is "noise," the hard code preserves the signal.
+
+**4. Disclosure and Warning**
+Include a clear, unavoidable disclosure in the setup flow stating that noise cancellation may mask environmental cues and should not be used when full situational awareness is required. Route the specific legal wording of this warning to counsel, as regulations regarding auditory safety devices vary by region.
+
+**Note:** This plan treats the "no hardware" constraint as fixed, relying entirely on simulation rigor. The "zero tolerance" stop condition is non-negotiable for irreversible physical risks.

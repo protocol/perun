@@ -1,0 +1,39 @@
+**Immediate Deployment Plan: Safety-Gated Drop Logic**
+
+Given the ten-day deadline and high stakes of irreversible supply loss, do not attempt to "prove" the system is safe. Instead, implement a **human-in-the-loop gate** for all autonomous drop decisions and execute a targeted **harm inventory and measurement plan** using your existing simulations.
+
+**1. The Non-Negotiable Gate (Manage)**
+Before any autonomous drop occurs in the field, the system must operate in "Recommendation Mode" only. The drone identifies a location, hovers or holds, and transmits the coordinates plus a **coarse confidence tier** (e.g., "High Confidence: Multiple Terrain Matches" vs. "Unverified: Single Source Data") to a human operator. The human must explicitly confirm the drop. Full autonomous execution of this high-stakes, irreversible action is blocked until the measurement plan below validates specific thresholds. This prevents immediate loss of critical supplies while you gather data.
+
+**2. Harm Inventory & Runnable Tests (Map & Measure)**
+You must run one specific test row per identified harm using your simulation tools. Do not rely on aggregate pass rates.
+
+*   **Harm: Unsafe Terrain Selection (Cliffs/Unstable Ground)**
+    *   **Probe Set:** Inject simulation inputs representing edge cases: steep gradients (>30°), loose soil textures, and obscured visibility (smoke/dust). Include a **positive control** (a known cliff coordinate that must be rejected) and a **negative control** (a known safe flat zone that must be accepted).
+    *   **Metric:** Rejection rate of positive controls; Acceptance rate of negative controls.
+    *   **Threshold:** Owner-set. Propose **zero tolerance** for accepting a positive control (cliff). Any failure here triggers an immediate rollback to manual-only mode.
+    *   **Stop Condition:** If the system selects a dangerous zone in >0% of positive control runs, autonomous mode is blocked.
+
+*   **Harm: Over-Reliance / False Precision**
+    *   **Probe Set:** Run scenarios where terrain data is incomplete or conflicting.
+    *   **Metric:** Does the system output a specific percentage (e.g., "87% safe") or a defined tier?
+    *   **Requirement:** Suppress raw model confidence numbers. Force the output to render as defined text tiers (e.g., "Verified," "Corroborated," "Unverified"). If the system cannot distinguish low-quality data, it must default to "Unverified" and require human review.
+
+*   **Harm: Excess Agency (Injection/Leakage)**
+    *   **Probe Set:** Feed corrupted terrain data or adversarial inputs mimicking sensor noise.
+    *   **Metric:** Does the drone attempt to drop anyway, or does it fail safe (hold position/return to base)?
+    *   **Stop Condition:** Any attempt to drop on corrupted data blocks deployment.
+
+**3. Transparency Artifact (Deliverable)**
+Create a one-page **Model Card** for the relief team. It must list:
+*   **Intended Use:** Emergency supply drops in road-impassable zones.
+*   **Limitations:** Explicitly state "Unverified" for terrain types not covered in your limited field data.
+*   **Measured Results:** Report the pass/fail status of the probe sets above. Do not invent a "99% accuracy" claim; if a metric wasn't tested, label it `UNVERIFIED`.
+*   **Owner:** Name the specific engineer responsible for the drop logic.
+
+**4. Governance**
+Assign one owner to review every simulation failure. If the disaster environment changes (e.g., new terrain type encountered), re-run the specific probe set before allowing drops in that new sector.
+
+**Notes**
+*   Legal requirements for automated decision disclosure in disaster zones must be routed to counsel immediately; do not assert compliance internally.
+*   If the "zero tolerance" threshold cannot be met within ten days, the constraint to move is the timeline, not the safety gate.

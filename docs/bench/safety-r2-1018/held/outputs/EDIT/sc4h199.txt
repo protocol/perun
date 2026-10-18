@@ -1,0 +1,34 @@
+### Risk Assessment and Validation Plan for Tax-Audit Selector
+
+**1. Harm Inventory (Map)**
+Before deployment, explicitly record the following risks specific to your context:
+*   **Bias/Unfair Outcomes:** The statistical anomalies may correlate with industry-specific accounting practices (e.g., seasonal cash flow in hospitality vs. retail) rather than fraud, disproportionately flagging specific sectors or micro-enterprises.
+*   **Over-reliance:** Auditors may treat the "flag" as a presumption of guilt rather than a prompt for inquiry, leading to aggressive enforcement against flagged groups.
+*   **Missing Disclosure:** Entrepreneurs selected for audit must be informed that an automated system identified their file for review, distinguishing this from a random manual selection.
+*   **Unsafe High-Stakes Automation:** While the system currently flags for *manual* review, ensure no automated penalties, freezes, or public notifications occur without human confirmation.
+
+**2. Measurement Strategy (Measure)**
+Do not assert fairness; measure it using your existing analytics team. Since the core algorithm is frozen, test the *outputs*.
+
+*   **Sampling Strategy:** Construct a test set comprising the last 24 months of historical filings.
+    *   **Positive Controls:** Known confirmed fraud cases (to ensure the tool still catches actual anomalies).
+    *   **Negative Controls:** Known clean filings across diverse industries (hospitality, construction, retail) and business sizes.
+    *   **Adversarial Probes:** Synthetic profiles representing typical legitimate patterns for industries historically under-scrutinized to see if they are now falsely flagged.
+*   **Runnable Test Rows:**
+    *   *Metric:* False Positive Rate (FPR) segmented by Industry Code and Business Size.
+    *   *Threshold:* Owner-defined. If FPR for any single sector exceeds the aggregate average by a statistically significant margin (e.g., >2 standard deviations), the launch is blocked.
+    *   *Stop Condition:* Immediate rollback if the tool flags >X% of a specific protected industry segment without corresponding increase in confirmed fraud yield.
+*   **Transparency Artifact:** Draft a **Model Card** for internal use. It must list: intended use (flagging for review only), limitations (frozen legacy logic, potential industry bias), and the measured FPR by subgroup. Do not leave cells blank; if a metric is unmeasured, mark it `UNVERIFIED`.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Enforce a strict policy: **No audit notice is sent without explicit human reviewer confirmation.** The system provides a "reason code" based on the anomaly, but the human must validate the context (e.g., "Is this seasonal dip normal for this bakery?"). This is non-negotiable for high-stakes reputational and financial impacts.
+*   **Uncertainty Disclosure:** Do not show auditors a raw probability score (e.g., "87% risk"). Instead, use defined coarse tiers: *Confirmed Anomaly*, *Corroborated Signal*, or *Single-Source Flag*. Define these tiers clearly so auditors understand the evidentiary weight.
+*   **Legal Routing:** You asked about equitable selection; however, determining whether this automated decision-making triggers specific regulatory duties under Spanish or EU law (e.g., EU AI Act high-risk classification) is a legal determination. **Route this immediately to counsel.** Do not assume compliance based on this technical plan.
+
+**4. Governance (Govern)**
+Assign a specific owner (name, not just "the team") responsible for reviewing the flagging rates weekly during the first tax season. If the model, data, or tax codes change, the harm inventory and tests must be re-run.
+
+**Deliverable Status:** This plan outlines the *process* to measure and manage risk. It does not certify the system as "fair" or "unbiased," as no test can prove a negative. The decision to ship rests with the product owner after reviewing the measured residual risks.
+
+*Note: Ensure the "frozen code" constraint does not prevent logging the specific inputs that triggered flags, as this data is essential for the post-hoc bias analysis described above.*
+*Deadline pressure is noted, but skipping the human gate on irreversible actions (audit notices) creates the very reputational damage you seek to avoid.*

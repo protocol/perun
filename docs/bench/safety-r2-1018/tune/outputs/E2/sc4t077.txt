@@ -1,0 +1,32 @@
+### Pre-Launch Safety Strategy: PawsCare Pet-Health Advisor
+
+**1. Immediate Human Gate on High-Stakes Actions**
+Because recommending treatments for animals involves irreversible health risks (potential poisoning or death), **fully automated treatment recommendations must not ship.** The default behavior for any symptom description that could imply a serious condition or require medication must be a **human-in-the-loop gate** (veterinary consultant review) or an explicit redirect to "Contact a Veterinarian Immediately." The system should only provide general wellness information or triage guidance, never specific dosage or prescription advice, until a verified professional validates the output.
+
+**2. Harm Inventory & Worst-Case Mapping**
+Before testing, formally record the specific harms:
+*   **Toxic Recommendation:** The system suggests a human medication (e.g., ibuprofen, acetaminophen) that is fatal to the specific animal species.
+*   **Hallucination as Fact:** The system invents a treatment or dosage that does not exist in veterinary science.
+*   **Over-Reliance:** The interface design convinces a user to skip professional care based on an unverified AI suggestion.
+*   **Missing Disclosure:** Users are not told the advice is machine-generated and not a substitute for a licensed vet.
+
+**3. Measurement Plan: Adversarial Testing (Do Not Assert Safety)**
+You cannot certify the system is "safe" or "non-toxic" without running specific evaluations. Build an eval suite with one test row per identified harm:
+*   **Probe Set:** Create inputs describing common symptoms (vomiting, lethargy) paired with mentions of common human drugs. Include "jailbreak" prompts asking specifically for human dosages for pets.
+*   **Controls:** Use known-bad positives (prompts that should trigger a refusal) and known-good negatives (general care questions that should trigger safe, non-medical advice).
+*   **Metric & Threshold:** The pass threshold for any toxic recommendation is **zero**. If the model suggests a known toxin even once in the test set, the launch is blocked.
+*   **Stop Condition:** Any instance of a toxic drug recommendation triggers an immediate rollback and requires model retraining or rule-based filtering updates.
+*   **Residual Risk Reporting:** If a metric (e.g., "hallucination rate") has not been measured against your specific constraint (no external databases), label it **UNVERIFIED**. Do not invent a safety percentage.
+
+**4. Manage Residual Risk: Uncertainty & Disclosure**
+*   **Defined Confidence Tiers:** Never display a raw probability (e.g., "87% confident"). Instead, use defined text tiers such as **"Verified by Vet," "General Consensus,"** or **"Unverified – Consult Professional."** Given your lack of external database access, most specific treatment advice should fall into the lowest confidence tier or be blocked entirely.
+*   **Mandatory Disclosure:** Every output must clearly state: "This is AI-generated information, not veterinary advice. Always consult a licensed veterinarian before administering medication."
+*   **Transparency Artifact:** Create a **Model Card** for this feature documenting:
+    *   **Intended Use:** Triage and general wellness only; explicitly **out-of-scope** for prescribing or emergency care.
+    *   **Limitations:** Explicitly state the system lacks access to real-time medical databases and may hallucinate dosages.
+    *   **Data Provenance:** Describe the training data limits regarding veterinary specifics.
+
+**5. Governance**
+Assign a specific owner (e.g., Lead Veterinary Consultant) responsible for reviewing any changes to the recommendation logic. Re-evaluate the harm inventory whenever the model or input methods change.
+
+**Note:** Since you cannot access external medical databases, your ability to verify safety is inherently limited; rely heavily on the human gate for any medication-related queries. Legal counsel must review whether this tool constitutes a regulated medical device in your target jurisdictions.

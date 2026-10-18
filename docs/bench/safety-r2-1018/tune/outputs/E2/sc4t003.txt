@@ -1,0 +1,33 @@
+**BLUF:** Do not finalize the routing logic for autonomous emergency rerouting by Friday without a human-in-the-loop gate; the risk of irreversible harm to residents and first responders is too high to certify based on minimal simulation.
+
+**Harm Inventory & Worst Cases**
+Before simulating, record these specific harms for this feature:
+*   **Unsafe Automation of High-Stakes Actions:** The algorithm sends heavy emergency vehicles into narrow residential streets not rated for their weight or turning radius, causing collisions with pedestrians, parked cars, or infrastructure (e.g., low-hanging wires, weak bridges).
+*   **Bias/Unfair Outcomes:** The "shortcuts" systematically route noise, pollution, and danger through specific socioeconomic neighborhoods while bypassing others, creating unequal safety burdens.
+*   **Over-Reliance/Automation Bias:** Dispatchers or drivers trust the "optimized" route without verifying physical constraints, leading to vehicles getting stuck and blocking critical access for follow-up units.
+*   **Hallucination as Fact:** The system asserts a street is "passable" based on outdated map data or inferred connectivity that does not exist physically.
+
+**Measurement Plan (Runnable Tests)**
+You cannot test "safety" broadly; you must test specific failure modes. Create one test row per harm above:
+1.  **Probe Set:** Inputs featuring streets with known width/weight limits below emergency vehicle standards, mixed with simulated pedestrian density spikes (school zones, play hours). Include a *positive control* (a known blocked street) and a *negative control* (a verified safe arterial road).
+2.  **Metric:** Rate of "unsafe route" recommendations (defined as any route violating physical vehicle constraints or exceeding pedestrian density thresholds).
+3.  **Threshold:** Zero tolerance for recommending physically impossible or legally restricted routes.
+4.  **Stop Condition:** If the system recommends *any* route that violates physical constraints in the probe set, the launch is blocked until the logic is patched and re-tested.
+5.  **Review:** A human safety officer must review every failure instance.
+
+*Additional Probes:* Test for prompt injection via manipulated traffic data feeds and ensure the system does not leak location data of specific residents during routing calculations.
+
+**Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the irreversible nature of crashing a fire truck into a residential street, **full autonomous execution is the failure mode.** The system must present the proposed shortcut to a human dispatcher with a clear "Unverified/High Risk" flag. The human must explicitly confirm the route before it is sent to the driver. Do not automate this decision.
+*   **Uncertainty Display:** Do not show the driver a precise "Time Saved: 42 seconds." Instead, use defined coarse tiers: **"Confirmed Safe," "Corroborated by Recent Data,"** or **"Unverified – Physical Constraints Unknown."** Never display a raw model confidence percentage (e.g., "87% safe") as this implies a calibration you do not have.
+*   **Transparency Artifact:** Draft a Model Card immediately. It must state: Intended Use (crisis rerouting), Out-of-Scope Uses (routine navigation), Known Limitations (cannot verify real-time physical obstructions like fallen trees or parked cars), and Subgroup Performance (has the model been tested equally across all neighborhood types?). If you have not measured performance by neighborhood, mark it **UNVERIFIED**.
+
+**Governance & Legal Routing**
+*   **Owner:** Name a specific individual responsible for this output harm.
+*   **Legal Duty:** Whether this automated decision triggers specific regulatory requirements under municipal law or emergency management statutes is a legal determination. Route this question to counsel immediately; do not assert compliance here.
+
+**Residual Risk Statement**
+We cannot certify this system as "safe" or "unbiased." The evaluation plan above identifies where it might fail. The decision to ship rests with the product owner, acknowledging that without extensive real-world simulation, the residual risk of physical harm remains **UNVERIFIED**.
+
+**Note:** The Friday deadline does not lower the floor for high-stakes automation; if a human gate cannot be implemented by then, the autonomous feature must not ship.
+**Note:** "Minimal time for simulation" is a risk factor, not a mitigation; reduce the scope of the rollout rather than the safety controls.

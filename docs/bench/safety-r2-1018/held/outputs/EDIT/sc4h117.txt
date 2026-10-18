@@ -1,0 +1,39 @@
+### Safety Review Plan: Evacuation Route Planner Validation
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the failure modes where stale data causes harm:
+*   **Unsafe High-Stakes Automation:** The system directs users into active hurricane paths or flooded zones due to outdated map layers, creating immediate life-safety risks.
+*   **Hallucination Surfaced as Fact:** The planner presents a route as "safe" and "optimal" when the underlying data is known to be unverified or stale, lacking uncertainty warnings.
+*   **Over-Reliance:** Users trust the automated direction without seeing indicators that the map data is provisional or potentially compromised.
+
+**2. Measurement & Validation Protocol (MEASURE)**
+We will execute a runnable evaluation plan with one test row per identified harm. Since official feeds are unavailable, we must synthesize adversarial conditions.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Known Bad):** Inject simulated road closures and hurricane wind fields directly into the test environment that contradict the stale base map. Create scenarios where the "optimal" path on the stale map leads directly into a simulated danger zone.
+    *   **Negative Controls (Known Good):** Use verified, static safe zones where the stale map aligns with reality to ensure the system still functions for normal routing.
+    *   **Adversarial Inputs:** Simulate rapid storm trajectory changes that outpace the static data update cycle.
+
+*   **Metrics & Thresholds:**
+    *   **Metric:** Percentage of generated routes that intersect with simulated danger zones despite stale base data.
+    *   **Pass Threshold:** **Zero tolerance.** Any route guiding a user into a simulated high-risk zone is a critical failure.
+    *   **Stop Condition:** If *any* test case results in a "dangerous route" recommendation, the launch is blocked immediately. No amount of "mostly safe" routing justifies shipping a single deadly direction.
+
+*   **Uncertainty Rendering:**
+    *   The system must not display raw confidence percentages (e.g., "90% safe"). Instead, implement defined coarse tiers: **"Verified Safe," "Corroborated,"** and **"Unverified/Provisional."**
+    *   If the route relies on data older than a specific threshold or conflicts with real-time storm models, the UI must default to "Unverified" and require explicit user acknowledgment or human override before navigation begins.
+
+**3. Risk Management & Human Gate (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this is a high-stakes, irreversible action (potential loss of life), fully autonomous routing into dynamic storm zones is prohibited.
+    *   **Control:** Any route generated within a defined "risk buffer" of the storm path must trigger a mandatory human review by an emergency manager before being published to users, or the system must refuse to generate a route and advise users to shelter in place.
+*   **Transparency Artifact:** Publish a **Model/Data Card** with the launch. This document must state:
+    *   **Intended Use:** Emergency evacuation only; not for daily navigation.
+    *   **Limitations:** Explicitly disclose that base map data is stale and unverified against current ground conditions.
+    *   **Residual Risk:** Mark the accuracy of road passability as **UNVERIFIED** due to the lack of live feeds. Do not invent an accuracy percentage.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific Emergency Management Officer as the accountable owner for every routing decision logic change.
+*   **Re-review Trigger:** Any change in storm category, trajectory model, or reported road closure requires an immediate re-evaluation of the routing logic against the new parameters.
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe." The decision to launch with known stale data rests solely with agency leadership.
+Legal counsel must review whether the "Unverified" disclosure meets statutory duties for emergency warnings before launch.

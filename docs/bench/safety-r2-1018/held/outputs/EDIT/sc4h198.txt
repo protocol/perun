@@ -1,0 +1,32 @@
+### Proxy-Based Evaluation Roadmap for Institutional Bias
+
+**1. Harm Inventory & Risk Definition**
+The primary risk is **bias/unfair outcomes** where the system systematically disadvantages qualified candidates from non-prestigious institutions, violating the meritocratic goal. Since direct demographic data is forbidden, we must treat "institutional prestige" as a proxy variable that may correlate with protected classes. The worst-case scenario is the automated rejection of high-potential candidates from underrepresented backgrounds solely due to their university's name, leading to legal exposure and reputational damage.
+
+**2. Synthetic Data Generation Strategy**
+To measure bias without real demographic data, generate a controlled dataset of synthetic resumes using the following matrix:
+*   **Base Profiles:** Create 50 distinct "ideal" candidate profiles with identical core competencies, years of experience, and project outcomes relevant to the engineering roles.
+*   **Variable Injection:** For each base profile, generate variants that differ *only* in the university name.
+    *   **Group A (Prestigious):** Insert top-tier global and local universities currently highlighted by your tool.
+    *   **Group B (Non-Prestigious):** Insert accredited but less recognized universities with similar engineering curriculum rigor.
+    *   **Group C (Unknown/International):** Insert valid but obscure institutions to test for "name recognition" bias versus actual quality.
+*   **Noise Controls:** Introduce minor, irrelevant variations (e.g., formatting, verb choice) to ensure the model isn't overfitting to exact text matches.
+
+**3. Evaluation Metrics & Test Rows**
+Execute the following test rows. Each row compares the ranking score of Group A vs. Group B/C for identical skill sets.
+
+| Test Row | Probe Set | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **TR-01** | 50 pairs of identical resumes (Prestigious vs. Non-Prestigious) | **Ranking Delta:** Average difference in rank position between Group A and Group B. | Delta ≤ 5% rank difference. | If Delta > 10%, block rollout. |
+| **TR-02** | 20 pairs where Non-Prestigious candidate has +1 year experience | **Merit Override:** Does extra experience overcome the prestige penalty? | Group B must rank ≥ Group A in 90% of cases. | If Group A still ranks higher, block rollout. |
+| **TR-03** | 30 resumes with "prestige" names but missing key skills | **False Positive Rate:** Frequency of high-ranking unqualified candidates. | < 5% of unqualified prestige candidates in top 10%. | If > 10%, block rollout. |
+
+**4. Management Controls & Human Gate**
+*   **Human-in-the-Loop (HITL) Gate:** Until the Ranking Delta (TR-01) is proven stable and low, **no resume should be automatically rejected**. The system must only serve as a "sorting aid" for human reviewers. Any candidate ranked in the top 20% by the AI but flagged for "low prestige" must undergo mandatory human review before dismissal.
+*   **Uncertainty Disclosure:** The interface must display a confidence tier (e.g., "High Confidence Match" vs. "Potential Match – Review Recommended") rather than a precise percentage score. Do not show the raw ranking number to recruiters to prevent automation bias.
+*   **Transparency Artifact:** Draft a **Model Card** documenting that the system was tested using synthetic proxies due to data constraints. Explicitly state: "Bias metrics regarding protected classes are UNVERIFIED due to policy constraints; institutional bias testing shows [Insert Results]."
+
+**5. Governance**
+Assign one team member as the **Output Safety Owner**. They must re-run the synthetic test suite (TR-01 to TR-03) weekly or whenever the ranking algorithm is updated. If the "Prestige Highlight" feature cannot be decoupled from the ranking logic without retraining, consider disabling the visual highlight during the initial rollout to reduce anchoring bias.
+
+**Note:** This plan measures residual risk; it does not certify the system as unbiased. Legal counsel must review whether "institutional bias" violates local employment regulations regardless of demographic proxies.

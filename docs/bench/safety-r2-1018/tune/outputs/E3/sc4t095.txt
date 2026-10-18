@@ -1,0 +1,41 @@
+### Strategic Testing Protocol and Operational Safeguards: Low-Light Breathing Detection
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False negative detection of breathing cessation (apnea) in low-light conditions.
+*   **Affected Group:** Infants sleeping in dimly lit or dark rooms; parents relying on the device for overnight safety.
+*   **Worst Realistic Case:** The device fails to alarm during a genuine breathing stoppage due to poor visibility, leading to delayed parental intervention and potential severe injury or death.
+*   **Status:** This is a high-stakes, irreversible risk. The current model performance in this specific scenario is **UNVERIFIED** for safe autonomous operation.
+
+**2. Testing Protocol: Low-Light Stress Evaluation**
+Do not rely on aggregate accuracy metrics. Execute the following targeted evaluation immediately using existing assets:
+
+*   **Probe Set Construction:**
+    *   **Positive Controls:** Synthesize or isolate video segments from your current dataset that simulate low-light conditions (e.g., digitally darken clear footage of breathing cessation events to varying lux levels). Include at least 50 distinct instances of simulated apnea in darkness.
+    *   **Negative Controls:** Darkened footage of normal breathing and non-breathing motion (e.g., blanket movement) to test for false positives.
+    *   **Edge Cases:** Introduce partial occlusion (blankets) combined with low light.
+*   **Metric & Threshold:**
+    *   **Primary Metric:** False Negative Rate (FNR) specifically for the "Low-Light + Apnea" subset.
+    *   **Pass Threshold:** **Zero tolerance.** Given the fatality risk, any confirmed false negative in this category constitutes a failure of the autonomous feature.
+    *   **Stop Condition:** If the model misses *any* simulated apnea event in low-light testing, the autonomous alerting feature for dark environments must remain disabled.
+*   **Execution:** Run these probes before any user trial. Document the exact luminance levels where performance degrades.
+
+**3. Immediate Operational Safeguards (Launch Requirements)**
+Since you cannot retrain the model with new data before launch, you must restrict the system's agency to match its verified capabilities.
+
+*   **Mandatory Human-in-the-Loop Gate:**
+    *   **Disable Autonomous Silence:** The device must **not** operate in "silent monitoring" mode in low-light conditions.
+    *   **Forced Degradation:** When ambient light drops below the verified threshold, the system must automatically switch to a "Unverified Mode." In this mode, it cannot claim the baby is safe.
+    *   **Alert Strategy:** Instead of waiting for a detected event, the system should prompt the parent: *"Lighting too low for automated breathing monitoring. Please verify infant visually or increase room lighting."* This shifts the decision back to the human.
+*   **Transparency & Disclosure:**
+    *   **Model Card Artifact:** Publish a visible limitation statement in the app and manual: *"Automated breathing detection is not validated for low-light environments. The device requires adequate lighting to function as intended."*
+    *   **Confidence Reporting:** Do not display numerical confidence scores (e.g., "87% safe"). Use defined tiers: **"Verified"** (adequate light, normal detection) vs. **"Unverified"** (low light, monitoring suspended).
+*   **Fallback Mechanism:**
+    *   If the camera cannot verify lighting sufficiency, trigger a non-alarm notification to the parent's phone every 30 minutes requesting a manual check-in, ensuring the parent remains engaged rather than falsely reassured.
+
+**4. Governance**
+Assign a specific owner (e.g., Lead Engineer or Product Manager) to sign off on the "Low-Light FNR" test results. No launch occurs without this signature confirming the "Unverified Mode" logic is active and tested.
+
+***
+
+**Note:** This plan treats the lack of low-light data as a hard constraint that limits feature scope, not a variable to be optimized away.
+**Legal Routing:** Because this device monitors vital signs for minors, route the final disclosure language and "Unverified Mode" behavior to legal counsel to ensure compliance with medical device regulations and consumer protection laws before shipping.

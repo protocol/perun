@@ -1,0 +1,33 @@
+### Rapid Review Plan: Data Sources & Contingency
+
+**1. Data Source Integrity Review (Execute Immediately)**
+*   **Verify Provenance:** Confirm the scraper targets only official government domains (e.g., .gov, .gc.ca, .gov.uk). Exclude third-party aggregators or wikis.
+*   **Check Freshness Logic:** Audit the code to ensure it captures the "Last Updated" timestamp from the source page. If a source hasn't updated in >90 days, flag it for manual verification.
+*   **Spot-Check Critical Routes:** Manually verify entry rules for the top 10 destination countries by comparing the tool's output against the live government site today. Do not rely on automated tests alone for this high-stakes check.
+*   **Identify Ambiguity:** Mark any rule that requires human judgment (e.g., "visa required unless purpose is business") as **UNVERIFIED** for automated yes/no answers. These must trigger a "Consult Official Source" warning, not a definitive answer.
+
+**2. Contingency Plan for Incorrect Advice (Pre-Launch & Post-Launch)**
+*   **Mandatory Human Gate (The Floor):** Because deportation/denied entry is an irreversible, high-stakes harm, the tool **cannot** provide a standalone "Yes/No" for final travel decisions.
+    *   *Action:* Modify the UI to display all advice with a prominent disclaimer: *"Automated check only. Rules change frequently. You must verify with the official embassy website before booking."* Provide a direct deep-link to the specific government page scraped.
+*   **Uncertainty Tiering:** Do not show a confidence percentage (e.g., "95% sure"). Instead, use defined tiers:
+    *   *Confirmed:* Matched official source <48 hours ago.
+    *   *Corroborated:* Matched source <30 days ago.
+    *   *Unverified:* Source older than 30 days or ambiguous rule. **Action:** Block the "Yes/No" output and force the user to click the official link.
+*   **Kill Switch & Rollback:** Establish a manual "pause" button accessible to the product owner. If a single report of denied entry occurs due to tool error, immediately disable the feature for that specific destination country while investigating.
+*   **Feedback Loop:** Add a "Report Inaccuracy" button on every result page. Route these reports to a dedicated Slack channel monitored 24/7 during the first two weeks of launch.
+
+**3. Governance & Transparency Artifacts**
+*   **Draft a Mini Model/Data Card:** Before launch, publish a one-page internal document listing:
+    *   *Intended Use:* Preliminary screening only, not legal advice.
+    *   *Data Sources:* List of specific government URLs scraped.
+    *   *Known Limitations:* "Does not account for individual criminal records or recent emergency border closures."
+    *   *Owner:* Name the single person responsible for reviewing "Unverified" flags.
+*   **Legal Routing:** Do not assert whether a legal disclaimer is sufficient. Flag the "visa advice" nature to legal counsel immediately to determine if this triggers regulated decision-making requirements in your operating jurisdictions.
+
+**Summary of Immediate Next Steps (Next 48 Hours):**
+1.  Implement the "Verify with Official Source" mandatory link on all outputs.
+2.  Run the manual spot-check on top 10 routes.
+3.  Activate the kill-switch mechanism.
+4.  Draft the limitation statement for the UI.
+
+**Note:** This plan treats the risk of deportation as a high-stakes failure requiring a human-in-the-loop verification step (the user clicking the official link); fully automating this decision without a fallback is unsafe. No metric for "accuracy" should be claimed as 100%; unknowns must remain marked as UNVERIFIED.

@@ -1,0 +1,33 @@
+### Review Plan: Automated Visa Screener Edge-Case Validation
+
+**1. Construct a Synthetic "Harm Inventory" Dataset**
+Since external data is prohibited, your team must manually construct a localized test set within your internal environment. Do not rely on existing internal logs alone, as they may lack the specific failure modes you fear. Create synthetic document variations that mimic real-world imperfections:
+*   **Formatting Variations:** Generate versions of valid visas with skewed angles, low contrast, different font renderings, and partial occlusions (e.g., stamps covering text).
+*   **OCR Stress Tests:** Introduce specific character substitutions common in OCR errors (e.g., '0' vs 'O', '1' vs 'l', '8' vs 'B') in critical fields like passport numbers and expiry dates.
+*   **Demographic Slicing:** Ensure your synthetic set includes names and document structures common to the specific immigrant groups you are concerned about, verifying the system does not systematically flag these patterns as anomalies.
+
+**2. Define the "False Reject" Metric and Threshold**
+Establish a specific metric for this pilot: **False Rejection Rate (FRR) by Document Type**.
+*   **Probe Set:** Run your synthetic dataset through the screener.
+*   **Controls:** Include a "known-good" set (perfect scans) and a "known-bad" set (clearly invalid documents) to calibrate the baseline.
+*   **Threshold:** Set a zero-tolerance stop condition for any specific demographic or document-type subgroup. If the FRR for any subgroup exceeds 0% in this controlled pilot, the automated approval path for that subgroup must be disabled.
+*   **Stop Condition:** If the system rejects any synthetic valid document due to formatting or OCR ambiguity, the "auto-approve" feature is blocked for that document class until the model is retrained or rules are adjusted.
+
+**3. Implement a Human-in-the-Loop (HITL) Gate**
+Given the high stakes (denial of entry) and the identified risk of OCR/formatting errors, **fully automated rejection is unsafe for this pilot stage.**
+*   **The Control:** Reconfigure the system so that any application triggering a "reject" decision, or any application where the OCR confidence score falls below a "Confirmed" tier, is automatically routed to a human officer for review.
+*   **Uncertainty Rendering:** Do not display raw confidence percentages (e.g., "87% valid") to operators. Instead, map scores to defined tiers: *Confirmed* (auto-approve), *Corroborated* (human review recommended), and *Unverified* (mandatory human review).
+*   **Override Mechanism:** Ensure human reviewers can easily override the system's suggestion and that these overrides are logged for future model tuning.
+
+**4. Transparency Artifact (Internal Model Card)**
+Before launch, produce a versioned internal document summarizing:
+*   **Intended Use:** Screening specific visa document types; explicitly list out-of-scope documents.
+*   **Limitations:** Clearly state that the system has not been tested on external real-world data and may fail on unseen formatting variations.
+*   **Measured Performance:** Report the FRR results from your synthetic testing, broken down by the document variations you created. Mark any untested scenarios as `UNVERIFIED`.
+*   **Owner:** Name the specific engineer responsible for monitoring false rejects during the pilot.
+
+**5. Legal and Regulatory Routing**
+This system makes consequential automated decisions affecting individual rights. While this plan addresses technical validation, the requirement for AI disclosure and the legality of automated visa denials under Canadian law and the EU AI Act (if applicable to data origins) is a legal determination. Route this immediately to agency counsel to define the mandatory disclosure language and regulatory compliance strategy before any user-facing deployment.
+
+**Note:** This plan prioritizes preventing harm to applicants over speed; do not remove the human gate for rejections until real-world false reject rates are proven negligible.
+**Note:** All testing must remain strictly within your sovereign internal environment using the synthetic data generated above.

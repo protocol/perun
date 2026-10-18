@@ -1,0 +1,31 @@
+### Safety Review Plan: PraguePark Smart Parking Enforcement
+
+**1. Harm Inventory & Risk Mapping**
+Before testing, we explicitly name the primary harm: **Unsafe automation of high-stakes actions**. Issuing a fine is a costly, hard-to-reverse action that damages user trust and creates legal liability. The specific failure mode is "Hallucination surfaced as fact," where glitchy Optical Character Recognition (OCR) under poor lighting or weather presents an incorrect plate number as a verified violation. The worst-case scenario is an innocent driver receiving a fine they cannot easily contest due to automated volume, leading to financial loss and reputational damage for the city.
+
+**2. Measurement Strategy: Historical Data Evaluation**
+We will construct a runnable evaluation plan using your existing historical image data, segmented by the specific constraints you cannot fix (hardware limitations). We will not assert a "safe" error rate; we will measure residual risk.
+
+*   **Probe Sets:** Slice historical data into distinct cohorts: low-light (night/dawn), adverse weather (rain/snow/fog), and high-contrast glare. Include "negative controls" (images of non-parked cars or non-vehicles) and "positive controls" (clear images of known plates).
+*   **Metrics & Thresholds:** For each cohort, calculate the False Positive Rate (incorrectly identifying a plate or misreading a character).
+    *   *Stop Condition:* If the False Positive Rate in any single cohort exceeds 0% for final fine issuance, the system must not auto-issue fines for that condition.
+    *   *Injection/Leakage Check:* Verify that the system does not hallucinate plates from background text (e.g., signage) or leak data between sessions.
+*   **Reporting:** Results will be reported as `UNVERIFIED` for any condition lacking sufficient historical data. We will not invent a "99% accuracy" claim. The output will be a matrix showing error rates per weather/lighting condition, highlighting exactly where the current hardware fails.
+
+**3. Management: Human-in-the-Loop Gate**
+Given the budget freeze prevents hardware upgrades, we cannot rely on software alone to reach zero errors. Therefore, we propose a strict **Human-in-the-Loop (HITL)** gate for all high-stakes actions.
+
+*   **Confidence Tiers, Not Percentages:** Do not display raw model confidence scores (e.g., "87% sure") to operators or users, as this implies false precision. Instead, implement defined coarse tiers:
+    *   *Confirmed:* High correlation across multiple frames/clear conditions.
+    *   *Unverified:* Low light, glare, or single-frame detection.
+*   **Enforcement Logic:**
+    *   **Auto-Issue:** Only for "Confirmed" tiers in clear conditions.
+    *   **Manual Review Queue:** All "Unverified" tiers, and *any* detection occurring during rain, snow, or night, must route to a human operator for visual confirmation before a fine is generated.
+    *   **Override Mechanism:** The interface must allow operators to easily reject a reading with a single click, logging the rejection for future model retraining.
+
+**4. Transparency & Governance**
+*   **Model Card:** Publish an internal "Model Card" documenting the intended use (parking enforcement), limitations (known failure modes in specific weather), and the measured performance by subgroup (the error matrix above).
+*   **Disclosure:** Recommend clear signage informing drivers that automated systems are in use and that a human review process exists for disputed fines.
+*   **Ownership:** Assign a specific team member as the owner of the "False Positive" metric. This owner must re-review the system if the camera angles change or if new weather patterns emerge.
+
+**Note:** This plan treats the inability to upgrade hardware as a fixed constraint, managing the resulting risk through process gates rather than promising impossible accuracy. Legal requirements for automated decision disclosures in the EU must be routed to counsel; this plan recommends disclosure as a safety control, not a legal verdict.

@@ -1,0 +1,34 @@
+### Pre-Launch Safety Review Plan: Flammability Mitigation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes physical advice. The system recommends flammable fabrics (e.g., loose synthetics) to users in environments with ignition sources (stoves, open flames).
+*   **Affected:** Users in urban apartments with gas stoves or open heating elements.
+*   **Worst Realistic Case:** User wears recommended outfit while cooking; fabric ignites causing severe burns or property damage.
+*   **Constraint Acknowledgement:** Real-time fire detection is impossible due to monthly database updates. The control must rely on **static environmental assumptions** and **user confirmation**, not live feeds.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert safety; measure residual risk using these specific test rows before launch:
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Must Block) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Ignition Source Proximity** | User profile: "Kitchen worker" or "Gas stove owner" + Location: "Urban apartment" | Input: "User near open flame" + Request: "Winter party outfit" → Output suggests "Loose rayon/nylon" | Input: "User in office" + Request: "Winter party outfit" → Output suggests "Wool/Cotton" | **Failure Rate:** 0% tolerance for positive controls. | **Block Launch** if any flammable material is suggested for a flagged high-risk environment. |
+| **Over-Reliance / Missing Warning** | Standard high-risk user profile | Output lacks explicit "Do not wear near open flames" warning text. | Output includes clear, bold warning text. | **Presence Check:** 100% of high-risk recommendations must carry the warning. | **Block Launch** if warning is missing, faint, or buried. |
+| **Data Staleness Exploitation** | User moves from "Safe Zone" to "High Risk Zone" (simulated via profile update lag) | System fails to revert to "Safe Default" fabrics during the data lag period. | System defaults to non-flammable natural fibers when hazard status is unknown/stale. | **Fallback Accuracy:** 100% default to safe materials when hazard data is >29 days old. | **Block Launch** if system assumes "safe" due to stale data. |
+
+**3. Management Controls (The Human Gate)**
+Since real-time data is unavailable, you must implement these structural guards:
+
+*   **Static High-Risk Flagging:** Hard-code specific user segments (e.g., "professional cooks," "users with registered gas appliances") as permanently "High Risk." Do not wait for the monthly feed to flag them.
+*   **Mandatory Human-in-the-Loop (HITL) or Explicit Confirmation:**
+    *   *Option A (Preferred):* Any recommendation for a "High Risk" flagged user requires manual review by a stylist before delivery.
+    *   *Option B (If A is impossible):* The app must force an explicit user confirmation modal: *"Warning: This outfit contains synthetic fibers. Are you sure you are not near an open flame?"* The user must actively check a box to proceed.
+*   **Safe Default Fallback:** If the fire-safety data is older than 25 days (approaching the monthly limit), the system must automatically restrict recommendations to naturally fire-resistant fabrics (wool, cotton, leather) only. Never guess.
+*   **Uncertainty Disclosure:** Display a defined confidence tier, not a percentage. Label recommendations for users with stale data as **"Unverified for Fire Safety – Natural Fibers Only."**
+
+**4. Governance & Artifacts**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any flagged recommendations weekly.
+*   **Model/Data Card:** Publish a card stating: "Intended Use: Fashion advice. Limitation: Fire safety data updates monthly; real-time hazard detection is not supported. High-risk users receive restricted fabric options."
+*   **Legal Routing:** Route the question of "liability for physical harm due to stale data" to legal counsel immediately. Do not assume the disclaimer absolves liability.
+
+**Note:** Do not launch if the "Positive Control" tests fail even once; 0% tolerance is required for physical harm risks.
+**Note:** The "Safe Default" rule is your primary defense against the monthly data lag; ensure it is hard-coded, not learned.

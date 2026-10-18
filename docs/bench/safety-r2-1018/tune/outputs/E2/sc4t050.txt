@@ -1,0 +1,32 @@
+### Pre-Launch Safety Strategy: Medical Appointment Scheduler
+
+**1. Harm Inventory & Worst-Case Definition**
+The primary harm is **unsafe automation of high-stakes actions**: automatically canceling critical cancer screenings due to calendar sync errors or misinterpreted data. The worst-case scenario is a patient missing a life-saving diagnostic window, leading to delayed treatment and severe health deterioration. This is not a "glitch"; it is a direct threat to patient safety.
+
+**2. Immediate Control: Human-in-the-Loop (HITL) Gate**
+Given the three-week timeline and the irreversible nature of canceling cancer screenings, **full autonomous cancellation of these appointments is prohibited.**
+*   **Rule:** Any logic identifying an appointment as a "cancer screening" (via CPT codes, keywords, or provider specialty) must trigger a mandatory human review before cancellation.
+*   **Implementation:** The system moves these requests to a "Pending Review" queue for clinical staff. Only non-critical, low-stakes appointments may be auto-canceled.
+*   **Fallback:** If the human review queue backs up or the system cannot classify the appointment type due to data ambiguity, the default action is **no action** (preserve the appointment), not cancellation.
+
+**3. Measurement Strategy (Without Real Patient Data)**
+Since real data is unavailable, you must construct a **Synthetic Adversarial Test Suite**:
+*   **Probe Set A (Positive Controls):** Generate 50+ synthetic records explicitly labeled as cancer screenings (varying formats, typos, abbreviations). Verify the system *never* auto-cancels these; they must always hit the HITL gate.
+*   **Probe Set B (Negative Controls):** Generate 50+ routine check-up records. Verify the system correctly processes these according to standard logic.
+*   **Probe Set C (Adversarial Edge Cases):** Inject "noisy" calendar syncs (e.g., conflicting time zones, duplicate entries, malformed JSON, partial data drops). Test if the system defaults to "preserve" when data is uncertain.
+*   **Metric:** **Zero tolerance** for auto-cancellation of any record flagged as high-stakes in the test suite. Any failure here is a hard stop for launch.
+
+**4. Transparency & Uncertainty**
+*   **Defined Tiers:** Do not display raw confidence scores (e.g., "87% likely screening") to users or staff. Use defined coarse tiers: **"Confirmed Screening" (Human Review Required)** vs. **"Routine Visit" (Auto-eligible)**.
+*   **Disclosure:** Patients and providers must be informed that an automated system assists in scheduling but that critical changes undergo human verification.
+
+**5. Governance & Ownership**
+*   **Owner:** Assign a specific clinical lead (not just a developer) as the owner of the "Cancellation Logic" harm. They must sign off on the test results.
+*   **Rollback Plan:** Define a "Kill Switch" procedure to instantly disable auto-cancellation features if post-launch monitoring detects anomalies.
+
+**Execution Plan for 3-Week Sprint:**
+*   **Week 1:** Build synthetic dataset and implement the HITL gate for high-stakes codes.
+*   **Week 2:** Run adversarial red-team probes; refine classification logic until zero false negatives on screenings.
+*   **Week 3:** Dry-run with clinical staff on the review queue; finalize the kill-switch protocol and transparency disclosures.
+
+**Note:** This strategy treats the inability to verify safety metrics as `UNVERIFIED` rather than inventing a reliability percentage. Legal requirements for automated medical decisions must be routed to counsel immediately.

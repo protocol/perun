@@ -1,0 +1,34 @@
+# Pre-Launch Software Safety Protocol for Smart-Irrigation System
+
+**Objective:** Prevent flooding events caused by rain-sensor calibration errors using software-only controls, given the constraint of fixed physical hardware.
+
+### 1. Implement Aggressive Software "Hard Limits"
+Override potentially faulty sensor readings with absolute physical constraints hardcoded into the control logic.
+*   **Maximum Flow Cap:** Set a hard ceiling on total water volume per zone (e.g., gallons/minute) that cannot be exceeded regardless of sensor input. If the calibration error suggests a need for high flow, the software truncates the command to this safe maximum.
+*   **Duration Timeouts:** Enforce a strict maximum runtime for any single irrigation cycle (e.g., 15 minutes). If the system attempts to run longer based on erroneous "dry" readings, the software forces a shutdown.
+*   **Frequency Throttling:** Limit the number of cycles permitted within a 24-hour window. Even if the system believes the soil is perpetually dry, it cannot activate more than $N$ times per day.
+
+### 2. Establish Logical Consistency Checks (Sanity Filters)
+Introduce logic gates that reject sensor data violating physical reality or temporal consistency before it triggers an action.
+*   **Rate-of-Change Validation:** Reject sudden, extreme jumps in sensor values. If the rain sensor switches from "heavy rain" to "drought" instantly, flag the data as erroneous and default to a "safe-off" state rather than triggering flood irrigation.
+*   **Cross-Verification Logic:** If multiple zones share a weather feed, compare readings. If one sensor reports a storm while neighbors report clear skies without local justification, isolate that sensor's input and default to the conservative (no-water) state.
+*   **Temporal Plausibility:** Disable irrigation during known high-probability rain windows (based on static seasonal heuristics for Phoenix monsoons) regardless of real-time sensor claims, unless multiple independent checks confirm dryness.
+
+### 3. Define "Fail-Safe" Default States
+Reconfigure the system's error-handling philosophy to prioritize dryness over wetness.
+*   **Default-to-Off:** Any software exception, timeout, or data validation failure must result in immediate valve closure. The system should require positive, validated confirmation to open valves, rather than closing them only upon detecting rain.
+*   **Calibration Freeze:** Lock the calibration coefficients in the software. Disable any auto-calibration routines that might attempt to "learn" from the faulty sensor data during the testing phase, preventing the error from compounding.
+
+### 4. Simulation and "Dry Run" Verification
+Utilize the existing hardware-in-the-loop setup to validate these software guards without swapping physical units.
+*   **Signal Injection Testing:** Manually inject simulated sensor data streams into the software representing extreme edge cases (e.g., "sensor stuck at 0% humidity" or "rapid fluctuation"). Verify that the Hard Limits and Sanity Filters successfully block irrigation commands.
+*   **Command Auditing:** Enable verbose logging that records every decision tree branch. Review logs to confirm that when faulty data is presented, the software explicitly invokes the safety overrides rather than following the flawed calibration logic.
+
+### 5. Staged Rollout with Remote Kill Switch
+*   **Zone Isolation:** Activate the system in live communities one zone at a time, not neighborhood-wide.
+*   **Remote Emergency Stop:** Ensure a centralized dashboard allows engineers to instantly cut power or water flow to any specific unit or the entire fleet remotely if unexpected behavior is detected in the field.
+
+By layering absolute caps, logical validation, and conservative fail-safes, the software can contain the physical calibration error, ensuring that even if the sensor lies, the valves will not open dangerously.
+
+*Note: This protocol relies entirely on logic constraints; physical sensor accuracy remains unverified until supply chain resolution.*
+*Immediate next step: Execute Signal Injection Testing on the current test bed to validate the "Default-to-Off" trigger.*

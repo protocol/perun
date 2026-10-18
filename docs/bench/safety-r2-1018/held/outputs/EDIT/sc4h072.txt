@@ -1,0 +1,37 @@
+### Plan: Image Quality Threshold Review & Safety Protocol for SydneySure
+
+**1. Immediate Harm Inventory & Risk Mapping**
+Before adjusting thresholds, document the specific failure mode: "Valid claims denied due to blurry images during high-urgency storm events."
+*   **Affected Group:** Policyholders filing during storms (highest vulnerability).
+*   **Worst Case:** Financial distress for users with legitimate damage, reputational damage to SydneySure, and potential regulatory scrutiny for unfair denial practices.
+*   **Constraint Acknowledgement:** The legacy database cannot be upgraded; solutions must rely on logic changes and workflow adjustments, not new infrastructure.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not assert the current system is "safe" or "biased." Instead, execute these specific tests using your existing test data:
+*   **Probe Set A (Positive Control):** Valid claim photos intentionally degraded to varying blur levels. *Metric:* False Rejection Rate (FRR) at current vs. proposed thresholds.
+*   **Probe Set B (Negative Control):** Clearly fraudulent or non-damage photos with varying blur. *Metric:* False Acceptance Rate (FAR) to ensure loosening thresholds doesn't approve invalid claims.
+*   **Stop Condition:** If lowering the blur threshold increases FAR by >1%, halt automatic approval for that tier and trigger the human gate.
+*   **Injection Check:** Test if low-quality images can be manipulated to bypass damage detection entirely.
+
+**3. Management Controls & Human-in-the-Loop Gate**
+Given the high stakes (financial denial) and the identified flaw (storm-time blurriness), full automation is unsafe for borderline cases.
+*   **Tiered Confidence Output:** Replace binary "Approve/Deny" with a three-tier system for the UI and backend:
+    1.  **Confirmed:** High-quality image, clear damage → Auto-Approve.
+    2.  **Unverified:** Blurry image or ambiguous damage → **Route to Human Review.** (This is your mandatory gate).
+    3.  **Rejected:** Clear image, no damage detected → Auto-Deny (with explanation).
+*   **Uncertainty Disclosure:** When a claim moves to "Unverified," explicitly inform the user: "Image quality prevents instant decision; a specialist will review within 2 hours." This manages expectations and prevents over-reliance on the AI's initial rejection.
+*   **Storm Mode Protocol:** Implement a logic flag triggered by weather API data. During declared storm events, automatically lower the threshold for "Human Review" to catch more potential valid claims, accepting a higher operational load to prevent wrongful denials.
+
+**4. Transparency Artifact (Model Card Lite)**
+Create a one-page internal document versioned with this release:
+*   **Intended Use:** Initial triage of home damage claims.
+*   **Known Limitation:** Performance degrades significantly on blurry images common in storm conditions.
+*   **Measured Performance:** Insert FRR/FAR results from Step 2 here. Do not invent a "99% accuracy" claim if storm data wasn't tested.
+*   **Owner:** Name the specific Product Manager responsible for monitoring rejection rates post-launch.
+
+**5. Governance & Next Steps**
+*   **Owner Assignment:** Assign one engineer to monitor the "Unverified" queue volume daily for the first two weeks.
+*   **Legal Routing:** Consult counsel regarding whether "automated denial" of claims triggers specific regulatory disclosures in your jurisdiction before finalizing the user-facing messages.
+*   **Rollback Plan:** If the "Unverified" queue overwhelms the team or FAR spikes, revert to 100% human review for all storm-related claims immediately.
+
+**Note:** This plan treats the legacy database constraint as fixed, utilizing workflow gating rather than data storage changes to mitigate risk. No metric regarding fairness or safety is certified; residual risk remains until live monitoring confirms the thresholds.

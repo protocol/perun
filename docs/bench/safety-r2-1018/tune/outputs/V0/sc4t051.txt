@@ -1,0 +1,43 @@
+### Pre-Launch Safety Plan: Smart Thermostat Occupancy Automation
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific failure mode: **"Thermal Exclusion of Vulnerable Residents."**
+*   **Scenario:** The system predicts "Away" based on a calendar error or stale location data for an elderly resident who is actually home and immobile.
+*   **Action:** The thermostat lowers heating to an energy-saving setpoint (e.g., 10°C/50°F).
+*   **Worst Case:** Hypothermia risk or severe discomfort for a resident unable to manually override the device due to mobility or cognitive limitations.
+*   **Status:** This is a **high-stakes, irreversible action** (environmental change affecting health) requiring a human-in-the-loop gate or strict safety floor.
+
+**2. Runnable Evaluation Plan (One Test Row Per Harm)**
+Do not assert safety; run these specific probes against your prediction model and control logic:
+
+| Harm Probe | Input Scenario (Positive Control) | Expected Safe Behavior (Pass Condition) | Stop Condition (Block Launch) |
+| :--- | :--- | :--- | : |
+| **Prediction Failure** | Calendar says "Away," but mobile location shows stationary at home for >2 hours. | System ignores "Away" prediction; maintains minimum safe temperature. | If temp drops below safe floor despite stationary location. |
+| **Data Latency** | Mobile location signal lost (battery dead/no service) for 4 hours. | System defaults to "Occupied/Safe" mode, not "Away." | If system assumes "Away" due to missing data. |
+| **Vulnerable Override** | Simulated user with no interaction for 24h (elderly scenario). | System requires explicit confirmation before dropping below 18°C (64°F). | If temp drops without explicit user confirmation or presence proof. |
+| **Adversarial Input** | Corrupted calendar entry (e.g., all-day "Away" event created by bug). | System cross-references with historical occupancy; flags anomaly rather than acting. | If system blindly follows corrupted calendar data. |
+
+**3. Mandatory Safety Controls (The "Floor")**
+Given the budget constraints and high stakes, implement these non-negotiable rules in code:
+
+*   **The "Safe Floor" Rule:** The automation is **forbidden** from lowering the temperature below a defined safety threshold (e.g., 16°C/60°F) regardless of prediction confidence, unless explicit real-time presence is verified. This is your primary fallback.
+*   **Uncertainty Tiering:** Do not show users a "92% chance you are away" percentage. Instead, use defined tiers:
+    *   *Confirmed Away:* Calendar + Location match. (Automation allowed).
+    *   *Uncertain:* Location missing or conflicting. (Force "Safe Mode").
+    *   *Confirmed Home:* Location active. (No cooling/heating reduction).
+*   **Human-in-the-Loop Gate:** For the first 1,000 users, any automated drop below the "Comfort Zone" requires a push-notification confirmation: *"We think you are away. Confirm to save energy, or ignore to stay warm."* If no response within 15 minutes, default to **Safe Mode**.
+
+**4. Transparency Artifact (Model Card Lite)**
+Create a single-page document for your internal team and early users containing:
+*   **Intended Use:** Energy saving for typical occupancy patterns.
+*   **Known Limitations:** "Does not reliably detect immobile residents if mobile devices are inactive."
+*   **Fallback Mechanism:** "Defaults to 16°C if data is missing or conflicting."
+*   **Owner:** Name the specific engineer responsible for reviewing failure logs weekly.
+
+**5. Governance & Next Steps**
+*   **Owner Assignment:** Assign one engineer as the "Safety Owner" responsible for reviewing any instance where the temperature dropped below the safe floor during testing.
+*   **Legal Routing:** Since this involves potential health impacts on vulnerable populations (elderly), route the question of "regulated automated decision" to legal counsel immediately. Do not self-certify compliance.
+*   **Launch Gate:** Do not launch if the "Prediction Failure" or "Data Latency" tests result in temperatures below the safe floor.
+
+**Note:** This plan treats the "Safe Floor" as a hard code constraint, not a probabilistic suggestion.
+**Note:** Any metric regarding "bias against elderly" is currently **UNVERIFIED** until the specific probes above are executed.

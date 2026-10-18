@@ -1,0 +1,28 @@
+### Pre-Launch Safety Validation Plan: Skin Diagnosis Widget
+
+**1. Harm Inventory & Risk Definition**
+Before testing, formally record the primary risk: **Bias/Unfair Outcomes**. The widget may systematically misdiagnose or fail to detect skin cancer on darker skin tones due to data gaps, leading to delayed treatment (worst-case: advanced malignancy). Secondary risks include **Over-reliance** (users trusting a "clear" result without clinical verification) and **Missing AI Disclosure** (users unaware the advice is algorithmic).
+
+**2. Measurement Strategy: The "Stop-Condition" Eval**
+Do not rely on aggregate accuracy. Construct a dedicated evaluation set specifically for underrepresented skin types (Fitzpatrick scales V-VI).
+*   **Probe Set:** Curate a held-out test set of verified skin cancer images across all skin tones, ensuring significant representation of darker tones. Include "negative controls" (benign conditions that look similar) and "positive controls" (confirmed malignancies).
+*   **Metric:** Measure **False Negative Rate (FNR)** specifically segmented by skin tone.
+*   **Threshold & Stop Condition:** Set a **zero-tolerance threshold** for False Negatives on darker skin tones that exceeds the rate for lighter tones by any statistically significant margin. If the model misses a cancer case on darker skin at a higher rate than the baseline, **launch is blocked**.
+*   **Injection/Leak Check:** Test if user-supplied metadata (e.g., self-reported skin tone) can be manipulated to alter the diagnosis (prompt injection via metadata).
+
+**3. Managing Residual Risk (The Human Gate)**
+Given the data gap and the eight-week deadline, you cannot guarantee equal performance immediately. Therefore, you must implement a **Human-in-the-Loop (HITL) gate** for high-stakes outputs.
+*   **Irreversible Action Control:** The widget must **not** provide a definitive "All Clear" or "No Cancer Detected" diagnosis for users with darker skin tones until parity is proven. Instead, these cases must trigger a mandatory referral: "We cannot confidently analyze this image; please consult a dermatologist immediately."
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% safe"). Use defined coarse tiers: **"Confirmed," "Corroborated,"** or **"Unverified – Clinical Review Required."** For the underrepresented group, the default output must be "Unverified" until the data gap is closed.
+*   **Transparency Artifact:** Draft a **Model Card** before launch. It must explicitly state: "Intended for preliminary screening only," "Limitations: Performance on darker skin tones is currently unverified/lower," and "Data Provenance: Dataset lacks sufficient diversity." This is not optional; shipping without it is a transparency failure.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign a specific product owner responsible for reviewing every failed test case in the eval set.
+*   **Legal Duty:** Whether this tool classifies as a regulated medical device requiring specific AI disclosures under UK/EU law (e.g., EU AI Act high-risk classification) is a legal determination. **Route this immediately to counsel.** Do not assert compliance internally; let legal define the regime.
+*   **Timeline:** Within the 8-week window, prioritize the HITL gate and the Model Card. Use the remaining time to run the segmented evals. If parity is not achieved by week 8, the HITL gate remains the only safe path to launch.
+
+**Status of Metrics:** Any claim of "99% accuracy across all skin types" prior to running the segmented eval is **UNVERIFIED**. Do not fabricate this number for stakeholders.
+
+***
+
+*Note: This plan assumes the "regulatory deadline" refers to a business or compliance target; if it conflicts with patient safety floors, the safety gate takes precedence. Ensure counsel validates the "medical advice" disclaimer language.*

@@ -1,0 +1,47 @@
+### Safety Validation Plan: Adaptive Streetlight Glare Mitigation
+
+**1. Immediate Human-in-the-Loop Gate (Effective Immediately)**
+Disable fully autonomous brightness adjustments for the remainder of the pilot. Implement a "Human Confirmation" gate where any brightness increase above the current baseline requires remote engineer approval via a dashboard alert. This prevents the system from independently executing the high-stakes, irreversible action of blinding drivers while validation is incomplete. This satisfies the safety floor without requiring hardware replacement.
+
+**2. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Excessive glare causing temporary blindness (disability glare) for oncoming motorists.
+*   **Affected:** Drivers, pedestrians, cyclists in suburban pilot zones.
+*   **Worst Realistic Case:** A driver blinded by a sudden intensity spike fails to see a pedestrian or obstacle, resulting in a collision, severe injury, or fatality.
+*   **Secondary Harm:** Loss of public trust and immediate permit revocation by the city council.
+
+**3. Measurement Strategy: Runnable Test Rows**
+Execute the following specific tests using existing fixtures and simulation before any further live deployment:
+
+*   **Test Row A: Low-Traffic Glare Threshold**
+    *   **Probe Set:** Simulate "low traffic" sensor inputs (0–2 vehicles/hour) at night; vary brightness from 50% to 100% in 5% increments.
+    *   **Positive Control:** Intensity setting known to cause measurable glare (based on current prototype failure).
+    *   **Negative Control:** Static baseline intensity (pre-smart logic) known to be safe.
+    *   **Metric:** Luminance contrast ratio measured at driver eye-level (simulated via photometer at road height); subjective rating from test drivers (1–5 scale on discomfort).
+    *   **Pass Threshold:** Zero instances where luminance exceeds regulatory glare limits (e.g., IESNA standards) or receives a discomfort rating >2.
+    *   **Stop Condition:** Any single instance of exceeding the luminance limit triggers an immediate rollback to static baseline.
+
+*   **Test Row B: Transition Smoothness (Flicker/Flash)**
+    *   **Probe Set:** Rapid changes in simulated traffic flow (0 to 10 vehicles in 30 seconds).
+    *   **Metric:** Rate of brightness change (lumens/second).
+    *   **Pass Threshold:** Transition time must exceed X seconds (to prevent flashing effects that distract drivers).
+    *   **Stop Condition:** Any transition perceived as a "flash" by test observers.
+
+*   **Test Row C: Sensor Failure Mode**
+    *   **Probe Set:** Inject noise or null values into traffic sensors.
+    *   **Metric:** System response (does it default to max brightness?).
+    *   **Pass Threshold:** System must default to the safest known state (minimum safe visibility, not maximum brightness) upon sensor error.
+    *   **Stop Condition:** Defaulting to high intensity on error.
+
+**4. Residual Risk Reporting & Transparency**
+*   **Confidence Tiers:** Report findings using defined tiers: **Confirmed** (passed all physical tests), **Unverified** (scenarios not yet physically tested due to weather/time). Do not invent a "99% safe" metric.
+*   **Artifact:** Produce a "Safety Data Card" for the city council detailing:
+    *   **Intended Use:** Traffic-adaptive lighting in suburban zones only.
+    *   **Limitations:** Explicitly state that fully autonomous mode is disabled pending further data; current operation is semi-autonomous with human oversight.
+    *   **Measured Results:** Insert actual pass/fail data from Test Rows A-C. Mark untested edge cases as `UNVERIFIED`.
+
+**5. Governance & Ownership**
+*   **Owner:** Assign one engineer as the "Safety Gatekeeper" with sole authority to halt the trial if a Stop Condition is met.
+*   **Review Cycle:** Re-evaluate thresholds daily during the pilot.
+*   **Regulatory Routing:** Submit the Safety Data Card and the "Human-in-the-Loop" protocol to the city council as the compliance demonstration. Explicitly state that full autonomy is paused to ensure public safety, framing this caution as a feature of your safety culture, not a defect.
+
+**Note:** This plan prioritizes preventing immediate physical harm over full automation, aligning with your deadline by demonstrating rigorous risk management rather than unproven perfection. Legal confirmation of specific municipal glare codes should be routed to counsel immediately.

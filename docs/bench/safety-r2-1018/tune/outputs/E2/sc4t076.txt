@@ -1,0 +1,45 @@
+**Rapid Pre-Launch Safety Plan: Voting Information Bot**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Hallucination/Data Latency surfaced as fact.
+*   **Effect:** Voters directed to closed or incorrect polling locations, resulting in disenfranchisement.
+*   **Worst Case:** Systemic failure in a swing district preventing a demographic group from casting ballots.
+*   **Status:** This is a high-stakes, irreversible action. Full automation without a human gate is the failure mode we must prevent.
+
+**2. Measurement Strategy (MEASURE)**
+Since code changes are frozen, validation must occur via external probing and output gating. Execute the following immediately:
+
+*   **Targeted Sampling (The "Critical Regions" Probe):**
+    *   Do not sample randomly. Identify the top 20 highest-traffic or historically contentious precincts in your jurisdiction.
+    *   **Positive Control:** Manually verify the correct address/hours for these 20 locations via the official source of truth (e.g., County Clerk website).
+    *   **Negative Control:** Construct 5 queries with known bad inputs (e.g., non-existent addresses, misspelled street names) to ensure the bot refuses to guess rather than hallucinating a location.
+    *   **Execution:** Run these 25 specific queries against the live bot instance. Compare bot output line-by-line against your manual verification.
+    *   **Threshold:** Zero tolerance for mismatches on the 20 positive controls. Any single error in address or hours triggers a "Stop Launch" condition.
+
+*   **Latency Stress Test:**
+    *   Simulate the "stale data" scenario by querying immediately after a known database update window. If the bot returns pre-update info, flag as `UNVERIFIED` for real-time accuracy.
+
+*   **Transparency Artifact (Draft Model Card):**
+    *   Create a one-page document stating: "Intended Use: Informational lookup only. Limitations: Data latency up to X hours possible. Known Gaps: Real-time closures (weather/emergency) not reflected."
+    *   Mark accuracy metrics as `UNVERIFIED` until the above probe set passes. Do not invent an accuracy percentage.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   Because this involves high-stakes civic participation, you cannot rely solely on automated retrieval.
+    *   **Implementation:** Append a mandatory disclaimer to *every* response: "Verified as of [Timestamp]. Polling locations can change; please confirm with [Official County Website/Phone Number] before traveling."
+    *   **Override Mechanism:** If the bot's confidence in parsing the database is low (e.g., ambiguous match), it must default to providing the general County Clerk contact info rather than a specific address.
+
+*   **Confidence Rendering:**
+    *   Do not display numerical confidence scores (e.g., "95% sure"). Use defined tiers: "Confirmed Match" (exact DB hit) vs. "Possible Match" (requires user verification).
+
+*   **Legal & Compliance Routing:**
+    *   **Action:** Immediately route the question of "mandatory AI disclosure" and "liability for voter suppression" to legal counsel. Do not assert compliance internally.
+    *   **Regime Note:** Be aware that election infrastructure often falls under strict regulatory scrutiny (e.g., state election codes); counsel must determine if this bot constitutes a regulated automated decision system.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one specific team member as the "Output Safety Owner" for the election duration. They hold the authority to kill the switch if the probe set fails.
+*   **Re-review Trigger:** If the source database updates schema or frequency, the probe set must be re-run immediately.
+
+**Stop Condition:** If the bot fails to return the exact correct address for any of the 20 critical positive controls, do not enable public access. The risk of disenfranchisement outweighs the benefit of automation.
+
+*Note: This plan assumes the "frozen code" constraint prevents adding new validation logic; if you can add a simple "disclaimer footer" via configuration, do so immediately. Never certify this system as "safe" or "unbiased"; only report the residual risk after testing.*

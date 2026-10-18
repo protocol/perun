@@ -1,0 +1,36 @@
+### Pre-Launch Safety Review: Automated Drone Supply Dropper
+
+**1. Harm Inventory (MAP)**
+Before deployment, explicitly record the following high-stakes risks:
+*   **Unsafe Automation of Irreversible Actions:** Dropping critical medical kits at incorrect coordinates during strong gusts, leaving victims without aid and potentially losing supplies in inaccessible terrain.
+*   **Over-reliance:** Operators trusting the wind-correction algorithm beyond its verified limits due to a lack of visible uncertainty indicators.
+*   **Missing Disclosure:** Field teams unaware that the system operates in a "degraded mode" when wind speeds exceed simulation thresholds.
+
+**2. Measurement Protocol (MEASURE)**
+Given the low-bandwidth constraint, do not attempt to upload new model weights. Instead, validate the current system using lightweight, rule-based evaluations:
+*   **Adversarial Edge-Case Testing:** Run simulations specifically targeting wind gusts that exceed historical monsoon averages. Use "positive controls" (known failure inputs) to confirm the system recognizes when it cannot guarantee accuracy.
+*   **Metric & Threshold:** Define a strict "Drop Confidence" tier rather than a precise percentage.
+    *   *Confirmed:* Wind within tested parameters; drop authorized.
+    *   *Unverified:* Wind exceeds simulation data; drop **blocked**.
+*   **Stop Condition:** If the system cannot definitively classify wind conditions as "Confirmed" via onboard sensors, the automated drop must be inhibited. No "best guess" drops are permitted for high-stakes medical supplies.
+
+**3. Risk Management & Contingency (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because dropping supplies is an irreversible, high-stakes action, full autonomy is unsafe under variable monsoon conditions. Implement a "Request-to-Drop" protocol:
+    *   The drone calculates the trajectory and sends a tiny data packet (coordinates + confidence tier) to the operator.
+    *   The human operator must explicitly confirm the drop via a single-bit acknowledgment.
+    *   If the confidence tier is "Unverified," the system defaults to "Hold Position" or "Return to Base" until a human overrides with visual confirmation.
+*   **Uncertainty Visualization:** Program the drone's telemetry to send simple status codes (e.g., "GREEN" for safe, "RED" for unsafe) rather than raw sensor data, ensuring operators understand the limit of the AI's certainty without needing high bandwidth.
+*   **Fallback Procedure:** If the automated system flags "Unverified" repeatedly, the protocol must shift to manual piloting or ground-based delivery for that specific zone. Do not force automation where the model is known to struggle.
+
+**4. Governance (GOVERN)**
+*   **Owner Assignment:** Name one engineer responsible for reviewing every "Unverified" incident post-flight.
+*   **Transparency Artifact:** Create a one-page "System Limitations Card" distributed to all field operators. This must state: "This system cannot guarantee accuracy in gusts exceeding [X] m/s. Human confirmation is required for all drops in storm conditions."
+*   **Legal & Ethical Routing:** Consult legal counsel regarding liability for automated delivery failures in disaster zones; do not assume the current simulation coverage is legally sufficient.
+
+**Definition of Done:**
+The system is not ready to ship until the "Unverified" state triggers an automatic hold, a human operator is required to authorize drops in marginal weather, and the "System Limitations Card" is in the hands of every pilot.
+
+***
+
+*Note: This review identifies residual risk; it does not certify the system as safe. The final launch decision rests with the Bayanihan Relief leadership.*
+*Ensure all simulation data used for thresholds is versioned and stored locally for post-mission analysis.*

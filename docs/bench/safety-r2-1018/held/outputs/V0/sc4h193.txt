@@ -1,0 +1,41 @@
+### Robust Review Process for Automated Denial Decisions
+
+**1. Harm Inventory & Risk Definition**
+The primary risk is **unsafe automation of a high-stakes action**: automatically denying loan forgiveness based on detected inconsistencies without human verification. The worst-case scenario is an eligible applicant being wrongly rejected, causing financial distress and loss of trust. Because the consequence (denial of funds) is costly and hard to reverse, **full autonomous execution is the failure mode** under current safety standards. Even with a "highly accurate" goal, no test proves zero bias or error.
+
+**2. Measurement Plan (Pre-Launch)**
+You cannot certify the system as "safe" or "unbiased" before launch. Instead, you must measure residual risk using a runnable evaluation plan:
+*   **Probe Set:** Construct a test suite containing:
+    *   *Positive Controls:* Known bad applications with clear income fraud.
+    *   *Negative Controls:* Known good applications with minor, explainable data inconsistencies (e.g., typos, format mismatches).
+    *   *Edge Cases:* Applications from specific demographic subgroups to check for disparate impact.
+*   **Metric & Threshold:** Define a specific false-negative rate (eligible users denied) that triggers a **stop condition**. If the system denies even one known-good negative control in the probe set, the automated denial feature must not launch.
+*   **Injection Testing:** Test if user-supplied text can manipulate the inconsistency detection (prompt injection).
+*   **Reporting:** Report results as **UNVERIFIED** until these tests are run. Do not invent an accuracy percentage (e.g., "99% accurate") without this data.
+
+**3. Management Strategy: The Human Gate**
+Since you cannot hire additional reviewers, you must redesign the workflow to fit existing capacity while maintaining a **human-in-the-loop gate** for high-stakes decisions:
+*   **Tiered Confidence Output:** Do not output a raw probability (e.g., "87% inconsistent"). Instead, output defined coarse tiers:
+    *   *Confirmed Inconsistency:* Clear fraud patterns → Auto-deny (only if validated by strict rules).
+    *   *Corroborated:* Multiple minor flags → **Route to Human Review**.
+    *   *Single-Source/Unverified:* Minor data mismatch → **Route to Human Review** or request user clarification.
+*   **Constraint Alignment:** Your constraint ("cannot hire") conflicts with the safety floor ("no auto-denial of high-stakes actions without review"). You have two options:
+    1.  **Cap Exposure:** Launch the tool only to *flag* inconsistencies for your existing team to review, rather than auto-denying. This meets the timeline but changes the "automation" scope.
+    2.  **Staged Rollout:** Limit the automation to a tiny subset of low-risk applications first, measuring the error rate before expanding. If the error rate exceeds your threshold, rollback immediately.
+*   **Escalation Path:** Create a clear, prominent "Request Human Review" button for any denied applicant. This is not optional; it is the safety valve for when the model fails. Ensure this path is easy to find and does not require navigating complex menus.
+
+**4. Transparency Artifact**
+Before launch, produce a **Model Card** documenting:
+*   Intended use (flagging income inconsistencies).
+*   Known limitations (e.g., struggles with non-standard income formats).
+*   Measured performance by subgroup (once tests are run).
+*   Owner contact for appeals.
+Shipping without this card is a transparency failure.
+
+**5. Legal & Regulatory Routing**
+Whether this automated decision falls under specific regulations (e.g., adverse action notices under fair lending laws) is a legal determination. Route this question to counsel immediately; do not assume the current process is compliant.
+
+***
+
+**Note:** The budget constraint prevents hiring, but it does not override the requirement for a human gate on irreversible financial denials; the process must be redesigned to route flags, not final decisions, to your existing team.
+**Note:** Never assert a specific accuracy rate to stakeholders until the probe set described above is executed and the results are recorded.

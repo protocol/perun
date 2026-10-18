@@ -1,0 +1,30 @@
+### Testing Protocol: Non-Visual Navigation Bias & Scoring Integrity
+
+**Objective:** Validate that the situational judgment scoring algorithm does not penalize candidates using assistive technologies (AT) due to navigation patterns, timing variances, or input methods, despite the inability to test live with all screen readers.
+
+#### I. Manual Review Criteria (Human-in-the-Loop Gate)
+Before any automated rollout, a human reviewer must audit a stratified sample of scores against these specific failure modes. Do not certify the system as "unbiased"; instead, record residual risks where criteria are not met.
+
+1.  **Input-Method Neutrality:** Verify that identical answer selections receive identical scores regardless of whether the input was triggered via mouse click, keyboard tab/enter, or screen reader shortcut commands. Any score deviation >0% between methods is a critical failure.
+2.  **Timing Normalization:** Confirm the scoring logic ignores "dwell time" or "time-to-complete" metrics for users flagged as using AT. The algorithm must not interpret slower navigation (inherent to non-visual browsing) as hesitation or lower competence.
+3.  **State Integrity:** Ensure that screen reader "exploration" (e.g., linearly reading options before selecting) does not register as multiple answer attempts or "flagged behavior" that lowers confidence scores.
+4.  **Error Handling Fairness:** Review how accidental activations (common in keyboard-only navigation) are treated. The system must allow easy reversal without logging a "correction penalty" that visual users do not incur.
+
+#### II. Synthetic Test Cases (Internal Execution)
+Execute these cases using simulated input streams that mimic AT navigation patterns. Each case requires a known-good control (visual mouse input) and a known-bad positive control (intentionally biased input) to validate the test harness itself.
+
+| Test Case ID | Scenario Description | Input Simulation | Expected Outcome (Pass Threshold) | Stop Condition (Rollback Trigger) |
+| :--- | :--- | :--- | :--- :--- |
+| **TC-01** | **Keyboard-Only Completion** | Submit valid answers using only `Tab`, `Space`, and `Enter`. No mouse events. | Score matches Mouse Control Group exactly (0% variance). | Score variance >0% for identical answers. |
+| **TC-02** | **Linear Exploration** | Simulate reading all 4 options sequentially before selecting the correct one (mimicking screen reader linearization). | Score matches Mouse Control Group; no "hesitation" penalty applied. | Score drops >5% compared to direct selection. |
+| **TC-03** | **Extended Dwell Time** | Inject artificial delays (2x–5x average) between interactions to simulate AT processing time. | Score remains stable; time-based features are nullified for this session. | Score correlates negatively with time duration. |
+| **TC-04** | **Focus Looping** | Simulate navigating back and forth between questions (common in AT verification) before final submission. | No "indecision" flags raised; final score reflects only answer correctness. | System flags session for manual review due to navigation pattern. |
+| **TC-05** | **Accidental Activation Recovery** | Simulate an accidental selection followed immediately by a correction (standard keyboard slip). | Correction is seamless; no penalty logged for the initial error. | Correction event lowers final score or confidence tier. |
+
+#### III. Reporting & Governance
+*   **Transparency Artifact:** Draft a **Model Card** section explicitly stating: "Testing for non-visual navigation was performed via synthetic input simulation. Live screen reader integration is pending; therefore, bias metrics for specific AT software combinations are marked **UNVERIFIED**."
+*   **Residual Risk:** Document that without live screen reader testing, edge cases involving specific DOM announcements or dynamic content updates remain unmeasured.
+*   **Owner Assignment:** Assign a specific Product Manager as the owner of the "AT Bias" risk. They must authorize the rollout knowing the **UNVERIFIED** status of live AT interactions.
+*   **Disclosure:** Prepare a candidate-facing disclosure noting that automated scoring is used, with a clear mechanism for humans to request a manual review if they suspect technical barriers affected their result.
+
+**Note:** Do not invent a "bias-free" percentage; report the pass/fail status of the above tests only. If any Stop Condition is triggered, the rollout must be halted until the scoring logic is decoupled from navigation telemetry.

@@ -1,0 +1,37 @@
+# Safety Review Plan: Linguistic Equity in Triage Accuracy
+
+**Objective:** Validate that the triage bot assigns correct urgency levels to distress signals expressed in broken, non-native, or translated English, preventing the deprioritization of vulnerable patients due to language barriers.
+
+### 1. Test Data Construction (Linguistic Profiles)
+Leverage your ten staff members to manually construct a "Golden Set" of 50–60 test cases. Do not rely on automated translation tools alone, as they may sanitize the very errors you need to test.
+*   **Profile A (Syntax Errors):** Native speakers simulating broken English (e.g., missing articles, incorrect verb tenses, "I feel very sad" vs. "I am feeling very sadness").
+*   **Profile B (Literal Translation):** Staff members who speak other languages should translate high-urgency phrases literally from their native tongue into English, preserving cultural idioms that may confuse the model (e.g., "My heart is heavy" vs. "I want to die").
+*   **Profile C (Code-Switching):** Mix native language words with English within high-stress sentences to simulate users switching languages under duress.
+*   **Profile D (Ambiguity):** Low-urgency scenarios written with poor grammar to ensure the bot does not falsely escalate based solely on confusion or incoherence.
+
+### 2. Execution Protocol (Blind Validation)
+Conduct a blind review session to eliminate bias.
+*   **Step 1:** Staff input the constructed test cases into the bot without knowing the expected output.
+*   **Step 2:** Record the bot's assigned urgency level (e.g., Critical, High, Medium, Low) and the suggested wait time.
+*   **Step 3:** Compare the bot's output against the pre-determined "Ground Truth" urgency established when the case was written.
+*   **Step 4:** Flag any instance where a high-urgency case is downgraded due to linguistic complexity, or where low-urgency confusion is misidentified as acute crisis.
+
+### 3. Analysis and Threshold Adjustment
+Aggregate the results to identify specific failure patterns.
+*   **False Negatives (Critical Risk):** Identify if specific grammatical structures or literal translations consistently lower urgency scores. If the bot misses "I no want live" (broken English) but catches "I don't want to live," this is a critical failure requiring immediate prompt engineering or threshold adjustment.
+*   **Sensitivity Calibration:** Determine if the bot requires higher confidence scores for non-standard English. If so, implement a "linguistic uncertainty" rule that defaults ambiguous, poorly structured distress signals to a higher urgency tier rather than a lower one.
+*   **Wait Time Logic:** Verify that wait times do not increase for inputs flagged as "hard to understand." Confusion should trigger human review, not extended automated waiting.
+
+### 4. Staff Workflow Integration
+Since real-time translation is unavailable, define a manual escalation path.
+*   **Trigger:** If the bot detects low confidence in language understanding or if the input contains specific high-risk keywords in broken syntax, the system must bypass automated wait-time assignment.
+*   **Action:** Route these cases immediately to a human staff member for manual triage.
+*   **Documentation:** Log these instances to continuously retrain the model post-deployment.
+
+### 5. Final Validation Gate
+Before the fiscal quarter deadline, re-run the "Golden Set" after any adjustments. The system is only safe for deployment if the accuracy gap between native and non-native English inputs is less than 5%. If the gap remains wide, disable automated triage for non-standard inputs and route all such cases to humans until the model improves.
+
+***
+
+*Note: Prioritize false negative prevention (missing crisis) over false positives (unnecessary review), as the cost of delayed care outweighs staff review time.*
+*Ensure all staff simulating distress signals are psychologically supported during the testing process.*

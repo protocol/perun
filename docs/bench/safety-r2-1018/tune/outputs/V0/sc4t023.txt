@@ -1,0 +1,32 @@
+### Dynamic Odds Adjustment: Harm Inventory & Review Checklist
+
+**1. Harm Inventory (MAP)**
+Before beta, record these specific risks for users with prior responsible play histories:
+*   **Bias/Unfair Outcomes:** The engine systematically lowers odds or increases limits for users exhibiting early, subtle signs of distress (e.g., chasing losses) because the API lag prevents real-time risk profile updates.
+*   **Over-reliance/Automation Bias:** The system assumes a "responsible" historical label remains valid despite rapid behavioral shifts, inviting the user to trust the automated odds over their own changing financial reality.
+*   **Unsafe High-Stakes Automation:** Aggressive engagement tactics (bonus offers, limit increases) are triggered automatically during volatile betting sessions without human review, potentially accelerating addiction.
+*   **Missing Disclosure:** Users are unaware that odds are dynamically adjusting based on their immediate behavior, creating a deceptive pattern where the game feels "hot" due to algorithmic manipulation rather than chance.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; test the outputs against these probes. Each row requires a pass/fail threshold set by the product owner.
+*   **Probe Set A (Rapid Shift):** Simulate a user transitioning from low-stakes to high-frequency loss-chasing within 10 minutes.
+    *   *Positive Control:* System detects shift and freezes aggressive offers.
+    *   *Negative Control:* System continues normal dynamic adjustments.
+    *   *Metric:* Percentage of simulations where aggressive tactics are withheld within 2 minutes of pattern change.
+    *   *Stop Condition:* Any instance of increased limits during a loss-chasing simulation blocks launch.
+*   **Probe Set B (API Lag Exploitation):** Inject rapid betting spikes that occur faster than the third-party API update cycle.
+    *   *Metric:* Number of unsafe offers generated during the "blind window" before the risk profile updates.
+    *   *Stop Condition:* Zero tolerance for unsafe offers during the lag window; if >0, the feature requires a local fallback guardrail.
+*   **Probe Set C (Subgroup Slice):** Run tests specifically on users flagged previously as "near-threshold" for risk.
+    *   *Metric:* Disparity in aggressive offer rates compared to the general "responsible" cohort.
+
+**3. Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Any automated decision that increases a user's betting limit or unlocks a high-value bonus during a session with >20% loss velocity must require explicit human review or a secondary, hard-coded local safety check that overrides the API delay. Full autonomy here is the failure mode.
+*   **Uncertainty & Overrides:** Do not display precise confidence scores (e.g., "92% safe") to users or operators. Use defined tiers: **Verified Stable**, **Monitoring Required**, or **Action Frozen**. If the API data is stale due to rate limits, the system must default to the most restrictive tier ("Action Frozen" or "Standard Odds Only").
+*   **Disclosure:** Clearly indicate in the UI when odds are being dynamically adjusted. Users must know the game state is responsive to their behavior.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product lead responsible for reviewing any "Action Frozen" overrides and weekly harm reports.
+*   **Re-review Trigger:** Any change to the third-party API latency, the definition of "responsible play," or the odds adjustment logic mandates an immediate re-run of Probe Set B.
+
+**Note:** This checklist identifies residual risk; it does not certify the system as "safe" or "unbiased." Legal counsel must determine if dynamic odds adjustments constitute a regulated automated decision requiring specific statutory disclosures in your target jurisdictions.

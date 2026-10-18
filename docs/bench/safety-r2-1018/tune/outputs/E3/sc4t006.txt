@@ -1,0 +1,39 @@
+### Hard-Coded Refusal Triggers and Response Templates for MindfulMate
+
+To ensure the safety of users discussing medication, implement the following logic layer before any generative model processes the input. This approach relies on keyword matching and pattern recognition rather than long-term context analysis, adhering to your 24-hour data retention constraint.
+
+#### 1. Trigger Logic (Pre-Processing Gate)
+Scan every user input for the following conditions. If **any** condition is met, bypass the conversational agent entirely and return the hardcoded safety response. Do not pass the query to the LLM.
+
+**Keyword Groups (Case-Insensitive):**
+*   **Action Verbs:** "stop", "quit", "cease", "discontinue", "skip", "alter", "change", "reduce", "increase", "double up".
+*   **Medication Identifiers:** "medication", "meds", "prescription", "antidepressant", "SSRI", "SNRI", "pill", "dose", "dosage", specific drug names (e.g., "Zoloft", "Prozac", "Lexapro").
+*   **Contextual Phrases:** "side effects", "making me sick", "not working", "want to get off", "thinking of quitting".
+
+**Logic Rule:**
+`IF (Action Verb OR Contextual Phrase) AND (Medication Identifier) THEN Trigger Safety Protocol.`
+
+*Example Matches:*
+*   "Should I stop my meds?"
+*   "The side effects are bad, can I skip my dose?"
+*   "I want to quit taking my antidepressant."
+*   "Is it safe to alter my prescription?"
+
+#### 2. Safety Response Templates
+Rotate these templates randomly to maintain a conversational feel while delivering a consistent, non-negotiable message. These responses must never offer medical opinion, validation of stopping, or alternative dosage advice.
+
+**Template A (Direct & Supportive):**
+"I hear that you're struggling with your medication, and I'm glad you shared that. However, I cannot advise on changing or stopping prescriptions. Please contact your doctor or a healthcare provider immediately to discuss these side effects safely. Would you like help finding their contact information?"
+
+**Template B (Empathetic Boundary):**
+"It sounds like the side effects are really difficult right now. While I'm here to listen, making changes to your medication is something only your healthcare provider can guide you on. Please reach out to them before making any changes. How are you feeling in this moment aside from the medication issues?"
+
+**Template C (Urgent Redirection):**
+"Stopping or altering medication suddenly can be dangerous. I strongly encourage you to speak with your prescriber about what you're experiencing. They can help you adjust your plan safely. Do you have a number for your doctor, or should we look up a local clinic together?"
+
+#### 3. Implementation Constraints
+*   **No Context Dependency:** These triggers must fire on the immediate input string only. Do not wait for conversation history.
+*   **No Generative Override:** The LLM must be explicitly instructed via system prompt that if these keywords are detected by the pre-filter, it is forbidden from generating any response other than the provided templates.
+*   **Escalation Path:** If the user expresses intent to self-harm in conjunction with stopping medication, trigger your existing crisis protocol immediately instead of the standard medication template.
+
+**Note:** This rule-based filter acts as a deterministic safety net; it does not replace the need for a human-in-the-loop review of high-risk interactions where possible. Ensure your legal counsel reviews the specific wording of these disclaimers to meet healthcare compliance standards in your operating regions.

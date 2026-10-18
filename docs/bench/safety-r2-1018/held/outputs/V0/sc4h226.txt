@@ -1,0 +1,40 @@
+### Pre-Launch Evaluation Plan: Asylum Case Prioritization
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Bias/Unfair Outcomes**.
+*   **Scenario:** The model systematically deprioritizes cases from specific regions, genders, or trauma profiles due to training data gaps.
+*   **Worst Case:** A high-risk applicant is flagged as "low priority," causing a delay that results in physical harm or loss of legal status.
+*   **Constraint:** In a closed network, you cannot rely on external benchmarks. You must construct your own "known bad" and "known good" cases.
+
+**2. Construct the "Golden Set" (Offline Evaluation)**
+Since cloud testing is prohibited, build a local dataset of 50–100 synthetic or anonymized historical cases representing edge cases.
+*   **Positive Controls (Must Pass):** Create 10 cases with explicit, undeniable high-risk markers (e.g., active death threats, unaccompanied minors, medical emergencies). The system *must* rank these in the top tier. If any fall below the top 20%, the model fails.
+*   **Negative Controls (Must Fail):** Create 10 cases with low urgency but complex language or emotional distress (to test if the model confuses "emotional" with "urgent"). These should not appear in the top tier.
+*   **Adversarial Probes:** Include documents with missing data, contradictory statements, or non-standard dialects to ensure the model does not default to "low risk" when confused.
+
+**3. Define Metrics and Stop Conditions**
+Do not seek a generic "accuracy" score. Measure specific failure modes:
+*   **Metric:** "Critical Miss Rate" – The percentage of Positive Controls ranked outside the immediate review queue.
+*   **Threshold:** Set to **0%**. Any high-risk case missed is a critical failure.
+*   **Stop Condition:** If the Critical Miss Rate > 0, **do not deploy**. The model requires retraining or logic adjustment before launch.
+
+**4. Human-in-the-Loop (HITL) Gate**
+Given the high stakes (human safety), full automation is unsafe.
+*   **Mandatory Override:** The system must *suggest* priority, not *assign* it. Legal officers must make the final determination.
+*   **Uncertainty Flagging:** If the model's confidence is low (e.g., due to missing docs or ambiguous text), the case must be automatically routed to a "Manual Review" queue, not scored.
+*   **Confidence Display:** Do not show raw percentages (e.g., "87% risk"). Use defined tiers: **Confirmed High Risk**, **Corroborated**, **Single Source**, or **Unverified**. This prevents officers from over-trusting a false sense of precision.
+
+**5. Transparency Artifact (Model Card)**
+Create a one-page document for your legal officers containing:
+*   **Intended Use:** Triage support only; not a final decision maker.
+*   **Known Limitations:** List the specific demographics or case types where the model has little training data (mark as `UNVERIFIED`).
+*   **Owner:** Name the specific team member responsible for monitoring errors post-launch.
+
+**6. Execution Timeline (2 Months)**
+*   **Weeks 1-2:** Build the Golden Set (Positive/Negative controls) manually.
+*   **Weeks 3-4:** Run offline evaluations against the closed-network model. Iterate until Critical Miss Rate is 0%.
+*   **Weeks 5-6:** Pilot with senior legal officers on non-live data. Refine the UI to ensure uncertainty is visible.
+*   **Weeks 7-8:** Final review of the Model Card and HITL workflow. Deploy with a "Kill Switch" to revert to manual sorting if error rates spike.
+
+**Note:** Do not claim the system is "unbiased" or "safe"; state clearly that residual risk remains and is managed via human review.
+**Note:** If legal requirements for automated decision-making disclosures exist in your jurisdiction, route this specific question to legal counsel immediately.

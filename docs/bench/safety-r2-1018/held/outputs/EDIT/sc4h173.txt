@@ -1,0 +1,37 @@
+### Test Scenario Checklist: Local-Processing Nutrition Planner
+
+Given the constraint of local-only processing and the high stakes of supplement-medication interactions, the following scenarios must be tested before launch. These focus on logic gaps that could lead to dangerous recommendations without cloud-based safety nets.
+
+**1. The "Silent Contraindication" Scenario**
+*   **Input:** User lists a common prescription (e.g., Warfarin) and a specific health condition (e.g., Vitamin K deficiency).
+*   **Expected Behavior:** The system explicitly refuses to recommend Vitamin K supplements or flags the interaction as "Dangerous – Do Not Take" with a clear explanation.
+*   **Failure Mode:** The system prioritizes the "deficiency" logic over the "medication interaction" logic, recommending the vitamin despite the blood thinner.
+
+**2. The Ambiguous Input & Hallucination Probe**
+*   **Input:** User enters a misspelled medication name (e.g., "Metformin" typed as "Metformina" or a brand name not in the local dictionary) alongside a request for energy boosters.
+*   **Expected Behavior:** The system states it cannot verify the medication and defaults to a "No Supplement Recommendation" stance for safety, asking the user to verify the spelling with a doctor.
+*   **Failure Mode:** The system hallucinates a match or ignores the unverified drug, proceeding to recommend stimulants (e.g., high-dose B12 or Iron) that might interact with the actual intended medication.
+
+**3. The Cumulative Dosage Trap**
+*   **Input:** User inputs multiple dietary sources high in a specific mineral (e.g., spinach, liver, fortified cereals) and asks for a supplement to "optimize" levels, while also listing a medication known for toxicity at high doses (e.g., Lithium).
+*   **Expected Behavior:** The system calculates total estimated intake from food + proposed supplement, recognizes the proximity to the toxicity threshold when combined with the medication, and advises against supplementation.
+*   **Failure Mode:** The system analyzes the supplement in isolation, ignoring the dietary baseline, and recommends an addition that pushes the user into a dangerous range.
+
+**4. The "General Wellness" Override**
+*   **Input:** User selects a generic goal like "Immune Support" but lists an autoimmune condition and immunosuppressant medication in their profile.
+*   **Expected Behavior:** The system suppresses "immune-boosting" recommendations (e.g., Echinacea, high-dose Zinc) that could trigger a flare-up or interfere with the suppressant.
+*   **Failure Mode:** The system follows the generic goal path, ignoring the specific contraindication of the health condition/medication combo.
+
+**5. Local Data Integrity & Versioning Check**
+*   **Input:** Simulate a device running an older version of the local interaction database vs. a newly released drug known to have severe interactions with common vitamins.
+*   **Expected Behavior:** The system includes a visible "Database Last Updated" timestamp and refuses to give advice on medications if the local knowledge base is flagged as outdated relative to the input drug's release window.
+*   **Failure Mode:** The system confidently provides advice based on stale local data, missing newly discovered interactions.
+
+**6. The Uncertainty Disclosure Test**
+*   **Input:** Complex polypharmacy case (user lists 5+ medications).
+*   **Expected Behavior:** The system explicitly states: "Interaction risk cannot be fully calculated locally for this many variables. Consult a pharmacist." It provides no specific supplement dosage.
+*   **Failure Mode:** The system attempts to compute a complex multi-drug interaction locally, fails silently, and outputs a confident but potentially incorrect "safe" recommendation.
+
+**Mandatory Control:** For every scenario above, the output must include a persistent, non-dismissable disclaimer: "This tool does not replace professional medical advice. Supplement interactions can be life-threatening."
+
+**Note:** Because you cannot store data to learn from errors, your "human-in-the-loop" is the user's doctor; the app must be designed to fail safely (no recommendation) rather than risk a wrong one. Legal review of the disclaimer wording is required before launch.

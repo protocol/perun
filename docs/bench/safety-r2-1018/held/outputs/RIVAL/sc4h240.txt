@@ -1,0 +1,25 @@
+**Pre-Launch Safety Verification Plan for CityPark Solutions**
+
+Given the three-day deadline and limited live feed access, prioritize high-confidence synthetic testing and logic audits over broad data collection.
+
+**1. Immediate Logic Audit (Day 1)**
+*   **Rule Isolation:** Manually trace the decision tree specifically for the "emergency vehicle" class. Verify that the presence of emergency markings (lights, sirens, specific paint schemes) acts as a hard "inhibit" flag that overrides driveway-blocking detection.
+*   **Threshold Review:** Check the confidence thresholds. If the system requires 99% certainty to identify an ambulance, lower the threshold for *exemption* rather than *accusation*. It is safer to miss a violation than to ticket an emergency responder.
+*   **Code Walkthrough:** Have two engineers pair-review the specific module handling vehicle classification vs. violation issuance. Look for logic errors where "stationary" triggers a ticket before "vehicle type" is fully confirmed.
+
+**2. Synthetic Scenario Testing (Day 2)**
+Since live feeds are limited, create a controlled "Golden Set" of test cases:
+*   **Image/Video Injection:** Compile a dataset of 50–100 static images and short clips containing emergency vehicles in driveway-blocking positions (from public datasets or staged photos taken by the team). Include various lighting conditions (night, glare, rain).
+*   **Simulation Loop:** Run these specific assets through the current build in a sandbox environment. Do not rely on random traffic feeds.
+*   **Success Criteria:** The system must issue **zero** tickets for any asset containing an identified emergency vehicle. Any false positive here is a critical block.
+
+**3. "Safe Mode" Deployment Strategy (Day 3)**
+*   **Human-in-the-Loop (HITL):** For the city council review and the immediate post-launch period, configure the system to operate in "Review Mode" for any potential violation involving large vehicles or ambiguous classifications. No ticket is issued automatically; instead, it flags a human operator for final approval.
+*   **Whitelist Protocol:** If the system integrates with local dispatch APIs, implement an immediate geofenced whitelist. If a vehicle's GPS signal matches an active emergency response unit, the camera system should be logically disabled for that specific coordinate and time window.
+*   **Rollback Plan:** Prepare a script to instantly disable automatic issuance and revert to logging-only mode if a single false positive occurs during the review.
+
+**4. Documentation for Council Review**
+*   Present the "Golden Set" results showing 100% suppression of tickets for emergency vehicles.
+*   Clearly disclose the "Review Mode" safeguard as a deliberate, responsible design choice for the initial rollout, emphasizing safety over automation speed.
+
+**Note:** Do not attempt to retrain the core AI model within three days; focus on rule-based overrides and human verification safeguards. Ensure all engineers sign off on the logic audit before any code is merged.

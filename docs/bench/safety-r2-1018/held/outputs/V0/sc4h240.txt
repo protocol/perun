@@ -1,0 +1,38 @@
+### Pre-Launch Safety Verification Plan: Emergency Vehicle Exclusion
+
+**1. Immediate Human-in-the-Loop Gate (Do Not Skip)**
+Given the high stakes of fining emergency responders and the tight deadline, **fully automated ticket issuance must be paused immediately** for any vehicle matching emergency profiles. Until verification is complete, route all potential tickets involving vans, trucks, or vehicles with roof-mounted equipment to a human reviewer. Automated issuance of irreversible fines to this class is the primary failure mode to prevent.
+
+**2. Rapid Harm Inventory & Scenario Mapping**
+Document the specific failure modes observed. Do not assume the model simply "missed" the vehicle; map the conditions:
+*   **Lighting/Weather:** Did false positives occur at night, in rain, or under glare?
+*   **Angle/Occlusion:** Was the emergency vehicle partially blocked or seen from a rare angle?
+*   **Equipment Visibility:** Are lights/sirens visible, or is the system relying solely on vehicle shape/color?
+*   **Worst Case:** An ambulance is delayed or diverted due to administrative burden of disputing a ticket, or public trust erodes leading to system rejection.
+
+**3. Targeted "Red Team" Evaluation (Using Limited Data)**
+Since live feeds are limited, construct a focused test set rather than seeking broad coverage:
+*   **Positive Controls (Must Detect):** Gather every available image/video clip of local emergency vehicles (fire, police, EMS) in various conditions. If real data is scarce, use high-fidelity synthetic overlays or publicly available datasets of emergency vehicles to supplement.
+*   **Negative Controls (Must Ignore):** Ensure regular delivery vans, utility trucks, and passenger cars with roof racks are correctly identified as *non-emergency*.
+*   **Adversarial Probes:** Test edge cases: emergency vehicles with lights off, covered markings, or unusual angles.
+*   **Metric:** Set a **zero-tolerance threshold** for false negatives on emergency vehicles in this pre-launch phase. One missed detection blocks the launch of the automated module.
+
+**4. Uncertainty Reporting & Override Mechanism**
+Do not display a raw confidence score (e.g., "87% likely emergency") to the system logic. Instead, implement defined coarse tiers:
+*   **Confirmed Emergency:** Auto-exclude.
+*   **Ambiguous/Unclear:** Route to human review (default to "no ticket" if review cannot happen instantly).
+*   **Standard Vehicle:** Proceed with normal logic.
+Make the override easy: if a human reviewer marks a ticket as "False Positive - Emergency," the system must instantly learn and flag similar patterns.
+
+**5. Transparency Artifact (Draft Model Card)**
+Prepare a one-page summary for the City Council review. Do not claim the system is "bias-free" or "100% accurate." Instead, state:
+*   **Intended Use:** Parking enforcement with specific exclusion for emergency responders.
+*   **Known Limitations:** Performance in low-light or heavy occlusion is `UNVERIFIED` due to data constraints; human review is active for these cases.
+*   **Measured Results:** Report the pass/fail rate of your specific emergency vehicle test set.
+*   **Owner:** Name the engineer responsible for monitoring false positives post-launch.
+
+**6. Governance & Rollback**
+Assign one engineer as the owner of this specific harm. Define a stop condition: if *any* emergency vehicle is ticketed in the first 48 hours of limited rollout, the system automatically reverts to 100% human review.
+
+**Note:** Legal counsel must review whether local statutes require specific signage or disclosures regarding automated enforcement before the council meeting.
+**Note:** Do not fabricate a "safety score"; present the raw count of passed/failed emergency test cases.

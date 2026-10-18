@@ -1,0 +1,38 @@
+# Safety Validation Plan: Smart Pill Dispenser Voice Recognition
+
+**Objective:** Establish confidence in voice authentication reliability for elderly patients using limited prototype data, preventing unauthorized dispensing (false accepts) and dangerous access denial (false rejects) prior to clinical trial.
+
+### 1. Data Augmentation & Simulation Strategy
+Given the constraint of limited voice samples, do not rely solely on raw recordings. Apply digital signal processing to the existing nine samples to simulate the physiological and environmental variations expected in the target demographic:
+*   **Physiological Variations:** Algorithmically introduce pitch shifts (±15%), jitter (frequency instability), and shimmer (amplitude variation) to simulate hoarseness, fatigue, and age-related vocal cord atrophy.
+*   **Accent & Dialect Simulation:** Use formant shifting to mimic regional accent variations without altering the core phonetic content of the command phrases.
+*   **Environmental Noise Injection:** Mix clean samples with recorded background noises typical of elderly living environments (e.g., television audio, HVAC hum, kitchen appliances) at varying Signal-to-Noise Ratios (SNR) from 20dB down to 5dB.
+*   **Health State Simulation:** Apply band-pass filtering to simulate the muffled acoustic properties of speech during respiratory congestion or post-nasal drip.
+
+### 2. Rigorous Testing Protocol
+Execute a three-phase validation cycle using the augmented dataset:
+
+**Phase A: Threshold Stress Testing (False Reject Analysis)**
+*   **Method:** Run the augmented "authorized" samples against the current acceptance threshold.
+*   **Metric:** Calculate the False Reject Rate (FRR). Any FRR > 2% for the "hoarse" or "congested" subsets requires immediate threshold recalibration.
+*   **Goal:** Ensure that a patient with a cold or morning hoarseness is not denied life-saving medication.
+
+**Phase B: Imposter & Spoof Resistance (False Accept Analysis)**
+*   **Method:** Cross-test every augmented sample against every other user's profile (N-1 testing). Additionally, test against high-quality recordings of the same phrases spoken by non-patients (if available) or synthetic voice clones generated from public elderly voice datasets.
+*   **Metric:** Calculate the False Accept Rate (FAR). The target must be 0.0% for unauthorized dispensing.
+*   **Goal:** Prevent caregivers or strangers from accessing another patient's medication.
+
+**Phase C: Edge Case & Failure Mode Identification**
+*   **Scenario Testing:** specifically test "borderline" cases where the confidence score hovers near the decision threshold.
+*   **Fail-Safe Verification:** Confirm that any system error, timeout, or low-confidence score defaults to a **DENY** state with a clear, non-punitive prompt for retry, rather than an unintended release or a permanent lockout.
+
+### 3. Confidence Establishment & Go/No-Go Criteria
+Before the 10-day deadline, establish statistical confidence using the following criteria:
+*   **Minimum Sample Size:** Generate at least 500 synthetic variations per patient profile using the augmentation techniques above.
+*   **Confidence Level:** Achieve a 95% confidence interval where the upper bound of the FRR remains below 5% and the FAR remains at 0%.
+*   **Fallback Mechanism Validation:** If voice recognition fails three consecutive times, the device must trigger a verified alternative authentication method (e.g., physical key, PIN, or remote caregiver override). This fallback must be tested as rigorously as the primary voice modality.
+
+**Deliverable:** A validation report detailing the FRR/FAR matrices across all simulated conditions, a recommended dynamic threshold setting that balances safety and accessibility, and a verified fallback protocol for edge cases.
+
+*Note: This plan relies on synthetic augmentation; final clinical validation with real patients remains mandatory post-trial start.*
+*Ensure all synthetic data generation complies with local privacy regulations regarding biometric data handling.*

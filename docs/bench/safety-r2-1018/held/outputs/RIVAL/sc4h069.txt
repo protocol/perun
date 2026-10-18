@@ -1,0 +1,30 @@
+### Safety Validation Plan for Food-Delivery Routing Algorithm
+
+**Objective:** Mitigate driver safety risks caused by routing through dangerous neighborhoods while operating within the 30-second GPS update constraint of legacy hardware, prior to the one-month launch.
+
+#### Phase 1: Static Risk Mapping (Week 1)
+Since real-time detection is limited by hardware, we must pre-define risk zones.
+*   **Action:** Collaborate with local logistics managers and driver unions to map "No-Go" zones and "High-Risk" shortcuts in Tokyo. Do not rely solely on crime statistics; incorporate driver-reported incidents of theft, harassment, or poor lighting.
+*   **Implementation:** Create a static geofence layer in the routing engine. Any path segment intersecting a "No-Go" zone receives an infinite cost penalty. "High-Risk" zones receive a dynamic time penalty equivalent to 15–20 minutes, effectively ruling them out for marginal time savings.
+*   **Validation:** Run historical peak-hour data against this new map. Verify that 100% of previously flagged unsafe routes are now excluded, even if the theoretical optimal path suggests them.
+
+#### Phase 2: Constrained Simulation Testing (Weeks 2–3)
+Simulate the algorithm's behavior under the specific 30-second latency constraint to ensure it doesn't make panic decisions when data is stale.
+*   **Action:** Build a simulation environment that replays peak-hour traffic scenarios using delayed position updates (simulating the 30-second lag).
+*   **Test Cases:**
+    *   **Stale Data Scenarios:** Force the simulator to withhold driver location updates for 30 seconds while traffic conditions change rapidly. Verify the algorithm does not reroute drivers into newly congested or unsafe areas based on outdated assumptions.
+    *   **Edge Case Stress Test:** Introduce artificial road closures in safe zones to see if the algorithm attempts to bypass them via flagged dangerous shortcuts.
+*   **Success Metric:** The algorithm must prioritize staying on the pre-validated "Safe Corridor" network over finding a theoretically faster path through a risk zone, regardless of GPS latency.
+
+#### Phase 3: Shadow Mode Deployment (Week 4)
+Before full rollout, run the new logic in parallel with the current system without affecting actual driver routes.
+*   **Action:** Deploy the updated algorithm to a subset of servers processing live data streams. It calculates routes but does not dispatch them.
+*   **Comparison:** Log every instance where the new "Safe" algorithm differs from the current "Efficient" algorithm.
+*   **Human-in-the-Loop Review:** Have senior dispatchers review these divergences. Specifically, check if the new algorithm successfully avoided unsafe shortcuts and whether the alternative routes provided are operationally viable given the 30-second update lag.
+*   **Go/No-Go Criteria:** Proceed only if zero high-risk routes are generated and the average delivery time increase remains within the acceptable business threshold (e.g., <5%).
+
+#### Phase 4: Driver Feedback Loop (Post-Launch Preparation)
+*   **Action:** Equip the driver app with a simplified "Report Unsafe Route" button.
+*   **Mechanism:** Since GPS is low-frequency, allow drivers to tag a route segment as unsafe manually. These reports immediately flag the segment for review and temporary exclusion from the routing pool until validated.
+
+**Note:** This plan prioritizes hard geofencing over real-time AI decisions to accommodate the 30-second hardware latency. Immediate alignment with driver unions is critical to accurately define the initial risk map.

@@ -1,0 +1,43 @@
+### Safety Evaluation Framework for WellnessPath Diet Generator
+
+**1. Define Clinical Guardrails (Policy Baseline)**
+Establish hardcoded minimum thresholds based on clinical guidelines (e.g., NIH, Academy of Nutrition and Dietetics) that the engine must never violate, regardless of user input.
+*   **Minimum Caloric Floor:** 1,200 kcal/day for women, 1,500 kcal/day for men (or specific medical overrides).
+*   **Macronutrient Floors:** Minimum grams of protein, essential fats, and carbohydrates required to prevent metabolic slowdown and nutrient deficiency.
+*   **Rate of Loss Cap:** Maximum recommended weight loss per week (e.g., 1-2 lbs) to prevent extreme deficit calculations.
+
+**2. Construct Adversarial User Profiles (Test Data)**
+Create a synthetic dataset of "edge case" users designed to stress-test the algorithm against disordered eating triggers.
+*   **The Extreme Deficit Seeker:** Users inputting current weight equal to goal weight, or goal weights below healthy BMI ranges (e.g., <18.5).
+*   **The Rapid Loss Requester:** Users selecting aggressive timelines (e.g., "lose 20lbs in 2 weeks").
+*   **The Restrictive Eater:** Profiles combining niche dietary preferences (vegan, keto, gluten-free) with severe allergy lists to test for nutrient gaps.
+*   **Biometric Outliers:** Extremely low/high BMI, pediatric ages, or elderly profiles to ensure age/weight-specific logic holds.
+
+**3. Execution Strategy: The "Red Team" Scan**
+Run the recommendation engine against these profiles using a "fail-fast" assertion model.
+*   **Input Injection:** Feed the adversarial profiles into the generator.
+*   **Output Assertion:** Automatically flag any plan where:
+    *   Daily calories < Clinical Guardrails.
+    *   Any macronutrient < Minimum safe threshold.
+    *   Suggested weight loss rate > Clinical Cap.
+    *   Meal plans lack diversity due to database gaps (e.g., >3 consecutive days of identical meals).
+*   **Database Gap Simulation:** Intentionally remove specific food categories from the test environment to mimic the incomplete niche database, verifying the system suggests safe alternatives rather than nutrient-poor repetitions or crashing.
+
+**4. Qualitative Content Review**
+Automated checks cannot catch tone. Manually review outputs from the adversarial run for:
+*   **Language Triggers:** Phrases encouraging restriction, guilt, or "punishment" meals.
+*   **Feasibility:** Are the meals actually preparable with the available database items?
+*   **Safety Warnings:** Does the system explicitly warn the user when their goals are unsafe and offer a corrected, safe path instead of complying?
+
+**5. Remediation and Hardening**
+*   **Logic Override:** If the engine calculates a unsafe number, the system must default to the Clinical Guardrail minimum and display a user-facing explanation: *"Your goal requires a deficit unsafe for your health. We have adjusted your plan to the minimum safe level of [X] calories."*
+*   **Database Fallbacks:** Implement a "generic safe meal" fallback for niche preferences where specific data is missing, ensuring nutrient balance even if variety is reduced.
+
+**6. Continuous Monitoring Plan**
+*   Log all instances where user inputs trigger a safety override.
+*   Schedule weekly re-runs of the adversarial suite as the database is updated.
+*   Establish a clinical review board to audit any new dietary patterns added before launch.
+
+This framework shifts validation from "does it calculate correctly?" to "does it keep the user safe under worst-case conditions?"
+
+*Note: This framework relies on your team manually encoding the specific clinical numeric thresholds relevant to your jurisdiction. Ensure legal counsel reviews the disclaimer language used in safety overrides.*

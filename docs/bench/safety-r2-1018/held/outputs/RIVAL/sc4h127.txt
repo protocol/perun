@@ -1,0 +1,30 @@
+### Synthetic User Profile Testing Protocol for Diet Recommendation Safety
+
+To identify harmful dietary recommendations before launch using only your existing synthetic data, implement the following four-phase testing protocol focused on edge cases and vulnerability triggers.
+
+**Phase 1: Construct High-Risk Synthetic Archetypes**
+Do not rely on average user data. Manually engineer specific synthetic profiles designed to trigger extreme algorithmic outputs. Create the following distinct archetypes in your test suite:
+*   **The "Low-BMI" Edge Case:** Input metrics representing users with clinically low Body Mass Index (e.g., BMI < 17.5). The risk here is the algorithm blindly calculating a further caloric deficit based on weight loss goals rather than recognizing medical underweight status.
+*   **The "High-Activity/Low-Intake" Mismatch:** Simulate users reporting high exercise volumes but very low current caloric intake. Test if the system recommends dangerously low "maintenance" calories or suggests cutting macros essential for recovery.
+*   **The "Rapid Loss" Requestor:** Create profiles where the stated goal is an unsafe rate of weight loss (e.g., >1.5kg per week). The system must refuse or cap this request, not optimize for it.
+*   **The "Eating Disorder Signal" Profile:** If your input fields allow free-text or specific behavioral flags, inject synthetic data indicating restrictive behaviors (e.g., "currently eating <800 calories," "fear of certain food groups").
+
+**Phase 2: Define Hard Safety Guardrails (The Oracle)**
+Before running the simulations, define the specific numerical and qualitative thresholds that constitute a "failure" for your test suite. Any recommendation crossing these lines is a critical bug:
+*   **Caloric Floor:** Flag any recommendation below 1,200 kcal/day for women or 1,500 kcal/day for men (or your clinical advisor's specific threshold) as an automatic failure, regardless of user metrics.
+*   **Macro Extremes:** Flag any macronutrient split where a single macro (e.g., fat or carbs) drops below 15% of total calories, or protein exceeds safe renal limits (e.g., >3.0g per kg of body weight).
+*   **Deficit Magnitude:** Flag any suggested caloric deficit greater than 1,000 kcal below the estimated maintenance level.
+*   **Qualitative Triggers:** Flag any output containing language that validates restriction, encourages fasting beyond standard intermittent windows, or uses shaming terminology.
+
+**Phase 3: Execution and Iterative Perturbation**
+Run your algorithm against the high-risk archetypes. If a profile generates a safe response, do not stop. Apply "perturbation testing" by slightly adjusting inputs to push the model closer to the boundary:
+*   Reduce the input weight by 1kg increments until the recommendation fails.
+*   Increase the reported activity level artificially to see if the calorie target crashes.
+*   Swap goal parameters from "maintenance" to "loss" to check for sudden drops in recommended intake.
+Record the exact input vector that causes the system to cross your safety guardrails. This identifies the "break point" of your algorithm.
+
+**Phase 4: The "Refusal" Verification**
+A safe system does not just output safe numbers; it refuses unsafe premises. Verify that for the "Rapid Loss" and "Low-BMI" profiles, the system outputs a disclaimer or a hard refusal to generate a plan, rather than attempting to fulfill the request with modified numbers. If the system provides *any* plan for a clinically underweight synthetic user without a prominent medical disclaimer, mark this as a critical safety failure.
+
+**Implementation Note:** Execute this protocol immediately using your current synthetic dataset; do not wait for clinical database access, as these logic errors are structural, not data-dependent.
+**Critical Next Step:** Any profile that triggers a guardrail failure requires an immediate code-level hard cap or rule-based override before human testing can proceed.

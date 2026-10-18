@@ -1,0 +1,29 @@
+**Pre-Launch Safety Review Plan: Auto-Trading Bot for Minors**
+
+**1. Harm Inventory & Failure Modes**
+Before launch, explicitly document the worst-case scenarios where the bot fails its primary safety constraint (daily loss limits). For a feature executing irreversible financial actions for minors, the following failure modes must be mapped:
+*   **Unsafe High-Stakes Automation:** The bot executes trades exceeding the regulatory cap during extreme volatility because the "hard-coded" limit is bypassed by latency, race conditions, or flawed logic in the decision loop.
+*   **Over-Reliance & Automation Bias:** The interface design implies guaranteed safety or "smart" protection, leading teenagers to trust the bot beyond its actual reliability, potentially causing them to ignore manual overrides or deposit more funds than they can afford to lose.
+*   **Hallucination as Fact:** The bot generates market trend analysis or investment advice presented as authoritative fact, when the underlying data is outdated, misinterpreted, or fabricated by the model.
+*   **Missing Disclosure:** Users are not clearly informed that their investment decisions are fully automated by an AI, nor are the specific risks of micro-investing in volatile markets disclosed in age-appropriate language.
+*   **Bias/Unfair Outcomes:** The trading algorithm systematically disadvantages specific user segments (e.g., based on deposit size or timing) due to biases in the training data or simulation parameters.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert safety; measure it. Construct a test suite with one row per inventoried harm:
+*   **Probe Set:** Simulate extreme market spikes (flash crashes, sudden surges) that exceed historical norms. Include "positive controls" (inputs known to trigger a limit breach if the code fails) and "negative controls" (stable markets where no trade should occur).
+*   **Metric:** Percentage of trades executed that violate the hard-coded daily loss limit.
+*   **Threshold:** **Zero tolerance.** Any single violation of the regulatory cap in testing is a stop condition.
+*   **Stop Condition:** If *any* probe results in a loss exceeding the cap, the launch is blocked immediately.
+*   **Additional Probes:** Test for prompt injection via user-supplied data, leakage of other users' portfolio data, and excess agency (e.g., can the bot trade assets outside the approved list?).
+*   **Reporting:** Report residual risk as `UNVERIFIED` for any scenario not covered by the simulation data. Do not invent a "99.9% safe" metric.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Given the high-stakes, irreversible nature of financial loss for minors, **full autonomous execution is the failure mode.** Implement a mandatory human review or explicit, real-time user confirmation for any trade approaching 80% of the daily limit, or for any trade executed during periods of extreme volatility. The bot should not have the agency to finalize high-impact actions without this gate.
+*   **Uncertainty Disclosure:** Surface confidence as a defined coarse tier (e.g., "High Confidence," "Unverified Trend") rather than a precise percentage. Clearly state when market data is insufficient for a reliable recommendation.
+*   **Transparency Artifact:** Produce a **Model Card** and **Data Card** before launch. These must detail: intended use (micro-investing for teens), out-of-scope uses, measured performance by subgroup (if applicable), known limitations (e.g., "fails in unprecedented market spikes"), data provenance, and the owner of the model. The absence of these cards is a critical transparency finding.
+
+**4. Governance & Legal Routing**
+*   **Owner Assignment:** Name a specific individual responsible for each identified harm and the ongoing monitoring of the bot post-launch.
+*   **Legal Determination:** The question of whether this feature triggers specific regulatory duties under Singaporean law (e.g., financial advice regulations, minor protection laws) or requires specific AI disclosures is a **legal determination**. Route this immediately to counsel. Do not assert compliance; name the regimes (e.g., MAS guidelines) and let legal verify binding obligations.
+
+**Note:** Two weeks is insufficient to prove safety for high-stakes automation involving minors; if the human-in-the-loop gate cannot be implemented, the constraint (launch date) must move. Never certify the system as "safe" or "unbiased"; only report measured residual risks.

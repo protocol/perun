@@ -1,0 +1,27 @@
+### Rapid Validation Plan for Welfare-Fraud Detector
+
+Given the four-week timeline and inability to clean source data, the validation strategy must shift from "perfect data" to "robust logic under imperfect conditions." The goal is to isolate logic errors from data noise before live deployment.
+
+**1. Construct a "Golden Set" of Synthetic Cases (Week 1)**
+Do not rely on historical production data for initial testing, as its flaws are unknown. Instead, manually craft 50–100 synthetic claimant profiles that represent specific edge cases known to cause integration glitches.
+*   **The "Glitch" Profiles:** Create records where employment dates slightly overlap benefit periods, where income spikes are due to one-off payments (e.g., severance), or where employer IDs are malformed but valid.
+*   **The "Clear" Profiles:** Create records with obvious, undisputed eligibility and ineligibility.
+*   **Execution:** Run the detector against this set. Any flag on a "Clear" profile or any miss on a known "Fraud" profile indicates a logic error, not a data issue. This establishes a baseline accuracy metric independent of the messy live feed.
+
+**2. Implement "Shadow Mode" with Human-in-the-Loop Triage (Weeks 2–3)**
+Deploy the system in a read-only "shadow mode" against a sample of live data. The system generates flags, but **no actions are taken** against citizens.
+*   **Rapid Review Squad:** Assign three team members to review every flag generated in shadow mode immediately.
+*   **Categorization:** Tag every flag as: (A) True Positive, (B) False Positive due to Data Glitch, or (C) False Positive due to Logic Error.
+*   **Threshold Tuning:** If Category B (Data Glitch) exceeds 20%, the system is too sensitive for the current data quality. Adjust the confidence threshold required to trigger a flag until the false positive rate drops to an acceptable level (e.g., <5%). Do not attempt to fix the data; instead, make the logic more conservative to accommodate the noise.
+
+**3. Establish a "Hard Stop" Safeguard for High-Risk Flags (Week 4)**
+Before full launch, hard-code a mandatory human review step for any flag that would result in immediate benefit suspension.
+*   **The Rule:** No automated letter is sent, and no payment is stopped, based solely on the algorithm's output for the first 90 days.
+*   **The Workflow:** The system produces a "Review Queue." A caseworker must verify the employment discrepancy manually before any adverse action is initiated. This acts as a circuit breaker, ensuring that even if the logic fails, no citizen suffers financial interruption without human verification.
+
+**4. Define a "Rollback Trigger"**
+Set a specific metric for failure. If, during the first two weeks of live operation, the rate of overturned flags (appeals successful due to system error) exceeds 10%, the system automatically reverts to manual-only processing. This pre-commits the team to pausing the automation if it causes undue distress, protecting vulnerable citizens from systemic failure.
+
+By focusing on synthetic edge cases, shadow running with immediate human triage, and enforcing a mandatory human review for all adverse actions, you can launch the tool as an *assistant* to caseworkers rather than an autonomous judge, mitigating the risk of harm from dirty data.
+
+*Note: This plan prioritizes citizen safety over automation speed; false negatives (missed fraud) are acceptable risks in the short term compared to false positives (wrongful accusation).*

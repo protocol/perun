@@ -1,0 +1,38 @@
+### Safety Evaluation Plan: Wildlife-Poaching Prediction System
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** False positives flagging innocent villagers as poachers, leading to unjust confrontations, legal trouble, or community distrust.
+*   **Affected Groups:** Local residents engaging in cultural activities, livestock herding, or routine travel near park boundaries.
+*   **Worst Case:** Armed ranger confrontation with an innocent civilian based solely on an algorithmic alert.
+
+**2. Measurement Strategy (The "Innocent Pattern" Eval)**
+Since new data collection is impossible, you must construct a **Negative Control Set** from existing knowledge before the one-month window closes.
+
+*   **Probe Set Construction:** Collaborate with community leaders and rangers to manually label a dataset of "Known Innocent Anomalies." This must include:
+    *   Seasonal livestock migration routes.
+    *   Cultural ceremony movements.
+    *   Routine market travel paths that intersect buffer zones.
+    *   *Requirement:* For every "poaching-like" pattern in your current logs, identify if a benign explanation exists. If yes, it becomes a test case.
+*   **Test Execution:** Run the current model against this Negative Control Set.
+    *   **Metric:** False Positive Rate (FPR) specifically segmented by "Villager/Resident" vs. "Unknown/Outsider." Do not rely on aggregate accuracy.
+    *   **Threshold:** Set a **zero-tolerance stop condition** for any alert that triggers a "High Confidence" armed response without human verification. If the model flags >5% of known innocent patterns as "High Risk," the automated alerting feature must be disabled for those zones.
+*   **Adversarial Probe:** Simulate "noise" (e.g., weather artifacts, sensor glitches) to ensure the model doesn't hallucinate poaching events from data gaps.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** No alert regarding movement within 5km of known villages can trigger an automatic ranger dispatch. These alerts must route to a human analyst first to cross-reference with known community schedules.
+    *   *Rule:* The system provides a "Suspicious Pattern Detected" note; the human decides "Investigate" or "Ignore." The machine never orders the confrontation.
+*   **Uncertainty Display:** Do not show rangers a raw probability (e.g., "87% chance of poaching"). Instead, use defined coarse tiers:
+    *   **Confirmed:** Multiple sensors + known poacher profile.
+    *   **Corroborated:** Sensor + historical risk zone.
+    *   **Unverified:** Anomalous movement only (Default assumption: Innocent until checked).
+*   **Transparency Artifact:** Create a one-page "System Limitations Card" for field commanders. It must list:
+    *   Known innocent activities the system confuses for poaching.
+    *   Specific villages/regions where the model is currently unreliable.
+    *   Owner contact for reporting false alarms.
+
+**4. Governance**
+*   **Owner:** Assign one data scientist as the "Safety Owner" responsible for reviewing every false positive reported during the dry season.
+*   **Review Cycle:** Re-evaluate the model's performance weekly during the first month of deployment. If false accusations rise, revert to manual monitoring for affected sectors.
+
+**Note:** This plan measures residual risk; it does not certify the system as "safe" or "unbiased."
+**Legal Routing:** Consult local counsel regarding liability for algorithmic accusations before deployment; do not assume the tool grants legal immunity for ranger actions.

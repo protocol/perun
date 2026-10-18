@@ -1,0 +1,41 @@
+**Pre-Launch Validation Plan: Fall Detection Logic (Pilot Scope)**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm A (False Positive):** Unnecessary ambulance dispatch. *Worst Case:* Family distress, emergency resource strain, user loss of trust, potential financial liability for false dispatch.
+*   **Harm B (False Negative):** Missed fall. *Worst Case:* Delayed medical attention leading to severe injury or death.
+*   **Harm C (Automation Bias):** Care network relying solely on AI without verifying context before dispatch.
+
+**2. Runnable Test Rows (One per Harm)**
+Execute these probes using historical motion data or staged simulations within your hardware transmission limits.
+
+*   **Row 1: False Positive Probe (Non-Fall Movements)**
+    *   **Probe Set:** 50+ sequences of common non-fall movements (sitting down quickly, dropping objects, bending to tie shoes, pet movement, rapid chair rocking). Include a *known-bad positive control* (simulated fall) and *known-good negative control* (normal walking).
+    *   **Metric:** False Dispatch Rate (FDR) per 100 non-fall events.
+    *   **Threshold:** Owner-set. Propose **zero tolerance** for automatic dispatch on any single unverified "fall" signal during the pilot.
+    *   **Stop Condition:** If FDR > 0% for automatic dispatch, **block launch**. Trigger mandatory human review gate.
+    *   **Reviewer:** Product Owner + Lead Clinician.
+
+*   **Row 2: False Negative Probe (Edge-Case Falls)**
+    *   **Probe Set:** 20+ sequences of low-movement falls (slumping in chair, sliding off bed, falling in bathroom blind-spots). Slice by user subgroup (e.g., slow movers vs. active seniors).
+    *   **Metric:** Missed Detection Rate.
+    *   **Threshold:** Owner-set based on clinical risk tolerance.
+    *   **Stop Condition:** If Missed Rate exceeds clinical safety floor, **block launch**.
+    *   **Reviewer:** Lead Clinician.
+
+*   **Row 3: Injection & Data Integrity**
+    *   **Probe Set:** Simulate sensor dropout, delayed transmission bursts (mimicking hardware constraints), and erratic signal spikes.
+    *   **Metric:** System behavior under data gaps (does it default to "safe/no-alert" or "alert"?).
+    *   **Stop Condition:** If system auto-dispatches on corrupted/missing data, **block launch**.
+
+**3. Management Controls (The Human Gate)**
+*   **Irreversible Action Gate:** Automatic dispatch of emergency services is a **high-stakes, irreversible action**. Given the risk of false positives, **full autonomous execution is the failure mode**.
+    *   **Mandatory Control:** Implement a **Human-in-the-Loop (HITL)** gate for the pilot. All "fall detected" signals must route to a human operator (care network staff) for verification via two-way audio or camera snapshot (if available) *before* emergency services are dispatched.
+    *   **Fallback:** If human verification is unavailable within X minutes (defined by clinical risk), then—and only then—escalate per protocol. This must be explicit, not hidden.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% fall likelihood") to operators. Use defined coarse tiers: **"Confirmed"** (multiple sensors tripped), **"Corroborated"** (motion + audio), **"Single-Source/Unverified"** (requires immediate human check).
+*   **Transparency Artifact:** Draft a **Model Card** for the pilot partners. It must state: intended use (monitoring only, not diagnostic), known limitations (specific movements that confuse the sensor), subgroup performance (if tested), and the explicit "UNVERIFIED" status of any metric not fully run in Row 1/2.
+
+**4. Governance**
+*   **Owner:** Name one person responsible for reviewing every false positive/negative during the pilot.
+*   **Legal Route:** Whether automatic dispatch requires specific regulatory disclosure or consent under health laws is a legal determination. Route to counsel immediately; do not assert compliance here.
+
+**Note:** This plan prioritizes preventing harmful false dispatches via a human gate over full automation. No metric is certified "safe"; residual risk must be logged per incident.

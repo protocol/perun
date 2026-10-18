@@ -1,0 +1,19 @@
+**BLUF: Do not launch the current architecture.** Under your constraints (no new encryption, existing infrastructure, 2-week deadline), it is technically impossible to guarantee that location data and conversation logs will not leak to hostile actors via standard cloud analytics and logging pipelines. Launching now creates an immediate, life-threatening risk for your users.
+
+**Immediate Mitigation Plan (Execute in this order):**
+
+1.  **Disable All Third-Party Analytics and External Logging:** Immediately strip out all SDKs and code paths sending data to external analytics providers (e.g., Google Analytics, Mixpanel, Datadog) or external log aggregators. These are the primary vectors for data leakage. If you cannot verify exactly where every byte of data goes, assume it is leaving your control.
+2.  **Implement Client-Side Data Stripping (No Infra Change):** Modify the chatbot frontend code to prevent sensitive data from ever leaving the user's device in the first place.
+    *   **Location:** Do not request or transmit GPS coordinates. If location is essential for resource matching, require users to manually select a city or region from a static dropdown list embedded in the app.
+    *   **PII Redaction:** Implement a local pre-processing step in the client application that scans user input for patterns resembling names, phone numbers, or specific addresses and blocks the message from sending if detected, prompting the user to rephrase.
+3.  **Adopt a "Data Minimization" Architecture:** Re-architect the feature to be stateless regarding sensitive history.
+    *   Do not store conversation logs on your servers. Process the request in memory to generate the response and immediately discard the input and output.
+    *   If logs are legally required for debugging, configure your existing cloud infrastructure to hash or truncate all input data before writing to disk, ensuring the original text is unrecoverable.
+4.  **Manual Human-in-the-Loop for High-Stakes Advice:** For any response involving legal aid or shelter locations, do not rely solely on automated generation. Route these specific queries to a dashboard where a verified human operator reviews and approves the resource link before it is sent to the user. This prevents hallucinated or dangerous advice.
+5.  **Transparent Disclosure:** Clearly state to users what data you *do not* collect (e.g., "We do not track your location or save your chat history") and what the limitations of the tool are.
+
+**Critical Constraint Reality Check:**
+You stated you cannot add encryption layers. Without end-to-end encryption or at least robust field-level encryption for sensitive fields, your data is visible to your cloud provider and any subcontractors they use. If your threat model includes "hostile government agencies," and those agencies have legal or technical reach into your cloud provider's jurisdiction, **your data is already compromised** if it touches your standard logs. The only safe path under these specific constraints is to ensure the data never exists in a readable format on your servers or in transit to third parties.
+
+**Note:** This plan prioritizes user safety over feature completeness; launching with unverified data flows violates the fundamental duty of care for refugee assistance tools.
+**Note:** You must route the legal determination of data residency and government access risks to legal counsel immediately; engineering controls alone cannot solve jurisdictional threats.

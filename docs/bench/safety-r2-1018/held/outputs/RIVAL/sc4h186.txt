@@ -1,0 +1,35 @@
+### Testing Strategy for Grade-Curving Disparate Impact
+
+**Objective:** Detect statistical disparities in the automated curving system's output across student groups using existing anonymized historical data, without modifying the core algorithm or acquiring new tools.
+
+**Phase 1: Data Preparation & Group Definition (Days 1-2)**
+1.  **Dataset Selection:** Extract historical cohorts (past 3–5 years) where final grades were assigned manually or via a verified neutral method. Ensure all personally identifiable information (PII) is removed, retaining only:
+    *   Raw pre-curve scores.
+    *   Final post-curve scores (if available for validation) or raw scores to be processed.
+    *   Protected attributes for analysis (e.g., demographic group identifiers, socioeconomic proxies used in your records).
+2.  **Group Segmentation:** Define test groups based on your institution's specific diversity metrics (e.g., Group A vs. Group B). Ensure sample sizes are statistically significant enough to detect trends.
+
+**Phase 2: Simulation Environment Setup (Days 3-4)**
+1.  **Sandbox Execution:** Since you cannot alter the core algorithm, create a "wrapper" script (using standard languages already available like Python, R, or even advanced Excel/SQL if code is restricted) that:
+    *   Ingests the anonymized raw scores.
+    *   Calls the existing curving function (or replicates its logic exactly in a read-only mode if the binary/library is accessible).
+    *   Outputs the simulated curved grades.
+2.  **Constraint Adherence:** Run this simulation in an isolated environment. Do not connect to the live production database. Use read-only copies of the historical data to ensure zero risk to current student records.
+
+**Phase 3: Disparate Impact Analysis (Days 5-7)**
+Perform the following statistical comparisons between groups:
+1.  **Delta Analysis:** Calculate the average change in score (Curved Score − Raw Score) for each group. A systematic negative delta for a specific minority group compared to the majority indicates potential bias.
+2.  **Distribution Shift:** Compare the distribution of grades before and after curving. Check if the curve disproportionately compresses the upper tail of minority scores or expands the lower tail.
+3.  **Failure Rate Variance:** Analyze if the pass/fail threshold shifts differently for specific groups. Did the curve cause a statistically significant increase in failure rates for one group while lowering it for another?
+4.  **Statistical Significance:** Apply a T-test or Chi-squared test (standard in most data tools) to determine if observed differences are due to chance or systemic bias.
+
+**Phase 4: Reporting & Mitigation Planning (Days 8-10)**
+1.  **Evidence Compilation:** Document findings with visualizations (histograms of score shifts by group) and statistical p-values.
+2.  **Decision Gate:**
+    *   **If No Bias Detected:** Proceed with deployment, documenting the audit as due diligence.
+    *   **If Bias Detected:** Since the algorithm cannot be changed post-semester, prepare a manual override protocol. This involves flagging affected student records for human review before final publication, ensuring individual fairness despite the algorithmic limitation.
+
+**Deliverable:** A comprehensive audit report detailing the methodology, statistical findings, and a recommended manual intervention protocol if disparate impact is confirmed.
+
+*Note: Ensure all data handling complies with your university's specific data privacy policies and POPIA regulations regarding student information.*
+*This strategy relies entirely on existing data and standard analytical capabilities, requiring no new software licenses.*

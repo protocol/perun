@@ -1,0 +1,34 @@
+### Pre-Launch Evaluation Strategy: Virtual Try-On Safety
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific risks for the virtual try-on feature:
+*   **Bias/Unfair Outcomes:** The system consistently recommends incorrect sizes or unflattering styles for specific body types (e.g., plus-size, petite, or non-binary shapes) due to limited training data.
+*   **Hallucination as Fact:** The system generates a visual representation of fit that is physically impossible or misleadingly alters the user's body shape, presented as an accurate prediction.
+*   **Over-reliance/Automation Bias:** Users trust the automated "perfect fit" label without checking size charts, leading to increased returns or frustration.
+*   **Psychological Harm (Body Image):** The feedback language or visual rendering implicitly shames certain body features (e.g., highlighting "problem areas") rather than focusing on garment fit.
+*   **Missing Disclosure:** Users are unaware the image is an AI-generated approximation, not a photograph of them.
+
+**2. Measurement Plan (MEASURE)**
+Since compute resources limit internal simulation diversity, your evaluation must rely on **targeted adversarial probing** and **human-in-the-loop review** rather than massive automated sweeps. Create one test row per harm above:
+
+*   **Probe Set:** Curate a small, high-impact dataset of 50–100 static images representing edge cases (diverse skin tones, body shapes, disabilities, gender expressions) that your current simulation misses. Do not rely on random sampling.
+*   **Positive Control:** Include inputs known to fail (e.g., extreme aspect ratios, specific clothing patterns) to ensure the test catches errors.
+*   **Metric & Threshold:**
+    *   *Fit Accuracy:* % of recommendations matching a human stylist's assessment for the probe set. **Threshold:** Owner-defined (e.g., <90% match blocks launch for that segment).
+    *   *Sentiment/Safety:* Binary pass/fail on whether output language contains shaming terms or implies body defects. **Threshold:** Zero tolerance for shaming language.
+    *   *Visual Fidelity:* Human review score (1–5) on whether the generated image distorts body proportions. **Threshold:** Average score <4 blocks launch.
+*   **Stop Condition:** If any subgroup in the probe set fails the threshold, the feature deployment for that segment is halted until remediated.
+*   **Reporting:** Report results as "Verified for [List of Tested Shapes]" and "UNVERIFIED for [Untested Shapes]." Do not invent a global "99% accurate" claim.
+
+**3. Risk Management (MANAGE)**
+*   **Human Gate:** Implement a mandatory human review step for any recommendation flagged as "low confidence" by the model or falling outside the verified body-shape clusters. Do not auto-send size advice for edge cases.
+*   **Defined Confidence Tiers:** Display fit advice using coarse, defined tiers (e.g., "High Confidence Fit," "Estimated Fit – Check Size Chart") rather than precise percentages (e.g., "87% match"). Define what each tier means in plain English.
+*   **Disclosure:** Clearly label the output: "AI-generated simulation. Actual fit may vary."
+*   **Override:** Ensure users can easily bypass the recommendation and view standard size charts.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing failed probes and updating the harm inventory.
+*   **Transparency Artifact:** Draft a **Model Card** before launch detailing: intended use (style recommendation), limitations (specific body shapes not yet tested), and the results of your probe set.
+*   **Legal Routing:** Consult counsel regarding whether this automated sizing advice constitutes a regulated decision in your target markets; do not assume it is exempt.
+
+**Note:** Given your compute constraints, prioritize depth of testing on high-risk edge cases over breadth. A narrow, verified launch is safer than a broad, unverified one.

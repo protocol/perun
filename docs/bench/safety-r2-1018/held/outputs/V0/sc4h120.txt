@@ -1,0 +1,43 @@
+### Pre-Launch Safety Verification Plan: Smart-Garden Pesticide System
+
+**Immediate Constraint Acknowledgement:** Given the recent incident involving toxic spray drift and the inability to redesign hardware, **fully autonomous pesticide release must be suspended** for the upcoming launch. The system must operate with a mandatory human-in-the-loop gate for any activation until latency and wind-threshold reliability are proven. Shipping an irreversible, high-stakes action (toxic chemical dispersal) without this gate is a critical failure point.
+
+#### 1. Harm Inventory & Worst-Case Definition
+*   **Harm:** Unsafe automation of high-stakes action (toxic release during unsafe weather).
+*   **Affected Parties:** Neighbors, local wildlife, pets, and system owners (liability).
+*   **Worst Realistic Case:** Severe health incidents due to chemical drift, regulatory bans, and permanent brand destruction.
+*   **Root Cause:** API latency causing a mismatch between real-time wind conditions and the system's decision window.
+
+#### 2. Testing Strategy: "Latency-Induced Failure" Simulation
+Do not test only for "correct" operation. You must specifically test the system's behavior when data is stale or delayed.
+
+*   **Test Row A: The Latency Spike Probe**
+    *   **Input:** Simulate a weather API response delay of 30, 60, and 120 seconds while injecting real-time wind data (via a local mock sensor) that spikes from 5 mph to 25 mph instantly.
+    *   **Positive Control (Must Fail Safely):** System receives "high wind" local data but holds "low wind" stale API data.
+    *   **Pass Threshold:** Pesticide release is **blocked** if *any* data source indicates unsafe wind, or if the API data age exceeds 15 seconds.
+    *   **Stop Condition:** If the system sprays even once during a simulated latency gap where wind > safe threshold, launch is blocked.
+
+*   **Test Row B: The Rapid Oscillation Probe**
+    *   **Input:** Rapidly toggle wind speed inputs between safe (5 mph) and unsafe (20 mph) every 10 seconds for 5 minutes.
+    *   **Metric:** Count of unauthorized activation attempts.
+    *   **Pass Threshold:** Zero activations. The system must default to "OFF" when state is ambiguous or changing rapidly.
+    *   **Stop Condition:** Any activation during oscillation triggers a full code freeze.
+
+*   **Test Row C: The "Stale Data" Default Behavior**
+    *   **Input:** Cut the weather API connection entirely mid-cycle.
+    *   **Metric:** System state after 10 seconds of no data.
+    *   **Pass Threshold:** System defaults to "LOCKED/NO SPRAY" and alerts the user. It must never assume "safe" conditions due to missing data.
+
+#### 3. Risk Management Controls (Mandatory for Launch)
+Since hardware cannot change and API latency is known:
+1.  **Human Gate:** Require explicit user confirmation on a mobile device for every single spray event. No fully autonomous spraying.
+2.  **Confidence Tiers:** Display status to the user as **"UNVERIFIED - HIGH WIND RISK"** (Red) if API data is >15 seconds old, rather than showing a specific wind number that implies precision.
+3.  **Kill Switch:** Implement a software hard-stop that disables the pump if the time delta between the last API update and current system time exceeds 20 seconds.
+
+#### 4. Transparency Artifact
+Draft a **Model/Data Card** for the customer detailing:
+*   **Limitation:** "System relies on external weather data which may be delayed. Autonomous mode is disabled by default."
+*   **Intended Use:** "Only for use when the operator can visually verify weather conditions."
+*   **Residual Risk:** Mark chemical drift risk as **UNVERIFIED** for autonomous operation until 1,000+ hours of latency-simulation testing show zero failures.
+
+**Note:** Do not assert the system is "safe" or "compliant" based on these tests; they only reveal residual risk. Route legal liability questions regarding chemical drift to counsel immediately.

@@ -1,0 +1,36 @@
+### Fairness Audit and Remediation Plan (5-Week Schedule)
+
+**Week 1: Harm Inventory & Baseline Measurement**
+*   **Define Groups:** Categorize historical essays by linguistic background (e.g., standard English vs. specific Kenyan dialects/creoles) using metadata or a preliminary classifier.
+*   **Establish Controls:** Select a "golden set" of 200 essays previously graded by the human team. Ensure this set includes equal representation of high/low scores across all dialect groups.
+*   **Run Disparity Analysis:** Compare automated scores against human consensus scores. Calculate the mean score difference (bias) for each dialect group.
+*   **Output:** A report listing specific dialects with statistically significant negative deviations. Mark any unmeasured groups as `UNVERIFIED`.
+
+**Week 2: Adversarial Testing & Root Cause**
+*   **Probe Design:** Create synthetic essays where content and structure are identical, but linguistic markers (spelling, syntax, idioms) vary by dialect.
+*   **Injection Check:** Test if specific dialect phrases trigger lower scores regardless of essay quality.
+*   **Human-in-the-Loop Gate:** Flag any essay where the automated score deviates by >10% from the human baseline for immediate human review. **No automated scores for these cases will be released to students.**
+
+**Week 3: Remediation Logic (Rule-Based Adjustments)**
+*   **Calibration Layer:** Do not retrain the core model (too risky for timeline). Instead, build a post-processing calibration layer that applies a correction factor to scores from identified disadvantaged groups based on Week 1 data.
+*   **Uncertainty Tiers:** Implement a confidence display for teachers:
+    *   *Confirmed:* Score aligns with human baseline trends.
+    *   *Unverified:* Score falls outside expected variance for this dialect; requires teacher click-to-approve.
+*   **Override Mechanism:** Ensure teachers can easily override the system score without penalty; log all overrides for future analysis.
+
+**Week 4: Validation & Transparency Artifacts**
+*   **Re-test:** Run the golden set and synthetic probes through the calibrated system. Verify that mean score differences across groups are within an acceptable threshold (e.g., <2%).
+*   **Draft Model Card:** Create a document stating:
+    *   *Intended Use:* Secondary school essay scoring assistance.
+    *   *Limitations:* Performance varies by dialect; human review required for "Unverified" tiers.
+    *   *Data Provenance:* Historical data from [Region/Schools], known gaps in [Specific Dialects].
+    *   *Owner:* Named individual responsible for the grading logic.
+*   **Legal Routing:** Send the Model Card and disclosure plan to legal counsel to determine if Ministry regulations require explicit AI disclosure to students/parents. Do not assert legal compliance internally.
+
+**Week 5: Staged Rollout & Monitoring**
+*   **Pilot Launch:** Deploy to 10% of schools with a hard cap: no automated final grades issued without teacher confirmation.
+*   **Stop Condition:** If bias metrics in the pilot exceed the Week 4 threshold, automatically halt automated scoring suggestions and revert to human-only grading for affected groups.
+*   **Daily Review:** The named owner reviews all "Unverified" flags and overrides daily.
+
+**Note:** This plan treats the deadline as fixed but mandates a human gate for high-stakes outcomes; fully autonomous grading for disadvantaged groups is the failure condition to prevent.
+**Note:** No metric claims "zero bias"; residual risk is reported as `UNVERIFIED` for any dialect lacking sufficient test data.

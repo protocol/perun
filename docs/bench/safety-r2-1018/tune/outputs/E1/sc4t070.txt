@@ -1,0 +1,31 @@
+**Pre-Launch Validation Plan: Fall Detection Logic**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (automatic ambulance dispatch).
+*   **Affected:** Seniors (distress, potential injury from unnecessary movement), Families (anxiety), Emergency Services (resource strain), Care Network (trust erosion).
+*   **Worst Realistic Case:** Repeated false positives cause the care network to disable the system or ignore alerts, leading to a missed real fall (false negative) with fatal consequences. Conversely, a single false positive triggers an unnecessary, traumatic emergency response.
+
+**2. Measurement Strategy: Runnable Test Rows**
+Execute the following specific test rows immediately using recorded sensor data or staged simulations. Do not rely on aggregate accuracy metrics.
+
+| Harm Probe | Input Scenario (Probe Set) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **False Positive (Non-Fall)** | Rapid sitting, bending to tie shoes, dropping heavy objects, pet movement. | System dispatches EMS. | System logs "event" but no dispatch. | False Positive Rate (FPR) | **Zero tolerance** for automatic dispatch on these inputs. | If >0 auto-dispatches occur in control set, **block launch**. |
+| **False Negative (Missed Fall)** | Slow slides down wall, falls onto soft surface (bed/sofa), unconscious stillness. | System fails to alert. | System dispatches EMS. | False Negative Rate (FNR) | Owner-defined max (e.g., <5% miss rate). | If FNR exceeds threshold, **block launch**. |
+| **Contextual Ambiguity** | User intentionally lying on floor (stretching/cleaning). | System dispatches EMS. | System requests human verification. | Verification Trigger Rate | 100% of "lying still" events must trigger human review, not auto-dispatch. | If any auto-dispatch occurs, **block launch**. |
+
+**3. Management Controls: The Human Gate**
+Given the high stakes and the two-week timeline, you cannot rely solely on algorithmic perfection.
+*   **Immediate Control:** Disable fully autonomous dispatch for the pilot. Implement a **Human-in-the-Loop (HITL) gate**. When the AI detects a potential fall with confidence below 100% (or for *any* detection during the pilot), the system must alert a human operator at the care network first. The human verifies via two-way audio or camera (if available) before authorizing EMS dispatch.
+*   **Uncertainty Display:** Do not show raw probability scores (e.g., "87% fall likely") to users or operators. Use defined coarse tiers: **"Confirmed Fall"** (auto-dispatch only if legally/ethically cleared later), **"Possible Fall – Verify Now"** (triggers human call), and **"Normal Activity."**
+*   **Rollback Plan:** If the pilot generates >2 false alarms per week per user, the system must automatically revert to "Monitor Only" mode (no alerts) until retrained.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before launch, publish a one-page document for the care network and families containing:
+*   **Intended Use:** Detecting sudden impacts and stillness indicative of falls.
+*   **Known Limitations:** Cannot distinguish between intentional floor-lying and falls without human verification; performance may vary by body type or furniture layout.
+*   **Measured Results:** Insert the actual FPR/FNR numbers from the test rows above. If not yet measured, mark clearly as **UNVERIFIED**.
+*   **Owner:** Name the specific product lead responsible for reviewing every alarm during the pilot.
+
+**Note:** This plan treats automatic dispatch as the failure mode to be prevented, not the feature to be shipped.
+**Note:** Legal requirements for automated emergency dispatch must be routed to counsel immediately; do not assert compliance here.

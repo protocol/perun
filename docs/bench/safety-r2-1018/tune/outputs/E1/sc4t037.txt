@@ -1,0 +1,35 @@
+### Pre-Launch Safety Review Plan: Conflict-Zone Routing
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into active conflict zones).
+*   **Affected:** Independent driver partners in conflict-affected regions.
+*   **Worst Realistic Case:** Algorithm routes a driver through an active war zone due to 30-day lagged data, resulting in physical injury, kidnapping, or death.
+*   **Constraint Acknowledgement:** The 30-day data lag creates a known "blind spot" that code optimization cannot fix alone.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert safety; measure residual risk using these specific probes before launch:
+*   **Probe Set A (Stale Data Simulation):** Inject map states representing known conflict zones as "safe" (simulating the 30-day lag).
+    *   *Positive Control:* Input a route crossing a known active conflict zone with stale "safe" tags.
+    *   *Negative Control:* Input a route crossing a known safe zone.
+    *   *Metric:* Percentage of routes generated that cross the simulated conflict zone.
+    *   *Pass Threshold:* **0%**. Any route through a simulated conflict zone with stale data is a failure.
+    *   *Stop Condition:* If >0% of test runs generate a route through the simulated zone, launch is blocked.
+*   **Probe Set B (Adversarial Edge Cases):** Test boundaries where conflict zones border safe zones.
+    *   *Metric:* Frequency of "border hugging" that inadvertently clips into the danger zone.
+    *   *Stop Condition:* Any clip into the danger zone triggers a rollback of the routing logic for that region.
+
+**3. Management Controls (Human-in-the-Loop & Fallbacks)**
+Since the data is inherently unreliable for high-stakes decisions, full automation is the failure mode. Implement the following floors:
+*   **Hard Geofencing Override:** Do not rely solely on the optimization algorithm for conflict zones. Maintain a separate, manually curated "Deny List" of high-risk coordinates/regions updated by human intelligence, not the map provider. The router must treat these as impassable regardless of efficiency scores.
+*   **Mandatory Human Gate for High-Risk Regions:** For any trip originating in or destined for a region flagged as "potential risk" (even if data says safe), require manual dispatch approval before the driver is assigned. No autonomous assignment in these zones.
+*   **Defined Uncertainty Tiers:** Display route confidence to drivers/dispatchers using coarse tiers, not percentages:
+    *   *Verified Safe:* Confirmed by real-time human intel or multiple trusted sources.
+    *   *Unverified:* Based solely on the lagged provider data. **Action:** System refuses to auto-route; requires manual override.
+*   **Emergency Kill Switch:** A global toggle to instantly suspend autonomous routing in specific geographic polygons if real-world incidents are reported, bypassing the algorithm entirely.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific Safety Lead responsible for the "Deny List" updates and reviewing every "Unverified" route override.
+*   **Transparency Artifact:** Publish an internal "Routing Limitations Card" detailing the 30-day lag, the specific regions affected, and the manual fallback procedures. Do not claim the system is "safe" or "bias-free"; state clearly that it relies on human verification for conflict zones.
+*   **Legal Routing:** Consult counsel regarding duty-of-care obligations in conflict zones and whether specific disclosures to drivers are legally required under local or international law. Do not assume compliance based on this plan.
+
+**Note:** This plan treats the 30-day lag as a critical failure point requiring non-algorithmic controls. No metric should be fabricated to suggest the algorithm alone can mitigate this risk.

@@ -1,0 +1,39 @@
+**Preparation Plan: Pet Health Alert Validation**
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly define the two primary failure modes:
+*   **False Negative (Missed Detection):** The algorithm fails to alert on a life-threatening event (e.g., arrhythmia, respiratory distress) during sleep. *Worst Case:* Preventable pet death.
+*   **False Positive (Excessive Alarm):** The system alerts on normal sleep variations. *Worst Case:* Owner anxiety, "alert fatigue" leading to ignored real warnings, and unnecessary vet visits.
+
+**2. Testing Strategy: The "Golden Set" Evaluation**
+Do not rely solely on live field tests yet. Construct a static, labeled dataset ("Golden Set") to run against your algorithm repeatedly as you tune it.
+*   **Data Composition:** Aggregate historical veterinary data and simulated signals representing:
+    *   *Critical Events:* Known patterns of cardiac arrest, severe bradycardia, and apnea in elderly dogs.
+    *   *Normal Variance:* Deep sleep cycles, dreaming (REM), and movement artifacts common in older dogs.
+    *   *Edge Cases:* Low battery signal noise, loose collar fit simulations, and extreme ambient temperatures.
+*   **Controls:** Ensure every test batch includes known "bad" inputs (critical events that must trigger) and "good" inputs (normal sleep that must not trigger).
+
+**3. Metric Definition & Thresholds**
+Define pass/fail criteria before running tests. Do not optimize for a single metric.
+*   **Sensitivity (Recall):** Target near 100% for critical events. A single missed life-threatening event in the Golden Set is a block condition.
+*   **Specificity:** Measure the false alarm rate per 24-hour cycle. Set a maximum threshold (e.g., <1 false alarm per week per dog) based on owner tolerance interviews.
+*   **Latency:** Measure time from event onset to alert generation, accounting for your battery-saving transmission intervals.
+
+**4. Battery-Constrained Simulation**
+Since you cannot transmit continuously, simulate the "duty cycle" in software:
+*   Run the algorithm on high-frequency data, but only allow "alerts" to pass through at your planned transmission intervals.
+*   Test if critical events occurring *between* transmission windows are still detected once the device wakes up, or if the smoothing logic accidentally filters them out as noise.
+
+**5. Human-in-the-Loop Gate (Launch Condition)**
+*   **Irreversible Action Control:** Until the False Negative rate is proven zero on the Golden Set, the device must not operate in "Silent/Auto-Only" mode.
+*   **Staged Rollout:** Launch initially to a beta group of 20–50 users with a mandatory "Human Review" step where ambiguous alerts are flagged as "Check Manually" rather than "Emergency," or ensure immediate customer support availability to triage incoming alerts before they reach the owner.
+
+**6. Transparency Artifact (Model Card)**
+Draft a one-page "Performance & Limitations" document for customers and vets.
+*   State clearly: "Designed to detect X, Y, Z; known limitations include [specific sleep states or conditions]."
+*   List the sensitivity/specificity results from your Golden Set test. If a metric is unverified for a specific breed or weight class, label it "UNVERIFIED" rather than estimating.
+
+**7. Governance**
+Assign one team member as the "Safety Owner" responsible for reviewing any missed alerts or false positives during the beta. No algorithm update ships without re-running the full Golden Set.
+
+**Note:** This plan identifies risks and measurement methods; it does not certify the device as safe. Legal requirements for medical/veterinary device disclosures must be routed to counsel.

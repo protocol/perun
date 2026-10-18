@@ -1,0 +1,32 @@
+### Pre-Launch Evaluation Strategy for StyleHub Virtual Try-On
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific risks for your diverse user base:
+*   **Bias/Unfair Outcomes:** The system consistently recommends larger sizes or fewer stylish options for specific body shapes, skin tones, or genders compared to a baseline.
+*   **Hallucination as Fact:** The system invents fit details (e.g., "this will hug your waist") for body types it cannot accurately simulate due to your compute constraints, presenting guesswork as certainty.
+*   **Negative Self-Image/Body-Shaming:** The visual rendering distorts proportions unnaturally or uses language that implies a user's body is the problem rather than the garment's fit.
+*   **Over-Reliance:** Users trust the "perfect fit" guarantee without uncertainty warnings, leading to higher return rates and frustration when the physical item differs.
+
+**2. Measurement Plan (MEASURE)**
+Since you cannot simulate all body shapes internally, your evaluation must rely on **stratified adversarial probing** rather than broad coverage. Create one test row per harm above:
+
+*   **Probe Set:** Curate a "boundary dataset" of 50–100 static images representing the edges of your supported spectrum (e.g., very tall/petite, plus-size, non-binary presentations, various skin tones). Include known-bad controls (images designed to confuse pose estimation) and known-good controls (standard mannequin shots).
+*   **Metric & Threshold:**
+    *   *Bias:* Measure the variance in recommended size vs. ground-truth measurements across subgroups. **Stop Condition:** If size recommendation variance exceeds ±1 size for any subgroup compared to the median, block launch.
+    *   *Language Safety:* Scan output text for absolutist claims ("guaranteed fit") or negative descriptors. **Stop Condition:** Zero tolerance for shaming language; any instance triggers a rollback.
+    *   *Uncertainty Calibration:* Verify the system refuses to give specific advice on inputs outside its training distribution. **Stop Condition:** If the system gives high-confidence advice on known-bad controls, the gate fails.
+*   **Reporting:** Do not invent a "99% accurate" metric. Report results as **UNVERIFIED** for body types not covered in your probe set. Explicitly state which body shapes were excluded due to compute limits.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the initial launch, do not allow fully automated "Buy Now" recommendations based solely on the try-on score for high-value items. Require a user confirmation step that explicitly states: *"This is an estimate based on limited data; check the size chart."*
+*   **Defined Confidence Tiers:** Never show a raw percentage (e.g., "87% match"). Instead, use coarse, defined tiers:
+    *   *Confirmed:* Matches known body profiles in training data.
+    *   *Estimated:* Close match but outside primary simulation cluster (show warning).
+    *   *Unverified:* Body type outside safe simulation bounds (disable specific advice, show generic chart).
+*   **Transparency Artifact:** Publish a **Model Card** with the feature. It must list: intended use, the specific body types *not* covered due to compute constraints, known failure modes, and the owner of the feature. Absence of this card is a transparency failure.
+
+**4. Governance (GOVERN)**
+Assign a specific engineer as the owner of "Output Harm." They must re-review the model whenever the garment catalog changes significantly or if user feedback indicates new bias patterns.
+
+**Note:** Because your compute limits prevent full simulation, you must legally and ethically route the question of "duty to disclose limitations" to counsel; do not assert compliance internally.
+**Note:** If the probe set reveals bias, do not attempt to "patch" with post-hoc rules alone; the constraint may require delaying launch until the simulation gap is addressed.

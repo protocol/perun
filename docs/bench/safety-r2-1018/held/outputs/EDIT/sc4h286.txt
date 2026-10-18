@@ -1,0 +1,34 @@
+**Safety Validation Strategy for Unmodeled Scenarios**
+
+Given the constraint of simulating only two standard layouts while deploying to unique high-rise architectures, you cannot logically verify that the algorithm will *never* guide people toward blocked exits in unmodeled scenarios. No amount of testing on limited data proves safety for unseen conditions. Instead, you must shift from "proving safety" to "managing residual risk" through a strict human-in-the-loop gate and conservative fallback logic.
+
+**1. Implement a Human-in-the-Loop Gate (The Floor)**
+Because directing occupants during a fire is a high-stakes, irreversible action where error causes physical harm, fully autonomous routing based on incomplete simulation data is unsafe. The system must not automatically override human judgment or building protocols in unverified scenarios.
+*   **Action:** Configure the system to default to static, pre-certified evacuation routes (e.g., nearest stairwell) whenever the real-time sensor data does not match the patterns learned from your two simulated layouts.
+*   **Control:** Require explicit human confirmation from a fire safety officer before the system activates dynamic, AI-generated routing for any scenario outside the two modeled floor plans. The system should present the proposed route as a *recommendation* only, not an automated command.
+
+**2. Define and Surface Uncertainty (No False Precision)**
+Do not output a specific confidence percentage (e.g., "87% safe") for routes in unmodeled areas, as your simulation gap means this number is fabricated and misleading.
+*   **Action:** Implement a coarse uncertainty tier system for the operator interface:
+    *   **Verified:** Scenario matches one of the two simulated layouts.
+    *   **Extrapolated:** Scenario shares key features with simulations but differs in geometry (flag for human review).
+    *   **Unverified:** Scenario is outside simulation parameters (trigger default static routes).
+*   **Disclosure:** Clearly label all dynamic routing suggestions as "AI-Assisted Recommendations Based on Limited Simulation" to prevent automation bias where users or operators trust the system beyond its reliability.
+
+**3. Construct a Harm Inventory and Targeted Probes**
+Before integration, document the specific failure mode: "Algorithm guides occupants into smoke-filled corridors due to architectural differences not present in the two standard layouts."
+*   **Action:** Run adversarial tests on the two available layouts specifically designed to break the algorithm (e.g., simulate sensor failures, rapid smoke spread blocking the "optimal" path).
+*   **Metric:** Measure how often the system defaults to the safe, static route when confidence is low, rather than measuring "accuracy" in the unmodeled zones. If the system attempts to route dynamically in an "Unverified" state, that is a critical failure.
+
+**4. Transparency Artifact**
+Create a provisional "System Limitation Card" for the integration team and future certifiers. This document must explicitly state:
+*   **Intended Use:** Dynamic routing only within geometries matching the two simulated templates.
+*   **Known Limitation:** Performance in unique architectural features is `UNVERIFIED`.
+*   **Data Gap:** Smoke propagation models do not cover the specific building's unique atrium/corridor configurations.
+*   **Owner:** Name the specific engineer responsible for validating any expansion beyond the current two layouts.
+
+**Conclusion**
+You cannot validate the algorithm for unmodeled scenarios with the current budget. The only logical safety strategy is to restrict the AI's agency. The system must fail safely (reverting to static codes) when it encounters the unknown, rather than guessing. Certification bodies will reject a claim of "verified safety" for unmodeled areas; they will accept a control plan that prevents the system from acting on those unverified areas without human oversight.
+
+*Note: Legal requirements for automated life-safety decisions and disclosure duties must be routed to counsel; this strategy addresses product behavior controls only.*
+*Do not proceed to full autonomous deployment until the simulation gap is closed or the human gate is rigorously tested.*

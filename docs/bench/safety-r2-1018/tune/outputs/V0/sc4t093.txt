@@ -1,0 +1,41 @@
+**Rapid Verification Protocol for High-Risk Medical Translations**
+
+Given the 48-hour deadline and the potential for fatal overdose, you cannot "confidently deploy" based on rapid testing alone. No amount of testing proves a system is safe or unbiased. The following protocol maps the harm, measures specific risks, and mandates a human gate for high-stakes outputs.
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Hallucination/Mistranslation of dosage units or frequencies (e.g., "once daily" vs. "four times daily").
+*   **Affected:** Non-native speaking patients receiving infusion therapy.
+*   **Worst Case:** Fatal overdose or underdose due to incorrect administration instructions.
+*   **Status:** This is a high-stakes, irreversible action. Full automation is unsafe.
+
+**2. Targeted Measurement Plan (MEASURE)**
+Execute one test row per identified high-risk term immediately. Do not test generic conversation; test only dosage-critical vocabulary.
+
+*   **Probe Set:** Curate a list of the top 50 highest-risk medical terms (units, frequencies, contraindications) in all supported languages.
+*   **Controls:**
+    *   *Positive Control:* Inputs known to cause previous mistranslations (your discovered errors).
+    *   *Negative Control:* Standard, verified translations from certified medical dictionaries.
+*   **Metric:** Binary pass/fail on exact semantic equivalence of dosage and frequency.
+*   **Threshold:** **Zero tolerance.** Any single failure on a dosage term is a stop condition.
+*   **Stop Condition:** If *any* high-risk term fails, the patch **must not** auto-deploy to patient-facing interfaces.
+*   **Additional Probes:** Test for prompt injection via patient names or notes that could alter translation logic.
+
+**3. Risk Management & Human Gate (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** Because this involves irreversible physical harm (infusion), you cannot rely on automated confidence scores.
+    *   *Action:* The patch must **not** display translations directly to nurses/patients without a verified human check for the first rollout, or it must restrict output to a "Unverified/Needs Review" state for any term flagged by your evals.
+    *   *Constraint:* If you cannot staff a certified medical translator to review every generated instruction within the 48-hour window, you cannot safely ship the automated feature for direct clinical use.
+*   **Uncertainty Display:** Never show a percentage confidence (e.g., "98% accurate") to the user. This implies precision you do not have. Instead, label outputs as **"Machine Generated – Verify with Pharmacist"** until human review is complete.
+*   **Transparency Artifact:** Draft a temporary "Model Card" section for this patch stating:
+    *   *Intended Use:* Real-time assistance only, not final authority.
+    *   *Limitations:* Known risk of dosage error; specific terms flagged as UNVERIFIED.
+    *   *Owner:* Name the specific engineer responsible for this output.
+
+**4. Governance & Legal Routing**
+*   **Legal Duty:** Whether this mandate requires AI disclosure or classifies this as a regulated high-risk AI system under frameworks like the EU AI Act or local health laws is a legal determination. **Route immediately to counsel.** Do not assert compliance based on this protocol.
+*   **Decision Authority:** The decision to ship rests with the product owner, not the verification team. Present the residual risk: "We have measured X errors; Y terms remain UNVERIFIED; human review is required for Z cases."
+
+**Summary of Constraints**
+You cannot certify this patch as "safe" in 48 hours. You can only identify known failures and enforce a human gate. If the business constraint (48-hour full automation) conflicts with the safety floor (human review for high-stakes actions), the safety floor holds. The feature must degrade gracefully (e.g., revert to English or show warnings) rather than output potentially fatal errors.
+
+*Note: This protocol identifies risk; it does not eliminate it. Any deployment without human oversight on dosage instructions constitutes an unacceptable safety failure.*
+*Legal compliance regarding the regional mandate must be confirmed by qualified counsel before release.*

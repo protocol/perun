@@ -1,0 +1,39 @@
+**Pre-Launch Stress Test Strategy: GreenSight Pollution Monitor Network**
+
+**Objective:** Verify fail-safe mechanisms prevent the suppression of hazardous readings under sensor drift, calibration errors, and environmental interference, strictly within existing low-power firmware constraints.
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before execution, we define the specific failure modes to target:
+*   **Silent Suppression:** Sensor drift or calibration error causes a actual hazardous event to register as "safe," preventing alerts to residents and regulators.
+*   **Interference Masking:** Environmental noise (e.g., extreme humidity, temperature spikes, electromagnetic interference from industrial machinery) forces the firmware into a safe-state default that hides real data.
+*   **Boundary Clipping:** Rapid spikes in pollution are smoothed out by firmware filtering algorithms, delaying critical alerts.
+
+**2. Runnable Test Matrix (One Row Per Harm)**
+Execute these tests on the physical hardware in a controlled chamber simulating the three industrial zones.
+
+| Harm Scenario | Probe Set (Inputs) | Pass Metric | Stop Condition (Block Launch) | Owner |
+| :--- | :--- | :--- | :--- :--- |
+| **Silent Suppression** | Inject known hazardous gas concentrations while artificially inducing +15% sensor drift and -10% calibration offset. | System triggers "Hazard" alert within 60 seconds despite drifted inputs. | Any hazardous injection fails to trigger an alert or logs "Safe." | Lead Firmware Eng |
+| **Interference Masking** | Simulate extreme humidity (95%), temp swings (-10°C to 50°C), and EMI bursts while injecting hazardous levels. | Alert triggers; system logs "Data Degraded" but does *not* default to "Safe." | System defaults to "Safe/Normal" reading during interference. | Hardware Lead |
+| **Boundary Clipping** | Input rapid step-changes (0 to Hazardous in <5 seconds) repeated 100 times. | Alert triggers on the first spike; no averaging delays the warning >30s. | Alert delayed >30s or smoothed out as "gradual increase." | Systems Architect |
+| **Power/Brownout** | Simulate voltage drops typical of low-power hardware during high-load sampling. | System preserves last known safe state or triggers "System Fault," never "Air Safe." | System reboots and reports "Normal" air quality immediately. | Embedded Eng |
+
+**3. Fail-Safe Logic Verification**
+*   **Default-to-Danger Principle:** Verify that any unverified reading, communication loss, or internal consistency check failure results in a "System Fault/Unknown" status, *not* a "Good Air" reading. The system must assume the worst when uncertain.
+*   **Watchdog Timers:** Confirm firmware watchdogs force a safe-state alert if the main loop hangs during complex interference calculations.
+
+**4. Reporting & Transparency**
+*   **Residual Risk:** Report any scenario where the "System Fault" state is ambiguous to a layperson. Do not claim "0% false negatives"; instead, publish the specific drift limits tested (e.g., "Validated up to 15% drift").
+*   **Artifact:** Generate a **Data Card** for the sensor fleet detailing the specific environmental conditions tested, the known limitations of the low-power hardware, and the exact definition of the "System Fault" state for regulators.
+
+**5. Human-in-the-Loop Gate**
+*   **Irreversible Action Control:** Since the system automatically alerts authorities (a high-stakes action), implement a firmware constraint where *confirmed* hazardous levels trigger an immediate alert, but *marginal* or *degraded-quality* hazardous readings trigger a local "Verify Needed" beacon for field technicians before regulatory notification, if latency permits. If real-time auto-alert is legally mandated for all spikes, the "System Fault" state must be distinct and loud to prevent silent failure.
+
+**Schedule:**
+*   **Day 1-2:** Chamber setup and baseline calibration.
+*   **Day 3:** Execute Silent Suppression and Interference probes.
+*   **Day 4:** Execute Boundary and Power probes; analyze logs.
+*   **Day 5 (Friday):** Finalize report, define residual risks, and sign off on the "Go/No-Go" for field technicians.
+
+**Note:** This plan assumes the legal requirement for auto-alerting is absolute; if marginal cases allow human verification, the firmware logic must be adjusted to prioritize preventing false alarms without compromising safety.
+**Note:** No cloud upgrades means all logic must be validated on-device; do not rely on post-hoc cloud analysis to catch these failures.

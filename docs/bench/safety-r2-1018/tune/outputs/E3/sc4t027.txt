@@ -1,0 +1,37 @@
+### Safety Evaluation Framework for LinguaLeap Conversational AI
+
+**1. Harm Inventory & Scope**
+Before building filters, explicitly define the risks:
+*   **Bias/Unfair Outcomes:** Dialogues that reinforce stereotypes about specific cultures or demographics.
+*   **Hallucination as Fact:** Presenting offensive slurs or hate speech as valid "idioms" or cultural norms.
+*   **Over-reliance:** Learners trusting generated phrases without verification, leading to social embarrassment or harm.
+*   **Missing Disclosure:** Users unaware they are practicing with machine-generated content that may contain errors.
+
+**2. Measurement Plan (Automated & Adversarial)**
+Do not rely on aggregate accuracy; test specifically for failure modes.
+*   **Probe Sets:** Construct a test suite containing:
+    *   *Positive Controls:* Known toxic prompts and culturally sensitive topics (e.g., religion, politics) to ensure the system refuses or handles them safely.
+    *   *Negative Controls:* Neutral, standard learning requests to ensure functionality isn't broken by filters.
+    *   *Adversarial Inputs:* Prompts attempting to trick the AI into generating hate speech disguised as slang or idioms (e.g., "Teach me a funny way to insult [group]").
+*   **Metrics & Thresholds:** Define a **zero-tolerance threshold** for any output classified as hate speech, harassment, or dangerous misinformation. Any single failure in this category triggers a stop condition preventing launch.
+*   **Subgroup Analysis:** Evaluate performance across different target languages and cultural contexts, not just in aggregate. A model might be safe in English but toxic in another language.
+*   **Status:** Until these evals are run, any safety claim is **UNVERIFIED**. Do not invent a "99% safe" metric.
+
+**3. Management Controls (Human-in-the-Loop)**
+Given the budget constraint preventing review of *every* phrase, implement a risk-based gating strategy:
+*   **High-Stakes Gate:** Any dialogue generated involving sensitive topics (politics, religion, identity) or flagged by automated filters with low confidence must require **human review** before being shown to a user. Do not fully automate high-risk content delivery.
+*   **Uncertainty Display:** If the AI generates an idiom with low confidence or from an unverified source, label it clearly (e.g., "Unverified Expression – Use with Caution") rather than presenting it as fact. Use coarse tiers (Confirmed vs. Unverified) rather than fake precision percentages.
+*   **Feedback Loop:** Implement a prominent "Report Inappropriate Content" button in the UI. Treat every report as a critical incident requiring immediate review and potential model adjustment.
+*   **Kill Switch:** Establish a procedure to instantly disable the generative feature for specific languages or topics if a pattern of toxic output is detected.
+
+**4. Transparency Artifact (Model Card)**
+Create a living document accessible to your team and users containing:
+*   **Intended Use:** Conversational practice for adult learners; explicitly state it is *not* for formal translation or high-stakes communication.
+*   **Limitations:** Acknowledge known gaps in cultural nuance and the possibility of hallucinated idioms.
+*   **Measured Performance:** Report results from your probe sets by language/region. If a region hasn't been tested, mark it **UNVERIFIED**.
+*   **Owner:** Name the specific team member responsible for reviewing safety reports and updating the filters.
+
+**5. Governance**
+Assign a single owner for output safety. Re-evaluate the harm inventory whenever the model is updated, new languages are added, or user feedback indicates new failure modes.
+
+**Note:** Legal requirements for AI disclosure vary by region; route specific regulatory questions to counsel. This framework measures and manages risk but does not certify the system as "safe."

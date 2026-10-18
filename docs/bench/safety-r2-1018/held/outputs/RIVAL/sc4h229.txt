@@ -1,0 +1,46 @@
+### Pre-Launch Testing Plan: Rental Pricing Fairness & Risk Mitigation
+
+Given your constraints (no code access, public data only, hard deadline), this plan focuses on **scenario-based logic review** and **targeted stress testing** to identify where your AI might suggest unfairly inflated prices.
+
+#### 1. Logic Review: Identify Inflation Drivers
+Before running tests, manually audit your pricing logic against these specific risk factors common in low-supply markets:
+*   **The "Scarcity Multiplier" Check:** Verify if your algorithm applies a linear or exponential price increase as supply drops. In vulnerable neighborhoods, a slight drop in supply should not trigger a disproportionate price spike. Ensure there is a **cap** on how much "low supply" can influence the final recommendation.
+*   **The "Informal Market" Blind Spot:** Since you lack informal data (e.g., basement suites, private agreements), your model likely sees "zero supply" where there is actually hidden inventory. Check if your logic treats "no public listings" as "extreme scarcity." If so, you must inject a **confidence interval** or a **fallback to historical averages** rather than projecting peak prices based on missing data.
+*   **Neighborhood Clustering:** Ensure the model doesn't "bleed" high prices from adjacent gentrifying areas into stable, low-income blocks due to overly broad geographic clustering.
+
+#### 2. Scenario-Based Stress Testing Plan
+Create a synthetic dataset representing "Vulnerable Neighborhood Scenarios" to run against your tool. Do not rely on live public feeds for this; hard-code these edge cases.
+
+**Test Scenario A: The "Ghost Town" Trap**
+*   **Input:** A specific low-income neighborhood with 0 active public listings for 30 days, but stable historical rents.
+*   **Expected Safe Output:** The tool suggests a price within ±5% of the 12-month historical average.
+*   **Failure Condition:** The tool suggests a price >15% above historical average due to "0 supply."
+*   **Mitigation:** If this fails, implement a "minimum data threshold" rule: if active listings < X, revert to historical trends instead of real-time scarcity modeling.
+
+**Test Scenario B: The "One Luxe Listing" Skew**
+*   **Input:** A neighborhood with 50 old, low-rent units and 1 new, high-end luxury listing added yesterday.
+*   **Expected Safe Output:** The tool identifies the outlier and suggests a price reflecting the median of the 50 older units.
+*   **Failure Condition:** The tool averages the luxury unit in, driving the suggested price up by >10% for standard units.
+*   **Mitigation:** Implement outlier detection (e.g., standard deviation filtering) to exclude listings that deviate >20% from the neighborhood mode before calculating suggestions.
+
+**Test Scenario C: The "Seasonal Spike" Overreaction**
+*   **Input:** Data from the start of summer leasing season (high demand) in a low-supply area.
+*   **Expected Safe Output:** A moderate increase reflecting seasonality, bounded by a "tenant affordability ceiling" (e.g., 30% of local median income).
+*   **Failure Condition:** The tool suggests prices that exceed 45-50% of local median income.
+*   **Mitigation:** Hard-code a **regulatory/ethical guardrail**: `If Suggested_Rent > (Local_Median_Income * 0.35), then Flag_For_Review` or cap the output.
+
+#### 3. Implementation Steps for Your Team
+1.  **Construct the "Red Team" Dataset:** Create a CSV with 20 rows covering the scenarios above. Include columns for `Neighborhood_ID`, `Active_Listings`, `Historical_Avg`, `Income_Level`, and `Expected_Max_Price`.
+2.  **Run Batch Prediction:** Feed this CSV into your tool.
+3.  **Analyze Deviations:** Calculate the percentage difference between `Suggested_Price` and `Expected_Max_Price`.
+4.  **Gatekeeper Rule:** If >10% of test cases exceed the safe threshold, **do not launch**. You must implement the hard caps or fallback logic described above.
+
+#### 4. Immediate Mitigation for Launch
+If you cannot retrain the model before the deadline:
+*   **Add a Human-in-the-Loop:** For any suggestion in a "low-supply" zip code, flag it for manual review by your team before showing it to the landlord.
+*   **Display Confidence Scores:** Show landlords a "Low Data Confidence" warning if the suggestion is based on fewer than 5 active listings, discouraging them from blindly accepting inflated prices.
+*   **Soft Cap:** Apply a temporary hard limit (e.g., "Never suggest more than 10% above last year's average") until informal data sources can be integrated.
+
+This approach prioritizes tenant protection by assuming your data is incomplete and building safeguards against the specific mathematical errors that lead to price gouging in data-sparse environments.
+
+*Note: This plan assumes you can modify the output logic or add post-processing rules without retraining the core model. If the model is a black-box API, you must implement the "Gatekeeper Rules" as an external wrapper.*

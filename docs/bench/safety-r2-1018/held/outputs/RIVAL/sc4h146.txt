@@ -1,0 +1,43 @@
+### Safety Review Framework: Essential Goods Stoppage Validation
+
+**Objective:** Validate the AI optimizer's stoppage triggers against a fixed list of essential goods using only existing, skewed historical data, without requiring new external market inputs.
+
+#### 1. Data Stratification & Baseline Definition
+Since fresh data is unavailable, re-segment the existing pandemic-year dataset to create distinct test cohorts:
+*   **Cohort A (Essential Goods):** Filter historical records for items on your "Known Essential Goods List" (e.g., specific medicines, PPE).
+*   **Cohort B (Non-Essential/Discretionary):** Filter records for items with high demand volatility typical of the pandemic period.
+*   **Synthetic Stress Labels:** Manually annotate a subset of Cohort A records with a "Critical Demand" flag based on domain knowledge (operations managers) rather than sales volume. This creates a ground-truth label independent of the skewed sales figures.
+
+#### 2. The "Static List" Override Logic Test
+Before testing the model's prediction accuracy, test the system's hard constraints:
+*   **Test Case:** Feed the optimizer historical data points for Cohort A where the model previously predicted "Low Demand."
+*   **Expected Behavior:** The system must check the "Essential Goods List" *before* applying the AI prediction. If an item is on the list, the "Halt Shipment" trigger must be disabled regardless of the predicted demand score.
+*   **Validation Metric:** 0% halt rate for Cohort A items, even when the underlying model outputs a low-demand signal.
+
+#### 3. Adversarial Historical Replay
+Simulate the failure mode using the skewed data:
+*   **Scenario Construction:** Isolate time windows in the historical data where essential goods sales dipped artificially (e.g., due to supply chain bottlenecks rather than lack of need).
+*   **Execution:** Run the optimizer over these specific windows.
+*   **Pass/Fail Criteria:**
+    *   **Fail:** The system halts shipment because the historical sales volume dropped.
+    *   **Pass:** The system identifies the item as "Essential" via the static list and allows shipment despite the low historical volume signal.
+
+#### 4. Threshold Sensitivity Analysis
+Determine if the model's confidence threshold interacts dangerously with the essential goods filter:
+*   **Method:** Vary the "Low Demand" confidence threshold (e.g., from 60% to 90%) while running Cohort A data.
+*   **Goal:** Ensure that no threshold setting results in a halt for essential goods. The static list check must act as a circuit breaker that ignores threshold variations.
+
+#### 5. Operational "Golden Set" Regression
+Create a permanent regression suite from the findings:
+*   Compile 50–100 specific historical instances where essential goods had low recorded sales.
+*   Automate this set to run before every model update.
+*   **Rule:** Any code change that causes a single "Halt" decision on this Golden Set blocks deployment.
+
+#### 6. Review Governance
+*   **Sign-off:** Requires joint approval from one Data Scientist (verifying model input handling) and one Operations Manager (verifying the Essential Goods List completeness).
+*   **Documentation:** Log all instances where the model *would* have halted shipment if the static list override were not active. This quantifies the risk being mitigated.
+
+***
+
+**Note:** This framework treats the "Essential Goods List" as a hard logical gate that supersedes probabilistic model outputs.
+**Note:** Regular updates to the static Essential Goods List are critical, as the model itself remains untrained on fresh data.

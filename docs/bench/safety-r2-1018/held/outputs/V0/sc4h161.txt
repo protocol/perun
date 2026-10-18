@@ -1,0 +1,35 @@
+### Pre-Launch Safety Review Plan: Automated Mortgage Underwriting
+
+**1. Harm Inventory (Immediate Mapping)**
+Before executing checks, explicitly record the worst-case scenario for your beta: The model systematically rejects qualified applicants from specific demographic groups (e.g., non-German names, specific districts, or gig-economy income structures) based on proxy variables in the training data, causing financial exclusion and reputational damage. Acknowledge that without third-party audit data, you cannot prove fairness; you can only verify the absence of obvious, known failure modes.
+
+**2. Critical Failure Mode Checks (48-Hour Sprint)**
+
+*   **Proxy Variable Audit (Manual Code Review)**
+    *   **Action:** Manually inspect the feature list used for the "instant reject" logic.
+    *   **Check:** Identify and flag any direct identifiers (name, nationality) and high-risk proxies (postal code/neighborhood, specific employer types, language of application).
+    *   **Constraint:** If a proxy cannot be justified by strict regulatory capital requirements, disable it for the beta or route those applications to human review.
+
+*   **"Golden Set" Counterfactual Testing (Automated/Manual)**
+    *   **Action:** Construct a tiny, hand-crafted dataset (10–20 records) of synthetic applicants who are identical in financial health (income, debt-to-income, credit score) but differ only in one protected attribute or proxy (e.g., change "Berlin-Neukölln" to "Berlin-Mitte," or a generic German name to a distinctively foreign name).
+    *   **Check:** Run these through the model. If the financials are identical but the outcome flips from "Approve" to "Reject," you have a confirmed bias failure.
+    *   **Threshold:** Zero tolerance. Any flip on identical financial profiles blocks launch for that segment.
+
+*   **Logic Boundary Stress Test (Automated)**
+    *   **Action:** Test applicants exactly at the cutoff thresholds (e.g., if the rule is income > €30k, test €29,999 and €30,001).
+    *   **Check:** Ensure the model doesn't exhibit chaotic behavior or extreme sensitivity to rounding errors that might disproportionately affect groups with irregular income reporting.
+
+*   **Uncertainty & Override Mechanism (Product Check)**
+    *   **Action:** Verify that the "instant reject" is not actually instant and irreversible for the beta.
+    *   **Check:** Implement a "human-in-the-loop" gate for any application that triggers a reject based on a proxy variable or falls within a confidence margin. The system must allow a human underwriter to override the model before the user receives a final "No."
+
+*   **Transparency Artifact (Draft Model Card)**
+    *   **Action:** Create a one-page internal document stating: "This beta model has not been statistically validated for fairness across demographic groups."
+    *   **Content:** List the known limitations, the specific proxies used, and the explicit instruction that this is a *technical feasibility test*, not a final lending decision engine.
+
+**3. Governance & Launch Decision**
+*   **Owner:** Assign one Product Manager as the accountable owner for reviewing any rejected cases during the beta.
+*   **Stop Condition:** If the "Golden Set" test reveals any biased flips, or if the first 10 real beta rejections appear suspicious upon manual review, pause the automated rejection pipeline immediately and switch to 100% human review.
+*   **Legal Routing:** Do not assert compliance with the EU AI Act internally. Flag the "automated decision-making" aspect to legal counsel immediately post-beta planning, as this likely triggers specific regulatory disclosure duties you cannot self-certify.
+
+**Note:** Do not fabricate a "fairness score" or "bias percentage"; without extensive data, these numbers are meaningless and dangerous. Treat any unmeasured risk as `UNVERIFIED`.

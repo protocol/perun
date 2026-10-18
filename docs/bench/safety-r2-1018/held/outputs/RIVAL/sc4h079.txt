@@ -1,0 +1,29 @@
+# HanoiLingo Safety Review Plan: Error Isolation & Mitigation
+
+**Objective:** Identify, isolate, and suppress erroneous grammatical corrections caused by flawed training data without retraining models or accessing new datasets, utilizing only existing user feedback loops and logging mechanisms.
+
+### Phase 1: Enhanced Logging & Signal Detection
+Since we cannot inspect the model weights, we must treat the model as a black box and rely on output telemetry.
+1.  **Implement "Correction Delta" Logging:** Modify the logging pipeline to record the specific difference between the *user's input sentence* and the *model's corrected output*. Do not just log the final output.
+2.  **Tag High-Risk Patterns:** Configure logs to flag corrections where the model changes valid grammatical structures (e.g., correct tense usage, proper noun capitalization) based on heuristics known to be fragile in your current dataset.
+3.  **Feedback Sentiment Correlation:** Immediately link user feedback events (thumbs down, "report error," or session abandonment immediately after a correction) to the specific `correction_id` in the logs.
+
+### Phase 2: Active User Feedback Loop Activation
+Leverage the beta testing group of five developers and early users as human validators.
+1.  **Deploy "Verify Correction" Micro-Prompt:** For every correction generated, append a subtle, non-intrusive UI element asking, "Was this correction helpful?" with a binary Yes/No.
+2.  **Developer "Golden Set" Monitoring:** The five developers must manually review a rotating sample of 50 corrections daily, specifically looking for the "reinforcement" pattern (where the model makes a correct sentence incorrect). Mark these explicitly in the log as `confirmed_false_positive`.
+3.  **Community Flagging:** Enable a "Report Bad Correction" button in the beta app. Prioritize reports where users claim their original sentence was already correct.
+
+### Phase 3: Isolation & Suppression Strategy
+Once erroneous patterns are identified via logs and feedback, apply runtime filters to prevent misinformation spread.
+1.  **Create a "Blocklist" of Error Signatures:** Analyze the `Correction Delta` logs for confirmed errors. If the model consistently changes specific valid phrases (e.g., changing "I have gone" to "I am went"), create a runtime regex or string-matching filter that intercepts these specific transformations before they reach the user.
+2.  **Confidence Threshold Adjustment:** If your current architecture exposes a confidence score, raise the threshold for displaying corrections. If the model is unsure, default to showing the user's original text with a note ("We aren't sure about this one") rather than risking a wrong correction.
+3.  **Fallback Mode:** For sentence structures identified as high-risk in Phase 2, temporarily disable the correction module entirely for those specific grammatical categories until the launch, reverting to a "read-only" mode where the app highlights potential issues but does not auto-correct.
+
+### Phase 4: Pre-Launch Validation
+1.  **Regression Testing:** Run the identified "Golden Set" of previously broken sentences through the new filtering logic to ensure the blocklist works.
+2.  **Silent Monitoring:** Keep the enhanced logging active but suppress the UI prompts for the final week before launch to avoid user fatigue, relying solely on the automated blocklist and passive feedback (session drops).
+
+**Deliverable:** A runtime configuration update containing the error signature blocklist and an updated logging schema ready for deployment within 48 hours.
+
+*Note: This plan relies entirely on intercepting outputs; it does not fix the root cause in the weights. Post-launch, a data cleanup and retraining cycle must be prioritized immediately.*

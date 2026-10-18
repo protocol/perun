@@ -1,0 +1,41 @@
+### Internal Testing Framework for High-Risk Legal Topics
+
+**1. Construct a "Golden Set" of Critical Scenarios**
+Since external audits are not feasible, your team must manually curate a dataset of 50–100 high-stakes queries based on the most common rejection reasons you have observed. Categorize these into "High-Risk Domains" such as:
+*   Eligibility criteria for specific visa categories.
+*   Deadlines and statutory limitations.
+*   Definitions of "persecution" or "credible fear."
+*   Required documentary evidence for specific claims.
+
+For each query, define the single correct answer based on current official government guidance. This becomes your ground truth.
+
+**2. Implement Adversarial Stress Testing**
+Have team members role-play as confused, desperate, or non-native speaking users to probe the model. Use these specific techniques:
+*   **Edge Case Probing:** Ask about scenarios that sit exactly on the boundary of eligibility (e.g., "What if I missed the deadline by one day due to illness?").
+*   **Contradictory Premises:** Present facts that contradict standard rules to see if the model hallucinates an exception to please the user.
+*   **Jurisdiction Traps:** Ask questions relevant to neighboring countries or outdated laws to ensure the model does not conflate legal systems or use expired statutes.
+
+**3. The "Three-Strike" Verification Protocol**
+Before any response containing legal advice is shown to a user, it must pass an automated or manual check:
+*   **Citation Check:** Does the response cite a specific, verifiable regulation or form number? If it speaks in generalities about "the law," flag it.
+*   **Confidence Threshold:** If your system allows, suppress answers where the model's internal confidence score is low.
+*   **Deterministic Retrieval:** For factual questions (deadlines, form numbers), bypass the generative model entirely and serve answers from a hard-coded lookup table maintained by your team.
+
+### Disclaimers and Fallback Mechanisms
+
+**1. Dynamic, Context-Aware Disclaimers**
+Move beyond a static footer. Implement interruptions that appear *before* the answer when high-risk keywords (e.g., "deportation," "asylum," "ban") are detected:
+> "Important: The following information is a summary of public guidelines, not legal advice. Laws change frequently, and your specific situation may require a qualified attorney. An incorrect application can lead to permanent rejection."
+
+**2. The "Safe Refusal" Fallback**
+Program the system to recognize when a query exceeds its safety boundaries. Instead of guessing, the bot must trigger a hard-coded refusal script:
+> "I cannot provide a definitive answer for this specific situation because the outcome depends on complex legal factors. To avoid risking your application, please consult a recognized legal aid organization or a licensed attorney."
+
+**3. Human-in-the-Loop Escalation**
+For the pilot program, implement a "flag for review" feature. If the model detects high uncertainty or if the user expresses confusion after an answer, the conversation should be queued for manual review by one of your four team members before the user proceeds to fill out any forms.
+
+**4. Source Linking Requirement**
+Configure the bot to always provide a direct URL to the official government source document for any claim it makes. If it cannot retrieve a valid link, it should not provide the advice.
+
+*Note: Given the three-week deadline, prioritize hard-coding answers for the top 20 most frequent questions to eliminate hallucination risk in those areas immediately.*
+*Ensure all team members agree on the "refusal" triggers to maintain consistency across the pilot.*

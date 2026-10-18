@@ -1,0 +1,35 @@
+### Robust Review Process for Automated Denials
+
+**1. Immediate Control: Human-in-the-Loop Gate (Non-Negotiable)**
+Despite the budget constraint preventing new hires, **fully automated denials for loan forgiveness constitute a high-stakes, irreversible action** that cannot launch without a human gate. Automation bias and data inconsistencies (e.g., typos in income fields) create an unacceptable risk of wrongly rejecting eligible applicants.
+*   **Action:** Reallocate existing staff time to create a mandatory "pre-denial" review queue. The system must **flag** potential denials but **never execute** them autonomously until a human confirms the inconsistency is not a clerical error.
+*   **Constraint Trade-off:** If existing staff cannot absorb this volume within the two-month timeline, you must **delay the launch** or **limit the automation's scope** (e.g., only auto-approve clear cases, manual review for everything else). Shipping a fully autonomous denial engine under these constraints is a critical failure mode.
+
+**2. Measurement Plan: Edge Case & Harm Evaluation**
+Do not assert accuracy; measure residual risk before launch. Construct an evaluation suite with the following specific test rows:
+*   **Probe Set A (Data Entry Errors):** Inputs with known minor inconsistencies (e.g., "$45,000" vs "45000", transposed digits) paired with valid supporting documents.
+    *   *Metric:* False Denial Rate on valid applicants with typos.
+    *   *Threshold:* Owner-set (recommend near-zero tolerance for false denials).
+    *   *Stop Condition:* If False Denial Rate > 0%, block launch of auto-denial feature.
+*   **Probe Set B (Adversarial/Edge Cases):** Inputs mimicking complex but valid financial situations (e.g., seasonal income, gig work fluctuations) that might look like inconsistencies to a rigid rule set.
+    *   *Metric:* Rate of flagged "inconsistencies" that are actually valid patterns.
+*   **Control Groups:** Include known-good (clear approval) and known-bad (clear fraud) cases to ensure the system doesn't degrade overall performance while tuning for edge cases.
+*   **Reporting:** Publish results as **UNVERIFIED** until these tests are run. Do not invent an accuracy percentage.
+
+**3. Escalation Path & Transparency Artifact**
+*   **User-Facing Disclosure:** Every denial notice must explicitly state: "This decision was assisted by an automated system based on detected data inconsistencies."
+*   **Defined Confidence Tiers:** Do not show users a raw probability (e.g., "87% likely fraud"). Instead, use defined tiers in internal logs and user communications:
+    *   *Confirmed Inconsistency:* Human verified mismatch.
+    *   *Unverified Flag:* System detected anomaly, pending human review.
+*   **Escalation Mechanism:** Establish a "Rapid Re-review" channel. Applicants denied by the system get a prioritized ticket for human re-evaluation within 48 hours, with a clear form to upload corrected documentation.
+*   **Model/Data Card:** Create a versioned document detailing:
+    *   *Intended Use:* Identifying income reporting inconsistencies for Denver residents.
+    *   *Limitations:* Known failure modes (e.g., specific gig-economy income structures).
+    *   *Performance:* Subgroup performance data (once measured via the evals above).
+    *   *Owner:* Name the specific team member accountable for this output harm.
+
+**4. Governance**
+Assign a single owner responsible for reviewing denial logs weekly. If the model, data sources, or Denver residency rules change, re-run the edge case evals immediately.
+
+**Note:** Legal counsel must determine if this automated decision triggers specific regulatory disclosures under consumer protection laws; this plan recommends disclosure as a safety control but does not assert legal duty.
+**Note:** "Highly accurate" is not a binary state; without the human gate and measured evals above, the risk of harming eligible applicants remains unmanaged.

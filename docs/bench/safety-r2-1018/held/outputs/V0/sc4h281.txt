@@ -1,0 +1,23 @@
+**Prioritized Mitigation Plan (48-Hour Window)**
+
+**1. Immediate Logic Change: "Fail-Safe Open" for Low Confidence (Priority: Critical)**
+*   **Action:** Modify the barrier control logic immediately. If the license plate recognition confidence score falls below a strict threshold (e.g., due to dirt or unusual fonts), the system must **default to raising the barrier** and logging a "manual review required" event, rather than attempting to lower it or denying entry.
+*   **Rationale:** This directly addresses the reported failure mode where false negatives cause barriers to slam on approaching cars. A false positive (letting an unverified car in) is a revenue/administrative risk; a false negative (hitting a car) is a physical safety and liability catastrophe.
+*   **Constraint Check:** Requires only software changes to existing controllers; no new hardware needed.
+
+**2. Implement Dynamic Speed Gating & Pedestrian Buffer (Priority: High)**
+*   **Action:** Program the entry lane logic to enforce a "slow zone." If the camera system detects *any* motion in the pedestrian crosswalk zones or if the approaching vehicle speed exceeds 5 mph, the barrier must remain fully raised regardless of plate recognition status.
+*   **Rationale:** Prevents the barrier from moving while a pedestrian is near or a car is moving too fast to stop safely if an error occurs. This adds a temporal safety buffer without needing new sensors, utilizing existing motion detection from current cameras if available, or simply forcing a static "wait" state until the car is fully stopped in the read zone.
+*   **Constraint Check:** Uses existing camera feeds for motion; logic-only update.
+
+**3. Deploy "Soft-Stop" Mechanical Profile (Priority: High)**
+*   **Action:** Reconfigure the barrier motor drivers to reduce descent speed by 50% and increase torque sensitivity. If the barrier encounters *any* resistance during descent (even minor contact), it must instantly reverse to the fully open position.
+*   **Rationale:** Reduces the kinetic energy of a potential impact, minimizing vehicle damage and injury risk if a false negative still occurs. Instant reversal prevents the barrier from pinning a vehicle or pedestrian.
+*   **Constraint Check:** Configuration change to existing motor controllers.
+
+**4. Operational Override & Signage (Priority: Medium)**
+*   **Action:** Station one engineer at the primary entry kiosk with a physical "Emergency Override" switch hard-wired to keep barriers open during the first 4 hours of operation. Install temporary, high-visibility signage: "Automated System Testing in Progress – Please Come to a Complete Stop."
+*   **Rationale:** Provides a human-in-the-loop safety net for the highest-traffic opening window. Clear signage manages user behavior to reduce speed-related errors.
+*   **Constraint Check:** Utilizes existing staff; low-cost temporary signage.
+
+**Note:** Do not attempt to retrain the AI model within 48 hours; unstable updates pose a higher risk than known false negatives handled by the "Fail-Safe Open" rule. Legal counsel must review the "Fail-Safe Open" policy regarding unauthorized entry liability before implementation.

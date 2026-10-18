@@ -1,0 +1,30 @@
+**Pre-Launch Review Strategy: Mitigating False Positives from Data Latency**
+
+Given the high-stakes nature of automated border denial and the constraint of using outdated static data, full autonomous deployment is unsafe. The following strategy prioritizes a human-in-the-loop gate and a targeted simulation framework to address data latency risks within your ten-day window.
+
+**1. Immediate Control: Human-in-the-Loop Gate (Mandatory)**
+Do not enable fully automated denial decisions. Configure the kiosks to operate in "Recommendation Mode" for the initial launch phase.
+*   **Action:** Any match resulting in a "Deny" recommendation must trigger an immediate alert to a human border officer for final verification before the traveler is turned away.
+*   **Rationale:** Automated decisions based on stale data constitute an irreversible harm (wrongful denial of entry). A human gate is the only acceptable control until real-time synchronization is proven.
+
+**2. Simulation Framework: Synthetic Latency Injection**
+Since you cannot access live feeds, you must simulate the *effect* of latency using your static snapshot.
+*   **Construct a "Status Change" Dataset:** Manually curate a test set of 50–100 synthetic profiles representing travelers whose status changed *after* your static snapshot date (e.g., individuals removed from watchlists, name corrections, or expired alerts).
+*   **Inject False Positives:** Feed these profiles into the kiosk system. Because your system relies on the old snapshot, it should theoretically flag them as matches.
+*   **Measure Failure Rate:** Calculate the percentage of these "cleared" individuals who are incorrectly flagged for denial. This metric represents your baseline false positive risk due to data latency.
+*   **Threshold:** Set a zero-tolerance threshold for automated denials on this specific test set. If the system attempts to auto-deny any of these synthetic "cleared" profiles, the automated feature must remain disabled.
+
+**3. Adversarial Stress Testing**
+*   **Edge Case Probing:** Test names with common variations, transliteration errors, and hyphenations against the static list to identify how aggressively the matching algorithm scores partial matches. High aggression combined with stale data maximizes false positives.
+*   **Confidence Tiering:** Do not display raw confidence scores (e.g., "92% match") to operators. Instead, implement defined coarse tiers (e.g., "Exact Match," "Potential Match – Review Required"). Force all non-exact matches into the human review queue.
+
+**4. Transparency and Disclosure Artifacts**
+*   **Model Card:** Draft a concise model card documenting the data provenance (static snapshot date), known limitations (lack of real-time updates), and the specific risk of false positives due to latency.
+*   **Operator Guidance:** Provide clear instructions to border staff emphasizing that the system's "Deny" signal is a *prompt for review*, not a final verdict, specifically citing the data synchronization lag.
+
+**5. Governance and Ownership**
+*   **Owner Assignment:** Name a specific individual responsible for monitoring false positive reports during the first 48 hours of operation.
+*   **Rollback Plan:** Define a clear "kill switch" procedure to revert to 100% manual processing if the rate of human-overturned denials exceeds an acceptable limit (e.g., >5% of flagged cases).
+
+**Note:** This strategy treats the data latency risk as unverified until live testing occurs; do not claim the system is "safe" or "unbiased."
+**Legal Routing:** Consult legal counsel immediately regarding mandatory disclosure requirements for automated decision-making under relevant EU regulations before deployment.

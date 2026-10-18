@@ -1,0 +1,24 @@
+### Robust Review Process Plan for Fraud Detection Calibration
+
+**Phase 1: Data Segmentation and Baseline Analysis**
+Isolate the dataset of flagged charity donations from general transaction logs. Create a dedicated "Humanitarian Aid" test cohort containing known legitimate transactions (verified by external public records or internal compliance logs, not by manual whitelisting). Analyze the specific feature triggers causing these flags (e.g., transaction velocity, geographic routing, beneficiary novelty). Document the exact threshold values where legitimate aid crosses into "suspicious" territory compared to confirmed fraud cases.
+
+**Phase 2: Hypothesis-Driven Parameter Adjustment**
+Instead of whitelisting entities, adjust the global detection logic to account for contextual variables common in aid work. Develop specific hypotheses for model tuning, such as:
+*   "Increasing the velocity threshold for transactions originating from registered NGO hubs reduces false positives without increasing fraud risk."
+*   "Adding a 'known crisis zone' geographic modifier lowers the sensitivity for transfers to those regions."
+Run simulations using the isolated test cohort against these adjusted parameters. Measure the reduction in false positives for the aid cohort while monitoring the false negative rate on the confirmed fraud dataset to ensure security is not compromised.
+
+**Phase 3: The "Four-Eyes" Calibration Review**
+Establish a formal review board consisting of four team members (two from fraud analysis, two from compliance/risk). The remaining two team members prepare the simulation results. The board will review the proposed parameter changes based strictly on statistical outcomes:
+*   Does the new configuration clear >95% of the known legitimate aid test set?
+*   Does the new configuration maintain a fraud catch rate within the acceptable risk tolerance (e.g., <1% degradation)?
+Approval requires unanimous consensus that the trade-off is acceptable. This distributes trust and ensures no single individual effectively "whitelists" a group by altering rules unilaterally.
+
+**Phase 4: Shadow Mode Validation**
+Before going live, deploy the adjusted model in "shadow mode" alongside the current production system for a fixed period (e.g., 48 hours) using live incoming traffic. The new model will process transactions and generate alerts but will not block any funds. Compare the shadow model's output against the live system's blocks. Verify that the specific charity cases previously blocked are now flagged as "low risk" or "review only" rather than "blocked," while ensuring no new, obvious fraud patterns are ignored.
+
+**Phase 5: Go-Live with Enhanced Human-in-the-Loop**
+Launch the system with the calibrated parameters. Implement a mandatory "fast-track" review queue for any transaction that triggers a money laundering alert but contains keywords or metadata associated with humanitarian aid (e.g., "relief," "donation," specific NGO codes). These transactions are not auto-blocked but are routed immediately to a senior analyst for a time-bound decision (e.g., within 1 hour). This ensures aid flows are paused only briefly for verification rather than being permanently blocked by the algorithm.
+
+**Note:** This approach adheres to your restriction by tuning system sensitivity and logic rather than creating an explicit whitelist of organizations. All changes are validated against statistical performance metrics rather than individual entity approval.

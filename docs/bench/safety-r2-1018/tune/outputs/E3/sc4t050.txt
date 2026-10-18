@@ -1,0 +1,33 @@
+### Pre-Launch Safety Strategy: Medical Appointment Scheduler
+
+**1. Harm Inventory & Worst-Case Definition**
+The primary harm is the **unsafe automation of a high-stakes, irreversible action**: canceling a critical cancer screening due to a technical sync error rather than patient request. The affected group is patients with time-sensitive oncology needs; the worst-case scenario is delayed diagnosis or treatment progression leading to severe health deterioration or death. Because this action is high-stakes and hard to reverse (lost slots, delayed care), full autonomous execution of cancellations for critical visit types is a failure mode that must be prevented before launch.
+
+**2. Measurement Plan: Logic Verification Without Real Data**
+Since real patient data is restricted, you must construct a **synthetic probe set** that mirrors high-risk scenarios. Create one test row per identified harm:
+*   **Probe Set:** Generate synthetic calendar events tagged as "Oncology," "Chemo," and "Radiation" alongside normal "Check-up" events. Inject specific failure sequences: duplicate calendar entries, timezone mismatches, and conflicting sync signals designed to trigger false-positive cancellations.
+*   **Controls:** Include a **known-bad positive control** (a sync error signal targeting a cancer appointment) which must *never* result in a cancellation. Include a **known-good negative control** (a valid patient cancellation request) which must succeed.
+*   **Metric & Threshold:** The metric is the count of erroneous cancellations of critical visits. The pass threshold is **zero tolerance**. Any single failure of a critical appointment in testing triggers an immediate stop condition blocking launch.
+*   **Scope:** Explicitly test for **excess agency** (does the system cancel without explicit confirmation?) and **injection risks** (can a malformed calendar title trick the logic?).
+
+**3. Risk Management: The Human Gate**
+You cannot rely on code correctness alone given the three-week timeline and limited data. You must implement a **human-in-the-loop gate** for all cancellations of critical visit types.
+*   **Default Behavior:** The system must default to *not canceling* any appointment tagged as high-stakes (e.g., oncology codes) if the trigger source is a calendar sync rather than a direct patient/provider command.
+*   **Override Mechanism:** Flag these potential cancellations for immediate human review by clinic staff before execution. Do not attempt to calculate a "confidence percentage" (e.g., "99% sure") for these decisions; instead, treat any ambiguity as a hard stop requiring human intervention.
+*   **Uncertainty Display:** If the system presents status to staff, use defined coarse tiers (e.g., "Verified Request" vs. "Sync Conflict – Review Required") rather than numerical probabilities that imply false precision.
+
+**4. Governance & Transparency**
+*   **Ownership:** Assign a specific owner (e.g., Lead Developer or Clinical Liaison) responsible for reviewing any flagged cancellation attempts post-launch.
+*   **Documentation:** Draft a **model/data card** for this feature. It must state the intended use (scheduling), the limitation (cannot distinguish sync errors from real cancellations without human review for critical codes), and the measured results from your synthetic testing. Mark any untested scenarios as `UNVERIFIED`.
+*   **Regulatory Routing:** Because this involves automated decisions affecting health outcomes, route the question of legal disclosure requirements and regulatory compliance (e.g., health privacy laws, AI regulations) to legal counsel immediately. Do not assert compliance internally; let counsel define the duty.
+
+**5. Execution Schedule**
+With three weeks remaining:
+*   **Week 1:** Build synthetic probe set and implement the hard block on autonomous critical cancellations.
+*   **Week 2:** Run adversarial tests against the logic; refine the human-review workflow.
+*   **Week 3:** Finalize the model card, confirm the human gate is operational, and conduct a "fire drill" rollback simulation.
+
+If the human gate cannot be implemented within the timeline, the constraint that must move is the launch date or the scope of automation; do not launch with fully autonomous cancellation for critical care.
+
+*Note: This strategy assumes the "critical" visit types can be reliably identified via calendar metadata or codes. If identification is ambiguous, the human gate must expand to cover all uncertain cases.*
+*Legal counsel must verify if specific AI-disclosure notices are required for patients under local health regulations.*

@@ -1,0 +1,39 @@
+**BLUF:** Do not launch the current system as described. Prioritizing "high-retention" content that internal tests confirm includes "increasingly extreme political material" for users aged 13–17 creates an immediate, unmitigated risk of harm (radicalization) that cannot be fixed by documentation review alone. With zero budget and limited compute, you must implement a **human-in-the-loop gate** and **logic-based fallbacks** immediately to meet your deadline safely.
+
+### 1. Harm Inventory (MAP)
+Before writing code, record these specific risks for this feature:
+*   **Unsafe Automation of High-Stakes Actions:** Automatically feeding extreme political content to minors constitutes a high-stakes action with irreversible psychological impacts. The current logic (maximize retention) directly drives this harm.
+*   **Bias/Unfair Outcomes:** The algorithm systematically disadvantages user well-being by prioritizing engagement over safety, disproportionately affecting vulnerable developmental stages.
+*   **Over-reliance:** Users (and parents) assume the platform's "recommended" label implies safety or neutrality, which the current engagement-only metric violates.
+
+### 2. Immediate Low-Cost Interventions (MANAGE)
+Since retraining is impossible and auditing funds are gone, you must change the **runtime behavior**, not the model weights. Implement these within 10 days:
+
+*   **Implement a Hard Human Gate (The Floor):**
+    *   **Action:** Stop fully automated delivery of political content to users under 18.
+    *   **Mechanism:** Route any video flagged by your existing (even imperfect) classifiers as "political" or "extreme" to a manual review queue before it appears in the feed. If your team of five cannot review 24/7, **cap the volume** of political recommendations to a trivial number (e.g., zero) until human capacity is secured.
+    *   **Rationale:** Automating radicalization is the failure state. Human review is the only viable control when the model is known to be unsafe.
+
+*   **Deploy Deterministic Guardrails (No Retraining Needed):**
+    *   **Action:** Override the recommendation score with hard rules.
+    *   **Mechanism:** If a video's metadata or transcript contains keywords associated with the "extreme" material identified in your internal tests, assign it a priority score of negative infinity. Do not rely on the AI to "learn" this; code it as a boolean filter.
+    *   **Mechanism:** Cap the "recency/repetition" loop. If a user has watched $N$ political videos in a row, force the next recommendation to be from a verified "safe" category (e.g., education, entertainment), regardless of predicted retention.
+
+*   **Surface Uncertainty and Limits:**
+    *   **Action:** Add a disclosure label.
+    *   **Mechanism:** Clearly label political recommendations as "Algorithmically Selected based on Engagement" rather than "Recommended for You." This reduces automation bias.
+
+### 3. Measurement Plan (MEASURE)
+You cannot certify safety, but you must measure residual risk before launch.
+*   **Red-Team Probe:** Construct a dataset of 50 known extreme videos (positive controls) and 50 benign political videos (negative controls).
+*   **Test:** Run these through your *new* deterministic filters and human-gate workflow.
+*   **Pass Threshold:** **Zero** extreme videos must reach the "recommended" state without human approval. If even one slips through, the launch must be delayed or the feature disabled.
+*   **Reporting:** Document this result as "Residual Risk: Unverified for edge cases outside the probe set." Do not claim "0% harm."
+
+### 4. Governance & Transparency
+*   **Owner:** Assign one engineer as the explicit owner of this harm inventory.
+*   **Artifact:** Publish a one-page "Model Card" internally stating: "Intended Use: Engagement. Limitations: Known tendency to promote extreme content if unfiltered. Mitigation: Hard keyword blocks and human review for minors."
+*   **Legal Route:** You are dealing with minors and political content. This likely triggers regulatory duties (e.g., age-appropriate design codes). **Route immediately to legal counsel** to determine if launch is legally permissible; do not assume it is.
+
+**Note:** If you cannot staff the human review queue or implement the hard filters in 10 days, the only safe path is to disable political recommendations for minors entirely until resources allow.
+**Note:** Never fabricate a safety metric; if the red-team test fails, the stop condition blocks launch.

@@ -1,0 +1,31 @@
+### Pre-Launch Geographic Bias Review Plan for RuralGuard Insurance
+
+**Objective:** Validate that the automated claims processor does not systematically deny valid claims in remote agricultural regions due to poor image resolution, ensuring fair support before the hurricane season launch.
+
+**Phase 1: Synthetic & Proxy Data Construction (Days 1–3)**
+Since historical claim data for target counties is unavailable, construct a "Golden Set" of test cases to serve as the ground truth.
+*   **Synthetic Imagery Generation:** Create a dataset of satellite images simulating storm damage across varying resolutions. Specifically, degrade high-resolution reference images of known damage to match the poor resolution expected in remote zones. Include clear negatives (no damage) and positives (verified damage) at these lower qualities.
+*   **Proxy Labeling:** Engage a rapid-response panel of three senior adjusters (internal or contracted) to manually review this synthetic set. Their verdicts will act as the "manual review" baseline.
+*   **Geographic Stratification:** Tag every test case by simulated region type (e.g., "Remote/Low-Res," "Urban/High-Res," "Mixed") to isolate geographic variables.
+
+**Phase 2: Targeted Shadow Testing (Days 4–7)**
+Run the automated processor against the Golden Set in a isolated "shadow mode" where it makes decisions but does not affect real policyholders.
+*   **Disparity Metric Calculation:** Calculate the denial rate for valid claims in the "Remote/Low-Res" group versus the "Urban/High-Res" group.
+*   **Threshold Analysis:** Identify the specific resolution threshold where the model's accuracy drops below an acceptable confidence level (e.g., if image quality < X meters/pixel, denial errors spike by >15%).
+*   **False Negative Audit:** Specifically isolate cases where the manual review said "Approve" but the model said "Deny." Categorize these by image artifact types (e.g., cloud cover, pixelation) to confirm if resolution is the root cause.
+
+**Phase 3: Risk-Based Triage Protocol (Days 8–10)**
+Based on testing results, implement a dynamic routing rule for the live launch rather than delaying deployment.
+*   **The "Uncertainty Flag":** Configure the system to automatically flag any claim originating from a low-resolution zone or where the model's confidence score falls below the identified threshold.
+*   **Human-in-the-Loop Fallback:** Route these flagged claims immediately to a human review queue for manual assessment before a final decision is issued. Unflagged claims proceed with instant automation.
+*   **Monitoring Dashboard:** Deploy a real-time dashboard tracking denial rates by county and image quality metric. Set alerts if the denial rate for any specific remote county exceeds the baseline established in Phase 2 by more than 5%.
+
+**Phase 4: Launch & Continuous Validation (Day 14+)**
+*   **Staggered Rollout:** If possible, enable full automation in high-confidence zones first, while keeping the human fallback active for remote zones during the first two weeks of the hurricane season.
+*   **Feedback Loop:** As real claims arrive, sample 10% of *approved* claims in remote zones for rapid manual re-review to ensure false positives (approving invalid claims) are not occurring while focusing on preventing false negatives.
+
+**Deliverable Summary:**
+This process bypasses the lack of historical data by using synthetic proxies to stress-test the specific failure mode (low resolution). It ensures fairness by instituting an automatic human fallback for any claim the model finds difficult to interpret, protecting farmers from erroneous denials while meeting the three-week deadline.
+
+*Note: Ensure the synthetic imagery accurately reflects the specific spectral bands used by your satellite provider to maintain test validity.*
+*Immediate action required: Secure the three senior adjusters for the proxy labeling phase today to stay on schedule.*

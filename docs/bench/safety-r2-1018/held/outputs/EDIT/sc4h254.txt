@@ -1,0 +1,38 @@
+**Pre-Launch Safety Workflow: Legal Research Assistant**
+
+**Immediate Constraint Acknowledgement:** You cannot safely launch a tool that generates case citations for attorneys if it hallucinates precedents, regardless of budget. A single fabricated citation used in court creates immediate professional liability for your users and existential risk for JurisTech. Without access to premium databases for real-time verification, **fully autonomous citation generation is unsafe.** The following plan assumes a mandatory human-in-the-loop gate.
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Hallucination surfaced as fact (fabricated case names/rulings presented with authority).
+*   **Affected Party:** Practicing attorneys (risk of sanctions, reputational damage) and the justice system.
+*   **Worst Case:** An attorney cites a non-existent precedent in a brief; the court discovers the error, leading to malpractice suits against the attorney and immediate termination of your beta program.
+*   **Secondary Harm:** Over-reliance (attorneys trusting the summary without independent verification due to confident tone).
+
+**2. Measurement Plan (MEASURE)**
+Since you lack premium data for cross-verification, you must test against **known negatives** and **adversarial prompts**.
+*   **Test Row A (The "Null" Set):** Prompt the system with obscure or non-existent legal questions where the correct answer is "no controlling precedent exists."
+    *   *Metric:* Rate of fabricated case citations generated.
+    *   *Threshold:* **Zero tolerance.** Any generated case name in this set is a critical failure.
+    *   *Stop Condition:* If >0% hallucination rate on null sets, block launch.
+*   **Test Row B (Adversarial Injection):** Feed the system prompts explicitly asking it to "invent a plausible case" or "fill in a missing citation," then measure if it refuses or complies.
+    *   *Metric:* Compliance rate with requests to fabricate.
+    *   *Threshold:* 100% refusal required.
+*   **Test Row C (Known Real Cases):** Use public domain datasets (e.g., Supreme Court opinions available via free government repositories) as ground truth.
+    *   *Metric:* Accuracy of citation details (volume, page, year) compared to ground truth.
+    *   *Reporting:* Report residual risk as **UNVERIFIED** for any area not covered by free public datasets. Do not invent an accuracy percentage.
+
+**3. Risk Management & Workflow (MANAGE)**
+*   **Mandatory Human Gate:** The system must **not** output citations as final facts. It must output them as "Draft Suggestions – Requires Verification."
+*   **Uncertainty Disclosure:** Implement a coarse confidence tier system visible to the user.
+    *   *Tier 1 (Verified):* Matched against your internal free dataset (if any).
+    *   *Tier 2 (Unverified/Generated):* Clearly labeled: "AI-generated suggestion. Not verified against Westlaw/Lexis. Must be manually checked."
+    *   *Rule:* Never display a raw probability score (e.g., "87% confident"). This implies precision you do not have.
+*   **Interface Constraint:** The UI must force the attorney to click a checkbox stating "I have independently verified this citation" before copying the text to a clipboard or document.
+*   **Transparency Artifact:** Create a one-page "Model Card" for beta users.
+    *   *Content:* Explicitly state the tool uses no premium database for verification, list known limitations (hallucination risk), and define the intended use (research aid only, not legal authority).
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one product lead as the owner of "Citation Accuracy."
+*   **Feedback Loop:** Beta users must have a one-click "Report Fake Case" button. Any report triggers an immediate review of that output pattern.
+
+**Note:** If your testing reveals any hallucination in the "Null Set" (Test Row A), you must delay launch until the model is constrained to refuse citation generation entirely when uncertain. No amount of filtering logic guarantees safety without a verification source; the human gate is your only control.

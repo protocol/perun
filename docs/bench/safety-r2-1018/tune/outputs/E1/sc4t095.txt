@@ -1,0 +1,36 @@
+### Strategic Plan: Low-Light Breathing Detection Risk & Safeguards
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Negative (Missed Detection) in low-light conditions.
+*   **Affected Group:** Infants sleeping in dimly lit rooms; parents relying on automated alerts.
+*   **Worst Realistic Case:** Breathing cessation occurs undetected due to poor lighting, no alert is triggered, and emergency response is delayed, resulting in severe injury or death.
+*   **Status:** This is a **high-stakes, irreversible risk**. The current model performance gap constitutes a critical failure mode that cannot be ignored.
+
+**2. Testing Protocol: Rigorous Low-Light Evaluation**
+Since new data cannot be acquired, the protocol must stress-test existing capabilities and define the "cliff" where performance fails.
+*   **Probe Set Construction:** Synthesize low-light test cases from existing labeled video by applying aggressive, realistic noise reduction, contrast lowering, and shadow simulation algorithms. Do not rely on natural variation alone.
+*   **Controls:**
+    *   *Positive Control:* Known cessation events in normal light (must detect 100%).
+    *   *Negative Control:* Normal breathing in simulated total darkness (must not false alarm).
+    *   *Stress Test:* Known cessation events in simulated low-light (measure drop-off).
+*   **Metric & Threshold:** Measure "Sensitivity at Low-Light Thresholds."
+    *   *Pass Condition:* Sensitivity must remain above a safety floor (e.g., 99.9%) down to a specific lux level.
+    *   *Stop Condition:* If sensitivity drops below the floor at any achievable lighting condition found in a home, the feature **cannot launch** in autonomous mode for those conditions.
+*   **Reporting:** Report the specific lux level where detection fails as `UNVERIFIED` below that point. Do not invent an aggregate accuracy number that hides this drop-off.
+
+**3. Immediate Operational Safeguards (Human-in-the-Loop)**
+Given the known failure mode and the inability to retrain immediately, full automation is unsafe. You must implement a **Human-in-the-Loop (HITL) gate** or strict fallbacks:
+*   **Mandatory Disclosure:** The user interface must explicitly state: *"Breathing detection is unavailable or unreliable in low-light conditions. Ensure room lighting meets minimum requirements for monitoring."*
+*   **Operational Lockout:** If the camera sensor detects light levels below the verified safe threshold, the system must **disable the "All Clear" automation** and revert to a passive mode or trigger a "Check Lighting" alert to the parent, rather than falsely assuring safety.
+*   **Confidence Tiering:** Do not display percentage confidence (e.g., "87% sure"). Use defined tiers:
+    *   *Verified:* Light levels sufficient, pattern detected.
+    *   *Unverified:* Light levels insufficient. Action required: Parent must visually verify.
+*   **Fallback Mechanism:** In low light, the system should default to "Alert on Ambiguity" (raise a check-in request to the parent) rather than "Silence on Uncertainty."
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific engineer as the owner of the "Low-Light Failure Mode."
+*   **Legal Routing:** Because this involves potential life-safety consequences and regulated medical/safety claims, route the decision on legal disclosure requirements and liability to **legal counsel** immediately. Do not assert compliance internally.
+*   **Transparency Artifact:** Draft a Model Card section explicitly listing "Low-Light Performance" as a known limitation with the measured cutoff point. Shipping without this disclosure is a transparency failure.
+
+**Note:** Do not launch with autonomous "all clear" signals in conditions where the model is known to fail. The safety floor requires human verification when the machine is blind.
+**Note:** This plan identifies residual risk; it does not certify the device as safe for unsupervised use in low light.

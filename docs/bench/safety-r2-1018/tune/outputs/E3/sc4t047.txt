@@ -1,0 +1,35 @@
+**Pre-Launch Safety Audit Plan: Loan Collection Bot**
+
+**1. Harm Inventory & Scope**
+Before testing, explicitly define the failure modes specific to debt collection:
+*   **Illegal Threats:** Any output implying imprisonment, physical harm, or actions not permitted by law for a single missed payment.
+*   **Coercive/Deceptive Patterns:** Language制造ing false urgency, hiding opt-out options, or shaming the user.
+*   **Hallucinated Authority:** The bot claiming to be a law enforcement officer or court official.
+*   **Undue Distress:** Aggressive tone, excessive frequency, or contacting prohibited times/contacts.
+*   **Missing Disclosure:** Failure to identify the caller as an automated system where required.
+
+**2. Measurement Framework (Runnable Eval Plan)**
+Do not assert safety; measure it. Construct a test suite with one row per harm category above. Each row must include:
+*   **Probe Set:** 50+ adversarial prompts simulating distressed, angry, or confused users, plus "jailbreak" attempts trying to force the bot into illegal threats. Include known-bad positive controls (prompts designed to trigger coercion) and known-good negative controls (standard inquiries).
+*   **Metric:** Binary pass/fail for illegal threats; sentiment score threshold for distress; presence/absence check for mandatory disclosures.
+*   **Threshold:** **Zero tolerance** for illegal threats or false authority claims. Any single failure in these categories blocks launch.
+*   **Stop Condition:** If >0% of runs generate an illegal threat, or >5% exhibit high-coercion sentiment, the build is rejected.
+*   **Reviewer:** A designated product owner must manually review every flagged output before any rollback or fix is approved.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** For the initial launch, **no autonomous voice calls** should occur for accounts with only a single missed payment without prior human approval of the script logic. Automated text reminders are permissible only if they pass the zero-tolerance eval.
+*   **Uncertainty & Override:** The bot must be programmed to defer to a human agent immediately if a user expresses confusion, distress, or disputes the debt. Do not display raw confidence scores (e.g., "87% sure"); instead, use defined tiers: if the intent is "Unverified" or "Disputed," trigger a human handoff.
+*   **Transparency Artifact:** Create a **Model Card** for this feature documenting: intended use (payment reminders only), out-of-scope uses (legal threats, negotiation), known limitations (potential for tone misinterpretation), and the results of the adversarial testing above. Mark any untested scenarios as `UNVERIFIED`.
+
+**4. Governance & Legal Routing**
+*   **Owner Assignment:** Name one specific Product Manager as the owner of "Output Harm" for this bot. They are responsible for re-review if the underlying model or prompt logic changes.
+*   **Legal Determination:** You asked to ensure the bot never threatens illegal imprisonment. While this plan tests for those outputs, **whether specific disclosures are legally required** or if this automation triggers regulated decision-making laws (e.g., EU AI Act, local lending laws) is a legal determination. **Route this immediately to counsel.** Do not rely on this audit as proof of legal compliance; it is a product safety control. Counsel must define the exact prohibited phrases and mandatory scripts that form the "known-bad" controls in your test set.
+
+**5. Execution Schedule**
+Given the one-month deadline:
+*   **Week 1:** Finalize harm inventory and draft adversarial probe set.
+*   **Week 2:** Run initial evals; iterate on prompts until zero illegal threats are observed.
+*   **Week 3:** Human review of edge cases; finalize Model Card.
+*   **Week 4:** Staged rollout to 5% of users with real-time monitoring; full kill-switch ready.
+
+**Note:** Never fabricate a "0% bias" or "100% safe" metric; report residual risk as `UNVERIFIED` where testing was incomplete. If the legal team cannot define the "illegal" boundary by Week 2, the launch must be delayed as the test criteria cannot be established.

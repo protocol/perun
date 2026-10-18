@@ -1,0 +1,45 @@
+### Pre-Launch Safety Check: Wildlife Conservation Tracker
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes actions (revealing precise locations of endangered species).
+*   **Affected:** Endangered animal populations (risk of poaching), conservationists (undermined mission).
+*   **Worst Case:** Poachers use the public heatmap to locate and kill rare animals, causing population collapse.
+*   **Status:** This is a **high-stakes, irreversible action**. Full automation of precise location publishing is the failure mode.
+
+**2. Immediate Mitigation Plan (MANAGE)**
+Given the one-week deadline and lack of resources for complex permissioning, you must implement a **Human-in-the-Loop (HITL) gate** and **data obfuscation** before the prototype goes live. Do not ship the current automatic publishing feature.
+
+*   **Action A: Implement a "Coarse Tier" Display (No Precision Numbers)**
+    *   Stop displaying precise coordinates or high-resolution heatmaps.
+    *   Replace exact locations with **defined coarse tiers** of granularity (e.g., "Region Level" or "50km grid") that are useful for general trends but useless for poaching.
+    *   *Rule:* Never show a confidence percentage or exact coordinate for sensitive species. If the system calculates a precise location, the code must downgrade it to the coarse tier before rendering.
+
+*   **Action B: Mandatory Human Review Gate**
+    *   Any data point flagged as "Endangered" or falling within a protected zone must **not** publish automatically.
+    *   Route these specific entries to a conservationist on your team for manual approval. They must verify that the displayed granularity is safe.
+    *   *Constraint:* If you cannot staff this review within the week, **do not publish** any data related to endangered species in the prototype. Show only dummy data or non-sensitive species for the demo.
+
+*   **Action C: Transparency Artifact (Mini Model Card)**
+    *   Publish a visible notice on the dashboard: "Locations of endangered species are intentionally obscured to prevent poaching. Data represents generalized regions, not exact sightings."
+    *   This manages user expectation and discloses the automated decision to obscure data.
+
+**3. Measurement Plan (MEASURE)**
+*   **Test Row 1 (Adversarial Probe):** Input known endangered species coordinates.
+    *   *Pass Condition:* The public output shows only the coarse region (e.g., "Northern Sector"), never the exact lat/long.
+    *   *Stop Condition:* If exact coordinates appear on the public dashboard, the launch is blocked.
+*   **Test Row 2 (Red Team):** Attempt to triangulate precise locations using multiple nearby non-sensitive data points.
+    *   *Pass Condition:* Triangulation fails to yield a precise target.
+    *   *Status:* Mark as **UNVERIFIED** until this test is run; do not claim the system is "safe" without this proof.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for the HITL gate during the demo.
+*   **Legal Route:** Consult counsel regarding legal duties for data privacy and endangered species protection; do not assume the current plan meets all regulatory requirements.
+
+**Definition of Done for Launch:**
+1.  Precise locations for endangered species are technically impossible to view on the public dashboard (coarse tiers only).
+2.  A human reviews any sensitive data before it becomes visible.
+3.  A transparency notice explains the data obfuscation to users.
+4.  No claim is made that the system is "unbiased" or "100% safe"; residual risk is acknowledged.
+
+**Note:** This plan prioritizes physical safety over data precision, adhering to the principle that irreversible harm (poaching) requires a human gate.
+**Note:** If the grant demo requires showing precise data, you must use a private, authenticated view for researchers only, strictly separated from the public dashboard.

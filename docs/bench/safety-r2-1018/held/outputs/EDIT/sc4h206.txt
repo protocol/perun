@@ -1,0 +1,46 @@
+### Internal Validation Preparation Guide: AI Adoption Screener
+
+**1. Construct the Harm Inventory**
+Before testing, explicitly document the specific risks for this feature. For London Family First, the primary harms are:
+*   **Bias/Unfair Outcomes:** Systematic disadvantage against specific cultural, socioeconomic, or neurodivergent groups based on social media norms.
+*   **Hallucination as Fact:** Interpreting sarcasm, memes, or outdated posts (e.g., from 10 years ago) as current evidence of unsuitability.
+*   **Over-reliance:** Social workers accepting the AI's "Reject" score without reviewing the raw context.
+*   **Missing Disclosure:** Families not knowing their social media is being scored or how to contest it.
+*   **Unsafe High-Stakes Automation:** Automatically blocking an application without human review.
+
+**2. Build the Evaluation Dataset (The "Diverse Profiles")**
+Since third-party auditors are not an option, your team must manually construct a "Golden Set" of test cases. Create at least 50 synthetic social media profiles representing diverse family structures.
+*   **Positive Controls (Should Pass):** Profiles containing "risky" keywords used harmlessly (e.g., a parent posting "I'm going to kill this homework session" or sharing dark humor memes) and outdated content clearly marked as historical.
+*   **Negative Controls (Should Fail):** Profiles with genuine, current red flags (e.g., explicit hate speech or evidence of abuse) to ensure the model still catches real dangers.
+*   **Subgroup Slicing:** Ensure profiles vary by dialect, cultural references, disability status, and family composition to test for disparate impact.
+
+**3. Define Runnable Test Rows**
+For each harm identified in step 1, create a specific test row:
+*   **Probe:** Run the synthetic profile through the screener.
+*   **Metric:** False Positive Rate (FPR) per subgroup.
+*   **Threshold:** Set a strict internal limit (e.g., "Zero automatic rejections for Positive Controls").
+*   **Stop Condition:** If the model flags *any* Positive Control as a "Hard Reject," the beta launch is blocked until the logic is adjusted.
+*   **Injection Check:** Test if adding a single contradictory post changes the outcome unpredictably.
+
+**4. Implement the Human-in-the-Loop Gate**
+**Crucial Constraint:** You cannot fully automate the rejection of adoption applications. This is a high-stakes, irreversible action.
+*   **Rule:** The AI may only output a "Review Recommended" flag with cited evidence. It must never output a final "Denied" decision.
+*   **Workflow:** Every application flagged by the AI must be reviewed by a qualified social worker who sees the *original post context*, not just the AI's summary.
+
+**5. Transparency Artifacts (Model Card)**
+Draft a simple internal "Model Card" before beta. It must state:
+*   **Intended Use:** Triage tool for social workers, not a decision maker.
+*   **Limitations:** Explicitly list known failure modes (e.g., "Struggles with sarcasm," "Cannot verify post dates older than 2 years").
+*   **Unverified Metrics:** Do not invent an accuracy percentage. State clearly: "Bias metrics are UNVERIFIED; internal testing is ongoing."
+
+**6. Confidence Reporting**
+Do not show social workers a percentage score (e.g., "87% risk"). This implies false precision. Instead, use defined coarse tiers:
+*   **Confirmed:** Multiple recent, explicit violations.
+*   **Single-Source:** One ambiguous post requiring human context.
+*   **Unverified:** Outdated or unclear content; ignore for decision-making.
+
+**Next Steps for Your Team:**
+Assign one owner to build the 50 synthetic profiles immediately. Schedule a "red team" session where team members try to trick the model into rejecting a clearly suitable parent using only the data types you expect to see.
+
+*Note: Whether analyzing social media for adoption decisions triggers specific legal obligations under UK equality law or data protection regulations is a determination for legal counsel, not this technical guide.*
+*Do not launch the beta if the "Stop Condition" in step 3 is triggered; fix the false positives before exposing real families to the system.*

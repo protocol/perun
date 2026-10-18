@@ -1,0 +1,31 @@
+### Risk Mitigation Strategy: Mental-Health Companion App
+
+**1. Harm Inventory (MAP)**
+Before release, explicitly document the following high-severity risks for this specific feature:
+*   **Unsafe High-Stakes Automation:** The model recommending harmful actions (e.g., self-harm, isolation, stopping medication) during a crisis.
+*   **Hallucination as Fact:** Presenting unverified clinical advice or fabricated resources as authoritative medical guidance.
+*   **Over-Reliance:** Users trusting the app's output over professional human care due to the absence of uncertainty markers.
+*   **Missing Disclosure:** Users failing to recognize the output is machine-generated, not a licensed therapist.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk through targeted evaluation.
+*   **Adversarial Red-Teaming:** Construct a probe set simulating high-severity crisis inputs (e.g., explicit suicidal ideation, panic attacks). Include "positive controls" (inputs known to trigger harmful responses in baseline models) and "negative controls" (safe inputs).
+*   **Metric & Threshold:** Define a pass threshold of **zero tolerance** for any output suggesting self-harm, violence, or medical non-compliance. Any failure in the positive control set blocks launch.
+*   **Stop Condition:** If the model generates even one unsafe suggestion in the high-severity probe set, the release is halted until the failure mode is patched and re-tested.
+*   **Transparency Artifact:** Draft a **Model Card** detailing intended use (cop ing support only, not crisis intervention), limitations (not a substitute for therapy), and subgroup performance. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+Given the constraint that complex real-time human oversight is impossible for *every* interaction, you must implement a tiered gating strategy:
+*   **Hard Gate for High-Stakes Inputs:** Implement a deterministic classifier to detect high-severity crisis keywords/intent. When triggered, **bypass the generative model entirely**. The system must output a static, pre-approved list of emergency resources (hotlines, emergency services) and a clear disclosure that the app cannot provide crisis care. This satisfies the "human-in-the-loop" requirement by relying on pre-vetted human content rather than real-time generation.
+*   **Defined Confidence Tiers:** For standard coping suggestions, do not display raw model confidence percentages (e.g., "87% sure"). Instead, use defined coarse tiers (e.g., "General Suggestion" vs. "Clinically Reviewed") with clear definitions.
+*   **Explicit Disclosure:** Every interaction must include a visible disclaimer: "AI-generated support. Not a medical device. In an emergency, call [Local Emergency Number]."
+*   **Override Mechanism:** Ensure users can easily flag harmful advice, triggering an immediate review by your clinical advisors.
+
+**4. Governance (GOVERN)**
+Assign a specific owner (e.g., Lead Clinical Advisor) responsible for reviewing any flagged outputs and re-validating the harm inventory if the model or data changes. Do not certify the system as "safe" or "unbiased"; report the residual risk and the controls in place.
+
+**Legal & Regulatory Note:**
+Whether this feature constitutes a regulated medical device or requires specific legal disclosures under regimes like the EU AI Act is a legal determination. Route this question immediately to counsel; do not rely on engineering assumptions for regulatory compliance.
+
+**Constraint Adherence:**
+This plan meets your infrastructure constraint by reserving real-time generation for low-stakes interactions while using deterministic, pre-vetted rules for high-stakes crisis moments, ensuring safety without requiring live human review for every message.

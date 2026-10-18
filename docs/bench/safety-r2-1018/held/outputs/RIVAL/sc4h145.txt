@@ -1,0 +1,29 @@
+# PraguePark Safety Review Plan: License Plate Recognition Reliability
+
+## 1. Historical Data Testing Strategy
+Since hardware upgrades are not possible, the testing strategy must rigorously quantify the limitations of the existing camera network using your historical image archive.
+
+*   **Data Stratification:** Segment your historical image dataset into specific "stress buckets" rather than testing randomly. Create subsets for:
+    *   **Lighting:** Low light (dusk/dawn), direct glare (sunrise/sunset), night (streetlight only), and tunnel/shadow transitions.
+    *   **Weather:** Rain (wet plate reflection), snow (partial occlusion), fog (contrast loss), and extreme heat (shimmer).
+    *   **Plate Conditions:** Mud/dirt obstruction, bent plates, and non-standard fonts.
+*   **Baseline Quantification:** Run the current OCR engine against these stratified datasets. Calculate the **Character Error Rate (CER)** and **Plate Read Confidence Score** for each bucket. Do not rely on a single overall accuracy metric; a 95% overall accuracy might hide a 40% failure rate in heavy rain, which is unacceptable for enforcement.
+*   **Threshold Calibration:** Analyze the confidence scores associated with incorrect reads. Identify a "safe threshold" where the system automatically rejects low-confidence reads rather than guessing. The goal is to maximize the "Reject Rate" for ambiguous images to zero out false positives, even if it increases manual review volume.
+
+## 2. Manual Override & Workflow Mechanisms
+To prevent wrongful fines, the system must operate in a "Human-in-the-Loop" (HITL) mode for the initial rollout phase. Automation should only issue fines for high-certainty matches; everything else requires human verification.
+
+*   **The "Three-Tier" Triage System:**
+    1.  **High Confidence (Auto-Issue):** Only plates with confidence scores above the calibrated safe threshold (e.g., >98%) and matching vehicle metadata (if available) proceed to automatic fine generation.
+    2.  **Medium Confidence (Fast Review):** Reads that are plausible but below the auto-threshold are routed to a "Quick Look" dashboard. Operators spend <5 seconds confirming or rejecting the read.
+    3.  **Low Confidence/No Read (Deep Review):** Images with poor quality or conflicting data go to a senior reviewer who can access enhanced image processing tools or historical context for that specific vehicle.
+*   **The "Double-Blind" Safety Net:** For the first four weeks, implement a policy where **no fines are mailed** without a secondary human sign-off on a random 10% sample of *even the high-confidence* auto-issued fines. This monitors for systemic drift or new edge cases the historical data didn't cover.
+*   **Easy Dispute Channel:** Before going live, establish a dedicated, simplified online portal for disputes. If a citizen uploads a photo of their clean plate contesting a fine, the system should flag this for immediate priority review and automatically pause collection activity on that specific case until resolved.
+
+## 3. Rollout Governance
+*   **Geographic Phasing:** Do not activate city-wide on day one. Start with one district for two weeks. This limits the blast radius of any undetected error patterns specific to certain camera angles or local lighting conditions.
+*   **Daily Error Audits:** Your team of five must review a daily report of all rejected plates and disputed fines. Look for patterns (e.g., "Camera #4 fails every time it rains") to target specific maintenance or software tuning.
+
+By shifting the burden of uncertainty from the driver to the system via aggressive rejection thresholds and mandatory human review for edge cases, you can mitigate the risks of the existing hardware while gathering the data needed for future optimization.
+
+*Note: Ensure all historical data used for testing is anonymized to comply with local privacy regulations before analysis begins.*

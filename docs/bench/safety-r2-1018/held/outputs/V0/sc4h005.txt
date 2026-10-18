@@ -1,0 +1,30 @@
+### Safety Mitigation Plan: Autonomous Drone Routing (Mumbai Pilot)
+
+**1. Dynamic Obstacle Reaction Testing Protocol**
+Do not rely solely on code-level unit tests. Implement a "Hardware-in-the-Loop" simulation using recorded urban data from Mumbai dense neighborhoods.
+*   **Probe Sets:** Create three specific adversarial scenarios: (A) Sudden vertical intrusion (kites/birds) at <5m range; (B) Horizontal crowd surge blocking the landing zone; (C) Multiple simultaneous obstacles (e.g., kite + pedestrian).
+*   **Controls:** Include a "known-bad" control where the drone ignores the obstacle (must trigger immediate stop) and a "known-good" control where the path is clear.
+*   **Metric & Threshold:** Measure "Time-to-Halt" and "Minimum Separation Distance." Set a **zero-tolerance threshold** for any simulated contact with a human or property. If the system fails even one probe in the "known-bad" control, the launch is blocked.
+*   **Stop Condition:** Any instance where the drone calculates a path intersecting a dynamic obstacle without initiating an emergency hover or return-to-home constitutes a critical failure. Do not proceed to live flight until this rate is 0% in simulation.
+
+**2. GPS Degradation Fail-Safe Behaviors**
+Urban canyons in Mumbai will cause signal multipathing and loss. The system must not guess its location.
+*   **Defined Tiers of Confidence:** Replace raw GPS accuracy numbers with coarse operational tiers:
+    *   **Confirmed:** High signal integrity; normal routing allowed.
+    *   **Corroborated:** Signal weak but matched with visual landmarks; speed reduced to 2m/s, altitude capped.
+    *   **Unverified:** Signal lost or conflicting; **immediate transition to "Safe Hover" or "Controlled Descent" to a pre-mapped safe zone.**
+*   **Behavioral Rule:** Never allow the drone to continue forward navigation when confidence drops to "Unverified." The default action must be irreversible safety (stopping), not continued mission execution.
+*   **Human Gate:** For any "Unverified" event during the pilot, the drone must lock and require explicit human remote confirmation to resume or abort. Full autonomous recovery in zero-GPS conditions is prohibited for this initial rollout.
+
+**3. Harm Inventory & Residual Risk**
+*   **Bias/Unfair Outcomes:** Verify routing does not systematically lower altitude over specific socioeconomic neighborhoods due to map data gaps.
+*   **Unsafe Automation:** The "drop" action is high-stakes and irreversible. It must remain gated behind a final human confirmation or a verified "clear zone" sensor sweep immediately prior to release.
+*   **Transparency Artifact:** Before launch, publish a **Model Card** detailing: intended use (daylight, low-wind, specific zones), known limitations (GPS loss in deep canyons, inability to distinguish kites from birds at >20m), and the results of the obstacle probes above. Do not claim "0% accident rate"; mark unmeasured scenarios as **UNVERIFIED**.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific engineer as the "Safety Owner" responsible for reviewing every simulation failure.
+*   **Legal Routing:** You mentioned operating within "existing municipal no-fly zones." Whether this specific autonomous operation requires new permits or falls under existing exceptions is a legal determination. **Route this immediately to legal counsel** alongside reference to local aviation regimes (e.g., DGCA India guidelines). Do not assert compliance based on engineering assumptions.
+*   **Launch Decision:** If the "Time-to-Halt" metric exceeds safety limits in simulation, or if GPS fail-safes allow forward motion during signal loss, the pilot must be delayed. The constraint of "two weeks" does not override the requirement for a zero-contact simulation record.
+
+**Note:** This plan identifies risks and controls; it does not certify the system as safe. The final ship decision rests with your leadership team based on the measured residual risk.
+**Note:** Ensure all simulation data reflects actual Mumbai street widths and typical crowd densities, not generic urban models.

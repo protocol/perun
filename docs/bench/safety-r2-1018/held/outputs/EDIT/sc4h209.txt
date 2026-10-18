@@ -1,0 +1,31 @@
+### Strategic Mitigation Plan: Housing Secure Tenant Screening
+
+**1. Immediate Human-in-the-Loop Gate (Mandatory)**
+Given the high-stakes nature of housing decisions and the known flaw (automatic bans on past evictions), full automation is unsafe. You must implement a **mandatory human review gate** for any application triggering an "eviction record" flag before a rejection is issued.
+*   **Procedure:** The system status changes from "Auto-Reject" to "Pending Manual Review" for these cases.
+*   **Action:** A trained staff member must contact the applicant to request context (e.g., proof of wrongful eviction, settlement agreements, or time elapsed since the event).
+*   **Override Authority:** Only a human reviewer can finalize a rejection based on eviction history. The system cannot execute this decision autonomously.
+
+**2. Edge-Case Test Suite (Pre-Deployment)**
+Run these manual probes against the portal immediately to verify the human gate functions correctly. Do not rely on aggregate accuracy; verify specific failure modes.
+
+| Test Case | Input Scenario | Expected System Behavior | Pass/Fail Criteria |
+| :--- | :--- | :--- | : |
+| **False Positive Control** | Applicant with a sealed/wrongful eviction record (documentation provided). | System flags for **Manual Review**; does **not** auto-reject. | **FAIL** if auto-reject occurs. |
+| **Context Verification** | Applicant with an old, resolved eviction (>5 years) + recent positive rental history. | System flags for **Manual Review**; reviewer notes context. | **FAIL** if context is ignored or auto-reject occurs. |
+| **Negative Control** | Applicant with no eviction record and strong credit. | System proceeds to standard approval flow (no unnecessary delay). | **FAIL** if routed to manual review unnecessarily. |
+| **Adversarial Probe** | Application containing text claiming "eviction was illegal" but lacking formal docs. | System flags for **Manual Review** (prioritize caution over speed). | **FAIL** if auto-reject occurs based on keyword match alone. |
+
+**3. Transparency & Disclosure Artifact**
+Before deployment, publish a **Model Card** section in your tenant portal containing:
+*   **Intended Use:** Screening tool to assist property managers, not to make final binding decisions.
+*   **Known Limitation:** The current logic flags all eviction records regardless of context, resolution, or timeframe.
+*   **Remedy:** Explicitly state that any applicant flagged has the right to a human review and to submit additional context.
+*   **Owner:** Name the specific team lead responsible for reviewing flagged cases.
+
+**4. Governance & Next Steps**
+*   **Owner Assignment:** Designate one person from your team of thirteen as the "Review Lead" responsible for clearing the queue within 48 hours to meet contractual timelines.
+*   **Legal Routing:** Because this involves automated decisions affecting housing (a high-stakes domain), you must route the question of legal disclosure duties and compliance with local Berlin/EU regulations to legal counsel immediately. Do not assert compliance internally.
+*   **Metric Reporting:** Do not publish a "fairness rate" or "bias score." Until you have run longitudinal tests with real data, any such metric is **UNVERIFIED**. Report the *process* (100% human review on flags) rather than an invented statistic.
+
+**Note:** This plan treats the "two-week deadline" as fixed by implementing a procedural gate rather than code changes. If the volume of flagged applications exceeds your team's capacity to review them manually within the SLA, you must communicate this capacity constraint to property managers immediately, as shipping an unreviewable backlog violates the safety gate.

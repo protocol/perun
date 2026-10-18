@@ -1,0 +1,51 @@
+### Pre-Launch Validation Plan: Vacation Mode Safety Gate
+
+**Objective:** Prevent pipe-freezing incidents caused by incorrect schedule learning during long absences before the 14-day firmware deadline.
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (heating control) leading to irreversible property damage (frozen/burst pipes).
+*   **Affected Group:** Homeowners with secondary/vacation properties absent for >48 hours in winter.
+*   **Worst Case:** System learns "away" pattern as "off," drops temperature below freezing threshold while owners are unreachable, causing structural damage.
+
+**2. Runnable Test Rows (Execute Immediately)**
+Construct three specific evaluation rows. Each must pass before deployment.
+
+*   **Row A: The "Long Absence" Positive Control**
+    *   **Probe:** Simulate 7+ days of zero motion/interaction at 32°F (0°C) ambient.
+    *   **Expected Behavior:** System overrides learned schedule; maintains minimum safe temperature (e.g., 45°F/7°C).
+    *   **Metric:** Temperature never drops below safe threshold.
+    *   **Stop Condition:** Any drop below threshold blocks launch.
+    *   **Owner:** Lead Firmware Engineer.
+
+*   **Row B: The "Return" Negative Control**
+    *   **Probe:** Simulate 7 days away followed by sudden motion at 6 AM.
+    *   **Expected Behavior:** System resumes normal comfort schedule immediately upon detection.
+    *   **Metric:** Time-to-comfort < 30 mins.
+    *   **Stop Condition:** Failure to resume normal operation blocks launch.
+
+*   **Row C: Adversarial "Intermittent Visit" Probe**
+    *   **Probe:** Simulate sporadic visits (one day every two weeks) during winter.
+    *   **Expected Behavior:** System identifies pattern as "vacation usage," not "permanent residence," and defaults to safe mode between visits.
+    *   **Metric:** Safe mode active during all gaps >48 hours.
+    *   **Stop Condition:** System attempts to "learn" a sparse schedule that allows freezing.
+
+**3. Management Controls (The Human Gate)**
+*   **Hard Constraint:** The "Vacation Mode" logic must be a deterministic rule (if no input > X hours AND temp < Y, THEN heat to Z), not a probabilistic model output. Machine learning must be disabled for the decision to drop below the freeze-protection threshold.
+*   **Uncertainty Display:** If the system cannot confirm occupancy status, the interface must display a coarse status tier: **"Unverified Absence – Safety Mode Active"** rather than a specific confidence percentage.
+*   **Rollback Trigger:** If >0% of test devices fail Row A, the update is halted. No "acceptable error rate" exists for pipe freezing.
+
+**4. Transparency Artifact (Model/Data Card)**
+Draft a one-page "Safety Logic Card" for internal records and customer support:
+*   **Intended Use:** Schedule optimization for primary residences.
+*   **Out-of-Scope:** Fully autonomous temperature reduction in sub-freezing conditions without explicit user confirmation.
+*   **Limitations:** Learning algorithms are suspended when ambient temps approach freezing risks.
+*   **Owner:** [Name of Product Lead].
+
+**5. Governance & Next Steps**
+*   **Day 1-3:** Execute Rows A, B, C on hardware-in-the-loop simulators.
+*   **Day 4:** Review results. If any fail, revert to deterministic "Safe Default" logic only; strip learning features for this edge case.
+*   **Day 5-10:** Staged rollout to 1% of users in cold climates only. Monitor for "Safety Mode" activations.
+*   **Day 14:** Full deployment if staged rollout shows zero safety events.
+
+**Note:** This plan treats the freeze risk as a binary failure (pass/fail), not a statistical average.
+**Note:** Legal counsel should review if "Safety Mode" defaults constitute a regulated automated decision in your jurisdiction, though this plan prioritizes physical safety over regulatory classification.

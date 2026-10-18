@@ -1,0 +1,32 @@
+### Safety Validation Protocol: PeakPower Battery Optimizer
+
+**1. Harm Inventory & Edge Case Mapping**
+Before testing, explicitly record the worst-case failure: the optimizer disables emergency communication apps (messaging, location sharing, emergency dialer) during a wildfire evacuation, isolating the user. Define "critical communication" not just by app name, but by active foreground usage, recent contact with emergency services, or user-pinned status. Edge cases to probe include:
+*   **Background vs. Foreground:** Does the kill-switch trigger while a user is actively typing an SOS?
+*   **Signal Scarcity:** Does the algorithm aggressively cut power when signal is weak (high drain), precisely when the phone is trying to connect to emergency towers?
+*   **User Override Latency:** If the system shuts down an app, how many seconds does it take for the user to restore it? In an emergency, even 10 seconds is a failure.
+
+**2. Measurement Plan (Runnable Tests)**
+Since retraining is off the table, validate via adversarial simulation and rule-based guards. Execute these three test rows before launch:
+*   **Probe Set A (The "Active SOS" Test):** Simulate low-battery scenarios (5%) where the user has an open connection to known emergency numbers or is using mapping software.
+    *   *Positive Control:* The system must **never** terminate these processes automatically.
+    *   *Metric:* Zero unauthorized terminations of active emergency sessions.
+    *   *Stop Condition:* Any single failure here blocks launch immediately.
+*   **Probe Set B (The "Weak Signal" Stress Test):** Simulate environments with fluctuating signal strength where power drain spikes.
+    *   *Goal:* Ensure the optimizer reduces background sync but preserves the radio stack required for emergency calls.
+    *   *Metric:* Successful completion of an emergency call attempt during aggressive power-saving modes.
+*   **Probe Set C (Injection/False Positive):** Feed the system non-essential apps disguised with emergency-like names or behaviors to ensure it doesn't over-block, while ensuring real emergency apps are whitelisted by hardware-level IDs, not just software labels.
+
+**3. Fail-Safes & Human-in-the-Loop Controls**
+Given the high stakes (life safety) and the inability to retrain, you must implement deterministic, hard-coded guards that override the model:
+*   **The "Emergency Whitelist" Gate:** Hard-code a list of critical functions (native dialer, SMS, specific emergency alert receivers) that the optimizer is *physically incapable* of shutting down, regardless of the model's recommendation. This is a non-negotiable floor.
+*   **Explicit Confirmation for Gray Areas:** If the model identifies an app as "non-essential" but it is currently running, do not auto-kill. Instead, present a single, high-contrast prompt: "Pause [App] to save 2 hours of battery?" with a large "Keep Running" default. Never hide this behind a menu.
+*   **Uncertainty Tiering:** Do not display a confidence percentage (e.g., "87% safe to close"). Instead, use coarse, defined tiers: **"Confirmed Safe to Pause"** (system verified) vs. **"Unknown Impact"** (default to keeping active).
+*   **One-Touch Reversal:** If a shutdown occurs, provide an immediate, persistent "Restore All" button on the lock screen, accessible without unlocking.
+
+**4. Transparency & Governance**
+*   **Model Card Requirement:** Ship a durable artifact stating the intended use (power extension) and the explicit limitation: "This feature uses heuristics that may not recognize all third-party emergency tools. Critical native functions are hard-protected."
+*   **Owner Assignment:** Name one engineer responsible for reviewing any incident where communication was lost.
+*   **Legal Routing:** Because this feature makes automated decisions affecting safety in regulated contexts (emergency response), route the question of legal disclosure requirements and liability to counsel immediately. Do not assert compliance internally.
+
+**Note:** The manufacturing deadline does not justify removing the hard-coded whitelist; that is a code change, not a model retrain. If the whitelist cannot be implemented in three weeks, the feature must not ship for the wildfire use case.

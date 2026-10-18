@@ -1,0 +1,52 @@
+**Pre-Launch Validation Protocol: Algorithmic Descent Co-Pilot**
+
+Given the high-stakes nature of automated suggestions to pilots during severe weather, the following protocol prioritizes harm prevention over speed. This plan addresses bias, hallucination (unsafe suggestions), over-reliance, and unsafe automation within your two-month constraint.
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before executing tests, explicitly document the following for the descent algorithm:
+*   **Hallucination as Fact:** The risk of the model suggesting a descent angle that conflicts with terrain or safety envelopes, presented with false confidence.
+*   **Bias/Unfair Outcomes:** Systematic failure in specific weather profiles (e.g., heavy snow vs. rain) or airport topographies that disadvantage certain flight crews.
+*   **Over-Reliance:** The interface design inviting pilots to accept suggestions without verification due to stress or perceived authority.
+*   **Missing Disclosure:** Pilots unaware the suggestion is probabilistic AI, not deterministic flight computer logic.
+*   **Unsafe Automation:** Any pathway where the suggestion could be auto-executed or hard-to-override.
+
+**2. Runnable Measurement Plan (One Test Row Per Harm)**
+Execute these evaluations using your existing simulator data. Do not aggregate results; report by subgroup (weather type, airport, visibility level).
+
+*   **Harm:** Hallucination (Unsafe Trajectory).
+    *   **Probe Set:** 500 extreme weather scenarios + 50 known-bad positive controls (inputs known to cause conflicts) + 50 known-good negative controls (standard approaches).
+    *   **Metric:** Rate of suggestions violating terrain/safety envelopes.
+    *   **Threshold:** **Zero tolerance** for violations in positive controls; <0.1% in edge cases.
+    *   **Stop Condition:** Any single violation of a safety envelope in a positive control blocks launch immediately.
+    *   **Reviewer:** Chief Safety Officer (CSO).
+
+*   **Harm:** Bias/Performance Variance.
+    *   **Probe Set:** Scenarios sliced by weather intensity (moderate/severe/extreme) and visibility (low/zero).
+    *   **Metric:** Success rate of valid suggestions per slice.
+    *   **Threshold:** No subgroup performance drop >5% below aggregate average.
+    *   **Stop Condition:** Significant degradation in "extreme" slices triggers rollback for retraining.
+    *   **Reviewer:** Lead Engineer.
+
+*   **Harm:** Over-Reliance & Interface Safety.
+    *   **Probe Set:** Red-team simulation with pilots under induced stress; inject conflicting ATC commands.
+    *   **Metric:** Frequency of blind acceptance vs. verified acceptance; time-to-override.
+    *   **Threshold:** 100% of pilots must successfully override/ignore unsafe suggestions in controlled failure tests.
+    *   **Stop Condition:** Any instance of "automation bias" leading to a simulated near-miss.
+    *   **Reviewer:** Human Factors Specialist.
+
+*   **Harm:** Injection & Data Leakage.
+    *   **Probe Set:** Adversarial inputs mimicking corrupted sensor data or malformed weather feeds.
+    *   **Metric:** System stability and refusal to output guidance when input integrity is compromised.
+    *   **Threshold:** Graceful degradation (no output) rather than hallucinated output.
+    *   **Stop Condition:** Generation of specific numerical guidance on corrupted inputs.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** The system must **never** auto-execute descent changes. It must function strictly as a advisory display requiring explicit pilot confirmation. This is non-negotiable for irreversible, high-stakes actions.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% safe"). Instead, use defined coarse tiers: **CONFIRMED** (multiple data sources agree), **CORROBORATED** (single source, consistent physics), or **UNVERIFIED** (low data quality). If the tier is anything less than CONFIRMED, the suggestion must be visually suppressed or heavily flagged.
+*   **Transparency Artifact:** Produce a **Model Card** before submission. It must list intended use (advisory only), out-of-scope uses (auto-landing, emergency-only), measured performance by weather subgroup, and known limitations. If a metric is unmeasured, label it `UNVERIFIED`; do not fabricate a number to satisfy the deadline.
+
+**4. Governance**
+Assign a specific owner (e.g., VP of Product Safety) responsible for reviewing residual risk before regulatory submission. If the simulation logs show any `UNVERIFIED` high-stakes metrics, the recommendation is to delay submission or narrow the feature's operational scope, regardless of the winter season deadline. Safety floors do not relax for schedule constraints.
+
+Note: Legal determination regarding regulatory disclosure requirements for AI in aviation must be routed to counsel; this protocol assumes full transparency as a safety control.
+Do not certify the system as "safe" based on these tests; they measure residual risk, not eliminate it.

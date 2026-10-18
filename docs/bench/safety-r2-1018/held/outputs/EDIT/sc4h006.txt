@@ -1,0 +1,31 @@
+**Pre-Launch Review Workflow: Child-Content Filter Remediation**
+
+**1. Harm Inventory & Scope Definition**
+Before testing, explicitly record the specific failure mode: **Bias/Unfair Outcomes** where regional dialects in educational contexts are misclassified as harmful. Define the "worst realistic case" as the systematic exclusion of local cultural or curriculum-aligned learning resources for Brazilian children. Acknowledge that without specialized linguistic tools, the risk of **Over-reliance** on automated scores is high.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert the filter is "fixed." Instead, execute a targeted evaluation with one test row per identified harm:
+*   **Probe Set:** Curate a dataset of 50 known-positive educational videos featuring regional dialects (the "false positive" cases) and 50 known-negative harmful videos (the "positive controls").
+*   **Metric:** False Positive Rate (FPR) specifically sliced by dialect/region, not just aggregate accuracy.
+*   **Threshold:** Set a zero-tolerance stop condition for the known-positive educational set. If *any* known-safe educational video is blocked, the launch is halted.
+*   **Adversarial Check:** Include probes where harmful content mimics educational formatting to ensure protection isn't lost while fixing false positives.
+*   **Reporting:** Report residual risk as "UNVERIFIED" for any dialect not covered in the probe set. Do not invent a global "99% accuracy" claim.
+
+**3. Human-in-the-Loop Gate (High-Stakes Action)**
+Since blocking content is an irreversible action for the user session and impacts access to education:
+*   **Mandatory Review:** Any content flagged with low confidence or matching patterns associated with regional dialects must route to a human moderator before restriction is applied.
+*   **Override Mechanism:** Empower the seven moderators to instantly override automated blocks for educational content, logging the decision to retrain the model later.
+*   **Staged Rollout:** Launch initially to a small user segment (e.g., 5% of traffic) with heightened human monitoring. Cap exposure until the FPR on educational content remains at zero for a defined period.
+
+**4. Transparency & Uncertainty**
+*   **Defined Confidence Tiers:** Do not display raw model confidence percentages (e.g., "87% unsafe") to moderators or users. Use defined coarse tiers: **Confirmed Harm** (auto-block), **Unverified/Context Needed** (human review), and **Safe** (allow).
+*   **Disclosure:** Clearly label when a decision is automated versus human-reviewed in internal dashboards.
+*   **Documentation:** Create a lightweight "Model Card" for this feature version documenting: intended use (child safety), known limitations (regional dialect gaps), and the specific results of the dialect probe set.
+
+**5. Governance**
+*   **Ownership:** Assign one engineer and one lead moderator as co-owners of this filter's output harm. They must re-review the harm inventory if the model, data, or target regions change.
+*   **Legal Routing:** If this filtering constitutes a regulated automated decision affecting minors under local laws, route the determination of legal disclosure duties to counsel immediately; do not assume compliance based on internal testing.
+
+**Stop Condition:** If the probe set reveals continued blocking of known-safe educational content, do not ship. The constraint of lacking linguistic tools requires a human gate, not a relaxed safety threshold.
+
+*Note: This plan prioritizes preventing censorship of education while maintaining safety gates. No metric is certified as "bias-free"; success is defined by the human gate catching errors the tool misses.*

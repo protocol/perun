@@ -1,0 +1,38 @@
+**Internal Safety Checklist: Insulin Dosage Suggestion Feature**
+
+**1. Input Validation & Image Quality Gates**
+*   **Lighting Thresholds:** Automatically reject or flag images where brightness histograms indicate underexposure (<10% luminance) or overexposure (>90% luminance), preventing analysis of obscured food textures.
+*   **Focus/Blur Detection:** Implement a pre-scan blur metric; if the image fails sharpness criteria, block dosage calculation and prompt the user to retake the photo.
+*   **Object Presence:** Ensure the model detects at least one food item with >60% confidence. If confidence is lower, default to a "Unable to analyze" response rather than a low-confidence guess.
+
+**2. Mixed Meal & Edge Case Logic**
+*   **Component Segmentation:** Verify the system attempts to segment distinct food items on a plate. If multiple items are detected but only one is classified, trigger a manual review flag.
+*   **Carbohydrate Summation Check:** For mixed meals, ensure the logic sums estimated carbohydrates from all identified components before applying the insulin-to-carb ratio. Isolate the summation step for code review.
+*   **"Unknown Food" Fallback:** If any significant portion of the plate (e.g., >20% of area) is labeled "unknown" or "unidentifiable," the system must withhold a specific dosage and suggest a conservative range or manual entry.
+
+**3. Dosage Calculation Safeguards**
+*   **Hard Caps:** Implement absolute maximum dosage limits per suggestion based on typical adult/pediatric thresholds (configurable by user profile). Any calculation exceeding this cap is blocked.
+*   **Zero/Negative Check:** Explicitly handle edge cases where image analysis returns zero carbs; ensure the suggested dose is zero, not an error code or negative value.
+*   **Unit Consistency:** Verify all internal conversions (grams to exchanges, etc.) are unit-tested against known standard values before the multiplication step.
+
+**4. Manual Review Process for High-Risk Suggestions**
+*   **Trigger Criteria:** Route the following scenarios to a human reviewer (clinical staff) before the suggestion reaches the user:
+    *   Confidence score for food classification is between 60%–75%.
+    *   Detected meal contains >3 distinct food items.
+    *   Calculated dosage is within 10% of the user's defined maximum daily limit.
+    *   Image quality flags were triggered but bypassed by user retry.
+*   **Review Workflow:**
+    1.  Reviewer sees the original image, model-derived carb count, and proposed dosage.
+    2.  Reviewer confirms, adjusts, or rejects the dosage within a dedicated admin dashboard.
+    3.  Only approved dosages are pushed to the user's app interface.
+    4.  Log all reviewer interventions for post-launch audit.
+
+**5. Pre-Launch Data Dry-Run**
+*   **Adversarial Set:** Manually test the pipeline with 50 curated images: poorly lit plates, mixed meals with hidden carbs (e.g., sauces), and non-food objects resembling food.
+*   **Outcome Verification:** Confirm that 100% of dangerous misclassifications in the test set result in either a "Retake Photo" prompt or a manual review flag, never a direct dosage suggestion.
+
+**6. User-Facing Disclaimers**
+*   **Mandatory Warning:** Every dosage screen must display: "This is an estimate based on image analysis. Always verify with your healthcare provider's guidance."
+*   **Emergency Override:** Provide a prominent "Do Not Use This Dose" button that allows users to manually input their own calculation, bypassing the suggestion entirely.
+
+*Note: This checklist assumes the model is already trained; it focuses on runtime guards and process controls. Given the medical risk, consider delaying launch if the "Manual Review" workflow cannot be staffed 24/7 during the beta period.*

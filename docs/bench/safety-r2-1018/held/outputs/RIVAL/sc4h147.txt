@@ -1,0 +1,45 @@
+# Safety Review and Testing Plan for TechAttend India
+
+**Objective:** Identify failure conditions in the facial recognition system caused by low-resolution camera feeds, varying lighting, and demographic diversity to prevent false negatives and wage theft prior to the Bangalore rollout.
+
+**Constraint Acknowledgement:** Testing must simulate the limitations of the existing office camera network without hardware upgrades.
+
+## 1. Test Data Preparation (Synthetic & Consented)
+Since live employee data cannot be used for failure testing without risk, create a controlled test set:
+*   **Demographic Matrix:** Compile a dataset of consented volunteer images or high-quality synthetic faces representing the diverse skin tones present in the Bangalore workforce (using the Fitzpatrick Scale types III–VI as a baseline for the region).
+*   **Accessory Variations:** Capture or generate variations for each subject including:
+    *   Prescription glasses (clear, tinted, thick frames).
+    *   Sunglasses (simulating entry from bright outdoors).
+    *   Religious head coverings (hijabs, turbans, scarves) common in the local context.
+    *   Masks (if applicable to current health protocols).
+*   **Baseline Ground Truth:** Establish a "perfect condition" baseline for each subject using high-resolution images to confirm the algorithm works ideally before degrading inputs.
+
+## 2. Environmental Simulation Protocol
+Simulate the specific constraints of the existing camera network using software degradation on the test images before feeding them to the system:
+*   **Resolution Degradation:** Downscale images to match the lowest resolution found in the current office camera audit. Apply compression artifacts typical of older CCTV codecs (e.g., H.264 at low bitrates).
+*   **Lighting Scenarios:** Alter test images to mimic:
+    *   **Backlighting:** Strong light sources behind the subject (common near windows).
+    *   **Low Light:** Early morning or late evening shifts with poor artificial lighting.
+    *   **Uneven Illumination:** Half-face shadows caused by overhead fluorescent tubes.
+    *   **Glare:** Reflections on glasses or shiny surfaces.
+
+## 3. Execution Matrix
+Run the system against every combination of the following variables. Record "False Negative" rates for each cell:
+
+| Variable Category | Test Conditions | Success Criteria |
+| :--- | :--- | :--- |
+| **Skin Tone** | Light, Medium, Dark, Deep | < 1% False Negative rate across all tones. |
+| **Lighting** | Optimal, Backlit, Dim, Glare | System must flag "Low Confidence" rather than "Absent" in poor light. |
+| **Accessories** | None, Glasses, Headwear, Mask | Recognition must persist with partial occlusion. |
+| **Camera Quality** | High Res, Degraded (Low Res + Compression) | Performance delta between High and Low res must be < 5%. |
+
+## 4. Failure Analysis & Mitigation Logic
+*   **Threshold Tuning:** If false negatives exceed 1% for any specific group (e.g., dark skin tones in low light), lower the confidence threshold for "Present" status or implement a "Human Review Required" flag instead of defaulting to "Absent."
+*   **Fallback Mechanism:** Define a protocol where any recognition score below a safe threshold triggers a manual check-in option (PIN code or security guard verification) to ensure no worker is penalized during system uncertainty.
+*   **Camera Placement Audit:** Based on failure points (e.g., specific angles causing glare), recommend low-cost physical adjustments (angling cameras, adding cheap LED strips) even if camera hardware cannot be replaced.
+
+## 5. Pre-Launch Validation Gate
+*   **Do Not Deploy** if the False Negative rate for any protected demographic group exceeds the overall average by more than 2%.
+*   **Mandatory Pilot:** Run a parallel trial for one week where the system logs attendance but does not process payroll. Compare system logs against manual sign-in sheets to calculate real-world error rates.
+
+**Note:** This plan relies on simulated degradation; actual pilot results may vary based on real-time network latency. Ensure all volunteer data is anonymized and stored securely compliant with India's DPDP Act.

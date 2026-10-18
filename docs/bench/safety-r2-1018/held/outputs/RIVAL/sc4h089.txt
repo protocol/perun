@@ -1,0 +1,28 @@
+### Evaluation Strategy Roadmap: Mitigating Protest-Related False Positives
+
+**Phase 1: Synthetic Data Construction (Days 1–3)**
+Since diverse local data is unavailable, immediately generate a synthetic evaluation set focused on the Jakarta context. Create three distinct categories of text inputs:
+1.  **Benign Protest Discourse:** Phrases common in peaceful Indonesian demonstrations (e.g., "aksi damai," "menyuarakan aspirasi," "turun ke jalan") combined with local dialects (Betawi) and slang. Ensure these samples explicitly mention non-violence, legal permits, or specific policy grievances without aggressive verbs.
+2.  **Ambiguous Edge Cases:** Statements that use strong emotional language or metaphors often flagged as violent (e.g., "fight for justice," "burning passion for change") but lack actual incitement.
+3.  **True Positive Controls:** Clear examples of violent incitement to ensure the model does not swing too far and miss actual threats.
+
+**Phase 2: Targeted Stress Testing (Days 4–6)**
+Run your current model against this synthetic dataset. Do not rely on overall accuracy; isolate the **False Positive Rate (FPR)** specifically for the "Benign Protest" category.
+*   **Metric Goal:** The FPR for peaceful protest content must be below 5% before launch.
+*   **Error Analysis:** Manually review every false positive. Categorize errors by trigger: Is it specific keywords (e.g., "revolution"), sentence structure, or the absence of negation markers? Identify if the model fails more often on specific dialects or informal syntax.
+
+**Phase 3: Mitigation and Calibration (Days 7–9)**
+Based on the error analysis, apply immediate mitigations suitable for a tight deadline:
+*   **Keyword Whitelisting:** Implement a pre-filter rule. If a post contains specific peaceful markers (e.g., "damai," "legal," "orasi"), bypass the AI flag or require a higher confidence threshold for moderation.
+*   **Contextual Prompt Engineering:** If your system uses an LLM wrapper, refine the system instructions to explicitly distinguish between "describing a protest" and "inciting violence." Provide few-shot examples of the benign cases identified in Phase 2.
+*   **Threshold Adjustment:** Lower the sensitivity threshold for the "violent incitement" class if the current setting is too aggressive, accepting a slight increase in manual review volume to protect free expression.
+
+**Phase 4: Human-in-the-Loop Validation (Days 10–12)**
+Before full automation, route all content flagged as "violent incitement" regarding protests to a human reviewer for the first two weeks of launch.
+*   **Compliance Documentation:** Document the evaluation methodology, the synthetic data used, the specific false positive rates achieved, and the human oversight mechanism. This demonstrates "reasonable effort" to regulators regarding bias mitigation.
+*   **Final Go/No-Go:** If the FPR remains above the acceptable risk level after calibration, launch with the human-review safeguard mandatory for all protest-related keywords, rather than risking automated censorship.
+
+**Deliverable Summary:** A synthetic test suite covering local dialects, a calibrated confidence threshold, a keyword whitelist for peaceful markers, and a mandatory human-review workflow for flagged protest content.
+
+*Note: Prioritize the human-review safety net over perfect model accuracy given the 12-day constraint.*
+*Ensure all synthetic data generation avoids using real user data to maintain privacy compliance.*

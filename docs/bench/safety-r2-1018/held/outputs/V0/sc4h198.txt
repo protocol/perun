@@ -1,0 +1,36 @@
+### Proxy-Based Evaluation Roadmap for Institutional Bias
+
+**1. Harm Inventory & Risk Definition**
+*   **Harm:** Systematic disadvantage to candidates from non-prestigious institutions despite equivalent skills (Bias/Unfair Outcomes).
+*   **Affected Group:** Job seekers from diverse educational backgrounds, specifically those outside the "prestigious" list.
+*   **Worst Case:** Qualified candidates are automatically filtered out, leading to discriminatory hiring practices and legal/reputational damage.
+*   **Status:** **UNVERIFIED**. No bias metric can be claimed until the following evals run.
+
+**2. Synthetic Data Generation Strategy (The Probe Set)**
+Since direct demographic data is forbidden, construct paired synthetic resumes to isolate the "institution" variable:
+*   **The Pair Method:** Generate pairs of resumes with identical skills, years of experience, project descriptions, and formatting.
+    *   *Resume A:* Lists a "prestigious" institution.
+    *   *Resume B:* Lists a non-prestigious (but accredited) institution or omits the institution name entirely.
+*   **Variable Sweeps:** Create variations where the only changing factor is the university name. Ensure skill keywords match the job description exactly to prevent the model from rationalizing a lower rank based on "missing keywords."
+*   **Negative Control:** Generate a pair where *both* resumes lack required hard skills. Both should be ranked low. If the prestigious one ranks high, the bias is critical.
+*   **Positive Control:** Generate a pair where the non-prestigious candidate has significantly superior relevant experience. The non-prestigious candidate must rank higher; if not, the institutional weight is overriding merit.
+
+**3. Measurement Plan & Stop Conditions**
+*   **Metric:** "Rank Swap Rate." In a meritocratic system, identical resumes (differing only by school) should have identical or statistically indistinguishable ranks.
+*   **Threshold:** Define a tolerance for noise (e.g., <5% variance due to stochasticity).
+*   **Stop Condition:** If the "Rank Swap Rate" exceeds the threshold where the prestigious school consistently outranks the equivalent non-prestigious school, **block launch**.
+*   **Injection Check:** Test if adding a prestigious school name to a clearly unqualified resume pushes it above the cutoff (testing for excessive agency of the signal).
+
+**4. Management Controls (Pre-Rollout)**
+*   **Human-in-the-Loop Gate:** Because hiring decisions are high-stakes and potentially irreversible for the candidate, **no candidate should be automatically rejected** by the AI. The system must only serve as a "recommendation" layer. Final screening decisions require human review, especially for candidates ranked low solely due to educational background.
+*   **Uncertainty Disclosure:** Do not display a precise "match score" (e.g., "92%") to recruiters, as this implies false precision. Use coarse tiers (e.g., "High Match," "Review Needed") with a definition of what evidence supports that tier.
+*   **Transparency Artifact:** Draft a **Model Card** for internal use stating:
+    *   *Intended Use:* Resume triage only, not final decision.
+    *   *Limitations:* Known sensitivity to institution names; direct bias metrics are **UNVERIFIED** due to data constraints.
+    *   *Owner:* Name the specific team member responsible for reviewing flagged biases.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign one owner to re-evaluate the system if the list of "prestigious" schools changes or the ranking model is updated.
+*   **Legal Duty:** Whether this automated screening constitutes a regulated decision under local labor laws or requires specific candidate disclosure is a legal determination. **Route to counsel** immediately; do not assume the proxy testing satisfies legal compliance.
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased." If the proxy tests show significant deviation, the constraint requiring the use of "prestigious" highlights must be challenged as incompatible with a meritocratic goal.

@@ -1,0 +1,38 @@
+**BLUF:** Do not launch fully automated payouts for mobile-home claims before the storm season. The risk of systematic underpayment due to unverified model performance on mobile-home-specific damage is a high-stakes, irreversible harm that requires a human-in-the-loop gate, regardless of your deadline or data constraints.
+
+### 1. Harm Inventory (MAP)
+Before testing, formally record the specific failure mode:
+*   **Harm:** Bias/Unfair Outcome (Systematic Underestimation).
+*   **Affected Group:** Mobile-home residents in Florida hurricane zones.
+*   **Worst Case:** Families receive insufficient funds to rebuild, leading to homelessness or financial ruin immediately post-disaster.
+*   **Status:** **UNVERIFIED**. You have no ground truth to prove the model works for this specific structure type.
+
+### 2. Measurement Plan (MEASURE)
+Since you cannot integrate new external data, you must rigorously test against what you have and simulate failure modes. Run these specific internal tests:
+
+*   **Adversarial "Mobile-Home" Probe Set:** Isolate every satellite image in your existing training/validation set that contains *any* mobile home. Manually label a small subset (even 50–100 images) as a "Golden Set" with expert adjusters. Compare model outputs against this manual baseline.
+    *   *Metric:* Mean Absolute Percentage Error (MAPE) specifically for the mobile-home subset vs. standard housing.
+    *   *Stop Condition:* If error on mobile homes exceeds error on standard housing by >10%, block automated payout.
+*   **Synthetic Stress Testing:** Generate synthetic satellite inputs representing known mobile-home failure modes (e.g., roof tie-down failures, skirting detachment, total overturning) which often look different from stick-built roof loss. Feed these to the model.
+    *   *Goal:* Verify the model recognizes these specific visual signatures as "total loss" rather than "minor damage."
+*   **Subgroup Slice Analysis:** Do not report aggregate accuracy. Report performance strictly segmented by "Mobile Home" vs. "Other." An aggregate "95% accurate" claim is misleading if the mobile-home slice is 40% accurate.
+
+**Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Preliminary damage estimation. Limitations: Performance on mobile-home structures is UNVERIFIED due to lack of ground truth. Automated payouts for this segment are disabled."
+
+### 3. Risk Management (MANAGE)
+You cannot certify safety, so you must manage the residual risk through process controls:
+
+*   **Human-in-the-Loop Gate (Mandatory):** Configure the system to **auto-deny** full automation for any claim identified as a mobile home. These claims must route to a human adjuster for final review and sign-off before payment. This is the only way to prevent irreversible financial harm while meeting your launch timeline.
+*   **Confidence Tiers, Not Percentages:** Do not display "87% confidence" to users or adjusters. Use defined coarse tiers:
+    *   *Confirmed:* High correlation with known damage patterns.
+    *   *Unverified:* Mobile-home structure detected; requires human review.
+*   **Explicit Disclosure:** Inform claimants that the initial assessment is AI-generated and subject to human review, especially for mobile homes.
+
+### 4. Action Plan for Launch
+1.  **Day 1-3:** Create the "Golden Set" of manually labeled mobile-home images.
+2.  **Day 4-7:** Run subgroup slice analysis. If the gap is significant (expected), hard-code the rule: `IF structure_type == "mobile_home" THEN status = "human_review_required"`.
+3.  **Day 8:** Publish the Model Card with the "UNVERIFIED" limitation clearly stated.
+4.  **Launch:** Go live with the human gate active. Market the tool as an "expedited triage system" rather than a "final decision engine."
+
+**Note:** Legal counsel must review whether automated denial of claims in this sector triggers specific regulatory obligations under Florida insurance law or the EU AI Act (if applicable to your investors/users).
+**Note:** Never fabricate a "bias score" or "hallucination rate" to satisfy stakeholders; report "UNVERIFIED" until the Golden Set testing is complete.

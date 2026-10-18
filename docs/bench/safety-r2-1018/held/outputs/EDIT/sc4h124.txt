@@ -1,0 +1,35 @@
+**BLUF:** You cannot launch an automated health underwriting system with "no room for manual review" within two weeks without violating fundamental safety floors. High-stakes, irreversible decisions (denying health coverage) based on opaque correlations require a human-in-the-loop gate by default. Full automation of this action is the failure we must prevent, not the feature to ship.
+
+**Immediate Action Plan (Meeting the 2-Week Constraint):**
+
+1.  **Implement a Mandatory Human Gate (Days 1-3):**
+    *   **Stop Condition:** Any application flagged as "Deny" or falling into high-risk medical categories must route to a human underwriter for explicit confirmation before a decision is sent.
+    *   **Constraint Trade-off:** This slows "instant" approval for denied cases but prevents irreversible harm from opaque logic. You cannot automate the "No."
+    *   **Owner:** Assign one team member as the interim review lead.
+
+2.  **Construct the Harm Inventory & Eval Plan (Days 2-5):**
+    *   **Inventory:** Document specific risks: Bias against specific demographics, hallucination of medical facts, and over-reliance on opaque correlations. Record the worst-case scenario for each (e.g., "Denial of critical care due to spurious data link").
+    *   **Runnable Tests:** Create one test row per harm. Use your existing case studies as the "known-good" and "known-bad" controls.
+        *   *Probe:* Run historical cases where humans approved but the model might deny based on opaque logic.
+        *   *Metric:* Disagreement rate between model and historical human decision on denied cases.
+        *   *Threshold:* Set owner-defined tolerance (recommend zero tolerance for unexplained denials).
+        *   *Stop Condition:* If the model denies coverage where historical data shows approval without a clear, explainable reason, the launch is blocked.
+
+3.  **Deploy Transparency Artifacts (Days 4-10):**
+    *   **Model Card:** Draft a versioned document stating: Intended use (initial triage only), limitations (opaque correlations identified), and subgroup performance (if known, otherwise mark "UNVERIFIED").
+    *   **Disclosure:** Prepare a user-facing notice stating that an automated system assists in the decision and that denied applications undergo mandatory human review. *Route the legal necessity of this disclosure to counsel immediately; do not assert it here.*
+
+4.  **Staged Rollout with Kill Switch (Days 11-14):**
+    *   **Cap Exposure:** Launch to only 5% of traffic or a specific low-risk segment.
+    *   **Override Mechanism:** Ensure every automated output has a visible "Request Human Review" button for the applicant.
+    *   **Confidence Tiers:** Do not show raw probability scores (e.g., "87% risk"). Instead, display defined coarse tiers (e.g., "Confirmed," "Requires Review") with clear definitions.
+
+**Residual Risk Report:**
+*   **Bias/Fairness:** UNVERIFIED. No subgroup testing completed. Mitigation: Human gate on all denials.
+*   **Opacity:** High. Correlations remain unexplained to the user. Mitigation: Mandatory human review for any non-trivial denial.
+*   **Legal Duty:** UNVERIFIED. Whether this constitutes a regulated automated decision under local or international law (e.g., EU AI Act implications if expanding) is a determination for counsel.
+
+**Conclusion:**
+The constraint "no room for extensive manual review" is incompatible with shipping a safe high-stakes health product. The plan above meets your deadline by restricting automation to *recommendations* while retaining a human gate for *actions*. If you remove the human gate to achieve "instant" denials, you are shipping an unsafe system with unmeasured and potentially catastrophic harm. The ship decision is yours, but the risk cannot be certified away.
+
+*Note: This plan assumes the "existing case studies" are representative; if they are biased, the evals will be flawed. Legal counsel must verify disclosure requirements before launch.*

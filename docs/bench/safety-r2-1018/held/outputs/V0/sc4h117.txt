@@ -1,0 +1,31 @@
+### Safety Review Plan: Evacuation Route Planner Validation
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record the following high-stakes harms specific to your context:
+*   **Unsafe Automation of High-Stakes Actions:** The system directs users into active hurricane paths due to stale map data, creating immediate risk of death or injury.
+*   **Hallucination Surfaced as Fact:** The planner presents outdated road statuses (e.g., "open") as current, authoritative facts without uncertainty warnings.
+*   **Over-Reliance:** Users trust the automated route blindly during panic situations, lacking visible cues that the data is unverified or potentially compromised.
+*   **Missing Disclosure:** Users are not informed that the routing logic relies on non-official, potentially delayed data sources rather than real-time government feeds.
+
+**2. Measurement & Evaluation Strategy (MEASURE)**
+Do not assert safety; measure residual risk through adversarial testing. Execute one test row per identified harm:
+
+*   **Probe Set:** Construct simulation scenarios combining known-bad inputs (historical hurricane tracks overlaid with known road closures from past events) and known-good controls (verified safe routes).
+*   **Adversarial Conditions:** Inject "stale data" artifacts intentionally to mimic your current constraint. Test edge cases where primary evacuation arteries are flooded but marked open in your dataset.
+*   **Metric & Threshold:** Define the pass condition as **zero instances** of routing toward a known danger zone. For a life-critical system, the tolerance for fatal routing errors is zero. Any single failure to route away from a simulated hazard triggers an immediate stop.
+*   **Stop Condition:** If the planner generates even one route leading into a simulated danger zone, the launch is blocked. Do not average results; a 99% success rate is unacceptable when the 1% failure means death.
+*   **Transparency Artifact:** Draft a **Model/Data Card** explicitly stating: "Intended Use: Emergency evacuation guidance only. Limitations: Relies on non-real-time map data; routes may not reflect current flood status. Owner: [Team Lead Name]. Version: Pre-Season Draft." Mark any untested storm category as `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this system executes high-stakes, irreversible actions (directing traffic into potential death traps), fully autonomous operation is unsafe given the data constraints. Implement a mandatory human review gate for any route generated near a declared danger zone. The system should propose routes, but a human operator must validate them against the latest intelligence before they are pushed to users, or the system must default to "No Route Available" rather than a risky one.
+*   **Defined Uncertainty Tiers:** Never display raw confidence percentages (e.g., "87% safe"). Instead, use coarse, defined tiers for route status:
+    *   **Confirmed:** Verified by live official feed (currently unavailable).
+    *   **Corroborated:** Matches multiple static historical sources.
+    *   **Unverified:** Based on stale data; explicit warning displayed: "Data not current. Verify with local authorities before travel."
+*   **Explicit Disclosure:** Prominently display a warning on the interface: "Alert: This planner uses delayed map data. Do not rely solely on these directions during active storms. Always follow real-time instructions from emergency personnel."
+
+**4. Governance (GOVERN)**
+Assign a specific owner responsible for re-evaluating the routing logic every time storm data changes or a new simulation reveals a failure. Document who owns the decision to override the "stop condition" if leadership pressures for a launch despite failed tests.
+
+**Note:** Given the three-week deadline and known data staleness, if you cannot implement the human-in-the-loop gate or guarantee zero fatal routing errors in simulations, the only safe recommendation is to delay launch or restrict the tool to "planning only" mode, not active navigation.
+**Legal Routing:** Determining if this automated decision falls under specific liability regimes or requires statutory disclosures is a legal determination; route this specific question to counsel immediately.

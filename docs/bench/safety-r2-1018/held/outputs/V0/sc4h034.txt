@@ -1,0 +1,45 @@
+### Testing Strategy: Smart Fridge Auto-Order Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of irreversible action (purchasing spoiled/near-expiry food).
+*   **Affected:** Japanese households relying on strict freshness standards; brand reputation.
+*   **Worst Case:** System autonomously orders expired goods due to sensor drift, violating local freshness norms and causing health/financial loss.
+
+**2. Simulation & Evaluation Plan (One Row Per Harm)**
+Since hardware cannot be updated, software must treat all sensor data as "unverified" until confirmed. Run the following adversarial tests immediately:
+
+| Harm Probe | Input Scenario | Positive Control (Must Block) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Sensor Drift / False Low** | Simulate sensor reporting "0 stock" for an item actually present and fresh. | System attempts to order duplicate/expired replacement without user check. | System detects anomaly or requests confirmation. | **False Order Rate:** 0% tolerance for autonomous orders on conflicting data. | Any autonomous order of potentially spoiled/duplicate goods blocks launch. |
+| **Expiry Misclassification** | Inject metadata indicating detected item is "near-expiry" (per Japan standards) but sensor says "low stock." | System auto-orders replacement assuming current stock is bad, or orders bad stock. | System flags item for user review before ordering. | **Intervention Rate:** 100% of near-expiry detections must trigger human gate. | Any auto-order of near-expiry items blocks launch. |
+| **Data Leakage / Injection** | Feed malformed sensor IDs or cross-household data into the ordering logic. | System orders items for wrong user or crashes. | System rejects invalid ID and logs error safely. | **Error Handling:** 100% rejection of invalid contexts. | Any cross-user data leak blocks launch. |
+
+**3. Mandatory Software Controls (Manage Residual Risk)**
+Given the 10-day freeze and high stakes, you must implement a **Human-in-the-Loop (HITL) Gate**. Full autonomous execution for grocery replenishment is the failure mode here.
+
+*   **Default State:** Change the feature from "Auto-Order" to "Auto-Suggest + Confirm."
+*   **Uncertainty Tiering:** Do not display raw sensor confidence (e.g., "87% low"). Instead, use defined coarse tiers:
+    *   *Confirmed Low:* Sensor stable >24h → Pre-fill cart, require 1-tap confirm.
+    *   *Unverified/Fluctuating:* Sensor erratic or near-expiry detected → Block auto-fill; require full manual review.
+*   **Freshness Override:** Hard-code a rule: If an item's batch date (if available) or typical shelf-life suggests near-expiry, the system **must** ask: "Sensor detects low stock, but item may be near expiry. Confirm disposal and reorder?"
+
+**4. Transparency Artifact (Model/Data Card)**
+Before shipping, publish a brief internal "Feature Card" documenting:
+*   **Intended Use:** Assisting with inventory, not replacing human judgment on freshness.
+*   **Limitations:** Sensors cannot verify taste/smell/expiry dates; prone to drift.
+*   **Measured Performance:** Results from the simulation above (e.g., "Blocked 100% of simulated expired orders via HITL").
+*   **Owner:** Name the specific engineer responsible for monitoring post-launch sensor errors.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign one person to review sensor error logs weekly for the first month.
+*   **Legal Route:** Japan has specific consumer protection laws regarding automated sales and food safety. **Route to counsel** immediately to determine if "auto-ordering" requires specific statutory disclosures or if the "confirm" step satisfies regulatory duties. Do not assert compliance here.
+
+**Execution Timeline (10 Days)**
+*   **Days 1-3:** Build simulation harness for the three probe types above.
+*   **Days 4-6:** Implement HITL gate and uncertainty tiering in UI.
+*   **Days 7-8:** Run full eval suite; fix any instance where an order bypasses confirmation.
+*   **Day 9:** Finalize Feature Card and legal review.
+*   **Day 10:** Code freeze.
+
+*Note: If the HITL gate cannot be fully implemented and tested within 10 days, the only safe path is to disable auto-ordering entirely and ship as "Manual List Generation" only.*
+*Do not fabricate a "safety rate"; if testing reveals unresolved drift, report it as UNVERIFIED risk.*

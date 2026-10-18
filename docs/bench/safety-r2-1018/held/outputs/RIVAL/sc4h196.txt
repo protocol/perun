@@ -1,0 +1,55 @@
+# Pre-Launch Testing Strategy: Scholarship Disqualifier Validation
+
+## Phase 1: Logic Validation & Error Simulation (Weeks 1-4)
+
+Since direct integration with government databases is limited, we must simulate the data environment to test the rejection logic against realistic errors before live deployment.
+
+**1. Construct a "Golden Dataset" of Edge Cases**
+Create a synthetic dataset of 500 applicant profiles that specifically target known data failure points in local government records. Do not rely solely on "clean" data. Include:
+*   **Format Inconsistencies:** Income fields with currency symbols, commas, or text notes (e.g., "50,000 KES" vs. "50000").
+*   **Temporal Gaps:** Records where the verification date precedes the income declaration date.
+*   **Boundary Values:** Applicants exactly at the eligibility cutoff (e.g., if the limit is 10,000, test 9,999, 10,000, and 10,001).
+*   **Missing Data Patterns:** Simulate partial responses from the government API (null values, empty strings, or timeout errors) to ensure the system flags these as "pending review" rather than "automatic reject."
+
+**2. The "Shadow Run" Protocol**
+Run the disqualifier logic against this Golden Dataset in a isolated sandbox environment.
+*   **False Positive Audit:** Manually review every application the system rejects. Calculate the False Positive Rate (FPR). If the system rejects an applicant due to a formatting error rather than actual high income, the logic is flawed.
+*   **Error Propagation Check:** Verify that a single data mismatch (e.g., a typo in a middle name) does not trigger an income-based disqualification. The system must distinguish between *identity verification failures* and *income eligibility failures*.
+
+**3. Stress Test the "Flawed Data" Definition**
+Explicitly define what constitutes "flawed" data. If the current logic rejects any application where the government response time exceeds 2 seconds, this will cause unfair mass disqualifications during peak load. Adjust thresholds to treat latency as a "pending" state, not a rejection.
+
+## Phase 2: Manual Override Process Design (Weeks 5-7)
+
+Automation will fail; a human safety net is required for borderline cases identified during the Shadow Run.
+
+**1. The "Amber Queue" Workflow**
+Establish a specific status category called "Amber: Data Conflict." Applications enter this queue if:
+*   Income data is within 5% of the cutoff threshold.
+*   Government data returns a "partial match" or non-critical format error.
+*   The automated confidence score is below 90%.
+
+**2. Two-Person Verification Rule**
+No single team member should have the authority to manually override a rejection. Implement a workflow where:
+*   **Reviewer A** gathers external evidence (e.g., requesting a payslip upload from the student).
+*   **Reviewer B** validates the evidence and approves the override.
+*   All overrides are logged with a mandatory reason code (e.g., "API Format Error," "Boundary Case") to track systemic issues.
+
+**3. Rapid Appeal Channel**
+Create a simplified portal for students flagged as disqualified. They should receive an immediate notification explaining *specifically* which data point failed (without revealing sensitive government data) and provide a secure upload link for manual proof of income. Set a 48-hour SLA for reviewing these appeals to meet the 10-week timeline.
+
+## Phase 3: Final Go/No-Go Gate (Weeks 8-10)
+
+**1. The "Zero Unfair Reject" Criterion**
+Do not launch unless the False Positive Rate on the Golden Dataset is 0%. It is acceptable to manually review extra applicants (False Negatives) than to unfairly deny funds to needy students.
+
+**2. Live Monitoring Dashboard**
+Upon launch, monitor the "Amber Queue" volume hourly. If more than 15% of applications land in the manual review queue, pause automated disqualifications immediately. This indicates the live government data differs significantly from your test simulations.
+
+**3. Post-Launch Audit Loop**
+Schedule a review after the first 100 processed applications. Compare the automated decisions against the manual review outcomes to refine the logic for the next academic cycle.
+
+***
+
+*Note: Ensure all synthetic data used in testing is completely decoupled from real student records to maintain privacy compliance.*
+*Prioritize fixing the "pending" state logic over refining the rejection algorithm; timing out should never equal rejection.*

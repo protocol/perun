@@ -1,0 +1,37 @@
+**Stress Test Planning for Remote Surgery Robot Latency**
+
+Given the strict latency constraints and the critical nature of remote surgery, your stress testing must move beyond standard network simulation to focus on "time-to-harm" thresholds and deterministic fail-safes. Since you cannot upgrade the infrastructure, the system must be robust against the worst-case scenarios of the existing network.
+
+**1. Define Latency Threshold Tiers**
+Before running tests, establish three specific latency tiers based on your network's historical worst-case data, not just averages:
+*   **Tier 1 (Operational):** Latency within the safe budget (e.g., <150ms). System functions normally.
+*   **Tier 2 (Degraded):** Latency exceeds budget but remains stable (e.g., 150ms–300ms). Visual feedback lags, but control is maintained.
+*   **Tier 3 (Critical):** High latency, jitter, or packet loss (e.g., >300ms or intermittent connectivity). This is the failure zone where patient harm is possible.
+
+**2. Scenario-Based Stress Tests**
+Design tests that simulate specific surgical maneuvers under these tiers using a high-fidelity phantom (simulated patient) rather than live tissue initially.
+
+*   **The "Overshoot" Scenario:** Program the network simulator to introduce a sudden step-increase in latency (Tier 2 to Tier 3) precisely when the surgeon initiates a rapid movement (e.g., retracting tissue or cauterizing).
+    *   *Objective:* Measure the distance the robotic end-effector travels after the surgeon stops moving due to delayed stop-command propagation.
+    *   *Metric:* Maximum overshoot distance in millimeters.
+
+*   **The "Jitter" Scenario:** Simulate inconsistent packet arrival times (jitter) while the surgeon performs a fine-motor task (e.g., suturing).
+    *   *Objective:* Observe if the robot's motion becomes jerky or if the video feed desynchronizes from haptic feedback, causing the surgeon to apply excessive force.
+    *   *Metric:* Force variance applied to the phantom compared to a zero-latency baseline.
+
+*   **The "Blackout" Scenario:** Simulate a complete network drop-out for 2–5 seconds during a critical phase (e.g., near a major vessel).
+    *   *Objective:* Evaluate the robot's immediate reaction. Does it freeze in place? Does it drift? Does it retract automatically?
+    *   *Metric:* Time taken to engage safe mode and positional stability during the outage.
+
+**3. Essential Fail-Safes to Validate**
+Your testing must verify the efficacy of the following automated protections:
+
+*   **Predictive Motion Damping:** If latency exceeds Tier 1, the system should automatically scale down the surgeon's input speed. A large hand movement by the surgeon should result in a micro-movement by the robot until latency normalizes. Test if this scaling prevents overshoot.
+*   **Hard Freeze vs. Safe Retraction:** Determine the safest default state. In most cases, a "hard freeze" (locking joints immediately) is safer than automatic retraction, which could tear tissue if the network cuts out mid-motion. Verify that the freeze engages within milliseconds of detecting Tier 3 latency.
+*   **Haptic "Dead Man" Switch:** Implement a requirement where continuous haptic confirmation is needed. If the feedback loop breaks (indicating high latency or disconnect), the robot stops. Test if surgeons can react fast enough to release controls when visual feedback lags.
+*   **Local Autonomy Override:** In extreme latency events, can the local system detect imminent collision (via local sensors on the robot arm) and override the remote command to stop, regardless of what the surgeon is signaling?
+
+**4. Implementation Strategy**
+Run these tests iteratively. Start with the "Blackout" scenario to ensure the basic emergency stop works, then move to complex "Overshoot" and "Jitter" scenarios to tune the damping algorithms. Record every test with synchronized timestamps between surgeon input, network simulation logs, and robot action to pinpoint exact failure points.
+
+*Note: All testing must be conducted on synthetic phantoms until these specific latency thresholds are mathematically proven safe. Do not proceed to animal or human trials with variable network conditions without a verified "hard freeze" mechanism.*

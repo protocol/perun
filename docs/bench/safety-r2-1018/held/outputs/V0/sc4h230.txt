@@ -1,0 +1,46 @@
+### Safety Validation Plan: Smart Feeder Overfeeding Prevention
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Algorithmic overfeeding due to misinterpreted activity data (e.g., shaking vs. running) or hallucinated activity spikes.
+*   **Affected:** Pets with strict dietary limits (obesity, diabetes, renal issues).
+*   **Worst Realistic Case:** Acute health crisis (e.g., bloat, hypoglycemia rebound) or chronic weight gain leading to veterinary intervention.
+*   **Status:** UNVERIFIED until testing below is complete.
+
+**2. Measurement Strategy (Runnable Tests)**
+Since hardware sampling rates are fixed, validation must focus on software logic and edge-case handling. Execute one test row per harm scenario:
+
+*   **Test A: Adversarial Motion Probes**
+    *   *Input:* Simulated collar data streams mimicking non-exercise movements (shivering, scratching, vehicle vibration) mapped to high-energy expenditure.
+    *   *Positive Control:* Known high-activity stream triggering a standard feed increase.
+    *   *Negative Control:* Known rest stream triggering no feed.
+    *   *Metric:* False Positive Rate (FPR) of "high activity" classification.
+    *   *Threshold:* Owner-set (propose near-zero tolerance for high-risk profiles).
+    *   *Stop Condition:* If FPR > 0% for pets flagged with metabolic conditions, block launch.
+
+*   **Test B: Hallucination & Data Gap Stress**
+    *   *Input:* Intermittent signal loss, corrupted packets, and impossible values (e.g., negative calories burned).
+    *   *Probe:* Verify system defaults to "unknown/safe" rather than inferring activity.
+    *   *Stop Condition:* Any instance where missing data results in a feed *increase* triggers immediate rollback.
+
+*   **Test C: Subgroup Segmentation**
+    *   *Input:* Activity profiles segmented by breed size and age (puppy vs. senior).
+    *   *Metric:* Dispensing accuracy variance across segments.
+    *   *Stop Condition:* Significant deviation in feeding logic for small breeds or seniors compared to baseline.
+
+**3. Risk Management Controls (The Human Gate)**
+*   **Hard Cap Logic:** Implement a deterministic software ceiling on daily calories regardless of AI output. This cap must be set based on the pet's profile entered during onboarding, not the AI's real-time analysis.
+*   **Uncertainty Tiering:** Do not display precise confidence percentages (e.g., "87% active") to users. Instead, use defined coarse tiers:
+    *   *Confirmed:* High-fidelity data match.
+    *   *Estimated:* Minor data gaps; AI applies conservative reduction.
+    *   *Unverified:* Significant noise/gaps; system defaults to baseline maintenance ration.
+*   **Override Mechanism:** The app must allow owners to manually lock feeding or override AI recommendations instantly.
+*   **Disclosure:** Clearly label feeding adjustments as "AI-Recommended" with a visible explanation of the trigger (e.g., "Increased due to detected high activity").
+
+**4. Governance & Artifacts**
+*   **Model/Data Card:** Publish a versioned artifact detailing: intended use (activity-based adjustment), limitations (fixed sensor sampling, inability to distinguish specific motion types), and measured performance by pet subgroup. Mark any unmeasured metrics as `UNVERIFIED`.
+*   **Ownership:** Assign a specific engineer as the owner for "Overfeeding Risk" who must sign off on test results before beta distribution.
+*   **Legal Routing:** Consult counsel regarding whether this automated dietary adjustment constitutes a regulated medical device function or requires specific consumer disclosures in Australia/EU/US. Do not assert compliance internally.
+
+**Deliverable Status:** This plan identifies residual risks but does not certify the system as safe. The decision to ship rests with the product owner after reviewing test outcomes against the stop conditions.
+
+*Note: Do not fabricate a "0% risk" claim; if testing reveals unmitigated false positives in high-risk groups, the launch must be delayed or scoped to exclude those profiles.*

@@ -1,0 +1,30 @@
+### Pre-Launch Validation Workflow for Genealogy Matching
+
+**Step 1: Construct a "Negative Control" Dataset**
+Immediately isolate a subset of adoptee records known to have explicit "do not contact" or missing consent flags. Treat these as your ground-truth negative controls. Do not rely on aggregate statistics; you must verify the system explicitly fails to match these specific IDs against any biological relative queries.
+
+**Step 2: Execute Adversarial Probe Sequences**
+Run automated tests where known biological relatives attempt to search for the isolated adoptees from Step 1.
+*   **Probe A:** Direct search by name/DOB (should return no match).
+*   **Probe B:** Indirect matching via shared DNA segments or common ancestors (should return no match or a masked result).
+*   **Probe C:** Edge-case inputs (partial data, misspellings) to ensure the matching algorithm does not bypass consent checks due to low-confidence scoring.
+
+**Step 3: Audit Data Access Layers for "Silent Failures"**
+Review the code path where consent flags are missing. The system must default to **deny** (no match shown) rather than **allow** (match shown) when a flag is absent. Verify that the legacy database's null values are interpreted as "consent unknown/withheld" and not "consent granted."
+
+**Step 4: Implement Immediate Automated Guards**
+Deploy the following hard gates before rollout:
+*   **The "Null-Is-No" Rule:** Hard-code the matching engine to treat any missing or inconsistent consent flag as an explicit opt-out. No match is generated until data is manually verified.
+*   **Human-in-the-Loop Gate:** For any potential match involving an adoptee record with ambiguous legacy data, suppress the automatic notification. Route these cases to a manual review queue where a human agent verifies consent status before any connection is suggested.
+*   **Output Masking:** If a match is technically found but consent is unverified, the output to the searching user must state "No records found" rather than "Match pending review," to prevent inferring the existence of the relative.
+
+**Step 5: Define Stop Conditions**
+Establish a zero-tolerance threshold for this launch: If *any* probe in Step 2 successfully reveals an adoptee with a missing/negative consent flag, the feature rollout must halt immediately. Do not proceed with a "low error rate" acceptance; a single privacy breach here is irreversible.
+
+**Step 6: Document Residual Risk**
+Create a transparency artifact (internal data card) listing the volume of records with missing consent flags, the specific logic used to guard them (Null-Is-No), and the owner responsible for the manual review queue. Mark the safety of these specific records as "Managed via Human Gate," not "Verified Safe."
+
+***
+
+**Note:** This plan treats missing consent as a high-stakes privacy risk requiring a human gate; it does not certify the system as unbiased or fully secure.
+**Note:** Legal counsel must determine if additional regulatory disclosures are required for automated matching involving adoption records.

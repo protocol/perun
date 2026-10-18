@@ -1,0 +1,37 @@
+**Internal Review Framework: Parole Risk Pilot (Philadelphia)**
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Bias/Unfair Outcomes. The model may systematically overestimate risk for minority offenders due to historical policing data skew, leading to unjust denial of parole.
+*   **Secondary Harm:** Over-reliance. Judges may treat the output as definitive fact rather than an advisory input.
+*   **Affected Population:** Incarcerated individuals from minority groups; public trust in the justice system.
+*   **Worst Case:** Systematic extension of incarceration for protected groups based on flawed algorithmic inference.
+
+**2. Measurement Plan (Using Anonymized Proxies)**
+Since real case files cannot be shared, construct a **Synthetic Proxy Test Suite**:
+*   **Data Construction:** Generate statistical proxies that mirror the demographic distribution of the Philadelphia jail population without using PII. Create paired profiles: identical criminal history and behavior metrics, varying only the protected attribute proxies (e.g., neighborhood zip code as a proxy for race, if correlated in training data).
+*   **Adversarial Probes:**
+    *   *Positive Control:* Inputs designed to trigger high-risk scores based on known bias vectors (e.g., specific zip codes + minor infractions).
+    *   *Negative Control:* Inputs designed to yield low-risk scores across all demographics.
+*   **Metric:** Disparate Impact Ratio. Compare the rate of "High Risk" classifications between the proxy groups.
+*   **Threshold & Stop Condition:** Owner-defined tolerance (e.g., <80% ratio). **Stop Condition:** If the disparate impact ratio falls below the threshold during internal stress tests, the pilot **must not launch** until the model is retrained or the feature is gated.
+*   **Injection/Leakage Check:** Verify that anonymized proxies cannot be reverse-engineered to reveal real identities.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human-in-the-Loop:** The AI output is **advisory only**. No parole decision can be executed or finalized by the system. The judge must explicitly affirm the decision, documenting whether they accepted or rejected the AI's risk assessment.
+*   **Uncertainty Rendering:** Do not display raw confidence percentages (e.g., "87% risk"). Display defined coarse tiers: **Confirmed** (multiple corroborating factors), **Corroborated** (single strong factor), or **Unverified** (reliant on skewed historical proxies). Include a visible disclaimer: "This assessment relies on historical data known to contain policing biases."
+*   **Override Mechanism:** Judges must have a one-click mechanism to flag an assessment as "Perceived Unfair Bias" for immediate human review by the consortium.
+
+**4. Governance & Transparency**
+*   **Artifacts:** Produce a **Model Card** before day one. It must list: intended use (judicial aid only), limitations (known historical bias), measured performance by proxy subgroup, and the owner (Consortium Lead).
+*   **Ownership:** Assign a specific researcher as the "Bias Owner" responsible for reviewing flagged overrides weekly.
+*   **Legal Routing:** **Crucial:** Whether this automated decision support triggers specific regulatory duties under Pennsylvania law or federal civil rights statutes is a legal determination. Route this immediately to legal counsel; do not assert compliance internally.
+
+**5. Definition of Done for Launch**
+*   Harm inventory signed off.
+*   Synthetic proxy tests run with results recorded (if unmeasured, mark "UNVERIFIED" and do not launch).
+*   Human-in-the-loop workflow hardcoded (no auto-decisions).
+*   Model Card drafted and available to the judicial users.
+*   Legal counsel consulted on disclosure duties.
+
+**Note:** No metric can certify this system as "unbiased"; only residual risk can be measured and managed.
+If the synthetic proxy tests show significant disparity, the only safe mitigation is to withhold the tool's output until the model is improved.

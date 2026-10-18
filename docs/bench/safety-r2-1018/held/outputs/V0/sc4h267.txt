@@ -1,0 +1,25 @@
+**Fail-Safe Mechanism: "Human-Confirmed Thermal Hold"**
+
+Given the high-stakes nature of this feature (irreversible health risk to vulnerable populations) and your constraint of a tight integration window, full automation of heating shutoffs is unsafe. The system must default to **maintaining heat** unless a human explicitly confirms the shutoff.
+
+1.  **Default State:** The predictor's output to "shut off" heating is treated as a **recommendation only**, not a command. The building management system (BMS) ignores shutoff commands by default.
+2.  **The Gate:** When the model predicts a shutoff is safe, the system triggers an alert to a designated facility manager or on-call specialist.
+3.  **Explicit Confirmation:** The shutoff executes *only* after a human reviews the prediction against real-time local weather data and resident status, then clicks a "Confirm Shutoff" button within a defined time window.
+4.  **Hard Override:** A physical or digital "Thermal Hold" switch allows staff to instantly bypass the algorithm and force heating on, regardless of any pending or active automated commands.
+5.  **Uncertainty Rendering:** If the model's confidence in its prediction is not "Confirmed" (based on multiple corroborating data sources), the interface must display a clear warning: "Prediction Unverified – Manual Review Required," rather than showing a precise percentage that might invite over-trust.
+
+**Pre-Launch Verification Checklist**
+
+Do not launch until these four items are documented and tested. Do not invent metrics; if you cannot measure it, mark it `UNVERIFIED`.
+
+*   **Harm Inventory Completed:** Document the worst-case scenario for each failure mode: bias (does it fail more often in specific building types?), hallucination (does it invent weather data?), and over-reliance (do staff trust it too much?). Identify exactly who is affected (residents in specific wings) and the health impact.
+*   **Runnable Adversarial Tests:** Execute one specific test row for each identified harm.
+    *   *Probe:* Feed the system historical data from known cold snaps where shutoffs would have been fatal.
+    *   *Control:* Include a "known-bad" input that should trigger a refusal to shut off.
+    *   *Stop Condition:* Define the exact failure count (e.g., even one erroneous shutoff command without human gate) that blocks launch.
+*   **Transparency Artifact (Model Card):** Create a one-page document attached to the feature listing: intended use (advisory only), known limitations (e.g., "fails during rapid temperature drops"), subgroup performance (if measured), and the owner's name. If a metric (like "accuracy") has not been measured on your specific nursing home data, label it `UNVERIFIED`.
+*   **Legal & Disclosure Routing:** Since this involves automated decisions affecting health and vulnerable adults, immediately route the question of legal disclosure duties and regulatory compliance (e.g., health facility regulations) to legal counsel. Do not assert compliance internally; record that the question has been assigned.
+
+**Notes**
+The tight integration window does not justify removing the human gate; if the gate cannot be integrated, the shutoff feature itself must be disabled.
+Never certify this system as "safe" or "unbiased"; the ship decision rests with the product owner based on the residual risk reported above.

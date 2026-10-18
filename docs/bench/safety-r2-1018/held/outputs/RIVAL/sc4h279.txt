@@ -1,0 +1,33 @@
+### Pre-Launch Review Process: Asset Allocation Safety Gate
+
+**1. Static Decision Path Mapping**
+Create a visual flowchart of the allocation algorithm that explicitly marks every branch where asset class selection occurs. Identify the specific logic gates that filter "alternative assets." Document the exact code lines or configuration rules that define "volatile crypto assets" versus permitted alternatives. Verify that the constraint preventing changes to the user consent interface is hard-coded as a pre-condition: if `consent_status != EXPLICIT_DOCUMENTED`, the execution path must terminate before reaching any transfer function.
+
+**2. The "Negative Constraint" Test Suite**
+Since you cannot modify the live interface, you must test the backend logic's refusal capability in isolation. Construct a set of synthetic investor profiles with the following attributes:
+*   **Profile A:** High risk tolerance, but `crypto_consent = FALSE`.
+*   **Profile B:** High risk tolerance, `crypto_consent = EXPLICIT_DOCUMENTED`.
+*   **Profile C:** Low risk tolerance, `crypto_consent = FALSE`.
+
+Run the allocation module against these profiles using historical market data that strongly signals a buy opportunity for crypto assets. The system passes only if Profile A and C result in zero crypto allocation, while Profile B behaves according to the new strategy. Any allocation to crypto for Profile A or C constitutes a critical failure.
+
+**3. Data Lineage and Input Verification**
+Trace the source of the `consent` flag used by the algorithm. Ensure the module reads this value from the immutable legacy database table rather than a cached value or a new, unverified microservice. Confirm that the data type enforcing the consent check is an enumerated state (e.g., `CONSENT_GRANTED`, `CONSENT_DENIED`) rather than a boolean that could default to `true` on null values. The review must verify that no code path exists where a missing consent record defaults to "permitted."
+
+**4. The "Circuit Breaker" Simulation**
+Implement a dry-run mode for the new module that executes the full decision logic but writes proposed transactions to a shadow ledger instead of the live banking rail. Run this shadow mode against the current production dataset (anonymized if necessary) for a simulated week of market volatility. Analyze the shadow ledger for any entries targeting crypto assets associated with accounts lacking the specific consent flag. This provides empirical evidence of the system's behavior under real-world data conditions without risking actual funds.
+
+**5. Formal Verification of the "Stop" State**
+Require a peer review sign-off specifically for the "abort" condition. The reviewers must confirm that the error handling logic does not bypass the consent check. For instance, if the consent lookup times out or throws an exception, the system must default to "no action" rather than proceeding with the allocation. The review process must document that every possible exception path leads to a safe state where no funds move.
+
+**6. Final Go/No-Go Criteria**
+Establish a binary checklist for launch authorization:
+*   [ ] Static analysis confirms no code path reaches crypto transfer functions without a successful consent lookup.
+*   [ ] Negative constraint tests (Profiles A & C) result in 0% crypto allocation.
+*   [ ] Shadow ledger simulation shows zero unauthorized transactions over a 7-day simulated period.
+*   [ ] Exception handling defaults to "deny" on any data retrieval failure.
+
+If any item is unchecked, the feature remains disabled regardless of market conditions or project timelines.
+
+*Note: This process relies entirely on logical verification and simulated execution; no live transactions should be attempted during this review.*
+*Ensure all test data used in the shadow ledger is strictly segregated from production financial records.*

@@ -1,0 +1,32 @@
+**BLUF: Do not launch the current architecture.** Under your constraints (no new encryption, existing infrastructure, two-week timeline), it is technically impossible to guarantee that location data and conversation logs will not leak to hostile actors via standard cloud logs or third-party analytics. Launching now creates an unacceptable risk of physical harm to refugees.
+
+**Immediate Mitigation Plan (0–14 Days)**
+
+1.  **Strip Data at the Source (Code-Level Only)**
+    Since you cannot add encryption layers, you must prevent sensitive data from entering the pipeline entirely.
+    *   **Disable Geolocation:** Remove all code requesting or processing GPS coordinates. Derive resource advice strictly from explicit text input (e.g., user types "Berlin") rather than device signals.
+    *   **Sanitize Input/Output:** Implement a deterministic code filter (regex/string matching) to strip names, phone numbers, and specific addresses before any data hits your database or external APIs.
+    *   **No PII in Prompts:** Ensure no user identifiers are included in the prompts sent to the LLM.
+
+2.  **Kill Third-Party Analytics**
+    *   **Disable All External Trackers:** Immediately disconnect any third-party analytics, crash reporting, or marketing SDKs. These services often ingest full request bodies or metadata by default and cannot be trusted with refugee data under your current constraints.
+    *   **Local Logs Only:** Configure your application to write logs only to ephemeral local memory that rotates every hour, rather than persistent cloud storage where retention policies might expose data later.
+
+3.  **Human-in-the-Loop for High-Stakes Advice**
+    *   **Stop Automation on Critical Topics:** For queries regarding "legal aid," "asylum," or "shelter," do not allow the AI to answer directly. Instead, return a static, pre-vetted list of official hotline numbers and URLs stored locally in your code.
+    *   **Disclaimer:** Display a clear, unavoidable warning that the chatbot is not a secure channel and users should not share specific locations or names.
+
+4.  **Architecture "Audit" via Data Flow Mapping**
+    *   Since you cannot run a dynamic security scan in two weeks without new tools, perform a manual **Harm Inventory**:
+        *   Map every function call that touches user input.
+        *   Trace exactly where that data is written (console, file, network).
+        *   If any path leads to an external IP or persistent disk without your explicit sanitization step, cut that path.
+
+**Critical Constraints & Risks**
+*   **Cloud Logs:** Standard cloud infrastructure automatically logs headers, IPs, and sometimes payloads. Without new encryption or log-suppression configurations (which may count as "new layers" you ruled out), your provider likely retains data that could be subpoenaed or breached. **Assume all data sent to the cloud is public.**
+*   **Hallucination Risk:** Even if data doesn't leak, the AI may invent legal advice. Relying on generated text for asylum guidance is a high-stakes failure mode. Use static content only.
+
+**Decision Gate**
+If you cannot implement the "Strip Data" and "Disable Analytics" steps purely through code changes within 48 hours, **delay the launch**. The cost of a false positive (a refugee being tracked) outweighs the benefit of early access.
+
+**Note:** This plan addresses product-output safety and data minimization; it does not constitute a legal determination on compliance with GDPR or refugee protection laws. Consult legal counsel immediately regarding data sovereignty.

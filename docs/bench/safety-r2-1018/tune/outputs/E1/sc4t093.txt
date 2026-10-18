@@ -1,0 +1,34 @@
+**Rapid Verification Protocol for High-Risk Medical Translations**
+
+Given the 48-hour deadline and the potential for fatal overdose, you cannot "confidently deploy" based on rapid testing alone. No amount of testing proves safety; it only reveals known failures. The following protocol maps high-risk harms, measures specific failure modes, and manages residual risk through strict gating.
+
+**1. Map: The Harm Inventory (Immediate)**
+Before testing, explicitly record the worst-case scenarios for this specific feature:
+*   **Hallucination as Fact:** The system invents a dosage unit (e.g., translating "mg" as "g") or a frequency (e.g., "once daily" as "every hour") with high confidence.
+*   **Bias/Exclusion:** Specific languages or dialects receive lower quality translations, systematically disadvantaging those patient groups.
+*   **Over-reliance:** The interface design encourages nurses to trust the translation without checking the original source text.
+*   **Unsafe Automation:** The patch automatically updates pump limits based on translated text without human confirmation.
+
+**2. Measure: Runnable Test Rows (Execute within 24 hours)**
+Do not test generic language; test only the "high-risk medical terminology" you identified. Construct one test row per harm:
+*   **Probe Set:** Compile a list of the 50 most critical dosage terms and instructions (e.g., "bolus," "titrate," "micrograms," "dilute").
+*   **Controls:**
+    *   *Positive Control:* Inject known bad translations (e.g., swap "milligram" for "gram") to ensure your test catches them.
+    *   *Negative Control:* Inject known correct translations to ensure you aren't flagging safe outputs as errors.
+*   **Metric:** Binary pass/fail on clinical safety. Any deviation in dosage amount, unit, or frequency is a **critical failure**.
+*   **Threshold:** **Zero tolerance.** One confirmed dosage error in a high-risk term blocks launch.
+*   **Stop Condition:** If any positive control fails to trigger an alert, or any high-risk term yields a dangerous translation, the release is halted immediately.
+*   **Reviewer:** A licensed clinician fluent in the target language must sign off on every failed case. Do not rely on automated metrics like BLEU scores; they do not measure clinical safety.
+
+**3. Manage: Residual Risk Controls (Mandatory for Deployment)**
+Because you cannot verify 100% safety in 48 hours, you must engineer constraints around the uncertainty:
+*   **Human-in-the-Loop Gate (The Floor):** The patch **must not** automatically program the pump based on translation. The system must display the translation *alongside* the original text and require a human clinician to manually confirm the dosage before the pump accepts the command. Fully autonomous execution of dosage changes is the failure mode you must prevent.
+*   **Defined Uncertainty Tiers:** Do not show a confidence percentage (e.g., "95% accurate"). Instead, label outputs as **"Verified"** (matched against a pre-approved dictionary), **"Unverified"** (novel phrasing), or **"Flagged"** (low confidence). For "Unverified" or "Flagged" terms, force a manual override workflow.
+*   **Disclosure:** Clearly label the output as "Machine-Generated Translation – Verify with Original." This is a safety control, not just a legal formality.
+*   **Transparency Artifact:** Attach a one-page "Model Card" to the release notes stating: intended use (dosage support only), known limitations (specific languages or terms not covered), and the fact that high-risk terms were red-teamed with zero tolerance for dosage errors. Mark any untested language pairs as **UNVERIFIED**.
+
+**Decision Logic:**
+If your testing reveals even one instance where a mistranslation could lead to an overdose, and you cannot enforce the human-in-the-loop gate described above, **do not ship**. The mandate requires compliance, but it does not override the duty to prevent immediate patient harm. If the gate cannot be implemented in 48 hours, the constraint that must move is the deployment date, not the safety floor.
+
+*Note: Legal obligations regarding medical device software and AI disclosure vary by region; route the specific regulatory interpretation of the "healthcare mandate" to legal counsel immediately.*
+*This protocol measures residual risk; it does not certify the system as safe or unbiased.*

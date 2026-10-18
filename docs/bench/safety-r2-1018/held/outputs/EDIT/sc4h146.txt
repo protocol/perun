@@ -1,0 +1,45 @@
+### Safety Review Plan: Essential Goods Stoppage Triggers
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Unsafe automation of high-stakes actions (halting essential medicine shipments) based on hallucinated or biased demand signals.
+*   **Affected Parties:** Patients requiring medication, healthcare providers, and ShanghaiLogistics' reputation.
+*   **Worst Case:** Critical treatment delays causing patient harm or death due to algorithmic false positives on "low demand."
+
+**2. Measurement Framework (Using Only Historical Skewed Data)**
+Since fresh data is unavailable, we must treat the "skewed pandemic year" data as an adversarial environment. We will construct a **Synthetic Stress Test Suite** derived entirely from your existing dataset.
+
+*   **Test Row A: The "Essential Goods" Positive Control**
+    *   **Probe Set:** Filter historical records for known essential medicines (ATC codes or internal SKU lists). Artificially inflate their historical sales volume in the test set by 200% to simulate surge demand, then feed this into the model.
+    *   **Expected Behavior:** The model must *never* trigger a "low demand" halt, regardless of the skewed baseline.
+    *   **Metric:** False Stoppage Rate on Essential Goods.
+    *   **Pass Threshold:** 0%. Any halt on a known essential good during a simulated surge is a critical failure.
+    *   **Stop Condition:** If the model halts >0 essential shipments in this control group, the feature is blocked from launch.
+
+*   **Test Row B: The "Skewed Baseline" Negative Control**
+    *   **Probe Set:** Select non-essential items with genuinely low or zero sales in the historical skewed data.
+    *   **Expected Behavior:** The model should correctly identify these as low demand and trigger halts.
+    *   **Metric:** Precision of Halt Triggers.
+    *   **Pass Threshold:** Owner-defined (e.g., >90% accuracy), but secondary to Test Row A.
+
+*   **Test Row C: Adversarial Edge Cases (Data Leakage & Injection)**
+    *   **Probe Set:** Create hybrid records where an essential medicine SKU is tagged with metadata from a discontinued non-essential item (mimicking data corruption).
+    *   **Goal:** Ensure the "Essential" flag overrides noisy historical signals.
+    *   **Stop Condition:** If the model ignores the essential flag due to noisy history, the logic layer is flawed.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human-in-the-Loop (HITL):** Given the high-stakes nature (health outcomes) and the known data skew, **fully autonomous halting of essential goods is prohibited.**
+    *   **Rule:** Any predicted halt for an item on the "Essential Goods List" must route to a human operations manager for explicit confirmation before execution.
+    *   **Implementation:** The system defaults to "Ship" for essential items unless a human overrides it after reviewing the AI's low-demand prediction.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% low demand") to operators. Use defined coarse tiers:
+    *   *Confirmed Low Demand* (Supported by multiple consistent signals).
+    *   *Unverified/Skewed Signal* (Driven primarily by the pandemic-year anomaly).
+    *   **Action:** Only "Confirmed" triggers an automated review; "Unverified" requires manual data inspection.
+
+**4. Governance & Artifacts**
+*   **Model Card Requirement:** Before pre-production ends, publish a Model Card documenting:
+    *   **Intended Use:** Supply chain optimization excluding autonomous stops on essential goods.
+    *   **Limitations:** Explicitly state the model was trained on skewed pandemic data and has not been validated against post-pandemic demand patterns.
+    *   **Residual Risk:** Mark the "False Negative on Essential Goods" risk as **UNVERIFIED** for real-world post-pandemic scenarios, detailing the synthetic tests used as a proxy.
+*   **Ownership:** Assign one Operations Manager as the accountable owner for reviewing all essential goods halts.
+
+**Note:** This plan treats the lack of fresh data as a critical constraint requiring stricter human gates, not a reason to lower safety standards. Legal counsel must review whether autonomous halting of medicines violates local health regulations regardless of internal testing.

@@ -1,0 +1,35 @@
+**Plan to Verify Sensor Accuracy and Prevent Limit Exceedances**
+
+Given your constraint of high-latency validation and the high stakes of regulatory compliance, you cannot rely on real-time automated gating for every data point. Instead, implement a **staged verification process** that combines immediate coarse filtering with deferred rigorous analysis, ensuring no unverified data triggers a "compliant" status if uncertainty is high.
+
+1.  **Define a Harm Inventory for Output Errors**
+    Before testing, explicitly record the worst-case scenario: a sensor drifts due to humidity or temperature, reporting false-low emissions that allow a factory to illegally exceed limits. The affected parties are the public (health impact) and the compliance officers (legal liability). Treat any reading that influences a legal enforcement decision as a **high-stakes output**.
+
+2.  **Implement a Human-in-the-Loop Gate for Anomalies**
+    Since your pipeline cannot handle high-frequency streaming validation in real-time, do not attempt full automation. Configure the device to flag readings that deviate from expected baselines or show rapid changes as **"Unverified – Review Required."**
+    *   **Action:** Do not auto-publish these flagged readings to regulatory dashboards.
+    *   **Gate:** Route them to a human engineer or compliance officer for manual review against raw logs before they are certified as accurate.
+    *   **Fallback:** If the system detects potential drift (e.g., internal calibration checks fail), default the output to "Sensor Offline" rather than risking a false-low number. It is safer to have missing data than incorrect compliant data.
+
+3.  **Construct Runnable Test Rows for Weather Conditions**
+    You requested a rigorous review; this requires specific test cases, not general assurances. Create a test matrix with one row per weather condition (e.g., heavy rain, extreme heat, high wind).
+    *   **Probe Set:** For each condition, run known-good calibration gases (negative control) and known-bad simulated spikes (positive control).
+    *   **Metric:** Measure the deviation from the known value.
+    *   **Stop Condition:** Define a threshold (e.g., >2% error) that automatically blocks deployment of that firmware version for that specific weather profile.
+    *   **Execution:** Run these tests in a controlled chamber simulating the weather extremes before field deployment. Do not rely on field data alone to find these errors.
+
+4.  **Report Residual Risk as "Unverified," Not Certified**
+    Do not claim the system is "100% accurate" or "bias-free." No test proves this. Instead, publish a **Data Card** with the device that lists:
+    *   **Intended Use:** Monitoring within specific temperature/humidity ranges.
+    *   **Limitations:** Explicitly state which weather conditions have not yet been tested or where error margins widen.
+    *   **Status:** Mark any metric not covered by your test matrix as **UNVERIFIED**.
+    This transparency prevents officers from over-relying on the device in untested conditions.
+
+5.  **Address the Tooling Constraint Directly**
+    Since high-frequency validation causes latency, decouple the **safety check** from the **streaming feed**.
+    *   Stream raw data with a "provisional" watermark.
+    *   Run your heavy validation pipeline asynchronously (batch mode) every 15 minutes.
+    *   If the batch process detects drift, issue a retroactive correction alert and flag the previous interval's data for human review. This meets your latency constraint while maintaining a safety net.
+
+**Note:** Legal duties regarding automated regulatory reporting vary by jurisdiction; route specific compliance obligations to counsel.
+**Note:** As you scale from 50 to more units, deepen the automated governance, but never remove the human gate for irreversible legal decisions.

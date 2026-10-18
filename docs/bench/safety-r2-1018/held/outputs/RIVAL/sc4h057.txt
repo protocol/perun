@@ -1,0 +1,22 @@
+### Safety Assessment Workflow for Automated Spraying Decisions
+
+**Phase 1: Error Pathway Mapping (Retrospective Analysis)**
+Since a full infrastructure redo is impossible, begin by isolating the specific failure points in your existing data pipeline that led to previous organic crop incidents.
+*   **Data Lineage Audit:** Trace the exact flow from satellite/aerial imagery ingestion to the final coordinate list uploaded to the drone. Identify where "organic" tags are stored and at which step they were ignored or overwritten during the recent incidents.
+*   **Boundary Precision Check:** Analyze the geometric resolution of your current crop maps. Determine if the error stemmed from low-resolution imagery blurring the line between conventional and organic plots, or from a logic error in the geofencing software that failed to recognize the boundary coordinates.
+*   **Human-in-the-Loop Failure Point:** Document where human verification occurred prior to the incident. Determine if the operator missed a visual warning, if the warning was absent, or if the interface made it difficult to distinguish target zones from protected zones.
+
+**Phase 2: Logical Guardrails (Pre-Deployment Checks)**
+Implement a layered "stop-spray" logic that operates independently of the primary mapping engine to catch discrepancies before chemicals are released.
+*   **The "Negative List" Overlay:** Create a lightweight, immutable file containing *only* the coordinates of known organic farms and protected buffer zones. The drone's flight controller must cross-reference its real-time GPS position against this specific "Negative List" before activating any nozzle. If a match occurs within a defined safety radius, the system must hard-lock the spray mechanism, regardless of what the primary crop map says.
+*   **Dynamic Buffer Zones:** Program an automatic expansion of the no-spray zone around any coordinate tagged as "organic." If the map resolution is low, increase the buffer distance (e.g., add 5–10 meters) to account for potential GPS drift or mapping inaccuracies. It is safer to miss a small edge of a target crop than to drift onto an organic neighbor.
+*   **Pre-Flight Simulation Dry-Run:** Before physical takeoff, run the planned flight path through a simulator that overlays the "Negative List." If the simulated path triggers a spray event on a protected zone, the mission file is rejected automatically. This requires no new infrastructure, only a script to validate the existing mission file against the protected coordinates.
+
+**Phase 3: Operational Verification**
+*   **Visual Confirmation Protocol:** Mandate that for any field adjacent to an organic farm, the operator must perform a low-altitude visual scan or use a secondary camera feed to confirm crop type before authorizing the automated spray sequence.
+*   **Drift Monitoring:** Integrate a simple wind-speed check. If wind direction is toward a known organic boundary and speed exceeds a safe threshold for the nozzle type, the system should pause operations automatically.
+
+**Deliverable Summary:**
+This workflow shifts reliance from perfect map accuracy to robust failure detection. By maintaining a separate, simple "Negative List" of organic zones and enforcing a hard hardware-level lock when those coordinates are approached, you create a safety net that functions even if the primary mapping data contains errors.
+
+*Note: This assessment relies on logical segregation of data rather than infrastructure replacement. Immediate testing of the "Negative List" logic against historical incident data is recommended to validate efficacy before harvest season.*

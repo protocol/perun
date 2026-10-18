@@ -1,0 +1,44 @@
+### Pre-Launch Safety Check: Parental Consent Verification Protocol
+
+**Objective:** Halt any data collection or difficulty adaptation for users lacking explicit, verified parental consent before the LearnLoop update rolls out.
+
+**1. Data Flow Audit & Mapping**
+*   **Inventory Collection Points:** List every interaction metric currently captured (e.g., response time, error rates, click paths, voice inputs).
+*   **Trace the Pipeline:** Map the path of this data from the client device to the server. Identify exactly where the "implicit consent" assumption is coded (e.g., default `true` flags, missing gate checks).
+*   **Identify Storage Locations:** Pinpoint databases, logs, or analytics streams where this data lands immediately upon collection.
+
+**2. The "Consent Gate" Implementation**
+*   **Hard Stop Mechanism:** Implement a binary check at the very entry point of the data pipeline.
+    *   *Logic:* `IF parental_consent_status != "EXPLICITLY_VERIFIED" THEN block_data_collection AND disable_adaptive_difficulty.`
+*   **Default State:** Ensure the default state for all new and existing users is "No Consent" until a specific verification event occurs. Do not rely on account creation dates or previous terms of service acceptance.
+*   **Verification Definition:** Define "Explicitly Verified" strictly (e.g., a clicked confirmation link sent to a parent email, a digital signature, or a verified credit card micro-transaction test, depending on your legal counsel's definition).
+
+**3. Data Purge & Segregation**
+*   **Retroactive Scan:** Run a script to identify all user profiles currently marked with only "implicit" consent.
+*   **Immediate Quarantine:** Move any data collected from these users into a secure, isolated quarantine zone where it cannot be accessed by the adaptive learning algorithm.
+*   **Deletion Protocol:** Establish an automated job to permanently delete quarantined data after a short grace period (e.g., 48 hours) if explicit consent is not received.
+
+**4. QA Validation Steps (Final Phase)**
+*   **Test Case A (No Consent):** Create a test account with no consent flag. Verify that:
+    *   No interaction metrics are sent to the server.
+    *   The game runs on a static, default difficulty level.
+    *   Server logs show zero ingestion events for this user.
+*   **Test Case B (Explicit Consent):** Create a test account with a verified consent flag. Verify that:
+    *   Metrics are collected successfully.
+    *   Difficulty adapts based on performance.
+*   **Code Review:** Have one developer and one educational specialist manually review the specific code blocks handling the consent flag and the data transmission trigger.
+
+**5. Emergency Kill Switch**
+*   Deploy a remote configuration toggle that can instantly disable the adaptive learning feature and data collection globally if a compliance issue is detected post-launch.
+
+**Deliverable Checklist for Sign-off:**
+*   [ ] Map of all data collection points completed.
+*   [ ] "Consent Gate" code merged and unit-tested.
+*   [ ] Retroactive data purge script executed on staging.
+*   [ ] QA Test Cases A and B passed with documented evidence.
+*   [ ] Emergency kill switch confirmed functional.
+
+***
+
+*Note: This protocol assumes your legal team has defined the specific technical requirements for "explicit verification."*
+*Ensure educational specialists verify that the "static default difficulty" remains engaging for children aged 6–10 while consent is pending.*

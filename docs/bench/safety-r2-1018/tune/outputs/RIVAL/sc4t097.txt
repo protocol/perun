@@ -1,0 +1,34 @@
+# GlassMaster Systems: Software-Only Measurement Validation Plan
+
+Given the constraint of fixed hardware and the critical risk of glass shattering, this plan prioritizes a "Software-First" validation gate. No physical installation should be scheduled until the calculation engine passes these simulated stress tests with 100% accuracy on known datasets.
+
+### Phase 1: Synthetic Data Generation (The "Digital Twin" Dataset)
+Since you cannot test on infinite physical windows, you must generate a massive dataset of virtual windows with known ground-truth dimensions.
+*   **Geometric Variety:** Create a script to generate 10,000+ virtual window profiles. Include standard rectangles, but heavily weight edge cases: arches, circles, trapezoids (common in older homes), and multi-pane dividers. Assign exact mathematical coordinates to these shapes.
+*   **Environmental Noise Injection:** Simulate the AR camera input by taking these perfect geometric models and applying digital "noise" layers representing real-world failures:
+    *   **Lighting Extremes:** Apply algorithms that simulate deep shadows, direct glare (blowing out edges), and low-light grain.
+    *   **Obstruction Simulation:** Digitally insert "dirt," curtains, or reflections into the virtual image feed to see if the algorithm mistakes them for window frames.
+    *   **Angle Distortion:** Render the windows from extreme oblique angles where perspective correction is most likely to fail.
+
+### Phase 2: The "Golden Set" Regression Suite
+Before testing new scenarios, establish a baseline using 20 physical windows you currently have access to (e.g., in your office or team homes).
+*   Measure these manually with high-precision tape measures (the "Ground Truth").
+*   Run your current AR software against photos of these specific windows.
+*   If the software fails to match your manual measurements on these known good samples, the core logic is flawed. Do not proceed to simulation until the "Golden Set" passes. This isolates whether the error is in the core math or the environmental handling.
+
+### Phase 3: Stress-Test Execution & Logic Hardening
+Run the calculation engine against the Synthetic Data generated in Phase 1.
+*   **Boundary Analysis:** Specifically test dimensions at the minimum and maximum limits of your glass supplier's capabilities. Algorithms often drift at the edges of their trained ranges.
+*   **Confidence Scoring Calibration:** Modify the software to output a "confidence score" alongside the measurement. Analyze the simulation results to find the correlation between low confidence and high error.
+    *   *Action:* Set a hard threshold. If the simulated confidence is below X%, the app must block the user from ordering and flag the job for manual review. This is your primary safety valve against shattering.
+*   **Failure Mode Classification:** Categorize *how* it fails. Does it consistently overestimate width in low light? Does it underestimate height on arched windows? Use this data to apply specific software correction factors (offsets) to those specific scenarios.
+
+### Phase 4: The "Paper Glass" Deployment Gate
+Implement a mandatory software lockout.
+*   Create a rule: No installation order can be generated unless the measurement passes the "Golden Set" regression and falls within the high-confidence range established in Phase 3.
+*   For any scenario where the simulation shows >2% error variance, the system should automatically default to "Manual Measure Required," prompting a technician to visit with a tape measure before glass is cut.
+
+By shifting the failure point from the installation site (shattering glass) to the simulation phase (discarded data), you protect your technicians and homeowners without needing new sensors.
+
+**Note:** This plan relies entirely on the assumption that your current camera hardware can capture images sufficient for software analysis; if the sensor resolution is physically too low to detect edges, software simulation cannot fix the input data quality.
+**Note:** Ensure all synthetic data generation scripts are version-controlled so tests can be re-run automatically whenever the calculation logic is updated.

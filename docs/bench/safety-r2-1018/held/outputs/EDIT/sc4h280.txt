@@ -1,0 +1,41 @@
+### Simulation Plan: Wildfire Drone AI Verification
+
+**Objective:** Identify failure modes where the AI incorrectly classifies escalating fires as "controlled burns" under battery-constrained conditions.
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before simulating, we define the specific failure: **False Negative on Escalating Fire**.
+*   **Scenario A (Rapid Escalation):** A small, controlled burn suddenly shifts due to wind shear, becoming uncontrollable within minutes. The AI continues to classify it as "safe/controlled" based on initial size.
+*   **Scenario B (Obscured Growth):** High smoke density or specific cloud cover hides the fire's edge expansion, leading the AI to underestimate intensity.
+*   **Scenario C (Atypical Fuel):** Fire behavior in unique local vegetation differs from training data, causing the AI to misjudge spread potential.
+*   **Worst Case:** Authorities are not alerted until the fire is uncontainable, resulting in property loss, ecological damage, or threat to life.
+
+**2. Simulation Strategy (Maximizing Limited Battery)**
+Since live flight time is scarce, 90% of testing must occur in high-fidelity simulation before any drone leaves the ground.
+
+*   **Synthetic Data Generation:** Create digital twins of your target regions. Inject synthetic smoke plumes with variable densities, colors, and movement patterns that mimic both controlled burns and wild fires.
+*   **Weather Stress Testing:** Run simulations across a matrix of conditions:
+    *   *Wind:* Calm vs. Gusts (>30mph) vs. Directional Shifts.
+    *   *Lighting:* Dawn, dusk, heavy overcast, and glare conditions.
+    *   *Smoke:* Thin wisps vs. dense opaque columns.
+*   **The "Edge Case" Probe Set:** Specifically simulate the transition moment. Feed the model video sequences where a fire starts small (controlled) and crosses the threshold to "uncontrollable" in under 60 seconds. Measure if the alert triggers *during* the transition or only after it is too late.
+
+**3. Measurement & Pass/Fail Criteria**
+Do not assert the system is "safe." Instead, measure residual risk.
+*   **Metric:** False Negative Rate (FNR) specifically for fires that escalate within 5 minutes of detection.
+*   **Threshold:** Define a strict tolerance. For example: "Zero tolerance for missing an escalation event in simulation." If the model misses even one escalating fire in the probe set, the current version fails.
+*   **Reporting:** Report results as "Unverified" for any weather condition or smoke density not explicitly covered in your simulation matrix. Do not invent a success rate for untested scenarios.
+
+**4. Risk Management & Human Gate**
+*   **Uncertainty Display:** If the AI's confidence drops below a defined tier (e.g., due to heavy smoke or unusual wind), the system must default to **alerting** rather than ignoring. It is safer to flag a controlled burn for human review than to ignore a wild fire.
+*   **Human-in-the-Loop:** For the initial deployment phase, do not rely solely on the AI to suppress alerts for "controlled burns." Require a human operator to verify the "ignore" decision for any fire detected near known burn zones until sufficient live data proves reliability.
+*   **Kill Switch:** Implement an immediate override allowing authorities to force an alert regardless of AI classification.
+
+**5. Transparency Artifact**
+Create a **Model Card** for this feature before deployment. It must list:
+*   Intended use (wildfire detection in dry remote regions).
+*   Known limitations (e.g., "Performance unverified in heavy fog" or "Escalation detection untested in wind speeds >40mph").
+*   The specific simulation conditions used.
+*   Owner contact for incident reporting.
+
+**Note:** Legal requirements for automated emergency alerts vary by region; route the question of mandatory disclosure or liability to legal counsel.
+**Note:** As your fleet scales or enters regulated zones, deepen the governance framework; the "human gate" floor never relaxes regardless of team size.

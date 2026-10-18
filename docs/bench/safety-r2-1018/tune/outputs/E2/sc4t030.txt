@@ -1,0 +1,36 @@
+### Mortgage Calculator Transparency & Safety Review Plan
+
+**1. Harm Inventory & Risk Mapping**
+Before launch, document specific risks where the legacy database causes harm:
+*   **Hidden Costs:** Users receive binding offers missing updated lender fees, leading to financial shock or rejected applications at closing.
+*   **Automation Bias:** Users trust the "instant" pre-filled application as final truth, skipping independent verification.
+*   **Irreversible Action:** Submitting a binding application based on incorrect data is a high-stakes, hard-to-reverse action.
+
+**2. Data Validation & Synchronization (Measure)**
+Do not assert data accuracy; prove it via runnable tests.
+*   **Probe Set:** Create a "known-bad" control (a loan scenario with a fee recently changed in the partner's live API but not yet in your legacy DB) and a "known-good" control (static fees).
+*   **Metric:** Discrepancy rate between calculator output and lender source-of-truth.
+*   **Threshold:** Owner-set zero tolerance for binding applications. If the legacy DB cannot confirm the latest fee structure within a defined window, the system must flag the estimate as "Unverified."
+*   **Stop Condition:** Any failure in the "known-bad" probe blocks the launch of the auto-fill feature.
+
+**3. Interface Clarity & Uncertainty Disclosure (Manage)**
+Redesign the UI to prevent over-reliance and show uncertainty without false precision.
+*   **Defined Confidence Tiers:** Never show a percentage (e.g., "95% accurate"). Instead, use coarse, defined text labels:
+    *   *Confirmed:* Fee matched to live lender feed <24hrs ago.
+    *   *Estimated:* Fee derived from legacy data; subject to lender verification.
+    *   *Unverified:* Data synchronization failed; do not submit.
+*   **Mandatory Human Gate:** For any cost labeled "Estimated" or "Unverified," disable the "Submit Binding Application" button. Require explicit user acknowledgment ("I understand these costs may change") or route to a human loan officer for review before submission.
+*   **Disclosure:** Clearly state that the output is an automated estimate based on available data, not a final loan commitment.
+
+**4. Rollback & Governance (Govern)**
+*   **Kill Switch:** Implement an immediate toggle to disable the "Auto-fill" function if discrepancy monitoring detects >0% variance in a production sample.
+*   **Owner Assignment:** Name a specific product owner responsible for reviewing every discrepancy incident and updating the harm inventory.
+*   **Rollback Plan:** If a discrepancy is found post-submission, the protocol must include immediate notification to the affected user, a pause on further applications from that lender partner, and a manual review queue for all pending apps.
+
+**5. Legal Routing**
+*   **Regulatory Duty:** Whether these disclosures satisfy legal requirements for mortgage estimates (e.g., TRID, EU consumer laws) is a legal determination. Route the specific wording of disclosures and the definition of "binding" to legal counsel immediately. Do not assume the current plan meets regulatory standards.
+
+**Definition of Done:**
+The feature ships only when the harm inventory is complete, the "known-bad" data probes pass, high-stakes submissions are gated behind human review or explicit uncertainty acknowledgment, and a model/data card exists documenting the legacy database's limitations.
+
+*Note: This plan treats the legacy database limitation as a critical safety constraint, not just a technical debt item. No metric regarding accuracy should be published as "verified" until the evaluation suite runs successfully.*

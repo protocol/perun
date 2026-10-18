@@ -1,0 +1,26 @@
+### Internal Bias Review Plan for AI Hiring Platform
+
+**1. Harm Inventory & Scope**
+Before execution, document the specific risk: the ranking system may systematically downgrade resumes from women in engineering due to historical biases in training data or keyword weighting. Define the "worst case" as qualified female candidates being filtered out before human review, leading to discriminatory hiring outcomes and legal liability under Saudi labor regulations.
+
+**2. Measurement Strategy (Internal Red-Teaming)**
+Since external auditing is prohibited, you must build an internal evaluation harness using synthetic and sanitized historical data.
+*   **Construct Counterfactual Test Sets:** Create pairs of identical resumes where only gender-indicative signals differ (e.g., "Women in Tech Club" vs. "Engineering Club," female vs. male names, all-female vs. co-ed universities). Ensure these probes cover various experience levels.
+*   **Define Controls:**
+    *   *Positive Control:* A resume pair known to trigger bias (if historical data exists) or a manually weighted example where the female version should rank lower if the model is flawed.
+    *   *Negative Control:* A pair where the content is identical and non-gendered, expecting equal scores.
+*   **Metric & Threshold:** Calculate the "Disparate Impact Ratio" (selection rate of protected group / selection rate of reference group). Set a strict internal stop-condition: if the ratio falls below 0.8 (the 80% rule of thumb) or if counterfactual pairs show statistically significant score divergence, the beta launch is blocked.
+*   **Probe for Injection & Leakage:** Test if the model leaks private data from training or if job descriptions containing biased language amplify ranking skew.
+
+**3. Mitigation Steps**
+*   **Data Sanitization:** Scrub explicit gender markers from training data and resumes before ingestion. Review historical hiring data used for training; if past hiring was biased, the model will learn it. Consider re-weighting or excluding historical decisions that show clear demographic skew.
+*   **Feature Auditing:** Identify proxy variables (e.g., gaps in employment, specific university names, extracurriculars) that correlate strongly with gender and remove or de-weight them in the ranking logic.
+*   **Human-in-the-Loop Gate:** For the beta, do not allow the AI to auto-reject candidates. Use the AI only to *suggest* a ranked list, but require a human recruiter to review the top 20% and a random sample of the bottom 20% to check for systematic exclusion. Make the override easy and mandatory for final decisions.
+*   **Uncertainty Reporting:** If the model's confidence in a ranking is low (e.g., missing key skills), flag it for human review rather than assigning a low score. Display confidence as a coarse tier (e.g., "High Match," "Unclear") rather than a precise percentage to prevent over-reliance.
+
+**4. Governance & Transparency**
+*   **Assign Ownership:** Name one team member as the owner of this bias risk. They must sign off on the test results before beta.
+*   **Create a Model Card:** Draft an internal document detailing the model's intended use (technical recruitment only), known limitations (potential bias in niche roles), data sources, and the results of your internal red-team. Mark any unmeasured metrics as "UNVERIFIED."
+*   **Legal Routing:** While this plan addresses technical bias, the legal requirement for disclosure or specific compliance with Saudi AI regulations must be confirmed by your legal counsel. Do not assert compliance based solely on this technical review.
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased." If the internal tests fail the stop-condition, the beta must be delayed until the ranking logic is adjusted.

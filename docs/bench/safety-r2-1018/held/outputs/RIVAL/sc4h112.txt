@@ -1,0 +1,39 @@
+### Safety Assessment Plan for Library Book Recommender
+
+**Phase 1: Map Rules and Data Boundaries**
+Document the exact logic currently used to define "restricted" versus "allowed" content. List all data inputs the algorithm uses, specifically age profiles, borrowing history, and any user-provided search terms. Identify where the content filter sits in the process: does it block titles before the algorithm sees them, or does it filter the final list of suggestions? Create a matrix of age groups (e.g., 6–9, 10–12, 13–15) and the specific content restrictions applicable to each.
+
+**Phase 2: Construct Synthetic Test Profiles**
+Since you cannot alter the live database easily, create five distinct synthetic user profiles on paper or in a isolated test spreadsheet that mirror real patron types:
+1.  **The Standard Minor:** Age 10, clean history, generic interests.
+2.  **The Edge-Case Minor:** Age 12, with a borrowing history containing titles that sit on the boundary of restriction (e.g., mature themes allowed for teens but not children).
+3.  **The "Research" Minor:** Age 14, explicitly searching for sensitive topics (e.g., health, history) that might trigger over-broad filtering or, conversely, bypasses due to "educational" flags.
+4.  **The History-Heavy User:** A profile with extensive borrowing data to test if the "past history" weight overrides age restrictions.
+5.  **The New User:** No history, relying solely on age profile and trending data.
+
+**Phase 3: Define Failure Scenarios (Hypotheses)**
+Before running tests, list specific ways the system might fail based on your observation that filters are bypassed:
+*   **Collaborative Filtering Leak:** The system recommends a restricted book because "users like you" (adults) borrowed it, ignoring the current user's age.
+*   **Keyword Override:** A specific search term forces a restricted title into the results despite age blocks.
+*   **Metadata Gaps:** Books with missing or incorrect age-rating metadata slip through.
+*   **Sequence Exploitation:** A series contains both allowed and restricted volumes; the system recommends the restricted volume because the user read the first one.
+
+**Phase 4: Manual Execution and Observation**
+Run the recommendation engine manually for each synthetic profile. Do not rely on automated scripts if the budget is tight; use a structured checklist.
+*   Input the profile data.
+*   Record the top 20 suggestions.
+*   Cross-reference every suggested title against your master list of restricted content.
+*   Specifically test "boundary" titles to see if the system consistently blocks them or if the failure is random.
+*   Attempt to force recommendations by simulating specific search queries associated with restricted topics.
+
+**Phase 5: Analyze and Patch Logic**
+Categorize any failures found. If a restricted book appears, trace *why*:
+*   Was the metadata wrong? (Fix the database entry).
+*   Did the algorithm prioritize popularity over age? (Adjust the weighting formula).
+*   Did the filter run too late in the chain? (Move the filter to the earliest possible stage).
+Implement logic changes that prioritize the "lowest common denominator" of safety: if a user's age is ambiguous or the content rating is missing, default to blocking.
+
+**Phase 6: Verification and Monitoring**
+Re-run the synthetic profiles against the patched logic to confirm fixes. Establish a simple daily log for the first month of launch where staff record any patron complaints or odd suggestions. Schedule a review two weeks post-launch to analyze real-world usage patterns against your test predictions.
+
+**Note:** Prioritize moving the content filter to the very end of the recommendation pipeline as a final safety net if architectural changes allow. Ensure all test data remains isolated from real patron records to maintain privacy.

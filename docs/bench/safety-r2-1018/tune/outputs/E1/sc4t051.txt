@@ -1,0 +1,36 @@
+### Pre-Launch Safety Plan: Smart Thermostat Occupancy Automation
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific failure mode: "System predicts 'Away' based on flawed calendar/location data, lowers heat during a cold snap, and exposes an elderly resident to hypothermia." The affected group is residents with limited mobility or cognitive decline who cannot manually override the system quickly. The worst realistic case is a medical emergency resulting from prolonged exposure to unsafe temperatures. An empty inventory is not a pass; this specific scenario must be written down and owned by a named engineer.
+
+**2. Runnable Measurement Plan (One Test Row Per Harm)**
+Do not assert safety; measure it. Execute the following specific evaluation before launch:
+*   **Probe Set:** Simulate 500 scenarios where calendar data says "Away" but mobile location data shows "Home" (e.g., user working in the garden, sleeping, or phone battery dead). Include a known-bad positive control (system definitely lowers heat) and a known-good negative control (system maintains heat).
+*   **Metric:** Percentage of instances where the thermostat fails to maintain the minimum safe temperature (e.g., 18°C/64°F) despite conflicting signals.
+*   **Threshold:** Owner-set to **0% tolerance** for any drop below the safe minimum when occupancy is ambiguous.
+*   **Stop Condition:** If *any* test case results in a temperature drop below the safe floor without human confirmation, the launch is blocked immediately.
+*   **Reviewer:** The lead engineer must personally review every failure log; do not rely on aggregate pass rates.
+
+**3. Mandatory Human-in-the-Loop Gate**
+Because lowering heat in winter is a high-stakes action with potential irreversible health consequences, full autonomous execution is prohibited when data is conflicting or low-confidence.
+*   **The Rule:** If the prediction confidence is not "Confirmed" (e.g., both calendar and location align perfectly), the system must default to "Safe Mode" (maintaining minimum heat) rather than "Efficiency Mode" (lowering heat).
+*   **The Override:** Any decision to lower heat below the safe floor when occupancy is uncertain requires explicit user confirmation via a mobile prompt or a delayed execution window (e.g., "We think you are away. We will lower heat in 30 mins unless you cancel"). Never automate the irreversible risk.
+
+**4. Uncertainty Disclosure & Fallback Mechanism**
+Do not show users a raw probability number (e.g., "87% chance you are away"); this implies false precision. Instead, use defined coarse tiers:
+*   **"Confirmed Away":** Both data sources agree. Auto-adjust allowed.
+*   **"Unverified":** Data conflicts or missing. System displays: "Occupancy unclear. Maintaining safe temperature."
+*   **Fallback:** Hard-code a physical or software "panic button" that instantly locks the temperature to a safe range, bypassing all AI logic. This must be tested as a primary feature, not an afterthought.
+
+**5. Transparency Artifact (Model Card)**
+Before shipping to the first 1,000 users, publish a one-page "System Card" included in the app settings. It must state:
+*   **Intended Use:** Energy saving for typical occupancy patterns.
+*   **Limitations:** "May fail if mobile location is inaccurate or calendars are outdated. Not designed for users who cannot manually override settings."
+*   **Measured Performance:** Report the results of the 500-scenario test above. If you have not run the test, mark the performance field as **UNVERIFIED**. Do not invent a success rate.
+
+**6. Ownership & Governance**
+Assign one specific engineer as the "Safety Owner" for this feature. They are responsible for re-running these tests if the prediction model, data sources, or user demographic changes. A team of six is small, but the owner's name must be written down.
+
+**Notes**
+*   Legal requirements for automated decisions affecting vulnerable populations in Japan must be routed to counsel; this plan addresses product safety, not regulatory compliance.
+*   If the budget prevents running the 500-scenario simulation, the launch must be delayed; there is no safe shortcut for unmeasured high-stakes automation.

@@ -1,0 +1,41 @@
+### Pre-Launch Verification Plan for Border Control Kiosks
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False positive match leading to wrongful detention or denied entry.
+*   **Affected:** Innocent citizens and visitors, specifically those from demographic groups where facial recognition historically underperforms.
+*   **Worst Case:** An innocent individual is detained, missing the summit or a flight, causing reputational damage and legal liability.
+*   **Status:** This is a **high-stakes, irreversible action**. Full automation is prohibited.
+
+**2. Measurement Plan (Runnable Tests)**
+Execute the following specific test rows before launch. Do not rely on aggregate accuracy claims.
+*   **Probe Set A (Demographic Slicing):** Run matches across sliced subgroups (age, gender, skin tone) using known-negative controls (innocent people).
+    *   *Metric:* False Positive Rate (FPR) per subgroup.
+    *   *Threshold:* Owner-defined zero tolerance for disparate impact. If FPR varies significantly by group, the system fails.
+*   **Probe Set B (Synchronization Error Simulation):** Inject known "stale" or corrupted database records to simulate sync errors.
+    *   *Metric:* Rate of flags generated solely due to data latency/corruption.
+    *   *Stop Condition:* Any flag generated purely by a sync error blocks launch.
+*   **Probe Set C (Adversarial/Edge Cases):** Test against low-quality images, partial occlusions, and siblings/twins.
+    *   *Metric:* Failure-to-enroll rate and false match rate under stress.
+
+**Reporting Rule:** If any metric above is unmeasured due to the timeline, report it explicitly as **UNVERIFIED**. Do not invent a "99% accurate" figure.
+
+**3. Management Controls (The Human Gate)**
+Given the three-week deadline and high stakes, the following controls are mandatory floors:
+*   **Mandatory Human-in-the-Loop (HITL):** The kiosk **must not** deny entry or trigger detention automatically. It can only recommend "Secondary Screening."
+    *   *Workflow:* System flags → Human officer reviews side-by-side images and data context → Officer makes final decision.
+    *   *Override:* The officer must have a one-click "False Alarm" override that logs the incident and allows immediate passage.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% match") to officers, as this invites automation bias. Instead, use defined coarse tiers:
+    *   *Confirmed:* High quality, multiple sources.
+    *   *Corroborated:* Good quality, single source.
+    *   *Unverified:* Low quality or potential sync issue (Default to "Pass" unless manually overridden).
+*   **Kill Switch:** Implement a hard stop switch. If the false positive rate spikes during the summit, the system must revert to manual ID checks only.
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name one specific individual responsible for reviewing every false positive incident during the summit.
+*   **Transparency Artifact:** Draft a preliminary "System Card" documenting intended use, known limitations (e.g., "performance unverified on subgroup X"), and the HITL protocol. This must be available to legal counsel and operational leads.
+*   **Legal Routing:** Immediately route the question of "legal disclosure requirements for automated decisions at borders" to counsel. Do not assert compliance internally; let legal define the duty under relevant regimes (e.g., EU AI Act if applicable).
+
+**Summary of Constraints:**
+You cannot certify this system as "safe" or "unbiased." You can only verify that the harm inventory is complete, the high-stakes actions are gated by humans, and the residual risks are measured and reported. If the synchronization error tests cannot be completed in three weeks, the system must launch with the database check disabled or strictly advisory until verified.
+
+*Note: This plan prioritizes the "human gate" over perfect algorithmic accuracy given the tight timeline. No metric should be fabricated to meet the summit deadline.*

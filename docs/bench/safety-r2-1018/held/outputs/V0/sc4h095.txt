@@ -1,0 +1,32 @@
+### Simulation Parameters for Boundary Condition Testing
+
+To test the risk of the app directing users too close to predators due to static map data, execute the following simulation scenarios using your staging environment:
+
+1.  **Predator Migration Drift**
+    *   **Input:** Simulate a pride of lions moving 2.5km outside the pre-loaded "high-risk" zone over a 48-hour period (a realistic daily range).
+    *   **Condition:** User device location matches the new, unrecorded predator location.
+    *   **Expected Failure:** App fails to trigger haptic warning because the coordinates fall within the static "safe" polygon.
+    *   **Metric:** Distance between actual predator location and the nearest static warning boundary at the moment of failure.
+
+2.  **Waterhole Congestion Edge-Case**
+    *   **Input:** Simulate 15+ tourist vehicles converging on a waterhole located exactly on the border of a static danger zone.
+    *   **Condition:** GPS drift (common on older devices) fluctuates user position by ±15 meters.
+    *   **Expected Failure:** Haptic feedback oscillates rapidly (on/off) or fails to engage due to signal noise near the hard-coded boundary, causing guide confusion.
+    *   **Metric:** Number of false negatives (no warning when within 50m of animal) vs. false positives during a 10-minute dwell time.
+
+3.  **Novel Pathfinding Trap**
+    *   **Input:** Simulate a user creating a new shortcut trail not present in the base map data that cuts directly through a known predator corridor.
+    *   **Condition:** User follows the new path; app calculates route efficiency based on static terrain data only.
+    *   **Expected Failure:** App actively guides the user toward the danger zone to optimize travel time, lacking real-time animal presence data.
+    *   **Metric:** Time elapsed before the user enters the critical 100m radius without any haptic alert.
+
+### Manual Override Protocol for Guides
+
+Given the offline constraint and static data limitations, the human guide is the primary safety layer. Implement this "Stop-Look-Confirm" protocol:
+
+1.  **Visual Primacy Rule:** Guides must treat the app as a secondary reference. If visual confirmation of a predator contradicts the app's "safe" status (no haptic feedback), the visual observation overrides the device immediately.
+2.  **The "Silent Stop" Trigger:** If haptic feedback becomes erratic (rapid pulsing) or ceases unexpectedly in known high-density areas, the guide must initiate an immediate vehicle halt and conduct a 360-degree visual sweep.
+3.  **Community Broadcast:** Since devices cannot update dynamically, establish a low-tech radio channel protocol. If one guide identifies a predator outside a marked zone, they broadcast a "Code Blue" with coordinates. All other guides must manually mark this coordinate as a temporary no-go zone on their physical maps or mental checklist, ignoring the app's guidance for that specific sector.
+4.  **Uncertainty Disclosure:** Guides must verbally inform tourists at the start of every drive: "This device uses fixed maps. Animals move. I am watching the wildlife, not just the screen."
+
+**Note:** Do not assign a specific "safety percentage" to these tests; unmeasured risk remains unverified. Ensure a human remains in the loop for any decision involving proximity to lethal threats.

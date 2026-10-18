@@ -1,0 +1,36 @@
+### Pre-Launch Review Strategy: Offline Refugee Translation Device
+
+**1. Immediate Human-in-the-Loop Gate (Stop Condition)**
+Do not deploy the device for autonomous final processing. Given the risk of wrongful deportation, the device must operate in a **"Draft-Assist" mode only**. The output must be explicitly labeled as "Machine-Generated Draft – Requires Linguist Verification." No statement regarding persecution, identity, or legal status should be submitted to an officer without a human linguist's signed confirmation. This is the non-negotiable floor for high-stakes, irreversible actions.
+
+**2. Harm Inventory & Targeted Red-Teaming**
+Before deployment, execute a focused evaluation on the specific failure mode: **mistranslation of persecution details**.
+*   **Probe Set:** Construct a test suite of 50–100 known "critical edge cases" derived from real asylum narratives where nuance changes legal outcomes (e.g., distinguishing between "fear of future harm" vs. "past inconvenience," or specific political/religious terminology).
+*   **Controls:** Include "known-bad" inputs (ambiguous phrases known to confuse the model) and "known-good" inputs (standard phrases with clear legal equivalents).
+*   **Metric:** Measure the **Critical Error Rate** (any mistranslation altering the legal meaning of persecution). The pass threshold for autonomous use is **0%**. If any critical error is found, the device remains in "Draft-Assist" mode.
+*   **Offline Execution:** Since you are offline, bundle these test cases onto the devices. Run the suite locally on each unit intended for deployment to ensure no hardware-specific variance affects the model's quantization or performance.
+
+**3. Uncertainty & Transparency Artifacts**
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "87% confident") to users or officers, as these imply a calibration you cannot verify offline. Instead, implement a coarse, defined tier system for the linguist reviewer:
+    *   *Verified:* High agreement with known legal lexicon.
+    *   *Review Required:* Low confidence or detection of ambiguous persecution terms (flagged visually).
+    *   *Unverified:* Output generated from out-of-distribution input.
+*   **Model Card (Offline Version):** Generate a one-page "Limitations & Intended Use" document to be physically bundled with each device. It must state:
+    *   **Intended Use:** Draft translation assist for trained linguists.
+    *   **Known Limitations:** Specific types of persecution narratives where the model struggles (based on your red-team findings).
+    *   **Owner/Contact:** The specific team lead responsible for the model version on the device.
+    *   **Warning:** "Never use for final legal determination without human verification."
+
+**4. Governance & Ownership**
+Assign a single **Safety Owner** (one of the six team members) who signs off on the "Critical Error Rate" results. This owner is responsible for halting distribution if the error rate exceeds zero on critical items. Document the specific model version and data snapshot used for this offline build; any future update requires re-running the full harm inventory.
+
+**5. Legal & Regulatory Routing**
+The question of whether this tool constitutes a "regulated automated decision" under international refugee law or local jurisdiction is a legal determination. **Route this immediately to legal counsel.** Do not assert compliance internally. Counsel must define if additional disclosures are legally mandated beyond the internal "Draft-Assist" warning.
+
+**Summary of Deliverables for Next Month:**
+1.  **Locked Mode:** Device firmware set to "Draft-Assist" with mandatory human confirmation workflow.
+2.  **Eval Report:** Results of the offline critical-error red-team (Pass/Fail based on 0% tolerance).
+3.  **Physical Artifact:** The "Limitations & Intended Use" card attached to every device.
+4.  **Legal Memo:** Counsel's determination on disclosure duties.
+
+**Note:** An empty harm inventory is not a pass; if you have not identified specific persecution terms that fail, you have not finished testing. Never fabricate a "safe" metric; if a metric is unmeasured, label it `UNVERIFIED`.

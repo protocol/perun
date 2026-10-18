@@ -1,0 +1,43 @@
+**Plan: Diversity Metric, Evaluation, and Risk Controls for NewsFlow Feed**
+
+**1. Harm Inventory & Scope**
+The primary risk is **algorithmic amplification of harmful misinformation** leading to user radicalization (bias/unfair outcome) and **hallucination/unverified claims surfaced as fact**. The affected users are the entire readership; the worst case is the platform becoming a vector for real-world harm via conspiracy theory propagation.
+
+**2. Diversity Metric Design (Balancing Engagement vs. Accuracy)**
+Do not rely on a single "accuracy" score, which is hard to define dynamically. Instead, implement a **constrained optimization metric**:
+*   **Primary Objective:** Maximize user engagement (CTR/time spent).
+*   **Constraint 1 (Source Diversity):** Limit the proportion of content from any single domain or cluster of domains within a session (e.g., no more than 30% from one publisher).
+*   **Constraint 2 (Claim Verification Tier):** Tag content sources using a deterministic lookup table (not model-generated) against trusted fact-checking lists. Assign content a coarse tier: *Verified*, *Corroborated*, *Single-Source*, or *Unverified/Disputed*.
+*   **The Metric:** `Score = Engagement_Value - (Penalty_Coefficient × Unverified_Tier_Weight)`.
+    *   Content tagged *Unverified/Disputed* receives a heavy penalty that overrides high predicted engagement.
+    *   **Crucial:** Do not output model confidence percentages (e.g., "87% likely false") to users or use them as precise weights. Use the defined coarse tiers to avoid false precision.
+
+**3. Evaluation Plan (Test Rows per Harm)**
+You must test the outputs, not just the code. Given your fixed compute budget, prioritize adversarial probing over exhaustive training sweeps.
+
+*   **Test Row A: Conspiracy Amplification**
+    *   **Probe Set:** Inputs containing known conspiracy narratives (positive control) mixed with neutral news (negative control).
+    *   **Metric:** Rank position of conspiracy content in the top 10 recommendations.
+    *   **Pass Threshold:** Conspiracy content must appear below position 10 or be flagged as *Unverified* in 100% of runs.
+    *   **Stop Condition:** If conspiracy content ranks in the top 3 for >5% of test user profiles, block launch.
+*   **Test Row B: Echo Chamber Formation**
+    *   **Probe Set:** Simulated user histories with extreme initial preferences.
+    *   **Metric:** Diversity score of the resulting feed (Shannon entropy of source domains).
+    *   **Pass Threshold:** Feed diversity must remain above a defined floor (e.g., equivalent to at least 5 distinct viewpoint clusters) regardless of input extremity.
+    *   **Stop Condition:** If the feed converges to a single viewpoint cluster within 5 clicks, trigger rollback.
+*   **Test Row C: Injection & Leakage**
+    *   **Probe Set:** Prompts attempting to inject fake "breaking news" via user comments or titles.
+    *   **Metric:** Frequency of injected fake news appearing in other users' feeds.
+    *   **Threshold:** Zero tolerance for cross-user leakage of unverified injected content.
+
+**4. Management & Governance**
+*   **Human-in-the-Loop Gate:** Any automated decision to *ban* a source or *flag* content as "harmful" must have a human review path for appeal. Conversely, high-volume promotion of *Unverified* content must be automatically capped until reviewed.
+*   **Transparency Artifact:** Publish a **Model Card** detailing: intended use (news curation), out-of-scope uses (medical/legal advice), known limitations (cannot verify real-time events instantly), and the definition of your verification tiers. Include a **Data Card** listing the sources used for the "trusted list" and their update frequency.
+*   **Residual Risk Reporting:** Report results as "UNVERIFIED" for any metric not explicitly tested in the rows above. Do not invent a "0% radicalization rate."
+
+**5. Legal & Regulatory Routing**
+Whether this system triggers specific regulatory obligations (e.g., EU AI Act high-risk classification, local misinformation laws) is a legal determination. Route this question to counsel immediately; do not assert compliance internally.
+
+**Notes**
+*   Ensure the "trusted list" for fact-checking is maintained via deterministic code, not the recommendation model itself, to prevent circular validation.
+*   If the pass thresholds cannot be met within the compute budget, the constraint to move is the launch date, not the safety gate.

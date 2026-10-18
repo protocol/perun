@@ -1,0 +1,38 @@
+**Pre-Deployment Safety Plan: Crop-Yield Predictor**
+
+**1. Harm Inventory & Immediate Constraint**
+Your simulation indicates the system recommends banned substances. This is a **high-stakes, irreversible harm** (legal liability, health risk, crop destruction).
+*   **Critical Constraint:** You stated you have "no budget for legal review." However, determining which substances are "banned" is a **legal determination**, not a technical one. An AI cannot reliably distinguish banned from permitted chemicals without a legally verified, up-to-date list provided by counsel or local agricultural authorities.
+*   **Action:** You must obtain an authoritative, current list of prohibited substances from a trusted external source (e.g., government agricultural ministry) before any technical filtering can be considered valid. Do not rely on the model's training data for this list.
+
+**2. Measurement Plan (Do Not Fabricate Rates)**
+You asked for a plan to identify "how often" these illegal recommendations occur.
+*   **Rule:** Never invent a safety metric. If you have not run specific tests, the failure rate is **UNVERIFIED**, not zero.
+*   **Method:**
+    *   **Construct a Probe Set:** Create a test suite containing:
+        *   *Positive Controls:* Inputs known to trigger banned substance recommendations (based on your early simulations).
+        *   *Negative Controls:* Inputs known to result in safe, standard advice.
+        *   *Edge Cases:* Scenarios involving rare crops, extreme weather, or mixed soil conditions where the model might hallucinate a "maximization" shortcut.
+    *   **Execute & Record:** Run the model against this set. Count the exact number of outputs referencing any substance on your authoritative "banned" list.
+    *   **Stop Condition:** Define a threshold of **zero tolerance** for banned substance recommendations. If *any* test case yields a banned chemical, the feature **must not launch**. There is no "acceptable" rate for illegal advice.
+
+**3. Fail-Safe Mechanism (Human-in-the-Loop & Hard Blocking)**
+Software filters alone are insufficient given the risk of hallucination.
+*   **Hard Block (Deterministic Code):** Implement a post-generation filter in your application code (not inside the AI model). This filter must compare every generated chemical name against your authoritative "banned" list. If a match is found, the system must **block the output entirely** and return a generic error message (e.g., "Unable to generate recommendation; please consult an agronomist"). Do not let the AI try to "rephrase" the banned advice.
+*   **Human-in-the-Loop Gate:** Because this involves high-stakes economic and safety decisions, **do not fully automate** the advice before launch.
+    *   Route all recommendations through a human reviewer (one of your five team members) for the initial planting season.
+    *   The human verifies the chemical against the official list before the message is sent to the farmer's device.
+    *   Only consider removing this gate after collecting substantial field data proving zero errors over multiple cycles.
+
+**4. Transparency & Disclosure**
+*   **Model Card:** Create a simple document stating the tool's intended use, the source of the "banned" list, and the known limitation that it requires human verification.
+*   **User Disclosure:** Clearly inform farmers that the advice is AI-generated and should be verified with local experts. Do not present the output as absolute fact.
+
+**Summary of Immediate Next Steps:**
+1.  Secure an official list of banned substances (non-negotiable).
+2.  Run the probe set; if any failures occur, halt launch.
+3.  Deploy the deterministic hard-block filter.
+4.  Institute mandatory human review for all outputs until proven safe over time.
+
+**Note:** This plan identifies risks and controls; it does not certify the system as safe. The decision to ship rests with your team.
+**Note:** If you cannot obtain a verified list of banned substances, you cannot safely launch this feature.

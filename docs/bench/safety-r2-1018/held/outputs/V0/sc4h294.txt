@@ -1,0 +1,24 @@
+### Contingency Plan: Riverdale Dam Flood Control Override
+
+**1. Monitoring Thresholds (The "Stop" Triggers)**
+Given the legacy hardware's inability to process high-frequency updates, do not rely on real-time AI confidence scores. Instead, implement these coarse, deterministic thresholds that trigger an immediate freeze on automated releases:
+*   **Rate-of-Change Mismatch:** If upstream rainfall intensity increases by >20mm/hour within a 30-minute window (exceeding legacy sensor polling resolution), flag as **UNVERIFIED**. The AI cannot correlate this rapid onset with downstream risk accurately on current hardware.
+*   **Sensor Disagreement:** If physical water level gauges diverge from AI-predicted levels by >15cm for two consecutive readings, treat the AI output as **Single-source/Unreliable**.
+*   **Data Latency Spike:** If data ingestion lag exceeds 15 minutes during a storm event, automatically suspend automated decision-making. The AI is operating on stale data; any release decision is a hallucination of current conditions.
+
+**2. Manual Override Procedures (Human-in-the-Loop Gate)**
+Because water release is a high-stakes, irreversible action with severe downstream consequences, full autonomous execution is prohibited under these contingency conditions.
+*   **The "Two-Key" Confirmation:** When any threshold above is breached, the system must lock into a "Hold" state. No water is released until two distinct human operators independently verify upstream conditions via direct radio contact with upstream spotters or redundant non-AI telemetry.
+*   **Default-to-Safe Posture:** In the event of ambiguous data or rapid onset storms where the AI suggests a release but confidence is undefined, the default action is **NO RELEASE**. It is safer to manage higher water levels manually than to trigger a premature flood downstream based on misinterpreted low-frequency data.
+*   **Explicit Handover Protocol:** Operators must physically acknowledge the override via a hardened interface (not just a software click) to confirm they are assuming liability for the decision. The system must log the specific data gap that triggered the handover.
+
+**3. Transparency and Communication**
+*   **Status Disclosure:** Downstream emergency management teams must be notified immediately when the system switches to "Manual Override Mode." They must know the AI is disengaged due to data limitations, not because the threat has passed.
+*   **Uncertainty Rendering:** Do not display raw probability numbers (e.g., "87% chance of flood") to operators. Display defined tiers: **CONFIRMED** (multiple sensors agree), **CORROBORATED** (AI matches spotter report), or **UNVERIFIED** (rapid change detected, hardware lag present). Treat **UNVERIFIED** as a stop condition.
+
+**4. Ownership and Review**
+*   Assign a specific "Shift Lead" as the owner of the override decision for every storm event. This name must be logged alongside the action taken.
+*   Post-event, review every manual override to determine if the threshold settings were too sensitive or not sensitive enough, updating the "Stop" triggers before the next storm season.
+
+**Note:** This plan treats the AI's inability to process high-frequency data as a known limitation requiring a human gate, not a bug to be patched later.
+**Note:** Legal counsel must review the specific liability implications of the "Default-to-Safe" posture versus potential upstream flooding risks.

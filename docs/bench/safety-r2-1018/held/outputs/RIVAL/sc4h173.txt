@@ -1,0 +1,31 @@
+### Local-Processing Nutrition Planner: Adverse Interaction Test Checklist
+
+Given the constraint that all processing occurs locally on the user's device with no cloud storage, testing must focus on the integrity of the local logic engine, the completeness of the embedded knowledge base, and the accuracy of user input handling. Since no external API calls can verify data during runtime, the local database must be exhaustive and the logic deterministic.
+
+**1. Embedded Knowledge Base Integrity**
+*   **Coverage Verification:** Confirm the local database includes interaction data for the top 200 most prescribed medications in Australia (e.g., blood thinners, SSRIs, statins) against all supported supplements (e.g., Vitamin K, St. John's Wort, Magnesium).
+*   **Version Control:** Verify the mechanism for updating the local interaction database. Since cloud storage is prohibited, test the "update package" installation process to ensure users can receive critical safety patches without transmitting health data outward.
+*   **Data Truncation:** Test if the local database loads completely on devices with limited memory. Ensure no interaction rules are dropped due to resource constraints on older phones.
+
+**2. Input Parsing and Normalization**
+*   **Synonym Recognition:** Test user inputs using brand names, generic names, and common slang for medications (e.g., "Warfarin" vs. "Coumadin" vs. "blood thinner"). The local parser must map all variations to the correct internal ID.
+*   **Dosage Sensitivity:** Verify logic distinguishes between therapeutic doses and toxic levels. Test scenarios where a user inputs high-dose supplements that are safe alone but dangerous when combined with specific prescriptions.
+*   **Ambiguity Handling:** Test inputs where users list conditions but not medications (e.g., "I have heart arrhythmia"). The system must either prompt for specific medication lists or default to a "high caution" stance without making unsafe assumptions.
+
+**3. Logic Engine & Conflict Detection**
+*   **Multi-Drug Interactions:** Test scenarios involving three or more substances (e.g., Prescription A + Supplement B + Dietary Component C). Ensure the logic evaluates cumulative effects, not just pairwise interactions.
+*   **Contraindication Severity:** Verify the system correctly categorizes interactions as "Monitor," "Avoid," or "Contraindicated." Test that "Contraindicated" recommendations result in a hard block of the meal plan/supplement suggestion, not just a warning text.
+*   **Condition-Specific Risks:** Test logic for users with specific health conditions (e.g., kidney disease) where even non-interacting supplements (like Potassium) could be dangerous regardless of medication.
+
+**4. Local Execution & State Management**
+*   **Session Isolation:** On shared devices, verify that one user's health profile does not persist or leak into a new session after the app is closed or reset.
+*   **Offline Consistency:** Run identical test cases on different device models (iOS, Android, various OS versions) to ensure the local logic produces identical safety outputs regardless of the underlying hardware architecture.
+*   **Crash Recovery:** Simulate app crashes during the analysis phase. Ensure that upon restart, the system does not output a partial or unverified recommendation based on incomplete data processing.
+
+**5. Output Safety & User Communication**
+*   **Clarity of Warnings:** Test that warning messages are explicit about *which* medication interacts with *which* supplement and the nature of the risk (e.g., "Reduced efficacy" vs. "Risk of bleeding").
+*   **Default Behavior:** Verify that if the local engine encounters an unknown medication or an error during calculation, it defaults to "Do not recommend" rather than guessing or providing a generic plan.
+*   **Audit Trail (Local):** Confirm the app generates a local-only log of the recommendation logic (inputs used, rules triggered) that the user can export to their physician, without this data ever leaving the device automatically.
+
+Note: This checklist assumes the local logic is deterministic; any probabilistic AI generation for safety-critical advice must be frozen or constrained to a verified rule set.
+Ensure legal review confirms that "local-only" processing satisfies Australian Therapeutic Goods Administration (TGA) software as a medical device (SaMD) guidelines.

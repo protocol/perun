@@ -1,0 +1,41 @@
+### Pre-Launch Audit Plan: Driving Hour Compliance
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (scheduling illegal driving shifts).
+*   **Affected:** Long-haul truck drivers (fatigue, legal liability, license suspension) and the public (accident risk).
+*   **Worst Realistic Case:** The system assigns a route requiring 12 hours of driving when only 9 are legally remaining, forcing a driver to violate Hours of Service (HOS) regulations or miss a delivery window under penalty.
+
+**2. Immediate Control: The Human-in-the-Loop Gate**
+Because assigning an illegal shift is an irreversible, high-stakes action with safety consequences, **full autonomous deployment is blocked** until a gate is installed.
+*   **Action:** Implement a "Hard Stop" rule in the integration layer. If the optimization engine proposes a shift exceeding legal limits by even one minute, the schedule must **not** auto-publish to the driver's app.
+*   **Fallback:** These specific cases must route to a human dispatcher for manual review and adjustment before the driver sees them. This applies immediately, regardless of the 12-day deadline.
+
+**3. Measurement Plan (Runnable Tests)**
+Do not assert the system is "compliant." Run these specific evaluations before launch:
+*   **Test Row A (Positive Control):** Input a driver profile with 1 hour of remaining legal drive time. Feed a route requiring 2 hours.
+    *   *Pass Condition:* System rejects auto-assignment; flags for human review.
+    *   *Stop Condition:* If the system auto-assigns this shift, **launch is blocked**.
+*   **Test Row B (Negative Control):** Input a driver with 8 hours remaining. Feed a route requiring 4 hours.
+    *   *Pass Condition:* System auto-assigns successfully.
+*   **Test Row C (Edge Case / Subgroup):** Test drivers near their weekly/monthly cumulative limits across different jurisdiction rules (if applicable).
+    *   *Metric:* Zero false negatives (illegal shifts auto-approved).
+    *   *Threshold:* Owner-set to 0% tolerance for illegal auto-assignments.
+
+**4. Transparency & Uncertainty**
+*   **Disclosure:** The driver interface must clearly state when a schedule was "Optimized by AI" and explicitly show the calculated remaining legal hours vs. the assigned shift length.
+*   **Confidence Tier:** Do not show a percentage (e.g., "99% compliant"). Use defined tiers: **"Verified Compliant"** (passed hard rules) or **"Requires Review"** (flagged by logic).
+
+**5. Governance & Ownership**
+*   **Owner:** Name one specific individual responsible for reviewing any "Requires Review" flags during the first week of launch.
+*   **Legal Routing:** The definition of "legal driving hour limits" varies by region and contract. **Route to legal counsel** immediately to confirm the exact rule set (e.g., FMCSA vs. local laws) encoded into the "Hard Stop" logic. Do not assume the engineering team's interpretation is legally sufficient.
+
+**6. Deadline Constraint Response**
+To meet the 12-day deadline without compromising safety:
+*   **Day 1-2:** Code the "Hard Stop" filter and human-review queue.
+*   **Day 3-5:** Run the adversarial tests (Rows A-C) on historical data.
+*   **Day 6-10:** Staged rollout to 5% of the fleet with mandatory human oversight on all schedules.
+*   **Day 11:** Full deployment only if Test Row A yields zero failures.
+*   **Cost:** This requires temporary dispatcher overtime for manual reviews. If staffing for this review queue is impossible within 12 days, the deadline must move; shipping an un-gated scheduler is not an option.
+
+**Note:** No metric of "0% bias" or "100% safety" is claimed here; residual risk remains until the human gate proves effective in production.
+**Note:** Legal counsel must validate the specific regulatory thresholds used in the code before Day 6.

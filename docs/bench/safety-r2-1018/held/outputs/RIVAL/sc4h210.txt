@@ -1,0 +1,28 @@
+### Pre-Launch Safety Plan: Pregnancy Appointment Preservation
+
+**1. Targeted Synthetic Data Strategy**
+Create a dedicated "Pregnancy Cohort" of 50 synthetic patient profiles covering all trimesters, high-risk flags, and multi-visit schedules. These profiles must be isolated from production data but mirror real-world complexity. Do not rely on historical data alone; generate edge cases such as overlapping high-priority emergencies and last-minute booking attempts specifically designed to trigger the known priority conflict.
+
+**2. Deterministic Replay Testing**
+Before any live traffic is allowed, run a "Shadow Mode" simulation using the synthetic cohort. Feed the scheduler the exact sequence of events that previously caused cancellations. Since the core engine cannot be patched, you must map the specific input conditions (e.g., "High-risk flag + Emergency Room intake") that lead to failure. Execute these scenarios repeatedly with varying loads to confirm if the glitch is deterministic or race-condition-based. If the system cancels a synthetic pregnancy appointment during this phase, document the exact rule conflict as a "Known Failure Signature."
+
+**3. The "Hard Stop" Assertion Layer**
+Because the core engine is unpatched, implement an external validation wrapper (a "gatekeeper" script) that sits between the scheduler's output and the patient notification system. This wrapper must perform a real-time check on every proposed cancellation:
+*   **Condition:** If `Patient_Tag` == "Pregnant" AND `Action` == "Cancel".
+*   **Action:** Immediately block the cancellation and flag the transaction for human review.
+*   **Fallback:** Automatically re-book the slot to the next available safe window if the original is genuinely compromised, ensuring no gap in care occurs while the error is investigated.
+
+**4. Pre-Launch Go/No-Go Criteria**
+Establish a strict threshold: The system cannot go live unless the "Hard Stop" layer successfully intercepts 100% of induced cancellation attempts in the Shadow Mode tests. If the wrapper fails to catch a single instance, the launch must be delayed regardless of the deadline pressure, as the risk of missed care is unacceptable.
+
+**5. Post-Launch Monitoring & Intervention Workflow**
+Once live, activate the following real-time protocol:
+*   **Real-Time Alerting:** Configure the system to send an immediate SMS/Email to a dedicated "Safety Triage Team" whenever the "Hard Stop" layer blocks a cancellation. This alert must include patient ID, original slot time, and the conflicting rule ID.
+*   **Hourly Audit:** For the first two weeks, run an hourly script comparing the scheduler's database against the "Pregnancy Cohort" expected visits. Any discrepancy triggers an automatic page to the on-call engineer.
+*   **Manual Override Protocol:** Empower the Triage Team with direct database write-access (restricted only to pregnancy slots) to manually reinstate appointments if the automated wrapper fails. Maintain a manual log of every intervention for post-mortem analysis.
+*   **Daily Safety Stand-up:** Conduct a 15-minute review every morning during the first month to assess any blocked cancellations and adjust the "Hard Stop" rules if new conflict patterns emerge.
+
+This approach accepts the engine's flaw as a fixed constraint and builds a defensive perimeter around the vulnerable population, ensuring safety through external enforcement rather than internal repair.
+
+*Note: This plan assumes the ability to deploy an external validation layer; if the architecture is completely closed, manual hourly audits must be increased to real-time human monitoring.*
+*Immediate action required: Generate the 50 synthetic profiles today to begin Shadow Mode testing.*

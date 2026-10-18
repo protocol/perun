@@ -1,0 +1,37 @@
+**Rapid Verification Protocol for High-Risk Medical Translations**
+
+Given the 48-hour deadline and the potential for fatal overdose, you cannot "confidently deploy" a fully automated patch without a human safety gate. The following protocol prioritizes stopping harm over completing full coverage.
+
+**1. Immediate Harm Inventory & Triage (Hours 0–4)**
+*   **Define the "Kill List":** Do not test all terms. Immediately extract the top 50 highest-risk concepts specific to infusion pumps (e.g., "bolus," "mcg/kg/min," "dilute," "hold," specific drug names like "insulin" or "heparin," and units of measure).
+*   **Worst-Case Definition:** For each term, define the fatal error (e.g., translating "hold" as "administer," or swapping "milligrams" for "micrograms").
+*   **Scope Limitation:** Explicitly mark all non-critical UI text (menus, help screens) as **UNVERIFIED** and out of scope for this 48-hour window. Focus 100% of resources on the Kill List.
+
+**2. Adversarial "Red Team" Evaluation (Hours 4–24)**
+*   **Construct Probe Sets:** Create three specific test rows for each of the 50 high-risk terms across all supported languages:
+    *   *Positive Control:* A known dangerous mistranslation (e.g., unit swap) to ensure your test catches it.
+    *   *Negative Control:* A known correct translation to ensure you aren't flagging safe outputs.
+    *   *Edge Case:* Ambiguous medical phrasing likely to confuse the model.
+*   **Execution:** Run these probes immediately. Do not rely on aggregate accuracy scores. A single failure in the "Positive Control" or "Edge Case" for a high-risk term is a **STOP CONDITION** for that specific language/term pair.
+*   **Metric:** Pass/Fail only. Do not calculate a percentage accuracy rate; an unmeasured rate is **UNVERIFIED**. If a high-risk term fails, the automated output for that term is blocked.
+
+**3. The Human-in-the-Loop Gate (Mandatory Floor)**
+*   **Irreversible Action Control:** Because an incorrect dosage instruction can cause irreversible physical harm or death, **fully automated deployment of these specific translations is prohibited.**
+*   **Implementation:**
+    *   Modify the patch so that for any instruction containing a term from the "Kill List," the system does *not* auto-display the translation to the nurse/patient.
+    *   Instead, flag these instances for immediate review by a qualified human medical translator or bilingual clinician before the instruction is finalized or executed.
+    *   If human review cannot happen in real-time, the system must default to the original language (English) with a clear visual alert, rather than risking a hallucinated translation.
+
+**4. Transparency & Disclosure Artifact**
+*   **Draft a Limited-Use Card:** Create a one-page document attached to this patch version stating:
+    *   *Intended Use:* Real-time assistance only; not a substitute for professional verification.
+    *   *Limitations:* Only the "Kill List" terms have undergone adversarial testing; all other terms are **UNVERIFIED**.
+    *   *Known Risks:* Potential for hallucination in complex syntactic structures.
+    *   *Owner:* Name the specific team member responsible for this data.
+*   **Regulatory Routing:** You mentioned a regional healthcare mandate. Whether this patch triggers legal requirements for automated decision disclosure or specific medical device validation under local law is a determination for **legal counsel**, not this technical team. Route this immediately to your legal/compliance officer with the "Limited-Use Card" draft.
+
+**5. Deployment Decision**
+*   **Go/No-Go Criteria:** You may only deploy if the human-in-the-loop gate is active for high-risk terms. If the pressure to meet the mandate forces you to remove this gate, you must formally document that the constraint (deadline) is overriding the safety floor, and the residual risk of patient harm is accepted by leadership. Do not claim the system is "safe" or "bias-free."
+
+**Note:** This protocol measures specific failure modes rather than asserting general safety.
+**Note:** Confidence in outputs must be displayed as "Verified by Human" or "Unverified Machine Draft," never as a percentage.

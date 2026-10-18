@@ -1,0 +1,40 @@
+### Safety Review Plan: Allergen-Safe Recipe Recommender
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the worst-case failure: The system recommends a meal containing nuts (or cross-contamination risks) to a user flagged with a severe nut allergy, leading to anaphylaxis.
+*   **Affected Group:** Users with severe nut allergies.
+*   **Failure Mode:** False negative (missing an allergen) due to ambiguous labels, synonym gaps, or cross-contamination omission.
+*   **Constraint Acknowledgement:** Since medical verification is absent, the system must treat *all* user-reported allergies as absolute truth. No probabilistic "likely allergy" logic is permitted.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk via adversarial evaluation. Create a runnable test suite with one row per harm scenario:
+*   **Probe Set Construction:**
+    *   *Ambiguous Labels:* Inputs like "natural flavors," "spices," "may contain traces," or regional Japanese terms that imply nuts without stating them explicitly.
+    *   *Cross-Contamination:* Recipes where nuts are not ingredients but are processed in the same facility (if data exists) or mentioned in prep steps ("garnish with crushed peanuts").
+    *   *Positive Controls:* Known nut-heavy meals fed to allergic profiles (must trigger block/warning).
+    *   *Negative Controls:* Nut-free meals fed to allergic profiles (must pass cleanly).
+*   **Metrics & Thresholds:**
+    *   *Metric:* False Negative Rate (FNR) on allergen detection.
+    *   *Threshold:* **Zero tolerance.** Any single false negative in the test set blocks launch. Do not invent an "acceptable error rate" for life-safety issues.
+    *   *Stop Condition:* If any probe triggers a dangerous recommendation, the build is rejected immediately.
+*   **Reporting:** Report results as "UNVERIFIED" until the full probe set passes. Do not fabricate a "99.9% safe" claim without this specific adversarial run.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop / Explicit Confirmation Gate:**
+    *   For any meal where ingredient data is ambiguous or confidence is not "Confirmed," the system must **not** auto-recommend. Instead, surface a high-visibility warning: *"Ingredient source unclear. Verify manually before consumption."*
+    *   Irreversible actions (e.g., auto-adding to a delivery cart) must be disabled for flagged users until explicit manual confirmation is given for each item.
+*   **Uncertainty Display:**
+    *   Do not show raw model confidence percentages (e.g., "87% safe"). Use defined coarse tiers: **Verified Safe** (explicitly nut-free ingredients only), **Unverified** (ambiguous labels present), or **Unsafe** (nuts detected).
+    *   Render "Unverified" with a distinct, colorblind-safe visual cue requiring user acknowledgment.
+*   **Emergency Override Mechanism:**
+    *   Implement a persistent, one-click "Flag Dangerous Suggestion" button on every recommendation card.
+    *   Action: Immediately removes the item, logs the incident for human review, and temporarily suspends automated recommendations for that user until a human agent validates the profile/recipe pair.
+*   **Disclosure:** Clearly state: *"Recommendations are based on user-reported data and automated parsing. Always verify ingredient labels physically before eating."*
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific individual responsible for reviewing every "Flagged Dangerous" incident within 24 hours.
+*   **Re-review Trigger:** Any update to the ingredient database, parsing logic, or user profile schema requires re-running the full adversarial probe set before redeployment.
+*   **Transparency Artifact:** Publish a Model/Data Card detailing that the system relies on unverified user input, listing known ambiguous ingredient terms, and documenting the zero-tolerance testing results.
+
+**Note:** Legal requirements for automated health-related decisions in Japan must be routed to counsel; this plan addresses product safety controls only.
+**Note:** If the adversarial test set reveals any false negatives, the deadline must be deprioritized against the risk of harm; do not ship with known gaps.

@@ -1,0 +1,30 @@
+### Immediate Safety Plan for Offline Telehealth Dosage App
+
+**1. Enforce a Human-in-the-Loop Gate for All Dosage Outputs**
+Given the risk of outdated allergy data and the high-stakes nature of medication errors, the system must not autonomously finalize dosage suggestions. The "fallback mechanism" must default to **withholding specific dosage numbers** if the local cache cannot verify allergy history with 100% confidence. Instead, the app should display a clear warning: *"Allergy data unverified. Consult a medical professional before administering."* Full automation of irreversible actions (taking medication) without confirmed safety checks is the failure mode to prevent.
+
+**2. Define Confidence Tiers, Not False Precision**
+Do not display numerical confidence scores (e.g., "85% safe") to clinic staff, as this implies a calibration your offline engine likely lacks. Instead, implement defined coarse tiers based on data freshness and completeness:
+*   **Verified:** Local cache matches last sync; full profile available. -> *Show dosage.*
+*   **Unverified:** Cache outdated (>24h) or allergy field empty. -> *Hide dosage; show warning.*
+*   **Critical Gap:** Known conflict between symptoms and cached allergies. -> *Block output; urge immediate human review.*
+
+**3. Runnable Testing Strategy (Pre-Launch)**
+You cannot certify the system as "safe," but you can measure residual risk. Execute these specific test rows before distribution:
+*   **Probe A (Stale Cache):** Simulate a patient with a newly recorded penicillin allergy on the server, but an outdated local cache. *Pass Condition:* The app must refuse to suggest penicillin-based dosages and trigger the "Unverified" warning.
+*   **Probe B (Missing Data):** Input a profile with null allergy fields. *Pass Condition:* The system must never assume "no allergies"; it must default to the warning state.
+*   **Probe C (Sync Failure):** Interrupt synchronization mid-process. *Pass Condition:* The app must revert to the safest possible state (no dosage advice) rather than using partial/corrupted data.
+*   **Probe D (Adversarial Input):** Enter conflicting symptoms and profile data. *Pass Condition:* The system must prioritize the conflict resolution rule (block advice) over generating a best-guess dosage.
+
+**4. Transparency Artifact (Model/Data Card)**
+Before launch, create a one-page "System Limitations Card" for clinic staff. This must explicitly state:
+*   **Intended Use:** Triage support only, not final prescription authority.
+*   **Known Limitation:** Dosage suggestions are suppressed if allergy data is not synced within [X] hours.
+*   **Owner:** Name the specific team member responsible for reviewing sync failures.
+*   **Data Provenance:** Source of the medical rules and date of last update.
+
+**5. Governance and Ownership**
+Assign a single owner (e.g., Lead Medical Advisor) to sign off on the "worst-case scenario" analysis: *What happens if a patient receives a wrong dosage due to a sync error?* If the answer involves potential harm, the human gate must remain mandatory. Do not fabricate a "0% error rate." Report the results of the probes above as "UNVERIFIED" until the tests are physically run on the target low-end devices.
+
+**Note:** Legal requirements for AI disclosure in healthcare (especially in India) must be routed to counsel immediately; do not assume compliance based on technical fixes alone.
+**Note:** If the five-week deadline prevents rigorous red-teaming of the sync logic, the only safe path is to disable automated dosage suggestions entirely until the data pipeline is proven robust.

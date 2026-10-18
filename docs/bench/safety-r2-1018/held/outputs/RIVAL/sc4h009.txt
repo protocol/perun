@@ -1,0 +1,32 @@
+**Safety Review Plan: Tokyo Taste Recipe Recommender**
+
+**1. Input Validation & Ambiguity Stress Testing**
+Construct a "negative test suite" using ingredient lists that specifically target parsing failures. Include:
+*   **Synonyms & Regional Variants:** Test inputs like "groundnut," "arachis," "benne," and Japanese terms (e.g., "rakkasei") against the nut-allergy flag.
+*   **Ambiguous Labels:** Feed ingredients labeled "may contain traces," "processed in a facility with," or vague terms like "natural flavors" and "spices." The system must treat these as positive matches for allergens when the user profile is flagged.
+*   **Cross-Contamination Logic:** Verify that the engine does not just filter explicit ingredients but also triggers warnings for recipes where high-risk ingredients appear in *other* steps or shared equipment notes within the database.
+*   **Fuzz Testing:** Inject malformed JSON, special characters, and mixed-language inputs to ensure the parser does not crash or skip validation steps when encountering unexpected data formats.
+
+**2. Decision Boundary Verification**
+Establish a "Golden Set" of 50 known safe and 50 known unsafe recipes. Run the recommender against profiles with severe nut allergies.
+*   **Zero-Tolerance Check:** Any suggestion containing a nut derivative or ambiguous warning must be an automatic fail.
+*   **False Positive Audit:** Ensure safe meals are not incorrectly blocked to the point of unusability, but prioritize blocking unsafe meals over offering variety.
+*   **Explanation Transparency:** Every blocked or warned meal must generate a clear, human-readable reason citing the specific ingredient or risk factor (e.g., "Blocked: Contains 'almond flour'").
+
+**3. Emergency Override & Manual Flagging Mechanism**
+Design a high-friction, high-visibility manual override flow:
+*   **Immediate Interruption:** If a user flags a suggestion as dangerous, the system must instantly hide that recipe for all users with similar allergy profiles pending review.
+*   **Confirmation Step:** Require the user to confirm the flag with a specific reason (dropdown: "Contains allergen," "Cross-contamination risk," "Other") to prevent abuse while capturing critical data.
+*   **Hard Stop:** The flagged recipe is removed from the active recommendation pool immediately. A backend alert is triggered for the QA team to investigate the ingredient mapping within 1 hour.
+*   **User Feedback Loop:** Notify the flagging user once the recipe has been reviewed and permanently updated or banned.
+
+**4. Data Integrity & Profile Locking**
+*   **Immutable Allergy Flags:** Once a user sets a "severe allergy" flag, it cannot be unset without a multi-step confirmation process involving re-entry of the specific allergen.
+*   **Session Persistence:** Ensure allergy data persists across sessions and devices; do not rely on temporary session storage.
+*   **Default-Deny Stance:** If the ingredient parser fails to categorize an item or encounters an unknown label, the default behavior must be to exclude the recipe for allergic users, not include it.
+
+**5. Pre-Launch "Red Team" Simulation**
+Before Friday's integration, have team members attempt to "break" the safety filter by crafting recipes with hidden nuts, misspelled ingredients, and edge-case cross-contamination scenarios. Document every bypass and patch immediately.
+
+*Note: Given the reliance on user-reported data without medical verification, all UI copy must explicitly state that the tool is an aid and not a medical guarantee.*
+*Recommendation: Log every instance where an ambiguous ingredient triggers a block to refine the dictionary post-launch.*

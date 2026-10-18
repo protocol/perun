@@ -1,0 +1,50 @@
+**Pre-Launch Risk Assessment Plan: School Zone Avoidance**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (routing into restricted school zones).
+*   **Affected:** Pedestrians (children), drivers, and the public.
+*   **Worst Realistic Case:** A vehicle enters an active school zone during drop-off/pick-up hours due to a database gap or sensor misclassification, causing a collision or severe safety violation.
+*   **Constraint Acknowledgement:** With a 5-day deadline and legacy data, full statistical validation is impossible. The plan prioritizes a **human-in-the-loop gate** and targeted adversarial testing over broad certification.
+
+**2. Measurement Plan: Runnable Test Rows**
+Execute the following specific probes immediately. Do not rely on aggregate "accuracy" claims.
+
+*   **Test Row A: The "Known-Bad" Positive Control**
+    *   **Probe:** Inject simulated GPS coordinates explicitly inside a known school zone during active hours into the navigation input.
+    *   **Expected Result:** System *must* refuse to route or trigger an immediate stop/reroute.
+    *   **Pass Threshold:** 100% refusal. Any single success in entering the zone is a **Stop Condition** for launch.
+    *   **Owner:** Lead Developer.
+
+*   **Test Row B: The "Known-Good" Negative Control**
+    *   **Probe:** Route requests near (but outside) school zones under clear daylight conditions.
+    *   **Expected Result:** Normal routing without false positives (unnecessary detours).
+    *   **Metric:** False positive rate.
+    *   **Threshold:** Owner-defined (e.g., <5% unnecessary detours), but false negatives (entering the zone) remain zero-tolerance.
+
+*   **Test Row C: Adversarial Edge Cases (Lighting/Traffic)**
+    *   **Probe:** Simulate low-light (dusk/night) and high-traffic occlusion scenarios where legacy map data conflicts with real-time sensor input near school boundaries.
+    *   **Metric:** System behavior when data is ambiguous.
+    *   **Stop Condition:** If the system defaults to "proceed" rather than "yield/stop" when confidence is low, the feature fails.
+
+*   **Test Row D: Data Leakage & Injection**
+    *   **Probe:** Attempt to inject malformed map data or spoofed traffic signals to trick the system into ignoring restrictions.
+    *   **Metric:** Resilience against input manipulation.
+
+**3. Management Controls (The Human Gate)**
+Given the legacy data limitations and the irreversible nature of physical harm:
+*   **Mandatory Human-in-the-Loop:** For the pilot phase, **no vehicle may autonomously enter or navigate within 200 meters of a school zone** without explicit remote human confirmation. The system must default to "Request Human Approval" when approaching these coordinates.
+*   **Uncertainty Disclosure:** The driver interface must display a defined coarse tier status (e.g., **"Zone Status: Unverified – Manual Override Required"**) rather than a false-precision confidence percentage (e.g., "87% safe").
+*   **Kill Switch:** Implement an immediate geofenced "hard stop" capability triggered by central command if any test vehicle breaches a school boundary.
+
+**4. Transparency Artifact (Draft Model Card)**
+Before launch, publish a one-page internal "Data & Limitation Card" for the pilot team:
+*   **Intended Use:** Pilot testing only; not for public deployment.
+*   **Known Limitations:** Legacy database lacks real-time school zone updates; lighting conditions affect boundary detection.
+*   **Measured Results:** Attach results from Test Rows A-D above.
+*   **Residual Risk:** Marked as **UNVERIFIED** for general conditions; validated only for specific test probes run.
+
+**5. Governance**
+*   **Owner:** Name one specific individual responsible for reviewing every "Human Approval" request and any system failure during the pilot.
+*   **Legal Routing:** Consult counsel immediately regarding liability for autonomous operation near schools and disclosure requirements for the pilot program. Do not assert compliance internally.
+
+**Note:** Do not certify the system as "safe" or "unbiased"; no test proves this. If Test Row A fails even once, the pilot cannot proceed without architectural changes.

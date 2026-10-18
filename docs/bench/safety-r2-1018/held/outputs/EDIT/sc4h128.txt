@@ -1,0 +1,28 @@
+**Plan: Fairness Review and Immediate Mitigation for Credit Limit Optimizer**
+
+**1. Immediate Mitigation (Human-in-the-Loop Gate)**
+Stop full automation for the identified high-risk group immediately. Configure the legacy logging system or a simple rule-based wrapper to flag any proposed credit limit *reduction* for users identified as elderly (or proxy indicators like low digital transaction frequency) for manual human review before execution. Do not allow the system to automatically lower limits for this segment until the bias is resolved. This prevents irreversible financial harm while the investigation proceeds.
+
+**2. Harm Inventory & Measurement Plan (Using Legacy Logs)**
+Since you cannot retrain models or use advanced tools, analyze existing decision logs with the following specific steps:
+
+*   **Define the Probe:** Isolate log entries where the optimizer recommended a limit *decrease*.
+*   **Segment the Data:** Split these entries into two groups: "Elderary/Low-Digital" (based on your observed proxy) and "General Population."
+*   **Calculate Disparity Metric:** Compute the average percentage reduction for both groups.
+    *   *Metric:* `(Avg Reduction % Group A) - (Avg Reduction % Group B)`.
+    *   *Threshold:* Any statistically significant negative disparity for the elderly group is a fail.
+*   **Control Check:** Identify a "known-good" scenario (e.g., users with high digital activity but similar spending drops) to ensure the model reacts to *spending behavior*, not *channel usage*.
+*   **Root Cause Analysis:** Check if the model weights "number of digital transactions" as a direct negative factor for creditworthiness, confusing "low digital usage" with "high risk."
+
+**3. Proposed Logic Adjustments (Rule-Based Fallbacks)**
+Without retraining, apply deterministic rules to override the model's output:
+*   **Remove Channel Bias:** Strip "frequency of digital transactions" as a direct input variable for the scoring logic if possible, or cap its influence weight to zero via configuration.
+*   **Floor Protection:** Set a hard rule that no credit limit can be reduced by more than X% (e.g., 5%) in a single cycle for any user over a certain age bracket or with < Y digital transactions/month, regardless of the model's suggestion.
+*   **Alternative Data Weighting:** If legacy tools allow, increase the weight of "on-time repayment history" and "total account tenure" to counterbalance the lack of digital activity signals.
+
+**4. Transparency & Governance**
+*   **Disclosure:** Update user communications to state that credit limits are adjusted by an automated system based on transaction patterns, and provide a clear, easy path for users to request a manual review of their limit.
+*   **Owner Assignment:** Assign one team member as the owner of this bias metric. They must re-run the disparity calculation weekly using the legacy logs.
+*   **Status Reporting:** Report the disparity metric as `UNVERIFIED` until the post-mitigation logs show the gap has closed. Do not claim the system is "fair" based on this initial plan; only report the measured residual risk.
+
+**Note:** This plan treats the automatic reduction of credit as a high-stakes action requiring a human gate. Legal counsel must determine if this automated decision triggers specific regulatory disclosures under local Nigerian banking laws or international standards.

@@ -1,0 +1,41 @@
+### Safety Validation Framework for Smart Water Quality Sensors
+
+**Objective:** Verify that water quality sensors reliably detect lead contamination under battery-saving constraints (reduced scan frequency) and network instability, ensuring zero false negatives before deployment.
+
+#### 1. Test Environment Setup
+*   **Hardware-in-the-Loop (HIL):** Use a controlled water circulation rig capable of mixing precise concentrations of lead (0 ppb to 20 ppb) to simulate EPA action levels (15 ppb) and safety margins.
+*   **Sensor Emulation:** Configure test units to operate in "Eco-Mode," enforcing the reduced spectral analysis interval dictated by battery constraints.
+*   **Network Simulator:** Implement a network shaper to induce latency, packet loss, and total outages ranging from 1 hour to 72 hours.
+
+#### 2. Testing Protocol Phases
+
+**Phase A: Baseline Sensitivity Verification (Static Conditions)**
+*   **Procedure:** Expose sensors to incremental lead concentrations (5, 10, 15, 20 ppb) while connected to a stable network.
+*   **Frequency Stress:** Trigger spectral scans at the minimum allowed frequency (e.g., once every 4 hours).
+*   **Success Criterion:** 100% detection rate at ≥15 ppb. Any reading below the threshold at these concentrations constitutes a false negative and fails the trial.
+
+**Phase B: Intermittent Connectivity & Store-and-Forward**
+*   **Procedure:** Introduce lead contamination (15+ ppb) immediately after a scan cycle completes, forcing the sensor to wait for the next scheduled scan.
+*   **Network Outage Simulation:** Cut network connectivity 10 minutes before the scheduled scan and maintain outage for 24 hours.
+*   **Validation:** Verify the sensor locally logs the high-lead event during the offline period. Upon network restoration, confirm the alert is transmitted immediately with the original timestamp.
+*   **Success Criterion:** No data loss; alerts generated upon reconnection reflect the actual time of detection, not the time of transmission.
+
+**Phase C: Battery-Constraint Edge Cases**
+*   **Procedure:** Simulate low-battery states where the device might further throttle operations. Introduce contamination during these states.
+*   **Wake-Up Logic:** Test if sudden changes in preliminary sensor readings (e.g., pH or turbidity spikes) trigger an unscheduled "emergency" spectral scan despite battery saving modes.
+*   **Success Criterion:** If preliminary indicators suggest contamination, the system must override frequency limits to perform a full spectral analysis. Failure to escalate constitutes a critical flaw.
+
+**Phase D: Long-Duration Drift Simulation**
+*   **Procedure:** Run a 7-day continuous cycle with fluctuating contamination levels and random network outages to simulate the academic term.
+*   **Focus:** Monitor for sensor drift that might cause a gradual under-reporting of lead levels, potentially slipping below the threshold over time.
+*   **Success Criterion:** Calibration checks auto-triggered by the system must validate accuracy; any uncorrected drift resulting in a missed alert is a failure.
+
+#### 3. Pass/Fail Criteria for Deployment
+*   **Zero False Negatives:** Absolute requirement. Any instance where lead ≥15 ppb is present but not alerted (either locally or remotely) halts deployment.
+*   **Latency Tolerance:** Alerts delayed solely by network outages are acceptable provided they are timestamped correctly and sent immediately upon recovery.
+*   **Battery Integrity:** The testing protocol must not drain batteries faster than the projected school-year lifespan.
+
+#### 4. Reporting & Authorization
+Generate a validation report detailing every injection event, the sensor's response time, the network state at the time of detection, and the final alert status. Deployment authorization is granted only if the False Negative Rate is 0% across all phases.
+
+*Note: This framework assumes the sensors have local logging capabilities; if not, Phase B requires hardware modification. Field trials should begin with a 10% subset of schools after passing Phase D.*

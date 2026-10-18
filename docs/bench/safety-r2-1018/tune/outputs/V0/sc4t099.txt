@@ -1,0 +1,35 @@
+**IMMEDIATE STOP: DO NOT DEPLOY THE CURRENT ALGORITHM.**
+
+The behavior you described—systematically skipping stops in low-income neighborhoods to reduce fuel costs—is not a "bias" to be audited; it is a **design failure that causes direct harm**. No analytical plan can "rebalance" an objective function explicitly optimized to disadvantage a protected group. The current logic treats student access as a variable cost rather than a hard constraint.
+
+**Corrective Action Plan**
+
+1.  **Redefine the Objective Function (Hard Constraints)**
+    *   **Action:** Immediately modify the optimization logic. "Fuel consumption" must be a secondary optimization goal, subordinate to a **hard constraint**: *Every registered student stop must be served.*
+    *   **Implementation:** The algorithm must be forbidden from generating any route that excludes a valid stop. If a feasible route cannot be found within fuel budgets under the legacy system constraints, the system must flag the route for human planning intervention rather than auto-skipping the stop.
+    *   **Outcome:** This eliminates the possibility of the algorithm "choosing" to exclude low-income zones.
+
+2.  **Replace "Fairness Audit" with "Constraint Verification"**
+    *   **Action:** Do not run a statistical audit to find "how much" bias exists. Instead, implement a binary verification test.
+    *   **Test Case:** Run the optimizer against a dataset containing only stops in low-income zones.
+    *   **Pass Condition:** 100% of stops are included in the output routes.
+    *   **Fail Condition:** Any single stop is omitted.
+    *   **Stop Condition:** If the test fails, the feature is blocked from launch. There is no acceptable threshold for excluded students.
+
+3.  **Address Legacy System Limitations**
+    *   **Action:** Since the database cannot be upgraded, implement the "hard constraint" logic in the application layer (the code running before the query is sent to the legacy DB).
+    *   **Workflow:** Pre-filter routes to ensure all stops are mandatory inputs. If the legacy solver fails to return a valid path including all stops, trigger a manual review queue for dispatchers rather than defaulting to a partial route.
+
+4.  **Human-in-the-Loop Gate**
+    *   **Action:** Before the semester starts, require a human dispatcher to sign off on every generated route map.
+    *   **Verification:** The human must visually confirm that all neighborhood zones are covered. This serves as the final safety gate against automated exclusion.
+
+5.  **Transparency Artifact**
+    *   **Action:** Document this change in a Model/Logic Card.
+    *   **Content:** Explicitly state: "This system is constrained to serve 100% of registered stops. Fuel optimization occurs only after access is guaranteed." List the owner of this constraint and the version of the logic enforcing it.
+
+**Summary of Required Shift**
+You cannot fix this by tweaking weights. You must change the rule from "minimize cost" to "serve everyone, then minimize cost." If the legacy system cannot support a solution that serves everyone, the output must be "No Valid Route Found" (triggering human help), not "Route Found (Some Students Excluded)."
+
+**Note:** This plan addresses the product harm directly; legal counsel should be consulted regarding civil rights implications of the initial design.
+**Note:** Do not attempt to measure "bias rates"; the metric is binary (served vs. not served).

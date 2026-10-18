@@ -1,0 +1,31 @@
+### Product Output Safety Review: Automated Claims Bot
+
+**Immediate Finding: High-Stakes Automation Gate Required**
+Your current design, which "automatically denies claims," constitutes a high-stakes, irreversible financial action. Before any testing strategy is executed, you must implement a **human-in-the-loop gate**. No claim denial should be fully automated during the beta stage, especially given the acknowledged complexity of "evolving storm systems" and data lag. The failure mode here is not just a bug; it is the systematic denial of valid relief to users in crisis. Shift the bot's role from "decider" to "recommender" that flags cases for human review when confidence is not absolute or when event data is ambiguous.
+
+**Harm Inventory & Measurement Strategy**
+Given your constraint of using only anonymized summaries, you cannot rely on historical accuracy alone. You must construct a **harm inventory** focusing on:
+1.  **Bias/Unfair Outcomes:** Does the bot disproportionately deny claims from regions with slower official declaration processes?
+2.  **Hallucination as Fact:** Does the bot treat "no official declaration yet" as "no disaster occurred"?
+3.  **Over-reliance:** Are operators trusting the bot's denial without verifying the evolving situation?
+
+**Testing Strategy for Edge Cases (Simulating Data Lag)**
+Since you cannot access real-time private data, you must build **adversarial synthetic probes** to test the logic:
+
+*   **The "Declaration Lag" Probe Set:** Create test inputs where the cancellation date falls *between* the onset of verifiable local chaos (e.g., news reports, flight cancellations) and the formal government declaration.
+    *   *Positive Control:* A claim where a disaster was declared 2 days prior (should approve).
+    *   *Negative Control:* A claim where no disaster exists (should deny).
+    *   *Edge Case:* A claim where major airlines cancelled flights due to a storm, but the government has not yet issued a formal "natural disaster" declaration. The bot must **not** auto-deny this. It should route to human review.
+*   **The "Regional Nuance" Probe Set:** Simulate scenarios where a disaster is declared for a specific province but not the whole country, or vice versa. Test if the bot incorrectly denies claims based on overly broad or narrow geographic matching.
+*   **The "Evolving Event" Probe Set:** Input claims where the reason code matches a developing situation (e.g., "wildfire smoke" vs. "fire"). If the bot's logic requires exact keyword matching to a static database, it will fail.
+
+**Execution Plan**
+1.  **Define Confidence Tiers:** Do not output a percentage (e.g., "87% likely valid"). Instead, use defined tiers: **Confirmed** (Official declaration matches), **Corroborated** (Multiple reliable third-party sources confirm event, no official declaration yet), and **Unverified**.
+2.  **Stop Condition:** If the bot outputs "Unverified" or "Corroborated," the action must be **paused for human review**. Any auto-denial in these tiers is a critical failure.
+3.  **Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Triage only. Limitations: Cannot account for declaration lags. Performance: Unverified for evolving events until beta testing completes." Do not claim the system is "fair" or "accurate" without running the probes above.
+
+**Governance**
+Assign a specific owner to review every denied claim during beta. If the bot denies a claim that a human later overturns, log this as a specific harm incident. Do not ship to public until the false-negative rate on "lag" scenarios is understood and mitigated by the human gate.
+
+*Note: Legal counsel must review whether auto-denials trigger specific regulatory duties under consumer protection laws in your operating regions. This review does not certify compliance.*
+*Note: "Unverified" is the only honest metric for edge cases until real-world data validates the synthetic probes.*

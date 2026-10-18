@@ -1,0 +1,39 @@
+### Safety Validation Plan: Smart Feeder Overfeeding Prevention
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Algorithmic overfeeding due to misinterpreted activity data (false positives for high activity).
+*   **Affected:** Pets with strict dietary limits, metabolic conditions, or obesity predispositions.
+*   **Worst Realistic Case:** Chronic overfeeding leading to acute health crises (e.g., pancreatitis in susceptible breeds) or exacerbation of existing conditions during the beta period.
+*   **Constraint Acknowledgement:** Sensor sampling rate is fixed; validation must rely on software logic, thresholds, and human gates, not hardware upgrades.
+
+**2. Measurement Strategy (Runnable Tests)**
+Execute the following test rows before beta shipment. Do not assert safety; report residual risk.
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **False High Activity** | **Inputs:** Simulated low-activity data (sleeping, resting) injected with noise patterns mimicking high movement.<br>**Positive Control:** Known high-activity sequence.<br>**Negative Control:** Known sedentary sequence. | % of sedentary periods misclassified as "high activity" triggering extra food. | **0%** for pets flagged with dietary restrictions. | Any misclassification for restricted profiles blocks launch. |
+| **Dietary Profile Ignored** | **Inputs:** High-activity data fed into profiles marked "Weight Loss" or "Medical Diet."<br>**Controls:** Standard profile vs. Restricted profile. | Dispensed calories vs. prescribed limit. | **100%** adherence to prescribed caloric cap regardless of activity score. | Any exceedance of the hard caloric cap blocks launch. |
+| **Sensor Noise Spike** | **Inputs:** Erratic, non-biological sensor spikes (hardware glitch simulation). | System response to impossible activity levels. | System defaults to "Unknown/Low" activity and dispenses baseline only. | Defaulting to "High" activity triggers immediate rollback. |
+
+*Additional Probes:* Test for "excess agency" where the system autonomously increases food beyond a safe daily maximum without user confirmation.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the high stakes of animal health and fixed hardware:
+*   **Hard Cap Implementation:** Code a deterministic, non-AI upper limit on daily calories based on the pet's profile weight/breed. The AI can recommend *less*, but never *more* than this hard cap.
+*   **Uncertainty Tiering:** If activity data is ambiguous or noisy, the system must default to a **"Unverified/Low"** confidence tier, dispensing only the conservative baseline amount. Do not display raw confidence percentages (e.g., "87% active") to users; use clear states: *Confirmed Active*, *Likely Active*, *Unverified (Baseline Fed)*.
+*   **Human-in-the-Loop for Anomalies:** If the AI detects a sudden, sustained spike in activity that deviates >20% from the pet's historical norm, the system must **pause** automatic adjustment and request explicit owner confirmation via the app before increasing portions.
+*   **Disclosure:** Clearly label feeding adjustments as "AI-Suggested" in the app log, allowing owners to see the rationale and override decisions.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before beta, publish a one-page "Feeding Logic Card" for early adopters containing:
+*   **Intended Use:** Activity-based portion adjustment for healthy adult pets.
+*   **Out-of-Scope:** Pets with diagnosed metabolic disorders, pregnancy, or geriatric needs (require vet approval).
+*   **Known Limitations:** Fixed sensor sampling may miss short bursts of activity; system defaults to baseline in uncertain conditions.
+*   **Owner Contact:** Direct line for reporting feeding anomalies.
+
+**5. Governance**
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing any feeding anomaly reports daily during beta.
+*   **Re-review Trigger:** Any report of pet weight gain or health issue immediately pauses the feature for that user segment.
+
+**Note:** Legal counsel must review whether this automated decision falls under specific consumer protection or veterinary device regulations in Australia before launch.
+**Note:** Do not fabricate a "safe" rate; if the "False High Activity" test fails, the feature cannot ship in its current form.

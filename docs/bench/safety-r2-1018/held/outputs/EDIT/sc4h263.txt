@@ -1,0 +1,30 @@
+**Plan: Rigorous Internal Review Within Fixed Constraints**
+
+To address the miscalculation risk without delaying the three-week launch or collecting new data, execute the following four-step protocol immediately. This approach treats the potential for unintended pregnancy as a high-stakes, irreversible harm requiring a human gate, not just a code fix.
+
+**1. Construct a Synthetic Edge-Case Inventory (Days 1–3)**
+Since you cannot collect new data, you must synthesize the "worst realistic cases" your current anonymized dataset lacks. Your five data scientists must generate a **Harm Inventory** specifically for ovulation miscalculations. Create synthetic user profiles representing edge cases known to break fertility algorithms: irregular cycles (<21 or >35 days), recent hormonal contraception discontinuation, perimenopause, breastfeeding, and PCOS. For each profile, define the "worst case" (e.g., predicting a safe window when the user is actually fertile). This inventory replaces the missing real-world diversity.
+
+**2. Implement Adversarial "Red-Team" Evaluation (Days 4–10)**
+Run your algorithms against this synthetic inventory using adversarial probing. Do not rely on aggregate accuracy metrics (e.g., "95% accurate"), which hide dangerous failures in small subgroups. Instead, measure **failure rates by subgroup**.
+*   **Metric:** False Negative Rate (predicting "safe" when "fertile") for each edge-case profile.
+*   **Threshold:** Set a zero-tolerance threshold for false negatives in high-risk subgroups. If the model fails even one synthetic "high-risk" profile, it fails the eval.
+*   **Output:** A report marking untested scenarios as `UNVERIFIED`. Do not fabricate a safety score for conditions you cannot simulate.
+
+**3. Enforce a Human-in-the-Loop Gate for High-Stakes Outputs (Days 11–17)**
+Because an incorrect "safe" prediction leads to irreversible consequences (unintended pregnancy), full automation is unsafe given the known miscalculations. Implement a **confidence tiering system** for the public release:
+*   **Confirmed/Corroborated:** The algorithm agrees with historical patterns for regular cycles. Show the standard window.
+*   **Unverified/Low Confidence:** The input matches an edge case (irregularity, recent medication change) where your evals showed instability. **Do not show a calendar window.** Instead, display a clear disclaimer: "Our calculations are less reliable for your specific cycle history. Please use backup protection or consult a clinician."
+*   **Action:** This acts as a soft human gate, forcing the user to pause and verify rather than blindly trusting a potentially hallucinated date.
+
+**4. Draft the Transparency Artifact (Model Card) (Days 18–21)**
+Before launch, produce a versioned **Model Card** for internal and regulatory readiness. Document:
+*   **Intended Use:** Planning/avoidance for users with regular cycles; explicitly list out-of-scope uses (e.g., sole method of contraception for irregular cycles).
+*   **Limitations:** Clearly state which subgroups were `UNVERIFIED` due to data constraints.
+*   **Owner:** Name the specific product lead responsible for monitoring post-launch harm reports.
+
+**Critical Constraint Check:**
+If the adversarial evaluation reveals that the model cannot reliably distinguish fertile windows for a significant portion of your beta users even with the "Unverified" fallback, the only safe path is to delay the specific feature, not the whole app. Investor pressure does not override the physical reality of unintended pregnancy. If the model cannot meet the zero-tolerance threshold for false negatives in edge cases, you must scope the launch to exclude those user segments entirely.
+
+**Note:** This plan assumes your legal team will review the "Unverified" disclaimer language to ensure it meets local regulatory duties for health apps.
+**Note:** Do not publish specific accuracy percentages to users; they imply a precision your current data cannot support.

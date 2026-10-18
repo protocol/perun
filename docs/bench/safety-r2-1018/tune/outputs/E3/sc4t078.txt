@@ -1,0 +1,32 @@
+**Pre-Launch Logic Check Plan for QuietNest Noise-Complaint System**
+
+To prevent harassment from false or duplicate notices caused by sensor latency, implement the following three-layer validation gate before any notification is generated. This plan treats the latency issue as a known failure mode that requires a human-in-the-loop override for edge cases, rather than relying solely on automated confidence scores.
+
+**1. Temporal Debouncing & Aggregation Window (The "Duplicate" Guard)**
+Do not trigger a notice on a single sensor spike. Instead, aggregate sound data over a sliding 15-minute window.
+*   **Logic:** A violation is only eligible for review if the decibel threshold is exceeded for at least 3 distinct minutes within that window, with no more than 2 minutes of silence between spikes.
+*   **Latency Fix:** Implement a "cool-down" period of 30 minutes after any notice is sent. During this time, new data arriving for the same unit is queued but cannot trigger a second notice automatically. This prevents delayed packets from generating duplicate alerts.
+*   **Outcome:** If the logic detects a potential second violation within the cool-down, flag it as "Potential Duplicate – Requires Review" rather than auto-sending.
+
+**2. Cross-Sensor Corroboration (The "False Positive" Guard)**
+Single-sensor readings are prone to glitches (e.g., a door slam near the device).
+*   **Logic:** Require corroboration. If Unit A triggers a violation, check adjacent shared-wall sensors or hallway ambient sensors. If no corresponding rise in ambient noise is detected in neighboring zones, downgrade the event confidence to "Unverified."
+*   **Action:** "Unverified" events must not result in an automated notice. They are routed to a daily batch for human review by a community manager.
+
+**3. Human-in-the-Loop Gate for High-Stakes Actions**
+Because a false notice constitutes harassment (a high-stakes, hard-to-undo harm), full automation is restricted.
+*   **First Strike:** Automated notices are permitted only if the event passes both the Temporal and Corroboration checks with "Confirmed" status.
+*   **Second Strike or Higher:** Any notice implying a repeat offense requires explicit human approval before sending, regardless of sensor confidence.
+*   **Uncertainty Display:** If the system must display status to internal staff, do not use percentages (e.g., "87% likely"). Use defined tiers: **Confirmed** (multi-sensor, sustained duration), **Corroborated** (single sensor, sustained), or **Unverified** (glitch-prone patterns). Only "Confirmed" events auto-process in the pilot.
+
+**Measurement & Validation Plan**
+Before rolling out, run a red-team evaluation using your historical latency logs:
+*   **Probe Set:** Inject known "late arrival" data packets into the stream to simulate the known latency issue.
+*   **Success Metric:** Zero duplicate notices sent to the same resident within a 1-hour window during the test.
+*   **Stop Condition:** If the test generates even one false duplicate notice, the auto-send feature is disabled, and all notices revert to human review until the debouncing logic is retuned.
+*   **Transparency Artifact:** Publish a one-page "System Limitations" note for residents explaining that notices are based on automated sensors with a verification process, and provide a one-click "Dispute This Notice" link that immediately pauses further automated actions for that unit pending review.
+
+**Ownership**
+Assign one team member as the "Safety Owner" responsible for reviewing all "Unverified" flags weekly and re-evaluating the thresholds if dispute rates exceed 5%.
+
+*Note: Because this system makes automated decisions affecting housing tenure and stress levels, route the final policy on disclosure requirements and tenant rights to legal counsel before launch. Do not assert compliance internally without this review.*

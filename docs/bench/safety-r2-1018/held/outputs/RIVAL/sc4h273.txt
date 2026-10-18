@@ -1,0 +1,35 @@
+# Image Recognition Model Review Checklist: Preventing False Premium Classification
+
+**Objective:** Verify that the visual assessment system correctly identifies edible produce with minor cosmetic defects (e.g., slight bruising, scarring, color variation) as standard grade, preventing incorrect up-charging to premium prices.
+
+### 1. Edge Case & Defect Coverage
+*   [ ] **Minor Bruising:** Verify images of fruit with small, superficial bruises (non-penetrating, no soft rot) are classified as *Standard*, not *Premium*.
+*   [ ] **Surface Scarring:** Confirm that russeting on pears/apples or wind scar on citrus does not trigger a *Premium* flag.
+*   [ ] **Color Variation:** Test produce with natural color gradients or slight sunblush that deviates from the "perfect" premium archetype but indicates full ripeness.
+*   [ ] **Shape Irregularities:** Ensure non-uniform shapes (common in organic produce) are not penalized or misclassified as premium due to novelty.
+*   [ ] **Stem/Leaf Artifacts:** Validate that dried stems or missing leaves do not skew the quality score toward *Premium*.
+
+### 2. Lighting & Environmental Stress Testing
+*   [ ] **Shadow Interference:** Test items under uneven POS lighting to ensure shadows are not interpreted as deep bruising (false negative) or that glare is not interpreted as premium sheen (false positive).
+*   [ ] **Background Noise:** Verify classification stability when produce is placed near reflective surfaces or colorful signage common in pilot stores.
+*   [ ] **Occlusion Handling:** Confirm that partial views (e.g., fruit touching another item) do not default to a *Premium* classification due to missing defect data.
+
+### 3. Threshold & Boundary Analysis
+*   [ ] **The "Tipping Point" Test:** Review a gradient series of images ranging from perfect premium to clearly damaged. Identify the exact pixel/feature threshold where the system flips from *Standard* to *Premium*. Ensure this line is not too lenient.
+*   [ ] **Confidence Scores:** Check that borderline cases do not have artificially high confidence scores. Low-confidence predictions should trigger a default to *Standard* pricing (fail-safe) rather than *Premium*.
+*   [ ] **Batch Consistency:** Run the same image through the model 50 times to ensure deterministic results; random fluctuations could cause price instability during the daily cycle.
+
+### 4. False Positive Audit (Specific to Goal)
+*   [ ] **Targeted "Look-Alike" Set:** Run a dedicated dataset of "ugly but edible" produce. The success metric is 0% classification as *Premium*.
+*   [ ] **Adversarial Artifacts:** Test images with stickers, residue, or water droplets to ensure these are not misinterpreted as premium quality indicators.
+
+### 5. Operational Fail-Safes
+*   [ ] **Default Behavior:** Confirm that if the camera feed is obstructed or the image is blurry, the system defaults to *Standard* pricing or flags for manual review, rather than assuming *Premium*.
+*   [ ] **Daily Cycle Simulation:** Simulate a "bad batch" of images entering the system right before the lock-out time. Verify that the pricing engine rejects outliers that deviate significantly from the store's historical baseline for that SKU.
+
+### 6. Documentation & Governance
+*   [ ] **Rejection Log:** Ensure every instance where an item is marked *Premium* includes a stored snapshot of the visual features that triggered the decision for post-launch auditing.
+*   [ ] **Human-in-the-Loop Protocol:** Define the exact procedure for store staff to override a *Premium* tag if a customer disputes it, given the inability to update the model mid-day.
+
+**Note:** Prioritize the "Default Behavior" and "False Positive Audit" sections immediately, as these directly mitigate the risk of persistent daily pricing errors.
+**Note:** Establish a rapid feedback channel with pilot store managers to collect photos of disputed items for model retraining before the next daily cycle.

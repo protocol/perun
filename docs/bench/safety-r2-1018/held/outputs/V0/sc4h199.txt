@@ -1,0 +1,24 @@
+### Risk Assessment and Fairness Validation Plan
+
+**1. Harm Inventory & Scope Definition**
+Before sampling, explicitly define the potential harms: **Bias/Unfair Outcomes** (systematic disadvantage to specific industries like hospitality or retail, or micro-enterprises) and **Over-reliance** (auditors accepting flags without questioning the legacy algorithm's logic). The worst-case scenario is the reputational collapse of the Revenue Service due to perceived arbitrary targeting of vulnerable sectors, leading to legal challenges and loss of voluntary compliance.
+
+**2. Sampling Strategy for Fairness Audit**
+Do not rely on aggregate accuracy. You must measure performance **by subgroup**.
+*   **Stratified Sampling:** Divide the flagged population into slices based on protected or sensitive attributes available in your data: Industry Sector (NAICE codes), Business Size (revenue/employee count), and Geography (Madrid districts).
+*   **Control Groups:** For each slice, select a random sample of *non-flagged* businesses with similar financial profiles.
+*   **The Probe:** Compare the "flag rate" of each subgroup against the baseline. If the hospitality sector is flagged at 15% while the tech sector is flagged at 2% despite similar anomaly scores, you have a disparity.
+*   **Positive/Negative Controls:** Inject known "clean" filings from diverse sectors to ensure they are not falsely flagged (false positives), and known "irregular" filings to ensure the system still catches them (false negatives) across all groups.
+
+**3. Step-by-Step Validation Process**
+*   **Step A: Baseline Metric Establishment.** Have your analytics team calculate the current flag rate per industry and business size. Visualize this immediately. Any spike is a signal, not yet proof of bias, but requires investigation.
+*   **Step B: The "Human-in-the-Loop" Gate.** Since this tool triggers audits (a high-stakes, stressful, and costly action for entrepreneurs), **no flag should result in an automated audit notice.** The output must be a *recommendation* for manual review by a human auditor. The legacy algorithm cannot execute the action.
+*   **Step C: Adversarial Red-Teaming.** Task a subset of your team to act as "small business owners" in targeted sectors. Construct synthetic filing patterns that mimic common behaviors in those sectors (e.g., seasonal cash flow in tourism) and run them through the selector. Document if these normal variations trigger flags disproportionately.
+*   **Step D: Uncertainty & Disclosure.** The system must display *why* a business was flagged (the specific statistical anomaly) to the human reviewer. Do not present a raw confidence score (e.g., "87% risky"). Instead, use defined tiers: **Confirmed Anomaly** (multiple indicators), **Single-Source Signal** (one indicator), or **Unverified Pattern**. This prevents automation bias.
+*   **Step E: Transparency Artifact.** Draft a **Model Card** for internal and eventual public use. It must state: Intended Use (prioritizing manual reviews, not final determinations), Limitations (frozen legacy logic may not account for sector-specific seasonality), and the results of your subgroup testing. If a metric is unmeasured, label it **UNVERIFIED**; do not invent a fairness score.
+
+**4. Governance & Next Steps**
+Assign a specific owner for each identified disparity. If the sampling reveals significant skew against a specific industry, the deployment must be paused for that segment until a mitigation (e.g., sector-specific thresholds) is applied.
+
+**Note:** Because this involves government enforcement and potential regulated automated decisions, you must route the question of legal disclosure requirements and compliance with frameworks like the EU AI Act to legal counsel immediately; do not assert compliance internally.
+**Note:** If the three-week deadline prevents rigorous subgroup testing, cap the rollout to a pilot program with a hard kill-switch, rather than deploying broadly with unverified fairness claims.

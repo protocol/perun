@@ -1,0 +1,36 @@
+### Testing Framework for SouthernGrid Smart Meter Billing Logic
+
+Given the constraints of limited on-device processing and no cloud budget for real-time analysis, the safety evaluation must rely on **deterministic unit testing** and **boundary-value analysis** executed locally during the firmware build process. This approach verifies the aggregation logic without requiring heavy computational resources or external services.
+
+#### 1. Define Critical Test Scenarios
+Focus on the specific failure mode: incorrect charging during peak hours. Create a static library of test cases that cover:
+*   **Boundary Conditions:** Exact transition times between off-peak and peak hours (e.g., one second before, exactly at, one second after).
+*   **Zero-Usage Baselines:** Periods with no consumption to ensure no phantom charges are generated.
+*   **Continuous Load:** Steady consumption spanning across peak/off-peak boundaries to verify correct time-slicing of data.
+*   **Interruption Handling:** Simulated power loss or data transmission gaps during peak windows to ensure the system does not default to maximum billing estimates.
+*   **Maximum Load:** Highest theoretically possible usage to check for integer overflow errors in the aggregation sum.
+
+#### 2. Local Deterministic Execution
+Since the hardware cannot run complex checks and cloud processing is cost-prohibitive, integrate these tests into the local development pipeline:
+*   **Embed Test Harness:** Include a lightweight C/C++ test runner within the firmware build environment that executes against the aggregation module directly.
+*   **Mock Data Injection:** Feed pre-calculated usage logs (timestamps and wattage) into the logic module. Do not rely on live sensor data for these tests.
+*   **Expected Output Comparison:** For every input sequence, define the exact expected bill amount. The test fails if the calculated value differs by even a single cent.
+
+#### 3. Verification of Time-Logic
+The core risk is the misclassification of time. Implement specific checks for:
+*   **Clock Drift Simulation:** Test how the logic behaves if the internal clock is slightly off (within hardware tolerance) relative to the defined peak window.
+*   **Daylight Saving/Calendar Changes:** If applicable to the region, verify logic handling during date transitions that might shift peak windows.
+
+#### 4. Pass/Fail Criteria for Pilot Deployment
+*   **Zero False Positives:** The system must never charge for off-peak usage as peak usage.
+*   **Zero False Negatives:** The system must correctly identify all peak usage.
+*   **Deterministic Repeatability:** Running the same test suite on a developer's laptop must yield identical results to running it on the actual meter hardware emulator.
+
+#### 5. Deployment Gate
+Before flashing any device for the pilot:
+*   The full test suite must pass 100% on the local build server.
+*   A "golden record" test (a known good usage pattern) must be run on every physical unit during initial setup to verify the compiled logic matches the tested version.
+
+This framework ensures that billing accuracy is mathematically verified before deployment, protecting low-income users from erroneous charges without requiring runtime overhead or cloud expenses.
+
+*Note: Ensure test data reflects actual Santiago peak-hour definitions provided by the local grid operator. Retain all test logs as audit evidence for regulatory compliance.*

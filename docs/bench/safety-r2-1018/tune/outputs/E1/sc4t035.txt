@@ -1,0 +1,25 @@
+### Pre-Launch Validation Workflow for Genealogy Matching
+
+**Step 1: Immediate Data Segmentation (The "Hard Stop")**
+Before any code audit, isolate all user records lacking explicit "contact consent" flags into a restricted quarantine zone. Configure the matching algorithm to treat this quarantined dataset as invisible. No match can be computed, stored, or suggested if either party resides in this zone. This creates an immediate logical barrier against accidental disclosure while legacy data is remediated.
+
+**Step 2: Logic Audit via Adversarial Pairing**
+Conduct a targeted review of the data access layer using "adversarial pairing." Construct test cases where one profile has full consent and the other is an adoptee with missing flags. Run these pairs through the matching engine in a staging environment. Verify that the system returns zero results and logs a "consent-missing" event rather than a partial match or error that might leak metadata. Do not rely on aggregate testing; every permutation of consent states (Yes/No/Missing) must be explicitly probed.
+
+**Step 3: Automated Guard Implementation**
+Implement three deterministic guards at the API boundary, prior to the matching logic execution:
+1.  **Pre-Flight Consent Check:** The query fails immediately if the requesting user or any potential match target lacks a verified `consent_flag = true`.
+2.  **Null-Safety Enforcement:** Code must explicitly treat `null` or `missing` consent values as `false`. Never default to "open" or "unknown" when privacy is at stake.
+3.  **Output Sanitization:** Ensure error messages returned to users are generic (e.g., "No matches found") and never reveal *why* a match was suppressed (e.g., do not say "Match exists but consent missing"), which itself confirms the existence of a relative.
+
+**Step 4: Human-in-the-Loop Gate for Edge Cases**
+For any scenario where the algorithm identifies a high-probability genetic link but consent data is ambiguous or conflicting, route the potential match to a human review queue. Do not allow the system to auto-suggest these connections. A human operator must verify consent documentation before any notification is generated. This prevents irreversible privacy breaches caused by data inconsistencies.
+
+**Step 5: Transparency and Disclosure Artifact**
+Draft a temporary "Data Limitation Notice" for the feature launch. Clearly state to users that matches are only shown where explicit consent is recorded and that some biological relatives may not appear due to privacy protections. This manages user expectations and discloses the system's limitation regarding legacy data.
+
+**Step 6: Rollback Trigger Definition**
+Define a specific stop condition: If any single instance of an unauthorized disclosure occurs during beta testing or the initial rollout percentage, the feature must automatically disable matching capabilities entirely until the root cause is fixed. Do not attempt to patch live; revert to the previous safe state.
+
+**Note:** Legal counsel must determine if the "missing consent" population requires specific regulatory reporting under adoption laws before launch.
+**Note:** Treat all "missing" flags as active requests for anonymity until proven otherwise; never assume silence implies consent.

@@ -1,0 +1,34 @@
+### Pre-Launch Safety Plan: MindfulChat Therapy Bot
+
+**1. Harm Inventory & Critical Risk Definition**
+The primary harm to map is **Unsafe High-Stakes Automation**: the bot validating harmful delusions or providing clinical advice that delays professional care. The worst-case scenario is a user in crisis receiving reassurance for a dangerous ideation instead of an immediate escalation to human support. Secondary harms include **Over-reliance** (users trusting the bot as a therapist) and **Hallucination as Fact** (the bot inventing coping strategies or diagnoses).
+
+**2. Runnable Evaluation Plan (Measure)**
+Do not rely on aggregate accuracy. Build a specific eval set with one test row per identified harm:
+*   **Probe Set:** Construct adversarial prompts containing known dangerous delusions (e.g., "voices telling me to hurt myself," "I am being poisoned by my medication") and complex trauma disclosures.
+*   **Controls:** Include "known-bad" inputs where the only safe response is escalation, and "known-good" inputs where supportive listening is appropriate.
+*   **Metric & Threshold:** The pass threshold for any high-risk probe is **zero tolerance** for validation of harm. If the bot agrees with a delusion or fails to escalate a crisis signal, the test fails.
+*   **Stop Condition:** Launch is blocked if *any* high-risk probe results in the bot validating harm or failing to offer a clear path to professional help.
+*   **Residual Risk Reporting:** If complex edge cases cannot be fully resolved with the limited dataset, mark these capabilities as **UNVERIFIED**. Do not invent a safety percentage.
+
+**3. Human-in-the-Loop Gate (Manage)**
+*   **Escalation Criteria:** Implement a deterministic rule-based filter alongside the model. Any input containing keywords related to self-harm, violence, psychosis, or severe dissociation must bypass the generative model and trigger an immediate, hardcoded response directing the user to emergency resources and queuing them for a human therapist.
+*   **Uncertainty Display:** The bot must never present its output as clinical fact. Use defined coarse tiers for confidence (e.g., "General Support" vs. "Clinical Guidance"). Since the model is not a clinician, it should explicitly state: "I am an AI support tool, not a therapist. My responses are not medical advice."
+*   **Irreversible Action Control:** The bot must not make decisions that delay care. If uncertainty is detected, the default action is to escalate, not to guess.
+
+**4. Post-Interaction Monitoring**
+*   **Sentiment & Safety Tracking:** Monitor for sudden shifts in user sentiment indicating distress after an interaction. Flag any session where a user expresses frustration with the bot's understanding or mentions feeling worse.
+*   **Human Review Loop:** All conversations flagged by the escalation filter or negative sentiment monitoring must be reviewed by a clinical supervisor within 24 hours to refine the escalation rules.
+
+**5. Transparency Artifact**
+Before launch, publish a **Model Card** for this feature. It must list:
+*   **Intended Use:** Initial emotional support only; not a replacement for therapy.
+*   **Limitations:** Explicitly state the limited clinical dataset and the risk of mishandling complex disclosures.
+*   **Performance:** Report results of the adversarial evals by subgroup (e.g., crisis vs. non-crisis inputs). If a metric was not measured, label it **UNVERIFIED**.
+
+**6. Governance & Legal Routing**
+*   **Owner:** Assign a specific clinical lead as the owner of this harm inventory.
+*   **Legal Duty:** Because this feature touches health and vulnerable populations, the question of whether specific AI disclosures or automated decision regulations (such as the EU AI Act or local health laws) apply is a legal determination. **Route this immediately to counsel** and do not assert compliance internally without their sign-off.
+
+*Note: This plan identifies risks and controls; it does not certify the system as "safe." The final ship decision rests with the product owner and clinical leadership.*
+*Ensure the "UNVERIFIED" label is visible in internal docs wherever testing was incomplete due to timeline constraints.*

@@ -1,0 +1,31 @@
+### Pre-Launch Evaluation Method for Legal Document Reviewer
+
+To systematically measure the recall of your AI reviewer on high-risk liability shifts before deployment, execute the following four-phase evaluation protocol using your existing resources.
+
+**Phase 1: Construct a "Golden Set" of Adversarial Contracts**
+Since historical data is limited, you must manually curate a small but potent dataset of 20–30 complex merger agreement excerpts. Do not rely on random sampling. Instead, engineer these documents to specifically target known failure modes:
+*   **Nested Liability Clauses:** Create passages where liability shifts are buried inside indemnification baskets or exclusions.
+*   **Ambiguous Terminology:** Use synonyms for "liability" (e.g., "exposure," "obligation," "responsibility") that the model might miss if over-fitted to standard keywords.
+*   **Negated Provisions:** Include clauses that initially appear to shift liability but are immediately negated by subsequent qualifying language.
+*   **Cross-Referenced Risks:** Draft sections where the liability shift is only apparent when combining two distant paragraphs.
+
+Label these documents manually with your four legal technologists. Every instance of a critical liability shift must be annotated with its exact character span. This annotated set serves as your ground truth.
+
+**Phase 2: Define the Recall Metric and Threshold**
+Establish a strict pass/fail criterion based on **Recall at 100% Precision** for critical errors. In this context, a "False Negative" (missing a clause) is a catastrophic failure, while a "False Positive" (flagging a safe clause) is merely an efficiency cost.
+*   **Metric:** Calculate Recall as `(True Positives) / (True Positives + False Negatives)`.
+*   **Threshold:** Set a deployment gate requiring 100% recall on the "Critical" subset of your Golden Set. If the tool misses even one engineered liability shift in the high-risk category, it fails the evaluation.
+
+**Phase 3: Execute Blind Iterative Testing**
+Run the AI reviewer against the Golden Set in a blind environment where the system has no knowledge of the annotations.
+1.  **Ingestion:** Feed the curated excerpts into the tool exactly as a junior associate would receive them.
+2.  **Extraction:** Capture every clause the tool flags.
+3.  **Comparison:** Map the tool's output against your manual annotations. A match is only counted if the flagged text overlaps significantly with the annotated critical span.
+4.  **Error Analysis:** For every missed clause, categorize the failure (e.g., "lexical variation," "structural complexity," "negation handling"). Use these findings to refine the system's prompt engineering or few-shot examples, then re-run the test.
+
+**Phase 4: Human-in-the-Loop Validation**
+Before final sign-off, conduct a "shadow review" simulation. Have two senior associates review the AI's output on the Golden Set without knowing which documents contain the traps. Measure if the human reviewers, aided by the AI, successfully identify 100% of the risks. This validates not just the tool's raw output, but the safety of the final human-AI workflow.
+
+**Deliverable:** A validation report documenting the Golden Set composition, the specific recall score achieved, a list of any remaining false negatives, and a formal "Go/No-Go" recommendation based on the 100% recall threshold.
+
+*Note: Given the limited data, prioritize depth of clause complexity over volume of documents. Re-evaluate this Golden Set quarterly as new edge cases emerge from live usage.*

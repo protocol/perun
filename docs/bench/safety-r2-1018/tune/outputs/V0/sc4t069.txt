@@ -1,0 +1,34 @@
+### Pre-Launch Evaluation Strategy for StyleHub Virtual Try-On
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific risks for your diverse user base:
+*   **Bias/Unfair Outcomes:** The system consistently recommends larger sizes or fewer stylish options for specific body shapes, skin tones, or genders compared to a baseline.
+*   **Hallucination as Fact:** The system invents fit details (e.g., "this will hug your waist") that are physically impossible given the garment's actual cut, leading to disappointment.
+*   **Over-reliance/Automation Bias:** Users trust the automated "Perfect Fit" label over their own knowledge or size charts, increasing return rates and frustration.
+*   **Psychological Harm (Body-Shaming):** The visual rendering or text feedback uses language or visual distortions that negatively impact self-image (e.g., exaggerating features, using judgmental phrasing).
+*   **Missing Disclosure:** Users believe the image is a real photograph of them rather than a synthetic simulation, creating unrealistic expectations.
+
+**2. Measurement Plan (MEASURE)**
+Since compute limits prevent simulating every body shape internally, you must test strategically using **adversarial probes** and **sliced metrics** rather than broad coverage. Create one test row per harm above:
+
+*   **Probe Set:** Construct a "boundary dataset" of 50–100 static images representing edge cases (extreme heights, diverse body proportions, various skin tones, adaptive clothing needs) rather than random sampling. Include **positive controls** (images known to trigger bias in similar models) and **negative controls** (standard mannequin images).
+*   **Metrics & Thresholds:**
+    *   *Size Deviation:* Measure the difference between recommended size and ground-truth size per body segment. **Stop Condition:** If deviation exceeds 1 size category for any specific demographic slice (e.g., plus-size, petite), block launch for that segment.
+    *   *Sentiment/Safety Score:* Run output text through a toxicity and body-image safety filter. **Stop Condition:** Any output flagged as "shaming," "judgmental," or "medically unsafe" triggers an immediate manual review gate.
+    *   *Visual Fidelity:* Human review of rendered images for distortion artifacts. **Stop Condition:** >5% of edge-case renders show physically impossible stretching or shrinking.
+*   **Reporting:** Report results as **UNVERIFIED** for any body type not explicitly included in your probe set. Do not claim "0% bias" globally; state "No bias detected in tested segments; risk remains UNVERIFIED for untested shapes due to compute constraints."
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the initial launch, do not allow the system to auto-apply a "Recommended Size" to the cart. Instead, present the recommendation as a suggestion with a clear **"Why this size?"** explanation and a mandatory user confirmation click.
+*   **Uncertainty Tiers:** Do not display a confidence percentage (e.g., "92% match"). Instead, use defined coarse tiers: **"Confirmed Fit"** (high agreement between camera data and garment specs), **"Estimated Fit"** (some data missing), or **"Unknown – Check Size Chart"** (low confidence).
+*   **Disclosure:** Clearly label all images as "Simulated Representation" and all advice as "AI-Generated Suggestion."
+*   **Fallback:** If the camera input quality is poor or the body shape falls outside the verified probe set, default to showing the standard size chart rather than guessing.
+
+**4. Governance (GOVERN)**
+Assign one engineer as the owner of "Output Harm." They must re-run the boundary dataset probes whenever the underlying model updates or the garment catalog expands significantly.
+
+**Deliverable Artifacts:**
+*   A **Model Card** documenting the specific body shapes tested, the known limitations (compute-constrained gaps), and the intended use (suggestion only, not medical or exact fitting).
+*   A **Data Card** describing the source of your test images and consent status.
+
+**Note:** Given your compute constraints, prioritize depth of testing on high-risk edge cases over breadth. Never fabricate a global accuracy metric; clearly mark untested segments as UNVERIFIED in your Model Card.

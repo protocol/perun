@@ -1,0 +1,46 @@
+### Software-Only Mitigation Strategy
+
+Given the constraint of fixed camera sensors, the software must act as a probabilistic filter rather than a definitive scanner. The strategy shifts from "detect and order" to "detect, verify, and confirm."
+
+1.  **Multi-Factor Confidence Scoring:**
+    Do not rely solely on the camera's visual analysis of expiration dates or spoilage signs. Implement a confidence algorithm that weighs three factors:
+    *   **Visual Input:** The camera's raw assessment (low weight due to sensor limitations).
+    *   **Temporal Logic:** Compare the scan date against the user-inputted or barcode-retrieved "purchase date." If the elapsed time is significantly shorter than the average shelf life for that specific food category (e.g., milk scanned as "spoiled" only 2 days after purchase), flag the visual result as a likely false positive.
+    *   **Usage Patterns:** If the item was accessed recently (door sensor data), lower the probability of internal spoilage compared to items untouched for weeks.
+    *   *Action:* Only trigger an automatic order if the combined confidence score exceeds a high threshold (e.g., 90%).
+
+2.  **Mandatory User Verification Loop:**
+    For any item flagged as potentially spoiled but falling below the auto-order confidence threshold, initiate a "Soft Alert" rather than an order.
+    *   **Notification:** Send a push notification to the household's mobile app: "FreshHome suspects [Item] may be spoiled based on visual scan. Does this look correct?"
+    *   **Visual Evidence:** Include the low-confidence crop image in the alert so the user can make a final judgment.
+    *   **One-Tap Confirmation:** The user confirms "Yes, discard and replace" or "No, it's fine."
+    *   *Learning:* Use these corrections to locally tune the sensitivity of the visual algorithm for that specific unit's lighting conditions.
+
+3.  **Batching and Delayed Execution:**
+    Prevent "panic ordering" caused by transient scanning errors (e.g., condensation on the lens). If an item is flagged, require the condition to persist across three separate scans over a 12-hour period before even presenting the user verification prompt. This filters out momentary false positives.
+
+### Pre-Launch Review Process
+
+With a team of six, utilize a focused "Red Team" approach to stress-test the logic before units ship.
+
+1.  **Adversarial Data Simulation (Days 1-2):**
+    *   Create a synthetic dataset of 500+ images representing edge cases: condensation, poor lighting, obstructed labels, and fresh items that look aged (e.g., rustic bread, ripe fruit).
+    *   Run these against the current algorithm to establish a baseline False Positive Rate (FPR).
+    *   *Goal:* Ensure the FPR is below 5% before enabling any auto-order features.
+
+2.  **Logic Walkthrough & "Break-Fix" Session (Day 3):**
+    *   Divide the team into two groups: "Defenders" (who configured the confidence weights) and "Attackers" (who try to force a false order).
+    *   Attackers attempt to trick the system using the simulated data and temporal anomalies (e.g., setting the fridge clock forward).
+    *   Defenders must adjust the confidence thresholds and verification rules in real-time to block these attempts without blocking legitimate spoilage detection.
+
+3.  **Hardware-in-the-Loop Pilot (Days 4-5):**
+    *   Deploy the updated software to two internal test units loaded with a mix of actual fresh and intentionally spoiled items.
+    *   Run the units for 48 hours in a normal kitchen environment.
+    *   Measure the number of unnecessary alerts generated versus actual spoilage detected.
+    *   *Go/No-Go Criterion:* If the system generates more than one false alert per 24 hours during this pilot, revert to "User Verification Only" mode (disabling auto-orders entirely) for the initial batch launch.
+
+4.  **Final Policy Lock:**
+    *   Document the final confidence thresholds and verification rules as "immutable" for the first batch, requiring a formal sign-off from the lead engineer and product owner to change post-launch. This prevents ad-hoc tweaks that could reintroduce instability.
+
+*Note: This approach prioritizes preventing unnecessary costs (false orders) over catching every single spoiled item immediately, which is acceptable given the hardware constraints.*
+*User confirmation acts as the ultimate sensor calibration until hardware can be updated.*

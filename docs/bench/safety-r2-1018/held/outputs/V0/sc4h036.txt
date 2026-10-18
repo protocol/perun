@@ -1,0 +1,26 @@
+**Immediate Review Process and Tuning Plan**
+
+**1. Harm Inventory (Map)**
+Before deployment, document the specific risk: the algorithm systematically amplifies unverified conspiracy theories (Hallucination surfaced as fact) and creates feedback loops that radicalize user segments (Bias/Unfair outcomes). The worst-case scenario is real-world harm driven by platform-radicalized users. This inventory must be owned by a named lead, not the team collectively.
+
+**2. Runnable Measurement (Measure)**
+Do not assert safety; measure residual risk with a targeted eval set before the month-end deadline:
+*   **Probe Set:** Curate 50 known conspiracy narratives (positive controls) and 50 verified news stories on similar topics (negative controls).
+*   **Metric:** Amplification Ratio (frequency of recommendation for positive vs. negative controls).
+*   **Threshold:** Set a zero-tolerance stop condition where conspiracy content is amplified >2x more than verified news in any major demographic slice.
+*   **Injection Check:** Test if user comments containing conspiracy keywords artificially boost post ranking (prompt injection via user content).
+*   **Reporting:** If the metric exceeds the threshold, the launch is blocked. Do not invent a "safety score"; report the raw amplification ratio as `UNVERIFIED` until this test runs.
+
+**3. Immediate Tuning Parameters (Manage)**
+Since a logic overhaul is impossible, apply these deterministic guards to the existing engagement model:
+*   **Source Reliability Cap:** Hard-code a down-ranking factor for domains not present in your trusted news allow-list. If a post's primary link is unverified, cap its maximum viral reach regardless of engagement velocity.
+*   **Velocity Breakers:** Implement a "cool-down" timer. If a post's engagement grows >300% in one hour without verification signals, pause algorithmic amplification for human review. This addresses unsafe automation of high-stakes influence.
+*   **Uncertainty Disclosure:** Append a visible, coarse-grained label to posts flagged by the velocity breaker: *"Rapidly trending: Verification pending"* (using text + colorblind-safe icon). Do not show raw confidence percentages (e.g., "87% likely false"), as this implies false precision.
+*   **Human-in-the-Loop Gate:** For any content hitting the "viral" threshold while lacking verified sources, route to a human moderator queue before further amplification. Full autonomous viral spread of unverified claims is the failure mode to prevent.
+
+**4. Governance and Transparency**
+*   **Owner:** Assign one person to own the "Amplification Risk" metric. Re-review is mandatory if the engagement weighting changes.
+*   **Artifact:** Publish a one-page Model Card with the update. It must state the intended use (engagement), the known limitation (susceptibility to coordinated inauthentic behavior), and the results of the probe test above. Absence of this card is a transparency failure.
+*   **Legal Routing:** Whether these specific amplification patterns trigger regulatory duties under US law or emerging frameworks (like the EU AI Act if you have global users) is a determination for counsel. Route this question immediately; do not assert compliance internally.
+
+**Note:** This plan meets your deadline by using rule-based fallbacks rather than retraining. If the "Velocity Breaker" triggers too frequently and hurts core engagement, the constraint to move is the "no overhaul" rule, not the safety gate.

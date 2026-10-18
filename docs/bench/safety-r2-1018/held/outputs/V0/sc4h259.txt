@@ -1,0 +1,35 @@
+**Immediate Action Plan: Human-Gated Warning Logic & Verification**
+
+Do not enable fully automated stop commands for crane operations at this stage. Given the high-stakes, irreversible nature of halting heavy lifting and the potential for catastrophic physical harm if the AI hallucinates or misinterprets sensor data, a **human-in-the-loop gate** is the mandatory floor. The system must function as a **decision-support tool** that surfaces warnings with defined confidence tiers, requiring explicit confirmation by the site manager or crane operator before executing a stop. Full autonomy on this action is the failure mode we must prevent, regardless of the 48-hour weather deadline.
+
+**1. Harm Inventory (MAP)**
+Before finalizing logic, record these specific risks for the crane monitoring feature:
+*   **Hallucination as Fact:** The AI interprets noisy wind sensor data as a dangerous gust when none exists, causing unnecessary work stoppage and schedule delay.
+*   **Bias/Unfair Outcomes:** The model fails to detect dangerous turbulence patterns specific to certain crane configurations or site topographies not well-represented in training data.
+*   **Over-reliance:** Operators trust the "All Clear" status despite conflicting physical cues (e.g., visible swaying), leading to operation in unsafe conditions.
+*   **Unsafe Automation:** The system autonomously cuts power or locks brakes based on unverified data, potentially causing a load drop or structural shock.
+
+**2. Verification Steps (MEASURE)**
+Execute these targeted evaluations immediately with your six engineers on-site. Do not assert safety; measure residual risk.
+*   **Adversarial Probe Set:** Inject known bad data (spikes, flatlines, sensor drift) into the live feed. Verify the system flags these as "Unverified" or "Sensor Error" rather than generating a confident "Stop" or "Go" command.
+*   **Positive/Negative Controls:**
+    *   *Positive Control:* Simulate a confirmed high-wind event (using historical data or calibrated fans if safe). The system must trigger a high-priority warning.
+    *   *Negative Control:* Run stable wind data with minor noise. The system must not trigger a stop.
+*   **Metric & Threshold:** Define a "Stop Condition" for launch. Example: If the system generates *any* false positive stop command during 100 cycles of stable data, or misses *any* simulated critical gust, the automated feature is blocked.
+*   **Confidence Tiers:** Replace raw probability scores (e.g., "87% risk") with defined coarse tiers displayed to users:
+    *   **Confirmed:** Multiple sensors agree + model high confidence → Recommend Stop.
+    *   **Corroborated:** Single sensor spike + model moderate confidence → Alert Manager for Review.
+    *   **Unverified:** Conflicting data or sensor anomaly → Display "Data Unreliable – Manual Inspection Required."
+
+**3. Management & Governance (MANAGE & GOVERN)**
+*   **Override Mechanism:** Ensure the "Stop" command requires a physical or digital confirmation from the site manager. The AI proposes; the human disposes.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for the site team immediately. List: Intended Use (wind monitoring only), Limitations (does not detect rain/ice unless specified), Known Failure Modes (sensor drift), and the Owner (Lead Engineer on-site).
+*   **Ownership:** Name the specific engineer responsible for reviewing any system failure during the 48-hour window.
+
+**4. Legal & Regulatory Routing**
+*   Whether this automated decision falls under specific safety regulations (e.g., OSHA, EU Machinery Regulation) requiring formal certification or specific disclosures is a legal determination. Route this question to counsel immediately. Do not assume compliance based on internal testing.
+
+**Summary of Deliverable:**
+Freeze the logic to "Recommendation Only" mode. Implement the three-tier confidence display. Run the 100-cycle false-positive test with your engineers. If any false stop occurs, revert to manual monitoring until the model is retrained or tuned. Do not ship autonomous stopping without a human gate.
+
+*Note: This plan addresses product output safety; it does not certify the system as "safe" or "compliant." The final ship decision rests with BuildSafe leadership.*

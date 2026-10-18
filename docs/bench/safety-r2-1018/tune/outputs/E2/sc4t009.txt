@@ -1,0 +1,31 @@
+### Plan to Respect Religious Observances in SyncTime Assistant
+
+**1. Immediate Harm Inventory & Human Gate (Do Before Rollout)**
+*   **Identify the Risk:** The specific harm is "Bias/Unfair Outcomes" where the system systematically disadvantages users of specific faiths by scheduling over their holy days, and "Unsafe Automation" by making an irreversible commitment (sending invites) that causes social/professional offense.
+*   **The Floor Control:** Because this involves high-stakes social friction and potential discrimination, **disable fully autonomous scheduling** for any meeting request that falls within a user-defined "Do-Not-Disturb" (DND) block until the system's recognition accuracy is verified. Implement a **human-in-the-loop gate**: if the assistant detects a potential conflict or low confidence in a time slot, it must ask the user for explicit confirmation ("This time overlaps with your marked DND block. Proceed?") rather than auto-booking.
+
+**2. Testing Strategy (Measure Without a Global Database)**
+Since you lack a comprehensive database, you cannot test against "all" scenarios. Instead, test against **adversarial probes** and **user-supplied ground truth**:
+*   **Construct a "Known-Bad" Probe Set:** Manually create 20–30 test cases representing major and minority observances (e.g., Jumu'ah prayers, Sabbath, Ramadan fasting hours, Diwali, Yom Kippur). Input these as explicit DND blocks in user profiles.
+    *   *Test:* Attempt to schedule meetings during these exact windows.
+    *   *Pass Threshold:* **Zero** automatic bookings during explicit DND blocks. Any auto-book is a critical failure requiring a code fix, not a process tweak.
+*   **Construct a "Known-Good" Negative Control:** Create test cases where DND blocks are adjacent to, but not overlapping, requested times.
+    *   *Test:* Ensure the assistant *does* book these slots to prove it isn't overly conservative.
+*   **Red-Team Ambiguity:** Test inputs where users describe observances in natural language (e.g., "I'm unavailable for Friday prayers" vs. "No meetings 12–1 PM Fridays"). Verify the parser maps these correctly to the DND logic.
+*   **Metric:** Report the **failure rate** on the "Known-Bad" set. If unmeasured, label it `UNVERIFIED`. Do not claim "0% bias" without running these specific probes.
+
+**3. Feedback Framework for Continuous Improvement**
+*   **In-Product "Conflict Report":** Add a one-click mechanism in the calendar invite or assistant chat: "Was this time inappropriate for your observance?" This captures false negatives (missed DND blocks) directly from the source.
+*   **Community-Sourced Expansion:** Since you cannot buy a database, build a feature allowing users to **contribute** recurring observance patterns (anonymized) to a shared internal library. Incentivize ERGs (Employee Resource Groups) to validate these patterns before they are trusted by the scheduler.
+*   **Transparency Artifact:** Draft a **Model/Data Card** for this feature. It must state:
+    *   *Intended Use:* Scheduling around user-defined DND blocks.
+    *   *Limitations:* "Does not automatically infer religious holidays without user input; relies on explicit user configuration."
+    *   *Owner:* Name the specific team member responsible for reviewing conflict reports weekly.
+
+**4. Governance & Next Steps**
+*   **Owner Assignment:** Assign one person to own the "Observance Conflict" metric. They must review any reported failures within 24 hours.
+*   **Legal Routing:** Whether failing to accommodate religious observances triggers specific employment law liabilities in your rollout regions is a legal determination. **Route this question to counsel** immediately; do not assert compliance based on this technical plan alone.
+*   **Rollout Strategy:** Given the two-week constraint, launch with the **human-in-the-loop gate active** for all ambiguous cases. It is safer to delay a booking slightly than to offend a user. Plan to relax this gate only after the "Known-Bad" probe set shows 100% blocking accuracy over a sustained period.
+
+**Note:** Do not fabricate an accuracy percentage for your safety documentation; if you haven't run the probes yet, state the metric is `UNVERIFIED`.
+**Note:** This plan addresses product behavior; ensure your code review also checks for "Excessive Agency" where the bot acts without confirmation on high-stakes social interactions.

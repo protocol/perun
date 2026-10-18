@@ -1,0 +1,29 @@
+### Pre-Launch Evaluation Plan: Night-Time Obstacle Detection
+
+**1. Targeted Testing Regimen (Measure)**
+Given the known sensor fusion limitation with low-contrast objects in poor lighting, the evaluation must prioritize adversarial scenarios over aggregate performance. Execute the following specific test rows before any public rollout:
+
+*   **Probe Set A (Positive Control):** Deploy stationary emergency vehicles (police, ambulance, tow trucks) with active and inactive lighting on unlit highway segments. Vary approach speeds (55–75 mph) and weather conditions (dry, rain, fog).
+    *   *Metric:* Detection distance (meters) and time-to-collision (TTC) at braking initiation.
+    *   *Pass Threshold:* Braking initiated with ≥4 seconds TTC in 100% of trials with active lights; ≥2.5 seconds TTC with inactive lights.
+    *   *Stop Condition:* Any failure to detect a stationary emergency vehicle with inactive lights at ≥60 mph resulting in <2.0 seconds TTC triggers an immediate launch hold.
+*   **Probe Set B (Negative Control):** Run identical routes with no obstacles to measure false-positive braking rates.
+    *   *Metric:* False interventions per 1,000 miles.
+    *   *Threshold:* <0.5 events/1,000 miles to prevent driver disengagement due to nuisance braking.
+*   **Probe Set C (Edge Cases):** Test against low-contrast stationary objects mimicking emergency vehicle profiles (e.g., dark-colored trailers, construction barrels without lights) in the specific lighting conditions where the sensor fusion struggles.
+    *   *Metric:* Classification accuracy and reaction latency.
+    *   *Reporting:* If detection rates fall below the threshold, report the residual risk as **UNVERIFIED** for those specific conditions. Do not fabricate a safety percentage.
+
+**2. Operational Limitations & Human Gate (Manage)**
+Because the system cannot reliably detect low-contrast stationary objects in poor lighting without a hardware update, full autonomous operation in these conditions constitutes an unsafe high-stakes automation risk. The following controls are mandatory:
+
+*   **Geofenced/Conditioned Deactivation:** The feature must automatically disengage or refuse activation when ambient light levels drop below the validated sensor threshold or when weather sensors detect precipitation reducing visibility.
+*   **Mandatory Human-in-the-Loop:** For any operation permitted in low-light conditions, the system must enforce a "hands-on-wheel" and "eyes-on-road" monitoring policy with a reduced latency for driver takeover alerts. The system is an *assistance* tool, not an autonomous driver, in these scenarios.
+*   **Explicit Uncertainty Disclosure:** The driver interface must display a defined coarse tier status (e.g., "Limited Visibility – Lane Keep Only, Obstacle Detection Reduced") rather than a false-precision confidence score. Clearly communicate that the system may not see stationary emergency vehicles in the dark.
+*   **Driver Acknowledgment:** Require an explicit, hard-to-reverse consent flow where the driver acknowledges the specific limitation regarding stationary obstacles in low light before the feature can be engaged at night.
+
+**3. Transparency Artifact**
+Publish a Model Card accompanying this release detailing the "Intended Use" (daylight/clear weather highway assistance) and "Known Limitations" (reduced stationary object detection in low light/low contrast). Include the results of Probe Set A and C by subgroup (lighting condition, object type). Absence of this card is a critical transparency failure.
+
+**Note:** Legal counsel must review whether these limitations trigger specific regulatory disclosures under automotive safety statutes before launch.
+**Note:** If the Stop Condition in Probe Set A is met, the rollout must be delayed regardless of schedule pressure; no software patch can compensate for the stated hardware/sensor deficit.

@@ -1,0 +1,39 @@
+### Safety Evaluation Plan: Medical Translation Pilot (ER)
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record these specific risks for the ER context:
+*   **Hallucination as Fact:** The model invents a symptom or severity level (e.g., translating "mild pressure" as "crushing chest pain") leading to incorrect triage priority.
+*   **Bias/Dialect Failure:** Systematic failure to translate specific dialects or non-standard phrasing common in the local demographic, causing delayed care for those groups.
+*   **Over-reliance:** Medical staff trusting the output without verification due to time pressure, treating the translation as a certified medical record.
+*   **Unsafe Automation:** The app automatically tags triage levels or alerts without human confirmation.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk using these specific evals. Run these *before* the pilot starts:
+*   **Critical Term Red-Team:** Create a probe set of 50 high-stakes phrases (chest pain, allergic reaction, bleeding, unconsciousness) in standard German and local dialects.
+    *   *Positive Control:* Known incorrect translations that change severity (must be caught).
+    *   *Negative Control:* Correct translations of low-stakes phrases (must pass).
+    *   *Metric:* Zero tolerance for severity escalation errors in the probe set.
+    *   *Stop Condition:* If any critical term is mistranslated regarding severity, the feature blocks automatically.
+*   **Dialect Stress Test:** Input recordings/text from the specific demographic groups expected in the ER. Measure failure rates by subgroup, not just aggregate accuracy.
+*   **Injection/Leakage Check:** Ensure patient inputs cannot trigger system instructions or leak data to other sessions.
+*   **Reporting:** Publish results as **UNVERIFIED** for any metric not explicitly tested. Do not invent a "99% accuracy" claim.
+
+**3. Risk Management Controls (MANAGE)**
+Given the high stakes and strict deadline, implement these mandatory floors:
+*   **Human-in-the-Loop Gate (Non-Negotiable):** The app must **never** auto-assign triage levels or send alerts. It must function strictly as a *drafting aid*. A human medical professional must read the original (if possible) or verify the translation against the patient's physical presentation before acting. Full automation of triage decisions is the failure mode this plan prevents.
+*   **Defined Confidence Tiers:** Do not display raw model confidence percentages (e.g., "87% sure") to staff, as this implies false precision. Instead, use defined coarse tiers with clear definitions:
+    *   *Verified:* Matches known medical dictionary terms.
+    *   *Unverified:* Low confidence or dialect detected; requires double-check by a second staff member or professional interpreter.
+*   **Explicit Disclosure:** The interface must clearly state: "AI-Generated Draft. Not a certified medical translation. Verify critical symptoms."
+*   **Rollback Plan:** Define the exact trigger for shutting down the pilot (e.g., one confirmed triage error) and the immediate fallback process (revert to phone interpreters/paper charts).
+
+**4. Governance & Transparency**
+*   **Owner:** Name one specific developer or clinical lead responsible for reviewing any failure reports daily during the pilot.
+*   **Transparency Artifact:** Create a one-page "Model Card" for the pilot team listing: intended use (drafting aid only), known limitations (specific dialects not tested), and the results of the critical term red-team.
+*   **Legal Routing:** Whether this tool triggers specific medical device regulations or mandatory disclosure laws under the EU AI Act is a legal determination. Route this question immediately to hospital counsel; do not assume compliance based on this plan.
+
+**Definition of Done for Launch:**
+The harm inventory is signed off; the critical term eval passes with zero severity errors; the human-gate is technically enforced; the "Unverified" tier is visible; and legal counsel has been consulted on regulatory status.
+
+*Note: This plan identifies risks and controls; it does not certify the system as safe. The decision to ship rests with the hospital leadership.*
+*If the human-gate cannot be technically enforced by next week, the pilot must be delayed regardless of staffing shortages.*

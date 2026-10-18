@@ -1,0 +1,31 @@
+### Pre-Launch Safety Verification Plan: Smart-Shower Pressure Fluctuations
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Thermal scalding due to latency in temperature correction during sudden pressure drops.
+*   **Affected Group:** Seniors (slower reaction times, thinner skin).
+*   **Worst Realistic Case:** A simultaneous toilet flush or sink activation causes a pressure drop; the shower fails to mix cold water within 200ms, resulting in water >49°C (120°F) contacting the user for >3 seconds, causing second-degree burns.
+
+**2. Runnable Test Matrix (Edge Cases)**
+Execute these tests on the physical prototype under strict firmware constraints. Do not rely on simulation alone.
+
+| Test ID | Probe Scenario (Input) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Pass Threshold | Stop Condition (Rollback) |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **T-01** | **Sudden Drop:** Simulate 40% pressure drop in <100ms (toilet flush equivalent). | System maintains hot valve position; temp rises >2°C. | System mixes cold within threshold; temp rise <1°C. | **Latency:** Time from pressure drop to cold-valve actuation. **Threshold:** ≤150ms. | Any single run >200ms. |
+| **T-02** | **Oscillation:** Rapid pressure fluctuation (0.5Hz sine wave) simulating unstable supply. | System chatters (valve opens/closes rapidly) or locks at hot. | System averages input or holds safe neutral temp. | **Stability:** No temperature spike >1.5°C above setpoint. | Any spike >2°C sustained for >1s. |
+| **T-03** | **Sensor Failure:** Disconnect pressure sensor mid-flow. | System defaults to last known state (potentially hot). | System fails safe to cold/off immediately. | **Fail-Safe:** Default state upon signal loss. **Threshold:** 100% fail-to-cold/off. | Any instance of fail-to-hot or fail-to-steady. |
+| **T-04** | **Max Load:** All house water outlets active + shower. | Temp exceeds 49°C. | Temp remains ≤44°C (111°F). | **Max Temp:** Peak temperature recorded. **Threshold:** ≤46°C. | Any reading >49°C. |
+
+**3. Measurement Protocol**
+*   **Instrumentation:** Use high-frequency data loggers (≥100Hz) on both pressure lines and output water temperature. Visual inspection is insufficient.
+*   **Subgroup Simulation:** Test with flow rates typical of elderly users (often lower flow due to mobility aids or conservative usage), as low flow can exacerbate heating speed.
+*   **Reporting:** Report the **maximum observed latency** and **peak temperature** across all runs. Do not report averages. If any test triggers the Stop Condition, the feature is **UNVERIFIED** and cannot ship.
+
+**4. Risk Management Controls (Firmware Constrained)**
+*   **Hard-Coded Ceiling:** Implement a deterministic, non-AI hard limit in the firmware: if the temperature sensor reads >48°C, the valve must mechanically or electrically cut hot water, regardless of pressure sensor input. This requires minimal code space.
+*   **Human-in-the-Loop (Pre-Ship):** Before general release, conduct a live pilot with 5–10 senior users under direct supervision with an emergency manual shut-off within arm's reach.
+*   **Disclosure:** Clearly label the device as "Assistive Technology" and provide a physical user guide detailing the "Scald Protection" feature and its limitations (e.g., "May not prevent scalding if household pressure fluctuates extremely rapidly").
+
+**5. Ownership**
+*   Assign a specific engineer as the "Safety Owner" responsible for signing off on the T-01 to T-04 results. No release occurs without their signed verification that all Stop Conditions were avoided.
+
+*Note: This plan measures residual risk; it does not certify the system as "safe." If the firmware cannot meet the ≤150ms threshold without complex models, the hardware valve mechanism must be upgraded before launch.*

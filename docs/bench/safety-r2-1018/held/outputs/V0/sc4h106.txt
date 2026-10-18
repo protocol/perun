@@ -1,0 +1,35 @@
+### Risk Assessment: Battery-Recycling Bot Misclassification
+
+**Harm Inventory & Worst-Case Scenario**
+The primary identified harm is **unsafe high-stakes automation** resulting in physical danger. Specifically, the bot's hallucination or misclassification of lithium batteries as regular trash creates an immediate fire hazard in waste facilities and households.
+*   **Affected Parties:** End users (risk of home fires), waste management workers (risk of injury), and the environment (toxic leakage).
+*   **Worst Realistic Case:** A user follows the bot's instruction, disposes of a damaged lithium battery in regular trash, causing a thermal runaway event that ignites a waste collection truck or facility, leading to injury and significant property damage.
+
+**Residual Risk Status: UNVERIFIED**
+We cannot certify the bot as "safe" or "unbiased" without running specific output-harm evaluations. Current logs indicate a failure rate greater than zero for critical safety instructions. Until adversarial testing (red-teaming) with known lithium battery scenarios proves the error rate is acceptable, the risk remains **UNVERIFIED**. No metric should be invented to suggest otherwise.
+
+**Critical Control Gap**
+The system currently lacks a **human-in-the-loop gate** for high-stakes actions. Providing disposal instructions for hazardous materials is an irreversible action with safety consequences. Fully autonomous execution of this advice, especially given known failure modes, violates the safety floor. The inability to update warning labels via the CMS before launch exacerbates the risk of **over-reliance**, as users have no interface-level cue to doubt the bot's authority.
+
+---
+
+### Contingency Communication Plan
+
+**1. Immediate Mitigation (Pre-Launch)**
+*   **Staged Rollout with Exposure Cap:** Do not launch to the full public. Restrict access to a small, internal, or beta group where every output regarding "lithium," "battery," or "fire" is manually reviewed before reaching the user.
+*   **Hard-Coded Fallback Rules:** Since the CMS is locked, implement a code-level override (requires no CMS update) that detects keywords like "lithium," "EV," or "power tool battery." If detected, the bot must bypass generative advice and return a static, hard-coded response: *"Safety Alert: Lithium batteries require special handling. Do not place in regular trash. Please consult [Local Authority Website] or visit a designated recycling center."*
+*   **Uncertainty Disclosure:** Modify the system prompt to force the bot to express uncertainty on disposal methods if confidence is not absolute, using defined coarse tiers (e.g., "Unverified - Check Local Guidelines") rather than presenting advice as fact.
+
+**2. User-Facing Transparency**
+*   **Mandatory Disclosure:** Clearly state on the landing screen that the bot is an AI assistant and that its advice regarding hazardous materials should be verified with official local sources.
+*   **Feedback Loop:** Implement an immediate "Report Incorrect Advice" button that flags the conversation for urgent human review and temporarily blocks similar advice to other users.
+
+**3. Governance & Ownership**
+*   **Owner Assignment:** Name a specific product owner responsible for monitoring fire-hazard logs daily post-launch.
+*   **Stop Condition:** Define a clear rollback trigger: If *any* user reports being directed to throw a lithium battery in regular trash, the feature must be disabled immediately until the root cause is fixed.
+
+**Legal & Regulatory Routing**
+Whether this automated advice constitutes a regulated decision under the **EU AI Act** (given the safety risk) or requires specific legal disclosures under Berlin local law is a determination for **legal counsel**. This plan recommends disclosure as a safety control but does not assert legal compliance.
+
+**Note:** The hard constraint on CMS updates requires a code-level fallback; do not launch with generative advice for hazardous items active.
+**Note:** Never fabricate a safety rate; the "UNVERIFIED" status stands until red-team testing confirms the hard-coded fallbacks work.

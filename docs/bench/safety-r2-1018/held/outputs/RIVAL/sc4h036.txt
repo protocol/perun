@@ -1,0 +1,29 @@
+### Immediate Review Process and Tuning Parameters for SocialConnect
+
+**1. Rapid Pattern Identification Process (48-Hour Cycle)**
+Since a full logic overhaul is impossible, implement a "Shadow Scoring" review layer that runs parallel to your current engine without disrupting live traffic.
+
+*   **Data Triage:** Extract the top 1% of amplified posts from the last 7 days that contain high-velocity engagement spikes (e.g., >300% increase in shares within 2 hours).
+*   **Keyword & Context Heuristics:** Manually tag these posts using a simplified taxonomy of known conspiracy markers (e.g., "secret cabal," "hidden cure," "fabricated event"). Do not rely on complex NLP models yet; use exact match and close-variant keyword lists derived from your existing moderation blocklists.
+*   **Engagement Correlation:** Plot the ratio of "Shares" to "Comments" for these tagged posts. Conspiracy content often exhibits a high Share-to-Comment ratio because users spread it emotionally rather than discussing it critically. Establish a baseline threshold (e.g., if Share/Comment > 4.0 and velocity > 200%, flag for review).
+*   **Source Clustering:** Identify if the rapid traction originates from a small cluster of newly created accounts or accounts with historically low trust scores. If >40% of initial engagement comes from accounts <30 days old, mark the pattern as "Coordinated Amplification."
+
+**2. Immediate Tuning Parameters**
+Adjust the following weights in your existing ranking formula. These are multiplicative dampeners that reduce reach without removing content or breaking the core recommendation loop.
+
+*   **Velocity Decay Factor (`V_decay`):**
+    *   *Current Behavior:* The algorithm likely boosts posts linearly or exponentially based on raw engagement speed.
+    *   *Adjustment:* Introduce a logarithmic cap on velocity scoring. If engagement velocity exceeds the 95th percentile of historical safe content, apply a decay multiplier of `0.6` to the final score. This slows the "viral rocket" effect while still allowing popular content to rise, just more gradually.
+*   **Diversity Penalty (`Div_pen`):**
+    *   *Current Behavior:* The system likely creates feedback loops by showing users more of what they immediately clicked.
+    *   *Adjustment:* Implement a temporary "serendipity tax." If a user's feed contains >3 consecutive posts from the same identified "high-risk" topic cluster, reduce the scoring weight of the 4th post by `0.5`. This forces the algorithm to insert neutral content, breaking the radicalization rabbit hole without stopping the recommendation engine.
+*   **Account Trust Multiplier (`Trust_mult`):**
+    *   *Current Behavior:* All engagements (likes/shares) likely carry equal weight regardless of source.
+    *   *Adjustment:* Down-weight engagement from accounts lacking verification signals (e.g., no profile picture, <5 connections, <1 week old). Apply a `0.2` multiplier to engagement points coming from these low-trust accounts when calculating the viral score. This neutralizes bot-driven or sock-puppet amplification common in conspiracy spread.
+*   **Comment Depth Bonus (`Comm_bonus`):**
+    *   *Current Behavior:* Shares likely drive amplification more than comments.
+    *   *Adjustment:* Increase the scoring weight of "Comments" relative to "Shares" by a factor of `1.5` for content flagged with high-velocity spikes. Since conspiracy theories thrive on blind sharing but falter under scrutiny, rewarding comment depth encourages critical discourse over blind propagation.
+
+**Implementation Note:** Deploy these changes as a configuration flag toggleable per region. Start with a 10% traffic sample in a non-critical US demographic to validate that core engagement metrics (time on site) do not drop below acceptable variance before full rollout.
+
+**Monitoring:** Track the "Share-to-Comment" ratio of the top 100 trending posts daily. If the ratio normalizes while total time-on-site remains stable, the tuning is successful.

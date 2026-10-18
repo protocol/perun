@@ -1,0 +1,32 @@
+**Pre-Launch Review Plan: Parole-Risk Scorer**
+
+**1. Harm Inventory (MAP)**
+Before proceeding, formally document the specific risks for this feature. For a parole-risk scorer, the primary harms are:
+*   **Bias/Unfair Outcomes:** The model systematically overestimates recidivism risk for specific demographic groups (e.g., based on race, socioeconomic status) due to historical data biases.
+*   **Hallucination as Fact:** Presenting a generated probability as an objective truth rather than a statistical estimate with known limitations.
+*   **Over-reliance:** Judges deferring entirely to the score without independent assessment, treating the tool as a mandate rather than an aid.
+*   **Missing Disclosure:** Failing to inform the court and the defendant that the decision support is algorithmic and detailing its limitations.
+*   **Unsafe High-Stakes Automation:** Allowing the score to automatically determine parole eligibility without mandatory human review. *This is the critical failure point.*
+
+**2. Measurement Strategy (MEASURE)**
+Since real-time monitoring is unavailable, you must validate outputs before launch using adversarial testing:
+*   **Construct Eval Rows:** Create a test set for each identified harm. For bias, include "positive controls" (known cases where demographic factors historically skewed outcomes) and "negative controls" (cases with similar criminal histories across different demographics).
+*   **Define Metrics & Thresholds:** Do not claim "0% bias." Instead, measure disparity rates (e.g., false positive rates) across subgroups. Set a strict stop condition: if disparity exceeds a pre-defined threshold (determined by your legal liaisons), the launch is blocked.
+*   **Red-Team Probes:** Test for prompt injection via case notes and data leakage. Ensure the model cannot infer protected attributes from proxy variables in the legacy data.
+*   **Transparency Artifact:** Draft a **Model Card** and **Data Card**. These must state the intended use (decision support only), list data provenance, report performance metrics *by subgroup*, and explicitly list known limitations. If a metric cannot be measured due to legacy constraints, label it **UNVERIFIED**; do not fabricate a number.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the irreversible nature of parole decisions, **full autonomous execution is prohibited.** The system must be designed so that the score *never* finalizes a decision. It must require explicit confirmation and reasoning from a judge. The output should be framed as "Advisory Only."
+*   **Uncertainty Visualization:** Do not display raw probabilities (e.g., "87% risk") which imply false precision. Instead, use defined coarse tiers (e.g., "High," "Moderate," "Low") with clear textual definitions of what each tier means regarding evidence quality and corroboration.
+*   **Disclosure:** Clearly label all outputs as "AI-Generated Risk Estimate." While specific legal disclosure duties must be confirmed by counsel, transparent labeling is a baseline safety control.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign a specific owner (e.g., Lead Data Scientist) responsible for the harm inventory and re-review triggers.
+*   **Change Management:** Mandate a re-evaluation of the harm inventory if the underlying data, model logic, or legal context changes.
+
+**Critical Constraints & Next Steps**
+*   **Legal Routing:** You must route the question of "regulated automated decision" status and specific disclosure laws to legal counsel immediately. Do not assume compliance based on this plan; name the regimes (e.g., relevant state laws, potential federal guidelines) but let counsel determine binding duties.
+*   **Deadline vs. Safety:** If the bias evaluation reveals disparities exceeding your threshold and the deadline prevents mitigation, the only safe path is to delay the high-stakes automation component, not to lower the safety gate.
+
+**Note:** This plan identifies risks and controls; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner and legal counsel.
+**Note:** Ensure the "Model Card" is versioned and accessible to the court administrators before day one of operation.

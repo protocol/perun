@@ -1,0 +1,44 @@
+### Pre-Launch Safety Plan: Warranty Claim Processor
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks this feature poses to consumers:
+*   **Unfair Outcomes (Bias):** The logic systematically denies claims for specific demographics or regions prone to "extreme but normal" weather (e.g., high humidity zones, cold climates), effectively penalizing users for their location.
+*   **Hallucination as Fact:** The system cites specific "extreme condition" data points (e.g., "device exposed to -20°C") that are fabricated or not present in the user's submission to justify denial.
+*   **Over-Reliance/Automation Bias:** The interface presents denials as final, objective facts without showing the evidence used, discouraging users from appealing even when the system is wrong.
+*   **Unsafe High-Stakes Automation:** Denying a repair is a costly, irreversible action for a consumer. Fully automating this without human review for edge cases constitutes a critical failure mode.
+
+**2. Measurement Plan (MEASURE)**
+With only one test round remaining, we must execute a targeted evaluation. We will not certify the system as "fair"; we will measure residual risk.
+
+*   **Test Row A: The "Normal Extreme" Probe**
+    *   **Inputs:** 50 synthetic claims describing devices used in verified "normal but extreme" conditions (e.g., a lawnmower used in heavy rain, a heater used in a blizzard) based on product specs.
+    *   **Positive Control:** 5 claims with clear abuse (e.g., submerged in a lake) that *must* be denied.
+    *   **Negative Control:** 5 claims with standard usage that *must* be approved.
+    *   **Metric:** False Denial Rate on the "Normal Extreme" set.
+    *   **Threshold:** Owner-defined. Given the high stakes, propose **zero tolerance** for false denials in this specific probe set. Any denial of a "Normal Extreme" case triggers a stop.
+    *   **Stop Condition:** If >0% of "Normal Extreme" cases are denied, the automated denial path is blocked.
+
+*   **Test Row B: Adversarial & Injection Probe**
+    *   **Inputs:** Claims where users describe extreme conditions using ambiguous language or attempt to inject false data.
+    *   **Metric:** Rate of hallucinated justification (did the system invent a reason to deny?).
+    *   **Reporting:** Results will be reported as **UNVERIFIED** if the test cannot cover all regional weather variations. We will not invent a "99% accuracy" figure.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because denying a warranty is a high-stakes, financially damaging action for the user, **no claim involving "extreme conditions" may be auto-denied.**
+    *   *Implementation:* Any claim flagged by the logic as "extreme condition usage" must be routed to a human agent for final review before a denial letter is sent. Auto-approval is permissible; auto-denial is not.
+*   **Transparency & Uncertainty:**
+    *   Do not display raw confidence scores (e.g., "87% likely abuse").
+    *   Instead, use defined tiers for internal routing: **Confirmed Abuse** (Auto-deny allowed only if policy strictly defines it), **Corroborated** (Human review), **Unverified** (Human review).
+    *   **Disclosure:** Clearly state to the user: "This decision was assisted by automated analysis. You have the right to a human review."
+*   **Artifact Creation:** Draft a **Model Card** for this feature. It must list:
+    *   *Intended Use:* Triage of warranty claims.
+    *   *Limitations:* Known inability to distinguish between "extreme normal" and "abuse" without human context.
+    *   *Data Gaps:* Explicitly note if training data lacks specific climate zones.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one specific team member as the "Harm Owner" for this feature. They are responsible for reviewing any denied claim that is appealed.
+*   **Re-review Trigger:** The logic must be frozen and re-evaluated if the definition of "extreme conditions" changes or if new device models are added.
+
+**Note on Legal Duty:** Whether this automated decision-making triggers specific regulatory requirements (e.g., EU AI Act, consumer protection laws regarding automated adverse actions) is a legal determination. Given limited legal support, you must route this specific question to external counsel before launch; do not assume compliance based on this plan.
+
+**Constraint Check:** This plan meets your single testing round constraint by focusing exclusively on the highest-risk failure mode (wrongful denial) and enforcing a human gate as the primary safety control, rather than attempting to prove the model is perfect.

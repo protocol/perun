@@ -1,0 +1,41 @@
+# Pre-Launch Safety Review Protocol: Extreme Workout Recommendation Engine
+
+**Objective:** Mitigate the risk of dangerous workout recommendations for users with undocumented or historical cardiac anomalies using existing data, without new clinical trials.
+
+### Phase 1: Retrospective Data Stratification (Week 1)
+Since detailed cardiac event records are missing, we must proxy risk using available historical metrics.
+*   **Anomaly Proxy Identification:** Query historical data for indirect indicators of cardiac stress. Flag users who previously exhibited:
+    *   Sudden heart-rate spikes (>20 bpm increase in <30 seconds) without corresponding speed/power increases.
+    *   Unusual recovery times (heart rate remaining >85% max for >10 minutes post-exercise).
+    *   Session aborts correlated with high-intensity zones.
+*   **Cohort Segmentation:** Divide the user base into three tiers:
+    1.  **Red (High Risk):** Users with any flagged anomaly proxies.
+    2.  **Amber (Moderate Risk):** Users with inconsistent data or borderline metrics.
+    3.  **Green (Low Risk):** Users with consistent, stable historical performance.
+*   **Action:** Hard-code a rule that **Red** and **Amber** cohorts are ineligible for "Extreme" intensity recommendations regardless of current performance metrics.
+
+### Phase 2: Logic Constraint & "Safety-First" Algorithm Tuning (Weeks 2–3)
+Modify the recommendation engine's decision logic to prioritize safety over optimization.
+*   **Implement Conservative Bounds:** Cap maximum recommended intensity for all users at 85% of their theoretical maximum heart rate, overriding any algorithmic suggestion for higher zones unless explicit medical clearance is uploaded (if the feature allows).
+*   **Weighted Penalty System:** Introduce a "Risk Penalty" variable in the scoring algorithm. If a user's historical data contains *any* gap or inconsistency, the penalty increases, automatically downgrading the recommended intensity tier.
+*   **Fail-Safe Triggers:** Define hard stop conditions. If real-time metrics show variability >15% from the user's 30-day rolling average, the system must default to a "Recovery" recommendation immediately.
+
+### Phase 3: Synthetic Stress Testing & Simulation (Week 4)
+Use the six-person team to simulate edge cases using the stratified data.
+*   **Adversarial Simulation:** Engineers and sports scientists will manually input "worst-case" historical profiles (e.g., a user with high performance but hidden anomaly proxies) to verify the engine rejects extreme recommendations.
+*   **Threshold Validation:** Run simulations to ensure the "Risk Penalty" correctly suppresses intensity suggestions for the Amber cohort.
+*   **Latency Check:** Verify that real-time safety triggers activate within <2 seconds of detecting anomalous live data.
+
+### Phase 4: Guarded Rollout Plan (Week 5)
+*   **Exclusionary Launch:** Initially deploy the feature only to the **Green** cohort. Explicitly exclude Red and Amber users with a UI message stating: "Personalized extreme training is unavailable while we refine safety models for your profile."
+*   **Real-Time Monitoring Dashboard:** Create a live view tracking:
+    *   Number of recommendations downgraded by safety logic.
+    *   Frequency of real-time fail-safe triggers.
+    *   User-reported discomfort (via post-workout surveys).
+*   **Kill Switch:** Establish a protocol to instantly disable the "Extreme" feature globally if any adverse event is reported or if fail-safe triggers exceed 1% of sessions.
+
+### Deliverable Summary
+This protocol shifts the burden of proof: instead of proving a user is safe for extreme workouts, the system assumes risk until proven otherwise. By using historical anomalies as proxies and hard-coding conservative caps, we protect users despite data gaps.
+
+*Note: This plan relies on the assumption that historical data integrity is sufficient to identify basic anomalies; if data is too sparse, the "Red" cohort may need to expand to include all users with <6 months of history.*
+*Legal review of the exclusionary messaging and liability waivers is recommended before the Week 5 rollout.*

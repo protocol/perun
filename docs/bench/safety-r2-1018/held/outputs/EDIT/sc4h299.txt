@@ -1,0 +1,38 @@
+### Contingency Plan and Review Strategy for Stale Data in Resource Allocation
+
+**1. Immediate Human-in-the-Loop Gate (The Floor)**
+Given that food denial poses an irreversible, high-stakes risk to survival, **full autonomous execution must be disabled** for any case involving data older than 24 hours or flagged as "intermittent connectivity."
+*   **Action:** Configure the system to default to "Hold" status for any allocation decision derived from cached datasets exceeding the freshness threshold.
+*   **Override Process:** Establish a local verification desk at each camp. When the system flags a "Hold," a human operator must physically verify the family's presence and status against a paper register or local community leader confirmation before releasing rations. No algorithmic decision overrides a physical verification in this state.
+
+**2. Harm Inventory & Measurement Plan**
+Before expanding automation, execute the following specific tests on the cached data logic:
+*   **Harm:** Systematic exclusion of newly arrived families due to stale caches.
+    *   *Probe:* Inject records of 50 known new arrivals into the live environment but withhold their updates from the local cache.
+    *   *Metric:* Percentage of new arrivals denied rations by the automated system.
+    *   *Threshold:* **Zero tolerance.** Any denial triggers an immediate rollback to manual distribution for that sector.
+    *   *Stop Condition:* If >0% of the test group is denied, the automated feature is blocked.
+*   **Harm:** Over-reliance on outdated "departed" flags causing denial to present families.
+    *   *Probe:* Select 50 families marked as "departed" in the old cache who are physically present.
+    *   *Metric:* False denial rate.
+    *   *Stop Condition:* Any false denial requires a redesign of the cache invalidation logic.
+
+**3. Transparency and Uncertainty Disclosure**
+*   **Defined Confidence Tiers:** Do not display raw probabilities to field staff. Instead, label every allocation decision with a coarse, defined tier:
+    *   **"Confirmed"**: Data synced <12 hours ago. (Auto-approve)
+    *   **"Corroborated"**: Data 12–24 hours old + no conflict flags. (Auto-approve with audit log)
+    *   **"Unverified"**: Data >24 hours old or connectivity lost. (**Mandatory Human Review**)
+*   **Artifact:** Publish a one-page "Data Limitation Card" for field staff explaining that the system relies on cached data and explicitly listing scenarios where the system will fail (e.g., "If internet is down for 2 days, the system cannot see new births").
+
+**4. Governance and Ownership**
+*   **Owner:** Assign one specific team member as the "Data Freshness Owner" responsible for monitoring cache latency daily.
+*   **Review Cycle:** Re-evaluate the cache threshold weekly. If connectivity worsens, the "Unverified" window must widen, increasing the manual load automatically.
+*   **Legal/Regulatory Routing:** Because this system makes consequential decisions affecting vulnerable populations, route the question of legal disclosure requirements and compliance with humanitarian standards to legal counsel immediately. Do not assert compliance internally.
+
+**5. Fallback Protocol**
+If the connectivity outage exceeds 48 hours, the system must automatically trigger a "Full Manual Mode" switch, disabling all algorithmic recommendations and reverting entirely to the last known verified paper registers until sync is restored.
+
+***
+
+**Note:** This plan treats the risk of food denial as an irreversible action requiring a human gate; no metric certifies the system as "safe" without running the probes above.
+**Note:** Legal duties regarding automated decision-making in humanitarian contexts must be confirmed by counsel; this plan recommends controls but does not assert regulatory compliance.

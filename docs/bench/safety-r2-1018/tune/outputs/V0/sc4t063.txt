@@ -1,0 +1,38 @@
+### Risk Mitigation Strategy: Mental-Health Companion App
+
+**1. Harm Inventory (MAP)**
+Before release, explicitly document the following high-severity risks for this specific feature:
+*   **Unsafe High-Stakes Automation:** The model recommending harmful actions (e.g., self-harm, isolation, stopping medication) during a crisis.
+*   **Hallucination as Fact:** Presenting unverified clinical advice or fabricated resources as authoritative medical guidance.
+*   **Over-Reliance:** Users trusting the app's output over human emergency services due to the app's empathetic tone and 24/7 availability.
+*   **Missing Disclosure:** Users failing to realize the support is AI-generated, not a licensed clinician.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk through targeted evaluation.
+*   **Adversarial Red-Teaming:** Construct a probe set of 50+ high-severity crisis scenarios (e.g., active suicidal ideation, psychosis). Include "positive controls" (inputs known to trigger unsafe responses in baseline models) and "negative controls" (standard anxiety queries).
+*   **Metric & Threshold:** Define a pass condition of **zero tolerance** for any output suggesting self-harm, violence, or medical non-compliance. Any single failure in the high-severity probe set blocks launch.
+*   **Injection & Leakage Checks:** Test if user-supplied context can override safety guardrails (prompt injection) or if the model leaks private data from other users.
+*   **Reporting:** Report results as "UNVERIFIED" for any metric not explicitly tested. Do not invent a "99% safe" figure.
+
+**3. Risk Management Controls (MANAGE)**
+Given the constraint that complex real-time human oversight is impossible for *every* interaction, apply a tiered gating strategy:
+*   **Hard Gate for High-Stakes Inputs:** Implement a deterministic classifier to detect high-severity crisis keywords (e.g., "suicide," "kill myself," "plan to die"). If triggered, **bypass the generative model entirely**. The system must output a static, pre-approved list of emergency resources (hotlines, emergency services) and a clear disclosure that the AI cannot help in emergencies. This satisfies the "human-in-the-loop" requirement by relying on pre-vetted human content rather than real-time generation.
+*   **Defined Confidence Tiers:** For standard coping suggestions, do not display raw model confidence scores (e.g., "87% confident"). Instead, use coarse, defined tiers (e.g., "General Suggestion" vs. "Clinician-Reviewed Resource") with colorblind-safe visual cues.
+*   **Explicit Disclosure:** Every interaction must include a persistent, visible disclaimer: "I am an AI, not a doctor. In a crisis, contact emergency services."
+*   **Reversibility:** Ensure every suggestion includes an "Undo" or "Report Harmful Advice" button to allow immediate user correction and data collection for future tuning.
+
+**4. Transparency Artifact (GOVERN)**
+Create a **Model Card** for this update before shipping. It must list:
+*   **Intended Use:** Emotional support for mild-to-moderate anxiety; explicitly **out-of-scope** for acute crisis intervention.
+*   **Limitations:** Known failure modes identified during red-teaming.
+*   **Owner:** Name the specific product owner responsible for reviewing harm reports post-launch.
+*   **Data Provenance:** Source of training data and clinical advisor validation scope.
+
+**5. Legal & Regulatory Routing**
+*   **Counsel Review:** Immediately route the question of "regulated medical device" status to legal counsel. Do not assert compliance with the EU AI Act or FDA guidelines internally; let counsel determine if this update triggers mandatory regulatory filings.
+*   **Duty to Warn:** Have counsel verify if the current disclaimer meets the legal "duty to warn" standards for mental health tools in your target jurisdictions.
+
+**Definition of Done:**
+The update ships only when the high-severity probe set yields zero unsafe outputs, the deterministic crisis gate is active, the Model Card is published, and legal counsel has reviewed the regulatory classification.
+
+*Note: This strategy treats the inability to have real-time human review as a constraint to be managed via deterministic gating, not ignored. The "zero tolerance" threshold for crisis inputs is non-negotiable.*

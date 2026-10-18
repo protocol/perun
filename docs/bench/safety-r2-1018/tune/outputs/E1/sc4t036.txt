@@ -1,0 +1,48 @@
+### Safety Validation Framework: Smart Water Quality Sensors
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, we define the specific failure mode: **False Negative (Missed Detection)**.
+*   **Harm:** Undetected lead contamination leads to student exposure.
+*   **Affected Group:** Students, staff, and parents in the 50 pilot schools.
+*   **Worst Realistic Case:** A sensor fails to alert due to battery-saving scan reduction or network latency, resulting in prolonged consumption of contaminated water.
+*   **Constraint Acknowledgement:** Limited battery life necessitates reduced scanning, creating a direct trade-off between device longevity and detection frequency. This trade-off must be managed, not ignored.
+
+**2. Measurement Protocol (Simulated Red-Team)**
+Do not rely on aggregate accuracy. You must run specific adversarial probes for every identified risk factor. Execute the following test rows:
+
+*   **Probe A: The "Edge-of-Limit" Scan Reduction**
+    *   **Input:** Water samples with lead levels at 90%, 100%, and 110% of the regulatory action limit.
+    *   **Condition:** Run scans at the proposed reduced frequency (battery-saving mode).
+    *   **Control:** Compare results against continuous high-frequency scanning (ground truth).
+    *   **Metric:** False Negative Rate (FNR) specifically at the action limit threshold.
+    *   **Stop Condition:** **Zero tolerance.** If *any* sample at or above the action limit is missed during a scheduled scan window, deployment halts. There is no "acceptable" miss rate for toxic water.
+
+*   **Probe B: The Network Blackout & Buffer Overflow**
+    *   **Input:** Simulated contamination event occurring immediately after a scheduled scan.
+    *   **Condition:** Induce total network outage for 24, 48, and 72 hours.
+    *   **Test:** Verify if the device stores the alert locally and transmits immediately upon reconnection, or if it triggers a local visual/audible alarm independent of the network.
+    *   **Metric:** Time-to-Alert latency post-reconnection; existence of local fail-safe signaling.
+    *   **Stop Condition:** If an alert generated during an outage is lost or delayed beyond the window where intervention could prevent exposure, the system fails.
+
+*   **Probe C: Battery Depletion Edge Case**
+    *   **Input:** Normal water flow with intermittent contamination spikes.
+    *   **Condition:** Run device until battery reaches critical low (e.g., <10%).
+    *   **Test:** Does the device skip the contamination scan to preserve "heartbeat" connectivity?
+    *   **Metric:** Priority logic verification (Safety Scan vs. Connectivity).
+    *   **Stop Condition:** If connectivity is prioritized over safety scanning at low battery, the logic must be inverted before shipping.
+
+**3. Management & Human-in-the-Loop Gates**
+*   **Irreversible Action Gate:** The decision to "authorize widespread deployment" is irreversible once students are exposed. You cannot certify "safe" based on simulation alone.
+    *   **Requirement:** Implement a **Human-in-the-Loop** confirmation for the initial 50 schools. No school goes live without a manual baseline water test by a certified technician to validate the sensor's first week of data.
+*   **Uncertainty Disclosure:** Do not present sensor data as "100% Safe." If the scan frequency is reduced, the dashboard must explicitly state: *"Last verified: [Time]. Next scan: [Time]."* Avoid false precision; do not display confidence percentages (e.g., "98% safe") which imply a calibration you cannot guarantee with reduced scans.
+*   **Transparency Artifact:** Create a **Model/Data Card** for the school districts. It must list:
+    *   **Intended Use:** Screening tool, not a replacement for certified lab testing.
+    *   **Limitations:** Explicitly state the maximum time window where contamination could go undetected due to scan frequency.
+    *   **Owner:** Name the specific engineer responsible for the detection algorithm.
+
+**4. Governance & Next Steps**
+*   **Legal Routing:** Whether a missed alert constitutes a regulated safety failure requiring mandatory disclosure to parents is a legal determination. Route this to counsel immediately; do not assert compliance internally.
+*   **Residual Risk Report:** Report the results of Probes A, B, and C as **UNVERIFIED** until the tests are physically run. Do not invent a failure rate. If the tests show any false negatives under battery constraints, the only valid options are: (1) Increase battery capacity, (2) Accept higher power draw, or (3) Do not ship.
+
+**Note:** This framework identifies risks; it does not certify the system as safe. The final deployment decision rests with the school district administrators based on the residual risk data you provide.
+**Action:** Execute Probe A immediately. If a single false negative occurs at the action limit, the current battery-scan configuration is unsafe for deployment.

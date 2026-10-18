@@ -1,0 +1,33 @@
+### Pre-Launch Testing Strategy & Manual Override Plan
+
+**1. Harm Inventory: Data-Error Disqualification**
+The primary risk is **bias/unfair outcomes** where valid applicants from marginalized groups are rejected due to inconsistent formatting in government data rather than actual ineligibility. The worst-case scenario is a qualified student being denied funding permanently before the academic year begins, with no immediate recourse.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+*   **Probe Set:** Construct a dataset of 50 synthetic applications including:
+    *   *Positive Controls (Known Bad):* Applications with genuinely contradictory income figures (e.g., declared income exceeds government cap by 20%).
+    *   *Negative Controls (Known Good):* Applications with minor formatting mismatches (e.g., "KES 50,000" vs "50000", missing middle names, transliteration differences) but valid underlying eligibility.
+    *   *Edge Cases:* Applicants with irregular income streams (seasonal workers) where government data lags reality.
+*   **Metric:** False Rejection Rate (FRR) – percentage of "Known Good" controls automatically rejected.
+*   **Threshold:** **Zero tolerance** for automatic rejection of "Known Good" controls. Any false rejection triggers an immediate logic freeze.
+*   **Stop Condition:** If FRR > 0% on the negative control set, the automated rejection feature is disabled for launch; only "auto-approve" and "flag-for-review" modes remain active.
+*   **Owner:** Lead Engineer reviews all failures daily.
+
+**3. Injection & Data Integrity Checks**
+*   Run adversarial probes where government database responses are delayed, partial, or return null values. The system must default to "manual review" rather than "reject" when data is missing or unreadable.
+*   Verify that no applicant is rejected solely based on a single data point mismatch without cross-referencing at least one secondary identifier.
+
+**4. Manual Override Process (Human-in-the-Loop Gate)**
+Since disqualification is a high-stakes, hard-to-reverse action affecting livelihoods:
+*   **The "Borderline" Bucket:** Any application triggering a rejection logic must be routed to a **"Pending Human Review"** queue, not an immediate "Rejected" status.
+*   **Review Protocol:** A human officer must explicitly confirm the rejection within 48 hours. The interface must display *why* the flag was raised (e.g., "Income mismatch: App says X, Gov says Y") and provide a one-click "Override & Approve" button.
+*   **Uncertainty Display:** If the confidence in the mismatch is low (e.g., formatting error likely), the system displays a "Unverified Data Conflict" tier (color-coded amber) rather than a precise probability score, prompting specific human verification steps.
+
+**5. Transparency Artifact**
+Before launch, publish an internal **Model/Data Card** documenting:
+*   **Intended Use:** Filtering based on verified income only; not for character assessment or academic merit.
+*   **Limitations:** Known gaps in government database coverage for informal sector workers.
+*   **Measured Performance:** The False Rejection Rate from the test plan above (if unmeasured at launch, mark as `UNVERIFIED` and restrict automation).
+*   **Owner:** Name the specific team member responsible for quarterly re-evaluation.
+
+**Note:** Legal counsel must review whether automated disqualification constitutes a regulated decision under local Kenyan data protection or education laws before final sign-off. Do not fabricate a "0% error rate" claim; report the actual residual risk from the test results.

@@ -1,0 +1,43 @@
+### Safety Evaluation Plan: FitPulse Chest Pain Advisor
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the primary risk: **False Negative Medical Advice**.
+*   **Harm:** The device advises "muscle fatigue" when the user is experiencing a cardiac event.
+*   **Affected Group:** Users outside the training demographic (women, older adults, non-athletes, individuals with pre-existing conditions).
+*   **Worst Case:** User ignores a heart attack, delays seeking care, and suffers severe injury or death.
+*   **Secondary Harm:** **Over-reliance**. Users treat the device as a diagnostic tool rather than a fitness tracker.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert accuracy. Because your data lacks diversity, any aggregate accuracy metric is **UNVERIFIED** for underrepresented groups. Structure your evaluation as follows:
+
+*   **Adversarial Probe Set:** Construct a synthetic test suite of edge cases representing demographics missing from your training data (e.g., female heart attack symptom patterns, atypical pain presentations in older adults).
+*   **Control Groups:**
+    *   *Positive Control:* Inputs known to be cardiac events (must never be classified as "fatigue").
+    *   *Negative Control:* Inputs known to be muscle fatigue.
+*   **Metric & Threshold:** Define a **Zero-Tolerance Threshold** for false negatives on cardiac events. If the model classifies *any* known cardiac event in the probe set as "muscle fatigue," the feature fails the test.
+*   **Stop Condition:** Launch is blocked if the false negative rate on the adversarial probe set is >0%.
+*   **Transparency Artifact:** Draft a **Model Card** stating clearly: "Intended for fitness context only; not a medical device. Training data limited to healthy young males; performance unverified for other demographics."
+
+**3. Risk Management & Guardrails (MANAGE)**
+Given the high stakes and data gaps, you must implement strict behavioral constraints:
+
+*   **Human-in-the-Loop Gate (The Floor):** The device must **never** autonomously dismiss chest pain as "muscle fatigue" with high confidence.
+    *   *Rule:* If biometric signals indicate chest pain, the output must default to: "Chest pain detected. This could be serious. Please stop activity and consult a medical professional immediately."
+    *   *Constraint:* Remove the binary "Fatigue vs. Serious" classification for the user. Replace it with a **triage advisory** that always escalates uncertainty to human medical review.
+*   **Defined Confidence Tiers:** Do not show users a percentage (e.g., "87% likely fatigue"). This implies false precision. Use coarse, defined tiers:
+    *   *Confirmed Exertion:* (Only for clear, non-pain exertion signals).
+    *   *Unverified/Alert:* (For any ambiguous or pain-related signal).
+*   **Disclosure:** Prominently display: "AI-generated advice based on limited data. Not a diagnosis. Always seek professional care for chest pain."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the Safety Owner responsible for reviewing any failure in the probe set.
+*   **Re-review Trigger:** Any update to the model or addition of new data types requires re-running the adversarial probe set.
+*   **Legal Routing:** Because this feature touches health outcomes, route the question of "regulated medical device status" to legal counsel immediately. Do not assume beta status exempts you from health regulations.
+
+**Summary of Immediate Actions:**
+1.  Halt any logic that allows the device to say "It's just fatigue" for chest pain.
+2.  Build the adversarial probe set for missing demographics.
+3.  Publish the Model Card with the "UNVERIFIED" status for non-male demographics.
+
+*Note: This plan identifies residual risk; it does not certify the feature as safe. The decision to ship rests with your leadership.*
+*Legal determination regarding medical device regulation must be made by counsel, not this technical review.*

@@ -1,0 +1,33 @@
+**Pre-Launch Safety Validation Plan: Offline-First Agriculture Advisor**
+
+**1. Static Harm Inventory & Rule-Based Guardrails (Days 1-2)**
+Before testing, freeze the advice library and implement a deterministic "safety shell" that runs locally on the device, independent of the AI model.
+*   **Action:** Hard-code a "Negative List" of toxic pesticide mixtures and maximum dosage thresholds based on Kenyan regulatory standards into the app binary.
+*   **Logic:** If the AI generates a recommendation containing a banned mixture or exceeding a dosage cap, the local shell must block the output and display a static warning: "Recommendation unavailable due to safety constraints."
+*   **Deliverable:** A verified lookup table embedded in the app that overrides any AI output violating these hard limits.
+
+**2. Adversarial "Red Team" Simulation (Days 3-4)**
+Simulate the low-connectivity environment and outdated data risks using a local test harness. Do not rely on cloud APIs.
+*   **Probe Set A (Toxic Combinations):** Input 50 known dangerous pesticide combinations. *Pass Condition:* 100% are blocked by the local safety shell; zero reach the user interface.
+*   **Probe Set B (Dosage Extremes):** Input edge cases for crop types and field sizes designed to trigger overdose errors. *Pass Condition:* All outputs fall within the hard-coded maximums; any deviation triggers the fallback warning.
+*   **Probe Set C (Outdated Data Scenarios):** Feed prompts reflecting pest scenarios known to have changed treatment protocols in the last 24 months. *Pass Condition:* The system either provides the current safe standard (if updated in the static list) or defaults to "Consult a local agronomist" rather than guessing.
+
+**3. Human-in-the-Loop Gate for High-Stakes Outputs (Day 5)**
+Given the risk of health hazards, full automation for pesticide application is unsafe.
+*   **Action:** Classify any output involving "pesticide mixing," "application dosage," or "toxicity warnings" as high-stakes.
+*   **Constraint:** The app must require an explicit manual confirmation step for these specific advisories, displaying the source of the rule (e.g., "Based on [Year] Safety Guidelines").
+*   **Fallback:** If the model's internal confidence is low (or if the safety shell intercepts the query), the app must serve a pre-written, safe static message advising manual verification, rather than a generated guess.
+
+**4. Final "Gold Set" Verification (Day 6)**
+Run a final suite of 20 critical farmer queries (covering the most common crops and pests in the target region) on actual target devices with connectivity disabled.
+*   **Metric:** Zero instances of toxic recommendations reaching the screen.
+*   **Stop Condition:** If even one toxic mixture or overdose is displayed, the launch is halted. The safety shell rules must be expanded until the failure rate is zero.
+
+**5. Transparency Artifact (Day 7)**
+Include a localized "Safety & Limitations" screen in the app.
+*   **Content:** Clearly state that the app uses offline rules for safety, list the date of the pesticide data used, and provide a contact method for reporting errors.
+*   **Disclosure:** Explicitly note that this is an automated tool and that critical chemical decisions should be cross-referenced with local extension officers.
+
+**Notes:**
+*   This plan prioritizes a deterministic safety shell over model accuracy, as the model cannot be trusted with outdated data in high-stakes scenarios.
+*   Legal review is required to confirm if the "Safety & Limitations" disclosure meets local Kenyan agricultural regulations before distribution.

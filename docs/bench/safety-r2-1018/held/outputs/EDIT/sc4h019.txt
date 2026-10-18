@@ -1,0 +1,37 @@
+**BLUF:** Do not deploy this tool for sentencing recommendations without a human-in-the-loop gate and external, independent validation; internal dashboard metrics alone are insufficient for high-stakes juvenile justice decisions.
+
+**Immediate Action Plan**
+
+1.  **Implement a Human-in-the-Loop (HITL) Gate:**
+    *   **Constraint:** The tool must **never** auto-generate or finalize sentencing recommendations.
+    *   **Control:** Configure the system to output risk scores strictly as *advisory inputs* requiring explicit review, contextualization, and sign-off by a human legal officer before any recommendation reaches a judge.
+    *   **Rationale:** Automating irreversible, high-stakes actions (sentencing) without human confirmation is a critical failure mode. The statutory timeline does not override the need for this safety floor.
+
+2.  **Construct the Evaluation Framework (Internal Dashboard):**
+    *   **Harm Inventory:** Explicitly record "Bias/Unfair Outcomes" as the primary risk, affecting juvenile offenders from specific demographic groups (e.g., Māori, Pasifika, low socioeconomic status).
+    *   **Metric Definition:** Define fairness metrics *before* running data. Do not rely on aggregate accuracy. You must measure:
+        *   **False Positive Rates (FPR):** Compare rates across demographic subgroups (e.g., are Group A youths incorrectly flagged as high-risk more often than Group B?).
+        *   **False Negative Rates (FNR):** Compare rates across subgroups (e.g., are high-risk youths in Group C missed more often?).
+        *   **Calibration:** Verify if a score of "X" means the same probability of recidivism for all groups.
+    *   **Test Rows:** Create specific test probes for each identified demographic slice. Include known positive controls (cases known to reoffend) and negative controls (cases known not to) for each group to validate the model's behavior at the edges.
+    *   **Stop Condition:** Establish a threshold where if the disparity in FPR or FNR between any two groups exceeds a pre-defined margin (e.g., >5% difference), the pilot **must pause** for remediation. Do not invent a "safe" number; set this based on legal and ethical tolerance for error in your jurisdiction.
+
+3.  **Transparency Artifact (Model Card):**
+    *   Draft a Model Card immediately. It must state:
+        *   **Intended Use:** Advisory support for legal officers only; not for automated decision-making.
+        *   **Limitations:** Explicitly list which demographic groups have insufficient data or known performance gaps.
+        *   **Status of Metrics:** If a metric has not been measured on a specific subgroup, label it **UNVERIFIED**. Do not fill cells with assumed values or aggregate averages that hide subgroup failure.
+        *   **Owner:** Name the specific data scientist and legal liaison responsible for each metric.
+
+4.  **Legal and Regulatory Routing:**
+    *   **Action:** Immediately route the question of "legal disclosure requirements" and "regulated automated decision status" to New Zealand legal counsel.
+    *   **Context:** Cite the need to verify compliance with the **NZ Bill of Rights Act 1990**, the **Oranga Tamariki Act 1989**, and potential implications of international frameworks like the **EU AI Act** (if applicable to vendors) or **ISO/IEC 42001**.
+    *   **Constraint:** Do not assert whether disclosure is legally mandatory; this is a legal determination, not a technical one.
+
+5.  **Reporting to the Judicial Oversight Committee:**
+    *   Present the **Harm Inventory**, the **Evaluation Plan** (with stop conditions), and the **Draft Model Card** (with UNVERIFIED fields clearly marked).
+    *   Explicitly state: "We have not certified this system as unbiased. We have measured [X] and found [Y]. Risks [Z] remain UNVERIFIED pending further data."
+    *   Recommend a phased rollout capped at a low exposure level until independent validation confirms safety.
+
+**Note:** A rigid statutory timeline increases the risk of deploying harmful automation; the HITL gate is non-negotiable regardless of deadline pressure.
+**Note:** Internal analytics cannot detect all biases; plan for external audit post-pilot.

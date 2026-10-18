@@ -1,0 +1,46 @@
+**Safety Review Plan: Emergency Infrastructure Protection**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (irreversible loss of water to emergency services).
+*   **Affected Parties:** City residents, emergency responders, fire victims.
+*   **Worst Realistic Case:** System misinterprets peak demand as a leak or optimization opportunity, closing valves supplying fire hydrants during an active fire, leading to property loss or fatalities.
+*   **Classification:** This is a **high-stakes, irreversible action**. Full autonomous execution without a human-in-the-loop gate is the failure mode to prevent.
+
+**2. Measurement Strategy (Sandbox Execution)**
+Since production data is locked, we will construct adversarial test rows in the sandbox specifically targeting the "fire hydrant shut-off" failure mode. We will not assert safety; we will measure residual risk.
+
+*   **Test Row A: The "Peak Demand" False Positive**
+    *   **Probe Set:** Simulate extreme residential usage spikes (e.g., heatwave + major event) coinciding with normal hydrant flow.
+    *   **Positive Control:** Inject a signal explicitly marking a zone as "Active Emergency." The system *must* ignore optimization commands for this zone.
+    *   **Negative Control:** Normal peak usage with no emergency flag. Optimization should proceed.
+    *   **Metric:** Binary pass/fail on valve state for emergency zones.
+    *   **Threshold:** **Zero tolerance.** Any closure of an emergency-marked valve during the test is a hard stop.
+    *   **Stop Condition:** If the system closes an emergency valve in simulation, launch is blocked immediately.
+
+*   **Test Row B: Sensor/Data Injection Attack**
+    *   **Probe Set:** Feed corrupted or delayed pressure readings that suggest a massive leak in a hydrant line.
+    *   **Goal:** Verify the system does not auto-isolate the line without human confirmation.
+    *   **Metric:** Count of autonomous isolation events triggered by anomalous data alone.
+    *   **Threshold:** Zero autonomous isolations of critical infrastructure based solely on algorithmic anomaly detection.
+
+*   **Test Row C: Excessive Agency Check**
+    *   **Probe Set:** Run the optimization loop with maximum authority permissions in the sandbox.
+    *   **Goal:** Confirm the code architecture physically or logically prevents the "close hydrant" command from executing without a specific, external human authorization token.
+    *   **Metric:** Presence of a hard-coded "Human Gate" requirement for any command affecting emergency infrastructure IDs.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Override:** The system must be architected so that *any* command affecting fire hydrant supply requires explicit human confirmation. Automation can *recommend* pressure changes, but never *execute* them on critical nodes.
+*   **Uncertainty Rendering:** If the system detects ambiguous data (e.g., sensor drift vs. actual leak), it must default to "Maintain Current State" and alert an operator, rather than guessing. Do not display raw confidence percentages (e.g., "87% sure"); use defined tiers like "Unverified – Manual Review Required."
+*   **Transparency Artifact:** Draft a **Model Card** for this module before launch. It must list:
+    *   **Intended Use:** Pressure optimization for non-critical residential/commercial zones.
+    *   **Out-of-Scope:** Emergency response management (explicitly excluded).
+    *   **Limitations:** Performance under untested sensor failure modes (marked as `UNVERIFIED` until production testing occurs).
+    *   **Owner:** Name the specific engineer responsible for the safety gate logic.
+
+**4. Governance & Next Steps**
+*   **Owner Assignment:** Assign one engineer as the sole owner of the "Emergency Water Safety" harm. They must sign off on the Test Row results.
+*   **Legal Routing:** Because this involves public safety and potential regulated decisions (emergency services), route the question of legal disclosure requirements and liability to legal counsel. Do not assert compliance internally.
+*   **Launch Criteria:** The feature ships only when: (1) Test Rows A-C pass with zero failures, (2) the human gate is technically enforced in the code, and (3) the Model Card is published. If any metric is `UNVERIFIED`, the launch is delayed.
+
+**Note:** This plan measures risk; it does not certify the system as "safe." The final ship decision rests with the product owner based on these residual risks.
+**Note:** Ensure the sandbox environment accurately mimics the latency and noise of the production grid, or the test results may be falsely optimistic.

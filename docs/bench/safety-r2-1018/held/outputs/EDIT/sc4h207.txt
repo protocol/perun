@@ -1,0 +1,35 @@
+**Immediate Action Plan: Welfare-Fraud Detector Validation**
+
+**1. Implement a Mandatory Human-in-the-Loop Gate (Non-Negotiable)**
+Given the high stakes (accusations of fraud, financial interruption) and known data instability, **no automated flag may trigger an adverse action against a citizen without human review.** Do not automate the notification, benefit suspension, or investigation initiation. The system must function solely as a "decision support" tool for caseworkers for this initial launch. Full automation of irreversible or high-cost actions is the primary failure mode to prevent.
+
+**2. Execute a Rapid "Harm Inventory" & Targeted Red-Team (Week 1)**
+Before testing logic, define the specific harms:
+*   **False Positives from Data Glitches:** Identify the specific employment record integration points known to be "glitchy."
+*   **Bias/Unfair Outcomes:** Determine if specific demographic groups or employment types are disproportionately affected by these data gaps.
+*   **Action:** Construct a "poisoned" test set using only records known to have integration errors. Run the detector against this set. If the system flags these known-bad data records as fraud, the logic is unfit for even human review until patched.
+
+**3. Deploy "Defined Confidence Tiers" Instead of Scores (Week 2)**
+Do not display raw probability scores (e.g., "87% likely fraud") to caseworkers, as this invites over-reliance on uncalibrated numbers. Replace them with three defined text-based tiers, clearly linked to data quality:
+*   **Tier 1 (Review Required):** Flagged irregularity + Data Source Verified.
+*   **Tier 2 (Data Check Required):** Flagged irregularity + Data Source Known to be Unstable/Glitchy.
+*   **Tier 3 (No Action):** Insufficient evidence.
+*   *Rule:* Any flag originating from a "glitchy" data source must automatically default to Tier 2, forcing the human reviewer to verify the data before assessing the claim.
+
+**4. Run a "Positive/Negative Control" Sprint (Week 3)**
+You cannot measure overall accuracy in four weeks, but you can verify specific failure modes:
+*   **Positive Control:** Feed the system 50 confirmed historical fraud cases. It *must* flag them.
+*   **Negative Control:** Feed the system 50 confirmed clean cases, specifically selecting those with complex employment histories similar to your known data glitches. It *must not* flag them.
+*   **Stop Condition:** If the system flags >0% of the Negative Control group due to data glitches, the launch must be delayed or scoped down to exclude those data sources. Do not invent an "acceptable error rate."
+
+**5. Transparency & Disclosure Artifact (Week 4)**
+Create a one-page "System Limitations Card" for internal caseworkers and external oversight. It must state:
+*   **Intended Use:** Decision support only; not an automated determiner of fraud.
+*   **Known Limitations:** Explicitly list the employment data integrations that are currently unstable.
+*   **Unverified Metrics:** Clearly mark overall accuracy and bias rates as "UNVERIFIED" due to the lack of data cleaning. Do not fabricate precision.
+
+**6. Governance & Ownership**
+Assign a single named owner (not the whole team) responsible for reviewing every "Tier 2" flag pattern weekly. If false positives spike, this owner has the authority to pause specific data feeds immediately.
+
+**Note:** Legal counsel must review whether this "decision support" classification meets local regulatory requirements for automated welfare decisions; do not assume the human gate absolves all liability.
+**Note:** If the "Negative Control" test fails, the only safe path is to decouple the glitchy data source before launch, even if it reduces detection coverage.

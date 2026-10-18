@@ -1,0 +1,30 @@
+### Vaccine Eligibility Checker: Validation & Safety Plan
+
+**1. Harm Inventory (Map)**
+Before testing, explicitly record the worst-case impact for each failure mode:
+*   **False Negative (Incorrect Denial):** A high-risk individual (elderly/immunocompromised) is blocked from vaccination, leading to potential severe illness or death. *Severity: Critical.*
+*   **Bias/Unfair Outcome:** The logic systematically disadvantages specific demographics due to flawed data proxies or rigid criteria that ignore complex medical histories.
+*   **Over-reliance:** Users or staff trust the "Ineligible" result without seeking human review, assuming the algorithm is infallible.
+*   **Missing Disclosure:** Users are unaware the decision is automated and do not know how to appeal.
+
+**2. Measurement Plan (Measure)**
+Execute these specific tests immediately. Do not rely on aggregate accuracy; focus on the edge cases that hurt vulnerable users.
+*   **Adversarial "Denial" Probe Set:** Construct a dataset of 50+ known *eligible* high-risk profiles (including complex comorbidities and edge-case ages).
+    *   *Pass Condition:* 0% false negatives on this specific set. Any denial triggers an immediate code freeze.
+    *   *Controls:* Include known ineligible profiles to ensure the system still correctly denies those truly outside criteria.
+*   **Subgroup Slice Testing:** Run the logic separately for distinct groups (e.g., age 65+, immunocompromised conditions, pregnant individuals). Compare denial rates across groups to detect systematic bias.
+*   **Hallucination/Logic Check:** Verify that every "Ineligible" output cites the specific rule triggered. If the system generates free-text explanations, test for fabricated medical rules.
+*   **Transparency Artifact:** Draft a "Model Card" for internal use listing: intended use (flu screening only), known limitations (does not replace doctor advice), and the specific criteria used. **Do not ship without this.**
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate (Critical):** Any output resulting in "Ineligible" for a user self-identifying as high-risk must **not** be final. The system must route these cases to a human health official for manual review before the session ends. Fully automated irreversible denials are unsafe for this context.
+*   **Defined Uncertainty Tiers:** If the input data is ambiguous (e.g., missing vaccination history), do not output a precise "0% eligible" score. Instead, use coarse tiers: "Confirmed Eligible," "Requires Review," or "Data Insufficient." Never display raw confidence percentages (e.g., "87% eligible") as they imply false precision.
+*   **Explicit Disclosure & Appeal:** Clearly state: "This is an automated screening tool. If you believe you are eligible, click here to speak with a nurse." Provide a one-click override path.
+*   **Rollback Switch:** Prepare a feature flag to instantly bypass the algorithm and revert to a manual-only intake if the error rate exceeds zero during the soft launch.
+
+**4. Governance**
+*   **Owner:** Assign one specific health official as the owner of the "False Negative" risk. They must sign off on the residual risk before launch.
+*   **Legal Routing:** Consult counsel immediately regarding whether this automated decision falls under specific health regulations requiring formal impact assessments. Do not assume compliance; verify the duty.
+
+**Note:** This plan prioritizes preventing harm to vulnerable users over speed; a "tight timeline" does not justify skipping the human gate for denials.
+**Note:** No metric here certifies the system as "safe" or "unbiased"; it only measures residual risk to inform your ship decision.

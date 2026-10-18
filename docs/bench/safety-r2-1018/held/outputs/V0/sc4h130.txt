@@ -1,0 +1,33 @@
+**Validation Checklist: Automated Eviction Notice Data Accuracy**
+
+**1. Multi-Source Reconciliation Gate**
+Before any notice generation logic runs, the system must cross-reference the primary ledger against at least two independent data sources (e.g., bank deposit logs, payment processor webhooks, and the internal accounting database).
+*   **Check:** Does the "amount due" match exactly across all sources?
+*   **Fail Condition:** Any discrepancy greater than $0.00 triggers an automatic halt for that specific tenant record. No notice is generated; the account is flagged for manual review.
+
+**2. The "Positive Payment" Negative Control**
+Run a test batch exclusively on tenants known to be current on payments (a "known-good" set).
+*   **Check:** Verify that zero notices are generated for this group.
+*   **Fail Condition:** If even one current tenant receives a draft notice, the entire batch is rejected. This validates that the logic does not hallucinate debt based on data glitches.
+
+**3. Hard-Coded "Human-in-the-Loop" Gate for First Action**
+Given the irreversible harm of an illegal eviction threat, fully automated sending is unsafe.
+*   **Check:** Implement a mandatory manual approval step for the first 30 days or the first 100 notices.
+*   **Procedure:** The system generates a "Draft Notice" report. A human manager must physically verify the debt existence and sign off on the batch before the system executes the send command.
+*   **Fail Condition:** If the system attempts to bypass this queue or send directly without the "Approved" flag, the deployment fails.
+
+**4. Uncertainty and Error Rendering**
+If the data confidence is not absolute, the output must reflect that uncertainty rather than asserting a fact.
+*   **Check:** Ensure notices are suppressed if data ingestion timestamps are stale (e.g., bank feed is >24 hours old).
+*   **Procedure:** If a payment is recorded but not yet reconciled, the system status must read "Processing" internally, preventing the "Late" trigger. Never guess; if the data pipeline lags, delay the notice.
+
+**5. Adversarial "Glitch" Probe**
+Simulate specific data errors known to occur in your multi-db environment (e.g., duplicate transaction entries, timezone mismatches causing late flags, or partial payment application errors).
+*   **Check:** Inject these bad records into a staging environment.
+*   **Fail Condition:** If the system generates a notice based on these injected errors, the validation logic is insufficient. The threshold for error tolerance on high-stakes legal notices must be zero.
+
+**6. Disclosure and Reversibility Mechanism**
+*   **Check:** Every notice must include a clear, bolded channel for immediate dispute ("If you believe this is an error, call X immediately").
+*   **Procedure:** Ensure there is a "Kill Switch" to recall or retract a notice if sent in error, and a logged protocol for issuing an immediate apology/correction to mitigate harassment claims.
+
+**Note:** Because this system executes high-stakes actions with potential legal liability, a "human-in-the-loop" gate is the minimum safety floor; do not remove it to meet the deadline. Legal compliance regarding eviction notices varies by jurisdiction; while this checklist addresses data accuracy, the legality of the notice content itself requires verification by qualified counsel before launch.

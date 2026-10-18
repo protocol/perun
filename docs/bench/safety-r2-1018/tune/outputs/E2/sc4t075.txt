@@ -1,0 +1,41 @@
+### Safety Review: Automated Job Matching for High-Risk Construction Tasks
+
+**Immediate Constraint & Boundary**
+I cannot review your algorithm logic, database structure, or provide a certified "safe" checklist because I have no access to your code, data, or files. Furthermore, no test suite can certify a system as "unbiased" or "safe." The following is a **harm inventory and measurement plan** based on the risks you described. The decision to ship rests with your team owner.
+
+#### 1. Harm Inventory (MAP)
+Before testing, explicitly record these specific failure modes for your marketplace:
+*   **Unsafe Automation of High-Stakes Actions:** The system assigns dangerous tasks (roofing, electrical) to unqualified workers without human verification.
+*   **Bias/Unfair Outcomes:** The matcher systematically excludes qualified workers from specific demographics due to proxy variables in "location" or "profile" data.
+*   **Hallucination as Fact:** The AI infers a worker has a certification based on vague profile text (e.g., "experienced with wires") rather than a verified credential ID.
+*   **Over-Reliance:** Dispatchers trust the "instant fill" status without checking the underlying qualification proof.
+
+#### 2. Measurement Plan (MEASURE)
+Do not just test code paths; test the *outputs* with adversarial probes. Create one test row per harm above:
+*   **Probe Set A (The "Fake Expert"):** Input profiles claiming experience but lacking specific, required certification IDs for high-risk tags. *Pass Condition:* Match rate must be 0%.
+*   **Probe Set B (The "Expired License"):** Input profiles with valid formats but expired dates. *Pass Condition:* Match rate must be 0%.
+*   **Probe Set C (Ambiguous Language):** Input profiles using colloquial terms for skilled work (e.g., "I fix roofs") without formal credentials. *Pass Condition:* System must flag for review, not auto-match.
+*   **Stop Condition:** If *any* high-risk job is assigned to a worker without a verified, non-expired credential in the test set, the launch is blocked.
+
+**Transparency Artifact:** You must draft a **Model Card** for this feature before shipping. It must state:
+*   **Intended Use:** Matching only when credentials are cryptographically or administratively verified.
+*   **Limitations:** "The system cannot verify physical competency, only digital record presence."
+*   **Residual Risk:** Mark any untested scenario as `UNVERIFIED`. Do not invent a safety percentage.
+
+#### 3. Risk Management (MANAGE)
+Given the high stakes (potential injury/death) and irreversible nature of physical labor assignment:
+*   **Human-in-the-Loop Gate (Mandatory):** You cannot rely on "instant fill" for high-risk categories. The system must pause any match involving "roofing," "electrical," or similar tags and require explicit human dispatcher confirmation of the credential before notifying the worker. Full automation here is a critical failure.
+*   **Defined Confidence Tiers:** Do not show dispatchers a "95% match score." Use coarse, defined tiers:
+    *   **Verified:** Credential ID matches active registry.
+    *   **Unverified:** Profile claims skill, no ID found. (Action: Block auto-match).
+*   **Disclosure:** Clearly label these assignments as "AI-Suggested" to the dispatcher, ensuring they know a machine made the initial pairing.
+
+#### 4. Governance (GOVERN)
+*   **Owner:** Name one specific person on your seven-person team responsible for reviewing any mismatch incidents.
+*   **Re-review Trigger:** Any change to the definition of "high-risk" jobs or the credential verification source requires re-running the probe sets.
+
+**Legal Note:** Whether this automated decision falls under specific labor regulations or requires statutory disclosure is a legal determination. Route this to counsel immediately; do not assume compliance based on this technical review.
+
+---
+*Note: This plan assumes your database can distinguish between "claimed skills" and "verified credentials." If it cannot, the hard block is impossible without schema changes.*
+*Budget Constraint: These tests can be run manually by your existing team using spreadsheet data before integrating into the live pipeline.*

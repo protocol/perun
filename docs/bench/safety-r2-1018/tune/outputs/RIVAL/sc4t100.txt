@@ -1,0 +1,34 @@
+### Pre-Launch Safety Verification Plan: Smart-Shower Pressure Fluctuations
+
+**1. Test Environment & Instrumentation Setup**
+*   **Hydraulic Rig:** Construct a closed-loop test bench mimicking residential plumbing (standard 40–60 PSI). Install high-frequency pressure transducers (sampling ≥100Hz) at the showerhead inlet to capture micro-fluctuations.
+*   **Thermal Logging:** Place fast-response thermocouples directly in the water stream at the point of user contact. Log temperature every 50ms to detect spikes invisible to standard sensors.
+*   **Actuation Simulation:** Use a programmable valve to simulate specific "edge case" pressure events: sudden drops (simulating a toilet flush), rapid oscillations (washing machine cycle), and total supply loss.
+
+**2. Defined Edge Case Scenarios**
+Execute the following specific pressure profiles against the firmware:
+*   **The "Sudden Drop":** Instant pressure decrease of 30% lasting 2 seconds (simulating a concurrent toilet flush).
+*   **The "Oscillation":** Rapid pressure cycling (±15%) over 5 seconds (simulating multiple household appliances activating).
+*   **The "Brownout":** Pressure drop to near-zero for 0.5 seconds, then immediate restoration.
+*   **The "Slow Bleed":** A gradual pressure decline over 10 seconds, testing if the system fails to react until it is too late.
+
+**3. Performance Metrics & Pass/Fail Criteria**
+Given the vulnerability of the target demographic, the criteria are strict:
+*   **Reaction Latency:** Time from pressure anomaly detection to valve actuation must be **< 200ms**. Any latency >500ms is a critical failure.
+*   **Temperature Ceiling:** During any pressure drop, water temperature must not exceed **43°C (109°F)** for more than 1 second.
+*   **Fail-Safe Action:** Upon detecting a drop >20%, the system must immediately either cut flow or inject cold water to neutralize the hot supply ratio.
+*   **Recovery Stability:** Once pressure normalizes, the system must not overshoot the target temperature by more than ±1°C.
+
+**4. Execution Protocol**
+*   **Baseline Calibration:** Run 10 cycles with stable pressure to establish the "normal" thermal baseline.
+*   **Stress Testing:** Run each edge case scenario 50 times consecutively to check for firmware state errors or memory leaks that might degrade response time over repeated events.
+*   **Worst-Case Input:** Perform tests with the water heater set to its maximum output (e.g., 60°C) to ensure the fail-safe works even when the potential scalding risk is highest.
+*   **Power Interruption:** Simulate a power loss during a pressure spike to verify mechanical or battery-backed fail-safes engage instantly.
+
+**5. Documentation & Go/No-Go Decision**
+*   Record all latency and temperature data. Plot temperature vs. time for every failed cycle.
+*   **Go Condition:** 100% of tests meet the Reaction Latency and Temperature Ceiling criteria.
+*   **No-Go Condition:** Any single test results in water >45°C for >2 seconds, or reaction latency >500ms.
+
+**Note:** Given the firmware size constraints, prioritize optimizing the interrupt handler for the pressure sensor over non-essential features.
+If hardware latency is the bottleneck, consider a purely mechanical thermal bypass valve as a redundant physical layer.

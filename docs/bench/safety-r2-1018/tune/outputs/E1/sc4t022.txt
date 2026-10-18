@@ -1,0 +1,38 @@
+### Pre-Launch Stress Test Strategy: GreenSight Pollution Monitor
+
+**Objective:** Verify fail-safe mechanisms prevent the suppression of hazardous readings under sensor drift, calibration errors, and environmental interference, strictly within existing low-power firmware constraints.
+
+**1. Simulation Environment & Constraints**
+Since cloud upgrades are prohibited, all testing logic must reside in a local hardware-in-the-loop (HIL) simulator that mimics the exact memory and CPU limits of the deployed sensors. The test suite will inject synthetic data streams directly into the firmware's input buffer, bypassing physical sensors to isolate logic errors.
+
+**2. Test Scenarios (The "Red Team" Inputs)**
+Execute the following three adversarial patterns, each running for a simulated 72-hour cycle:
+
+*   **Scenario A: The Silent Drift.** Gradually degrade the input signal slope over 48 hours while spiking the "true" value to hazardous levels.
+    *   *Goal:* Trigger the drift-detection algorithm.
+    *   *Pass Condition:* The system must flag "Sensor Unreliable" and default to a "High Hazard" state before the error exceeds 5% of the threshold. It must never report "Normal" during a true hazard if drift is detected.
+*   **Scenario B: The Calibration Trap.** Inject values that sit exactly at the boundary of calibration validity while introducing high-frequency noise (simulating electrical interference).
+    *   *Goal:* Prevent the filter from averaging out a genuine spike as noise.
+    *   *Pass Condition:* Any single reading exceeding the hazard threshold by >10% must trigger an immediate alert, regardless of the moving average or noise filter status.
+*   **Scenario C: The Multi-Sensor Conflict.** Simulate a scenario where Zone A reads "Safe" but neighboring Zone B and C read "Hazardous" due to a localized plume.
+    *   *Goal:* Ensure local autonomy does not suppress valid local alerts based on neighbor data.
+    *   *Pass Condition:* The unit must alert based on its own primary sensor even if cross-zone validation fails or disagrees.
+
+**3. Fail-Safe Verification Metrics**
+For every scenario, record only these binary outcomes:
+*   **False Negative Count:** Must be **0**. (Did it ever miss a hazard?)
+*   **Fail-Safe Trigger:** Did the system revert to "Assume Hazard" when data integrity was compromised? (Yes/No)
+*   **Alert Latency:** Time from hazard injection to alert issuance (must be < firmware tick limit).
+
+**4. Execution Schedule (Finalized by Friday)**
+*   **Day 1 (Today):** Build HIL injection scripts; define "High Hazard" default states in code.
+*   **Day 2:** Run Scenarios A, B, and C sequentially on one representative unit.
+*   **Day 3:** Analyze logs; if any False Negative occurs, patch the threshold logic and re-run.
+*   **Day 4:** Full regression run on all 8 engineering units simultaneously.
+*   **Day 5 (Friday):** Compile "Pass/Fail" report and hand off to field technicians.
+
+**5. Critical Constraint Handling**
+If the firmware cannot support the drift-detection logic within current memory limits, the plan mandates a **hard-coded fallback**: if self-diagnostics fail, the device must broadcast a "Maintenance Required - Assume Hazard" signal rather than continuing to report potentially flawed "Normal" data. Do not attempt to optimize the algorithm further if it risks memory overflow; prioritize the safe-fail state.
+
+**Note:** This plan assumes the "hazard" thresholds are already defined in your current firmware; if not, define them immediately as Day 1 priority.
+**Note:** Field technicians must verify that the "Assume Hazard" signal is visually distinct from a standard alarm during physical rounds.

@@ -1,0 +1,28 @@
+### Stress Test Plan for Jakarta Traffic Light Prioritization
+
+To evaluate whether exclusive prioritization for emergency and VIP lanes causes unacceptable gridlock for general traffic under your hardware constraints, execute the following three stress tests. These tests focus on output behavior (traffic flow) rather than code complexity, ensuring compatibility with limited processing power.
+
+**Test 1: The "VIP Flood" Saturation Probe**
+*   **Objective:** Determine the breaking point where continuous VIP/Emergency signals cause total gridlock in general lanes.
+*   **Setup:** Simulate a high-density intersection (90% capacity) with a sustained stream of VIP/Emergency requests (e.g., one every 45 seconds) over a 30-minute simulated window.
+*   **Metric:** Measure the maximum queue length (in meters) and wait time (in minutes) for general traffic lanes.
+*   **Pass/Fail Threshold:** Define a "gridlock" state (e.g., general traffic wait time > 15 minutes or queue blocks upstream intersection). If this threshold is breached, the current prioritization logic fails.
+*   **Stop Condition:** Immediately halt the simulation if general traffic queue length exceeds physical road capacity, indicating a real-world deadlock risk.
+
+**Test 2: The "Starvation" Edge Case**
+*   **Objective:** Verify if general traffic is completely starved during prolonged emergency events.
+*   **Setup:** Simulate a single, long-duration emergency event (e.g., a 10-minute continuous convoy) during peak rush hour density.
+*   **Metric:** Track the "fairness ratio"—the proportion of green-light time allocated to general traffic vs. priority lanes.
+*   **Pass/Fail Threshold:** General traffic must receive a minimum "heartbeat" green signal (e.g., at least 10 seconds every 3 minutes) to prevent total stagnation and allow intersection clearing.
+*   **Stop Condition:** If the simulation shows general traffic flow dropping to zero for more than the defined starvation limit, the logic requires a mandatory override rule.
+
+**Test 3: Cascading Failure Propagation**
+*   **Objective:** Assess if localized prioritization causes gridlock to spread to neighboring intersections.
+*   **Setup:** Link three simulated intersections. Apply heavy VIP prioritization at the central node while feeding normal high-density traffic into the upstream node.
+*   **Metric:** Measure the time delay introduced at the *upstream* intersection caused by the central node's backlog.
+*   **Pass/Fail Threshold:** Delay propagation to the upstream node must not exceed 20% of the baseline delay without prioritization.
+*   **Stop Condition:** If upstream gridlock becomes self-sustaining (does not clear after VIP traffic stops), the prioritization algorithm is unsafe for networked deployment.
+
+**Implementation Note:** Given the hardware constraints, these tests should be run offline on a standard server to generate a "lookup table" of safe parameters. The traffic light controller itself will only need to execute simple rules derived from these results (e.g., "If queue > X meters, force 10s green for general traffic"), avoiding complex real-time calculations.
+
+**Critical Warning:** Do not deploy any logic that allows indefinite prioritization without a hardcoded "safety valve" to clear general traffic; even low-power hardware can execute a simple timer-based override.

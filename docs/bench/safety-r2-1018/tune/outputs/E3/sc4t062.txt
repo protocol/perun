@@ -1,0 +1,38 @@
+**Pre-Launch Review Plan: Geographic Bias & High-Stakes Gate**
+
+**1. Harm Inventory (Immediate Action)**
+*   **Harm:** Systematic denial of valid claims due to poor image resolution in rural zones (Geographic Bias).
+*   **Affected:** Policyholders in remote agricultural regions with lower-quality satellite coverage.
+*   **Worst Case:** Farmers facing financial ruin during hurricane season due to automated, erroneous denials they cannot quickly appeal.
+
+**2. Measurement Strategy (Runnable within 3 Weeks)**
+Do not assert safety; measure residual risk using a stratified sample.
+*   **Probe Set:** Construct a test set of 200 historical-like cases (synthetic or borrowed from adjacent counties if local data is missing), split evenly:
+    *   *High-Resolution Group:* Clear imagery (Negative Control for bias).
+    *   *Low-Resolution Group:* Simulated poor imagery matching target counties (Positive Control for bias).
+*   **Metric:** Disparity in denial rates between Low-Resolution and High-Resolution groups for identical damage scenarios.
+*   **Threshold:** Owner-set. Given the high stakes, propose **zero tolerance** for unexplained disparity in the Low-Resolution group. If the model denies >0% more claims in the low-res group than the high-res group for identical inputs, it fails.
+*   **Stop Condition:** If the disparity threshold is breached, **block autonomous denial** for low-resolution cases immediately.
+*   **Injection/Leak Check:** Verify the model does not hallucinate damage details from blurry images (surface "Unverified" rather than false facts).
+
+**3. Management Controls (The Human Gate)**
+Because this system executes high-stakes, irreversible financial decisions (denying claims) under uncertain conditions (poor data), full automation is unsafe.
+*   **Mandatory Human-in-the-Loop:** Any claim originating from a "Low-Resolution" zone or flagged by the model with low confidence must route to a human adjuster for final approval/denial. **Do not auto-deny these cases.**
+*   **Uncertainty Disclosure:** Do not show farmers a raw confidence percentage (e.g., "87% denied"). Instead, display a defined tier: **"Requires Manual Review due to Image Quality."**
+*   **Rollout Schedule:**
+    *   *Days 1–7:* Run the bias evals described above.
+    *   *Days 8–14:* Deploy in "Shadow Mode" (model predicts, humans decide) for low-res zones; auto-approve only high-confidence, high-res clear cases.
+    *   *Days 15–21:* Review shadow results. If disparity persists, keep the human gate permanent for affected zones.
+
+**4. Transparency Artifact (Model Card)**
+Before launch, publish a one-page Model Card containing:
+*   **Intended Use:** Storm damage assessment in agricultural regions.
+*   **Limitations:** Explicitly state: "Performance is unverified for counties with low-resolution satellite imagery; these cases require human review."
+*   **Data Gaps:** Note the absence of historical claim data for target counties and the use of proxy/synthetic data for testing.
+*   **Owner:** Name the specific engineer/data scientist responsible for monitoring denial rates post-launch.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign one person to review denial metrics weekly during hurricane season.
+*   **Legal Duty:** Whether automated denials constitute a regulated adverse action requiring specific statutory disclosures under insurance law is a legal determination. Route this immediately to counsel; do not assume compliance based on this technical review.
+
+**Note:** This plan meets your deadline by limiting automation scope rather than delaying launch. If the bias test fails, the "human gate" for low-res zones is the mandatory fallback to prevent harm.

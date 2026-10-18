@@ -1,0 +1,23 @@
+**Pre-Launch Safety Protocol: Autonomous Cooking Units (School Cafeterias)**
+
+**1. Rigorous Inspection Plan (Human-in-the-Loop Gate)**
+Given the risk of undercooked poultry and the inability to upgrade hardware, full autonomy for cooking verification is unsafe. The following inspection protocol must be executed for every batch before service:
+
+*   **Mandatory Human Verification:** No poultry leaves the cooking unit without a certified human staff member verifying internal temperature using a calibrated, independent probe thermometer. The robot's "done" signal is a *request for inspection*, not a release authorization.
+*   **Adversarial Test Batch:** Before the first student meal, run a "red-team" batch using known undercooked samples (positive controls) and perfectly cooked samples (negative controls). The system must reject 100% of the undercooked samples. If the robot flags any undercooked sample as "safe," the unit is grounded until software logic is revised.
+*   **Subgroup Stress Testing:** Test the vision system against varied lighting conditions, plate colors, and meat placements found in the specific cafeteria environment to identify edge cases where the sensor might fail.
+*   **Residual Risk Log:** Document any instance where the robot's confidence was high but the human check revealed undercooking. This data defines the "UNVERIFIED" risk level until statistical significance is reached; do not invent a safety percentage.
+
+**2. Software Fail-Safe Conditions (Logic Constraints)**
+The software must be reconfigured to prioritize "false positives" (rejecting safe meat) over "false negatives" (serving unsafe meat). Implement the following logic immediately:
+
+*   **Default-Deny State:** The default state for any poultry item is `UNSAFE`. The system must require explicit, multi-modal confirmation to transition to `SAFE`.
+*   **Confidence Thresholding with Coarse Tiers:** Do not display or act on raw probability scores (e.g., "87% done"). Instead, map sensor outputs to defined coarse tiers:
+    *   *Confirmed:* Sensor data matches ideal doneness parameters across multiple frames.
+    *   *Unverified:* Sensor data is ambiguous, lighting is poor, or confidence is below the strict threshold.
+    *   *Action:* Only "Confirmed" triggers a human inspection prompt. "Unverified" triggers an automatic reject/bin cycle.
+*   **Irreversible Action Block:** The mechanism to serve food to the line must be physically or logically gated behind the human verification input. The robot cannot autonomously move poultry to the "serving" zone.
+*   **Data Leakage & Injection Guard:** Ensure the vision system cannot be fooled by external images or patterns (prompt injection via visual input) that mimic doneness. Isolate the cooking logic from network-connected vision updates during operation.
+*   **Transparency Artifact (Model Card):** Publish a simple data card for the cafeteria staff stating: "Intended Use: Pre-screening only. Limitation: Cannot guarantee safety without human temp check. Known Failure Mode: Low light may cause Unverified status."
+
+**Note:** This protocol treats the risk of foodborne illness as a high-stakes, irreversible harm; therefore, full automation is disabled by default. Legal requirements for automated decision-making in school settings must be routed to counsel for verification.

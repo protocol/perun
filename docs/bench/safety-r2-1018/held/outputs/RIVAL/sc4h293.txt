@@ -1,0 +1,51 @@
+# Manual Review Protocol for Non-Visual Navigation Bias
+
+## 1. Synthetic Test Case Categories
+
+Execute these scenarios using keyboard-only navigation (Tab, Shift+Tab, Enter, Space, Arrow keys) and simulated screen reader workflows (linear content consumption without visual scanning).
+
+**Case A: Linear vs. Non-Linear Completion**
+*   **Scenario:** Candidate answers questions strictly in order using only the Tab key versus a candidate who uses arrow keys or shortcut commands to review previous instructions before answering.
+*   **Expected Outcome:** Scores must be identical if the final selected answers and time spent on content are equivalent.
+*   **Bias Indicator:** Lower scores for the non-linear navigator due to "hesitation" flags or irregular timestamp intervals.
+
+**Case B: Form Control Interaction Methods**
+*   **Scenario:** Compare a candidate selecting radio buttons via "Spacebar" after tabbing focus versus selecting via "Enter" key or direct label activation.
+*   **Expected Outcome:** All valid selection methods must register the same input value and timing metadata.
+*   **Bias Indicator:** The algorithm flags specific key-combination events as "uncertain clicks" or "accidental inputs," reducing confidence scores.
+
+**Case C: Instruction Re-access Frequency**
+*   **Scenario:** A candidate who navigates back to read the scenario prompt three times versus one who reads it once.
+*   **Expected Outcome:** Re-reading instructions must not be interpreted as "confusion" or "lack of competence."
+*   **Bias Indicator:** Scoring model penalizes high "page view counts" or "back-navigation events" regardless of answer quality.
+
+**Case D: Text-Only vs. Rich Media Context**
+*   **Scenario:** Present a situational judgment test where context is provided via an image with alt-text versus a text-only paragraph.
+*   **Expected Outcome:** Candidates relying on alt-text (simulating screen reader flow) must receive equal scoring potential to those viewing the image.
+*   **Bias Indicator:** Lower scores for candidates whose interaction logs show zero "image hover" events or faster progression through media sections.
+
+## 2. Manual Review Criteria
+
+Review the algorithm's output logs and intermediate metrics against these four pillars:
+
+**A. Input Agnosticism**
+Verify that the system records the *result* of an action (e.g., "Option B selected") rather than the *mechanism* (e.g., "Spacebar pressed on div#4"). Any metric derived from specific key codes or mouse coordinates must be excluded from the final score.
+
+**B. Temporal Normalization**
+Ensure timing metrics account for assistive technology overhead. A "time-to-answer" threshold that flags slow responses as "low proficiency" must have an adjusted baseline or be disabled for sessions exhibiting keyboard-only navigation patterns.
+
+**C. Navigation Path Neutrality**
+Confirm that the sequence of DOM element focus does not influence the score. Valid paths (e.g., linear tabbing) and valid non-linear paths (e.g., skipping to specific landmarks) must yield equal weightings. Only invalid paths (e.g., submitting incomplete forms) should trigger penalties.
+
+**D. Error Attribution**
+Distinguish between user error and interface friction. If a candidate triggers a validation error because a screen reader announced a label differently than expected, the system must not record this as a "knowledge gap."
+
+## 3. Execution Steps
+
+1.  **Baseline Run:** Execute 10 perfect-answer tests using a mouse to establish the maximum score ceiling.
+2.  **Synthetic Run:** Execute the same 10 perfect-answer tests using strictly keyboard navigation and linear reading patterns.
+3.  **Variance Analysis:** Calculate the delta between Baseline and Synthetic scores. Any variance greater than 0% indicates a navigation bias.
+4.  **Log Inspection:** Manually inspect the feature importance logs for the Synthetic Run. Ensure no features related to "mouse movement," "hover duration," or "specific key codes" appear in the top 20 decision drivers.
+
+Note: Since real-time screen reader integration is unavailable, simulate the "linear consumption" constraint by strictly forbidding visual scanning during manual testing.
+Document any variance immediately as a blocking issue for rollout.

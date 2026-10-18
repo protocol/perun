@@ -1,0 +1,30 @@
+**Immediate Safety Directive: Do not deploy or simulate operation until a firmware-enforced "Fail-Safe Default" is implemented.** Given the failure mode (detaching when sensors misread dust), the only safe firmware adjustment without hardware changes is to invert the logic: the robot must **refuse to operate unless adhesion readings exceed a significantly elevated threshold** and remain stable for a sustained duration. Treat any ambiguous sensor reading as a "fall risk" and trigger an immediate emergency tether lock or alarm, rather than attempting to clean.
+
+**Proposed In-House Validation Workflow (Firmware-Only Constraints):**
+
+Since you cannot modify hardware and have exhausted your budget, your validation must focus on **adversarial firmware testing** using simulated sensor inputs rather than physical high-risk drops.
+
+1.  **Sensor Data Spoofing Suite:**
+    *   **Action:** Create a script to inject synthetic sensor logs into the firmware, bypassing physical sensors.
+    *   **Test Cases:**
+        *   *The "Dust Trap":* Inject values that mimic the specific electrical signature of dust-covered glass (based on your failure logs). **Pass Condition:** Robot initiates emergency stop/refusal to move.
+        *   *The "Edge Case":* Inject rapidly fluctuating values simulating wind shear or partial detachment. **Pass Condition:** Robot halts immediately; no "cleaning" command is issued.
+        *   *The "False Positive":* Inject perfect adhesion values. **Pass Condition:** Robot operates normally.
+    *   **Metric:** 100% refusal rate on any input below the new elevated safety threshold.
+
+2.  **Bench-Top "Dry Run" Protocol:**
+    *   **Action:** Mount the robot on a vertical glass pane in a controlled office environment (not a high-rise). Disable the motor drivers physically (cut power to motors only, keep sensors active) or use a rig that catches the robot if it releases.
+    *   **Procedure:** Manually apply dust, oil, and water to the glass.
+    *   **Verification:** Confirm the firmware logs a "Unsafe Surface" error and prevents the "Start Cleaning" state machine from engaging. If the robot attempts to engage motors or release suction, the firmware update is failed.
+
+3.  **The "Human-in-the-Loop" Gate (Contractual Mitigation):**
+    *   **Action:** Since automated safety is compromised, introduce a mandatory manual confirmation step.
+    *   **Procedure:** The firmware must require a continuous "dead man's switch" signal from a remote operator before any movement is allowed. If the operator does not actively hold the button, the robot locks.
+    *   **Validation:** Simulate operator distraction (release button). The robot must freeze within 200ms.
+
+**Critical Constraint Warning:**
+You stated a contractual obligation to install by next Friday. **If the firmware cannot be proven to reject the "dust" signature with 100% certainty in the spoofing suite, you must not install the units.** A falling robot from a high-rise creates irreversible liability that outweighs any contract penalty. If the validation fails, the only safe path is to delay installation and notify the client of a critical safety hold, citing the specific sensor failure mode. Do not rely on "average" performance; one failure is a catastrophe.
+
+**Notes:**
+*   Your "exhausted budget" precludes external certification; this internal red-team approach is the minimum viable safety check.
+*   Document every test result as "UNVERIFIED" until the spoofing suite shows zero false positives on dust signatures.

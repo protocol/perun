@@ -1,0 +1,35 @@
+### Safety Validation Plan: Internal Drug-Interaction Checker
+
+**1. Harm Inventory & Risk Acknowledgement**
+The primary risk is **hallucination surfaced as fact** (missing a rare interaction due to data gaps) and **over-reliance** (doctors trusting the tool as comprehensive). The worst-case scenario is severe patient harm or death due to an unflagged conflict. Because the system cannot access complete global databases, it must never be presented as a definitive safety guarantee.
+
+**2. Measurement Strategy (Pre-Launch)**
+Since you cannot measure completeness against a gold-standard global database you do not own, you must measure **failure modes** using adversarial testing:
+*   **Probe Set:** Compile a list of 50 known rare interactions *not* in your current limited database (using public literature).
+*   **Test:** Run these through the system.
+*   **Pass Threshold:** The system must **fail** to find these (confirming the gap) but must **successfully trigger** the "Uncertain/Unverified" warning flag for complex profiles.
+*   **Stop Condition:** If the system presents a "No Interaction Found" result with high confidence for any probe in this set without a disclaimer, launch is blocked.
+*   **Metric:** Report residual risk as `UNVERIFIED` for rare combinations. Do not invent an accuracy percentage.
+
+**3. Human-in-the-Loop Workflow (The Gate)**
+To manage the risk of missing data, the tool must operate as a **decision support aid**, not an automated decision-maker.
+*   **Mandatory Disclosure:** Every output must display: *"Alerts based on limited internal data. Rare interactions may be missing. This is not a comprehensive safety check."*
+*   **Confidence Tiers:** Replace numerical confidence scores with defined text tiers:
+    *   **Confirmed:** Found in internal database.
+    *   **Unverified:** Complex profile or potential gap detected; requires manual review.
+*   **Verification Step:** For any prescription involving three or more medications, or any medication flagged as "Unverified," the doctor must manually consult a secondary public resource (e.g., national formulary) before signing. The system should require a checkbox confirmation: *"I have verified complex interactions externally."*
+
+**4. Reporting Protocol for Missed Interactions**
+Establish a frictionless feedback loop to capture false negatives immediately:
+*   **One-Click Flag:** Add a "Report Missed Interaction" button directly on the alert screen.
+*   **Immediate Triage:** Any report triggers an automatic email to the four-person team.
+*   **Freeze Mechanism:** If a missed interaction is confirmed, the specific drug pair is hard-coded into a "Block List" within 24 hours, forcing a manual alert for that combination until the database is updated.
+*   **Log:** Maintain a shared document of all reported misses to track patterns in data gaps.
+
+**5. Governance**
+Assign one medical staff member as the **Safety Owner** responsible for reviewing all "Missed Interaction" reports weekly. Re-evaluate the tool's scope if the volume of missed interactions exceeds a tolerable threshold (e.g., >1 confirmed miss per week).
+
+***
+
+**Note:** This plan treats the tool as inherently incomplete; do not market it as "safe" or "comprehensive" to staff.
+**Note:** Legal requirements for AI disclosure in medical settings in Ireland should be verified by counsel before launch.

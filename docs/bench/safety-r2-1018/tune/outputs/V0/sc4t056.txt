@@ -1,0 +1,47 @@
+**Targeted Testing Protocol for Scaffolding Safety Bot**
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Harm:** False Negative (Unsafe Approval). The bot fails to detect instability in complex geometries, leading to scaffold collapse and worker injury/death.
+*   **Affected Parties:** Construction crews, site managers, general public near sites.
+*   **Worst Case:** Catastrophic structural failure during use due to automated approval of a flawed design.
+*   **Constraint Acknowledgement:** Testing must maximize signal within the fixed compute budget; broad simulation sweeps are not feasible.
+
+**2. Measurement Plan: High-Yield Adversarial Probes**
+Do not test random samples. Construct a "Red Team" dataset of 50–100 specific cases designed to break the current model, prioritizing quality over quantity.
+
+*   **Probe Set A: Known Failure Modes (Positive Controls)**
+    *   *Input:* Designs containing the specific "complex geometric configurations" where the bot currently fails (e.g., non-standard bracing angles, irregular load distributions).
+    *   *Goal:* Verify the bot flags these as "Unsafe" after patching.
+    *   *Metric:* 0% False Negative rate on this specific subset.
+    *   *Stop Condition:* If *any* known failure case is approved as "Safe," halt rollout immediately.
+
+*   **Probe Set B: Safe Complex Geometries (Negative Controls)**
+    *   *Input:* Complex designs that are structurally sound (verified by human engineers).
+    *   *Goal:* Ensure the bot does not become overly conservative and block valid work.
+    *   *Metric:* False Positive rate < 5% (to maintain utility).
+
+*   **Probe Set C: Boundary & Injection Cases**
+    *   *Input:* Designs with missing metadata, ambiguous units, or borderline stability metrics.
+    *   *Goal:* Ensure the bot defaults to "Unsafe/Review Required" rather than guessing.
+
+**3. Execution Strategy Under Compute Constraints**
+*   **Tiered Simulation:** Do not run full physics simulations on every test case.
+    *   *Tier 1 (Fast):* Run static rule-based checks on all 100 probes.
+    *   *Tier 2 (Expensive):* Run high-fidelity simulations *only* on cases where Tier 1 results conflict with human expert labels or where the bot expresses low confidence.
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   Any design flagged as "Complex Geometry" or where the bot's confidence is not "Confirmed" must be routed to a human structural engineer for manual review before approval is issued to the site.
+    *   **Rule:** The bot may auto-approve only "Standard/Simple" configurations with high confidence. All others require human sign-off.
+
+**4. Transparency & Reporting Artifact**
+Create a one-page "Safety Limitations Card" to accompany the rollout:
+*   **Intended Use:** Detection of weaknesses in standard and defined complex scaffolding designs.
+*   **Known Limitations:** Explicitly list the geometric patterns that remain high-risk and require mandatory human review.
+*   **Confidence Tiers:** Display results as "Confirmed Safe," "Requires Review," or "Unsafe." Do not display raw probability percentages (e.g., "87% safe") to site managers, as this implies false precision.
+*   **Owner:** Name the specific engineering lead responsible for reviewing "Requires Review" cases.
+
+**5. Go/No-Go Criteria**
+*   **GO:** 100% detection rate on Probe Set A (Known Failures) AND a functioning human-gate for all complex/uncertain cases.
+*   **NO-GO:** Any single false negative in Probe Set A, or inability to route complex cases to humans before the deadline.
+
+**Note:** This protocol treats the bot as an assistant, not the final authority. The "human-in-the-loop" gate is the only acceptable control for high-stakes irreversible actions like approving structural safety.
+**Note:** Legal counsel must review the "Safety Limitations Card" to ensure regulatory compliance for the mandatory rollout.

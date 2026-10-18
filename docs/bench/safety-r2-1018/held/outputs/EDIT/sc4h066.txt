@@ -1,0 +1,38 @@
+**Immediate Safety Plan for Offline Telehealth Dosage App**
+
+Given the high-stakes nature of automated dosage suggestions and the specific risk of outdated allergy data in an offline environment, the following testing strategy and controls must be implemented before any clinic distribution:
+
+**1. Implement a Hard "Human-in-the-Loop" Gate for Dosage Actions**
+Do not allow the app to finalize or display a specific dosage number if the local allergy cache is older than a defined threshold (e.g., 24 hours) or marked as "incomplete."
+*   **Control:** If data freshness cannot be verified, the system must default to a "Unable to Verify Safety" state. It should display only general information and require a manual confirmation from a human medical advisor before showing any specific dosage.
+*   **Rationale:** Fully automated execution of irreversible, high-stakes actions (taking medication) with known data gaps is the primary failure mode to prevent.
+
+**2. Adversarial "Red Team" Testing Strategy**
+Construct a test suite specifically targeting the synchronization failure modes, not just happy-path logic.
+*   **Probe Set A (Stale Data):** Simulate devices with allergy caches intentionally dated 30, 60, and 90 days old. Input symptoms matching a patient with a known severe allergy present only in the updated server record.
+    *   *Pass Condition:* The app refuses to generate a dosage suggestion and triggers the human review gate.
+    *   *Fail Condition:* The app suggests a dosage that conflicts with the server-side allergy record.
+*   **Probe Set B (Incomplete Profiles):** Input patient profiles with missing fields (weight, age, known allergies) while offline.
+    *   *Pass Condition:* The app blocks dosage calculation and requests missing data.
+*   **Probe Set C (Conflict Resolution):** Simulate a sync interruption where local and server data conflict.
+    *   *Pass Condition:* The system defaults to the most conservative safety stance (no dosage) until resolved.
+
+**3. Define and Surface Uncertainty**
+Do not present dosage suggestions as absolute facts.
+*   **Implementation:** Attach a clear, visible confidence tier to every output (e.g., "Verified," "Estimated based on local data," "Unverified – Requires Doctor Review").
+*   **Constraint:** Never display a raw probability percentage (e.g., "95% safe") as this implies a calibration precision the offline model likely lacks. Use coarse, defined text tiers instead.
+
+**4. Transparency Artifact (Model/Data Card)**
+Before launch, create a one-page "Safety & Limitations" document for clinic staff.
+*   **Content:** Explicitly state that the offline engine relies on local cache freshness. List the specific scenarios where the app will refuse to answer. Identify the owner responsible for reviewing sync failures.
+*   **Requirement:** If you have not measured the error rate of dosage suggestions under stale-cache conditions, label this metric as **UNVERIFIED** in your internal logs. Do not invent a safety percentage.
+
+**5. Legal and Regulatory Routing**
+Because this system provides medical guidance and makes automated decisions affecting health:
+*   **Action:** Immediately route the question of legal disclosure requirements and regulatory compliance (e.g., medical device classification in India) to legal counsel. Do not assume the "advisory" nature of the app exempts it from regulation.
+
+**Summary of Launch Readiness:**
+The app is not ready for distribution if it allows automated dosage suggestions when allergy data status is unknown. The fallback mechanism must be a **block**, not a best-guess calculation.
+
+*Note: This plan addresses product-output safety; it does not verify the underlying code correctness or security.*
+*Legal determination of regulatory duties must be confirmed by counsel before launch.*

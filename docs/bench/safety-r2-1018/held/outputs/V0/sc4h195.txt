@@ -1,0 +1,23 @@
+**Blunt Assessment:** I cannot state definitively that your mitigation strategies eliminate the legal duty to disclose algorithmic influence. Determining whether a legal disclosure duty exists for an automated decision in family court is a legal determination that must be routed to counsel, not asserted by an engineering or product review. Given the high-stakes nature of custody disputes and the involvement of a court-supervised trial, you must engage legal counsel immediately to address obligations under relevant regimes (such as the EU AI Act if applicable, or local judicial conduct rules) before the pilot begins.
+
+**Harm Inventory & Measurement Plan**
+Your feature generates recommendation scores in a high-stakes, irreversible legal environment. The primary harms are **bias/unfair outcomes** (systematic disadvantage to single-parent households), **hallucination surfaced as fact** (scores presented as objective truth despite biased training data), and **missing AI disclosure**. The worst-case scenario is a parent losing custody rights based on a biased score they were unaware influenced the mediator.
+
+To measure bias against single-parent households, do not assert safety; run the following evaluation:
+
+*   **Probe Set:** Construct paired synthetic case files where all variables (income, criminal history, housing stability) are identical, except for household structure (Single-Parent vs. Two-Parent). Include a known-bad positive control (a case explicitly designed to trigger bias if present) and a known-good negative control (a case where structure should be irrelevant).
+*   **Metric:** Calculate the disparity in recommendation scores between the paired groups.
+*   **Threshold:** Define a zero-tolerance threshold for unexplained disparity in high-stakes gating. Any statistically significant deviation favoring one structure without explicit, validated justification constitutes a failure.
+*   **Stop Condition:** If the disparity exceeds the threshold, the pilot must halt immediately. Do not launch until the model is retrained or the scoring logic is adjusted and re-verified.
+*   **Injection & Leakage Checks:** Test for prompt injection via case file notes and ensure no private data from historical files leaks into the output.
+
+**Risk Management Controls**
+1.  **Human-in-the-Loop Gate:** Because custody decisions are irreversible and high-stakes, the system must **not** auto-decide or auto-recommend without explicit human confirmation. The tool should serve only as a draft aid for the mediator, who must actively validate and sign off on any output before it reaches a judge or parent. Full autonomous execution is a failure mode.
+2.  **Uncertainty & Transparency:** Do not display raw confidence percentages (e.g., "87% fit") which imply false precision. Instead, use defined coarse tiers (e.g., "Corroborated by multiple factors," "Single-source indication," "Unverified") with clear definitions.
+3.  **Transparency Artifact:** Create a **Model Card** for this pilot. It must list the intended use (mediator aid only), limitations (trained on potentially biased historical data), known failure modes (potential bias against single parents), and the results of the bias evals above. If you have not measured a metric, label it `UNVERIFIED`; do not invent a number.
+
+**Governance**
+Assign a specific owner for this output harm who is responsible for reviewing the eval results and the human gate logs. Re-review is mandatory if the historical data source or the scoring model changes.
+
+**Note:** The "two-week" deadline does not relax the requirement for a human gate on high-stakes actions or the prohibition on fabricating safety metrics.
+**Note:** Legal counsel must define the disclosure duty; this assessment recommends disclosure as a safety control but cannot rule on the legal obligation.

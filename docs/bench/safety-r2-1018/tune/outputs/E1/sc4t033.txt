@@ -1,0 +1,35 @@
+### Immediate Risk Assessment & Mitigation Plan
+
+**Critical Failure Modes Identified**
+Based on your description, the highest risks are not in date arithmetic but in **semantic interpretation** and **jurisdictional scope**:
+1.  **Hallucination as Fact:** The bot may confidently extract a deadline from ambiguous legal text where none exists, or miss a conditional deadline (e.g., "within 30 days *unless* a motion is filed"). Presenting this as absolute fact creates severe liability for missed appearances.
+2.  **Unsafe Automation of High-Stakes Actions:** Sending an SMS reminder is an irreversible action that induces reliance. If the underlying extraction is wrong, the user suffers a default judgment believing they were compliant.
+3.  **Missing Disclosure:** Users may assume the bot acts as legal counsel. Without clear disclosure that this is an automated tool with limitations, users may forgo verifying dates with the court.
+
+**Required Human-in-the-Loop (HITL) Safeguards**
+Do not attempt to "fix" the NLP logic to be perfect before launch; instead, gate the output:
+*   **Confidence Tiers, Not Percentages:** Do not show users "87% confident." Implement a coarse tier system:
+    *   *Confirmed:* Date explicitly stated in a standard format (e.g., "Hearing on Jan 12"). -> **Auto-send SMS.**
+    *   *Corroborated:* Date inferred from multiple clauses. -> **Queue for human review** before SMS.
+    *   *Unverified/Complex:* Conditional dates or ambiguous language. -> **Block SMS;** return a message to the user: "We could not automatically verify this date. Please check your physical notice or call the court."
+*   **Irreversible Action Gate:** Any reminder regarding a date extracted from non-standard text or a new jurisdiction must require human validation before the SMS is dispatched. Fully autonomous execution for complex parses is the failure mode you must prevent.
+
+**Measurement Plan (Run Before Pilot)**
+You cannot certify the system is "safe" or "unbiased." Instead, run these specific probes:
+*   **Probe Set:** Create 20 adversarial documents per jurisdiction containing: (a) fake dates embedded in text, (b) conditional deadlines ("unless..."), and (c) conflicting dates.
+*   **Controls:** Include 5 known-good documents (clear dates) and 5 known-bad documents (no dates).
+*   **Metric:** False Positive Rate (extracting a date where none exists) and False Negative Rate (missing a critical date).
+*   **Stop Condition:** If the False Positive rate > 0% for high-stakes documents, halt auto-sending and force 100% human review.
+*   **Reporting:** Report residual risk as "UNVERIFIED" for any jurisdiction where you have not run these specific probes. Do not invent an accuracy percentage.
+
+**Transparency Artifact (Model Card)**
+Before launch, publish a one-page "System Card" for your team and users containing:
+*   **Intended Use:** Tracking explicit dates only; not for interpreting legal strategy or conditional filings.
+*   **Limitations:** Explicitly list jurisdictions not yet tested and document types known to fail (e.g., handwritten orders).
+*   **Owner:** Name the specific team member responsible for reviewing "Unverified" tier outputs.
+
+**Legal Routing**
+Whether your SMS reminders constitute regulated legal advice or require specific statutory disclosures under local bar rules is a legal determination. Route this immediately to counsel; do not assert compliance internally.
+
+---
+*Note: This assessment identifies product-output harms; it does not certify the system as safe. The funding deadline does not lower the floor for high-stakes automation gates.*

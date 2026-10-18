@@ -1,0 +1,36 @@
+### Bankruptcy Model Fairness Evaluation Strategy
+
+**1. Harm Inventory & Scope**
+The primary risk is **bias/unfair outcomes**: systematically denying capital to solvent businesses in hospitality and retail due to false positives. The affected parties are small business owners in these sectors; the worst-case impact is business failure due to denied liquidity. Secondary risks include **over-reliance** (lenders trusting the score without override) and **missing disclosure** (applicants unaware an AI made the initial decision).
+
+**2. Measurement Plan (Internal Simulation)**
+Since external auditing is unavailable, execute the following internal evals before beta:
+
+*   **Construct Counterfactual Test Sets:** Create synthetic loan applications where financial health metrics (cash flow, debt-to-income) are held constant, but sector (hospitality, retail vs. manufacturing) and business size vary.
+*   **Define Controls:**
+    *   *Positive Control:* Known insolvent applications (should flag high risk).
+    *   *Negative Control:* Known solvent applications in non-flagged sectors (should flag low risk).
+    *   *Probe Set:* Solvent applications in hospitality/retail of varying sizes.
+*   **Metric & Threshold:** Measure the **False Positive Rate (FPR)** per sector and size bucket.
+    *   *Stop Condition:* If the FPR for hospitality/retail exceeds the FPR of the baseline sector by >5%, or if any solvent business is denied without a human review path, **block launch**.
+    *   *Status:* Until these tests run, the fairness metric is **UNVERIFIED**. Do not assert a specific bias rate.
+*   **Stress Tests:** Probe for **prompt injection** or data leakage if the model ingests unstructured text (e.g., business descriptions) that might contain biased language correlating with sector.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop (HITL) Gate:** Because loan denial is a high-stakes, potentially irreversible financial harm, **no application flagged as "high risk" by the model may be automatically denied** during the beta. All high-risk flags must route to a human underwriter for final confirmation. Full automation of denial is the failure mode to prevent.
+*   **Uncertainty Disclosure:** Do not display raw probability scores (e.g., "87% risk") to lenders or applicants, as this implies false precision. Instead, use defined coarse tiers (e.g., "Requires Review," "Likely Solvent") with clear definitions of what evidence supports each tier.
+*   **Transparency Artifact:** Draft a **Model Card** documenting:
+    *   Intended use (small business loan triage) and out-of-scope uses.
+    *   Data provenance and known gaps (e.g., underrepresentation of seasonal retail).
+    *   Measured performance by subgroup (once tests above are run).
+    *   Explicit limitations: "This model has not been externally audited; false positives in hospitality/retail are a known risk under investigation."
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific product owner responsible for reviewing FPR metrics weekly. Re-evaluate if the model or data changes.
+*   **Legal Duty:** Whether this automated decision triggers specific regulatory requirements (e.g., adverse action notices, EU AI Act high-risk classification) is a legal determination. **Route immediately to counsel** to define disclosure duties and compliance regimes. Do not assume internal simulation satisfies legal "fairness" standards.
+
+**Definition of Done for Beta:**
+The harm inventory is recorded; the HITL gate is technically enforced for all denials; the counterfactual tests are executed with results logged (even if "UNVERIFIED" initially); the Model Card is drafted; and legal counsel has reviewed the disclosure strategy.
+
+*Note: This plan relies on internal data; external validation remains a critical future requirement.*
+*Never certify the model as "unbiased" based on these simulations alone.*

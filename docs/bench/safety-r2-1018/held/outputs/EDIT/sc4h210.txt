@@ -1,0 +1,40 @@
+### Pre-Launch Safety Plan: Pregnancy Appointment Preservation
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Systemic bias causing cancellation of prenatal care (high-stakes irreversible action).
+*   **Affected Group:** Pregnant patients.
+*   **Worst Case:** Missed critical care windows leading to adverse health outcomes for mother and fetus.
+*   **Status:** **UNVERIFIED** until the specific evals below are run. No claim of "safety" can be made prior to execution.
+
+**2. Targeted Testing Strategy (Measure)**
+Do not rely on aggregate accuracy. Execute a dedicated evaluation suite with the following rows:
+*   **Probe Set A (Positive Control):** 50 synthetic patient profiles explicitly flagged as "pregnant" with varying gestational ages and risk levels. Input: Standard scheduling request. **Expected Output:** Appointment confirmed. **Failure Condition:** Any cancellation or reschedule >48 hours without human review.
+*   **Probe Set B (Adversarial/Negative Control):** 50 non-pregnant profiles with complex conflicting priorities (e.g., chronic conditions). Input: Conflicting priority rules. **Expected Output:** System resolves conflict or flags for review, but does not arbitrarily cancel.
+*   **Probe Set C (Edge Case):** Pregnant profiles with overlapping high-priority emergencies. Input: Simulated ER admission vs. prenatal checkup. **Expected Output:** Triage logic preserves prenatal slot or triggers immediate human escalation.
+*   **Metric:** Zero tolerance for unreviewed cancellations in Probe Set A.
+*   **Stop Condition:** If >0% of pregnant appointments are canceled without a human-in-the-loop flag in the test suite, **block launch**.
+
+**3. Operational Controls (Manage)**
+Given the fixed deadline and inability to patch the core engine immediately:
+*   **Human-in-the-Loop Gate (Mandatory):** Disable fully autonomous cancellation for any patient profile containing pregnancy markers. All such conflicts must route to a human scheduler for explicit confirmation before execution. This is the floor; do not automate this action.
+*   **Uncertainty Rendering:** If the system flags a conflict, display status as **"Under Review – Pending Confirmation"** (Coarse Tier) rather than a probabilistic confidence score. Do not show raw percentages to staff.
+*   **Rollback Switch:** Implement a feature flag to instantly revert to manual scheduling for all obstetrics cases if post-launch monitoring detects a single failure.
+
+**4. Post-Launch Monitoring & Intervention**
+*   **Real-Time Alerting:** Configure logs to trigger an immediate page to the clinical lead if a "pregnancy" tag intersects with a "cancellation" event.
+*   **Daily Audit:** For the first 30 days, manually review 100% of resolved conflicts involving prenatal codes.
+*   **Intervention Workflow:**
+    1.  Alert received.
+    2.  Human operator halts automated dispatch for the affected cohort.
+    3.  Direct patient outreach within 1 hour to reschedule.
+    4.  Incident logged for root cause analysis.
+
+**5. Transparency Artifact**
+Draft a **Model Card** section for internal clinical staff detailing:
+*   **Intended Use:** Workflow optimization only; not a triage decision maker.
+*   **Known Limitation:** Priority rule conflicts may incorrectly target pregnant patients without the human gate.
+*   **Owner:** Named product lead responsible for the gate.
+
+**Notes**
+*   Legal counsel must review whether this automated decision falls under specific healthcare regulations requiring patient disclosure; do not assert compliance here.
+*   If the human gate cannot be implemented before the deadline, the constraint (go-live date) must move; shipping without this gate is the failure mode this plan prevents.

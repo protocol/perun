@@ -1,0 +1,32 @@
+**Immediate Action Plan: Bias Mitigation for Tax-Audit Selector**
+
+Given the three-week deadline and the inability to acquire new demographic data, you cannot prove the system is "unbiased" or "fair." No test can certify this. Instead, you must inventory the specific harm, measure what is possible with existing data, and implement a mandatory human gate before any audit is launched.
+
+**1. Map the Harm Inventory**
+Record the specific risk: The output (audit flag) may systematically disadvantage small businesses owned by specific minority groups due to proxy variables in the training data (e.g., zip code, business type, transaction patterns). The worst-case scenario is regulatory backlash, reputational damage to the agency, and financial distress for wrongly targeted businesses. This inventory must be documented immediately; an empty inventory is not a pass.
+
+**2. Measure with Existing Data (Runnable Evaluation)**
+Since you cannot add demographic columns, you must test for **proxy bias** using adversarial probes and segmentation on available non-sensitive features:
+*   **Probe Set:** Construct synthetic test cases where business financial metrics are identical, but proxy indicators (e.g., industry codes common to specific communities, geographic clusters) vary. Include known "good" negatives (compliant businesses in high-risk clusters) and "bad" positives (non-compliant businesses in low-risk clusters).
+*   **Metric:** Measure the disparity in flagging rates across these proxy segments.
+*   **Threshold & Stop Condition:** Define an owner-set threshold for acceptable disparity. If the model flags a segment at a rate significantly higher than the baseline without corresponding financial risk evidence, the launch must stop.
+*   **Reporting:** Report the residual risk as **UNVERIFIED** for direct demographic bias since no ground-truth demographic data exists. Do not fabricate a "0% bias" claim. Publish these limitations in a **Model Card** that accompanies the deployment, explicitly stating the data gaps and known limitations.
+
+**3. Manage Residual Risk (The Human Gate)**
+Because this system triggers high-stakes, irreversible actions (government audits causing financial and legal stress), **full autonomous execution is prohibited.**
+*   **Mandatory Human-in-the-Loop:** The system must function only as a *recommendation engine*. Every flagged return must be reviewed by a human auditor who confirms the risk based on explicit evidence before an audit notice is sent. The AI cannot send notices automatically.
+*   **Uncertainty Disclosure:** Do not show raw confidence scores (e.g., "87% risk") to auditors, as this implies false precision. Instead, use defined coarse tiers (e.g., "High Confidence/Corroborated," "Single-Source Indicator," "Unverified Pattern") with clear definitions for each.
+*   **Override Mechanism:** Auditors must have a simple, one-click override to dismiss an AI flag without penalty, preventing automation bias.
+
+**4. Governance and Legal Routing**
+*   **Ownership:** Assign a specific owner responsible for re-evaluating the model if the data source or business patterns change.
+*   **Legal Determination:** You asked about fairness and potential disproportionate impact. Whether this system falls under specific regulated decision-making frameworks (such as the **EU AI Act** regarding high-risk AI systems) or requires specific legal disclosures is a determination for **legal counsel**. Route this question immediately to your legal team and `business-ops` to name the applicable regime. Do not assert compliance internally.
+
+**Summary of Deliverables Before Launch:**
+1.  A documented harm inventory detailing the proxy bias risk.
+2.  A runnable eval report showing disparity metrics on proxy segments, marked **UNVERIFIED** for direct demographics.
+3.  A **Model Card** attached to the release noting data limitations and intended use.
+4.  A hardened workflow where **no audit is initiated without human confirmation**.
+
+**Note:** Do not attempt to "fix" the bias via reweighting without new data, as this may introduce instability. Rely on the human gate as your primary control.
+**Note:** If legal counsel determines this is a regulated high-risk system under the EU AI Act, additional conformity assessments may be required that could impact your timeline.

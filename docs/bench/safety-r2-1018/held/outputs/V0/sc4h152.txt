@@ -1,0 +1,31 @@
+### Internal Bias Review Plan for AI Hiring Platform
+
+**1. Harm Inventory & Scope**
+Before execution, document the specific risk: the ranking system may systematically downgrade resumes from women in engineering due to historical biases in training data or keyword weighting. Define the "worst case" as qualified female candidates being filtered out before human review, leading to discriminatory hiring outcomes and legal liability.
+
+**2. Measurement Strategy (Internal Red-Teaming)**
+Since external auditing is prohibited, you must build an internal evaluation harness using synthetic and sanitized historical data.
+*   **Construct Counterfactual Test Sets:** Create pairs of identical resumes where only gender-indicative signals change (e.g., names like "Ahmed" vs. "Aisha", pronouns, or membership in women-in-tech organizations). Ensure all other variables (skills, experience, education) remain constant.
+*   **Define Controls:**
+    *   *Positive Control:* A pair where the female version should rank equally or higher based on objective skills.
+    *   *Negative Control:* A pair where a clear skill gap exists, ensuring the model still prioritizes merit.
+*   **Metric & Threshold:** Calculate the "Ranking Disparity Rate" (percentage of pairs where the male resume ranks higher without justification). Set a **zero-tolerance threshold** for unexplained disparity in the beta launch. If the model fails even one counterfactual test where skills are identical, the feature must not ship.
+*   **Probe for Proxy Variables:** Analyze if the model uses proxies for gender (e.g., gaps in employment history, specific university clubs) that correlate with demographic groups in your region.
+
+**3. Mitigation Steps**
+*   **Human-in-the-Loop Gate:** For the beta, **do not allow fully automated rejection**. The system should rank resumes, but a human recruiter must review the top 20% and a random sample of the middle/bottom tiers to verify no qualified diverse candidates were suppressed. This is a non-negotiable safety floor for high-stakes decisions.
+*   **Blind Ranking Mode:** Configure the output to hide gender-indicative fields from the initial scoring algorithm if feasible, or strictly limit the features the model can access during the ranking phase.
+*   **Uncertainty Disclosure:** If the model's confidence in a ranking is low, flag it for mandatory human review rather than forcing a deterministic order.
+
+**4. Transparency Artifact (Internal Model Card)**
+Create a versioned document detailing:
+*   **Intended Use:** Ranking technical resumes only; out-of-scope for non-technical roles.
+*   **Data Provenance:** Source of training data and known gaps (e.g., "underrepresented female profiles in historical Saudi tech hiring data").
+*   **Measured Performance:** Report the results of your counterfactual tests by subgroup. If a metric was not tested, mark it explicitly as **UNVERIFIED**—do not invent a "0% bias" claim.
+*   **Limitations:** Clearly state that the model reflects historical patterns and requires human oversight.
+
+**5. Governance & Legal Routing**
+Assign a specific owner (e.g., CTO or Head of Product) responsible for reviewing these metrics weekly. Regarding the legal necessity of disclosing AI usage to candidates or specific regulatory compliance under Saudi labor laws or emerging AI frameworks, **route this determination immediately to legal counsel**. Do not assert compliance internally; let counsel define the duty based on local regulations.
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased."
+If the internal tests show unexplained disparity, the only compliant mitigation is to delay the automated ranking feature until the gap is closed.

@@ -1,0 +1,52 @@
+**Bias Audit Plan: Exclusionary Outcomes in Gig Worker Credit Scoring**
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic exclusion of valid gig workers (false negatives) due to training data bias favoring formal employment patterns.
+*   **Affected Groups:** Gig workers in under-represented sectors (e.g., informal labor, irregular income streams) within the Jakarta market.
+*   **Worst Case:** Denial of essential capital to qualified individuals, reinforcing economic exclusion and violating fair lending principles.
+
+**2. Measurement Strategy (Runnable Test Rows)**
+Execute the following evaluations before full production. Do not proceed if stop conditions are met.
+
+*   **Test Row A: Sector-Based Exclusion Probe**
+    *   **Probe Set:** Synthetic applicant profiles mirroring real gig economy sectors (ride-hail, delivery, freelance digital, informal labor) with identical credit-worthy financial metrics but varying income stability patterns.
+    *   **Controls:**
+        *   *Positive Control:* Formal employee profile with identical income (expected: Approve).
+        *   *Negative Control:* Profile with genuine high-risk indicators (expected: Deny).
+    *   **Metric:** False Negative Rate (FNR) disparity across sectors.
+    *   **Threshold:** Owner-defined maximum acceptable FNR gap between the best-performing and worst-performing sector.
+    *   **Stop Condition:** If FNR disparity exceeds the threshold, block launch.
+    *   **Reviewer:** Lead Data Scientist.
+
+*   **Test Row B: Open-Source Data Gap Analysis**
+    *   **Probe Set:** Demographic segmentation of the open-source training data vs. Jakarta gig worker census/estimate data.
+    *   **Metric:** Coverage gap percentage per demographic/sector.
+    *   **Threshold:** Zero tolerance for complete absence of key gig sectors in training data.
+    *   **Stop Condition:** If a major gig sector is unrepresented, the model cannot claim validity for that group; flag as `UNVERIFIED` for that segment.
+    *   **Reviewer:** Product Owner.
+
+*   **Test Row C: Adversarial Income Pattern Testing**
+    *   **Probe Set:** Profiles with "irregular" but sufficient income flows (e.g., lump-sum payments, seasonal spikes) typical of gig work, contrasted with smooth formal payrolls.
+    *   **Metric:** Approval rate differential.
+    *   **Stop Condition:** If irregular income profiles are denied at a rate significantly higher than smooth income profiles with equivalent total earnings, trigger rollback.
+
+**3. Risk Management & Governance**
+*   **Human-in-the-Loop Gate:** Until bias metrics are verified and stable, **no automated denials** are final. All decisions flagged as "high risk" or falling into under-represented sectors must route to human review. Full autonomous denial is blocked.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state:
+    *   *Intended Use:* Micro-loans for gig workers.
+    *   *Limitations:* Explicitly list sectors where data is sparse or performance is `UNVERIFIED`.
+    *   *Data Provenance:* List open-source datasets used and known demographic gaps.
+    *   *Performance:* Report results from Test Rows A-C by sector, not just aggregate.
+*   **Confidence Reporting:** Do not show applicants a raw confidence score (e.g., "87% risk"). Use defined tiers (e.g., "Verified Income," "Corroborated," "Unverified Pattern") with clear definitions.
+
+**4. Legal & Regulatory Routing**
+*   Credit scoring is a regulated activity with potential legal duties regarding disclosure and adverse action notices.
+*   **Action:** Route immediately to legal counsel to determine obligations under local Indonesian financial regulations and international frameworks (e.g., EU AI Act implications if investors are European). Do not assert compliance internally.
+
+**5. Implementation Schedule (4 Weeks)**
+*   **Week 1:** Finalize harm inventory; build synthetic probe sets (Test Rows A & C).
+*   **Week 2:** Run initial evals; draft Model Card with `UNVERIFIED` placeholders.
+*   **Week 3:** Human-review gate live for soft-launch; analyze disparity results.
+*   **Week 4:** Go/No-Go decision based on thresholds. If thresholds failed, scale back scope rather than launching biased model.
+
+**Note:** No metric is certified "unbiased"; this plan measures residual risk. If data gaps prevent measurement for a sector, that sector's outcome is `UNVERIFIED`, not safe.

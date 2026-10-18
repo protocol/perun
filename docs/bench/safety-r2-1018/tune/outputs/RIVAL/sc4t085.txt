@@ -1,0 +1,35 @@
+# Pre-Launch Validation Plan: Smart-Thermostat Vacation Mode
+
+**Objective:** Validate that the scheduling logic correctly identifies long-term absences and defaults to a "Freeze Protection" state, preventing pipe damage during winter vacancies.
+
+### 1. Define Critical Test Scenarios
+Construct a matrix of edge cases focusing on the transition from "Active Learning" to "Vacation Mode."
+*   **The "Silent House" Scenario:** Simulate 48–72 hours of zero motion/interaction during peak winter temperatures (e.g., -10°C). Verify the system overrides learned "wake/sleep" patterns.
+*   **The "Intermittent Visit" Trap:** Simulate a user visiting for 2 hours every 4 days. Ensure the system does not interpret this as a return to normal residency and revert to energy-saving modes that risk freezing.
+*   **The "Power Blip" Recovery:** Test system behavior after a power loss during a vacation state. The device must boot directly into Freeze Protection, not resume a previous learned schedule.
+*   **The "Manual Override" Persistence:** Verify that a temporary manual temperature increase does not permanently reset the vacation detection algorithm.
+
+### 2. Data Injection & Simulation Strategy
+Since field testing is too slow and risky, use hardware-in-the-loop (HIL) simulation.
+*   **Time Compression:** Inject historical sensor logs compressed in time to simulate 30 days of absence within a 4-hour test window.
+*   **Sensor Spoofing:** Feed the algorithm synthetic data representing "ghost occupancy" (e.g., minor temperature fluctuations caused by sunlight) to ensure the logic distinguishes between environmental noise and human presence.
+*   **Boundary Testing:** Test the exact threshold limits (e.g., if the trigger is 48 hours, test at 47h 59m and 48h 01m) to confirm the fail-safe triggers decisively.
+
+### 3. Success Criteria & Pass/Fail Gates
+Define binary outcomes for the validation team. No "partial passes" are acceptable for safety-critical logic.
+*   **Pass:** Device enters Freeze Protection (maintaining >5°C) within the defined timeout window regardless of prior learned habits.
+*   **Fail:** Device allows temperature to drop below 5°C based on a learned "eco" schedule or misinterprets lack of data as "no one home, turn off completely."
+*   **Audit Trail:** The device must log the specific trigger event (e.g., "Vacation Mode Activated: No motion > 48h") to allow post-mortem analysis if a field failure occurs.
+
+### 4. Execution Timeline (14 Days)
+*   **Days 1–3:** Finalize test vectors and configure HIL simulation environment.
+*   **Days 4–9:** Run automated regression suites against the new logic. Focus on the "Intermittent Visit" and "Power Blip" scenarios.
+*   **Days 10–12:** Bug fix and re-verification. Any failure in freeze protection triggers an immediate code freeze.
+*   **Days 13–14:** Final sign-off and generation of the validation report for the hardware partner.
+
+### 5. Risk Mitigation
+*   **Fallback Mechanism:** Ensure the firmware includes a hard-coded, non-learning "safety floor" temperature that cannot be overridden by the AI model.
+*   **Rollback Plan:** Prepare a signed previous-version firmware image ready for immediate over-the-air (OTA) deployment if the new logic shows instability in the first 1% of rollout.
+
+**Note:** Prioritize the "Power Blip" and "Intermittent Visit" scenarios, as these are the most common causes of logic errors in adaptive systems.
+**Note:** Document all test results formally; this validation report serves as your liability shield with the hardware partner.

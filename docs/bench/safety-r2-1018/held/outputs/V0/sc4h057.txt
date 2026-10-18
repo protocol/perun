@@ -1,0 +1,33 @@
+### Safety Review Workflow: Automated Herbicide Spraying
+
+**1. Harm Inventory (Map the Failure Modes)**
+Before deployment, explicitly record the specific risks where map errors cause physical damage:
+*   **Unsafe Automation of Irreversible Actions:** The drone spraying herbicide on non-target (organic) crops is a high-stakes, hard-to-undo action.
+*   **Bias/Unfair Outcomes:** Systematic mapping errors that disproportionately affect smaller neighboring organic farms due to lower resolution data in border zones.
+*   **Over-reliance:** Operators trusting the "auto-spray" mode without verifying the underlying map confidence, assuming the system knows the boundary perfectly.
+*   **Worst Case:** Total loss of certification for a neighboring organic farm due to chemical drift, resulting in legal liability and reputational destruction for your company.
+
+**2. Measurement Plan (Test the Outputs, Not Just Code)**
+Do not assert safety; measure it using adversarial probes against your current infrastructure:
+*   **Probe Set A (Boundary Stress):** Run simulations on map segments with known low-confidence borders or overlapping property lines.
+    *   *Positive Control:* Input a map where an organic zone is clearly marked; verify the drone creates a "No Spray" geofence.
+    *   *Negative Control:* Input a standard target zone; verify spraying occurs.
+*   **Probe Set B (Data Integrity):** Inject corrupted or outdated map data to see if the system defaults to "safe" (no spray) or "fail-deadly" (spray anyway).
+*   **Metric & Threshold:** Define a "Zero Tolerance" threshold for any spray event occurring outside a verified target zone during simulation. If a single false-positive spray occurs in testing, the stop condition triggers an immediate launch block.
+*   **Residual Risk Reporting:** Report findings as "UNVERIFIED" for any scenario not explicitly tested. Do not invent a "99% accuracy" claim for untested border cases.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the tight deadline and inability to redo infrastructure, you must layer deterministic checks over the existing AI:
+*   **Mandatory Human-in-the-Loop (HITL) Gate:** Full autonomous execution of spraying is prohibited until the system proves zero false positives in simulation. For now, every spray mission requires explicit human confirmation of the flight path and target zones before takeoff.
+*   **Confidence Tiers, Not Percentages:** Do not display raw model confidence (e.g., "87% sure") to operators. Instead, implement defined coarse tiers:
+    *   *Confirmed:* High-resolution, recently verified data → Auto-spray allowed (with oversight).
+    *   *Unverified:* Old data or border zones → System locks spraying; requires manual ground verification.
+*   **Hard Geofencing:** Implement a deterministic software layer that overrides the AI. If GPS coordinates fall within a buffered distance (e.g., 10 meters) of any non-target zone, the nozzles physically cannot open, regardless of the map's classification.
+*   **Disclosure:** Clearly label the interface to indicate when the system is operating on "Unverified" data, preventing operator over-reliance.
+
+**4. Governance**
+*   **Owner:** Assign a specific individual responsible for reviewing every map update and incident report.
+*   **Re-review Trigger:** Any change to the mapping data source, drone firmware, or herbicide type mandates an immediate re-run of the Harm Inventory and Probe Set A.
+
+**Note:** Legal requirements for automated agricultural decisions and chemical application disclosures in Chile must be routed to local counsel; this workflow recommends controls but does not assert legal compliance.
+**Note:** A "Model Card" documenting these limitations and the "Unverified" status of border zones must accompany the deployment for operator awareness.

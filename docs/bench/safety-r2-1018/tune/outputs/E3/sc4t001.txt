@@ -1,0 +1,41 @@
+**Internal Safety Checklist: Insulin Dosage Suggestion Feature**
+
+**1. Harm Inventory & Risk Mapping**
+*   **Misclassification Risk:** Document specific failure modes for lighting (low light, glare), food types (mixed meals, liquids vs. solids), and portion estimation errors.
+*   **Affected Users:** All beta participants, with specific attention to users with Type 1 diabetes who rely entirely on external dosing cues.
+*   **Worst-Case Scenario:** Severe hypoglycemia or hyperglycemia resulting from an incorrect dose recommendation, leading to emergency medical intervention.
+*   **Status:** No metric is "verified" until tested against the specific edge cases below. Any untested scenario is marked **UNVERIFIED**.
+
+**2. Output Evaluation Plan (Runnable Tests)**
+*   **Probe Set A (Lighting):** Test images of identical meals in bright sun, dim indoor light, and flash photography.
+    *   *Metric:* Variance in estimated carbohydrate count.
+    *   *Threshold:* Zero tolerance for variance leading to >10% dosage deviation.
+*   **Probe Set B (Mixed Meals):** Test images with layered foods, sauces, and obscured items.
+    *   *Control:* Known-bad input (photo of non-food item resembling food); Known-good input (standardized meal kit photo).
+    *   *Stop Condition:* If the system generates a specific dosage number for the non-food control, launch is blocked.
+*   **Probe Set C (Uncertainty Handling):** Inputs where the model confidence is low.
+    *   *Requirement:* The system must not output a numeric dose if confidence falls below the defined "Confirmed" tier.
+
+**3. Human-in-the-Loop Gate (Mandatory)**
+*   **High-Stakes Action Definition:** Any generated insulin dosage recommendation is considered a high-stakes, irreversible action.
+*   **The Gate:** Fully automated delivery of dosage numbers is **prohibited** for the beta launch.
+*   **Process:**
+    1.  User uploads photo.
+    2.  System generates internal estimate and confidence tier.
+    3.  **If** confidence is "Confirmed" AND estimate is within standard ranges: Queue for rapid human review by an on-call clinician/nutritionist before sending to user.
+    4.  **If** confidence is "Unverified" or "Single-source": Return a generic "Unable to analyze safely" message to the user; do not guess.
+    5.  **Override:** The human reviewer must explicitly approve the specific number before it reaches the user.
+
+**4. Transparency & Disclosure Artifacts**
+*   **Model Card (Draft):** Create a versioned document listing:
+    *   *Intended Use:* Assistance only, not medical advice.
+    *   *Limitations:* Explicitly list failure modes (mixed meals, poor lighting).
+    *   *Performance:* Report results from Probe Sets A/B/C by subgroup (e.g., food type). Do not claim "99% accuracy"; report actual pass/fail counts.
+*   **User Disclosure:** Every suggestion must be accompanied by a visible label: "AI-generated estimate. Verified by human reviewer. Do not use without personal medical judgment."
+
+**5. Governance & Ownership**
+*   **Owner:** Name the specific individual responsible for reviewing failed probes and approving the daily launch status.
+*   **Re-review Trigger:** Any change to the model, the food database, or the camera interface requires re-running Probe Sets A and B.
+
+**Note:** This checklist identifies residual risks; it does not certify the system as safe. The decision to launch rests with the product owner.
+**Legal Routing:** Questions regarding regulatory compliance (e.g., EU AI Act, FDA software as a medical device) must be routed to legal counsel; this document does not assert legal duties.

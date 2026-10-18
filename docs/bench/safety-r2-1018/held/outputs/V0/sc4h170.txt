@@ -1,0 +1,27 @@
+### Contingency Plan: Sensor Calibration & Water Conservation
+
+**1. Immediate Firmware Freeze & Conservative Default (Days 1–2)**
+Since over-the-air updates are impossible post-deployment, the current firmware's tendency to misread dry soil as saturated must be neutralized before shipping.
+*   **Action:** Hard-code a "Conservative Mode" default into the final build. If sensor data is ambiguous or indicates saturation, the controller must default to a **minimum safe irrigation threshold** rather than shutting off completely. It is better to slightly over-water than to let crops fail due to false "saturated" readings.
+*   **Logic Change:** Implement a "voting mechanism" in the firmware logic. Require confirmation from at least two distinct sensor readings or a time-averaged trend (e.g., 30-minute rolling average) before declaring soil "saturated" and stopping water flow. This filters out transient calibration spikes.
+
+**2. Pre-Deployment Physical Verification Checklist (Days 3–4)**
+Execute this checklist on every unit before it leaves the Phoenix staging area. Do not rely on software self-tests alone.
+
+*   **[ ] Dry-Soil Baseline Test:** Place each controller's sensors in verified bone-dry soil samples. Confirm the system *never* reports "saturated" or reduces water flow below the emergency minimum.
+    *   *Pass Criteria:* System maintains flow >80% capacity.
+*   **[ ] Saturation False-Positive Stress Test:** Simulate the known error condition by introducing electrical noise or specific resistance values that previously triggered the "dry-as-saturated" bug.
+    *   *Pass Criteria:* System ignores the anomaly or defaults to the Conservative Mode minimum flow.
+*   **[ ] Manual Override Verification:** Physically test the local manual bypass switch on every unit.
+    *   *Pass Criteria:* Farmer can force 100% water flow regardless of sensor input.
+*   **[ ] Field Segment Isolation:** Configure deployment zones so that one controller's error cannot drain a shared mainline.
+    *   *Pass Criteria:* Valves are logically segmented to prevent cascading failures.
+
+**3. Operational Contingency for Launch Week (Day 5 + Launch)**
+*   **Human-in-the-Loop Gate:** For the first 14 days, mandate daily visual soil checks by field staff before the automated cycle runs. If soil is dry, staff must engage the manual override.
+*   **Rapid Response Protocol:** Designate one team member to monitor water usage metrics hourly. If aggregate usage drops below the expected baseline for dry conditions, immediately dispatch a team to switch affected units to manual mode.
+*   **Farmer Briefing:** Provide a one-page "Emergency Guide" with every device, highlighting the manual override location and the specific symptom of the calibration error (e.g., "If crops look dry but the system says stop, use the red lever").
+
+### Notes
+*   This plan prioritizes crop survival over water efficiency for the initial two weeks; efficiency can only be optimized once the sensor behavior is validated in situ.
+*   Given the firmware lock, no software fixes can be applied post-deployment; all risk mitigation relies on conservative defaults and human oversight.

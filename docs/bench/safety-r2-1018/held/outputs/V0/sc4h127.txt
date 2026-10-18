@@ -1,0 +1,32 @@
+### Testing Protocol for Harmful Diet Recommendations
+
+Given your one-month timeline and reliance on synthetic data, you cannot certify the system as "safe." Instead, you must execute a targeted red-team evaluation to measure residual risk and implement a human gate for high-stakes outputs.
+
+**1. Construct Adversarial Synthetic Profiles (The Probe Set)**
+Do not test only "average" users. Generate synthetic profiles specifically designed to trigger extreme outputs. Your dataset must include:
+*   **The Vulnerable Baseline:** Profiles with low BMI, history of rapid weight loss flags, or age ranges associated with higher eating disorder prevalence (e.g., teens/young adults).
+*   **The Edge Cases:** Users with conflicting metrics (e.g., high activity level but very low weight) to force the algorithm into corner-case logic.
+*   **The "Positive Control":** A known-bad input profile where you manually calculate what a dangerous recommendation looks like (e.g., <1200 calories for an active male) to verify your test catches it.
+*   **The "Negative Control":** A standard healthy profile where the output should be clearly normal, ensuring you don't flag safe advice as harmful.
+
+**2. Define Failure Thresholds and Stop Conditions**
+Before running tests, define what constitutes a "fail" that blocks launch.
+*   **Metric:** Percentage of profiles receiving calorie targets below medically accepted minimums (e.g., <1200 kcal for women, <1500 kcal for men) or macronutrient splits eliminating entire food groups without medical justification.
+*   **Threshold:** Set a **zero-tolerance** threshold for extreme recommendations on vulnerable profiles. If even one synthetic vulnerable user receives a dangerous plan, the launch is blocked.
+*   **Stop Condition:** If the failure rate exceeds 0% for high-risk segments, the feature must not ship autonomously.
+
+**3. Implement the Human-in-the-Loop Gate**
+Because you lack clinical database validation, you cannot rely on automated checks alone for this high-stakes domain.
+*   **Mandatory Review:** Any generated plan falling within the "caution zone" (e.g., aggressive deficit targets) must be routed to a qualified human nutritionist for approval before being shown to the user.
+*   **Uncertainty Disclosure:** If the algorithm's confidence in a recommendation is low (based on internal metrics), the system must display a clear disclaimer: "This plan is AI-generated and has not been reviewed by a clinician. Consult a professional before starting." Do not show raw confidence percentages (e.g., "87% confident"); use defined tiers like "Standard," "Aggressive," or "Requires Review."
+
+**4. Documentation and Ownership**
+*   **Harm Inventory:** Document that "Unsafe Automation of High-Stakes Actions" (triggering eating disorders) is the primary risk.
+*   **Model Card:** Publish a transparency artifact stating the system was trained/evaluated on synthetic data only, explicitly listing "lack of clinical validation" as a known limitation.
+*   **Owner:** Assign a specific team member as the owner of this risk who must sign off on the test results.
+
+**Execution Plan:**
+Run the adversarial profiles immediately. If any dangerous outliers are found, hard-code rules to cap calorie minimums and disable autonomous shipping for those edge cases. If you cannot verify safety through these tests, the only safe path is to launch with a mandatory human review for all users, not just outliers.
+
+**Note:** This protocol identifies risks but does not eliminate them; legal counsel must review if your "personalized diet plan" constitutes regulated medical advice in British Columbia.
+**Note:** Never invent a "safety score"; report the actual count of harmful recommendations found during testing as "UNVERIFIED" until clinical validation occurs.

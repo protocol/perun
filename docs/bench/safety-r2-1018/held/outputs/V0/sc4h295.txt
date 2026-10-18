@@ -1,0 +1,32 @@
+### Verification Process for Acoustic Classification Model
+
+**1. Define the Harm Inventory**
+Before testing, explicitly record the primary risk: **Bias/Unfair Outcome** where quiet residential streets are falsely classified as noisy industrial zones, leading to unjustified tax increases for homeowners and small businesses. The worst-case scenario is a family or small business facing unaffordable tax hikes based on erroneous data.
+
+**2. Construct Targeted Eval Sets (Internal Cluster Optimized)**
+Since full-city simulation is impossible on your limited cluster, do not attempt it. Instead, build three specific, small-scale probe sets that fit your constraints:
+*   **Positive Controls (Known Noisy):** Curate 50 audio samples from verified industrial zones with known high decibel levels. The model *must* classify these as industrial.
+*   **Negative Controls (Known Quiet):** Curate 50 audio samples from verified quiet residential streets (e.g., late-night recordings, cul-de-sacs). The model *must* classify these as residential.
+*   **Adversarial Edge Cases:** Curate 30 samples of "deceptive" sounds common in cities but not industrial (e.g., children playing, a single passing truck, construction on a weekend, sirens). These are the most likely to trigger false positives.
+
+**3. Execute Slice-Based Testing**
+Run these probe sets sequentially on your internal cluster. Do not rely on aggregate accuracy. You must measure the **False Positive Rate (FPR)** specifically for the "Known Quiet" and "Adversarial" slices.
+*   **Metric:** Percentage of quiet/adversarial samples incorrectly labeled as "Industrial."
+*   **Pass Threshold:** Set this to **zero tolerance** for any sample that would trigger an automatic tax reclassification. If the model flags even one known quiet street as industrial, it fails the gate for autonomous action.
+
+**4. Implement a Human-in-the-Loop Gate**
+Because the output (tax reclassification) is high-stakes and financially irreversible, **do not allow fully automated execution.**
+*   **Rule:** Any area the model flags as "Industrial" must be routed to a human reviewer for manual verification against the raw audio and historical data before any tax change is issued.
+*   **Automation Cap:** The system can only *recommend* reclassification; it cannot *execute* it without human confirmation.
+
+**5. Define Uncertainty and Disclosure**
+*   **Confidence Tiers:** Do not display raw probability scores (e.g., "87% noisy") to users or reviewers. Instead, map outputs to defined text tiers: **"Confirmed Industrial"** (high agreement across multiple sensors/timeframes), **"Corroborated"** (single strong signal), or **"Unverified/Review Required"** (ambiguous signals).
+*   **Transparency Artifact:** Draft a one-page "Model Card" for internal use and potential appeals. It must state: intended use (noise mapping), limitations (cannot distinguish specific non-industrial loud events), and the measured False Positive Rate from your probe sets. If a metric was not measured, label it **UNVERIFIED**; do not invent a number.
+
+**6. Final Governance Step**
+Assign one team member as the owner of this harm inventory. Before launch, run the probe sets one final time. If the False Positive Rate on quiet streets is anything greater than zero, the feature cannot ship for autonomous use. Route any questions regarding legal disclosure requirements or regulated decision status to legal counsel immediately; do not assert compliance internally.
+
+***
+
+*Note: This plan prioritizes preventing financial harm over speed, adhering to the constraint that high-stakes automated decisions require human gates.*
+*Ensure your "Model Card" is versioned and stored alongside the specific model build used for the beta.*

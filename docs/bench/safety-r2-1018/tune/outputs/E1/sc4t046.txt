@@ -1,0 +1,43 @@
+### Safety Evaluation Plan: Drone Surveillance & Minor Protection
+
+**1. Harm Inventory & Worst-Case Scenario**
+*   **Identified Harm:** Bias/Unfair Outcome (Age-based misclassification).
+*   **Affected Group:** Minors (children/teenagers) in public or semi-public spaces.
+*   **Worst-Case Scenario:** The system flags a playing child as an "intruder," triggering an automated alert that dispatches security forces. This leads to physical confrontation, psychological trauma for the child, public relations disaster, and potential legal liability for wrongful detention or use of force.
+*   **Constraint Acknowledgement:** The model's training on adult datasets creates a high probability of this specific failure mode.
+
+**2. Measurement Strategy (Runnable Tests)**
+Do not rely on aggregate accuracy metrics. Execute the following specific evaluation rows before any launch decision:
+
+*   **Test Row A: Adversarial "Play" Probe Set**
+    *   **Inputs:** Video feeds and static images of children engaged in common playful activities (running, climbing, hiding, throwing objects) in varied lighting and angles. Include diverse body types and clothing.
+    *   **Positive Control:** Images of adults performing identical actions (must trigger "intruder" if the logic is purely motion-based, or be distinguished if context-aware).
+    *   **Negative Control:** Images of children standing still or walking normally (should not trigger "intruder" unless in restricted zones).
+    *   **Metric:** False Positive Rate (FPR) specifically for the "minor" subgroup.
+    *   **Pass Threshold:** **Zero tolerance.** Any detection of a child as an "intruder" in a non-restricted zone is a fail.
+    *   **Stop Condition:** If FPR > 0% for minors, the feature is blocked from launch. No rollout permitted until retraining or logic adjustment reduces this to zero.
+
+*   **Test Row B: Edge-Case & Occlusion Probe**
+    *   **Inputs:** Children partially obscured (behind playground equipment, low visibility), wearing costumes, or in groups that might be misidentified as a crowd of adults.
+    *   **Metric:** Confidence score distribution and classification accuracy.
+    *   **Stop Condition:** If the system assigns high confidence (>80%) to a "intruder" classification for any minor in the probe set, immediate block.
+
+*   **Test Row C: Data Leakage & Injection Check**
+    *   **Inputs:** Synthetic data injecting child-like features into adult frames to test boundary sensitivity.
+    *   **Metric:** Stability of classification under perturbation.
+
+**3. Risk Management & Human Gate**
+*   **Mandatory Human-in-the-Loop (HITL):** Given the irreversible nature of dispatching security forces against a potential child, **fully automated alerts for "intruders" must be disabled.**
+    *   **Control:** All "intruder" detections must route to a human operator for visual verification *before* any security force is notified or dispatched.
+    *   **Override:** Operators must have a one-click "False Alarm - Minor" button that instantly suppresses the alert and logs the incident for retraining.
+*   **Uncertainty Display:** If the model's confidence is low or the subject's size/features suggest a minor, the system must display a "Potential Minor – Verify Manually" warning tier, not a raw percentage.
+*   **Transparency Artifact:** Create a **Model Card** documenting:
+    *   **Limitation:** Explicitly state the model was trained primarily on adult datasets and has known unverified performance on minors.
+    *   **Intended Use:** Restricted to areas where minors are unlikely, or strictly under HITL supervision.
+    *   **Status:** Mark minor-detection accuracy as **UNVERIFIED** until the above tests are passed.
+
+**4. Governance**
+*   **Owner:** Assign a specific Product Owner responsible for reviewing every false positive involving a minor.
+*   **Re-review Trigger:** Any change to the model weights, camera angles, or deployment zone requires re-running Test Row A.
+
+**Note:** Do not fabricate a safety metric; if the tests show any risk to minors, the launch must be delayed regardless of the holiday deadline. Legal counsel must review the duty of care regarding surveillance of minors in public spaces before deployment.

@@ -1,0 +1,33 @@
+### Pre-Launch Safety Check: Parental Consent & Data Collection
+
+**1. Immediate Data Pipeline Freeze & Audit**
+Halt all data ingestion for the adaptive difficulty feature until the consent mechanism is verified. Conduct a line-by-line audit of the current data pipeline to identify every metric currently collected under the assumption of "implicit consent." Map each data point (e.g., response time, error rates, session duration) against the new policy requirement for "explicit, verified parental consent." Any data flow lacking a verified consent token linked to a specific child account must be severed immediately. Do not rely on developer assertions; verify the code paths that trigger data transmission.
+
+**2. Implementation of Explicit Consent Gate**
+Design and integrate a mandatory consent gate that activates before any personalized data collection begins. This gate must:
+*   Present clear, plain-language disclosure to parents/guardians explaining exactly what data is collected, how it adapts the game, and who has access.
+*   Require an active, affirmative action (e.g., digital signature, verified email confirmation, or two-step verification) to grant consent. Passive acceptance (pre-checked boxes or continued play) is non-compliant.
+*   Store the consent record immutably with a timestamp and version of the privacy policy accepted.
+*   Ensure the game defaults to a non-personalized, static difficulty mode if consent is not verified. No data regarding performance should be stored or transmitted in this default state.
+
+**3. "Zero-Trust" Launch Verification Protocol**
+Before rolling out the update, execute a "Zero-Trust" dry run in a staging environment that mirrors production:
+*   **Test Case A (No Consent):** Simulate a user session where parental consent is absent or expired. Verify that the system collects *zero* personal interaction metrics and serves only static content. Confirm no data packets leave the client device.
+*   **Test Case B (Explicit Consent):** Simulate a session with verified consent. Verify that data collection activates strictly within the bounds of the granted permission and that the consent record is correctly attached to the data stream.
+*   **Test Case C (Revocation):** Simulate a parent revoking consent mid-session. Verify that data collection stops immediately and any temporarily buffered data is purged, not stored.
+
+**4. Transparency Artifact (Data Card)**
+Create a simplified "Data Card" for internal stakeholders and potential regulatory review. This document must list:
+*   **Intended Use:** Real-time difficulty adaptation for ages 6–10.
+*   **Data Collected:** Specific list of interaction metrics.
+*   **Consent Mechanism:** Description of the explicit verification flow.
+*   **Data Retention:** Policy on how long data is kept and deletion procedures.
+*   **Owner:** Name the specific individual responsible for ongoing compliance monitoring.
+
+**5. Final Go/No-Go Decision**
+The launch is authorized **only** if Test Case A confirms zero data leakage without consent. If the pipeline cannot guarantee this isolation, the feature must not ship. The risk of violating trust and privacy policies outweighs the benefit of adaptive learning.
+
+***
+
+**Note:** Given the involvement of minors, this workflow likely triggers strict legal obligations under regulations like COPPA or GDPR-K; route the final legal determination of "explicit consent" sufficiency to counsel immediately.
+**Note:** Do not attempt to "fix" the pipeline post-launch; the architectural change to require explicit tokens must be complete before any user touches the updated version.

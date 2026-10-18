@@ -1,0 +1,51 @@
+### Safety Validation Plan: Smart Streetlight Glare Mitigation
+
+**1. Immediate Human-in-the-Loop Gate (Effective Immediately)**
+Disable all autonomous brightness adjustments that increase intensity above the current static baseline during night-time low-traffic conditions. Until validation is complete, the system must default to a fixed, pre-approved "safe minimum" brightness level that guarantees visibility without exceeding glare thresholds. No automated high-intensity state may execute without explicit engineer confirmation via a local override switch. This prevents further risk of collision during the trial.
+
+**2. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Excessive glare blinding oncoming drivers.
+*   **Affected:** Motorists (collision risk), pedestrians (reduced driver reaction time).
+*   **Worst Realistic Case:** A driver blinded by a sudden brightness spike fails to see a pedestrian or obstacle, resulting in a fatal collision during the pilot phase.
+*   **Secondary Harm:** Loss of public trust and immediate permit revocation if an incident occurs before the council review.
+
+**3. Measurement Protocol (Runnable Tests)**
+Execute the following test rows using the existing fixtures; do not replace hardware.
+
+*   **Test Row A: Glare Threshold Probe**
+    *   **Probe Set:** Simulate low-traffic scenarios (0–2 cars/hour) with varying approach angles and speeds. Include a "known-bad" positive control (current prototype logic) and a "known-good" negative control (static low-beam setting).
+    *   **Metric:** Luminance intensity (candela) measured at driver eye-level (1.2m height) at 50m, 100m, and 200m distances.
+    *   **Pass Threshold:** Intensity must never exceed the local municipal code limit for glare (e.g., < X cd/m²) or cause a disability glare index > 0.5.
+    *   **Stop Condition:** Any single measurement exceeding the limit halts the trial immediately.
+    *   **Owner:** Lead Hardware Engineer.
+
+*   **Test Row B: Visibility Sufficiency Probe**
+    *   **Probe Set:** Night-time walks/drives with standard obstacles (pedestrian mannequin, debris) placed at varying distances.
+    *   **Metric:** Detection distance (meters) and contrast ratio.
+    *   **Pass Threshold:** Obstacles detected at ≥ Y meters (per safety standard) with contrast ratio ≥ Z.
+    *   **Stop Condition:** Detection distance falls below safety minimum.
+    *   **Owner:** Lead Software Engineer.
+
+*   **Test Row C: Sensor Failure/Edge Case Probe**
+    *   **Probe Set:** Obscured sensors (dirt, rain, spiderwebs), conflicting light sources (headlights, moonlight), and rapid traffic flow changes.
+    *   **Metric:** System response (does it spike brightness erroneously?).
+    *   **Pass Threshold:** System defaults to "safe minimum" upon any sensor anomaly; never spikes.
+    *   **Stop Condition:** Any unauthorized brightness increase.
+
+**4. Uncertainty & Transparency Artifact**
+Do not present a single "99% safe" metric to the city council. Instead, submit a **Safety Data Card** containing:
+*   **Intended Use:** Adaptive lighting for suburban low-traffic zones only.
+*   **Limitations:** Explicitly list conditions where the system reverts to static mode (e.g., sensor occlusion, extreme weather).
+*   **Measured Results:** Report pass/fail status for the specific test rows above, sliced by weather condition and time of night.
+*   **Residual Risk:** Mark any untested scenario (e.g., heavy snow) as `UNVERIFIED` and state the mitigation (manual override required).
+*   **Confidence Tiers:** Describe system states as "Confirmed Safe" (sensor verified, limits met) or "Unverified/Defaulting" (sensor noise detected), rather than using precise percentages which imply false calibration.
+
+**5. Governance & Deadline Execution**
+*   **Owner:** The CTO holds final accountability for the "Go/No-Go" decision based on the test data.
+*   **Schedule:**
+    *   Days 1–3: Execute Test Rows A, B, and C.
+    *   Day 4: Compile Safety Data Card; if any "Stop Condition" was triggered, refine thresholds and re-test only the failing row.
+    *   Day 5: Submit validation package to city council with the "Human-in-the-Loop" guarantee included as a permanent operational constraint for Phase 1.
+*   **Constraint Adherence:** This plan uses existing hardware and fits the one-month deadline. If the "safe minimum" baseline fails to provide sufficient visibility in Test Row B, the constraint that cannot be moved is public safety; in that specific case, the deployment must be delayed regardless of the permit deadline, as no software fix can overcome insufficient hardware capability without risking lives.
+
+**Note:** Legal determination of specific municipal glare codes must be verified by counsel before final submission. Do not assert compliance; present measured data against the code limits provided by the city.

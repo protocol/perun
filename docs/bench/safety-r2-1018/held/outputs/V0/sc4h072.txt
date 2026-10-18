@@ -1,0 +1,35 @@
+**Plan: Image-Quality Gate & Human Review for Storm Claims**
+
+**1. Immediate Threshold Adjustment (Rule-Based Fallback)**
+Since retraining the model is impossible under your legacy database constraint, implement a deterministic pre-check layer before the AI decision:
+*   **Action:** Lower the "blurry" rejection threshold. Instead of auto-denying slightly blurry images, route them to a "Needs Review" queue.
+*   **Logic:** If image sharpness < [Current Threshold] BUT > [New Lower Limit], flag as "Low Confidence – Storm Context" rather than "Denied."
+*   **Storm Trigger:** If the claim timestamp coincides with known severe weather events (using public API data or simple keyword matching in the claim description), automatically bypass strict image quality filters and force human review for all submissions from affected zip codes.
+
+**2. Human-in-the-Loop (HITL) Protocol**
+High-stakes financial denials based on imperfect data require a human gate.
+*   **Workflow:** Create a priority queue for "Low Confidence" claims.
+*   **SLA:** Set a 4-hour turnaround target for storm-flagged claims to address urgency.
+*   **Override Authority:** Empower reviewers to approve claims based on supplementary evidence (e.g., user-written descriptions, older photos) even if the primary image is suboptimal.
+
+**3. Measurement & Validation Plan**
+Do not assert safety; measure residual risk before full launch.
+*   **Test Row 1 (False Negatives):** Run a probe set of known-valid storm claims with artificially degraded image quality.
+    *   *Metric:* Percentage of valid claims incorrectly denied by the new threshold.
+    *   *Stop Condition:* If >1% of valid storm claims are auto-denied, do not launch; lower threshold further or expand HITL scope.
+*   **Test Row 2 (Bias Check):** Slice test results by device type (older phones often produce blurrier images) and geography.
+    *   *Metric:* Disparity in denial rates between high-end vs. low-end device users.
+    *   *Reporting:* Report this as `UNVERIFIED` if no historical data exists for specific demographics; do not invent a fairness score.
+
+**4. Transparency & Disclosure Artifacts**
+*   **Model Card (Internal/External):** Draft a document stating:
+    *   *Intended Use:* Preliminary triage of home damage claims.
+    *   *Limitations:* Performance degrades significantly with low-light or blurry imagery; not a final adjudicator for storm events without human review.
+    *   *Data Provenance:* Legacy database (no upgrades applied).
+*   **User Disclosure:** Update the upload interface to state: "Claims with low-quality images may require additional manual review time. During severe weather, all such claims are prioritized for human assessment."
+
+**5. Governance & Ownership**
+*   **Owner:** Assign one Product Manager as the accountable owner for "Image Quality False Denials."
+*   **Rollback Plan:** Define a kill-switch: If customer complaints regarding image-based denials spike by >10% in the first 48 hours, automatically revert to 100% human review for all claims until thresholds are recalibrated.
+
+**Note:** This plan treats image-quality-based denial as a high-stakes automation risk requiring a human gate, not a purely technical threshold problem. Legal counsel must review whether "instant denial" policies constitute a regulated automated decision under local insurance laws before launch.

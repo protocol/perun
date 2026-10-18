@@ -1,0 +1,33 @@
+**Pre-Launch Evaluation Strategy for StyleHub Virtual Try-On**
+
+Given your constraints on compute resources and the critical need to prevent bias and body-shaming, adopt a "Targeted Adversarial Audit" rather than broad simulation. This approach maximizes insight per compute cycle by focusing on high-risk edge cases and specific failure modes.
+
+**1. Construct a "Boundary Breaker" Dataset**
+Instead of simulating thousands of random bodies, manually curate a small, high-impact dataset (50–100 images) representing the extremes your model is most likely to fail on. Since you cannot simulate diversity broadly, test the boundaries deeply:
+*   **Body Extremes:** Include images representing the 1st and 99th percentiles of height, weight, and specific proportions (e.g., very broad shoulders with narrow hips, post-pregnancy bodies, athletic builds with high muscle mass).
+*   **Demographic Intersections:** Ensure these extremes cover diverse skin tones, ages, and visible disabilities to catch intersectional bias.
+*   **Adversarial Inputs:** Include images with occlusions (hands in pockets, holding bags), unusual poses, or poor lighting to test if the system defaults to harmful stereotypes when confidence is low.
+
+**2. Define "Harm" Metrics Beyond Accuracy**
+Standard accuracy metrics will not detect body-shaming. Establish qualitative and quantitative guardrails:
+*   **The "Upsize" Bias Check:** Track if the system systematically recommends larger sizes for specific body types or demographics compared to a ground-truth measurement. A consistent deviation suggests bias.
+*   **Language Sentiment Analysis:** Scan all generated feedback for negative connotations. Flag any output containing words related to "hiding," "covering," "slimming," or "masking" unless explicitly requested by the user. The tone must be neutral or affirming, never corrective.
+*   **Failure Mode Review:** Analyze what the system says when it *cannot* determine a size. It must default to a helpful, neutral fallback (e.g., "We recommend consulting our size guide") rather than making assumptions about the user's body shape.
+
+**3. The "Red Team" Review Loop**
+With seven engineers, divide responsibilities to simulate a diverse user base without needing extra compute:
+*   **Role-Playing Sessions:** Assign team members to specific personas (e.g., "plus-size shopper," "petite shopper," "non-binary shopper"). Have them run the curated "Boundary Breaker" dataset and record their emotional response to the feedback.
+*   **Blind Grading:** Remove demographic metadata from the test results and have a different team member grade the advice solely on tone and utility. If the advice sounds harsh when the body type is unknown, the language generation is flawed.
+
+**4. Compute-Efficient Stress Testing**
+Since you cannot run massive simulations:
+*   **Iterative Perturbation:** Take a single base image and apply minor digital perturbations (slight rotation, brightness changes, virtual accessories) to see if the size recommendation fluctuates wildly. Instability often precedes biased outputs.
+*   **Focus on the "No":** Prioritize testing scenarios where the item *does not fit* well. The system's ability to gently suggest an alternative style without criticizing the user's body is the highest risk area for causing negative self-image.
+
+**Deliverable Checklist for Launch Gate:**
+*   [ ] Pass rate >95% on "Boundary Breaker" dataset for neutral tone.
+*   [ ] Zero instances of unsolicited "slimming" or "hiding" language.
+*   [ ] Documented fallback behavior for low-confidence inputs.
+*   [ ] Sign-off from the "Red Team" role-play session confirming no reported feelings of shame or exclusion.
+
+*Note: This strategy prioritizes depth of insight over breadth of data to respect your compute limits. Ensure all test images are synthetic or properly licensed to maintain privacy compliance.*

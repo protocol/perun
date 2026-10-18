@@ -1,0 +1,42 @@
+### Safety Validation Roadmap: Smart-Home Energy Optimizer
+
+**Critical Constraint Acknowledgement:** Your current plan to "verify automated decisions never compromise user health" via software testing alone is insufficient. Because the system cannot reliably distinguish medical equipment from standard appliances without additional hardware, **fully autonomous power shedding of non-essential circuits is a high-stakes, irreversible action that must not ship without a human-in-the-loop gate.** No amount of simulation can prove a negative (that it will *never* fail) in an open-ended home environment.
+
+The following roadmap maps harms, measures residual risk, and manages the unavoidable danger of false negatives.
+
+#### Phase 1: Harm Inventory & Definition (MAP)
+Before writing tests, formally record the specific failure mode:
+*   **Harm:** Unsafe automation of high-stakes action (power loss to life-support).
+*   **Affected Group:** Users with home health devices (oxygen concentrators, dialysis machines, CPAP).
+*   **Worst Case:** Severe injury or death due to power interruption during a heatwave.
+*   **Root Cause:** Algorithmic inability to distinguish device signatures without extra sensors.
+*   **Status:** **UNVERIFIED** capability to safely auto-exempt.
+
+#### Phase 2: Adversarial Simulation & Measurement (MEASURE)
+Do not test only "happy paths." Construct an evaluation suite where the goal is to break the classifier.
+*   **Probe Set A (False Negatives):** Simulate power signatures of medical devices that mimic non-essential loads (e.g., a compressor cycle in an oxygen concentrator looking like a fridge).
+    *   *Positive Control:* Known medical device signature → Expected Result: **NO CUT**.
+    *   *Negative Control:* Known non-essential device → Expected Result: **CUT**.
+*   **Probe Set B (Edge Cases):** Simulate combined loads where medical devices run alongside high-draw appliances, testing if the aggregate signature masks the critical load.
+*   **Probe Set C (Injection/Noise):** Introduce grid noise or voltage fluctuations typical of Phoenix peak hours to ensure the classifier doesn't degrade into random guessing.
+*   **Metric:** False Negative Rate (FNR) on medical device classification.
+*   **Threshold:** **Zero tolerance.** Any single instance of a medical device being flagged for shedding in simulation blocks the launch of *autonomous* mode.
+*   **Reporting:** Report the specific FNR found. If the rate is >0%, the metric for "safe autonomy" is **UNVERIFIED**. Do not invent a "99.9% safe" claim.
+
+#### Phase 3: Risk Management & Human Gate (MANAGE)
+Since hardware constraints prevent perfect detection, you must change the product behavior, not just the test plan.
+*   **The Gate:** Implement a mandatory **human confirmation step** for any circuit identified as "ambiguous" or "unknown." If the algorithm cannot positively identify a load as non-essential with high confidence, it must default to **keeping power ON**.
+*   **Uncertainty Display:** Do not show users a raw confidence percentage (e.g., "87% safe"). Instead, use defined tiers:
+    *   *Confirmed Non-Essential:* Auto-cut eligible.
+    *   *Unverified/Unknown:* **Never cut.** Require explicit user override to shed.
+*   **Disclosure:** Clearly inform users that the system relies on software estimation and that they must manually register medical devices to guarantee exemption. Provide a physical "emergency bypass" switch logic in the app.
+*   **Rollback Plan:** Define a trigger (e.g., any reported near-miss or grid instability event) that instantly disables auto-shedding and reverts to manual-only control.
+
+#### Phase 4: Transparency Artifact (GOVERN)
+Create a **Model Card** for the energy optimizer before launch.
+*   **Intended Use:** Reducing non-essential load; **explicitly out-of-scope** for guaranteeing life-support safety without user registration.
+*   **Limitations:** Document the inability to distinguish specific medical signatures without user input.
+*   **Owner:** Name the specific engineer responsible for reviewing any "ambiguous" classification logs weekly.
+
+**Note:** You must route the question of legal liability for automated power shedding to counsel immediately; this is a regulated safety domain.
+**Note:** If the simulation reveals any false negatives, the only safe launch path is to disable auto-cutting for ambiguous loads entirely, even if it reduces energy savings.

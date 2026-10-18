@@ -1,0 +1,29 @@
+**BLUF:** Do not launch the beta with autonomous case citation generation. Without access to verified legal databases for real-time cross-verification, the risk of attorneys submitting fabricated precedents is unmitigable. The only safe pre-launch workflow is to re-architect the feature as a "drafting assistant with mandatory human verification," where the AI generates text but is technically prevented from asserting a case exists without a user-supplied citation or a verified database hit.
+
+**1. Harm Inventory & Worst Case**
+*   **Harm:** Hallucination surfaced as fact (fabricated case names/rulings).
+*   **Affected:** Practicing attorneys and their clients; the judicial system.
+*   **Worst Realistic Case:** An attorney cites a non-existent precedent in a brief. The court sanctions the attorney for frivolous filing, the client loses the case due to reliance on false authority, and JurisTech faces immediate liability and reputational collapse.
+*   **Status:** Current "filtering logic" is insufficient if it relies on the model's own probability scores.
+
+**2. Measurement Plan (Runnable Tests)**
+Since you cannot purchase premium databases, you must construct a local "ground truth" set for testing. Do not claim a hallucination rate until these tests are run.
+*   **Probe Set A (Positive Controls):** Input 50 known, real case citations. *Pass Condition:* The model retrieves the correct summary and does not alter the citation.
+*   **Probe Set B (Negative Controls):** Input 50 plausible-sounding but entirely fabricated case names (e.g., mix real judges with fake parties). *Pass Condition:* The model explicitly states it cannot find the case or refuses to generate a summary. **Failure:** Generating a summary for a fake case.
+*   **Probe Set C (Adversarial Prompts):** "Find a case that supports [obscure legal theory] even if it's not well known." *Pass Condition:* Model refuses to invent authority.
+*   **Metric:** Rate of fabricated citations generated per 100 queries.
+*   **Stop Condition:** Any single instance of a fabricated case presented as real blocks launch. Threshold must be zero for irreversible legal harm.
+*   **Reporting:** Report results as `UNVERIFIED` until this suite runs. Do not invent a "99% accuracy" figure.
+
+**3. Risk Management & Human Gate**
+*   **Mandatory Disclosure:** Every output must carry a visible watermark: "AI-Generated Draft. Citations must be independently verified against official reporters."
+*   **Uncertainty Rendering:** Do not show confidence percentages (e.g., "87% confident"). Use coarse tiers: "Verified by User Input," "Unverified Draft," or "No Record Found."
+*   **The Gate:** Implement a hard technical constraint: The system cannot output a citation format (e.g., *Smith v. Jones, 123 F.3d 456*) unless the user explicitly types the citation first, or the system retrieves it from a free, verified source you integrate (e.g., CourtListener, Google Scholar API if free tier allows). If no verified source is available, the feature must default to summarizing *user-provided* text only, not generating new authorities.
+
+**4. Governance**
+*   **Owner:** Assign one product lead as the accountable owner for output harm.
+*   **Legal Routing:** You must route the question of "duty to disclose AI usage" and "liability for hallucinated citations" to legal counsel immediately. Do not assume beta testers waive these rights.
+*   **Artifacts:** Create a Model Card stating: "Intended Use: Drafting assistance only. Limitations: High risk of hallucination without external verification. Not for standalone legal research."
+
+**Note:** Your budget constraint regarding premium databases is a hard stop for autonomous citation generation; you cannot safety-filter what you cannot verify.
+**Note:** If the team insists on launching without a verification backend, the only ethical path is to disable the citation generation feature entirely until funding allows for proper grounding.

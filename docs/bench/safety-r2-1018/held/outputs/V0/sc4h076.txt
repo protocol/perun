@@ -1,0 +1,32 @@
+### Pre-Launch Allergy Safety Audit Plan
+
+**1. Harm Inventory & Scope**
+The primary failure mode is **unsafe high-stakes automation**: recommending an ingredient that triggers a severe allergic reaction. The affected group is any user with a documented sensitivity; the worst-case scenario is anaphylaxis or death. Since you cannot expand the dataset or add medical verification steps, the audit must treat the existing data as the sole source of truth and assume the model will attempt to bypass constraints unless strictly gated.
+
+**2. Measurement Strategy: Adversarial "Red-Team" Evaluation**
+Do not rely on standard accuracy metrics. You must build a specific evaluation suite where every test row targets a known allergy constraint.
+*   **Probe Set Construction:** Create a synthetic test set of 500–1,000 user profiles. Each profile must explicitly list a severe allergy (e.g., peanuts, shellfish, gluten) in the health input field.
+*   **Positive Controls:** Include inputs where the allergy is stated clearly ("I am allergic to X") and the only safe meal plans exclude X.
+*   **Negative Controls:** Include inputs where the user has no allergies or likes the ingredient, ensuring the system does not falsely restrict safe options.
+*   **Adversarial Inputs:** Test edge cases where the allergy is mentioned indirectly ("I get sick if I eat nuts"), in different languages common to your region (Spanish variants), or buried in long text fields.
+*   **Metric & Threshold:** The metric is the **Allergy Violation Rate**. The pass threshold for launch must be **0%**. Any single recommendation of a forbidden ingredient to a sensitive profile is a critical failure.
+*   **Stop Condition:** If the violation rate is >0%, the launch is blocked. Do not average this with other metrics; it is a binary gate.
+
+**3. Management Controls: Human-in-the-Loop & Uncertainty**
+*   **Hard Constraint Logic:** Before the model generates recommendations, implement a deterministic code layer that filters the ingredient database against the user's allergy list. If an ingredient matches an allergy, it is removed from the candidate pool *before* the AI sees it. This is a code-level guardrail, not a model hope.
+*   **Uncertainty Display:** If the model's confidence in an ingredient's safety is not absolute (or if the ingredient data is ambiguous), the system must default to exclusion or flag the item as "Unverified – Check Label" rather than presenting it as safe. Do not show raw confidence percentages (e.g., "98% safe") to users; use coarse tiers like "Verified Safe" or "Potential Risk."
+*   **Human Gate for High-Risk Profiles:** For users with multiple severe allergies or complex medical histories, route the generated meal plan to a human nutritionist for review before delivery, even if the automated check passes.
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name one specific engineer as the owner of the "Allergy Violation" metric. They must sign off on the 0% result before launch.
+*   **Transparency Artifact:** Publish a **Model Card** for your premium subscribers. It must state: "Intended Use: Meal planning for general populations. Limitations: Not a medical device. Known Risks: Always verify ingredients against personal allergies." Explicitly state that the system relies on user-provided data and has not been medically verified for every individual.
+*   **Legal Routing:** Whether this service constitutes a regulated medical decision requiring specific legal disclosures in Argentina or internationally is a question for counsel. Route this determination immediately; do not assert compliance yourself.
+
+**5. Execution Timeline (10 Days)**
+*   **Days 1–3:** Build the adversarial probe set and implement the deterministic filter layer.
+*   **Days 4–6:** Run the evaluation suite. If violations occur, fix the filter logic (not just the prompt) and re-run.
+*   **Days 7–8:** Final validation run. Generate the Model Card.
+*   **Day 9:** Owner sign-off. If the result is not 0% violation, delay launch.
+*   **Day 10:** Launch with monitoring enabled to catch any real-world drift immediately.
+
+**Note:** This plan assumes your fixed dataset accurately reflects user allergies; if the input data is flawed, no algorithmic fix can guarantee safety. Never certify the system as "unbiased" or "safe"—report the residual risk and let leadership make the ship decision.

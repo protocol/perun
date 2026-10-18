@@ -1,0 +1,39 @@
+**Pre-Launch Safety Plan: Pediatric Telehealth Triage (3-Day Sprint)**
+
+**1. Immediate Harm Inventory & Triage (Day 1 Morning)**
+*   **Define the "Red Line":** Explicitly list the specific infant age ranges (e.g., <3 months) and fever thresholds where *any* automated categorization other than "Immediate Emergency Care" is a critical failure.
+*   **Map Failure Modes:** Document worst-case scenarios for your specific context:
+    *   *Bias/Accent:* System fails to understand a Marathi or Hindi-accented English description of "lethargy" or "not drinking," downgrading urgency.
+    *   *Noise:* Background household noise masks a child's cry or wheezing, leading to false reassurance.
+    *   *Over-reliance:* Parents trust a "Home Care" recommendation despite visible distress because the bot sounded confident.
+*   **Action:** Freeze the model. No new training data can be ingested. All changes must be rule-based overrides.
+
+**2. Targeted Stress-Testing Protocol (Day 1 Afternoon – Day 2)**
+Do not attempt comprehensive testing. Execute a "Red Team" sprint focused *only* on high-stakes errors (missing a severe case).
+*   **Accent & Noise Probe Set:** Create 20 adversarial audio clips simulating Mumbai demographics:
+    *   *Inputs:* 10 clips of severe symptoms (e.g., "baby is limp," "high pitch cry") spoken in varied local accents (Hindi, Marathi, Gujarati influences) with overlapping background noise (traffic, fans, multiple speakers).
+    *   *Controls:* 5 clear "safe" cases and 5 clear "emergency" cases in standard English (positive/negative controls).
+*   **Metric & Threshold:**
+    *   *Metric:* False Negative Rate (severe cases categorized as non-urgent).
+    *   *Threshold:* **Zero tolerance.** If *any* severe infant case is misclassified as "Home Care" or "Routine Visit," the automated path for that specific symptom cluster is disabled.
+*   **Injection Check:** Verify that loud noises or unrelated speech do not trigger false "calm" classifications.
+
+**3. Robust Human-in-the-Loop Gate (Day 2 Afternoon)**
+*   **Hard Gate Implementation:** For any input involving infants under 6 months or reported fever >102°F (39°C), bypass the model's final decision. The system must **force** a handoff to a human nurse before giving *any* advice.
+*   **Uncertainty Rendering:** If the model's confidence is not "Confirmed" (based on your internal thresholds), the output must state: *"I am not certain. Connecting you to a nurse now."* Do not display numerical confidence percentages (e.g., "87% sure") to parents; this invites dangerous over-trust.
+*   **Override Mechanism:** Ensure the "Call Nurse Now" button is visible on every screen and voice prompt, regardless of the bot's assessment.
+
+**4. Transparency & Disclosure Artifacts (Day 3 Morning)**
+*   **Draft a "Model Card" Lite:** Create a one-page document for your internal team and pilot hospital administrators listing:
+    *   *Intended Use:* Triage support only, not diagnosis.
+    *   *Known Limitations:* Specifically list accent variations or noise levels where performance is `UNVERIFIED`.
+    *   *Data Gaps:* Acknowledge if training data lacked specific local dialects.
+*   **User Disclosure:** Script a mandatory opening statement: *"This is an AI assistant. It can make mistakes. In an emergency, call local emergency services immediately."*
+
+**5. Go/No-Go Decision (Day 3 Afternoon)**
+*   Review the stress-test logs. If the "Zero Tolerance" threshold was breached for high-stakes infant cases, **do not launch** the automated feature for that segment. Restrict the pilot to older children or require human review for all inputs until the model is retrained.
+*   **Legal Routing:** Immediately flag to counsel whether this triage constitutes a "regulated automated decision" under local Indian health laws or international standards if serving expats. Do not assume compliance; get a formal sign-off.
+
+**Notes**
+*   Any metric not explicitly measured in this 3-day window must be labeled `UNVERIFIED` in your documentation; do not invent accuracy rates.
+*   If the stress test reveals gaps you cannot fix with rules in 48 hours, scale back the pilot scope rather than launching with known high-stakes risks.

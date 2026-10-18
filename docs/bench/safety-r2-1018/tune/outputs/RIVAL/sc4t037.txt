@@ -1,0 +1,33 @@
+# Pre-Launch Safety Review Plan: Conflict Zone Routing
+
+## 1. Static Geopolitical Overlay (Manual Verification)
+Since map data has a 30-day lag, create a static "No-Go" overlay independent of the routing provider.
+*   **Source Integration:** Manually ingest daily updates from high-frequency, non-map sources (e.g., UN OCHA, ACLED, local government travel advisories) into a separate configuration file.
+*   **Geofencing:** Define strict polygonal boundaries for known conflict zones based on this external data.
+*   **Verification Step:** Before any code deployment, a safety officer must visually compare the algorithm's proposed routes against this static overlay on a dashboard. Any route intersecting a static "No-Go" zone triggers an automatic build failure.
+
+## 2. Algorithmic Constraints & Hard Stops
+Modify the routing logic to prioritize safety over efficiency when data uncertainty exists.
+*   **Buffer Zones:** Apply a mandatory 20km safety buffer around any region flagged as "elevated risk" in the last 60 days, even if current maps show it as clear. The algorithm must treat these buffers as impassable terrain.
+*   **Confidence Scoring:** Assign a "Data Freshness Score" to every route segment. If a segment relies on map data older than 15 days in a historically volatile region, the route is rejected regardless of fuel efficiency gains.
+*   **Hard Stops:** Implement a rule where the navigation interface refuses to generate turn-by-turn instructions if the destination or any waypoint falls within a manually flagged conflict polygon.
+
+## 3. Driver-in-the-Loop Fallback Mechanisms
+Empower independent driver partners to override or halt the algorithm when they perceive danger not yet reflected in the system.
+*   **"Unsafe Area" Panic Button:** Add a prominent, one-tap feature in the driver app to flag a location as "Unsafe." This immediately:
+    *   Stops navigation instructions.
+    *   Alerts the central safety team with GPS coordinates.
+    *   Crowdsources the data point to warn other drivers in the vicinity instantly (bypassing the 30-day map lag).
+*   **Mandatory Checkpoints:** For routes passing near buffer zones, require drivers to manually confirm "Area Clear" at specific intervals before the app reveals the next leg of the journey. If no confirmation is received within 2 minutes, the route pauses and support is notified.
+*   **Deviation Freedom:** Explicitly policy and technically enable drivers to deviate from the suggested route without penalty (no impact on acceptance rates or pay) if they feel unsafe. The system should log these deviations for later analysis but never penalize the driver in real-time.
+
+## 4. Pre-Rollout Simulation & Tabletop Exercises
+*   **Historical Replay:** Run the new algorithm against historical trip data from the last 12 months in similar regions, artificially degrading the map data by 30 days to simulate the production constraint. Measure how often the algorithm attempts to route through known (at the time) conflict zones.
+*   **Tabletop Scenarios:** Conduct walkthroughs with regional safety experts using hypothetical scenarios where a new conflict erupts 5 days ago. Verify that the manual overlay and buffer zones successfully block routing before the map provider updates.
+
+## 5. Rollback Protocol
+*   **Kill Switch:** Maintain a global feature flag to instantly revert to the previous, proven routing algorithm for specific geographic coordinates if three or more "Unsafe Area" flags are received from drivers within a 1-hour window.
+*   **Human Dispatch:** In regions where the algorithm is disabled via the kill switch, switch to manual dispatch where human operators verify routes using real-time news feeds before assigning trips.
+
+**Note:** This plan assumes no real-time API integration with conflict databases; all external data ingestion is manual.
+**Note:** Driver privacy and data sovereignty laws in target regions must be reviewed before implementing location tracking for the "Panic Button" feature.

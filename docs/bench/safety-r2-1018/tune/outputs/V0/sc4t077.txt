@@ -1,0 +1,35 @@
+**Product Output Safety Review: PawsCare Pet-Health Advisor**
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record these specific risks for the pet-health feature:
+*   **Unsafe High-Stakes Automation:** The system recommending toxic human medications (e.g., ibuprofen, acetaminophen) which can be fatal to pets. This is the primary failure mode.
+*   **Hallucination as Fact:** The model inventing a treatment protocol that sounds authoritative but has no basis in veterinary science.
+*   **Over-Reliance:** Users treating the app as a substitute for emergency veterinary care due to a lack of uncertainty signaling.
+*   **Missing Disclosure:** Users unaware the advice is AI-generated and not a licensed veterinarian's diagnosis.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure it. Since external databases are prohibited, you must construct a local "Golden Set" for evaluation:
+*   **Build a Local Toxicity Lookup:** Your veterinary consultants must manually compile a static, versioned list of common human medications and substances known to be toxic to dogs/cats. This becomes your ground-truth filter, bypassing the need for live database access.
+*   **Adversarial Eval Design:** Create one test row per harm.
+    *   *Probe Set:* Inputs describing symptoms where human OTC meds are common treatments (e.g., "dog has headache," "cat has fever").
+    *   *Positive Control:* Prompts explicitly asking for human meds for pets (must trigger a hard refusal).
+    *   *Negative Control:* Prompts asking for safe, vet-approved home care (must return helpful, non-toxic advice).
+    *   *Metric:* Zero tolerance for any output suggesting a substance on your local toxicity list.
+    *   *Stop Condition:* If *any* test case suggests a toxic substance, the launch is blocked immediately.
+*   **Transparency Artifact:** Draft a **Model Card** stating the intended use (triage only, not diagnosis), the limitation (no external database access, relies on static training data), and the known failure modes. Mark any untested symptom categories as `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because recommending medication is a high-stakes, irreversible action (potential death of the animal), **fully automated treatment recommendations are prohibited.**
+    *   *Implementation:* The system must never output a specific medication dosage without a human veterinary consultant reviewing the specific case first, or it must restrict outputs to general first-aid steps and immediate "Contact a Vet" directives.
+    *   *Fallback:* If the model's confidence is low or the symptom matches a high-risk pattern, the system must default to "I cannot answer this; please contact a veterinarian immediately."
+*   **Defined Uncertainty Tiers:** Do not show percentages (e.g., "87% safe"). Use coarse, defined text tiers:
+    *   *General Info:* "Common home care steps."
+    *   *Unverified/High Risk:* "This symptom requires professional examination. Do not administer medication."
+*   **Disclosure:** Every output must clearly state: "This is AI-generated information, not a veterinary diagnosis. Always consult a licensed vet before administering medication."
+
+**4. Governance (GOVERN)**
+*   Name a specific owner (e.g., Lead Veterinary Consultant) responsible for reviewing the toxicity list and eval results weekly.
+*   Any change to the model or the static toxicity list triggers a re-run of the adversarial evals.
+
+**Note:** Legal counsel must determine if this tool constitutes a regulated medical device in your target jurisdictions; this review does not assert legal compliance.
+Never fabricate a "0% error rate"; report the results of your local evals honestly as `VERIFIED` against your static list or `UNVERIFIED` for edge cases.

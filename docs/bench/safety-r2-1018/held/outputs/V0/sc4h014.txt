@@ -1,0 +1,37 @@
+### Pre-Launch Safety Report: Route Planner Equity & Mitigation
+
+**1. Harm Inventory: Discriminatory Service Denial**
+*   **Harm Identified:** Systematic exclusion of low-income neighborhoods due to fuel-efficiency optimization prioritizing wider streets.
+*   **Affected Group:** Residents of marginalized districts with narrower street infrastructure.
+*   **Worst Realistic Case:** Creation of "food deserts" where vulnerable populations lose access to essential grocery delivery, exacerbating existing socioeconomic inequalities and violating the contractual obligation for city-wide coverage.
+*   **Status:** **CONFIRMED** via observed routing patterns during integration testing.
+
+**2. Measurement Plan (Runnable Validation)**
+To validate adjustments before the end-of-month launch, execute the following test row immediately:
+*   **Probe Set:** Generate 500 random delivery requests distributed evenly across all city districts, with a 40% oversample of known low-income/narrow-street zones. Include a **positive control** (a request in a narrow street that *must* be served) and a **negative control** (a request in an unreachable alley).
+*   **Metric:** **Coverage Disparity Ratio** = (Service Rate in Low-Income Zones) / (Service Rate in High-Income Zones).
+*   **Pass Threshold:** Owner-defined, but must approach **1.0** (parity). Any ratio below **0.9** triggers a launch block for that zone.
+*   **Stop Condition:** If the adjusted algorithm fails to serve >95% of the positive control set within the agreed delivery time window, rollback to the previous version and engage human dispatch for affected zones.
+*   **Reviewer:** Lead Logistics Expert.
+
+**3. Immediate Algorithmic Adjustments (Manage)**
+Given the rigid deadline, retraining is not feasible. Implement these rule-based overrides:
+*   **Constraint Injection:** Hard-code a "Minimum Service Quota" per district. The optimizer must assign at least $X$ routes to every postal code, regardless of fuel cost, before optimizing for efficiency.
+*   **Penalty Reweighting:** Temporarily reduce the weight of "fuel efficiency" in the cost function for routes entering flagged narrow-street zones. Increase the penalty for "unserved demand" in these zones to infinity.
+*   **Human-in-the-Loop Gate:** For the first two weeks post-launch, any route plan that leaves a low-income zone with <80% coverage compared to the city average must be flagged for manual review by a logistics expert before driver assignment.
+*   **Uncertainty Disclosure:** If the system cannot guarantee standard delivery times for specific narrow streets due to traffic unpredictability, display a **defined coarse tier** status to the user (e.g., "Extended Window Expected") rather than a false precise ETA. Do not hide the limitation.
+
+**4. Transparency Artifact (Model Card Summary)**
+*   **Intended Use:** Grocery delivery optimization across the full metropolitan area.
+*   **Known Limitations:** Fuel optimization logic historically under-serves narrow-street districts; mitigated via hard quotas in v1.0.
+*   **Measured Performance:** Coverage Disparity Ratio to be reported weekly. Current status: **UNVERIFIED** pending the probe run above.
+*   **Owner:** SeineFresh Logistics Lead.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one logistics expert to own the "Equity Metric" daily until stability is proven.
+*   **Legal Routing:** The potential classification of this service denial under French or EU anti-discrimination laws (or the EU AI Act regarding high-risk systems) is a legal determination. **Route immediately to counsel** to assess regulatory exposure; do not assert compliance internally without their sign-off.
+
+***
+
+**Note:** This report identifies residual risk; it does not certify the system as "fair" or "compliant." The final launch decision rests with the product owner.
+**Note:** If the probe set reveals that time guarantees cannot be met even with adjustments, the constraint to "launch across the entire city" may need renegotiation with partners to avoid unsafe automation.
