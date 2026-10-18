@@ -1,0 +1,23 @@
+# Pre-Launch Safety Review Checklist: Pawsitive Health Diagnostic Tool
+
+## 1. Data Limitation & Severity Bias Assessment
+*   **Rare Disease Overfitting Check:** Audit the training set for the ratio of common ailments (e.g., minor skin irritations, ear mites) versus rare, severe conditions (e.g., mast cell tumors, necrotizing fasciitis). With limited data, models often over-weight distinctive but rare features. Verify that the model does not default to "high severity" when confidence is low due to unfamiliarity with benign variations.
+*   **Visual Ambiguity Mapping:** Identify specific visual overlaps where benign conditions mimic fatal ones in your current dataset (e.g., a harmless bruise vs. internal bleeding signs, mild lethargy posture vs. shock). Document these as "High-Risk False Positives."
+*   **Breed-Specific Baseline Verification:** Ensure the model distinguishes between breed-normal traits (e.g., wrinkled skin folds in Shar-Peis, hairlessness in Xoloitzcuintlis) and pathological symptoms. Limited data often causes the model to flag normal breed characteristics as severe dermatological issues.
+
+## 2. Output Calibration & Uncertainty Handling
+*   **Confidence Threshold Tuning:** Establish a strict lower bound for confidence scores. If the model's confidence in a "fatal" diagnosis is below 90% (or a determined high threshold), the system must automatically downgrade the output to "Uncertain – Requires Vet Review" rather than suggesting a specific severe illness.
+*   **Differential Diagnosis Presentation:** Mandate that the tool never outputs a single definitive diagnosis for high-severity categories. Instead, it must present a ranked list of possibilities, explicitly placing common, treatable conditions at the top unless visual evidence is overwhelmingly specific to a fatal condition.
+*   **"Unknown" Class Enforcement:** Verify that the model has a robust "No Match / Insufficient Data" output class. If an input image falls outside the distribution of your limited training data, the system must refuse to guess rather than forcing a match to the closest (potentially fatal) known category.
+
+## 3. Immediate Manual Oversight Steps
+*   **The "Red Flag" Human-in-the-Loop:** Implement a mandatory manual review queue for any case where the model predicts a fatality risk >50%. No user should receive a "fatal condition" alert without a licensed veterinarian or trained technician verifying the image and model reasoning first.
+*   **Contextual Data Requirement:** Before displaying any result, require the user to input three critical context markers: duration of symptoms, animal age, and activity level. If these inputs contradict the visual severity (e.g., image suggests shock, but user inputs "playing normally 10 mins ago"), suppress the fatal diagnosis and trigger a manual review.
+*   **Explicit Disclaimer Injection:** Hard-code a non-dismissible warning on every result screen: *"This tool analyzes images only and cannot replace a physical exam. Results are probabilistic suggestions, not diagnoses. In emergencies, contact a veterinarian immediately."*
+
+## 4. Feedback Loop for Pilot Phase
+*   **False Positive Logging:** Create a simple mechanism for users to report "Incorrect Alarm" if a vet clears the pet after a high-severity alert. Prioritize reviewing these cases weekly to retrain or adjust thresholds.
+*   **Vet Partner Validation:** Partner with 2–3 local Sydney clinics to blindly test the pilot outputs against their professional assessments for the first 100 cases to calibrate the severity bias before wider release.
+
+*Note: Given the high stakes of medical decisions, err on the side of under-diagnosing severity in the automated output and over-referring to human professionals.*
+*This checklist assumes no additional data collection before launch; focus entirely on constraining the model's current tendency to hallucinate severity from noise.*

@@ -1,0 +1,42 @@
+# Pre-Launch Safety Review Checklist: Pawsitive Health Pilot
+
+### 1. Harm Inventory: Data-Limitation Risks
+*Before pilot launch, document these specific failure modes caused by limited training data:*
+*   **Severity Inflation (False Positives for Fatal Conditions):** Identify common, treatable symptoms (e.g., minor skin irritations, mild eye discharge) that visually resemble rare, fatal conditions in your limited dataset. Record the worst-case user action (e.g., unnecessary emergency visit, extreme distress).
+*   **Breed/Coat Bias:** List dog/cat breeds or coat colors underrepresented in your data. Note if the model systematically fails or over-flags symptoms for these groups.
+*   **Context Blindness:** Acknowledge that photos lack vital context (duration of symptom, pet's age, vaccination status). Record how missing context could lead the model to assume the worst-case scenario by default.
+
+### 2. Measurement Plan: Targeted Red-Teaming
+*Do not assert accuracy. Run these specific tests before allowing user access:*
+*   **The "Benign Mimic" Test:** Create a probe set of 20+ images of common, treatable issues that look like serious conditions.
+    *   *Pass Condition:* The system must **not** rank a fatal condition as the top suggestion without a heavy uncertainty disclaimer.
+    *   *Stop Condition:* If >5% of benign images trigger a "Fatal/Emergency" top ranking, halt launch.
+*   **The "Unknown Breed" Test:** Input images of breeds absent from your training data.
+    *   *Metric:* Rate of "Unable to Analyze" vs. "High Confidence Wrong Diagnosis."
+    *   *Requirement:* The system must default to "Uncertain/Consult Vet" rather than guessing a specific severe illness.
+*   **Calibration Check:** Verify that the model's internal confidence scores do not correlate with incorrect severe diagnoses. If the model is "99% confident" on a wrong fatal diagnosis, the confidence metric is broken.
+
+### 3. Management Controls: Immediate Manual Oversight
+*Implement these gates to prevent irreversible harm from automated outputs:*
+*   **Mandatory Human-in-the-Loop for High-Stakes Outputs:**
+    *   **Rule:** Any output suggesting a "Fatal," "Emergency," or "Critical" condition **must** be reviewed by a qualified veterinarian before being shown to the user.
+    *   **Implementation:** Route these cases to a dashboard for your team's vet partner to approve, modify, or reject the AI's suggestion within 15 minutes. Do not automate the delivery of bad news.
+*   **Defined Uncertainty Tiers (No False Precision):**
+    *   **Action:** Remove all percentage confidence scores (e.g., "87% likely") from the user interface.
+    *   **Replacement:** Use defined text tiers:
+        *   *Confirmed:* Matches multiple verified cases in data.
+        *   *Possible:* Matches some cases but lacks context.
+        *   *Unclear:* Insufficient data or visual ambiguity (Default for low-data scenarios).
+    *   **Requirement:** Every output must include the phrase: "This is an automated suggestion based on limited data, not a veterinary diagnosis."
+*   **Friction for Urgent Actions:**
+    *   If the tool suggests an emergency, do not provide a "One-Click Book Emergency Vet" button that bypasses thought. Instead, provide a list of local emergency clinics and require the user to manually select one, reinforcing that *they* are making the decision.
+
+### 4. Transparency Artifact (Model Card Lite)
+*Publish a simple document for users and partners containing:*
+*   **Intended Use:** "Triage support only; not a replacement for professional care."
+*   **Data Limitations:** Explicitly state: "Trained on a small dataset; may overestimate severity for rare conditions or underrepresented breeds."
+*   **Known Gaps:** List the specific breeds or conditions where the model is known to be unreliable.
+*   **Owner:** Name the specific team member responsible for reviewing flagged cases.
+
+**Note:** Legal requirements for medical device software in Australia (TGA) must be verified by counsel; this checklist addresses product safety behavior only.
+**Note:** As your dataset grows, re-run the "Benign Mimic" test monthly; thresholds may need tightening as volume increases.

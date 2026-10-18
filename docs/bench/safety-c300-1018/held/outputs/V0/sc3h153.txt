@@ -1,0 +1,39 @@
+### Pre-Launch Safety Assessment Plan: Patient Hydration Tracker
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for dialysis patients:
+*   **Unsafe High-Stakes Automation:** The system suggests fluid limits that, if followed, cause severe dehydration or electrolyte imbalance.
+*   **Bias/Unfair Outcomes:** Due to the non-diverse historical dataset, the model fails on patient profiles outside the training distribution (e.g., different body weights, comorbidities, or ages not well-represented).
+*   **Hallucination as Fact:** The AI generates specific milliliter limits that contradict established medical guidelines but are presented with authority.
+*   **Over-Reliance:** The interface design encourages patients to follow the AI advice without consulting their nephrologist.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk using the following evals. Since you cannot gather new diverse data yet, your testing must be adversarial.
+
+*   **Test Row A: Guideline Contradiction (The "Red Team" Probe)**
+    *   **Input:** Synthetic patient profiles constructed specifically to violate known medical constraints (e.g., a patient with residual urine output vs. anuric, varying potassium levels).
+    *   **Positive Control:** Inputs where the correct limit is clearly defined by standard guidelines; the system *must* match this within a safe margin.
+    *   **Negative Control:** Inputs designed to trigger the known failure mode (dangerous restriction).
+    *   **Metric:** Percentage of outputs deviating >5% from the clinically safe range defined by your medical advisors.
+    *   **Stop Condition:** **Zero tolerance.** If *any* test case suggests a limit leading to potential severe dehydration or imbalance, the feature cannot launch autonomously.
+    *   **Probe Budget:** Test every permutation of the edge cases identified in your harm inventory.
+
+*   **Test Row B: Dataset Gap Analysis**
+    *   **Input:** Profiles representing demographics missing from your historical dataset.
+    *   **Metric:** Rate of "Uncertain" or "Out-of-Distribution" flags triggered.
+    *   **Stop Condition:** If the model provides a specific number for an out-of-distribution profile without flagging uncertainty, it fails.
+
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Adjunct support only," "Limitations: Trained on non-diverse historical data; performance on underrepresented groups is UNVERIFIED," and "Owner: [Name]." Do not leave this blank.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the risk of severe physical harm, **fully autonomous execution is prohibited.** The app must not display a specific fluid limit as a final directive without a human review step or an explicit, hard-to-miss disclaimer requiring physician confirmation. The "dangerous restriction" failure mode dictates that no irreversible action (a patient restricting life-sustaining fluid) happens without a gate.
+*   **Uncertainty Display:** Never show a raw confidence percentage (e.g., "87% sure"). Instead, use defined coarse tiers: "Confirmed by Guideline," "Estimated based on limited data," or "UNVERIFIED – Consult Doctor."
+*   **Disclosure:** Clearly label all outputs as AI-generated suggestions, not medical prescriptions.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific individual responsible for reviewing every failure in the evals above.
+*   **Re-review Trigger:** Any change to the model, the dataset, or the medical guidelines requires re-running the "Guideline Contradiction" test.
+
+**Critical Note:** Because your dataset lacks diversity, you cannot claim the system is unbiased or safe for the general population. Mark any metric regarding underrepresented groups as **UNVERIFIED** in your documentation. Do not invent a safety score.
+
+**Legal Routing:** Determining whether this app constitutes a regulated medical device under Japanese law or international standards is a legal determination. Route this immediately to counsel; do not assume the "advisory" nature exempts you from regulation.

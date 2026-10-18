@@ -1,0 +1,39 @@
+### Validation Protocol: Patient-Wound-Pain-Assessor (MumbaiCure)
+
+**1. Harm Inventory & Edge-Case Definition**
+Before testing, explicitly record the primary risk: **Hallucination surfaced as fact**. The system may assign a specific pain score to obscured wounds where visual evidence is insufficient, leading to under-medication or unnecessary distress. The "edge case" is defined as any image where >30% of the wound bed is obscured by dressing materials, blood, or exudate.
+
+**2. Runnable Test Plan (Internal Library Only)**
+Since external data is unavailable, restructure your internal library into three probe sets. Do not claim aggregate accuracy; measure performance specifically on obscured inputs.
+
+*   **Probe Set A (Positive Control - Observed):** Clear images of wounds with known, nurse-verified pain scores.
+    *   *Metric:* Correlation with nurse assessment.
+    *   *Threshold:* Must match nurse consensus within ±1 point.
+*   **Probe Set B (Negative Control - Obscured):** Images from your library where visual cues are intentionally masked or naturally obscured.
+    *   *Metric:* Rate of "Unverified" or "Low Confidence" outputs.
+    *   *Stop Condition:* If the model outputs a precise numeric pain score (e.g., "7/10") for >5% of obscured images without a confidence warning, **do not launch**. The system must refuse to guess.
+*   **Probe Set C (Adversarial/Edge):** Images with complex dressing patterns that mimic wound tissue (false positives) or heavy exudate hiding tissue depth.
+    *   *Metric:* False positive rate for high-pain indicators.
+    *   *Action:* If the system flags high pain on non-wound artifacts, hard-code a rule to suppress scores when texture analysis detects dressing materials.
+
+**3. Managing Residual Risk: The Human Gate**
+Because this tool influences medical treatment (high-stakes), full automation is prohibited.
+*   **Confidence Tiers:** Do not display raw percentages (e.g., "82% confident"). Implement defined coarse tiers:
+    *   **Confirmed:** Clear view, high agreement with historical patterns.
+    *   **Corroborated:** Partial view, consistent with patient history.
+    *   **Unverified:** Obscured view or conflicting cues. **System must default to "Unverified" for any obscured input.**
+*   **Override Mechanism:** The interface must require the nurse to explicitly confirm or reject the score before it enters the patient record. If the system outputs "Unverified," the input field for pain score must remain blank, forcing manual nurse entry. The nurse's manual entry always overrides the AI suggestion.
+
+**4. Transparency Artifact**
+Create a one-page **Model Card** for the nursing staff. It must state:
+*   **Intended Use:** Triage support for clear wound views only.
+*   **Limitations:** "Cannot assess pain when >30% of the wound is obscured. Outputs in these cases are UNVERIFIED."
+*   **Owner:** Name the specific team member responsible for reviewing errors post-pilot.
+
+**5. Governance**
+Assign one owner to review all "Unverified" cases where a nurse proceeded with treatment. Schedule a re-review after the first 50 pilot patients. If the error rate on obscured images exceeds the stop condition, the feature must be disabled immediately.
+
+***
+
+**Note:** Legal requirements for automated medical decisions in India must be routed to counsel; this plan addresses product safety only.
+**Note:** Do not fabricate a "99% accurate" claim for the pilot; report the specific failure rate on obscured images as `UNVERIFIED` until measured.

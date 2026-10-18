@@ -1,0 +1,30 @@
+### Testing Protocol for Neurodivergent Behavior False Positives
+
+**Objective:** Quantify and mitigate the rate at which the behavior classification model misidentifies neurodivergent traits (e.g., stimming, atypical speech) as disruptive conduct, given the constraints of low-resolution video and low-fidelity audio from existing district infrastructure.
+
+**Phase 1: Synthetic Data Construction (The "Neurodivergent Corpus")**
+Since real student data cannot be used for initial stress testing, construct a simulated dataset that explicitly mimics the district's hardware limitations.
+*   **Visual Simulation:** Generate or curate video clips of actors and animated avatars exhibiting specific neurodivergent behaviors (hand flapping, rocking, pacing, avoiding eye contact). Apply degradation filters to match the district's camera resolution (e.g., downscaling to 480p, adding compression artifacts, simulating poor lighting conditions common in older classrooms).
+*   **Audio Simulation:** Create audio tracks featuring non-typical speech patterns (echolalia, rapid pacing, monotone delivery, vocal stimming like humming). Apply noise profiles typical of the school environment (HVAC hum, distant hallway noise) and reduce fidelity to match existing microphones.
+*   **Labeling:** Every clip must be ground-truth labeled by your team of educational psychologists as "Non-Disruptive/Neurodivergent" to serve as the negative control against the model's "Disruptive" classification.
+
+**Phase 2: Adversarial Scenario Injection**
+Run the model against the simulated corpus in isolated batches to isolate specific failure modes.
+*   **Stimming vs. Agitation Test:** Feed clips of repetitive motor movements (stimming) without any accompanying aggressive context. Measure the confidence score for "agitation" or "disruption." A high score indicates a false positive.
+*   **Speech Pattern vs. Disruption Test:** Feed audio clips of echolalia or loud self-talk that does not interrupt instruction. Measure the classification of "verbal disruption."
+*   **Contextual Ambiguity Test:** Combine low-quality video of a student looking away (potential attention deficit or processing style) with low-fidelity audio of silence. Verify the model does not infer "non-compliance" solely from lack of engagement cues which are obscured by poor sensor quality.
+
+**Phase 3: Metric Definition and Thresholding**
+Establish specific success criteria before full deployment.
+*   **False Positive Rate (FPR) Ceiling:** Define a maximum acceptable FPR for the neurodivergent corpus (e.g., <5%). If the model flags stimming as disruption above this rate, it fails the protocol.
+*   **Confidence Calibration:** Analyze if the model expresses lower confidence on neurodivergent inputs compared to typical disruptive inputs. If confidence remains high during errors, the model is overfitting to motion/noise rather than understanding behavior.
+*   **Sensor Sensitivity Analysis:** Correlate error rates with specific degradation levels. Determine if the false positives spike only when resolution drops below a certain threshold, indicating the hardware limitation is a primary driver of bias.
+
+**Phase 4: Iterative Mitigation**
+*   **Retraining:** Use the identified false positives as hard-negative examples to retrain the classifier, explicitly teaching it that these specific motion and audio patterns are non-punitive.
+*   **Rule-Based Overrides:** Implement pre-processing filters that suppress "disruption" flags when specific signatures of neurodivergence (identified by the psychologists) are detected with high certainty.
+*   **Human-in-the-Loop Requirement:** Mandate that any flag generated with characteristics matching the high-risk false positive profiles requires teacher verification before being recorded as an incident.
+
+**Deliverable:** A validation report detailing the FPR for each neurodivergent category, a heatmap of errors correlated to sensor quality, and a finalized list of behavioral signatures that require manual override logic.
+
+*Note: This protocol relies entirely on the accuracy of the synthetic data's resemblance to real-world sensor output; physical spot-checks in an empty classroom with the actual hardware are recommended to validate the simulation filters.*

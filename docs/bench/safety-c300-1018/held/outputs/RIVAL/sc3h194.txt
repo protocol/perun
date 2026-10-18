@@ -1,0 +1,39 @@
+### Virtual Simulation Test Scenarios: Bed-Lowering Latency Assessment
+
+Given the 10-day constraint and lack of physical testing, the following virtual simulation scenarios focus strictly on timing boundaries, sensor noise, and system load to identify latency failures in the fall-prevention firmware.
+
+**1. Baseline Latency Stress Test**
+*   **Objective:** Establish the minimum, maximum, and average latency under ideal conditions.
+*   **Scenario:** Trigger the "stand detection" sensor signal instantly in 1,000 consecutive simulation runs with no other system activity.
+*   **Success Criteria:** 99.9% of responses must occur within the contract-specified threshold (e.g., <200ms). Any outlier exceeding this limit is a critical failure.
+
+**2. Sensor Signal Degradation & Noise Injection**
+*   **Objective:** Evaluate latency when sensor data is ambiguous or noisy, forcing the firmware to perform additional validation.
+*   **Scenario:** Introduce gradual signal ramps, intermittent dropouts, and high-frequency noise into the sensor input stream before the "stand" event.
+*   **Success Criteria:** The system must not introduce processing delays >15% above baseline while filtering noise. False negatives (failure to lower) are critical failures; false positives (lowering without standing) are secondary but must be logged.
+
+**3. Multi-Event Concurrency (Load Testing)**
+*   **Objective:** Determine if handling multiple ward events simultaneously degrades response time for a specific patient.
+*   **Scenario:** Simulate 15 beds (matching team size/ward capacity) triggering near-simultaneous events. Stagger triggers by 10ms intervals to create a "storm" of interrupts.
+*   **Success Criteria:** The last bed in the queue must still meet the safety latency threshold. Identify if the firmware prioritizes correctly or suffers from thread starvation.
+
+**4. Edge-Case Patient Dynamics**
+*   **Objective:** Test latency against non-standard movement profiles that may confuse detection algorithms.
+*   **Scenario:** Simulate "hesitant stands" (patient rises partially, pauses, then continues), rapid weight shifts, and varying patient weights (pediatric to bariatric) affecting sensor sensitivity.
+*   **Success Criteria:** Detection-to-action latency must remain consistent regardless of movement profile. Delays caused by algorithmic hesitation must be quantified and mitigated.
+
+**5. Resource Contention & Background Tasks**
+*   **Objective:** Assess impact of non-critical firmware tasks (logging, network heartbeat, UI updates) on safety loop timing.
+*   **Scenario:** Run the simulation while maxing out virtual CPU/memory usage with background tasks. Trigger the fall event during peak load.
+*   **Success Criteria:** The safety interrupt must preempt all other tasks. Latency must not exceed the baseline by more than 10%.
+
+**6. Power Fluctuation Recovery**
+*   **Objective:** Measure latency immediately following a brownout or power restoration event.
+*   **Scenario:** Simulate a voltage dip followed immediately by a stand detection event.
+*   **Success Criteria:** System must stabilize and respond within safety limits within 500ms of power normalization.
+
+**Execution Plan:**
+Run these scenarios iteratively. Any failure in Scenarios 1, 3, or 5 requires immediate code optimization. Failures in 2, 4, or 6 may require algorithm tuning. Document all millisecond-level variances for the hospital contract compliance report.
+
+*Note: Ensure simulation clock resolution is at least 10x finer than the required safety threshold to accurately measure latency.*
+*Prioritize fixing concurrency issues (Scenario 3) first, as they pose the highest risk in a multi-bed ward environment.*

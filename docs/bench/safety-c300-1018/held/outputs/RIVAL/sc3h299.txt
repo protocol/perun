@@ -1,0 +1,29 @@
+**Pre-Launch On-Device Safety Plan for Tokyo PainCare**
+
+To stress-test your on-device chronic pain assessment logic without cloud connectivity, implement a **Deterministic Edge-Case Matrix** combined with **Local Synthetic Patient Simulation**. This approach ensures comprehensive validation of non-linear pain impacts using only local resources.
+
+**1. Construct the Deterministic Edge-Case Matrix**
+Create a static, version-controlled library of test cases that specifically target non-linear relationships and subtle indicators often missed by linear models. Since you cannot rely on cloud updates, this library must be exhaustive before deployment.
+*   **Discordant Inputs:** Define cases where self-reported pain scores (e.g., 2/10) conflict sharply with functional impairment metrics (e.g., inability to walk >10 minutes). The logic must flag these for human review rather than averaging them down.
+*   **Threshold Boundaries:** Generate inputs falling exactly at, just below, and just above every intervention threshold. Verify that a 0.1-point difference does not cause a disproportionate jump in suggested care levels unless clinically justified.
+*   **Temporal Non-Linearity:** Simulate patient histories where pain is stable but quality of life degrades suddenly due to a single variable (e.g., sleep disruption), ensuring the algorithm detects this inflection point.
+*   **Missing/Noisy Data:** Test how the logic handles partial datasets common in chronic pain (e.g., patient skips "mood" questions). The system must degrade gracefully, suggesting "monitoring" rather than a false "low risk" verdict.
+
+**2. Deploy Local Synthetic Patient Simulation**
+Utilize your team of five to run a localized "adversarial" simulation using scripted agents rather than live patients.
+*   **Persona Scripting:** Write 50–100 distinct patient personas representing complex chronic pain profiles (e.g., "The Stoic Worker," "The Fluctuating Fibromyalgia Patient"). Encode their traits into JSON fixtures that feed directly into your on-device executable.
+*   **Batch Execution Pipeline:** Create a local script that iterates through these fixtures, running the assessment algorithm thousands of times in minutes. Capture every output to a local log file.
+*   **Blind Review Protocol:** Have two team members independently review the algorithm's suggested intervention levels for the top 20 most complex synthetic cases. Discrepancies between human expert consensus and the algorithm's output highlight logic gaps.
+
+**3. Implement Static Logic Freezing and Hash Verification**
+Since the device cannot check for updates, the binary itself is the source of truth.
+*   **Version Pinning:** Embed a unique hash of the test matrix used during validation directly into the application build. If the code changes, the hash mismatches, preventing deployment until re-validation.
+*   **Regression Locking:** Before any logic tweak, run the full Edge-Case Matrix. The build fails automatically if any previously passing edge case now yields a different intervention level.
+
+**4. The "Safe Failure" Mode**
+Program the on-device logic with an explicit "Uncertain" state. If input patterns match known ambiguous edge cases (identified during your matrix testing), the tool must default to recommending "Clinical Review" rather than attempting an automated calculation. This ensures that subtle, non-linear cases are escalated to humans rather than being processed by potentially rigid logic.
+
+By executing this plan, you transform your lack of connectivity into a strength: a rigorously frozen, locally verified logic core that refuses to guess when faced with ambiguity.
+
+*Note: Ensure all synthetic patient data is generated locally and never leaves the secure development environment.*
+*This plan requires no external network access and relies entirely on your team's ability to script and review local fixtures.*

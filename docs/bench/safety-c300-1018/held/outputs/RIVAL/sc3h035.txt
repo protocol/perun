@@ -1,0 +1,32 @@
+### Pre-Launch Pricing Audit Plan
+
+**1. Define Controlled Test Profiles**
+Create a matrix of synthetic user profiles that isolates device variables. Keep all other factors constant: same location (Riyadh), same rental dates, same car category, and identical booking lead times. Vary only the `User-Agent` string and device fingerprint headers to simulate specific phone models (e.g., high-end iOS vs. budget Android). Ensure you include at least three distinct price tiers of devices to detect gradients in pricing.
+
+**2. Construct Deterministic Test Scripts**
+Since real-time monitoring is restricted, build a lightweight local script (using Python or Node.js) that iterates through your test profiles. The script should:
+*   Spoof the necessary HTTP headers to mimic the target device.
+*   Send identical booking requests to your staging environment.
+*   Capture the final quoted price and any intermediate rate codes returned.
+*   Log results to a local CSV file with timestamps and device identifiers.
+*   *Constraint Check:* Ensure the script respects your cloud provider's rate limits by adding a 2–5 second delay between requests to avoid triggering anti-bot defenses that could skew results.
+
+**3. Establish a Baseline and Control Group**
+Run a control set using a generic desktop browser signature where device-based pricing should theoretically be neutral or standardized. Compare the mobile results against this baseline. If the desktop price matches the lowest mobile price, your system is likely segmenting based on device capability or perceived willingness to pay. If the desktop price is also elevated, the issue may be temporal or location-based rather than device-specific.
+
+**4. Execute Staged Audits**
+Run the audit in three phases:
+*   **Phase A (Sanity Check):** Run 5 iterations per device type to verify the script works and prices are stable.
+*   **Phase B (Full Sweep):** Execute 50+ iterations per device type over different times of day to account for any time-based dynamic pricing noise.
+*   **Phase C (Edge Cases):** Test devices with low battery states or specific OS versions if your logic ingests those signals.
+
+**5. Analyze Variance and Statistical Significance**
+Calculate the average price per device model. Use a simple T-test or variance analysis to determine if price differences are statistically significant or just random fluctuation. Flag any device model where the average price exceeds the baseline by more than your acceptable margin (e.g., >2%).
+
+**6. Manual Code Review of Pricing Logic**
+With limited monitoring tools, inspect the source code directly. Search for logic blocks that ingest `User-Agent`, `device_model`, or `os_version`. Verify if these inputs feed directly into the pricing multiplier function. Look for hardcoded rules or external configuration files that map specific device IDs to price tiers.
+
+**7. Remediation and Verification**
+If discrimination is found, decouple device data from the pricing engine immediately. Re-run the audit script to confirm the variance is eliminated before launch. Document the findings and the fix for compliance records.
+
+**Note:** Ensure all testing occurs strictly in your staging environment to avoid charging real customers or corrupting live inventory data. Given your single-cloud constraint, store audit logs locally rather than relying on cloud-native logging services that may be too complex to configure quickly.

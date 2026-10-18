@@ -1,0 +1,41 @@
+**Safety Case Review: Neonatal Infusion Occlusion Threshold System**
+
+**Immediate Halt Required:** Do not deploy this feature with fully automated threshold adjustments for neonatal units under the current constraints. The combination of legacy hardware (low-frequency sensor readings), high-stakes irreversible actions (tissue damage, missed medication), and a vulnerable population (neonates) creates an unacceptable risk profile that cannot be mitigated by software logic alone within a 10-day window.
+
+**Harm Inventory & Worst Cases:**
+1.  **Unsafe Automation of High-Stakes Actions:** The system dynamically adjusts pressure limits. If the algorithm sets thresholds too high due to missed rapid spikes (caused by low sensor frequency), it risks extravasation, leading to permanent tissue necrosis or nerve damage in neonates.
+2.  **Over-reliance/Automation Bias:** Clinicians may trust the "smart" dynamic limits over manual checks, delaying intervention during a masked occlusion event.
+3.  **Hallucination as Fact:** The system may report "line clear" based on interpolated data between sparse sensor readings, presenting an unverified state as fact.
+
+**Verification Scenarios (Stress-Test Plan):**
+*Note: These scenarios identify failure modes; passing them does not certify safety given the hardware floor.*
+
+*   **Scenario A: The "Masked Spike" (Positive Control for Failure)**
+    *   **Input:** Simulate a rapid occlusion event (pressure spike duration < sensor update interval) on a low-weight patient profile with high-viscosity fluid.
+    *   **Expected System Behavior:** The system *must* fail to detect the peak pressure and consequently set a dangerously high threshold.
+    *   **Metric:** Detection rate of spikes shorter than the hardware sampling window.
+    *   **Stop Condition:** If the system claims confidence > "Unverified" or auto-adjusts thresholds upward without flagging the data gap, **block launch**.
+
+*   **Scenario B: Viscosity-Weight Edge Case (Bias/Fairness)**
+    *   **Input:** Lowest weight bracket (e.g., <1kg) paired with highest viscosity medication.
+    *   **Probe:** Inject noise mimicking sensor drift.
+    *   **Metric:** Threshold variance compared to standard static limits.
+    *   **Stop Condition:** If dynamic thresholds exceed established static safety ceilings for this subgroup, **block launch**.
+
+*   **Scenario C: Sensor Latency Injection**
+    *   **Input:** Introduce artificial latency exceeding the legacy hardware's maximum spec.
+    *   **Metric:** Time-to-alarm vs. time-to-tissue-damage threshold.
+    *   **Stop Condition:** If alarm latency exceeds 50% of the time required for clinically significant damage, **block launch**.
+
+**Required Controls (Non-Negotiable):**
+1.  **Human-in-the-Loop Gate:** Dynamic threshold adjustments must be **suggestions only**, requiring explicit clinician confirmation before activation. Fully autonomous adjustment of pressure limits for neonates is prohibited under these hardware constraints.
+2.  **Defined Uncertainty Tiers:** The UI must display status as **"Unverified – Sensor Gap"** (red/amber) whenever the time since the last physical reading exceeds a safe fraction of the occlusion risk window. Do not display numerical confidence percentages (e.g., "92% safe"); they imply false precision.
+3.  **Fallback to Static Limits:** If sensor frequency cannot guarantee detection of rapid spikes, the system must hard-lock to conservative, static pressure limits known to be safe for the smallest patients, disabling the dynamic feature entirely.
+
+**Transparency Artifact Requirement:**
+A Model/Data Card must be drafted before any trial, explicitly stating: "Intended use excludes fully autonomous operation due to sensor latency risks." It must list the "Masked Spike" scenario as a known, unmitigated failure mode if the human gate is bypassed.
+
+**Legal & Regulatory Routing:**
+This system likely qualifies as a high-risk automated decision under emerging AI regulations (e.g., EU AI Act concepts, though local Korean MFDS regulations apply). The requirement for AI disclosure and the legality of automated dosing/pressure control in neonates is a legal determination. Route immediately to counsel and regulatory affairs; do not assert compliance internally.
+
+**Residual Risk Status:** UNVERIFIED. No amount of software testing can overcome the physical limitation of missing data between sensor reads. The only safe path is disabling automation or enforcing a human gate.

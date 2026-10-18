@@ -1,0 +1,47 @@
+**Validation Plan: Mumbai FoodSafe Allergy Scanner**
+
+**1. Harm Inventory & Risk Definition**
+Before testing, formally record the specific risks:
+*   **False Negative (Critical):** Marking a dangerous item as "Safe." Worst case: Anaphylaxis or death.
+*   **False Positive (High):** Marking a safe item as "Dangerous." Worst case: Unnecessary starvation, loss of trust, device abandonment.
+*   **Over-reliance:** Users assuming 100% accuracy without verifying ingredients manually.
+
+**2. Measurement Strategy (Maximizing Confidence with Limited Samples)**
+Given the supply chain constraint on diverse physical samples, shift validation from breadth of physical inventory to depth of adversarial probing and synthetic augmentation.
+
+*   **Adversarial Probe Sets (The "Red Team"):**
+    *   Construct a test suite of 50–100 high-risk edge cases using *existing* samples mixed in controlled ways (e.g., trace peanut oil on safe bread, cross-contamination simulations).
+    *   **Positive Controls:** Known allergens spiked at threshold levels. The system *must* flag these.
+    *   **Negative Controls:** Known safe items. The system *must* clear these.
+    *   **Synthetic Data Augmentation:** Use spectral simulation or digital twins to generate variations of your limited physical library (different lighting, packaging textures, partial occlusions) to stress-test the vision/sensing model without needing new physical food.
+
+*   **Metric & Thresholds:**
+    *   **Primary Metric:** False Negative Rate (FNR). Target: **0% tolerance** in validation. Any single failure to detect a known allergen in the probe set blocks launch.
+    *   **Secondary Metric:** False Positive Rate (FPR). Measure the rate of safe items flagged as dangerous.
+    *   **Stop Condition:** If FNR > 0% on the probe set, or if FPR exceeds a pre-defined owner threshold (e.g., >5% leading to significant user friction), the launch is halted.
+
+*   **Uncertainty Reporting (No False Precision):**
+    *   Do not display raw confidence percentages (e.g., "92% Safe") to users. This implies calibrated precision you cannot verify with limited data.
+    *   Implement **Defined Coarse Tiers**:
+        *   **"Verified Safe"** (High corroboration, multiple sensor matches).
+        *   **"Uncertain / Check Label"** (Low confidence, ambiguous signal).
+        *   **"Danger Detected"** (Any positive allergen signal).
+    *   **Rule:** If the device cannot reach the "Verified Safe" tier, it must default to "Uncertain" or "Danger," never guessing "Safe."
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Irreversible Action Gate:** The device cannot autonomously authorize consumption if confidence is low. The "Safe" classification is a recommendation, not an absolute command.
+*   **Mandatory Disclosure:** The interface must clearly state: *"AI-generated assessment. Always verify with ingredient labels. Not a medical device."*
+*   **Fallback Protocol:** If the scanner returns "Uncertain," the user workflow must explicitly guide them to manual verification or avoidance.
+
+**4. Transparency Artifact (Model Card)**
+Draft a one-page "Safety & Limitations" card included in the box and app:
+*   **Intended Use:** Screening for specific allergens in controlled lighting/conditions.
+*   **Limitations:** Explicitly list the food categories *not* covered due to sample shortages.
+*   **Performance:** Report results on the adversarial probe set (e.g., "0 failures on 50 spiked samples"), not a fabricated global accuracy rate. Mark untested categories as **UNVERIFIED**.
+
+**5. Governance**
+*   **Owner:** Assign one product lead as the accountable owner for these metrics.
+*   **Re-review Trigger:** Any update to the sensing model or addition of new food types requires re-running the adversarial probe set.
+
+**Note:** This plan measures residual risk; it does not certify the device as "safe." The final ship decision rests with product leadership.
+**Legal Routing:** Consult counsel immediately regarding regulatory classification (medical device vs. wellness tool) and mandatory disclosure laws in your target markets.

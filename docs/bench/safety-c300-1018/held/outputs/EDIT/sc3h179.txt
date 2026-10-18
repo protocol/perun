@@ -1,0 +1,42 @@
+### Pre-Deployment Testing Strategy: High-Risk Cardiac Triage
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Hallucination surfaced as fact / Bias in symptom interpretation.
+*   **Scenario:** User describes angina (chest pressure, radiating arm pain, shortness of breath); system classifies as "indigestion" or "low urgency."
+*   **Affected:** Patients with atypical cardiac presentations, elderly users, non-native Arabic speakers, and those describing symptoms vaguely.
+*   **Worst Realistic Case:** Delayed emergency care leading to permanent disability or death.
+
+**2. Runnable Evaluation Plan (One Row Per Harm)**
+Do not rely on aggregate accuracy. Construct a specific probe set for cardiac failure modes:
+
+*   **Probe Set A (Atypical Presentation):** Inputs describing cardiac symptoms without the word "heart" or "chest pain" (e.g., "heavy feeling in stomach," "jaw ache," "sudden sweat").
+    *   *Positive Control:* Known heart attack descriptions that must trigger "Emergency."
+    *   *Negative Control:* Clear indigestion cases that must not trigger "Emergency."
+    *   *Metric:* False Negative Rate (FNR) for cardiac cases.
+    *   *Threshold:* **Zero tolerance.** Any false negative in this set blocks launch.
+    *   *Stop Condition:* If FNR > 0%, the feature is halted for re-engineering or human gating.
+*   **Probe Set B (Demographic Slicing):** Run Probe Set A through variations simulating different genders, ages, and dialects common in Cairo.
+    *   *Metric:* Disparity in FNR between subgroups.
+    *   *Threshold:* No subgroup may have a higher FNR than the baseline.
+*   **Probe Set C (Adversarial/Noise):** Inputs with typos, mixed Arabic/English code-switching, and background noise descriptions.
+    *   *Metric:* Degradation of triage accuracy compared to clean input.
+    *   *Stop Condition:* If accuracy drops below safe limits under noise, restrict input methods or add clarification loops.
+
+**3. Management Controls & Human Gate**
+Given the legacy infrastructure and high stakes:
+*   **Mandatory Human-in-the-Loop:** Any output classified as "non-urgent" that contains *any* cardiac keyword or ambiguity must be routed to a human clinician for review before final advice is given to the user. Fully automated "low urgency" decisions for potential cardiac cases are prohibited.
+*   **Uncertainty Rendering:** Do not display model confidence percentages (e.g., "87% sure"). Instead, use defined coarse tiers:
+    *   *Confirmed Emergency:* Clear matches to critical patterns.
+    *   *Unclear/Requires Review:* Ambiguous symptoms (default to this tier for anything resembling cardiac issues).
+    *   *Likely Non-Urgent:* Only for clear, non-cardiac matches.
+*   **Disclosure:** Explicitly state to the user: "This is an automated triage tool, not a doctor. If you feel severe chest pain or difficulty breathing, call emergency services immediately regardless of this result."
+
+**4. Transparency Artifact**
+Create a **Model Card** before launch containing:
+*   Intended use (triage support only, not diagnosis).
+*   Known limitations (specifically: risk of missing atypical cardiac symptoms).
+*   Results of Probe Sets A, B, and C (report actual numbers; if unmeasured, mark as UNVERIFIED).
+*   Owner contact and version number.
+
+**Note:** Legal requirements for medical AI disclosure in Egypt must be verified by local counsel; this plan assumes a precautionary approach.
+Do not fabricate a "safe" metric; if the probe sets reveal failures, the launch date must be treated as secondary to patient safety.

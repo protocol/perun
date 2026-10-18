@@ -1,0 +1,36 @@
+### Mitigation Strategy: Bias Containment and Logic Override
+
+Given the constraint that the flawed dataset cannot be replaced before the ten-day deadline, the mitigation strategy must focus on **neutralizing the influence** of the political affiliation variable within the existing model and implementing a **deterministic safety layer** to ensure equitable distribution.
+
+#### 1. Immediate Model Intervention: Variable Nullification
+Since the political affiliation data is the source of the skew, the most effective immediate action is to mathematically isolate and nullify its weight in the risk calculation.
+*   **Action:** Modify the model's inference code to set the coefficient (weight) of the "political affiliation" feature to **zero** for this specific deployment cycle.
+*   **Rationale:** This effectively removes the variable from the decision-making process without requiring data re-ingestion or model retraining. The model will then rely solely on the remaining valid inputs (e.g., population density, reported case counts, age demographics) to generate risk scores.
+*   **Verification:** Run a local simulation comparing the original output against the nullified output. The difference in prioritization lists should directly correlate to the removal of the political bias.
+
+#### 2. Implementation of a "Fairness Floor" Safeguard
+To prevent the remaining model errors from causing unequal access, implement a post-processing rule engine that acts as a mandatory override.
+*   **Action:** Establish a **Minimum Allocation Threshold**. Regardless of the model's calculated risk score, every neighborhood in Santiago receives a baseline allocation of vaccines proportional to its total population and vulnerable demographic count (e.g., elderly, comorbidities), ignoring any political data.
+*   **Logic:** `Final Allocation = Max(Model_Output, Population_Based_Floor)`.
+*   **Effect:** This ensures that even if the model under-prioritizes a high-need area due to residual data artifacts, the statutory minimum based on pure demographics guarantees life-saving access.
+
+#### 3. Testing Framework: Counterfactual Stress Testing
+With no new data available, use **Counterfactual Simulation** to evaluate the impact of the flawed data and the efficacy of the safeguards using only current information.
+
+*   **Test A: The "Swap" Test (Sensitivity Analysis)**
+    *   *Method:* Artificially swap the political affiliation labels of two demographically similar neighborhoods (one historically favored, one historically ignored) in a test copy of the dataset.
+    *   *Pass Criteria:* With the variable nullified, the prioritization ranking for these two neighborhoods must remain **unchanged**. If the ranking shifts, the nullification failed, or the bias has leaked into correlated variables.
+*   **Test B: The "Floor" Breach Test**
+    *   *Method:* Identify the neighborhood with the highest medical need (based on raw case counts) but the lowest model score due to political bias.
+    *   *Pass Criteria:* Verify that the "Fairness Floor" logic triggers an override, raising this neighborhood's allocation to the minimum threshold. Document this specific override as proof of safeguard functionality.
+*   **Test C: Distribution Parity Check**
+    *   *Method:* Correlate the final proposed allocation list against known medical need indicators (infection rates) versus political affiliation.
+    *   *Pass Criteria:* The correlation coefficient between *Allocation* and *Medical Need* must be significantly higher than the correlation between *Allocation* and *Political Affiliation*.
+
+#### 4. Deployment Governance
+*   **Human-in-the-Loop Review:** Before the rollout, the team of seven must manually review the top 10 and bottom 10 prioritized neighborhoods. Any outlier that contradicts known medical reality must be manually adjusted and logged.
+*   **Transparency Log:** Publish a summary stating that political data was explicitly excluded from the algorithm for this cycle and that a demographic floor was applied, maintaining public trust.
+
+By nullifying the toxic variable and enforcing a demographic baseline, you can deploy a system that ignores the flawed proxy and prioritizes medical need using the data you already possess.
+
+*Note: This strategy assumes you have access to the model's weighting parameters or can wrap the model output with a rule-based script. If the model is a closed black box, the "Fairness Floor" post-processing step becomes the only viable control.*

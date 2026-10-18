@@ -1,0 +1,38 @@
+**Crop-Yield Estimator Output Safety Plan (Verde AgriTech)**
+
+**1. Map the Harm Inventory**
+Before testing, explicitly record the specific risks for this feature:
+*   **Bias/Unfair Outcomes:** Systematic underreporting of yields for specific crops or regions due to missing historical weather data, leading to premature asset sales and financial loss for farmers.
+*   **Hallucination as Fact:** Presenting precise yield numbers with high confidence despite known data gaps, misleading users about the certainty of the prediction.
+*   **Over-reliance:** Farmers trusting the automated estimate without understanding the model's limitations regarding local weather anomalies.
+*   **Missing Disclosure:** Users unaware that the output is an AI-generated estimate based on incomplete data.
+
+**2. Measure with Runnable Tests (Do not assert safety)**
+Construct one test row per identified harm. Do not claim "0% bias"; instead, run these probes:
+*   **Probe Set:** Create adversarial inputs simulating the specific weather data gaps in rural Argentina. Include a "known-bad" control (inputs where yields are historically high but data is missing) and a "known-good" control (regions with full data).
+*   **Metric:** Percentage of estimates that underreport yield by >15% compared to ground-truth samples in the test set.
+*   **Threshold:** Set a zero-tolerance stop condition for systematic underreporting in the "known-bad" control group. If the model consistently underestimates yields where data is missing, the launch must be blocked.
+*   **Subgroup Analysis:** Slice results by crop type and region to ensure no specific farmer group is disproportionately affected.
+*   **Transparency Artifact:** Draft a **Model Card** stating: intended use (harvest planning), limitations (missing weather data in specific zones), and measured performance by subgroup. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**3. Manage Residual Risk (Human Gate & Uncertainty)**
+*   **Human-in-the-Loop Gate:** Since acting on these estimates involves irreversible financial decisions (selling assets), the system must not auto-execute trades or provide definitive "sell" commands. The output must be framed as advisory, requiring explicit farmer confirmation before any integrated action.
+*   **Show Uncertainty:** Do not display raw confidence percentages (e.g., "87% accurate"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Data complete, high correlation.
+    *   *Estimated:* Some data gaps, moderate correlation.
+    *   *Unverified:* Significant weather data missing (your current constraint).
+    *   *Action:* For "Unverified" tiers, the interface must prominently warn the user of the data gap and suggest delaying financial decisions.
+*   **Disclosure:** Clearly label the output as "AI-Generated Estimate" and explicitly state: "Predictions may be less accurate due to limited local weather history."
+
+**4. Govern and Own**
+*   **Owner:** Assign one engineer as the explicit owner of this output harm. They are responsible for re-reviewing the model if new weather data becomes available or if the model is updated.
+*   **Legal Route:** Consult counsel regarding whether this constitutes a regulated automated decision in Argentina's agricultural sector. Do not assume compliance; route the duty to legal experts.
+
+**Execution Timeline (2 Weeks):**
+*   **Days 1-3:** Finalize harm inventory and build the adversarial test set focusing on data gaps.
+*   **Days 4-7:** Run evals, calculate underreporting rates, and draft the Model Card.
+*   **Days 8-10:** Implement uncertainty tiers and disclosure warnings in the UI. Establish the human gate for any high-stakes actions.
+*   **Days 11-14:** Final review by the assigned owner. If the "known-bad" control fails the threshold, delay launch or restrict the tool's geographic scope until data improves.
+
+*Note: This plan identifies risks and controls; it does not certify the model as safe or unbiased. The final ship decision rests with Verde AgriTech leadership.*
+*If the testing reveals systematic underreporting that cannot be mitigated by uncertainty warnings, the only safe path is to restrict the tool's deployment to regions with sufficient data.*

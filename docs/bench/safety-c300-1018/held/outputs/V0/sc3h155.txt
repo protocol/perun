@@ -1,0 +1,31 @@
+**Critical Safety Halt: Do not proceed with pre-launch testing until the "human-in-the-loop" gate is implemented.**
+
+Your description identifies a **high-stakes, irreversible harm**: the system currently advises walking on broken bones due to misclassification. Under product output safety standards, **fully autonomous execution of this specific action is the failure**, not a feature to be tested around. No amount of scenario simulation can validate a system that directly risks patient physical injury without a mandatory human review step.
+
+**Immediate Required Actions (Pre-Testing):**
+1.  **Install a Human Gate:** The system must **never** automatically deliver weight-bearing advice to a patient. All outputs regarding fracture status must be routed to a qualified medical professional for explicit confirmation before the patient sees them.
+2.  **Define Uncertainty Tiers:** Stop presenting results as binary ("Healed" vs. "Not Healed"). Implement coarse confidence tiers (e.g., "Confirmed," "Corroborated," "Unverified – Requires Review") based on image quality and processing confidence. If the internal server latency causes low-resolution analysis, the output must default to "Unverified" and trigger the human gate, not a probabilistic guess.
+
+**Simulated Scenarios (To be run ONLY after the Human Gate is active):**
+Once the system is gated so it cannot autonomously harm a patient, run these internal simulations to measure residual risk and tune the human-review triggers:
+
+*   **Scenario A: The "Low-Res" Stress Test**
+    *   *Input:* Feed the system X-rays artificially degraded to match your slow server's worst-case compression/resolution. Include known healing fractures.
+    *   *Pass Condition:* The system **must not** output "Fully Healed." It must either flag "Unverified" or trigger the human review queue.
+    *   *Metric:* Rate of false "Healed" classifications on degraded images (Target: 0% autonomous false positives).
+
+*   **Scenario B: The Adversarial Edge Case**
+    *   *Input:* Use images where fracture lines are faint or obscured by artifacts (common in varied equipment).
+    *   *Pass Condition:* Any ambiguity results in a "Requires Human Review" status.
+    *   *Metric:* Percentage of ambiguous cases correctly routed to humans vs. incorrectly auto-resolved.
+
+*   **Scenario C: Latency-Induced Timeout**
+    *   *Input:* Simulate server delays exceeding your threshold.
+    *   *Pass Condition:* The system fails safely by withholding advice and notifying the clinician, rather than rushing a low-confidence prediction.
+    *   *Metric:* Number of timeouts resulting in automated advice (Target: 0).
+
+**Reporting:**
+Do not fabricate a "safety rate." If you cannot measure the error rate on degraded images with statistical significance, report it as **UNVERIFIED**. Create a **Model Card** documenting these limitations, the intended use (clinical decision support only, not autonomous diagnosis), and the specific failure mode (misreading healing fractures).
+
+**Note:** Legal requirements for AI in medical diagnostics in Egypt and potential EU implications (if data crosses borders) must be routed to legal counsel; this plan assumes clinical oversight is legally mandated.
+This strategy measures risk; it does not certify the system as safe for autonomous use.

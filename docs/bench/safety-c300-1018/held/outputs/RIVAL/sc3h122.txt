@@ -1,0 +1,39 @@
+# Pre-Launch Safety Validation Plan: Overheating Risk Assessment
+
+**Objective:** Identify and mitigate potential overheating scenarios in older brick homes caused by insulation removal recommendations, using only existing internal simulation logs.
+
+### 1. Data Stratification and Filtering
+Isolate all simulation runs within your logs that match the specific risk profile:
+*   **Building Type:** Filter for "older brick" construction parameters (high thermal mass, specific U-values).
+*   **Action Variable:** Select only cases where the algorithm recommended "partial" or "total" removal of existing insulation.
+*   **Climate Input:** Cross-reference these runs against input datasets containing "summer heatwave" conditions (e.g., ambient temperatures >30°C for >3 consecutive days). If explicit heatwave tags are missing, filter for the highest temperature percentiles available in your historical weather inputs.
+
+### 2. Retrospective Thermal Stress Analysis
+Re-process the filtered log data to calculate internal peak temperatures and "overheating hours" (hours where internal temperature exceeds 26°C or 28°C).
+*   **Baseline Comparison:** For each identified case, compare the predicted internal temperature *with* the recommended insulation removal against the simulated temperature *without* the change (the baseline).
+*   **Thermal Lag Check:** Specifically analyze night-time cooling rates. Brick homes rely on night cooling to purge heat; verify if the simulation logs show that removed insulation prevents the structure from shedding heat accumulated during the day, leading to cumulative temperature rises over multi-day heat events.
+
+### 3. Scenario Stress-Testing (Virtual)
+Since new physical tests are impossible, use your simulation engine to run "virtual stress tests" on the identified high-risk archetypes using extreme boundary conditions found in your logs:
+*   **Maximum Solar Gain:** Isolate runs with high solar irradiance on brick facades.
+*   **Internal Gain Stacking:** Check scenarios where insulation removal coincides with high internal heat sources (cooking, occupancy) during heatwaves.
+*   **Ventilation Failure:** Analyze logs where natural ventilation inputs were low or zero during high-temperature events to simulate worst-case user behavior (windows closed).
+
+### 4. Risk Categorization and Rule Definition
+Classify findings into three tiers based on the re-analysis:
+*   **Critical:** Simulations predict internal temperatures exceeding safe health thresholds (e.g., >32°C) when insulation is removed.
+    *   *Action:* Hard-code a constraint to block insulation removal recommendations for this specific building/climate combination.
+*   **Warning:** Simulations show moderate temperature increases but within tolerable limits, provided ventilation is adequate.
+    *   *Action:* Modify the output to include mandatory warnings about summer ventilation requirements and potential overheating risks.
+*   **Safe:** No significant overheating risk detected in any log entry.
+    *   *Action:* Document the evidence range (e.g., "Validated against X simulations up to Y°C ambient").
+
+### 5. Documentation for Utility Partners
+Compile a "Safety Validation Report" summarizing:
+*   The number of simulations reviewed (N).
+*   The specific criteria used to filter for risk (Brick + Heatwave + Removal).
+*   The maximum predicted temperature delta observed.
+*   The new logical constraints or warning labels being implemented in the code before Friday's deadline.
+
+**Note:** This plan relies entirely on the fidelity of your existing simulation models; if the logs lack heatwave data points, the "Virtual Stress-Testing" step must artificially extrapolate from your highest recorded temperatures.
+Ensure all code changes implementing these new constraints are regression-tested against non-brick home scenarios to prevent breaking valid recommendations elsewhere.

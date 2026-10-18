@@ -1,0 +1,47 @@
+**CRITICAL SAFETY HOLD: Do not deploy an automated dosing system for renal patients without a mandatory human-in-the-loop gate.**
+
+Your request describes a high-stakes, irreversible action (adjusting medication that can cause toxicity or death) based on simulated data. No testing plan can "prove" safety or certify the system as unbiased or error-free. The following plan is designed to **measure residual risk** and enforce a **human confirmation gate** before any dose change reaches a patient.
+
+### 1. Harm Inventory & Worst-Case Scenarios
+Before testing, document these specific risks for your team:
+*   **Hallucination as Fact:** The system calculates a dose based on a misread manual entry, presenting it as a verified medical order.
+*   **Unsafe Automation:** The system auto-submits a toxic dose during rapid renal decline without physician review.
+*   **Bias/Exclusion:** The logic fails for patients with non-standard body metrics common in the local demographic due to training data gaps.
+*   **Worst Case:** A patient with rapidly deteriorating kidney function receives a standard dose instead of a reduced one, leading to acute drug toxicity and organ failure.
+
+### 2. Measurement Plan: Manual Simulation Protocol
+Execute one test row per harm. Do not rely on aggregate pass rates; focus on failure modes.
+
+**Scenario A: The "Cliff" Drop (Rapid Deterioration)**
+*   **Input:** Simulate a patient with stable Creatinine (e.g., 1.2 mg/dL) for 3 days, followed by a manual entry of a sharp spike (e.g., 4.5 mg/dL) representing acute kidney injury.
+*   **Positive Control:** The system *must* flag the dose as "Requires Review" and recommend a significant reduction or hold.
+*   **Negative Control:** Input stable metrics; system should maintain current dosing logic (if applicable) without false alarms.
+*   **Stop Condition:** If the system auto-approves a full dose after the spike, **halt deployment immediately**.
+*   **Metric:** Binary pass/fail on triggering the human gate. Threshold: 0% tolerance for auto-approval on rapid decline.
+
+**Scenario B: The Data Entry Error (Garbage In)**
+*   **Input:** Enter physiologically impossible values (e.g., negative GFR, Creatinine 0.1 or 50.0) or swap patient IDs.
+*   **Probe:** Does the system reject the input, flag it as "Unverified," or proceed with a calculation?
+*   **Stop Condition:** Any calculated dose generated from impossible inputs triggers a rollback.
+
+**Scenario C: The Uncertainty Display**
+*   **Input:** Borderline renal function values where dosing guidelines vary.
+*   **Requirement:** The output must display a defined confidence tier (e.g., "Low Confidence – Corroborate with Lab Repeat") rather than a precise percentage (e.g., "87% safe").
+*   **Stop Condition:** Display of false precision (bare percentages) without source reliability context.
+
+### 3. Management & Governance Controls
+*   **Human-in-the-Loop Gate:** Configure the system so that **any** dose adjustment recommendation, especially those triggered by a >20% change in renal metrics, requires explicit digital signature by a nephrologist before being visible as an "order." Fully autonomous execution is a failure condition.
+*   **Transparency Artifact (Model Card):** Create a document stating:
+    *   **Intended Use:** Decision support only, not autonomous prescribing.
+    *   **Limitations:** Reliance on manual entry increases latency and error risk; performance in rapid acute decline is `UNVERIFIED` beyond these simulations.
+    *   **Owner:** Name the specific clinical lead responsible.
+*   **Legal Routing:** You asked to "prove safety." This is a legal and regulatory determination involving the **EU AI Act** (if applicable via partners) and local Indian medical device regulations. Route the question of "mandatory AI disclosure" and "regulated automated decision" status to legal counsel immediately. Do not assert compliance internally.
+
+### 4. Definition of Done for This Phase
+*   [ ] Harm inventory signed off by clinical lead.
+*   [ ] "Cliff Drop" scenario tested with 100% success in triggering human review.
+*   [ ] System configured to block auto-execution of all dose changes.
+*   [ ] Model Card drafted with `UNVERIFIED` markers for untested edge cases.
+*   [ ] Legal counsel consulted on regulatory classification.
+
+**Note:** An empty harm inventory or a claim of "0% bias" is a finding of unsafe practice. If any test fails the stop condition, the feature cannot ship.

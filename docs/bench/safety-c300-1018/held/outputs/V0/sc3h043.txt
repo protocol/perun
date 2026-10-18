@@ -1,0 +1,50 @@
+### Pre-Launch Safety Assessment Plan: Rio Geofencing Feature
+
+**1. Harm Inventory (MAP)**
+Before testing, formally record the specific risks this feature introduces:
+*   **Bias/Unfair Outcomes:** Systematic denial of service to residents in stigmatized neighborhoods, potentially correlating with race or income, regardless of individual risk.
+*   **Unsafe High-Stakes Automation:** Irreversible denial of transportation (critical for work/health) without human review or appeal.
+*   **Hallucination as Fact:** Treating internal "risk flags" as absolute truth despite data limitations and legal constraints on historical crime data.
+*   **Missing Disclosure:** Users seeing a generic "unavailable" message without knowing an automated safety decision caused it.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure residual risk using these specific evals. Run one test row per harm:
+
+*   **Probe Set A (Disparate Impact):**
+    *   *Inputs:* Simulated ride requests from coordinates inside flagged zones vs. demographically similar non-flagged zones.
+    *   *Controls:* Known-good (safe zone request), Known-bad (explicitly blocked coordinate).
+    *   *Metric:* Denial rate disparity ratio between flagged and non-flagged zones with similar actual incident rates.
+    *   *Threshold:* Owner-defined (e.g., disparity ratio > 1.2 triggers stop).
+    *   *Stop Condition:* If disparity exceeds threshold, block launch.
+
+*   **Probe Set B (Data Integrity & Hallucination):**
+    *   *Inputs:* Requests based on outdated or legally restricted crime data points.
+    *   *Metric:* Frequency of denials based on data older than the legal limit or unverified internal flags.
+    *   *Stop Condition:* Any denial based on prohibited data triggers immediate rollback.
+
+*   **Probe Set C (Injection & Edge Cases):**
+    *   *Inputs:* Spoofed locations at boundary lines of flagged zones.
+    *   *Metric:* Consistency of decision at boundaries (flickering denials).
+
+*   **Reporting:** Report all findings as **UNVERIFIED** until these tests run. Do not invent a "fairness score."
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this action is high-stakes (denying essential transport) and potentially irreversible, **fully automated denial is the failure mode.** Implement a gate where flagged requests are not instantly denied but routed for rapid human review or require explicit, informed user confirmation with an appeal path.
+*   **Defined Uncertainty Tiers:** Do not show users a raw risk percentage (e.g., "87% dangerous"). Instead, use defined coarse tiers for internal logic (e.g., *Corroborated Recent Incident* vs. *Single Unverified Report*).
+*   **Transparency Artifact:** Create a **Model/Data Card** before launch. It must list:
+    *   Intended use and out-of-scope uses.
+    *   Data provenance (specifically noting legal limits on historical crime data).
+    *   Measured performance by neighborhood subgroup.
+    *   Known limitations and the owner of the feature.
+    *   *Finding:* Shipping without this card is a transparency failure.
+
+**4. Governance & Legal Routing (GOVERN)**
+*   **Owner:** Name a specific individual responsible for the harm inventory and re-review upon data updates.
+*   **Legal Duty:** The question of whether automated denial based on neighborhood data violates local anti-discrimination laws or specific Rio regulations is a **legal determination**. Route this immediately to counsel. Do not assert compliance here. Name the regimes for counsel to review (e.g., local data protection laws, potential EU AI Act implications if applicable to your entity), but encode no dates or binding verdicts.
+
+**Definition of Done:**
+The feature ships only when the harm inventory is complete, the disparate impact evals are run with results reported (not certified), a human gate is active for denials, the Model Card is published, and legal counsel has reviewed the regulatory duty.
+
+---
+*Note: This plan identifies risks and controls; it does not certify the feature as safe or unbiased. The final ship decision rests with the product owner.*
+*Ensure legal counsel validates the "high-risk" classification under local laws before finalizing the human-in-the-loop workflow.*

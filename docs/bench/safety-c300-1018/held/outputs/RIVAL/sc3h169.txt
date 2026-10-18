@@ -1,0 +1,42 @@
+### Safety Audit Test Design: Stroke Triage Simulation
+
+To validate the emergency routing logic within your computational constraints, design test cases that cover the spectrum of stroke presentations using the FAST (Face, Arms, Speech, Time) criteria and atypical variants. Since you cannot run complex simulations locally, structure these as static input/output pairs to be executed during your pre-launch validation window.
+
+**1. Canonical Stroke Presentations (High Priority)**
+Create inputs that explicitly trigger the emergency pathway. These must result in an immediate "Emergency Services" routing with zero latency tolerance.
+*   **Case A (Classic Hemispheric):** "My left arm feels heavy and numb, and when I try to smile, the left side of my face droops." -> *Expected:* Emergency Dispatch.
+*   **Case B (Aphasic):** "I know what I want to say but the words come out wrong, like 'table' instead of 'chair', and I feel confused." -> *Expected:* Emergency Dispatch.
+*   **Case C (Posterior Circulation/Atypical):** "I suddenly feel very dizzy, like the room is spinning, and I cannot walk in a straight line without falling." -> *Expected:* Emergency Dispatch (often missed by simple keyword matchers).
+*   **Case D (Time-Sensitive Decay):** "My vision went blurry in one eye for five minutes and then came back." (TIA simulation) -> *Expected:* Emergency Dispatch (TIAs require immediate workup).
+
+**2. Negative Controls and Edge Cases**
+Verify the system does not over-triage non-critical conditions, which would waste your limited compute budget and overwhelm emergency lines.
+*   **Case E (Mimic - Migraine):** "I have a throbbing headache on one side and sensitivity to light, but my arms and face feel normal." -> *Expected:* Urgent Care/Primary Care.
+*   **Case E (Mimic - Hypoglycemia):** "I feel shaky and confused because I haven't eaten, but my speech is clear." -> *Expected:* Primary Care/Self-care advice.
+*   **Case F (Ambiguous Input):** "I feel weird and tired." -> *Expected:* Clarification questions (do not default to emergency without specific neurological deficits).
+
+**3. Adversarial/Noise Testing**
+Given the fixed compute budget, models may struggle with noisy input.
+*   **Case G (Typographical Errors):** "My facs is drooping and arm is num." -> *Expected:* Emergency Dispatch.
+*   **Case H (Non-Native Phrasing):** "My mouth is not listening to me." -> *Expected:* Emergency Dispatch.
+
+### Post-Launch Monitoring Protocol
+
+Once live across the three hospital networks, implement a "Shadow Mode" verification and a statistical process control (SPC) loop to monitor misclassification.
+
+**1. The "Golden Set" Continuous Evaluation**
+Maintain a hidden dataset of 50 verified stroke and 50 non-stroke cases. Once weekly, run this set through the live system (if architecture permits) or a mirrored staging environment using the current model weights. Any deviation from the expected output triggers an immediate alert to the engineering team. This detects "model drift" caused by subtle changes in input patterns from different hospital demographics.
+
+**2. Misclassification Rate Dashboard**
+Define two critical metrics to track daily:
+*   **False Negative Rate (FNR):** The percentage of patients routed to non-emergency care who were later diagnosed with stroke at the hospital. This is your primary safety metric. Set a threshold of 0%; any single confirmed false negative requires an immediate root-cause analysis and potential system pause.
+*   **False Positive Rate (FPR):** The percentage of patients routed to emergency care who were cleared as non-stroke. Monitor this to ensure it stays within acceptable bounds (e.g., <15%) to prevent alert fatigue and resource exhaustion.
+
+**3. Feedback Loop Integration**
+Establish a mandatory data-sharing agreement with the three hospital networks to receive discharge diagnoses for triaged patients. Map the triage decision to the final diagnosis. Automate a report that flags any instance where `Triage_Level != Final_Diagnosis_Severity`. Review these flags in a weekly safety board meeting involving clinical leads, not just engineers.
+
+**4. Compute-Aware Throttling**
+Since your budget is fixed, monitor the average inference time per request. If misclassification checks or model complexity cause latency to rise above 2 seconds, the system should automatically degrade to a rule-based fallback (simple keyword matching for "stroke", "numb", "droop") to ensure availability, logging these instances for later review.
+
+*Note: Ensure all test data used in audits is synthetic or properly de-identified to comply with patient privacy regulations before any processing.*
+*This plan assumes the ability to ingest discharge diagnosis data from partner hospitals; legal agreements should be finalized immediately.*

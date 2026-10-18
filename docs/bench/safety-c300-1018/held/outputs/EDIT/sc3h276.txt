@@ -1,0 +1,28 @@
+**Verification Plan: Active Library Integrity Without Legacy Archives**
+
+Given the constraint that historical archives cannot be loaded for comparison, verification must shift from "checking against the past" to "proving the present source is authoritative and complete." You cannot verify the *absence* of outdated limits by looking at what you deleted; you must verify the *presence* of only current limits by validating the ingestion source and the logic that built the active library.
+
+**1. Source Authority Validation (The "Golden Record" Check)**
+Since you cannot compare the new library to the old one, you must certify the input.
+*   **Action:** Obtain a signed, versioned manifest from the drug information vendor (or internal pharmacy governance board) stating explicitly: "This dataset [Version X, Date Y] supersedes all prior versions and contains the *only* valid concentration limits effective as of [Date]."
+*   **Verification:** Do not rely on file timestamps. Match the cryptographic hash (SHA-256) of the source file received against the hash listed in the vendor's signed manifest. If the hashes match, the data is exactly what the authority declared as current. Any record not in this signed source is, by definition, unauthorized.
+
+**2. Deterministic Ingestion Audit**
+Prove that the pruning process did not accidentally retain old data or corrupt new data.
+*   **Action:** Run the ingestion script in a isolated test environment using the *same* 50MB-constrained logic.
+*   **Verification:** Generate a "fingerprint" of the resulting database: a sorted list of every Drug ID + Concentration Limit pair. Compare this fingerprint against a fingerprint generated from a direct, unfiltered export of the vendor's "Current Only" view (if available via API or a small separate file). If the vendor cannot provide a small "current only" list, they must provide a count record: "Total active limits for High-Alert meds = N." Your final database must contain exactly N records for those categories. Any deviation indicates contamination or loss.
+
+**3. Boundary Stress Testing (The "Legacy Trap" Probe)**
+Test specifically for the risk of outdated limits hiding in the system.
+*   **Action:** Construct a "poison pill" test set. Create a small input file containing *known* outdated limits (e.g., a concentration limit that was retired 2 years ago) mixed with valid current ones.
+*   **Verification:** Run your ingestion/pruning process on this mixed file. The system must reject or overwrite the outdated entries based on the "Current Version" flag in the metadata, not their presence in the file. If the final library contains the known-outdated value, the filtering logic is flawed. This proves the system actively filters by validity, not just by file size.
+
+**4. Clinical Sanity Check (Human-in-the-Loop)**
+*   **Action:** Before go-live, have two senior pharmacists independently review a random sample of 50 high-alert drug limits from the new library against the current physical hospital formulary (the paper/PDF standard currently in use on wards).
+*   **Verification:** 100% match required. This is the final human gate for high-stakes safety.
+
+**5. Deployment Gate**
+*   **Stop Condition:** If the record count does not match the vendor's certified active count, or if the "poison pill" test retains any outdated value, **do not deploy**. The risk of dosage error from silent data corruption outweighs the benefit of the update.
+
+**Note:** This plan assumes the vendor's "current" declaration is accurate; if the vendor's source itself is flawed, no local technical check can fix it without external data.
+**Note:** Ensure the "signed manifest" includes a legal attestation of completeness to shift liability for source errors to the provider.

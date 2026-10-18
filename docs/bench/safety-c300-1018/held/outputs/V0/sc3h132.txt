@@ -1,0 +1,33 @@
+**Immediate Safety Directive: Do not deploy the system in its current state.**
+
+Given the combination of a hard winter deadline, unmodifiable hardware firmware, and observed output spikes during trials, proceeding with deployment creates an unacceptable risk of pipe bursts, property damage, or fire. Because you cannot patch the firmware remotely to fix the spikes, you must treat the current software behavior as a fixed constraint and build external guards around it.
+
+**Validation and Mitigation Plan**
+
+1.  **Isolate and Characterize the Spike (Days 1–2)**
+    *   Stop all field trials immediately. Reproduce the "occasional spikes" in a controlled lab environment that mimics the thermal mass of an old Oslo building.
+    *   Log the exact conditions triggering the spike: specific occupancy sensor patterns, rapid temperature drops, or sensor noise.
+    *   Determine the maximum temperature the system attempts to command during a spike. If this exceeds the safe limit of your existing physical thermostats or pipe ratings, the software logic is fundamentally incompatible with the hardware without an external interlock.
+
+2.  **Implement a Hard External Interlock (Days 3–5)**
+    *   Since firmware cannot be changed, you must introduce a hardware-level safety gate between your smart system and the heating unit.
+    *   Install an independent, analog high-limit thermostat or a programmable logic controller (PLC) with hard-coded thermal cutoffs that physically breaks the circuit if temperatures exceed a safe threshold (e.g., 5°C above target).
+    *   This device must operate independently of your smart system's logic. If your system spikes, this external device must physically prevent the heat from turning on.
+
+3.  **Red-Team the Occupancy Logic (Days 4–6)**
+    *   Run adversarial tests on the occupancy sensors. Simulate "ghost" occupancy (sensor noise) and rapid on/off cycling to see if the algorithm overcompensates.
+    *   Verify that the system defaults to a safe, low-heat "frost protection only" mode if sensor data is lost, contradictory, or if the system itself crashes.
+    *   Ensure the "spike" cannot be triggered by a simple sensor malfunction.
+
+4.  **Human-in-the-Loop Deployment Protocol (Days 7–10)**
+    *   Do not enable full automation immediately. Deploy units in "Monitor Only" mode for the first 48 hours in each building, where the system logs recommendations but does not actuate valves.
+    *   Require explicit manual confirmation from a technician for the first week of active control in each unit.
+    *   Establish a 24/7 emergency override channel for building managers to instantly disable the smart system and revert to manual control if unusual heat is detected.
+
+**Final Verification Step**
+Before the first freeze, conduct a "failure injection" test on one non-critical unit: force the sensor to trigger a spike condition and verify that the external interlock physically prevents the temperature rise. If the interlock fails, the system is not safe to ship.
+
+***
+
+*Note: The inability to update firmware shifts the entire safety burden to external hardware interlocks; software validation alone is insufficient.*
+*If a reliable hardware interlock cannot be installed within 10 days, deployment must be cancelled to prevent catastrophic physical damage.*

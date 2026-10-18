@@ -1,0 +1,33 @@
+### Verification Plan: Active Library Integrity Without Legacy Archives
+
+Given the constraint that historical archives cannot be loaded for comparison, verification must shift from **retrospective data auditing** to **prospective source validation** and **adversarial boundary testing**. You cannot prove the library is complete by looking at what you deleted; you must prove it is correct by looking at where the current data came from and how it behaves under stress.
+
+**1. Source-of-Truth Reconciliation (The "Golden Record" Check)**
+Since you cannot compare against your own history, you must compare against the external authority.
+*   **Action:** Extract the active concentration limits for all high-alert medications from the new library.
+*   **Verification:** Manually or via script cross-reference every single limit against the **current, official printed or digital formularies** provided by the drug manufacturers and the Korean Ministry of Food and Drug Safety (MFDS) effective as of the deployment date.
+*   **Pass Condition:** 100% match between the active library and the current official external sources. Any deviation is a critical failure, regardless of whether it matches "old" data.
+*   **Deliverable:** A signed "Source-of-Truth Attestation" by the lead pharmacist confirming every active limit matches the current external standard, explicitly noting that historical internal data was not used for validation.
+
+**2. Adversarial Boundary Testing (The "Safe Limit" Stress Test)**
+Test the system's ability to reject unsafe values, ensuring the logic holds even if data pruning inadvertently removed edge-case constraints.
+*   **Action:** Generate a test suite of infusion parameters that sit exactly **1% above** the newly defined safe limits for every high-alert drug. Also include values at 110%, 200%, and clearly toxic levels.
+*   **Verification:** Run these inputs through the staging environment.
+*   **Pass Condition:** The system **must** trigger a hard stop or high-priority alert for 100% of these over-limit inputs.
+*   **Negative Control:** Run inputs exactly **at** the limit and **1% below**. The system must allow these without a high-alert block (though soft warnings are permissible).
+*   **Deliverable:** An execution log showing 100% detection of over-limit scenarios and 0% false blocks on valid scenarios.
+
+**3. The "Unknown Drug" Probe**
+Ensure the system does not silently accept concentrations for drugs or formulations that were pruned or are no longer supported but might still be selected by error.
+*   **Action:** Attempt to program concentrations for drug formulations known to be deprecated or removed in this update.
+*   **Pass Condition:** The system should either prevent selection of the deprecated formulation entirely or flag it as "Unverified/Do Not Use" rather than applying a potentially outdated default.
+
+**4. Human-in-the-Loop Gate for Deployment**
+*   **Control:** Do not automate the final push to production. Require a dual-signoff (Lead Nurse + Lead Pharmacist) on the "Source-of-Truth Attestation" and the "Adversarial Test Log" before the IT team enables the library on live pumps.
+*   **Disclosure:** Clearly label the system update in the nurse handover notes: "Library updated to [Date] standards; historical internal trends are not displayed. Verify unusual prescriptions against current physical formulary."
+
+**Residual Risk Statement:**
+Because historical data was pruned and not verified, there is an **UNVERIFIED** risk that a specific legacy prescription pattern existing in the hospital but absent from current manufacturer guidelines will not trigger a specific "historical context" warning. The safety case relies entirely on the accuracy of the *current* external standards, not on continuity with the *past* internal data.
+
+**Note:** This plan treats the external regulatory standard as the only valid baseline, bypassing the need for internal historical data.
+**Note:** If any current external source is ambiguous, that specific drug entry must be flagged as `UNVERIFIED` and excluded from the auto-alert library until clarified.

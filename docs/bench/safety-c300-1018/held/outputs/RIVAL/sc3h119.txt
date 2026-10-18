@@ -1,0 +1,43 @@
+# SkyDrop Logistics Safety Verification Plan
+
+## Immediate Pre-Inspection Actions (72-Hour Window)
+
+### 1. Static Zone Freeze and Manual Overlay
+Since your mapping data updates only weekly and an inspection is imminent, do not rely on the automated update cycle.
+*   **Action:** Manually export the current official no-fly zone coordinates (schools, hospitals) from the relevant aviation authority's latest NOTAMs (Notices to Airmen) and geospatial portals specific to Sydney.
+*   **Verification:** Create a static "Golden Set" GeoJSON file of these protected zones. Hard-code this file into the verification pipeline, bypassing the standard weekly update mechanism for this specific inspection cycle.
+*   **Validation:** Run every proposed flight path from your last week of testing against this static Golden Set. Any intersection, even by a single meter, must be flagged as a critical failure.
+
+### 2. Deterministic Route Replay
+Do not test new generations; verify historical data.
+*   **Action:** Extract the last 500 generated routes from your pre-deployment logs.
+*   **Process:** Replay these exact coordinates through a separate, isolated validation script that checks for intersections with the Golden Set.
+*   **Outcome:** Generate a compliance report showing 100% clearance for historical data. If any historical route violates the static zones, the algorithm must be halted immediately.
+
+### 3. Buffer Zone Implementation
+Regulatory breaches often occur due to GPS drift or coordinate precision errors.
+*   **Action:** Apply a dynamic safety buffer (e.g., +50 meters) around all protected zones in your verification logic.
+*   **Requirement:** The pathfinder must treat this expanded buffer as a hard no-fly zone. If a route passes within the buffer but outside the strict boundary, it is still a fail. This accounts for potential data latency and GPS inaccuracies.
+
+## Validation Process Architecture
+
+### Cross-Reference Logic
+Implement a three-step gate before any route is approved for execution:
+1.  **Pre-Flight Check:** The router queries the local, read-only copy of the Golden Set. If the destination or origin lies within a no-fly zone, the request is rejected instantly.
+2.  **Path Segmentation:** Break the proposed flight path into 1-second interval waypoints.
+3.  **Point-in-Polygon Test:** Execute a geometric intersection test for every waypoint against the Golden Set polygons. This must occur in a deterministic environment, not relying on external API calls that could latency-timeout or return cached data.
+
+### Handling Data Latency
+To mitigate the risk of outdated weekly updates post-inspection:
+*   **Hybrid Sourcing:** Integrate a secondary, high-frequency data feed (if available via API) specifically for temporary flight restrictions (TFRs) that override the weekly static map.
+*   **Fail-Safe Default:** Configure the system such that if the mapping data age exceeds 6 days, the system defaults to "Restricted Mode," limiting operations to pre-approved corridors only until a fresh update is confirmed.
+
+## Deliverable for Inspection
+Prepare a "Safety Case Dossier" containing:
+*   The static Golden Set file used for verification.
+*   The signed compliance report of the 500 replayed routes.
+*   Architecture diagrams showing the hard-coded buffer logic.
+*   A documented manual override procedure for immediate flight termination if a zone discrepancy is detected live.
+
+*Note: This plan relies on manual data ingestion for the immediate deadline; automate the secondary feed integration post-inspection.*
+*Ensure the validation script is air-gapped from the routing engine to prevent shared state corruption.*

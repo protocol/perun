@@ -1,0 +1,39 @@
+**Testing Strategy for Patient-Matching and Cross-Language Accuracy**
+
+**1. Harm Inventory & Risk Prioritization**
+Before executing tests, explicitly record the worst-case scenario: a patient receives another person's dosage instructions, leading to overdose, underdose, or adverse drug interactions. This is a high-stakes, irreversible harm. Consequently, **no fully automated SMS dispatch** should occur for the initial cohort without a human-in-the-loop gate or a strict "confirm identity" reply mechanism.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+Construct a test matrix where each row targets a specific failure mode with defined inputs, controls, and stop conditions.
+
+*   **Harm: Wrong Patient Match (Identity Collision)**
+    *   **Probe Set:** Create synthetic pairs with high similarity (same name, different DOB; same DOB, different name; common typos in legacy IDs).
+    *   **Controls:** Include a "known-bad" positive (intentionally mismatched ID that must fail) and a "known-good" negative (perfect match that must pass).
+    *   **Metric:** False Match Rate (FMR) per 1,000 attempts.
+    *   **Threshold:** Owner-set to **zero tolerance** for any confirmed wrong-patient dispatch in the pilot.
+    *   **Stop Condition:** If *any* false positive occurs in the "known-bad" set, block launch immediately.
+    *   **Review:** Manual audit of every flagged near-match by a senior developer.
+
+*   **Harm: Cross-Language Dosage Error**
+    *   **Probe Set:** Given the shortage of real multilingual cases, generate adversarial synthetic inputs using back-translation (translate English instructions to local languages and back) and inject common medical abbreviation ambiguities specific to those regions.
+    *   **Controls:** Known correct translations (positive) and known garbled/nonsensical outputs (negative).
+    *   **Metric:** Semantic integrity score (does the dosage amount/frequency change?).
+    *   **Threshold:** Zero tolerance for altered dosage numbers or frequency units.
+    *   **Stop Condition:** Any instance where a number or unit (mg, ml, times/day) changes during translation blocks the pipeline.
+
+*   **Harm: Data Leakage / Excess Agency**
+    *   **Probe Set:** Inputs designed to trigger retrieval of adjacent records (e.g., querying edge-case IDs).
+    *   **Metric:** Count of records returned per query.
+    *   **Threshold:** Exactly one record.
+    *   **Stop Condition:** Any query returning >1 record or data from a different patient ID triggers an immediate rollback.
+
+**3. Managing Residual Risk Under Constraints**
+*   **Human Gate:** Due to legacy query limits and test data gaps, implement a mandatory "Reply YES to confirm [Drug Name] for [Patient Name]" step before the first dose instruction is sent to any new user. This breaks the automation loop for high-stakes actions.
+*   **Uncertainty Display:** If the matching confidence is below a defined tier (e.g., "Confirmed" vs. "Unverified"), do not send the SMS. Instead, flag for manual review. Do not show raw probability percentages to users.
+*   **Synthetic Data Augmentation:** To address the multilingual gap, programmatically generate edge-case variations of names and drug terms in target languages to expand coverage beyond existing limited datasets.
+
+**4. Transparency Artifact**
+Draft a preliminary "System Card" documenting: intended use (adherence reminders only), known limitations (legacy DB latency, unverified multilingual edge cases), and the specific human-gate control implemented. Mark any unmeasured accuracy rates as **UNVERIFIED**.
+
+**Note:** Legal counsel must determine if this constitutes a regulated automated decision requiring specific disclosures under local health laws.
+Do not certify the system as "safe" or "unbiased"; the ship decision rests with the product owner based on the residual risk reported above.

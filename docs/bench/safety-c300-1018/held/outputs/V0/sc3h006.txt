@@ -1,0 +1,36 @@
+### Harm Inventory & Testing Framework for Contract Summarizer
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks to your Tokyo users:
+*   **Hallucination/Omission as Fact:** Critical clauses (liability, termination, payment) are dropped or altered, leading users to sign agreements they do not understand.
+*   **Over-reliance:** Users trust the "plain language" summary as a complete legal substitute rather than a reference, skipping the original text.
+*   **Bias/Unfair Outcomes:** Specific clause types (e.g., complex indemnity) are systematically simplified more aggressively than others, disadvantaging non-native speakers who rely on the tool most.
+*   **Missing Disclosure:** Users are not told the output is an AI summary with known limitations, creating a false sense of security.
+
+**2. Measurement Plan (MEASURE)**
+Since you cannot integrate new APIs, your testing must rely on adversarial prompts and a "Golden Set" of known contracts. Execute one test row per harm:
+
+*   **Probe Set:** Curate 20–30 real contracts where you manually highlight "Critical Clauses" (e.g., auto-renewal, unlimited liability, jurisdiction). Create a **Positive Control** (a contract with a known tricky clause) and a **Negative Control** (a simple contract with no tricky clauses).
+*   **Metric:** "Critical Clause Retention Rate." Did the summary explicitly mention the obligation, risk, or right identified in the manual highlight?
+*   **Threshold:** **Zero tolerance** for omitted critical clauses in the final rollout. If *any* critical clause is missing or misinterpreted in the Positive Control set, the feature must not ship.
+*   **Stop Condition:** If the system fails to flag or summarize a single high-risk clause correctly during the two-week sprint, the rollout is blocked until a human-in-the-loop gate is enforced.
+*   **Specific Checks:**
+    *   *Negation Testing:* Feed clauses with "not," "unless," or "except" to ensure the summary doesn't invert the meaning.
+    *   *Numeric Integrity:* Verify all dates, currency amounts, and percentages match the source exactly.
+    *   *Language Stress:* Run the same English contract through the Japanese summarization path and vice-versa to check for translation-induced drift.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because omitting a clause is an irreversible legal risk, **no summary can be presented as final without a human review step** or a prominent, unavoidable warning. The system must output: *"Warning: This is an AI summary. Critical clauses regarding [X] may be omitted. Always review the original text before signing."*
+*   **Defined Confidence Tiers:** Do not show a percentage (e.g., "95% accurate"). Instead, use coarse, defined tiers:
+    *   *Verified:* Clause matches source text structure.
+    *   *Unverified:* Complex syntax detected; manual review required.
+*   **Transparency Artifact:** Create a one-page "Model Card" for your internal team and clients. It must state:
+    *   *Intended Use:* Draft review aid only, not legal advice.
+    *   *Limitations:* Known failure modes (e.g., "Struggles with nested conditional clauses").
+    *   *Owner:* Name the specific team member responsible for reviewing failures.
+
+**4. Governance (GOVERN)**
+Assign one of your four team members as the "Output Owner." They must re-review the system if the contract types change or if the underlying model is updated. Do not claim the system is "safe" or "unbiased"; report the residual risk (e.g., "We verified 30 contracts; 2 edge cases remain UNVERIFIED").
+
+**Note:** Legal duty regarding AI disclosure in Japan or for cross-border contracts must be routed to counsel; this plan recommends disclosure as a safety control, not a legal verdict.
+Do not fabricate a "0% error rate"; if a metric is unmeasured, label it `UNVERIFIED`.

@@ -1,0 +1,22 @@
+### Safety Review Checklist: Smart-Blind Entrapment Risk
+
+**1. Hazard Logic & Sensor Discrimination**
+*   **Verify Sensor Fusion Logic:** Confirm the firmware prioritizes "rapid opacity change + heat spike" patterns as potential fire/smoke over "slow particulate accumulation" (dust). The algorithm must default to *opening* shades when sensor data is ambiguous or conflicting, rather than closing them.
+*   **Simulated Input Testing:** Since live fire simulation is prohibited, inject recorded sensor data profiles from actual fire incidents (smoke density curves, thermal spikes) into the hardware input pins. Verify the system reacts by opening blinds or halting closure, not proceeding with the "sunlight reduction" routine.
+*   **Fail-Safe Default State:** Validate that a loss of sensor signal, power fluctuation, or internal processing error triggers an immediate "Open All" command. The default state during uncertainty must be egress-friendly.
+
+**2. Manual Override & Physical Access**
+*   **Hardwired Bypass Test:** Physically disconnect the main controller and verify that a dedicated hardwired switch (accessible without tools) immediately cuts motor power or engages a manual release clutch. This circuit must be independent of the microcontroller.
+*   **Latency Measurement:** Measure the time delta between the manual override activation and the cessation of motor movement. It must be under 2 seconds. Any delay allowing the blind to complete a closing cycle is a failure.
+*   **Force Resistance Check:** Ensure the manual release mechanism can be operated by an adult under stress (simulated panic grip) without requiring fine motor skills or excessive force.
+
+**3. Integration & Manufacturing Gates**
+*   **Firmware Lock Verification:** Before the manufacturing lock, confirm the "Fire Mode" logic is compiled into the read-only memory section that cannot be overwritten by future OTA updates without a physical factory reset.
+*   **Labeling Audit:** Verify that physical labels near the manual override clearly state "EMERGENCY OPEN" with universal pictograms, visible even in low-light/smoky conditions.
+
+**Required Manual Override Tests (Pre-Production)**
+1.  **The "Blind" Injection Test:** Run the device with no light/heat input but inject a "smoke-like" noise pattern into the dust sensor. The blind must not close.
+2.  **The Power-Cut Drop:** Cut power mid-cycle during a "close" command. The mechanical brake must release instantly, allowing the blind to be lifted manually.
+3.  **The Panic Switch:** Have three different team members attempt to activate the override while wearing thick gloves (simulating disorientation/PPE). All must succeed within 5 seconds.
+
+**Note:** Do not certify this system as "safe" based on these checks; they only identify residual risks. Given the high-stakes nature of potential entrapment, a human-in-the-loop review of the final test data by an external safety engineer is strongly recommended before the firmware lock.

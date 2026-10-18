@@ -1,0 +1,30 @@
+**Pre-Launch Safety Review Plan: Smart Infusion Rate Controller**
+
+**1. Recalibration Window Stress Tests**
+*   **Simultaneous Trigger Overload:** Simulate multiple recalibration signals arriving within milliseconds of each other to verify the controller does not stack adjustment commands, causing a sudden flow spike.
+*   **Mid-Cycle Interruption:** Inject a "stop" or "pause" command exactly during the recalibration calculation phase to ensure the pump defaults to a safe hold state rather than executing a partial or corrupted rate change.
+*   **Sensor Latency Simulation:** Introduce artificial delays (500ms, 1s, 2s) in feedback loops during recalibration to test if the controller attempts to "catch up" by aggressively accelerating flow once data resumes.
+
+**2. Boundary and Edge Case Scenarios**
+*   **Zero-Flow Transition:** Test recalibration when the prescribed rate is temporarily zero (e.g., between doses) to ensure the controller does not initiate flow without a specific prescription command.
+*   **Maximum Rate Ceiling:** Attempt recalibration adjustments when the pump is already at its maximum safe limit for the specific medication; verify the system clamps the rate rather than overshooting due to calculation error.
+*   **Minimum Detectable Flow:** Simulate flow rates near the sensor's noise floor during recalibration to confirm the controller distinguishes between actual flow deviation and sensor noise, preventing unnecessary oscillation.
+
+**3. Failure Mode and Safe-State Verification**
+*   **Calculation Timeout:** Force the internal logic to exceed its processing time limit during a recalibration cycle; the system must revert to the last known safe rate or alarm, not a default high value.
+*   **Conflicting Input Data:** Feed contradictory sensor data (e.g., pressure sensor indicates occlusion while flow sensor indicates high flow) during recalibration to verify the system prioritizes occlusion safety protocols over rate maintenance.
+*   **Power Fluctuation During Cycle:** Simulate a brownout or brief power interruption specifically during the write-phase of a recalibration command to ensure memory integrity and prevent corrupted rate settings upon recovery.
+
+**4. Medication-Specific Logic Checks**
+*   **High-Alert Drug Profiles:** Run scenarios with narrow therapeutic index medications (e.g., vasopressors, insulin) where the allowable deviation is <5%; verify the controller's adjustment granularity cannot exceed this safety margin.
+*   **Viscosity Changes:** Simulate fluid viscosity shifts (e.g., temperature changes in the line) during recalibration to ensure the algorithm attributes resistance correctly and does not compensate by dangerously increasing pressure/flow.
+
+**5. Human-in-the-Loop Interaction**
+*   **Manual Override During Auto-Adjust:** Simulate a nurse manually adjusting the rate via the interface at the exact moment the controller attempts an automatic recalibration adjustment; manual input must always supersede automated logic.
+*   **Alarm Masking:** Verify that active recalibration processes do not suppress or delay critical alarms (occlusion, air-in-line, door open) under any simulation condition.
+
+**Execution Protocol:**
+Run each test case 50 times with randomized seed values for timing and sensor noise to rule out intermittent failures. Document any instance where flow deviates >2% from the prescribed rate during or immediately after the recalibration window as a critical failure requiring code freeze.
+
+*Note: This plan relies entirely on your internal simulation fidelity; ensure your sensor models accurately reflect the physical latency and noise characteristics of the actual hardware.*
+*Do not proceed to clinical verification until all "critical failure" instances are resolved and regression tested.*

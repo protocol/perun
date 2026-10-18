@@ -1,0 +1,41 @@
+### Manual Verification Plan: Timezone Edge Cases for Static-Location Medication Bot
+
+Given the constraint of static string locations and the critical nature of medication timing, your manual verification must focus on the disconnect between a user's declared "home" string and their physical reality during transitions. Since the system cannot dynamically detect coordinates, it relies entirely on the user's static string to infer timezone rules. Verify the following specific edge cases:
+
+**1. The "Static String" Ambiguity Trap**
+Test inputs where the static location string is ambiguous or lacks political context, which causes incorrect DST rule application.
+*   **Case:** A user enters "Springfield" or "Phoenix" without a state/country suffix.
+*   **Risk:** The system defaults to a timezone that observes DST when the actual location does not (or vice versa), causing a 1-hour shift error.
+*   **Verification:** Confirm the system forces a fully qualified string (e.g., "Phoenix, Arizona, USA") or explicitly asks for timezone confirmation if ambiguity is detected.
+
+**2. The Cross-Border Commuter (Static Home vs. Dynamic Reality)**
+Test users whose static string is in one timezone but who physically reside or work in another during the transition window.
+*   **Case:** A patient has "Detroit, MI" (EST/EDT) as their static string but is staying in "Windsor, ON" (same offset, but different historical rule sets) or a border town like "Lloydminster" (which straddles timezones).
+*   **Risk:** If the static string logic applies the wrong jurisdiction's DST start/end dates, the bot shifts an hour early or late compared to the user's wall clock.
+*   **Verification:** Simulate a user traveling from a non-DST region to a DST region (e.g., Arizona to California) during the transition week without updating their static string. Ensure the bot warns the user rather than guessing.
+
+**3. The "Fall Back" Duplicate Dose Risk**
+This is the highest safety risk. When clocks fall back, one hour occurs twice.
+*   **Case:** A dose scheduled for 1:30 AM on the night of the DST transition.
+*   **Risk:** The system fires the reminder at 1:30 AM (first occurrence), then fails to suppress the second 1:30 AM, causing a duplicate alert. Conversely, it might skip the first one entirely if logic assumes the "second" instance only.
+*   **Verification:** Manually step through the transition hour for a static string in a DST-observing region. Confirm exactly one alert fires at the correct *absolute* time relative to UTC, regardless of the local clock repetition.
+
+**4. The "Spring Forward" Missed Dose Risk**
+When clocks spring forward, one hour is skipped.
+*   **Case:** A dose scheduled for 2:30 AM on the transition night (a time that technically does not exist locally).
+*   **Risk:** The bot fails to fire because the local time 2:30 AM never occurs, leading to a missed dose.
+*   **Verification:** Ensure the system has a fallback rule: if a scheduled time falls in the "gap," the reminder fires immediately after the transition completes (e.g., at 3:00 AM) or shifts to the nearest valid time, rather than skipping entirely.
+
+**5. International Travel During Transition Windows**
+Test users who travel between hemispheres or countries with opposite DST schedules.
+*   **Case:** A user with static string "London, UK" travels to "Sydney, Australia" during the UK's DST transition.
+*   **Risk:** Since the location is static, the bot continues to apply UK time rules, sending reminders at completely wrong local times for the user's actual location.
+*   **Verification:** Verify that the bot includes a mandatory "I am traveling" override flow. If the user cannot update their static string quickly, confirm the system allows a temporary "Current Local Time" manual offset input that supersedes the static string calculation.
+
+**6. Legacy Data Format Inconsistencies**
+*   **Case:** Older database entries using abbreviations (e.g., "EST") vs. modern IANA strings (e.g., "America/New_York").
+*   **Risk:** Abbreviations are not unique and do not contain DST transition rules.
+*   **Verification:** Audit a sample of legacy static strings. Ensure the conversion logic correctly maps ambiguous abbreviations to current IANA timezones or flags them for user review before the next DST event.
+
+**Note:** Prioritize the "Fall Back" duplicate and "Spring Forward" missed dose scenarios as these pose immediate patient safety risks.
+Ensure all test results document the exact UTC timestamp of the alert alongside the displayed local time.

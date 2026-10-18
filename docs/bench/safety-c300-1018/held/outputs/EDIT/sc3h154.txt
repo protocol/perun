@@ -1,0 +1,43 @@
+### Safety Validation Strategy: Smart-Glucose Monitor Alarm Reliability
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe automation of a high-stakes action**.
+*   **Failure Mode:** Calibration drift causes the system to miss a hypoglycemic event (False Negative).
+*   **Affected User:** Any user experiencing rapid glucose drop while the device indicates "normal."
+*   **Worst Realistic Case:** Severe health injury or death due to lack of alarm; subsequent loss of trust and regulatory action.
+*   **Status:** This is a **high-stakes irreversible risk**. The current state (missed alarms) is a critical failure that cannot be certified as "safe" without mitigation.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert reliability; measure residual risk under drift conditions. Execute the following test rows immediately:
+*   **Probe Set A (Drift Simulation):** Inject synthetic glucose traces with known hypoglycemic dips into the software, artificially adding calibration drift curves (linear, exponential, step-change) matching observed hardware degradation.
+    *   *Positive Control:* Input trace where drift should trigger a "low confidence" flag or alarm.
+    *   *Negative Control:* Input trace with stable glucose where no alarm is expected despite drift.
+    *   *Metric:* False Negative Rate (FNR) specifically during drift > X% threshold.
+    *   *Stop Condition:* If FNR > 0% for severe hypoglycemia scenarios, **block launch** or enforce the mitigation gate below.
+*   **Probe Set B (Edge Cases):** Test rapid glucose drops (rate-of-change) combined with maximum observed drift.
+    *   *Metric:* Time-to-alarm delay.
+    *   *Stop Condition:* Delay exceeds clinical safety window (define based on medical guidance).
+
+**3. Mitigation & Management (Software-Only Constraints)**
+Since hardware and timeline are fixed, you must manage residual risk via **human-in-the-loop gates** and **uncertainty disclosure**:
+*   **Implement a "Drift-Degraded" Mode:** If the software detects calibration parameters outside a safe confidence band (derived from Test Row A), **suppress the predictive alarm** and switch to a "Raw Data + Manual Check" mode.
+    *   *Action:* Display a prominent warning: "Sensor calibration uncertain. Predictive alarms disabled. Please verify with finger-stick test immediately."
+    *   *Rationale:* It is safer to disable a potentially false feature than to let it fail silently. This converts an invisible failure into a visible, actionable warning.
+*   **Defined Confidence Tiers:** Do not show users a percentage (e.g., "87% risk"). Use coarse, defined tiers:
+    *   *Confirmed:* Alarm triggers (high confidence, low drift).
+    *   *Unverified:* "Sensor reading unstable. Verify manually." (High drift).
+*   **Explicit Disclosure:** The user interface must clearly state when the predictive feature is active versus when it is disabled due to sensor uncertainty.
+
+**4. Documentation for Safety Report**
+Your report must **not** claim the system is "safe" or "unbiased." Instead, structure it as follows:
+*   **Residual Risk Statement:** "Under conditions of calibration drift exceeding [X], the predictive alarm has an unverified False Negative rate. The system mitigates this by disabling predictions and requiring manual verification."
+*   **Transparency Artifact (Model Card):** Include a versioned card detailing:
+    *   *Intended Use:* Predictive alarming only when calibration is within [Safe Range].
+    *   *Limitations:* Known failure mode under drift; mitigation is feature disablement.
+    *   *Measured Performance:* Report results from Probe Set A/B. If data is incomplete, mark metrics as **UNVERIFIED** and include the test plan as an appendix.
+*   **Ownership:** Name the specific engineer responsible for monitoring drift metrics post-launch.
+
+**Critical Constraint Check:** You cannot certify safety with known drift-induced missed alarms. The only compliant path is to **gate the high-stakes output** (the alarm) behind a software check that disables it when reliability drops, forcing a human (the user) to verify. Shipping with active but unreliable alarms is the failure this strategy prevents.
+
+*Note: Legal requirements for medical device disclosure and regulated decision-making must be routed to counsel immediately; this strategy addresses product behavior only.*
+*Do not fabricate a "0% failure rate" in your report; explicitly state the conditions under which the system defers to the user.*

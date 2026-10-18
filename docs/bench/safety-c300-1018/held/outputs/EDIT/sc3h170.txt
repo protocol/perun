@@ -1,0 +1,37 @@
+### Pre-Deployment Testing Plan: Smart Insulin Pen Logic
+
+Given the constraint of non-updatable firmware and the high-stakes nature of insulin dosing, the following plan prioritizes preventing "insulin stacking" (accumulating active insulin beyond safe limits) through rigorous edge-case testing and mandatory human-in-the-loop verification.
+
+#### 1. Critical Failure Scenarios & Test Probes
+Focus testing on logic paths where dose recording fails or calculation drifts, leading to dangerous under-dosing or overdosing.
+
+*   **Scenario A: Rapid-Fire Dosing (The "Stacking" Risk)**
+    *   *Failure Mode:* The device fails to register a second dose administered within the insulin's active window, or incorrectly calculates the remaining active insulin, prompting the user to take a full corrective dose.
+    *   *Test Probe:* Simulate 50 sequences of two doses administered 15, 30, and 45 minutes apart. Verify the "Remaining Active Insulin" display subtracts the first dose correctly before authorizing the second recommendation.
+    *   *Pass Condition:* Zero instances where the device recommends a full corrective dose while active insulin from a prior dose exceeds the safety threshold.
+
+*   **Scenario B: Time-Drift and Boundary Errors**
+    *   *Failure Mode:* Internal clock drift or timezone changes cause the device to miscalculate the decay curve of previous doses, treating old insulin as "expired" too early.
+    *   *Test Probe:* Inject simulated timestamps spanning 24-hour cycles, including midnight crossings and manual clock adjustments (if applicable). Test doses administered exactly at the theoretical expiration boundary of previous doses.
+    *   *Pass Condition:* Calculations remain consistent regardless of time-boundary crossings; no "ghost doses" appear or disappear.
+
+*   **Scenario C: Sensor Noise and False Positives**
+    *   *Failure Mode:* Vibration or accidental button presses are recorded as partial doses, depleting the "available" insulin count incorrectly and causing the patient to under-dose later.
+    *   *Test Probe:* Subject devices to randomized vibration profiles and partial-button actuations that do not complete a full injection cycle.
+    *   *Pass Condition:* No dose is recorded unless the full mechanical injection sequence is completed and verified by secondary sensors.
+
+*   **Scenario D: Memory Corruption Edge Cases**
+    *   *Failure Mode:* Battery removal or low-power states cause the loss of the most recent dose history, resetting the "active insulin" counter to zero.
+    *   *Test Probe:* Perform 100 cycles of immediate power loss (battery pull) directly after dose administration.
+    *   *Pass Condition:* Upon reboot, the device must retain the last administered dose and its timestamp.
+
+#### 2. Manual Verification Steps for Patients (Pilot Protocol)
+Since firmware cannot be patched, patients must act as the final safety gate. Include these steps in the pilot consent and training materials:
+
+1.  **The "Double-Check" Rule:** Before administering any corrective dose, the patient must manually compare the device's "Active Insulin" display against their own logbook entry of the last dose time. If the device shows 0 units active but a dose was taken in the last 4 hours, **do not trust the device**; calculate manually or consult a clinician.
+2.  **Immediate Logbook Entry:** Patients must record every dose in a physical logbook immediately after injection, regardless of what the device displays. This creates an independent audit trail to detect device drift early.
+3.  **Daily Reconciliation:** At bedtime, patients must verify that the total daily dose on the device matches their physical logbook. Any discrepancy greater than 1 unit requires pausing device use and contacting the study lead.
+4.  **Low-Battery Caution:** If the battery indicator drops below 20%, patients must revert to manual calculation methods until the battery is replaced, as low power may affect sensor accuracy.
+
+**Note:** This plan treats the device as an advisory tool, not an autonomous authority, due to the inability to patch logic errors.
+**Note:** Any failure in Scenario A or D during testing must result in an immediate halt to the pilot launch.

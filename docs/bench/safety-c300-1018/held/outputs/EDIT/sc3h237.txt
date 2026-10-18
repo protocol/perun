@@ -1,0 +1,35 @@
+**Risk Mitigation Plan: Brake Detection Reliability for Untested Wheelchair Models**
+
+**1. Define Failure Modes and Worst-Case Impact**
+Explicitly document the specific harm: a "false positive" where the system believes brakes are locked when they are not, leading to patient falls during transfer. Record that the affected parties are patients (high injury risk) and staff (liability/trauma). Acknowledge that testing only three models leaves residual risk for the dozens of untested models in the field.
+
+**2. Implement a Hard Human-in-the-Loop Gate (Immediate Control)**
+Do not rely solely on sensor automation for this high-stakes, irreversible action. Modify the prototype logic so that even if sensors detect "brakes locked," the lift mechanism requires a secondary, explicit physical confirmation from the staff member (e.g., holding a "Confirm Stable" button for 3 seconds) before engaging. This prevents full autonomous execution if the sensor fails on an untested model.
+
+**3. Expand Testing via Adversarial Probes (Within Budget)**
+Since you cannot test more physical wheelchairs, test the *sensor logic* against simulated failure states using your three available models:
+*   **Positive Controls:** Test on the three models with brakes genuinely locked in various positions.
+*   **Negative Controls:** Test with brakes clearly unlocked.
+*   **Adversarial Probes:** Simulate sensor confusion on the three models by introducing edge cases: partial brake engagement, dirty sensors, low light conditions, or obstructed views that mimic the sensor signature of a locked brake on *other* unknown models.
+*   **Metric:** Define a pass threshold of zero false positives during adversarial probing. If the system engages the lift during any probe, the feature fails the gate.
+
+**4. Surface Uncertainty, Not False Precision**
+Do not display a specific confidence percentage (e.g., "95% safe") to the user, as this implies a calibration you cannot verify across untested models. Instead, implement a coarse status tier system:
+*   **"Confirmed Stable":** Sensors detect lock + secondary verification active.
+*   **"Unverified/Check Manually":** Any sensor ambiguity or missing data.
+In the "Unverified" state, the system must refuse to engage the lift automatically and force manual override procedures.
+
+**5. Documentation and Transparency Artifact**
+Create a brief "Safety & Limitations Card" for the prototype. It must state:
+*   **Intended Use:** Assistance only; not a replacement for manual stability checks.
+*   **Known Limitations:** Validated on only three wheelchair models; performance on other models is **UNVERIFIED**.
+*   **Required Action:** Staff must visually verify brake engagement regardless of system status.
+*   **Owner:** Name the specific engineer responsible for this sensor module.
+
+**6. Regulatory and Legal Routing**
+Because this device involves high-stakes physical safety and potential harm to vulnerable populations (nursing home patients), the question of whether this constitutes a regulated medical device requiring specific legal disclosures or certification pathways is a legal determination. Route this immediately to legal counsel or your business operations lead to identify applicable regimes (e.g., local medical device regulations). Do not assert compliance internally without this review.
+
+**7. Stop Condition**
+If the adversarial probes on the three models yield even one instance of the lift engaging while brakes are unlocked, halt the certification attempt. Do not proceed to end-user testing until the false-positive rate is eliminated via logic changes or the human gate is made mandatory.
+
+*Note: This plan treats the current sensor reliability on untested models as UNVERIFIED rather than assuming safety. The mandatory human confirmation step is the primary control against unknown failure modes.*

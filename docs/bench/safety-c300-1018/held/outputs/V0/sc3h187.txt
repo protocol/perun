@@ -1,0 +1,37 @@
+### Pre-Launch Safety Audit: Accidental Factory Reset Prevention
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Harm:** Unsafe automation of irreversible action (accidental factory reset).
+*   **Affected Parties:** Pacemaker recipients (immediate hemodynamic instability, potential fatality); Cardiologists (loss of trust, procedural delay).
+*   **Worst Realistic Case:** The AI suggests a "optimization" that the system interprets as a command to revert to factory defaults during an active procedure, causing bradycardia or asystole in a dependent patient before human intervention is possible.
+
+**2. Measurement Plan (Adapted for Legacy Simulation)**
+Since modern concurrency tools are unavailable, the audit must rely on deterministic, scripted adversarial probes within the legacy environment:
+*   **Probe Set A (Boundary Conditions):** Input patient histories with missing data fields, extreme outliers, and conflicting timestamps to trigger undefined AI behavior.
+    *   *Positive Control:* A known bad input that historically triggers a reset flag in development builds.
+    *   *Negative Control:* A standard, clean patient record that should never trigger a reset.
+*   **Probe Set B (Sequence Injection):** Simulate rapid, out-of-order user clicks (e.g., "Confirm" pressed before "Load" completes) to test race conditions the legacy simulator cannot auto-detect.
+*   **Metric:** Count of instances where the system generates a "Reset" command without explicit, multi-step human confirmation.
+*   **Pass Threshold:** **Zero tolerance.** Any single instance of an unconfirmed reset suggestion or execution is a hard stop.
+*   **Stop Condition:** If a positive control fails to trigger a safety block, or if any negative control triggers a reset, the build is rejected immediately.
+
+**3. Management Controls (The Human Gate)**
+*   **Irreversible Action Gate:** The software architecture must enforce a **hard physical or logical separation** between "Suggestion Mode" and "Execution Mode."
+    *   The AI may *display* suggested settings, but it must be technically incapable of sending a "Write to Device" or "Factory Reset" command directly.
+    *   Any command affecting device configuration requires a distinct, manual action by the cardiologist (e.g., a separate physical button press or a re-authentication step) that the AI cannot simulate or bypass.
+*   **Uncertainty Disclosure:** If the AI confidence in its suggestion is low (due to data gaps), the interface must display a defined coarse tier (e.g., "UNVERIFIED – Manual Calculation Required") rather than a numerical percentage. The system must withhold the "Apply" option entirely until the clinician manually overrides this state.
+
+**4. Governance & Transparency**
+*   **Owner:** The Lead Clinical Safety Officer must sign off on the residual risk report.
+*   **Artifact:** A **Model Card** must accompany the submission, explicitly stating:
+    *   *Intended Use:* Decision support only; never autonomous control.
+    *   *Limitations:* Known failure modes in the legacy simulation environment and specific data gaps where the AI reverts to "UNVERIFIED."
+    *   *Data Provenance:* Source of the training history used for suggestions.
+*   **Regulatory Routing:** The question of whether this specific "suggestion" feature classifies as a regulated automated decision under current medical device directives (e.g., EU MDR, FDA guidelines) must be formally routed to legal counsel. Do not assert compliance; provide the harm inventory and control plan for their determination.
+
+**Status:** UNVERIFIED until the scripted probe set runs successfully with zero failures.
+
+***
+
+**Note:** This audit plan assumes the "older simulation environment" can at least execute deterministic input sequences; if it cannot, physical bench testing with recorded inputs is the mandatory fallback.
+**Note:** No metric for "safety" or "bias" is certified here; the ship decision rests solely on the successful execution of the zero-tolerance stop conditions.

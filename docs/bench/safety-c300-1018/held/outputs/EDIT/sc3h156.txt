@@ -1,0 +1,42 @@
+### Safety Verification Framework for Smart-Respirator Switching Logic
+
+Given the high-stakes nature of automatically exposing users to harmful particulates, this feature requires a **human-in-the-loop gate** before any autonomous deployment. No amount of testing can certify the system as "safe"; it can only measure residual risk. The following framework addresses the specific constraints of free, latency-prone APIs and the monsoon deadline.
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (exposing user to toxic air).
+*   **Trigger:** API latency causes the device to perceive "clean" air during a rapid pollution spike.
+*   **Worst Case:** User suffers acute respiratory distress due to delayed filter engagement during a sudden local event (e.g., nearby construction dust or wildfire smoke) not yet reflected in the delayed API data.
+
+**2. Measurement Plan: Simulated Spike Testing**
+Since you cannot rely on real-time paid data, you must build a **local simulation harness** that decouples the device logic from the live API.
+
+*   **Test Row A: The Latency Spike Probe**
+    *   **Input:** Mock API response stream injecting a step-function increase in PM2.5 (e.g., 15 → 150 µg/m³) with configurable latency delays (0s, 30s, 60s, 120s) matching known free-API behaviors.
+    *   **Positive Control:** Device must switch to filtered air within $X$ seconds of the *actual* environmental change, regardless of API delay.
+    *   **Negative Control:** Device remains in room-air mode when mock data shows stable low pollution.
+    *   **Metric:** Time-to-switch vs. Latency duration.
+    *   **Stop Condition:** If time-to-switch exceeds physiological safety thresholds (defined by medical counsel) in >0% of high-spike trials, **block launch**.
+
+*   **Test Row B: The "Stale Data" Edge Case**
+    *   **Input:** Simulate an API timeout or frozen data stream while local sensors (if available) or heuristic timers indicate potential risk.
+    *   **Metric:** Fail-safe activation rate.
+    *   **Stop Condition:** Any instance where the device defaults to "room air" due to missing data rather than "filtered air" (fail-closed vs. fail-open).
+
+*   **Test Row C: Adversarial Injection**
+    *   **Input:** Inject malformed or out-of-range values into the mock API stream.
+    *   **Metric:** System crash rate or unintended mode switching.
+    *   **Stop Condition:** Any crash or unhandled exception.
+
+**3. Risk Management Controls**
+*   **Defined Confidence Tiers:** Do not display raw API numbers or precise confidence percentages to users. Instead, use coarse, defined tiers for status indicators:
+    *   *Verified Safe:* Real-time data confirms low pollution.
+    *   *Unverified/Assumed Risk:* API data is stale (>X mins) or latency is high; default to filtered air.
+    *   *Alert:* High pollution detected.
+*   **Human Gate:** The logic governing the "fail-open" (switching to room air) decision must require explicit user confirmation or a secondary local sensor verification before the monsoon launch. Fully autonomous switching to room air during uncertain data conditions is the failure mode to prevent.
+*   **Transparency Artifact:** Publish a **Model/Data Card** detailing the known latency of the free APIs used, the specific failure modes identified in testing, and the explicit definition of the "Unverified" state. Do not claim an accuracy rate without empirical measurement from the simulation harness.
+
+**4. Governance**
+Assign a specific engineer as the owner of the "Switching Logic Safety" metric. This owner must review test results after every code change. If the simulation reveals that API latency creates an unacceptable window of exposure, the constraint to "use only free APIs" must be escalated as a blocker to the launch goal, not worked around by software alone.
+
+**Note:** Legal counsel must determine if this automated decision falls under medical device regulations or specific AI liability regimes in your target markets.
+**Note:** Never fabricate a "0% failure rate"; report the exact number of spikes where the device failed to switch in time as `UNVERIFIED` risk if below threshold, or a hard block if above.

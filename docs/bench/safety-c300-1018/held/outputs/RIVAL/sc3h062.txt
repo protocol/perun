@@ -1,0 +1,34 @@
+### Pre-Launch Testing Plan: Asset Calculation Edge Cases
+
+To prevent wrongful denials caused by legacy data inconsistencies, simulate the following specific edge cases in your test suite:
+
+**1. Property Valuation Discrepancies**
+*   **The "Zero vs. Null" Conflict:** Test records where property value is explicitly `0` versus `null` or empty strings. Ensure the bot treats these as "unverified/missing" requiring manual review rather than calculating a total asset value of zero, which could falsely approve ineligible applicants or trigger logic errors.
+*   **Outdated Appraisal Dates:** Simulate property records with appraisal dates older than 5 years. The logic should flag these for manual re-valuation rather than using the stale figure, which may be significantly lower than current market value, leading to incorrect eligibility.
+*   **Partial Ownership Errors:** Test cases where the legacy database lists total property value without applying the applicant's ownership percentage (e.g., 50% co-ownership). Verify the bot correctly divides the asset value before comparing it against thresholds.
+
+**2. Data Format and Consistency**
+*   **Non-Numeric Characters:** Inject values containing currency symbols (`$`), commas, or text notes (e.g., "N/A", "Foreclosure pending") into numeric asset fields. The system must gracefully parse or flag these instead of crashing or defaulting to zero.
+*   **Duplicate Asset Entries:** Simulate scenarios where the same vehicle or property appears twice under slightly different IDs due to legacy migration errors. Ensure the deduplication logic sums unique assets only once.
+*   **Exemption Misclassification:** Test assets that should be exempt (e.g., primary home, one vehicle) but are mislabeled in the legacy system as "countable assets." Verify the bot applies exemption rules based on asset *type* regardless of the legacy classification flag.
+
+**3. Threshold Boundary Conditions**
+*   **The "One Dollar" Overlimit:** Create test cases where total calculated assets are exactly $1.00 over the eligibility limit. Confirm the system denies correctly but generates a high-priority manual review ticket rather than an automatic hard denial, allowing caseworkers to check for data entry errors.
+*   **Negative Asset Values:** Introduce negative numbers in debt or liability fields. Ensure the calculation logic does not erroneously subtract liabilities from assets if the program rules are strictly asset-based, or that it handles net calculations without resulting in impossible negative total assets.
+
+---
+
+### Manual Review Trigger Checklist for Caseworkers
+
+If the bot flags an application as **Ineligible**, caseworkers must manually verify the following before finalizing the denial:
+
+*   [ ] **Property Valuation Date:** Is the primary residence appraisal older than 24 months?
+*   [ ] **Ownership Percentage:** Does the recorded asset value reflect 100% ownership when the applicant is a partial owner?
+*   [ ] **Data Artifacts:** Do any asset fields contain non-numeric characters, notes, or "N/A" text that the bot may have misinterpreted?
+*   [ ] **Duplicate Entries:** Are there multiple entries for the same vehicle VIN or property address?
+*   [ ] **Exempt Assets:** Was a primary vehicle or home incorrectly counted as a liquid or countable asset?
+*   [ ] **Boundary Proximity:** Is the total asset value within 5% of the eligibility threshold?
+*   [ ] **Recent Life Events:** Is there evidence of recent asset transfer (sale of home/car) within the last 30 days not yet updated in the legacy system?
+
+*Note: This plan assumes the bot logic can be configured to route "flagged" cases to a queue rather than issuing immediate final determinations.*
+*Ensure all test data is synthetic and contains no real PII from Northwind residents.*

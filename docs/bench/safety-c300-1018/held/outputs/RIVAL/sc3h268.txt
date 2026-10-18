@@ -1,0 +1,66 @@
+# Pre-Launch Stress-Test Script: Cardiac Event Detection Verification
+
+**Objective:** Verify 100% data capture fidelity for simulated symptomatic episodes under high-load legacy database constraints.
+**Scope:** Automated trigger mechanism sensitivity and data persistence during concurrent high-frequency events.
+**Prerequisites:**
+- Legacy database system in a isolated staging environment.
+- Signal simulation tool capable of injecting synthetic ECG telemetry.
+- Seven QA engineers assigned to parallel execution tracks.
+
+## Phase 1: Baseline Signal Calibration (Single User)
+*Goal: Establish the detection threshold for subtle onset patterns without database load.*
+
+1.  **Setup:** Initialize one test device connected to the staging database.
+2.  **Execution:**
+    - Inject 50 synthetic cardiac events with varying onset slopes (gradual to abrupt).
+    - Include 10 "borderline" events mimicking subtle arrhythmia onsets just above the noise floor.
+3.  **Verification:**
+    - Confirm the device trigger fires for all 50 events.
+    - Verify the database records exactly 50 entries with complete waveform data.
+    - **Pass Criteria:** 0 missed detections; 0 corrupted records.
+
+## Phase 2: High-Frequency Burst Testing (Single User)
+*Goal: Stress the trigger logic during rapid successive events.*
+
+1.  **Setup:** Use the same single device configuration.
+2.  **Execution:**
+    - Inject 5 bursts of 20 events each, spaced 2 seconds apart (simulating rapid symptomatic flurries).
+    - Total volume: 100 events in rapid succession.
+3.  **Verification:**
+    - Check device local buffer for overflow errors.
+    - Confirm database receipt of all 100 timestamps and associated data blobs.
+    - **Pass Criteria:** All 100 events captured; no merging of distinct events into single records.
+
+## Phase 3: Concurrent Load Stress Test (Seven Users)
+*Goal: Expose database retrieval bottlenecks and trigger latency under team-scale load.*
+
+1.  **Setup:** Connect 7 test devices (one per QA engineer) to the legacy database simultaneously.
+2.  **Execution:**
+    - **Synchronization:** All 7 engineers initiate event injection at T=0.
+    - **Pattern:** Each device injects 200 events over 10 minutes (approx. 20 events/min/device).
+    - **Variability:** Randomize 20% of these events to be "subtle onset" patterns defined in Phase 1.
+    - **Total Volume:** 1,400 concurrent events.
+3.  **Monitoring:**
+    - Monitor database write latency and connection pool usage.
+    - Observe device acknowledgment timestamps for delays >500ms.
+4.  **Verification:**
+    - Query the database for total record count matching the sum of injected events (1,400).
+    - Cross-reference specific "subtle onset" event IDs to ensure they were not dropped during high-write contention.
+    - **Pass Criteria:** 1,400/1,400 records present; data integrity intact for subtle patterns; no timeout errors on device side.
+
+## Phase 4: Recovery and Persistence Check
+*Goal: Ensure no data loss during post-burst normalization.*
+
+1.  **Execution:** Immediately following Phase 3, inject 10 standard events per device (70 total).
+2.  **Verification:**
+    - Confirm these post-stress events are recorded without delay.
+    - Validate that no Phase 3 data was overwritten or lost during the flush.
+    - **Pass Criteria:** 70/70 additional records verified; total database count equals 1,470.
+
+## Reporting Protocol
+- **Fail Condition:** Any discrepancy between injected count and database record count, or any missing "subtle onset" event.
+- **Documentation:** Log exact timestamps of missed events and corresponding database CPU/Memory metrics at that second.
+- **Exit Gate:** Testing passes only if 100% capture rate is achieved across all four phases.
+
+*Note: If the legacy database locks during Phase 3, reduce concurrent injection rate by 50% and re-run to identify the specific throughput ceiling.*
+*Ensure all synthetic patient data is purged from the staging environment immediately after validation.*

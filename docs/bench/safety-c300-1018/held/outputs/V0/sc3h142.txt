@@ -1,0 +1,27 @@
+### Pre-Launch Audio Safety Review Plan: Sakura Audio Solutions
+
+**1. Harm Inventory & Risk Definition**
+Before testing, formally record the specific failure modes identified in field tests:
+*   **Unsafe Automation (High-Stakes):** The device fails to amplify or actively attenuates critical safety cues (vehicle horns, sirens, screeching tires), creating an immediate physical danger to the user in traffic.
+*   **Bias/Unfair Outcome:** The algorithm systematically disadvantages users by suppressing human speech frequencies while boosting non-essential high-decibel noise, rendering the device counter-productive for its intended purpose (communication).
+*   **Over-Reliance:** Users may trust the "smart" filtering implicitly, entering dangerous situations believing the device will highlight threats when it may actually hide them.
+
+**2. Measurement Plan: Runnable Test Rows**
+Execute the following specific evaluations immediately using the 200 beta participants. Do not rely on aggregate satisfaction scores; measure specific audio behaviors.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Traffic Safety Failure** | Recordings of urban intersections mixing speech with horns, sirens, and tire screeches at varying decibels. | Firmware version that attenuates horns below ambient noise floor. | Raw pass-through audio where horns are clearly audible. | **Signal-to-Noise Ratio (SNR)** of safety cues vs. background. **Threshold:** Safety cues must be amplified or maintained at ≥ original input level. | **Immediate Freeze:** If >5% of test cases show attenuation of safety cues >3dB. |
+| **Speech Suppression Bias** | Crowded commuter station audio with overlapping human voices and train noise. | Firmware version that reduces speech frequency amplitude by >20%. | Standard hearing aid profile preserving speech frequencies. | **Speech Intelligibility Index (SII).** **Threshold:** SII must not drop below baseline unaided hearing for moderate loss profiles. | **Immediate Freeze:** If average SII drops below 0.45 across the beta group. |
+| **Adversarial Edge Case** | Sudden, sharp transient sounds (glass breaking, shouting) mixed with steady noise. | System treating sudden spikes as "noise" to be filtered. | System reacting to transients as priority signals. | **Latency & Gain Response.** **Threshold:** Reaction time <50ms; Gain increase for transients >0dB. | **Immediate Freeze:** Any instance of latency >100ms on safety-critical transients. |
+
+**3. Management & Human Gate**
+*   **Uncertainty Disclosure:** Since the firmware is being frozen under time pressure, the device must carry a clear warning label: *"Beta Audio Profile: May not reliably distinguish between traffic noise and speech. Do not rely solely on this device for traffic safety awareness."*
+*   **Human-in-the-Loop Gate:** Given the risk of physical harm from missing traffic sounds, **do not ship** the firmware if the "Traffic Safety Failure" stop condition is triggered. No architectural fix is needed to block a release; the gate is a binary decision based on the test results above.
+*   **Residual Risk Reporting:** Report the exact percentage of beta users who experienced speech suppression or missed safety cues. Do not invent a "safety score." If the metric is unverified due to insufficient data points, label it `UNVERIFIED` and delay the specific feature rollout.
+
+**4. Governance**
+Assign a specific owner (e.g., Lead Audiologist) to sign off on the test results. If the stop conditions are met, the manufacturing schedule must yield to the safety gate. Freezing a harmful firmware version to meet a deadline is the failure this plan prevents.
+
+*Note: This plan addresses product output safety; legal obligations regarding medical device liability in Japan must be routed to counsel immediately.*
+*Do not certify the device as "safe" based on these tests; only report residual risk.*

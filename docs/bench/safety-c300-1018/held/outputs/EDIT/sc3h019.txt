@@ -1,0 +1,40 @@
+### Pre-Launch Review Plan: Elderly Fraud Detector Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Bias/Unfair Outcomes (Systematic disadvantage to elderly users with atypical but legitimate patterns).
+*   **Affected Group:** Customers aged 65+ making large donations, travel bookings, or medical payments.
+*   **Worst Realistic Case:** A vulnerable senior is locked out of funds during a medical emergency or while traveling abroad due to a false positive freeze, causing physical harm or financial distress.
+
+**2. Synthetic Data & Evaluation Strategy (MEASURE)**
+Since historical data is limited, construct a **Synthetic Adversarial Probe Set** specifically for the 65+ demographic. Do not rely on aggregate accuracy; measure performance by this subgroup.
+
+*   **Probe Construction:** Generate synthetic transaction streams representing "Safe Atypical" behaviors:
+    *   *Scenario A:* Large one-time charitable donation.
+    *   *Scenario B:* Sudden high-value travel booking (flight + hotel) from a home location.
+    *   *Scenario C:* Emergency medical payment to an unfamiliar provider.
+    *   *Controls:* Include known fraud patterns (positive controls) and routine spending (negative controls) for the same demographic.
+*   **Metric:** False Positive Rate (FPR) specifically for the 65+ "Safe Atypical" segment.
+*   **Pass Threshold:** Owner-defined. Given the high stakes, propose **zero tolerance** for irreversible freezes on these specific synthetic probes without human review.
+*   **Stop Condition:** If the system auto-freezes any "Safe Atypical" synthetic probe without triggering a human review workflow, **block launch**.
+*   **Injection/Leakage Check:** Verify that synthetic user data does not leak into other user contexts and that the model cannot be manipulated via transaction descriptions (prompt injection via memo fields).
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** Because account freezing is a **high-stakes, irreversible action** for the user, full autonomous execution is unsafe given the current data gaps.
+    *   *Requirement:* Any freeze trigger generated for a user aged 65+ (or matching the "Safe Atypical" pattern) must route to a human agent for confirmation before the account is locked.
+    *   *Fallback:* If real-time human review is impossible within the transaction window, the system must default to **allowing the transaction** and flagging it for post-hoc review, rather than risking a false freeze.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "87% fraud risk") to internal agents or customers. Use defined coarse tiers:
+    *   *Confirmed Fraud* (Multiple strong signals)
+    *   *Suspicious – Review Required* (Atypical pattern, single source)
+    *   *Unverified* (Insufficient data)
+*   **Transparency Artifact:** Draft a preliminary **Model Card** section documenting:
+    *   *Intended Use:* Fraud detection for general population.
+    *   *Known Limitations:* Limited historical training data for 65+ atypical spending; high risk of false positives for this group.
+    *   *Status:* Mark performance metrics for the 65+ subgroup as **UNVERIFIED** until the synthetic evals are run. Do not invent an accuracy rate.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific product owner responsible for reviewing the synthetic eval results before the 5-day deadline.
+*   **Legal Routing:** Consult counsel immediately regarding regulatory obligations for automated decisions affecting vulnerable populations (e.g., EU AI Act implications for high-risk systems) and disclosure requirements. Do not assert legal compliance internally; route the determination.
+*   **Execution:** Run the synthetic probe set immediately. If the stop condition is met, the go-live date must be delayed or the scope restricted to non-freeze alerts until the HITL gate is fully operational.
+
+**Note:** This plan identifies residual risk; it does not certify the system as safe or unbiased. The decision to ship rests with the assigned owner based on the eval results.
+Legal determination on regulatory duties (EU AI Act, etc.) must be confirmed by counsel, not assumed.

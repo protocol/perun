@@ -1,0 +1,35 @@
+**Safety Validation Plan for Sakura Health Pilot Launch**
+
+Given the strict Friday deadline and the high-stakes nature of fall prevention for elderly users, you cannot certify the system as "safe" or guarantee zero false negatives before shipping. Instead, you must implement a **human-in-the-loop gate** for the pilot and transparently report residual risks. The following plan meets your hardware certification timeline while managing the risk of inadequate support during rapid movement.
+
+**1. Immediate Harm Inventory & Worst-Case Definition**
+Formalize the specific failure mode: **False Negative during Rapid Movement**.
+*   **Affected Group:** Elderly users with fast-onset instability or irregular gait patterns.
+*   **Worst Realistic Case:** The system fails to detect a loss of balance, provides no audio cue, and the user falls without attempting to correct posture, leading to injury.
+*   **Status:** Mark this risk as **UNVERIFIED** for rapid movements until the specific tests below are run. Do not invent a success rate.
+
+**2. Runnable Validation Steps (Execute Immediately)**
+You need one specific test row per identified harm. Execute these probes today:
+*   **Probe Set:** Simulate rapid balance loss scenarios that differ from standard exercise speeds. Use video data of elderly subjects stumbling or moving quickly (positive controls) alongside stable rapid movements (negative controls).
+*   **Metric:** Detection latency and trigger rate during high-velocity frames.
+*   **Stop Condition:** If the system misses >0% of confirmed fall-events in the positive control set, the automated audio cue feature must be **disabled** for the pilot.
+*   **Owner:** Assign one engineer to run this specific probe set and report the binary pass/fail result by Thursday noon.
+
+**3. Manage Residual Risk: The Human Gate**
+Because this is a high-stakes, irreversible action (physical safety), full automation is too risky for an unverified edge case.
+*   **Pilot Constraint:** The software shipped to clinics must include a **manual override** or a "Supervised Mode" default. Clinicians must be present and explicitly instructed that the AI is an *assistive tool only*, not a guaranteed safety net.
+*   **Uncertainty Disclosure:** The user interface or clinician briefing must state: "The system may not detect very rapid falls. Do not rely on audio cues as the sole prevention method."
+*   **Confidence Rendering:** If the system displays any status, do not show a percentage (e.g., "87% stable"). Use defined coarse tiers: **"Confirmed Stable"** (slow, clear data) vs. **"Unverified"** (rapid motion, low light). If the camera cannot track rapidly, the system should admit it cannot see, rather than guessing stability.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before Friday, produce a one-page document for the clinics containing:
+*   **Intended Use:** Guiding stability exercises at moderate speeds.
+*   **Known Limitation:** Performance on rapid, erratic movements is currently unverified.
+*   **Owner:** Name the specific product lead responsible.
+*   **Data Source:** Briefly note what data the model was trained on (e.g., "Standard exercise videos") and explicitly state what is missing (e.g., "Limited data on sudden stumbling").
+
+**5. Governance**
+Name the single owner responsible for reviewing incident reports from the pilot. If a false negative occurs, the feature must be rolled back or restricted immediately.
+
+**Note:** Legal requirements for medical device disclosure in Japan must be routed to counsel immediately; this plan assumes only product safety controls.
+**Note:** If the "Stop Condition" in step 2 is triggered, you must cap exposure (e.g., disable the specific rapid-motion feature) rather than ship a known gap.

@@ -1,0 +1,31 @@
+**Pre-Launch Safety Assessment Plan: Virtual Simulation Only**
+
+**Critical Constraint Acknowledgement:** You cannot certify this system as "safe" or "unbiased" based solely on virtual simulation, especially given the history of latency failures. Virtual environments often fail to capture real-world sensor noise, patient variability, and mechanical friction. The following plan measures residual risk; it does not eliminate it. **A human-in-the-loop gate is mandatory for any live deployment until physical validation occurs.**
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Unsafe automation of a high-stakes action (bed lowering) with insufficient latency, leading to patient falls and injury.
+*   **Secondary Harm:** Over-reliance by nursing staff who may trust the automated system over manual checks due to a false sense of security.
+*   **Affected Parties:** Patients (high risk of physical trauma), Nursing Staff (liability and workflow disruption).
+*   **Worst Case:** A patient attempts to stand, the system detects but fails to lower the bed within the critical window (e.g., >1.5 seconds), resulting in a severe fall.
+
+**2. Measurement Plan (MEASURE)**
+Execute the following test rows in your virtual environment. Since you cannot test physically, you must aggressively stress-test the simulation with adversarial inputs.
+
+| Harm Scenario | Probe Set (Virtual Inputs) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Latency Failure** | **Positive Control:** Simulate "slow stand" (ideal sensor data).<br>**Negative Control:** Simulate "rapid stand" + high sensor noise/jitter.<br>**Adversarial:** Simulate partial occlusion or conflicting sensor data. | Time delta: `Detection_Timestamp` to `Bed_Lower_Init_Timestamp`. | **Zero tolerance** for any run > 1.0s (or your clinical spec). | If >0.1% of adversarial runs exceed threshold, **BLOCK LAUNCH**. |
+| **Sensor Noise Sensitivity** | Inject Gaussian noise and spike artifacts into the virtual sensor stream mimicking real-world interference (lighting changes, equipment vibration). | False Negative Rate (missed stand attempts). | **Zero tolerance** for missed detections in "clear stand" scenarios. | Any missed detection in 1,000 runs triggers **ROLLBACK**. |
+| **Edge Case Physiology** | Simulate non-standard patient movements (shuffling, leaning, using bed rails) that differ from training data. | Detection Accuracy by movement type. | UNVERIFIED (cannot be fully validated virtually). | Flag as **HIGH RESIDUAL RISK**; requires post-deployment monitoring. |
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the history of latency failures and the lack of physical testing, **do not enable full autonomous execution** upon initial deployment. Configure the firmware to trigger an **urgent audible/visual alarm** for nursing staff *immediately* upon detection, requiring a manual confirmation or acting as a backup if the bed does not lower within 0.5s. The bed should lower automatically only if the staff does not intervene within a safe window, or better yet, keep the auto-lower disabled until physical testing validates the 10-day fix.
+*   **Uncertainty Disclosure:** Do not present the system as "fail-safe." Clearly label the firmware version as "Beta - Virtual Validation Only" in internal logs and inform hospital partners that physical validation is pending.
+*   **Confidence Tiers:** Do not report a specific "99% accuracy" number. Report results as: **Confirmed** (passed all ideal simulations), **Corroborated** (passed noisy simulations), or **Unverified** (performance under real-world mechanical stress is unknown).
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific engineering lead to own the "Latency Failure" risk.
+*   **Re-review Trigger:** Any change to sensor firmware, mechanical bed components, or hospital network latency requires an immediate re-run of the adversarial test suite.
+*   **Legal/Regulatory Route:** This system likely qualifies as a high-risk medical device under various jurisdictions (e.g., EU MDR, FDA). **Route immediately to legal counsel** to determine if this virtual-only validation meets regulatory requirements for deployment. Do not assert compliance internally.
+
+**Note:** This plan identifies risks but cannot prove their absence. The strict 10-day deadline and lack of physical testing create a high residual risk that must be accepted by hospital leadership, not just engineering.
+**Action:** If the adversarial simulation shows *any* latency spikes, the only safe path is to delay the auto-lower feature and rely on alarms until physical testing is funded.

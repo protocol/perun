@@ -1,0 +1,42 @@
+### Risk Assessment & Human-in-the-Loop Gate Plan
+
+**1. Harm Inventory: Bias in Automated Scheduling**
+*   **Harm:** Systematic disadvantage against candidates with names perceived as foreign due to parsing errors, leading to missed interview opportunities.
+*   **Affected Group:** International candidates, specifically those with non-Germanic name structures.
+*   **Worst Realistic Case:** Qualified candidates are permanently excluded from the hiring pipeline without ever knowing an interview was offered, exposing the firm to reputational damage and legal liability under anti-discrimination laws.
+*   **Status:** **UNVERIFIED** (No quantitative bias rate measured yet; reliance on anecdotal observation).
+
+**2. Measurement Plan (Pre-Launch)**
+Do not assert a "low error rate." Instead, execute this targeted evaluation before the integration window closes:
+*   **Probe Set:** Construct a test batch of 500 synthetic resumes.
+    *   *Positive Controls:* 250 resumes with names known to trigger parsing errors (based on your observations of "foreign" names).
+    *   *Negative Controls:* 250 resumes with common local names and identical qualifications.
+*   **Metric:** False Negative Rate (Interviews canceled/missed per group).
+*   **Stop Condition:** If the error rate for the Positive Control group exceeds 0% (or a threshold you define as acceptable risk), the automated cancellation feature **must not** go live without the gate below.
+*   **Injection Check:** Verify that resume formatting variations (PDF vs. Word) do not disproportionately affect the Positive Control group.
+
+**3. Management Control: Human-in-the-Loop (HITL) Gate**
+Given the high stakes (career opportunity loss) and the identified parsing flaw, full automation of interview cancellations is unsafe. Implement the following mandatory gate immediately:
+
+*   **The Rule:** The bot may *draft* cancellation notices or flag "parsing uncertain" cases, but it **cannot execute** the cancellation or fail to send an invitation without human review.
+*   **The Workflow:**
+    1.  **Quarantine:** Any candidate record where the name parser confidence is low, or the name matches patterns associated with previous errors, is routed to a "Manual Review Queue."
+    2.  **Review:** A human recruiter verifies the name parsing and interview eligibility for these queued cases within 24 hours.
+    3.  **Override:** The human explicitly confirms or corrects the action before the system contacts the candidate or updates the legacy HR system.
+*   **Uncertainty Display:** If the bot presents data to recruiters, label parsing results as "Unverified" or "Needs Confirmation" rather than displaying a raw confidence percentage (e.g., avoid "87% match").
+
+**4. Transparency Artifact (Model Card Lite)**
+Before launch, create a one-page document attached to this feature containing:
+*   **Intended Use:** Scheduling invitations based on parsed resume data.
+*   **Known Limitation:** Name parsing algorithms have unverified error rates for non-local names; retraining was not possible within the integration window.
+*   **Mitigation:** All potential cancellations for flagged names require human approval.
+*   **Owner:** [Name of BuildRight HR Lead].
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign a specific individual at BuildRight HR as the owner of this risk. They must re-evaluate the system if the parser or candidate demographics change.
+*   **Legal Duty:** Whether this automated decision-making triggers specific regulatory requirements under the EU AI Act or German labor laws is a legal determination. **Route this immediately to counsel.** Do not assume the current mitigation is legally sufficient; counsel must verify if explicit candidate disclosure of AI usage is mandated.
+
+***
+
+**Note:** This plan prioritizes preventing irreversible harm (missed interviews) over automation speed. The "Stop Condition" is critical: if testing reveals significant bias, the human gate must remain permanent until the algorithm is retrained.
+**Note:** Never certify this system as "unbiased" or "safe" in client communications; state clearly that human oversight is active specifically to manage known parsing risks.

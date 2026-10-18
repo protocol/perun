@@ -1,0 +1,36 @@
+**Practical Validation Plan for LagosPay Credit-Limit Augmenter**
+
+**1. Construct a "Golden Set" of Manual Archetypes (Days 1–2)**
+Since you cannot afford external tools, create a local spreadsheet containing 50–100 synthetic user profiles that represent your specific risk concerns. Do not rely solely on random sampling. Explicitly engineer these rows to mimic the "irregular cash flow" patterns of your target demographic:
+*   **The "Gig Worker":** High frequency of small deposits, varying days, zero formal salary slip.
+*   **The "Market Trader":** Large lump-sum deposits followed by weeks of silence, then heavy withdrawal.
+*   **The "Remittance Receiver":** Irregular international inflows that don't match local payroll cycles.
+*   **The "False Negative":** Users who look risky by traditional standards (low average balance) but have 100% repayment history on your platform.
+*   **The "Control Group":** Traditional salaried employees with steady flows (to ensure you haven't broken existing logic).
+
+Manually label what the *correct* decision should be for each profile based on your product intent. This spreadsheet is your ground truth.
+
+**2. Execute a Deterministic Logic Replay (Days 3–4)**
+Run your current decision engine against this Golden Set in a isolated staging environment. Since you have no budget for new software, use your existing development scripts to batch-process these specific IDs.
+*   Compare the system's output against your manual labels.
+*   Calculate the "Fairness Error Rate": Specifically, how many of your "Gig Worker" and "Market Trader" archetypes were incorrectly flagged as high-risk?
+*   If more than 5–10% of your intended beneficiary archetypes are rejected, your logic is too rigid for the Nigerian informal sector.
+
+**3. Perform "Threshold Stress Testing" (Days 5–7)**
+Your logic likely uses hard cut-offs (e.g., "average balance must be > X" or "no gap > 14 days"). Identify these thresholds in your code.
+*   Manually adjust these variables in your staging config to be 10–20% more lenient.
+*   Re-run the Golden Set.
+*   Observe if the "False Negatives" (reliable low-income users) are now approved while the actual high-risk profiles remain rejected.
+*   Document the specific threshold changes that maximize approval for your target demographic without triggering obvious fraud risks. This defines your launch configuration.
+
+**4. Implement a "Human-in-the-Loop" Shadow Mode (Launch Week)**
+Do not fully automate the decision for the first 1,000 real users.
+*   Configure the system to *recommend* a limit change but require a manual click from a team member to finalize it.
+*   With a 12-person team, rotate two staff members daily to review these recommendations for 1 hour.
+*   Focus specifically on cases where the system suggests "No Change" or "Decrease" for users who have repaid consistently.
+*   Log every override. If your team overrides the system >20% of the time for the same reason, hard-code that exception into the logic immediately.
+
+**5. Establish a Rapid Feedback Loop**
+Create a simple internal channel (e.g., a dedicated Slack thread or WhatsApp group) where customer support can instantly flag users who complain about limits despite good repayment behavior. Treat every complaint as a potential data bug. Investigate the transaction history of these specific users within 24 hours to identify if a specific cash-flow pattern is breaking your model.
+
+**Note:** Prioritize reviewing users with high repayment frequency but low average balances, as they are most likely to be unfairly penalized by standard algorithms. Keep your "Golden Set" spreadsheet updated with real edge cases found during the shadow mode to refine logic post-launch.

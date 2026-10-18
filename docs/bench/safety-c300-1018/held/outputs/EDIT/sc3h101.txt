@@ -1,0 +1,33 @@
+I cannot confirm that your current logic is "completely safe and fair." No test or review can certify a system as unbiased or risk-free, especially one making high-stakes healthcare decisions. Asserting such safety without rigorous, subgroup-specific measurement would be a fabrication.
+
+Instead, here is the immediate plan to manage residual risk within your deadline and budget constraints:
+
+**1. Harm Inventory (MAP)**
+Your primary identified harm is **Bias/Unfair Outcomes**: the algorithm systematically disadvantages elderly or mobility-impaired users by assigning distant clinics. The worst-case scenario is a high-risk patient missing critical vaccination due to inaccessible travel, leading to severe health outcomes.
+
+**2. Measurement Plan (MEASURE)**
+You must test outputs, not just code, before launch.
+*   **Probe Set:** Create synthetic user profiles varying only by age and assumed mobility (e.g., "75-year-old with limited mobility" vs. "30-year-old"). Use existing address data for Paris arrondissements.
+*   **Controls:** Include a "known-bad" case (elderly user far from transit) and a "known-good" case (user near multiple clinics).
+*   **Metric:** Calculate the average additional travel time/distance for the "high-risk" group compared to the general population.
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for cases where travel time exceeds a safe limit for the demographic (e.g., >45 mins for high-risk). If the system fails this for any subgroup, **do not launch** the fully automated version.
+*   **Status:** Until you run these specific probes, your fairness metric is **UNVERIFIED**. Do not invent a safety percentage.
+
+**3. Risk Management (MANAGE)**
+Given the high stakes (health access) and irreversible nature of missed care, you must implement a **Human-in-the-Loop (HITL) gate** immediately.
+*   **The Gate:** Do not auto-confirm appointments for users flagged as high-risk (e.g., age >70 or self-reported mobility issues). Instead, route these assignments to a human reviewer or require explicit user confirmation via a clear warning: "This clinic is X km away. Is this accessible for you?"
+*   **Uncertainty Display:** Do not show raw confidence scores. If the system is unsure about transit links, display a coarse tier like "Travel Time Unverified" rather than a precise minute count.
+*   **Disclosure:** Clearly state that the clinic assignment is an automated recommendation, not a medical directive.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one product manager as the named owner for this specific harm.
+*   **Artifact:** Draft a lightweight "Model Card" for internal use documenting the intended use (scheduling), limitations (does not account for real-time mobility barriers), and the results of your bias probes.
+*   **Legal Routing:** Because this involves health data and consequential decisions for vulnerable groups, you must route the question of legal disclosure duties and regulatory compliance (e.g., EU AI Act implications) to legal counsel immediately. Do not rely on engineering assumptions for this.
+
+**Summary of Next Steps:**
+1.  Run the subgroup travel-time probes today.
+2.  Implement the HITL gate for high-risk profiles before any code pushes to production.
+3.  Route regulatory questions to counsel.
+4.  Document the residual risk and the "UNVERIFIED" status of fairness until probes pass.
+
+Launching without these controls constitutes shipping an unsafe automated decision system. The deadline is tight, but the floor for high-stakes automation cannot be relaxed.

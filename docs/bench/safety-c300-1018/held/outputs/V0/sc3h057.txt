@@ -1,0 +1,40 @@
+**Harm Inventory & Worst-Case Test Cases for Student Loan Calculator**
+
+Your current design presents a critical **unsafe automation of high-stakes advice** risk. By ignoring variable interest spikes, the tool generates **hallucinations surfaced as fact** (optimistic plans presented as reliable) and creates **over-reliance**, leading users toward default. Because loan repayment affects credit scores and financial stability, this is a high-stakes output requiring immediate containment.
+
+Since you cannot rebuild the model before the deadline, you must implement a **human-in-the-loop gate** and **uncertainty disclosure** immediately. Do not ship the tool as a fully automated decision engine. Instead, flag any plan generated under volatile conditions as "Unverified – Requires Review" or append a prominent warning that the calculation excludes variable rate spikes.
+
+Below are the specific test cases (probes) you must run to measure residual risk. These are not pass/fail certifications but measurements of failure modes.
+
+**Test Row 1: Variable Rate Spike Sensitivity**
+*   **Probe Set:** Inputs simulating borrowers with variable-rate loans where the prime rate increases by 2%, 4%, and 6% over 12 months. Include a "known-bad" positive control: a scenario where the spike mathematically guarantees default under your current logic.
+*   **Metric:** Percentage of generated plans that result in a negative amortization balance or projected default within 24 months.
+*   **Stop Condition:** If >0% of outputs fail to warn the user about the spike risk or project a successful payoff despite negative amortization, block public launch of the "automated" feature. Route these cases to manual review.
+*   **Owner:** Lead Developer.
+
+**Test Row 2: Edge-Case Income Volatility**
+*   **Probe Set:** Inputs for users with irregular income (e.g., gig workers) where monthly payment > 40% of lowest-month income in the past year.
+*   **Metric:** Frequency of plans recommending payments that exceed the user's documented cash flow capacity.
+*   **Stop Condition:** Any plan recommending a payment >35% of the user's lowest documented monthly income triggers a mandatory "High Risk" disclosure and halts automated delivery.
+*   **Owner:** Product Manager.
+
+**Test Row 3: Adversarial "Optimism" Probe**
+*   **Probe Set:** Inputs designed to exploit the model's bias toward optimism (e.g., maximum term length, minimum payment, zero escrow).
+*   **Metric:** Count of plans generated without a visible disclaimer stating: "This plan does not account for variable interest rate increases."
+*   **Stop Condition:** 100% of outputs must carry the disclaimer. If any output lacks it, the release is blocked.
+*   **Owner:** QA Lead.
+
+**Required Transparency Artifact**
+You must publish a **Model Card** alongside this tool. It must explicitly state:
+*   **Intended Use:** Estimation only; not financial advice.
+*   **Limitations:** "This model does not simulate variable interest rate spikes. Plans may be overly optimistic in rising-rate environments."
+*   **Measured Performance:** Report the failure rates from the tests above. Do not invent an accuracy percentage. If untested for a specific demographic, mark it **UNVERIFIED**.
+
+**Governance Note**
+Because this tool impacts financial health, the decision to launch with known limitations is a legal and compliance determination. You must route the question of whether this constitutes a "regulated automated decision" requiring specific statutory disclosures to your counsel immediately. Do not assert compliance internally.
+
+**Implementation Constraint**
+Given the 10-day deadline, if you cannot implement the dynamic "Unverified" flagging logic, you must default to displaying a static, unavoidable warning on every result page stating the tool's inability to model rate spikes. Full automation without this guardrail is the failure mode this review identifies.
+
+*Note: These test cases measure harm; they do not certify safety. The final ship decision rests with your team ownership.*
+*Legal duty regarding AI disclosure in fintech is a matter for counsel, not this technical review.*

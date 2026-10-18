@@ -1,0 +1,38 @@
+### Safety Protocol: Retrospective Extreme-Scenario Review for Glucose Predictor
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the worst-case failure for each risk:
+*   **False Negative (Missed Drop):** The system fails to warn of a rapid decline during high-intensity intervals, leading to severe hypoglycemia, loss of consciousness, or injury during activity.
+*   **False Positive (Ghost Alert):** The system predicts a drop that does not occur, causing the user to consume unnecessary carbohydrates or reduce insulin incorrectly, leading to hyperglycemia or disrupted performance.
+*   **Latency Failure:** The warning arrives too late for the user to act (e.g., <15 minutes before the nadir), rendering the advice useless.
+*   **Over-Reliance:** Users treat the prediction as a medical guarantee rather than a probabilistic trend, ignoring physical symptoms.
+
+**2. Measurement Plan (MEASURE)**
+Since live hardware testing is unavailable, construct a rigorous retrospective eval suite using your existing logs. Do not assert accuracy; measure residual risk.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls:** Isolate log segments where a rapid glucose drop (>2 mg/dL/min) actually occurred post-exercise. Inject these into the model to verify alert generation.
+    *   **Negative Controls:** Use stable post-exercise segments where no drop occurred to verify the absence of false alarms.
+    *   **Adversarial/Edge Cases:** Specifically target "extreme" scenarios: rapid transitions from anaerobic to aerobic activity, delayed drops occurring 30+ minutes post-exercise, and data gaps typical of sweat-induced sensor noise.
+*   **Metrics & Thresholds:**
+    *   **Lead Time:** Calculate the delta between the alert timestamp and the actual glucose nadir. *Stop Condition:* If >5% of true drops have a lead time <15 minutes, block launch.
+    *   **False Alarm Rate:** Measure alerts per hour of stable activity. *Stop Condition:* If the rate exceeds 1 per 4 hours of activity, block launch (risk of alarm fatigue).
+    *   **Subgroup Slicing:** Segment results by exercise intensity and duration. If performance degrades significantly in the "high-intensity" slice compared to the aggregate, flag as **UNVERIFIED** for that specific use case.
+*   **Reporting:** Publish results as "Measured Lead Time Distribution" and "False Alert Frequency." Never invent a "99% safe" claim. If a scenario cannot be simulated due to data gaps, label it **UNVERIFIED**.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the public beta, the system must **not** automatically adjust insulin pumps or lock out user decisions. It must function strictly as a *warning display* requiring explicit user acknowledgment.
+*   **Uncertainty Disclosure:** Do not show raw confidence percentages (e.g., "87% chance of drop"). Instead, use defined coarse tiers:
+    *   *Confirmed Trend:* Strong signal across multiple data points.
+    *   *Possible Decline:* Single-source signal or conflicting indicators.
+    *   *Unverified:* Insufficient data (e.g., sensor noise detected).
+*   **Mandatory Disclaimer:** Every screen must state: "This is a decision-support tool, not a medical device. Always verify with a finger-stick test before adjusting insulin."
+*   **Kill Switch:** Implement a remote toggle to disable the prediction feature immediately if post-launch monitoring shows a spike in reported adverse events.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific team member as the "Safety Owner" responsible for reviewing any model update or new data source.
+*   **Transparency Artifact:** Draft a **Model Card** for the beta release detailing: intended use (athletic trend spotting), limitations (retrospective training, not real-time CGM validated), and the specific failure modes identified in your harm inventory.
+*   **Legal Routing:** Because this involves health outcomes and potential automated decision support, route the question of "regulated medical device status" and "mandatory disclosure laws" to legal counsel immediately. Do not self-certify compliance.
+
+**Note:** This protocol relies entirely on the quality of your retrospective logs; gaps in historical extreme-exercise data constitute an unmeasured risk.
+**Note:** Never relax the requirement for user confirmation before any physiological action, regardless of startup speed or resource constraints.

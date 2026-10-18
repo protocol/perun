@@ -1,0 +1,31 @@
+**Immediate Action Plan: Pre-Launch Validation for Equitable Rerouting**
+
+Given the two-week deadline, strict budget, and high-stakes nature of distributing essential medicines, you cannot rely on aggregate accuracy metrics. You must execute the following specific validation steps to address the risk of systematically excluding crisis zones:
+
+1.  **Construct a "Crisis Scenario" Adversarial Test Set**
+    Do not test only on historical averages. Manually create 10–15 synthetic input scenarios representing known failure modes: sudden demand spikes in famine zones, data blackouts in conflict areas, and skewed inventory signals from damaged infrastructure.
+    *   **Positive Control:** A scenario where a famine region has low reported inventory but high inferred need; the system *must* flag this for human review or prioritize it despite low signal confidence.
+    *   **Negative Control:** A standard low-demand region with stable supply; the system should not over-prioritize this.
+    *   **Metric:** Pass only if 100% of crisis scenarios trigger a specific "Low-Confidence/High-Impact" alert or are routed to a human decision-maker.
+
+2.  **Implement a Hard Human-in-the-Loop (HITL) Gate**
+    Because rerouting essential medicines is an irreversible, high-stakes action, fully autonomous execution for any shipment destined for a region flagged as "crisis," "conflict," or "data-sparse" is prohibited.
+    *   **Control:** Configure the system to pause any automated decision that deprioritizes a shipment to a predefined list of vulnerable regions.
+    *   **Requirement:** These specific decisions must require explicit confirmation from a regional health official before execution. This is not optional; it is the floor for safety in this context.
+
+3.  **Render Uncertainty as Defined Tiers, Not Percentages**
+    Do not display raw model confidence scores (e.g., "87% probability of demand") to administrators. This invites over-reliance on uncalibrated numbers.
+    *   **Action:** Map internal scores to coarse, defined text tiers: **Confirmed** (multiple verified sources), **Corroborated** (single reliable source), or **Unverified** (inferred only).
+    *   **Display:** Any shipment recommendation based on "Unverified" data for a crisis zone must visually highlight the lack of evidence and mandate the HITL gate described above.
+
+4.  **Draft a Provisional Model Card (Transparency Artifact)**
+    Before launch, produce a one-page document attached to the tool's interface.
+    *   **Content:** Explicitly state the system's limitation: "This optimizer relies on existing data sources and may fail to detect sudden crises in data-sparse regions."
+    *   **Usage:** Define the intended use (optimizing known supply chains) and out-of-scope uses (sole decision-maker for emergency famine response).
+    *   **Owner:** List the specific engineer and logistics lead responsible for reviewing failure logs weekly.
+
+5.  **Establish a "Stop Condition" for Launch**
+    Define a clear rollback trigger. If the adversarial test set (Step 1) reveals even one instance where a crisis zone is silently deprioritized without an alert or human gate, the launch must be delayed. Do not ship with a "known bias" that affects life-saving supplies.
+
+**Note:** I cannot certify this system as "unbiased" or "safe"; no test proves that. These steps measure residual risk and enforce controls.
+**Note:** Whether this automated decision-making triggers specific legal obligations under local or international health regulations is a determination for your legal counsel, not this technical review.

@@ -1,0 +1,49 @@
+### Pre-Launch Safety Assessment Plan: Oxygen Flow Stability
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (irreversible physiological impact).
+*   **Scenario:** Device enters "deep sleep" power-saving mode based on faulty activity/sleep inference.
+*   **Failure Mode:** Oxygen flow drops below therapeutic threshold while patient demand remains high or increases (hypoxia).
+*   **Affected Group:** Patients with chronic respiratory issues, specifically during unconscious states (nighttime).
+*   **Worst Realistic Case:** Severe hypoxia leading to cardiac arrest or death before the patient wakes or a caregiver intervenes.
+
+**2. Measurement Strategy (Simulated Sleep Scenarios)**
+Do not rely on aggregate pass rates. Execute the following specific test rows with a **zero-tolerance stop condition** for any instance of hypoxia.
+
+*   **Test Row A: The "False Deep Sleep" Probe**
+    *   **Input:** Simulated biometric data indicating "deep sleep" (low movement, regular breathing) while simultaneously injecting a simulated spike in respiratory demand (mimicking an apnea event or position change).
+    *   **Control (Negative):** Standard therapeutic flow maintained despite "sleep" signal.
+    *   **Control (Positive - Failure):** Flow rate drops to minimum power-saving level.
+    *   **Metric:** Time-to-recovery of therapeutic flow after demand spike.
+    *   **Stop Condition:** If flow drops below the prescribed minimum for >2 seconds during the demand spike, **block launch**.
+
+*   **Test Row B: The "Transition Lag" Probe**
+    *   **Input:** Rapid cycling between "active" and "deep sleep" states to stress the state-machine logic.
+    *   **Metric:** Minimum flow rate recorded during transitions.
+    *   **Stop Condition:** Any dip below therapeutic floor triggers immediate rollback of the power-saving algorithm.
+
+*   **Test Row C: Sensor Degradation/Noise**
+    *   **Input:** Noisy sensor data mimicking poor contact or electrical interference from the delayed power chips.
+    *   **Metric:** System response (Fail-Safe vs. Power-Save).
+    *   **Requirement:** The system must default to **maximum safe flow** (fail-open) when sensor confidence is low, not power-save.
+
+**3. Management Controls (The Human Gate)**
+Given the supply chain constraint prevents hardware swaps, software controls must be absolute.
+
+*   **Hard Floor Enforcement:** Code must enforce a physical/software "hard floor" on flow rate that cannot be overridden by the power-saving algorithm. This floor must equal the minimum prescribed therapeutic dose, regardless of battery status or sleep classification.
+*   **Uncertainty Tiering:** Do not display battery optimization status to the user as a precise percentage. Instead, use defined tiers: "Optimized," "Standard," and "Critical." If the algorithm cannot verify sleep state with high confidence, it must revert to "Standard" flow immediately.
+*   **Mandatory Human Review:** Before final certification, a clinical lead must review the raw logs of Test Rows A, B, and C. No automated report suffices.
+
+**4. Transparency Artifact (Model/Data Card)**
+Create a versioned "Safety & Limitations Card" for this specific firmware build:
+*   **Intended Use:** Home oxygen therapy with power optimization.
+*   **Known Limitation:** Power-saving mode relies on inferred sleep states; if inference fails, hard-floor limits apply.
+*   **Measured Performance:** Insert results from Test Rows A-C here. If any result is `UNVERIFIED` due to incomplete simulation, state `UNVERIFIED` explicitly. Do not invent a safety percentage.
+*   **Owner:** Name the specific engineer and clinical lead responsible for this assessment.
+
+**5. Governance & Decision**
+*   **Route to Counsel:** Determine if the "automatic adjustment" constitutes a regulated automated decision requiring specific patient disclosures under local medical device laws.
+*   **Ship Decision:** If the "hard floor" cannot be guaranteed in code due to the chip limitation, or if Test Row A triggers the stop condition, the feature causing the risk (power-saving mode) must be disabled entirely for the initial run. Consistent oxygen delivery supersedes battery life.
+
+**Note:** This plan measures residual risk; it does not certify the device as "safe." The final ship decision rests with the product owner and clinical leadership.
+**Note:** Legal counsel must verify disclosure requirements for automated flow adjustments before market release.

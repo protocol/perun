@@ -1,0 +1,30 @@
+### Simulation-Based Validation Plan for Traffic-Light Optimizer
+
+**1. Construct a High-Fidelity Conflict Scenario Suite (Hours 0–12)**
+Since live testing is restricted, build a deterministic simulation environment mirroring Jakarta's specific intersection topologies. Populate this with "adversarial" scenarios where multiple emergency vehicles approach perpendicular directions simultaneously.
+*   **Positive Controls:** Inject known conflict cases (e.g., two ambulances arriving at a 4-way stop within 5 seconds) to verify the bug reproduces.
+*   **Negative Controls:** Inject single-vehicle requests to ensure normal optimization still functions.
+*   **Edge Cases:** Simulate high-traffic density combined with simultaneous emergency requests to test for gridlock induction.
+
+**2. Define Safety Metrics and Stop Conditions (Hours 12–18)**
+Establish clear, non-negotiable thresholds for the simulation runs. Do not rely on aggregate "efficiency" scores alone.
+*   **Primary Metric:** Maximum delay imposed on any *other* emergency vehicle. Set the pass threshold to zero seconds of blocking time for conflicting emergency routes.
+*   **Secondary Metric:** Total intersection clearance time.
+*   **Stop Condition:** If any simulation run results in an emergency vehicle being stopped by a red light while another emergency vehicle holds the green in a conflicting path, the build fails immediately. No deployment occurs until this specific failure mode is eliminated.
+
+**3. Implement a Human-in-the-Loop (HITL) Gate for Irreversible Actions (Hours 18–36)**
+Given the high-stakes nature of traffic control, full autonomous execution is unsafe without a fallback.
+*   **Override Mechanism:** Hard-code a manual override capability for traffic control center operators to instantly revert to standard timing cycles if the optimizer behaves unexpectedly.
+*   **Confidence Tiering:** Do not display raw algorithmic confidence percentages to operators. Instead, implement a coarse status indicator: "Confirmed Safe," "Corroborated," or "Unverified/Conflict Detected." If the system detects a potential conflict it cannot resolve deterministically, it must default to a safe state (e.g., all-red or standard cycle) and alert a human operator.
+
+**4. Execute Adversarial Simulation Sweep (Hours 36–42)**
+Run the full suite of scenarios repeatedly. Document every instance where the optimizer fails to prioritize correctly or creates a bottleneck.
+*   **Residual Risk Report:** Produce a brief document listing any scenarios where the system's behavior is "Unverified" due to simulation limitations. Do not invent success rates. Clearly state: "System validated against X scenarios; Y scenarios remain untested due to simulation constraints."
+
+**5. Final Review and Deployment Decision (Hours 42–48)**
+Present the residual risk report and simulation logs to the lead engineer and city stakeholders.
+*   **Decision Authority:** The decision to ship rests with the human owners, not the simulation results. The simulation provides evidence of risk, not a certificate of safety.
+*   **Transparency Artifact:** Attach a "Model Card" to the deployment package detailing the intended use (emergency prioritization), known limitations (specific traffic densities not tested), and the owner of the system.
+
+**Note:** This plan identifies risks and structures validation; it does not guarantee the system is "safe" or "unbiased," as no test can prove a negative.
+**Note:** Legal requirements for automated public safety decisions must be routed to counsel immediately; this plan addresses technical validation only.

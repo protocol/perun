@@ -1,0 +1,48 @@
+### Safety Assessment Strategy: Cognitive-Deficit Detection Thresholds
+
+**1. Harm Inventory & Worst-Case Definition**
+Before analyzing data, explicitly define the failure mode: **Unsafe Progression due to Missed Decline**.
+*   **Harm:** The system fails to detect a subtle cognitive drop, automatically increasing exercise difficulty, leading to patient falls, frustration, or neurological stress.
+*   **Affected Group:** Stroke survivors with fluctuating attention or processing speed; specifically those whose baseline performance is near the current decision threshold.
+*   **Worst Realistic Case:** A patient with undetected fatigue-induced decline is pushed into a complex task, resulting in a physical injury during the pilot.
+
+**2. Measurement Plan (Using Existing Anonymized Data)**
+Since new recruitment is impossible, you must stress-test the *existing* dataset against the defined harm. Do not assert safety; measure residual risk.
+
+*   **Adversarial Resampling (The "Near-Miss" Probe):**
+    *   Isolate all pilot sessions where a patient's score fell within ±5% of your current progression threshold.
+    *   Treat these "borderline" cases as your primary test set. These represent the highest probability of failure.
+    *   **Action:** Manually review the raw video/logs of these specific instances alongside the algorithm's decision. Did the algorithm miss subtle behavioral cues (e.g., hesitation, gaze aversion) that a human therapist would catch?
+
+*   **Synthetic Degradation Simulation:**
+    *   Take "safe" progression events from your data and artificially degrade the input signals to simulate subtle decline (e.g., increase reaction time latency by 10-15% in the logs, reduce accuracy metrics slightly).
+    *   **Run the Algorithm:** Feed these modified records back into your system.
+    *   **Metric:** Calculate the "Miss Rate." How often does the system still recommend progression when the input has been artificially degraded to mimic decline?
+    *   **Stop Condition:** If the system recommends progression in >0% of artificially degraded "decline" scenarios, the threshold is too aggressive for autonomous operation.
+
+*   **Subgroup Slice Analysis:**
+    *   Segment your existing data by stroke severity or time-since-event (if available in anonymized tags).
+    *   Check if the miss rate is higher for specific subgroups (e.g., severe aphasia patients might show decline differently than motor-only patients).
+    *   **Reporting:** Report findings as `UNVERIFIED` for any subgroup with fewer than 10 data points. Do not invent a confidence interval.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the high stakes (physical safety of vulnerable patients) and the inability to validate with new data, full automation is unsafe.
+
+*   **Mandatory Human-in-the-Loop (HITL):**
+    *   **Rule:** Any recommendation to *increase* exercise difficulty must be flagged for explicit therapist confirmation before execution. The system can suggest, but never execute, a progression autonomously during the pilot.
+    *   **Override:** Therapists must have a one-click "Downgrade/Stop" button that overrides the algorithm instantly.
+
+*   **Uncertainty Rendering:**
+    *   Do not display a specific confidence percentage (e.g., "87% safe") to therapists, as this implies a calibration you cannot verify with limited data.
+    *   **Display:** Use defined coarse tiers: **"Confirmed Safe," "Corroborated,"** or **"Review Required."**
+    *   **Logic:** If a patient's score is within the ±5% borderline zone identified above, the system must default to "Review Required."
+
+**4. Transparency Artifact**
+Create a **Model Card** for the pilot team containing:
+*   **Intended Use:** Assistive screening only; not a diagnostic tool.
+*   **Limitations:** Explicitly state that thresholds are derived from a small, non-diverse pilot set and have not been validated for subtle decline detection.
+*   **Residual Risk:** Document the "Miss Rate" found in your synthetic degradation tests.
+*   **Owner:** Name the specific engineer responsible for monitoring threshold logs daily.
+
+**Note:** This plan identifies risk but does not certify the system as safe; the decision to proceed rests with your clinical lead.
+**Legal:** Route questions regarding regulatory classification of this automated decision-making to counsel immediately.

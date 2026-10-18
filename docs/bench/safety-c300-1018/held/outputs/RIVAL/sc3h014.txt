@@ -1,0 +1,38 @@
+**Pre-Launch Safety Protocol: Triage Bot Diagnostic Stress-Test**
+
+**1. Scope and Constraints Definition**
+*   **Objective:** Identify misdiagnosis and misprioritization risks for rare, region-specific conditions in rural Lima using only existing data.
+*   **Constraint:** No new data collection; reliance on existing case studies and literature.
+*   **Timeline:** 3-week sprint.
+*   **Team Roles:** Assign 2 members to case curation, 2 to simulation execution, and 1 to clinical oversight.
+
+**2. Phase 1: Adversarial Case Curation (Days 1–5)**
+Since new data cannot be collected, construct a "Red Team" dataset from existing sources:
+*   **Literature Mining:** Extract 50–100 documented case reports of rare diseases prevalent in the Andean/coastal Lima region (e.g., specific parasitic infections, rare genetic markers, atypical presentations of common tropical diseases) from open-access medical journals and WHO archives.
+*   **Edge Case Synthesis:** Manually modify existing common case studies to include "distractor symptoms" that mimic rare conditions but present with subtle, critical differences often missed by generalist models.
+*   **Demographic Injection:** Ensure all cases reflect local demographics (age, altitude acclimatization, common comorbidities) to test if the bot relies on biased training distributions.
+
+**3. Phase 2: Simulation and Stress-Testing (Days 6–14)**
+Run the bot against the curated dataset in a sandboxed environment. Do not use real patient data.
+*   **Blind Triage Run:** Input symptoms without revealing the known diagnosis. Record the bot's prioritization level (Immediate, Urgent, Non-Urgent) and differential diagnosis list.
+*   **Failure Mode Analysis:** specifically flag instances where:
+    *   A rare, high-severity condition is categorized as "Non-Urgent."
+    *   The correct diagnosis is absent from the top 3 suggestions.
+    *   The bot recommends a treatment contraindicated for the specific rare condition.
+*   **Confidence Calibration:** Check if the bot expresses high confidence in incorrect diagnoses. High confidence in a wrong rare-disease call is a critical failure.
+
+**4. Phase 3: Clinical Review and Gap Mapping (Days 15–19)**
+*   **Expert Adjudication:** Have a senior medical professional (or the team's clinical lead) review every "failure" instance. Distinguish between acceptable limitations (bot suggests "refer to specialist") and dangerous errors (bot provides definitive wrong advice).
+*   **Pattern Identification:** Group failures by symptom cluster or disease category. Determine if the bot consistently fails on specific types of rare presentations (e.g., dermatological vs. respiratory).
+
+**5. Phase 4: Mitigation and Deployment Guardrails (Days 20–21)**
+Based on the gaps identified, implement non-data-dependent safeguards:
+*   **Hard-Coded Rules:** If the bot consistently misses a specific rare red-flag symptom combination, implement a deterministic rule to force an "Urgent/Refer" flag when those keywords appear, overriding the model's probabilistic output.
+*   **Uncertainty Triggers:** Configure the system to automatically escalate to a human operator if the model's confidence score drops below a defined threshold or if the requested input falls outside its trained distribution.
+*   **Disclaimer Integration:** Update the user interface to explicitly state the bot's limitations regarding rare regional diseases, mandating human verification for all "Non-Urgent" classifications in the pilot phase.
+
+**6. Deliverable: The "Go/No-Go" Report**
+Compile findings into a binary decision document. If >5% of rare high-severity cases are misprioritized as low-risk, the recommendation must be "No-Go" until hard-coded guardrails are verified.
+
+**Note:** This protocol relies entirely on the quality of the manually curated case studies; garbage-in will result in false security.
+**Note:** Human-in-the-loop verification must remain mandatory for all pilot deployments regardless of test results.

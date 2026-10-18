@@ -1,0 +1,29 @@
+### Pre-Launch Testing Protocol: Patient-Vehicle Matching Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (assigning non-ambulatory patients to inaccessible vehicles).
+*   **Affected:** Patients with mobility impairments; risk of stranded patients, missed critical care, or physical injury during transfer attempts.
+*   **Worst Realistic Case:** A wheelchair-bound patient is dispatched in a standard sedan, arrives at the pickup point, cannot board, and misses a time-sensitive medical appointment.
+
+**2. Measurement Plan (Runnable Eval Rows)**
+Execute the following test rows before pilot expansion. Do not rely on aggregate accuracy; focus on failure modes in the "read-only" legacy data context.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Must Fail/Safe) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Missing Data Field** | Patient records where `mobility_level` is NULL/empty but `diagnosis_code` implies non-ambulatory status. | System flags for **Human Review** or defaults to **Wheelchair Vehicle**. | System assigns Standard Vehicle. | **Recall on High-Risk Flags:** 100%. | **BLOCK LAUNCH** if any high-risk patient is assigned a standard vehicle. |
+| **Conflicting Data** | Records where `uses_wheelchair` = "Yes" but `vehicle_preference` = "Standard" (legacy artifact). | System overrides preference based on safety flag; routes to Wheelchair Vehicle. | System follows unsafe preference. | **Override Rate:** 100% for safety conflicts. | **BLOCK LAUNCH** if any unsafe preference is honored. |
+| **Edge Case Diagnosis** | Rare mobility conditions not explicitly mapped in the current rule set. | System triggers **Human-in-the-Loop** gate for manual dispatcher verification. | System auto-assigns Standard Vehicle. | **Human Gate Trigger:** 100% for unmapped high-risk codes. | **BLOCK LAUNCH** if auto-assignment occurs for unmapped high-risk codes. |
+
+**3. Management Controls (The Human Gate)**
+*   **Default to Safety:** Given the read-only constraint, the algorithm must treat *any* ambiguity or missing mobility data as "Requires Wheelchair Access" until proven otherwise. It is safer to send a large van for an ambulatory patient than a sedan for a non-ambulatory one.
+*   **Human-in-the-Loop:** Any match triggered by a "missing data" flag or a "conflicting data" resolution must require explicit confirmation by a logistics coordinator before the ride is finalized. Fully automated execution is prohibited for these edge cases.
+*   **Uncertainty Disclosure:** The dispatcher interface must visually flag matches derived from inferred data (e.g., "Vehicle assigned based on diagnosis code due to missing mobility field") rather than presenting the decision as absolute fact.
+
+**4. Transparency Artifact (Model/Data Card)**
+Create a one-page "Matching Logic Card" for the hospital partners and internal team containing:
+*   **Intended Use:** Coordinating transport for varying mobility levels; *not* for emergency medical response.
+*   **Known Limitations:** Reliance on legacy read-only data; specific fields known to be incomplete.
+*   **Measured Performance:** Report the results of the three test rows above (e.g., "100% of simulated missing-data cases triggered human review").
+*   **Owner:** Name the specific developer/logistics lead responsible for reviewing flagged matches.
+
+**Note:** This protocol measures residual risk; it does not certify the system as "bias-free" or "safe." The final launch decision rests with Mumbai Mobility Care leadership based on these findings. If legal regulations regarding automated patient transport decisions apply in your jurisdiction, route that determination to legal counsel immediately.

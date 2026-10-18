@@ -1,0 +1,27 @@
+# Pre-Launch Safety Plan: Healing Timeline Prediction Model
+
+## 1. Validation Strategy for Static Data Constraints
+
+Since real-time EHR data is unavailable, validation must rely on **synthetic stress-testing** and **manual chart reconciliation** using the month-old snapshots.
+
+*   **Synthetic Edge-Case Generation**: Manually construct 20–30 patient profiles representing extreme scenarios not well-represented in the static snapshot (e.g., rapid infection onset, sudden circulation improvement, non-compliance with dressing changes). Run these through the model to ensure predictions do not confidently output impossible timelines (e.g., healing in <24 hours for severe ulcers).
+*   **Blinded Historical Reconciliation**: Select 15 closed cases from the static dataset where the actual healing outcome is known. Mask the outcome from the nursing team, input the initial state into the model, and compare the predicted timeline against the actual recorded duration. Calculate the Mean Absolute Error (MAE) for this specific subset. If the model systematically underestimates time-to-heal by >20% in this retrospective test, flag the model for recalibration before rollout.
+*   **Circulation-Specific Stratification**: Manually verify that the model differentiates clearly between patients with varying degrees of compromised circulation. Group the static data by circulation metrics (e.g., Ankle-Brachial Index ranges) and ensure the predicted timelines increase logically as circulation worsens. If the model predicts faster healing for worse circulation in any cluster, this indicates a logic flaw requiring immediate code review.
+
+## 2. Initial Deployment Monitoring Protocols
+
+During the two-week regional rollout, implement a **"Human-in-the-Loop" verification protocol** to detect systematic overestimation.
+
+*   **The "72-Hour Deviation" Rule**: Nurses must record the actual wound status at every visit. If a patient's progress deviates from the predicted trajectory by more than one clinical stage (e.g., predicted granulation but still necrotic) after 72 hours, the case is automatically flagged for senior review. This creates an early warning system for overestimation without waiting for full healing.
+*   **Daily "Overestimation" Log**: Create a simple shared log where nurses record cases where the model predicted a sooner healing date than clinically observed. Tally these daily. If >30% of active cases in a single day are flagged as "over-optimistic," trigger an immediate pause on using the tool for new patients and convene the innovation squad for emergency analysis.
+*   **Weekly Cohort Review**: Every Friday, the team of eight must manually review all active cases. Compare the aggregate average predicted remaining days versus the clinical consensus estimate for the same patients. A consistent gap where the model predicts significantly shorter times than the clinical team indicates systematic bias.
+
+## 3. Manual Checks for Systematic Bias
+
+To specifically detect overestimation of healing rates:
+
+*   **The "Worst-Case" Audit**: Randomly select 5 patients with the poorest circulation scores each week. Manually calculate a conservative healing estimate based on standard clinical guidelines (ignoring the model). If the model's prediction is consistently shorter than this conservative manual estimate, the model is likely overestimating healing rates for high-risk patients.
+*   **Stagnation Detection**: Monitor patients whose wound measurements (area/depth) have remained unchanged for two consecutive visits. The model should predict extended timelines for these cases. If the model continues to predict imminent healing despite stagnant metrics, this is a critical failure mode indicating the model is ignoring lack of progress.
+
+**Note**: This plan relies entirely on manual data entry and vigilance; ensure nurses are trained that the model is a decision-support tool, not a directive.
+Immediate escalation paths must be established if the "Overestimation Log" thresholds are breached.

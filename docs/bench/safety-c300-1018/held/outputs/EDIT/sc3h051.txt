@@ -1,0 +1,36 @@
+**Pre-Launch Safety Checklist: Payment Holding Logic & Due Diligence**
+
+**1. Harm Inventory & Failure Mode Documentation**
+Document the specific failure mode: "False Positive Sanction Screening." Record that the current logic (IP geolocation + name matching) erroneously flags legitimate contractors in non-sanctioned regions (e.g., Amsterdam) as sanctioned entities.
+*   **Affected Group:** Legitimate freelance workers in non-sanctioned jurisdictions.
+*   **Worst Realistic Case:** Severe financial distress, inability to meet daily living expenses, and reputational damage to Acme Global.
+*   **Root Cause Hypothesis:** Over-reliance on low-fidelity signals (IP addresses are easily spoofed or misrouted; common names yield high false positives) without secondary verification.
+
+**2. Data Points to Document for Due Diligence**
+To demonstrate internal review and logic transparency to the board, capture and version the following artifacts immediately:
+*   **Input Signal Fidelity:** Document the known error rates of your IP geolocation provider and the collision rate of your name-matching algorithm against common Dutch names. Label these metrics as **UNVERIFIED** if no internal test exists; do not invent accuracy percentages.
+*   **Decision Logic Flow:** Map the exact boolean logic causing the block. Example: `IF (IP_Country IN Sanction_List) OR (Name_Match_Score > Threshold) THEN Hold`. Highlight where the logic lacks an "AND" condition or secondary confirmation step.
+*   **False Positive Evidence:** Compile a list of the specific Amsterdam cases identified in the audit. Include the input data (IP, Name) and the system's output (Hold) to serve as a "known-bad" test set.
+
+**3. Immediate Control Implementation (Human-in-the-Loop)**
+Since this feature executes a high-stakes, irreversible action (withholding livelihood funds), full automation is the failure state.
+*   **Mandatory Gate:** Implement an immediate manual review step for any transaction flagged solely by IP or name match before funds are held. No transaction should be frozen automatically based on these weak signals alone until fidelity improves.
+*   **Uncertainty Disclosure:** If the system must display a status to the user before review, do not state "Sanctioned" as a fact. Use a defined tier such as "Under Review: Identity Verification Required" to avoid presenting unverified claims as authoritative facts.
+
+**4. Measurement Plan (Runnable Tests)**
+Create one test row per identified harm to run before Friday:
+*   **Probe Set:** Inputs containing known legitimate Amsterdam contractors (positive controls for "allow") and known sanctioned entities (negative controls for "block").
+*   **Metric:** False Positive Rate (FPR) specifically for EU-based users.
+*   **Stop Condition:** If FPR > 0% for the legitimate Amsterdam set, the automated hold feature must remain disabled or strictly gated behind human review.
+*   **Owner:** Assign one engineer to own the execution of this test and the review of failures.
+
+**5. Transparency Artifact (Internal Model Card)**
+Draft a one-page internal "Decision Card" for this feature containing:
+*   **Intended Use:** Screening for sanctioned regions.
+*   **Out-of-Scope:** Final determination of legal status (requires human review).
+*   **Limitations:** Explicitly state that IP and name matching are probabilistic indicators, not proof of sanction status.
+*   **Residual Risk:** Acknowledge that without biometric or document verification, false positives will occur.
+
+**Notes**
+*   Route the question of specific legal disclosure duties regarding automated financial decisions to your internal compliance lead; this checklist addresses product safety controls, not legal certification.
+*   Do not claim the system is "unbiased" or "safe" in your review presentation; present the measured false positive rate and the implemented human gate as your due diligence.

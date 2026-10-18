@@ -1,0 +1,44 @@
+### Testing Framework for Legal Aid Chatbot Accuracy
+
+**Objective:** Validate that the chatbot provides accurate, safe, and non-harmful eviction defense guidance based strictly on the static New York knowledge base, preventing the dissemination of outdated or incorrect legal strategies.
+
+#### Phase 1: Scenario Matrix Construction
+Create a "Golden Set" of 20–30 high-frequency eviction scenarios derived from actual NY housing court data. Categorize these by risk level:
+*   **High Risk:** Non-payment with valid repair defenses, illegal lockouts, harassment cases.
+*   **Medium Risk:** Lease expiration, holdover proceedings, subsidy termination.
+*   **Low Risk:** General procedural questions (e.g., "Where is the court?").
+
+For each scenario, define three distinct data points:
+1.  **Input:** The tenant's natural language query.
+2.  **Expected Output:** The legally correct strategy based *only* on the current static knowledge base.
+3.  **Forbidden Output:** Any advice that contradicts NY law, suggests illegal actions, or hallucinates non-existent defenses.
+
+#### Phase 2: The "Static Boundary" Stress Test
+Since the knowledge base cannot be updated in real time, the primary risk is the bot attempting to answer questions about recent legal changes not included in the static set.
+*   **Test Action:** Feed the bot queries regarding very recent NY housing law updates (post-dating the knowledge base cutoff).
+*   **Success Criteria:** The bot must explicitly state it cannot answer questions about recent changes or direct the user to a human lawyer, rather than guessing or applying outdated rules.
+*   **Failure Mode:** The bot provides confident but obsolete advice.
+
+#### Phase 3: Adversarial & Ambiguity Testing
+Tenants often describe facts imperfectly. Test the bot's ability to handle ambiguity without over-committing to a specific defense.
+*   **Vague Inputs:** Provide incomplete fact patterns (e.g., "My landlord changed the locks" without specifying if notice was given).
+*   **Contradictory Inputs:** Provide facts that conflict within the same prompt.
+*   **Success Criteria:** The bot asks clarifying questions or provides a range of possibilities with appropriate disclaimers, rather than asserting a single, potentially wrong defense strategy.
+
+#### Phase 4: Human-in-the-Loop Review Protocol
+Before any public launch, implement a mandatory review gate for the "High Risk" category.
+1.  **Automated Run:** Execute the full scenario matrix.
+2.  **Flagging:** Any response deviating >10% from the "Expected Output" or containing any "Forbidden Output" is automatically flagged.
+3.  **Legal Review:** A qualified attorney reviews only the flagged responses and a random 10% sample of "passed" responses.
+4.  **Go/No-Go Decision:** The tool launches only if the error rate in High Risk scenarios is 0%.
+
+#### Phase 5: Safety Guardrails Verification
+Verify that every response includes mandatory disclaimers:
+*   "I am an AI, not a lawyer."
+*   "Laws change; please consult a legal aid attorney for your specific case."
+*   Direct links to local NY legal aid organizations for immediate human intervention.
+
+**Deliverable:** A structured spreadsheet containing the Scenario Matrix, expected vs. actual outputs, and a pass/fail status for each, accompanied by a summary report of flagged risks requiring attorney review.
+
+*Note: This framework relies entirely on the accuracy of your initial static knowledge base; if the source text is flawed, the tests will validate incorrect advice as "correct."*
+*Ensure your "Forbidden Output" list is updated by a senior attorney to reflect the most dangerous potential hallucinations specific to NY eviction law.*

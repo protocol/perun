@@ -1,0 +1,29 @@
+### Internal Review Workflow for Protein Requirement Algorithm
+
+**1. Define the Harm Inventory & Risk Tier**
+Before sampling, explicitly record the primary risk: **Underestimation of protein needs**, which could delay wound healing or worsen patient outcomes. Classify this as a **high-stakes clinical decision support**. Because the output influences care but requires a dietitian's final approval, the "human-in-the-loop" is the dietitian. However, your review must verify that the algorithm's *suggestions* do not systematically bias low, which could anchor the clinician's judgment (automation bias).
+
+**2. Construct the Evaluation Dataset (Using Existing Data)**
+Since external data is unavailable, maximize your beta data:
+*   **Stratified Sampling:** Do not pick random cases. Manually select 50–100 patient records from your beta phase covering the full spectrum of severity (Stage 1–4 ulcers) and vitals (low/high albumin, varying weight).
+*   **Positive Controls (Known Risk):** Intentionally include 5–10 complex cases where clinical guidelines clearly demand high protein (e.g., severe burns + pressure ulcer) to ensure the algorithm does not underestimate these obvious high-need scenarios.
+*   **Negative Controls:** Include 5–10 stable patients with minor wounds to ensure the tool does not grossly overestimate (waste/cost), though underestimation is the critical failure mode.
+
+**3. The Manual Verification Protocol (The "Golden Set")**
+Create a blind review process for your sample:
+*   **Step A:** Have two senior clinicians independently calculate the required protein for each selected patient using current clinical guidelines (e.g., ESPEN or local protocols) *without* seeing the algorithm's output. Record this as the "Guideline Target."
+*   **Step B:** Reveal the algorithm's suggested target.
+*   **Step C:** Compare. Flag any case where the Algorithm Output < Guideline Target.
+*   **Metric:** Calculate the **Underestimation Rate** (percentage of cases where the tool suggested less than the guideline).
+*   **Threshold:** Set a strict stop condition. For example: "If >0% of high-severity cases are underestimated, or if the average underestimation exceeds 5g/day, the feature cannot expand to new wards."
+
+**4. Manage Residual Risk & Transparency**
+*   **Uncertainty Display:** If the algorithm relies on incomplete vitals, ensure the interface displays a clear "Unverified" or "Low Confidence" tier rather than a precise number, prompting the dietitian to rely solely on manual calculation.
+*   **Documentation (Model Card Lite):** Draft a one-page artifact listing: intended use (hospitalized pressure ulcer patients), known limitations (e.g., "not validated for renal failure patients"), and the results of your internal review (e.g., "Tested on N=80 cases; 0 underestimations found in Stage 3-4 ulcers"). This travels with the software to new wards.
+*   **Owner:** Assign one clinician-developer pair as the owners of this review. They must re-run this sampling if the algorithm logic changes or if new patient demographics are introduced.
+
+**5. Go/No-Go Decision**
+Present the Underestimation Rate and the worst-case error magnitude to the team lead. If the metric exceeds your threshold, halt expansion. Do not certify the tool as "safe"; report the residual risk and let the clinical leadership decide if the measured error rate is acceptable for wider deployment.
+
+*Note: This workflow treats the algorithm as a decision-support tool, not an autonomous actor; final intake targets must remain under explicit dietitian confirmation.*
+*Legal or regulatory duties regarding medical device classification in Egypt should be routed to your institution's legal counsel.*

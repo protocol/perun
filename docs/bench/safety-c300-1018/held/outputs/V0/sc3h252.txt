@@ -1,0 +1,34 @@
+### Pre-Launch Safety Checklist: MumbaiMed Alert System
+
+**1. Harm Inventory & Scope Definition**
+*   **Document Known Gaps:** Explicitly list drug combinations and patient demographics absent or under-represented in the current regional dataset. Do not assume coverage where data is missing.
+*   **Define "Unverified" Zones:** Mark any alert logic relying on non-local or synthetic data as `UNVERIFIED` for the local context. These zones require higher scrutiny.
+*   **Identify High-Stakes Failures:** Categorize errors where a missed alert leads to irreversible harm (e.g., fatal interaction) versus manageable harm. The former dictates the strictest controls.
+
+**2. Measurement & Evaluation Plan (Run Before Launch)**
+*   **Adversarial Probe Set:** Construct a test suite containing:
+    *   *Positive Controls:* Known, documented severe interactions present in global literature but rare locally.
+    *   *Negative Controls:* Safe co-prescriptions to test for false positives.
+    *   *Edge Cases:* Patients with multiple comorbidities or polypharmacy (5+ drugs) where interaction complexity spikes.
+*   **Metric & Threshold:** Define a "Stop Condition." If the system fails to flag any known severe interaction in the positive control set, launch is blocked. Do not invent an accuracy percentage; report the specific pass/fail status of these critical probes.
+*   **Injection & Leakage Check:** Verify that user-entered notes or external pharmacy data cannot manipulate the alert logic (prompt injection) or reveal other patients' data.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** For any alert flagged as "Rare," "Low Confidence," or derived from `UNVERIFIED` data zones, the system must **not** auto-suppress or auto-act. It must route to a pharmacist for manual review before the prescription is finalized. Full automation of high-stakes decisions is prohibited.
+*   **Confidence Tiering:** Display alert confidence using defined coarse tiers (e.g., "Confirmed by Local Data," "Global Evidence Only," "Theoretical Risk") rather than raw percentages (e.g., "87%"). Include a brief definition of what each tier means to prevent over-reliance.
+*   **Override Mechanism:** Ensure clinicians can easily override an alert with a mandatory reason code, but cannot disable the alert system entirely. Log all overrides for post-launch review.
+*   **Transparency Artifact (Model/Data Card):** Create a one-page document attached to the software release detailing:
+    *   Intended use and specific out-of-scope scenarios.
+    *   Data sources used and known demographic/drug gaps.
+    *   Performance metrics by drug class (if available) or explicit statement of limitations.
+    *   Owner contact for safety reporting.
+
+**4. Governance & Prioritization Strategy**
+*   **Prioritization Logic:** Manually review interactions involving:
+    1.  Narrow therapeutic index drugs (e.g., warfarin, digoxin).
+    2.  Drugs with black box warnings.
+    3.  Combinations with zero local historical records but high severity in global literature.
+*   **Ownership:** Assign a specific clinical lead responsible for reviewing "Unverified" alerts and updating the harm inventory as new local data arrives.
+*   **Legal Routing:** Consult legal counsel regarding disclosure requirements for AI-assisted decisions in healthcare; do not assert compliance internally.
+
+**Note:** This checklist identifies risks and mandates controls; it does not certify the system as safe or unbiased. The final launch decision rests with the product owner based on the residual risk reported.

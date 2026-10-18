@@ -1,0 +1,29 @@
+### Immediate Safety Strategy for Nile Digital Health
+
+**1. Implement a Mandatory Human-in-the-Loop Gate (Highest Priority)**
+Given the risk of premature treatment cessation—a high-stakes, irreversible action with potential life-threatening consequences—you must immediately disable fully automated "remission" flags that trigger medication stop alerts. No algorithmic confidence score, regardless of how high, should automatically execute this action without explicit human verification.
+*   **Action:** Reconfigure the workflow so that any NLP interpretation suggesting "remission" or "complete recovery" routes to a clinical reviewer or requires explicit, multi-step confirmation from the prescribing physician before an alert is generated or sent.
+*   **Rationale:** Automating high-stakes medical decisions without a human gate is the primary failure mode you must prevent. This control does not require additional cloud compute; it is a logic switch.
+
+**2. Deploy a Targeted "Harm Inventory" and Adversarial Test Set**
+You cannot rely on general testing when specific failure modes (vague positive feedback → false remission) are already observed. You need a focused evaluation strategy that fits your budget constraints.
+*   **Action:** Create a minimal, high-impact test set consisting of:
+    *   **Positive Controls:** 20–30 examples of vague positive feedback (e.g., "feeling better," "good day") that previously triggered false remission.
+    *   **Negative Controls:** 20–30 examples of genuine remission indicators confirmed by clinical data.
+    *   **Edge Cases:** Inputs mixing positive sentiment with ongoing symptom descriptors.
+*   **Execution:** Run this specific suite locally or on your existing staging environment. Do not aim for statistical significance across all users; aim for 100% detection of the known failure mode in this specific subset. If the system flags *any* positive control as "remission" without human review, the feature is not ready for rollout.
+
+**3. Redefine Output Confidence and Disclosure**
+Stop presenting NLP interpretations as definitive facts. The current behavior implies a precision the model does not possess.
+*   **Action:** Change the user and doctor-facing output from definitive status updates (e.g., "Status: Remission") to tiered, uncertainty-aware language.
+    *   Use defined tiers such as: **"Reported Improvement"** (user input only), **"Potential Remission – Review Required"** (NLP flag), and **"Confirmed Remission"** (clinician verified).
+    *   Never display raw probability scores (e.g., "87% confident") to users or doctors, as this invites over-reliance on uncalibrated numbers.
+*   **Disclosure:** Clearly label these outputs as "AI-assisted interpretation" to ensure users and doctors understand the data is machine-generated and requires clinical context.
+
+**4. Document Residual Risk (The "Model Card" Lite)**
+Before rolling out to 5,000 users, produce a single-page transparency document for your internal team and medical partners.
+*   **Content:** Explicitly state the known limitation: "The system may misinterpret vague positive feedback as remission." Document the mitigation: "All remission flags require human review." State clearly that the remission detection rate for vague inputs is currently **UNVERIFIED** for the broader population until further data is gathered.
+*   **Ownership:** Name the specific product owner and clinical lead responsible for reviewing any failures post-launch.
+
+**Note:** Do not attempt to certify the system as "safe" or "unbiased"; no test can prove this. Your goal is to manage the known risk through strict gating and transparency.
+**Note:** Any legal requirements regarding automated medical decisions in your region must be verified by legal counsel; this strategy focuses on product safety controls.

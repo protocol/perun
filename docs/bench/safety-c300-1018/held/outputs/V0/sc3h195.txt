@@ -1,0 +1,42 @@
+### Safety Validation Plan: Cairo NutriScan Allergen Scanner
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negative (Missed Allergen)**.
+*   **Affected User:** Hospital patients with life-threatening allergies.
+*   **Worst Case:** Patient consumes meal containing undetected allergen due to system error, resulting in anaphylaxis or death.
+*   **Secondary Harm:** **Automation Bias**. Staff may trust the "Allergen-Free" label without manual verification because the system appears authoritative.
+
+**2. Measurement Strategy (Using Existing Data)**
+Since you cannot gather new diverse lighting data, you must stress-test the current library to find breaking points.
+*   **Adversarial Probe Set:** Do not just run standard validation. Manually curate a "Red Team" subset from your existing library containing the hardest cases: visually similar non-allergenic items (e.g., cashew vs. peanut, coconut flake vs. cheese), items in shadow, and items with glare.
+*   **Controls:**
+    *   *Positive Control:* Images known to contain allergens that the model *must* catch.
+    *   *Negative Control:* Images known to be safe that the model *must* clear.
+*   **Metric:** Focus exclusively on **False Negative Rate (FNR)** per allergen type. Accuracy is irrelevant if the system misses a single nut.
+*   **Threshold Setting:** Do not invent a "99% safe" number. Instead, determine the **abstention threshold**:
+    1.  Run the model on your Red Team set.
+    2.  Identify the confidence score below which false negatives occur.
+    3.  Set the system to **abstain** (output "Unable to Verify – Manual Check Required") for any prediction below that score.
+    4.  If the model cannot distinguish similar items even at high confidence, the feature cannot ship for those specific classes.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this is a high-stakes, irreversible action (eating), the system **cannot** autonomously declare a meal "Safe."
+    *   *Logic:* If the system detects an allergen → Warn immediately.
+    *   *Logic:* If the system detects *no* allergen → Output "No Allergens Detected by AI; **Human Verification Required**."
+    *   *Failure Mode:* Fully automated "Safe" clearance is the failure this plan prevents.
+*   **Uncertainty Disclosure:** Never show a raw percentage (e.g., "92% safe") to staff. This implies false precision. Use defined tiers:
+    *   *Alert:* "Allergen Detected."
+    *   *Unclear:* "Image Quality Insufficient – Manual Inspection Required."
+    *   *Clear (with gate):* "AI Clear – Staff Confirmation Needed."
+*   **Transparency Artifact:** Create a one-page **Model Card** for the hospital staff. It must state:
+    *   *Intended Use:* Screening aid only, not a replacement for ingredient labels or staff checks.
+    *   *Limitations:* Explicitly list that the model was trained on limited lighting conditions and may fail in dark or glaring environments.
+    *   *Owner:* Name the specific product lead responsible.
+
+**4. Governance**
+Assign one owner to review any false negative incident immediately. If the model misses an allergen in testing, the launch for that specific allergen class is blocked until the abstention threshold is adjusted or the feature is disabled.
+
+***
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe" or "unbiased."
+**Note:** Legal requirements for medical device disclosure and liability must be routed to counsel immediately; do not assert compliance internally.

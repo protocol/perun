@@ -1,0 +1,35 @@
+### Safety Validation Workflow for SafeRide Nigeria (Pilot Phase)
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negative on Distress**.
+*   **Affected Group:** Female passengers on night trips in Lagos.
+*   **Worst Realistic Case:** A passenger is coerced into an unscheduled stop or route deviation; the system interprets this as "traffic" or "driver error" rather than distress, failing to escalate, resulting in physical harm or abduction.
+*   **Secondary Harm:** **Over-reliance**. Drivers or passengers assume the system is infallible and delay manual emergency calls.
+
+**2. Adversarial Pattern Testing (The "Red Team" Probe Set)**
+Since you cannot use audio, you must stress-test the geometric and temporal logic against known evasion tactics. Construct a dataset of synthetic trip logs containing:
+*   **Positive Controls (Known Distress):** Simulate "coerced deviations" (e.g., a 2-minute stop in a low-light zone followed by a route change away from the destination) and "silent panic" (rapid, erratic speed changes consistent with a struggle, not traffic).
+*   **Negative Controls (Known Safe):** Simulate legitimate Lagos-specific anomalies, such as sudden stops for police checkpoints, diversions due to flash floods, or drivers taking shortcuts through informal settlements to avoid gridlock.
+*   **Adversarial Probes:** specifically design inputs where a driver intentionally mimics safe patterns during a kidnapping scenario (e.g., maintaining steady speed while deviating significantly from the GPS route).
+
+**3. Measurement Plan: One Row Per Harm**
+Do not assert accuracy. Run the following evaluation:
+*   **Metric:** False Negative Rate (FNR) specifically for the "Night/High-Risk Zone" segment.
+*   **Threshold:** Set a **zero-tolerance stop condition** for any false negative in the "Coerced Deviation" probe set. If the system misses even one simulated abduction pattern, the pilot must pause.
+*   **Owner:** Assign one team member to review every failure case manually before any model adjustment.
+
+**4. Human-in-the-Loop Gate (Irreversible Action Control)**
+The decision to *not* escalate is effectively an irreversible action if harm occurs.
+*   **Rule:** For the pilot, any trip triggering a "medium confidence" distress signal (e.g., unusual stop + route deviation) must **not** be auto-dismissed. It must route to a human safety operator for immediate verification via text/SMS check-in with the passenger.
+*   **Constraint Adherence:** Since real-time audio is banned, the fallback verification must be silent (e.g., a coded SMS response or a "panic button" prompt on the user's screen that looks like a normal app notification).
+
+**5. Transparency & Uncertainty Artifacts**
+*   **Model Card (Pilot Version):** Publish a internal document stating the system's limitations: "This pilot detects geometric anomalies only; it cannot detect verbal distress or non-deviation threats." List the specific Lagos neighborhoods where GPS data is known to be sparse.
+*   **Confidence Tiers:** Do not show users a percentage (e.g., "85% safe"). Use defined tiers: **"Normal," "Monitoring (Unusual Pattern),"** and **"Escalating."** Define exactly what data triggers "Monitoring" so operators do not ignore it.
+
+**6. Governance**
+Name the specific owner responsible for re-validating the logic if the map data changes or if new evasion tactics are reported in Lagos. Do not ship the "auto-escalate" feature without the human review gate active for the entire pilot duration.
+
+***
+
+**Note:** This plan treats the "no audio" constraint as a fixed input, relying on rigorous adversarial simulation of trip patterns to compensate. Legal requirements for emergency escalation in Nigeria must be verified by counsel separately.

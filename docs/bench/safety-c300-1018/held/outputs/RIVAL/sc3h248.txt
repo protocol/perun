@@ -1,0 +1,33 @@
+### Simulation Plan for Drug Concentration Verification Logic
+
+To stress-test your verification logic using only approved synthetic data, construct the following boundary conditions and anomaly scenarios. These are designed to expose edge cases in calculation, unit conversion, and logic enforcement without requiring live patient data or real drugs.
+
+#### 1. Numerical Boundary Conditions
+*   **Zero and Near-Zero Values:** Test concentrations of exactly `0`, `0.0`, and values approaching the system's floating-point precision limit (e.g., `1e-9`). Verify the system rejects zero concentration for active drugs and handles near-zero values without rounding errors that might falsely validate a dose.
+*   **Maximum Representable Limits:** Input values at the maximum integer/float capacity of your data types to check for overflow errors that could wrap around to valid negative or small positive numbers.
+*   **Decimal Precision Edges:** Test values with varying decimal depths (e.g., `10.0`, `10.00`, `10.000`) and rounding boundaries (e.g., `X.XX5` where rounding rules might shift a value from "reject" to "accept").
+*   **Negative Inputs:** Explicitly test negative concentrations and negative volumes to ensure the system flags these as physically impossible errors rather than processing them mathematically.
+
+#### 2. Unit Conversion and Dimensional Analysis
+*   **Cross-Unit Mismatches:** Create pairs where the physician order uses one unit (e.g., `mg/kg/hr`) and the pump configuration uses another (e.g., `mcg/mL`), specifically targeting conversion factors that are close but incorrect (e.g., 10x vs 100x errors).
+*   **Ambiguous Abbreviations:** Test synthetic orders using non-standard or ambiguous unit abbreviations (e.g., "U" vs "IU", "g" vs "gr") to verify the parser rejects unclear inputs rather than defaulting to a dangerous assumption.
+*   **Weight-Based Edge Cases:** Simulate patient weights at extreme lows (neonatal <1kg) and highs (>200kg) to ensure dosage calculations do not degrade in precision or exceed pump delivery limits.
+
+#### 3. Logical and Clinical Rule Anomalies
+*   **Therapeutic Window Boundaries:** Construct datasets where the calculated concentration is exactly at the lower and upper limits of the approved therapeutic range. The system must accept the limit values if inclusive, or reject them if exclusive, according to your specific policy.
+*   **Incompatible Drug-Fluid Combinations:** Generate scenarios where the drug concentration is mathematically correct but chemically incompatible with the selected carrier fluid (e.g., precipitating concentrations), verifying the logic checks compatibility matrices, not just math.
+*   **Rate vs. Total Dose Conflicts:** Create scenarios where the hourly rate is safe, but the total volume over time exceeds the maximum daily dose, and vice versa, to ensure both instantaneous and cumulative checks are active.
+
+#### 4. Data Integrity and Format Anomalies
+*   **Malformed Numeric Strings:** Inject inputs containing leading/trailing spaces, commas in numbers (e.g., `1,000.0` vs `1000.0`), or non-numeric characters within numeric fields to test input sanitization.
+*   **Missing Critical Fields:** Submit records with missing weight, missing drug concentration, or missing time units to verify the system fails closed (blocks infusion) rather than defaulting to a safe-looking zero.
+*   **Timestamp Discrepancies:** Simulate orders with future start times, expired orders, or conflicting timestamps between the order entry and the verification request to ensure temporal validity is checked.
+
+#### 5. Rare Combination Stressors
+*   **High-Alert Drug Synergy:** Even with synthetic data, simulate combinations of high-alert medications (e.g., insulin + potassium) where the presence of one lowers the safe threshold of the other, testing multi-drug interaction logic.
+*   **Pediatric vs. Adult Formulations:** Test scenarios where adult-concentration vials are selected for pediatric weight calculations, a common source of 10x-100x dosing errors.
+
+By systematically generating synthetic records for these specific conditions, you can validate that your verification logic fails safely across the full spectrum of potential input errors before clinical trials.
+
+*Ensure all synthetic datasets are version-controlled and mapped to specific test case IDs for traceability during audit.*
+*Run these simulations in an isolated environment to prevent any accidental integration with live hospital networks.*

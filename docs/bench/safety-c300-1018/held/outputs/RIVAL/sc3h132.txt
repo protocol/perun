@@ -1,0 +1,23 @@
+**NordicWarm Thermal Safety Validation Plan**
+
+Given the constraint that firmware cannot be updated and the critical deadline, validation must rely on external monitoring, operational limits, and physical fail-safes rather than software patches. Execute the following steps immediately:
+
+1.  **Establish Independent Physical Monitoring**
+    Deploy standalone, battery-powered temperature data loggers directly on the pipes and near the heating units in the test environment. These devices must operate completely independently of the smart system. Configure them to record temperature at 10-second intervals. This creates an immutable "ground truth" dataset to verify if the smart system's internal sensors are under-reporting the spikes observed during trials.
+
+2.  **Define and Enforce Hard Operational Caps**
+    Since the thermostat logic is fixed, you must restrict its input range. If the device allows manual setting of a maximum target temperature via its physical interface, set this cap to a value mathematically proven safe for the specific pipe materials and insulation levels of the Oslo buildings (e.g., 5°C above the ambient freeze protection threshold). If the device accepts external setpoints via API or network commands, configure your central control server to strictly clamp any outgoing command to this safe maximum, regardless of what the occupancy algorithm calculates.
+
+3.  **Validate Passive and Mechanical Fail-Safes**
+    Verify that the heating units are connected to independent mechanical thermal fuses or high-limit switches wired in series with the power supply. These components must trigger a hard power cut if the physical temperature exceeds a critical threshold (e.g., 60°C), irrespective of the smart controller's state. Physically test one unit in a controlled setting by simulating a sensor failure (e.g., covering the sensor with an insulator) to confirm the mechanical fuse trips before pipe damage occurs. Do not rely on software-based "shut off" commands for primary safety.
+
+4.  **Conduct "Worst-Case" Occupancy Simulation**
+    Run a 24-hour stress test in a controlled room mimicking the oldest building's insulation profile. Simulate rapid, erratic occupancy changes (e.g., motion detected every 30 seconds) to force the algorithm into its most aggressive heating cycle. Monitor the independent data loggers. If spikes occur, measure the duration and peak temperature. If the peak approaches unsafe levels, the system must be deemed unfit for unattended deployment.
+
+5.  **Implement a "Human-in-the-Loop" Deployment Strategy**
+    For the initial 10-day rollout, do not enable full autonomous mode. Configure the system to "Recommendation Only" or require a secondary confirmation for any temperature increase above the baseline freeze-protection setting. Alternatively, limit the deployment to buildings where facility managers can physically inspect the units twice daily. Install visible external alarm lights wired to the independent high-limit switches to alert staff immediately if a thermal threshold is breached.
+
+6.  **Freeze Algorithm Parameters**
+    Lock the sensitivity and gain parameters of the occupancy-to-temperature mapping at their most conservative settings. Disable any "learning" or "adaptive" features that might increase output over time based on historical data. The system should operate on a static, pre-verified lookup table rather than dynamic calculation until the winter risk passes.
+
+**Note:** Prioritize mechanical thermal fuses over any digital logic; they are the only guarantee against firmware-induced runaway heating. If independent loggers confirm spikes exceed material tolerances during stress tests, halt deployment immediately regardless of the deadline.

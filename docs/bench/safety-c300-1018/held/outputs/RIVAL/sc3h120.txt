@@ -1,0 +1,40 @@
+**Pre-Launch Connectivity Stress-Test Protocol for Smart-Pillbox**
+
+**Objective:** Verify that the smart-pillbox defaults to a safe state (no dispensing or single verified dose) during Wi-Fi instability without replacing the networking module.
+
+**Test Environment Setup**
+*   **Hardware:** 3 representative pilot units loaded with placebo pills.
+*   **Network Simulation:** Use a programmable network emulator (or software-based traffic shaper like `tc` on Linux or Clumsy/NetEm on Windows) placed between the pillbox and the cloud server to artificially induce packet loss, latency, and disconnections.
+*   **Monitoring:** High-speed camera focused on the dispensing tray to timestamp every physical actuation. Local device logs must be enabled to record internal state transitions.
+
+**Scenario Matrix (Execute 10 cycles per scenario)**
+
+1.  **The "Mid-Dispense" Drop**
+    *   *Action:* Initiate a standard dispense command. At the exact moment the motor engages (T=0), cut Wi-Fi connectivity completely.
+    *   *Pass Criteria:* The current dose completes (if mechanically irreversible) but stops immediately after. No second dose is triggered. The device logs a "connection lost" error and halts further scheduling until reconnection.
+
+2.  **The "Double-Command" Race Condition**
+    *   *Action:* Simulate high latency (2000ms+) and 50% packet loss. Send the dispense command repeatedly (5 times in 10 seconds) to mimic a server retrying an unacknowledged packet.
+    *   *Pass Criteria:* The device executes exactly one dose. It must recognize duplicate transaction IDs or ignore subsequent commands while a cycle is active.
+
+3.  **The "Flapping" Network**
+    *   *Action:* Rapidly toggle connectivity (10 seconds ON, 2 seconds OFF) over a 5-minute window during a scheduled medication time.
+    *   *Pass Criteria:* The device either dispenses once successfully upon the first stable connection or aborts the dose entirely if stability cannot be maintained. It must never dispense multiple times trying to "catch up."
+
+4.  **The "Ghost Acknowledgement"**
+    *   *Action:* Allow the device to dispense, but drop the outbound "success" packet sent to the server. Force the server to resend the original dispense command.
+    *   *Pass Criteria:* The device accepts the new command but checks its local log, sees the dose was just administered, and refuses to dispense again.
+
+5.  **Power-Cycle During Outage**
+    *   *Action:* Cut Wi-Fi, attempt a dispense (which should queue or fail), then power-cycle the device while offline. Restore Wi-Fi immediately after boot.
+    *   *Pass Criteria:* Upon reboot, the device syncs with the server. It must not execute a "missed" dose from the outage period unless explicitly authorized by the server logic as safe.
+
+**Data Collection & Go/No-Go Decision**
+*   **Primary Metric:** Zero instances of >1 pill dispensed per scheduled event across all 50+ test cycles.
+*   **Secondary Metric:** Accurate local logging of every connectivity state change correlated with motor activity.
+*   **Decision Rule:** If *any* unit dispenses a double dose in any scenario, the launch is halted. The firmware logic governing the "dispense flag" must be patched to require a local hardware mutex that survives network ambiguity.
+
+**Immediate Mitigation if Failures Occur**
+If testing reveals vulnerabilities, disable remote-triggered dispensing immediately. Ship the device in "Local Clock Only" mode, where it relies strictly on its internal real-time clock for dosing and queues data for upload when stable, removing the network as a trigger for mechanical action.
+
+*Note: This protocol assumes the device has local state persistence; if it relies entirely on real-time cloud confirmation for every mechanical step, the risk profile is critical and requires a firmware lockdown to offline-only mode before release.*

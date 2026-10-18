@@ -1,0 +1,35 @@
+### Admissions Predictor Safety Review Plan
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for the Seoul admissions context:
+*   **Bias/Unfair Outcomes:** The model systematically assigns lower success probabilities to applicants from underrepresented backgrounds due to patterns in legacy data, reinforcing historical inequalities.
+*   **Over-reliance/Automation Bias:** Applicants or counselors treat the predicted score as a definitive verdict rather than a probabilistic estimate, causing qualified students to self-reject ("chilling effect").
+*   **Missing Disclosure:** Users are unaware the score is machine-generated, based on limited legacy data, and cannot account for unmeasured socioeconomic factors.
+*   **Unsafe High-Stakes Automation:** The tool effectively gates access to higher education without human review of edge cases or context.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure disparate impact using the available legacy data.
+*   **Test Design:** Construct adversarial probe sets comparing applicants with identical academic metrics but differing proxy indicators for underrepresented status (e.g., high school region, legacy demographic fields present in the dataset).
+*   **Controls:**
+    *   *Positive Control:* Synthetic profiles designed to trigger known bias patterns found in early results.
+    *   *Negative Control:* Profiles from dominant demographics with identical academic stats to establish a baseline score.
+*   **Metrics:** Calculate the disparity in predicted success rates between groups. Define a stop condition: if the score gap exceeds a threshold set by the admissions office (e.g., >5% difference for equivalent academic profiles), the feature cannot launch.
+*   **Chilling Effect Simulation:** Run a simulation estimating how many applicants from specific subgroups would withdraw if shown their current predicted score versus a "human-review" baseline.
+*   **Transparency Artifact:** Draft a **Model Card** detailing: intended use (advisory only), data limitations (legacy sources only, no socioeconomic indicators), and measured performance gaps by subgroup. Mark any unmeasured impact as `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** The predictor must **never** auto-reject an applicant. Any score below a certain threshold, or any application flagged for potential data gaps, must trigger mandatory human review by an admissions officer.
+*   **Uncertainty Communication:** Do not display raw percentages (e.g., "87% chance") which imply false precision. Instead, use defined coarse tiers with clear definitions:
+    *   *Strong Candidate* (Corroborated by multiple legacy indicators)
+    *   *Potential Candidate* (Mixed signals or data gaps)
+    *   *Review Required* (Low confidence or high-stakes ambiguity)
+    *   *Visual Cue:* Use color-blind-safe indicators alongside text.
+*   **Explicit Disclosure:** Prominently state: "This score is an AI-generated estimate based on historical data. It does not account for personal resilience, recent improvements, or socioeconomic barriers. It is not a final decision."
+*   **Override Mechanism:** Ensure the interface allows counselors to easily override or ignore the score, documenting the reason to prevent automation bias.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign a specific owner (e.g., Lead Admissions Officer) responsible for reviewing the harm inventory and measurement results before every cycle.
+*   **Re-evaluation:** Mandate a re-review if the legacy data source changes or if the model is retrained, regardless of the team size.
+
+**Note:** Legal counsel must determine if this tool constitutes a regulated automated decision under local Korean law or international standards; this plan assumes advisory status only.
+Do not fabricate a "0% bias" metric; report residual risk as `UNVERIFIED` until the specific evals above are run.

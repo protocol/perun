@@ -1,0 +1,36 @@
+### Pre-Launch Safety Review: Patient-Medication Reconciler
+
+**1. Harm Inventory: Critical Allergy Deletion**
+*   **Harm:** False-negative allergy removal during deduplication causes a clinician to prescribe a contraindicated medication, leading to anaphylaxis or death.
+*   **Affected:** Patients with complex histories; clinicians relying on the "cleaned" record as the single source of truth.
+*   **Worst Case:** Irreversible patient fatality due to automated data loss masked as "duplicate removal."
+
+**2. Measurement Plan (Staging Only)**
+Since live parallel testing is impossible, you must construct a "Golden Dataset" in your isolated staging environment that mimics high-risk real-world chaos.
+*   **Probe Set A (Positive Controls):** Inject 50 synthetic patient records where critical allergy data exists in a non-standard format (e.g., free-text notes, abbreviated codes, conflicting timestamps) alongside a "duplicate" entry that lacks the allergy.
+    *   *Pass Condition:* The reconciler **never** deletes the allergy field. If the system merges the records, the allergy must persist from the most reliable source.
+    *   *Stop Condition:* **Zero tolerance.** A single instance of allergy deletion in this set blocks launch immediately.
+*   **Probe Set B (Negative Controls):** Inject 50 records with actual duplicates (identical timestamps, sources, and values).
+    *   *Pass Condition:* Duplicates are removed without data loss.
+*   **Adversarial Probe:** Inject records where the "older" entry contains the allergy and the "newer" entry does not (simulating a data entry error).
+    *   *Requirement:* Verify the logic prioritizes clinical safety (presence of allergy) over simple recency.
+
+**3. Management Controls & Human Gate**
+*   **Uncertainty Tiering:** Do not present the merged record as "Verified." Implement a visual tier:
+    *   *Confirmed:* Data matches across ≥2 sources.
+    *   *Single-Source:* Data exists in only one feed (flag for pharmacist review).
+    *   *Conflict Detected:* Sources disagree (auto-halt merge, force human resolution).
+*   **Human-in-the-Loop Gate:** For the initial go-live, **disable fully automated deletion** of any field tagged as "Allergy" or "Contraindication." The system should propose deletions/merges, but a pharmacist must explicitly approve the change before it writes to the permanent record. Automation of irreversible clinical data removal is the failure mode to prevent.
+*   **Disclosure:** Clearly label the interface: "AI-Assisted Reconciliation: Review flagged conflicts before prescribing."
+
+**4. Rollback Strategy**
+*   **Snapshot Preservation:** Before any batch job runs in production, take an immutable snapshot of the target patient records.
+*   **One-Click Revert:** Deploy a script that instantly restores the pre-merge snapshot if a "Conflict Detected" rate exceeds 0% or if a single critical error is reported.
+*   **Fallback Mode:** If the reconciler fails validation, the system must default to displaying the raw, unmerged source data rather than a potentially corrupted "cleaned" version. It is safer to show duplicates than to show missing allergies.
+
+**5. Governance & Transparency**
+*   **Owner:** Assign a specific clinical lead (e.g., Chief Pharmacist) as the owner of the "Allergy Deletion" risk. They must sign off on the Golden Dataset results.
+*   **Artifact:** Publish a **Data Card** for this feature documenting the logic used for merging, the known limitations (e.g., "cannot resolve conflicts where both sources are equally trusted but contradictory"), and the results of the staging probes. Mark any untested edge cases as `UNVERIFIED`.
+*   **Legal Routing:** Because this involves automated decisions affecting health outcomes, route the question of regulatory compliance (e.g., EU AI Act, local health data laws) to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** Never fabricate a "0% error rate" claim; report the specific results of your Golden Dataset tests. If the staging environment cannot adequately simulate the legacy data's complexity, the risk remains `UNVERIFIED` and launch should be delayed.

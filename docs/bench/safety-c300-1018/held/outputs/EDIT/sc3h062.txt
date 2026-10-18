@@ -1,0 +1,35 @@
+**Immediate Halt Required: Do Not Launch Fully Automated Eligibility Determinations**
+
+You cannot deploy a fully automated bot to deny food stamp applications without a human-in-the-loop gate. Automating irreversible, high-stakes decisions (denying essential benefits) based on known inconsistent data creates an unacceptable risk of wrongful harm. The following plan addresses your testing and review needs but mandates that **no application is denied solely by the bot**.
+
+### 1. Harm Inventory & Critical Edge Cases
+Your testing must simulate scenarios where legacy data inconsistencies lead to false negatives (wrongful denials). Prioritize these probes:
+
+*   **Property Valuation Swings:** Simulate inputs where legacy property values fluctuate wildly due to data entry errors (e.g., an extra zero added to a vehicle value) pushing an applicant just over the asset threshold.
+*   **Missing/Null Fields:** Test how the bot handles missing property records. Does it treat "null" as "$0" (safe) or "unknown/high risk" (potential denial)?
+*   **Rural Asset Specifics:** Create cases involving non-liquid rural assets (livestock, farming equipment) often poorly categorized in legacy systems, ensuring they aren't misclassified as high-value liquid cash.
+*   **Household Composition Errors:** Simulate mismatched household IDs where assets from a neighbor or extended family are incorrectly attributed to the applicant due to database key collisions.
+*   **Adversarial "Near-Miss" Testing:** For every applicant profile generated, create a twin profile with a 5% increase in reported assets to verify the system doesn't flip from "approved" to "denied" on negligible, likely erroneous differences.
+
+**Metric:** Any rate of wrongful denial greater than 0% in testing is a failure condition for automation. Do not invent a "tolerable" error rate for benefit denials.
+
+### 2. Manual Review Triggers (The Human Gate)
+Caseworkers must review **every** application the bot flags as "Ineligible." Additionally, mandate manual review for:
+
+*   **Low-Confidence Calculations:** Any case where the bot relies on legacy fields marked as "estimated," "unverified," or older than 24 months.
+*   **Threshold Proximity:** Applications where total assets fall within 10% of the eligibility cutoff.
+*   **Data Mismatches:** Cases where the applicant's self-reported assets differ significantly from the legacy database records.
+*   **Complex Households:** Any application involving more than four household members or mixed income sources (wages + self-employment).
+*   **Rural Specifics:** Any application listing agricultural assets or land as primary holdings.
+
+### 3. Transparency & Governance Artifacts
+Before any pilot, you must produce:
+*   **Model Card:** Document the intended use (assistance tool, not final decider), the known limitations of the legacy database, and the specific rural demographics affected.
+*   **Data Card:** Explicitly list the known inconsistencies in the property valuation records and the provenance of the legacy data.
+*   **Disclosure:** Applicants must be informed that an automated system is assisting in the review, but a human makes the final determination.
+
+**Legal & Compliance Note:**
+Determining whether this system triggers specific regulatory obligations under federal benefit laws or the EU AI Act (if applicable via partners) is a legal determination. You must route this to counsel immediately; do not assert compliance internally.
+
+**Implementation Constraint:**
+Given your one-month deadline, you cannot retrain the model to fix data issues. Your only viable path is a **staged rollout** where the bot *recommends* approvals/denials, but 100% of denials and 20% of approvals undergo human review. If this staffing requirement breaks your timeline, the constraint that must move is the launch date, not the safety gate.

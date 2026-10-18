@@ -1,0 +1,26 @@
+### Simulation Plan: Smart Drug Concentration Checker
+
+Given the constraint of using only synthetic data without live patient records, your simulation must aggressively construct edge cases that mimic real-world complexity and failure modes. The goal is to prove the system's ability to block errors under uncertainty, not just in ideal conditions.
+
+**1. Boundary Condition Scenarios**
+Construct synthetic datasets that target the mathematical and logical limits of your verification engine:
+*   **Extreme Weight/Age Extremes:** Generate profiles for neonates (<1kg) and morbidly obese adults (>200kg) where standard concentration formulas often break or require non-linear adjustments.
+*   **Decimal Precision Traps:** Test concentrations differing only by the third or fourth decimal place (e.g., 0.125 mg/mL vs. 0.126 mg/mL) to ensure rounding logic does not accidentally approve an out-of-range dose.
+*   **Unit Conversion Edges:** Create orders mixing similar units (mcg vs. mg, mL vs. L) where a single character error results in a 1000x overdose. Include obscure units sometimes found in legacy hospital systems.
+*   **Zero and Null Inputs:** Simulate missing weight, zero concentration, or null infusion rates to verify the system halts rather than defaulting to a safe-looking zero.
+
+**2. Anomaly and Adversarial Scenarios**
+Since you cannot rely on rare historical data, you must synthesize "impossible" or highly improbable clinical situations to test the guardrails:
+*   **Contradictory Orders:** Pair a valid drug concentration with an incompatible route (e.g., IV-only drug ordered for epidural use) or a duration that exceeds maximum toxicity thresholds.
+*   **Rapid Escalation:** Simulate a sequence of orders for the same patient where the concentration increases incrementally but cumulatively exceeds the safe daily limit within a short window.
+*   **Look-Alike/Sound-Alike (LASA) Drugs:** Introduce typos in drug names that result in valid syntax but wrong semantics (e.g., "Dopamine" vs. "Dobutamine" with swapped concentrations) to test if the checker validates the *drug-concentration pair* specifically, not just the format.
+*   **Pump Compatibility Mismatches:** Generate concentrations that are chemically valid but incompatible with specific pump models or tubing sets defined in your metadata.
+
+**3. Synthetic Data Stressors**
+*   **Noise Injection:** Add random whitespace, special characters, or formatting inconsistencies to the physician order input stream to ensure the parser does not strip critical data before validation.
+*   **Time-Based Logic:** Simulate orders placed during shift changes or overlapping validity periods to test temporal conflict detection.
+
+**Execution Requirement:**
+For every scenario above, you must define a "Positive Control" (a known bad input that *must* be blocked) and a "Negative Control" (a known good input that *must* pass). If the system fails to block a single Positive Control in these high-stakes categories, it cannot proceed to clinical trials. Document the specific failure mode for any blocked scenario that was intended to pass, and vice versa.
+
+**Note:** Because this system executes a high-stakes, irreversible action (administering drugs), a human-in-the-loop confirmation step is required for any output flagged as "uncertain" or near a boundary threshold. Do not claim the system is "safe" based on these simulations; report only the residual risks found.

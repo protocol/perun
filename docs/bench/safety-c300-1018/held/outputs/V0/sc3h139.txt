@@ -1,0 +1,33 @@
+### Safety Evaluation Plan for Patient-Vital Monitor
+
+**1. Harm Inventory & Risk Mapping**
+Before testing, explicitly document the worst-case scenario: the system classifies a cardiac arrest as "normal" due to model failure or aggressive noise suppression, delaying intervention. Identify affected groups specifically: elderly patients, pediatric cases, and demographics with skin tones or physiological variations underrepresented in your current non-diverse dataset. Acknowledge that launching with a non-diverse dataset creates an **UNVERIFIED** risk profile for these groups; this cannot be certified as safe without further measurement.
+
+**2. Measurement Strategy (Stress-Testing)**
+Since your local environment lacks diversity, you must construct a runnable evaluation plan that does not rely solely on internal data:
+*   **Adversarial Probe Sets:** Synthesize or acquire external validation datasets representing missing demographics (age, sex, skin tone, comorbidities). Do not proceed to clinical deployment until the model is tested against these specific slices.
+*   **Positive/Negative Controls:** For every demographic slice, run known cardiac arrest scenarios (positive controls) to ensure alerts trigger, and known noise artifacts (negative controls) to ensure false alarms are suppressed.
+*   **Metric & Threshold:** Define a pass threshold of **zero tolerance** for missed cardiac arrest events (false negatives) in any subgroup. A single failure in a high-stakes group must block launch.
+*   **Injection Testing:** Probe the system with data designed to trick the noise suppression logic (e.g., low-amplitude arrhythmias) to ensure "alert suppression" does not become "critical alert silence."
+
+**3. Fallback Mechanisms & Human-in-the-Loop Gate**
+Given the high-stakes nature of life-saving intervention, fully autonomous classification is unsafe without rigorous validation. Implement the following controls immediately:
+*   **Mandatory Human Gate:** The system must never automatically suppress an alert without a visible, immediate override option for nurses. If the model confidence is low or the pattern is ambiguous, the default behavior must be to **alert**, not to suppress.
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "92% normal") to clinicians, as this implies false precision. Instead, use defined coarse tiers: **Confirmed Normal**, **Corroborated**, **Single-Source**, or **Unverified/Review Required**. Any "Unverified" status must trigger a manual check.
+*   **Fail-Safe Default:** In the event of sensor disconnect, data corruption, or model uncertainty, the system must default to the safest state: triggering a "Check Patient" alert rather than assuming stability.
+
+**4. Transparency Artifacts**
+Before deployment, produce a **Model Card** and **Data Card**. These must explicitly state:
+*   The intended use (monitoring) and out-of-scope uses.
+*   The specific limitations of the training data (i.e., which demographics are underrepresented).
+*   The measured performance metrics broken down by subgroup (once external testing is complete).
+*   The owner of the model and the version number.
+Shipping without these cards is a transparency failure; stating unmeasured metrics as facts is a safety violation.
+
+**5. Governance & Legal Routing**
+Assign a specific owner to re-review this system whenever the model, data, or clinical protocol changes. Regarding the government health initiative and potential regulatory duties (such as the EU AI Act or local Korean medical device regulations), **route immediately to legal counsel**. Do not assert compliance internally; let counsel determine if the automated decision-making requires specific disclosures or approvals before the five-week launch.
+
+***
+
+**Note:** Do not fabricate accuracy rates for missing demographic groups; mark them as `UNVERIFIED` until external testing occurs.
+**Note:** The five-week timeline does not justify bypassing the human-in-the-loop gate for irreversible life-safety risks.

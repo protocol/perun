@@ -1,0 +1,32 @@
+### Internal Review Workflow for Patient-Discharge Generator
+
+**1. Harm Inventory & Protocol Mapping (Week 1)**
+Before testing, explicitly map the "worst realistic case" for every output category: omitted medication, missing warning signs, or incorrect dosage frequency. Do not rely on general testing; create a **lookup table** pairing every possible surgical procedure in your scope with its official, versioned standard care protocol from your hospital. This table is your ground truth. Any generated summary missing a single element from this map is a critical failure, not a minor bug.
+
+**2. Adversarial "Red-Team" Evaluation (Weeks 2–3)**
+Since you cannot hire external reviewers, your five engineers must act as adversarial testers. Do not test only "happy paths." Construct a dataset of 50+ high-risk edge cases: patients with complex comorbidities, conflicting medications, or rare surgical complications.
+*   **Positive Controls:** Inputs known to trigger specific omissions (e.g., a patient allergic to the standard painkiller).
+*   **Negative Controls:** Standard cases where the output must be perfect.
+*   **Execution:** Run the generator against these inputs. Measure the **omission rate** specifically against your protocol lookup table. If the system hallucinates a instruction or misses a critical step, log it as a "Critical Safety Event." Do not calculate an overall "accuracy %" which masks fatal errors; report the raw count of dangerous omissions.
+
+**3. The Human-in-the-Loop Gate (Mandatory for Launch)**
+Given the high stakes (patient recovery) and the risk of irreversible harm, **fully automated delivery to patients is unsafe** at launch. You must implement a mandatory human verification step.
+*   **Workflow:** The AI generates a draft care plan → A qualified human (nurse, resident, or attending surgeon) reviews the draft against the standard protocol → The human explicitly signs off (digital signature) → The document is sent to the patient.
+*   **Constraint:** The system must never bypass this gate. If no human is available, the discharge summary is not sent. This is not a suggestion; it is the floor for high-stakes medical automation.
+
+**4. Uncertainty & Disclosure Design**
+*   **Confidence Tiers:** Do not display raw model confidence scores (e.g., "87% sure") to clinicians or patients, as this implies a precision the model likely lacks. Instead, flag outputs requiring review based on deterministic rules (e.g., "Contains high-risk medication" or "Deviation from standard protocol detected").
+*   **Disclosure:** Clearly label the document as "AI-Assisted Draft – Requires Clinical Verification" until the human gate is passed.
+
+**5. Transparency Artifact (Model Card)**
+Create a one-page "Model Card" for internal hospital use. It must state:
+*   **Intended Use:** Drafting discharge summaries for [specific surgeries] only.
+*   **Limitations:** Explicitly list what the model is known to miss (based on your red-team results).
+*   **Owner:** Name the lead engineer responsible for the output safety.
+*   **Status:** Mark any untested surgical categories as "UNVERIFIED – DO NOT USE."
+
+**6. Governance & Stop Conditions**
+Define a "Stop Launch" condition: If your internal red-team finds even **one** instance of a missing critical warning sign or medication instruction in the high-risk test set, the launch is blocked until the root cause is fixed and re-tested. Assign one engineer as the "Safety Owner" who has the authority to halt deployment if this threshold is breached.
+
+**Note:** This workflow assumes you have access to the official hospital protocols; if these are not digitized, the lookup table cannot be built, and the system cannot be safely tested.
+**Note:** Legal requirements for AI disclosure in Canadian healthcare settings must be confirmed by your hospital's legal counsel; this plan recommends disclosure as a safety control, not a legal verdict.

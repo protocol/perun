@@ -1,0 +1,38 @@
+**Safety Review Plan: Smart-Ventilator Cough-Response Logic**
+
+**1. Harm Inventory (MAP)**
+Before proceeding, we must explicitly name the worst-case failures for ICU patients unable to override the device:
+*   **Unsafe Automation of High-Stakes Actions:** The device switches modes autonomously during critical respiratory distress. A false positive (detecting a cough where none exists) or false negative (missing a severe fit) could cause barotrauma, hypoxia, or cardiac stress.
+*   **Over-Reliance/Automation Bias:** Clinicians may trust the automatic switch without verifying the patient's actual status, delaying manual intervention if the algorithm fails.
+*   **Bias/Unfair Outcomes:** The detection model may perform poorly on specific demographics (e.g., pediatric vs. adult, varying body masses) if training data was not representative, leading to systematic under-protection for certain groups.
+*   **Hallucination as Fact:** The system might interpret noise (equipment vibration, staff movement) as a "coughing fit" with high confidence, triggering an unnecessary and dangerous mode switch.
+
+**2. Measurement Strategy Despite Budget Cuts (MEASURE)**
+Since physical simulation budget is reduced by 40%, we cannot rely solely on new physical trials. We must shift to a hybrid validation approach:
+*   **Adversarial Digital Twins:** Construct software-based "digital twin" simulations of rapid, irregular coughing sequences using existing physiological data. Run the control algorithm against these synthetic inputs thousands of times to stress-test edge cases that physical rigs might miss due to cost.
+*   **Red-Team Probe Sets:** Define specific failure probes:
+    *   *Positive Control:* Known severe coughing fit data → Expected: Immediate, safe mode switch.
+    *   *Negative Control:* Normal breathing + equipment noise → Expected: No mode switch.
+    *   *Edge Case:* Irregular, stuttering coughs (the specific risk) → Expected: Correct classification without oscillation.
+*   **Metric & Stop Condition:** Define a "Zero-Tolerance" stop condition for any test row where the device switches modes incorrectly during a simulated critical event. Do not invent a "99% accuracy" claim; if the digital twin reveals *any* unmitigated failure mode in high-stakes scenarios, the launch is blocked until resolved.
+*   **Data Provenance Check:** Audit the training data for the cough detection model. If specific subgroups (e.g., low-weight patients) are underrepresented, mark performance for those groups as **UNVERIFIED** rather than assuming parity.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the irreversible nature of lung injury, fully autonomous execution is too risky without safeguards. Implement a "Confirm-and-Execute" or "Watchdog" protocol:
+    *   The AI suggests a mode switch, but the final actuation requires a secondary, deterministic safety check (e.g., confirming oxygen saturation drop) or an immediate, visible alert to nursing staff with a hard manual override always available.
+    *   Never allow the device to lock out manual control.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% cough detected") to clinicians, as this implies false precision. Instead, use defined coarse tiers: **"Confirmed Fit," "Possible Fit (Verify),"** or **"Normal."**
+*   **Transparency Artifact:** Draft a **Model Card** for the review board. This must include:
+    *   Intended use and explicit out-of-scope scenarios.
+    *   Known limitations (e.g., "Performance unverified for patients under X kg due to data gaps").
+    *   The results of the digital twin red-teaming.
+    *   Clear ownership of the algorithm's behavior.
+
+**4. Governance & Legal Routing**
+*   **Owner Assignment:** Name one engineer as the accountable owner for the cough-detection output harm.
+*   **Regulatory Routing:** Do not assert internally whether this constitutes a "regulated automated decision" under specific medical device laws. Explicitly route the question of legal disclosure requirements and classification to legal counsel immediately. Name the relevant regimes (e.g., local medical device regulations, ISO standards) in your documentation but let counsel determine binding obligations.
+
+**Deliverable Status:** This plan identifies residual risks and mandates a human gate. It does not certify the device as "safe." The final ship decision rests with the hospital review board based on these disclosed risks.
+
+*Note: All untested scenarios due to budget cuts must be labeled "UNVERIFIED" in the final documentation; do not fabricate success rates.*
+*Ensure the manual override mechanism is physically distinct and failsafe, independent of the software stack.*

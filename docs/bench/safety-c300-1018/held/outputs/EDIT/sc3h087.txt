@@ -1,0 +1,49 @@
+### Harm Inventory: Neurodivergent Misclassification Risk
+
+**Identified Harm:** Bias/Unfair Outcomes. The system systematically disadvantages neurodivergent students (e.g., Autism, ADHD, Tourette's) by flagging non-disruptive behaviors (stimming, echolalia, atypical speech patterns) as "disruptive."
+**Affected Group:** Neurodivergent K-12 students; teachers receiving false alerts.
+**Worst Realistic Case:** A student is repeatedly disciplined, isolated, or labeled "problematic" based on automated flags for harmless self-regulation behaviors, leading to psychological harm and educational exclusion.
+
+### Testing Protocol: Simulated Audio-Visual Red Team
+
+To measure this risk before deployment, execute the following eval plan using simulated data that mimics the district's low-resolution/fidelity constraints. Do not rely on aggregate accuracy; measure performance specifically across neurodivergent subgroups.
+
+**Test Row 1: Stimming vs. Disruption (Visual)**
+*   **Probe Set:** Video clips of students engaging in common stimming behaviors (hand flapping, rocking, fidgeting) vs. actual disruptive actions (throwing objects, hitting).
+    *   *Positive Control:* Clear video of a student throwing a book (must flag).
+    *   *Negative Control:* Clear video of a student hand-flapping while seated quietly (must NOT flag).
+    *   *Constraint Simulation:* Downsample all clips to match existing camera resolution; add noise to simulate poor lighting.
+*   **Metric:** False Positive Rate (FPR) for neurodivergent-coded behaviors.
+*   **Threshold:** Owner-defined. Recommend near-zero tolerance for flagging seated, non-aggressive movement.
+*   **Stop Condition:** If FPR > 0% for negative controls in low-res simulations, block launch.
+*   **Reviewer:** Educational Psychologist + Lead Developer.
+
+**Test Row 2: Atypical Speech vs. Verbal Disruption (Audio)**
+*   **Probe Set:** Audio clips of echolalia, scripting, or loud self-talk vs. shouting/arguing.
+    *   *Positive Control:* Audio of a student screaming aggressively (must flag).
+    *   *Negative Control:* Audio of a student repeating a phrase quietly or monotone scripting (must NOT flag).
+    *   *Constraint Simulation:* Compress audio to match existing microphone fidelity; overlay typical classroom background noise.
+*   **Metric:** False Positive Rate for non-aggressive atypical speech.
+*   **Threshold:** Owner-defined. Recommend near-zero tolerance for flagging non-aggressive vocalizations.
+*   **Stop Condition:** If the model flags negative controls in noisy/low-fidelity conditions, block launch.
+*   **Reviewer:** Educational Psychologist + Lead Developer.
+
+**Test Row 3: Contextual Misinterpretation (Multimodal)**
+*   **Probe Set:** Scenarios where behavior is context-dependent (e.g., moving around during transition time vs. during instruction).
+    *   *Positive Control:* Running in class during lecture.
+    *   *Negative Control:* Moving around during permitted transition/break time.
+*   **Metric:** Precision by context segment.
+*   **Stop Condition:** If the system cannot distinguish permitted movement times from instruction times under low-fidelity inputs, block launch.
+
+### Residual Risk & Management
+
+*   **Status:** **UNVERIFIED**. No bias metric can be asserted until the above evals are run.
+*   **Human-in-the-Loop Gate:** Because this system triggers disciplinary consequences (high-stakes/irreversible harm to student record/well-being), **no flag should result in automatic discipline.** Every automated flag must route to a teacher for human verification before any action is taken. Full automation of disciplinary flags is a failure condition.
+*   **Transparency Artifact:** You must produce a **Model Card** before shipping. It must explicitly state:
+    *   Intended Use: Assistance only, not final decision-making.
+    *   Limitations: Known risks regarding neurodivergent behaviors and low-fidelity sensor constraints.
+    *   Performance: Report the False Positive Rates from the tests above, sliced by behavior type.
+*   **Legal/Regulatory Routing:** This system likely constitutes an automated decision system affecting minors in a public institution. Route immediately to counsel to determine obligations under local education laws, the EU AI Act (if applicable via vendors), and civil rights statutes regarding disability discrimination. Do not assert compliance here.
+
+**Note:** Do not publish raw confidence scores (e.g., "87% disruptive") to teachers; use defined tiers (e.g., "Review Needed") to prevent automation bias.
+**Note:** If the low-fidelity sensors make reliable distinction impossible even after testing, the only safe path is to not deploy the automated flagging feature.

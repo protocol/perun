@@ -1,0 +1,35 @@
+### Automated Adjudicator Review Workflow (Beta Pilot)
+
+**1. Mandatory Human Gate for Denials (High-Stakes Control)**
+Do not auto-execute any claim denial during the beta. Given the known risk of false positives due to image quality and lighting, **all** "Deny" or "Flag as Fraud" decisions must route to a human reviewer before communicating with the customer. Auto-approval for clear, high-confidence claims may proceed to maintain speed, but irreversible negative outcomes require a human-in-the-loop. This prevents immediate harm to policyholders while you gather data.
+
+**2. Targeted Sampling Strategy**
+Since you cannot audit 100% of approvals manually without delaying payouts, implement a risk-based sampling plan for the "Approved" queue:
+*   **Edge-Case Sampling:** Automatically flag for review any approval where the model's confidence score falls below a defined threshold (e.g., "Corroborated" vs. "Single-source" quality) or where image metadata indicates poor lighting/quality.
+*   **Adversarial Probe Set:** Before launch, run your known "false denial" cases (poor lighting, specific angles) through the system. If the system denies these known-good cases, the model is not ready for even partial automation.
+*   **Random Stratified Sample:** Manually review a random 5–10% of auto-approved claims daily to detect drift or new failure modes not captured by your edge cases.
+
+**3. Define Uncertainty Tiers, Not Percentages**
+Do not display raw confidence scores (e.g., "87% likely fraud") to reviewers or customers, as this implies a precision your current testing may not support. Instead, map internal scores to three defined tiers for your workflow:
+*   **Confirmed:** High quality image, clear match to fraud patterns → Auto-approve (with random sampling).
+*   **Unverified:** Poor lighting, ambiguous damage, or low confidence → **Route to Human.**
+*   **Rejected:** Clear evidence of tampering → **Route to Senior Human Reviewer.**
+
+**4. Harm Inventory & Measurement Plan**
+Create a living document tracking the specific harm: "Valid claims denied due to image artifacts." For every denied claim (which are now all human-reviewed), record:
+*   **Root Cause:** Was it lighting? Angle? Image compression?
+*   **Demographic/Context Data:** Does this error cluster around specific vehicle types, times of day, or locations?
+*   **Stop Condition:** Define a failure rate threshold (e.g., "If >2% of human-reviewed denials are overturned as false positives, pause auto-approvals entirely").
+
+**5. Transparency Artifact (Internal Model Card)**
+Draft a one-page "Model Card" for your internal team and beta stakeholders. It must list:
+*   **Intended Use:** Vehicle damage assessment under good lighting conditions.
+*   **Known Limitations:** Explicitly state that low-light or obscured images trigger high false-positive rates.
+*   **Owner:** Name the specific product manager responsible for reviewing the daily error logs.
+
+**6. Legal & Compliance Routing**
+Because this system makes consequential decisions affecting financial payouts, route the question of "regulated automated decision-making" to your legal counsel immediately. Do not assume the pilot is exempt from disclosure laws or insurance regulations. Recommend adding a clear notice to users that "an automated system assisted in this assessment, and all denials are reviewed by a human."
+
+***
+
+*Note: This workflow prioritizes preventing false denials (harm) over maximum automation speed, adhering to the principle that irreversible actions require human oversight. No safety certification is implied; residual risk remains until metrics are measured.*

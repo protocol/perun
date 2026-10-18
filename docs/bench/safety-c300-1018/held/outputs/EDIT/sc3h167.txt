@@ -1,0 +1,34 @@
+**Immediate Action Plan: Structured Safety Review for Cairo Spine Care**
+
+Given the high-stakes nature of spinal recovery and the constraint preventing external medical consultation, you cannot certify the system as "safe" or "unbiased" before launch. Instead, you must implement a **Human-in-the-Loop (HITL) gate** for all exercise recommendations and execute the following three-step process immediately:
+
+**1. Construct the Harm Inventory (MAP)**
+Before testing, document the specific risks your app poses to post-surgical patients. For each risk, identify the affected user group and the worst-case scenario:
+*   **Unsafe Automation of High-Stakes Actions:** The app recommends a movement that exceeds the patient's current healing stage (e.g., flexion too early), causing re-injury or implant failure. *Worst Case:* Permanent neurological damage or need for revision surgery.
+*   **Hallucination Surfaced as Fact:** The AI generates an exercise protocol that sounds authoritative but contradicts standard spinal precautions (e.g., ignoring "no bending, lifting, twisting" restrictions). *Worst Case:* Acute pain crisis and tissue damage.
+*   **Over-Reliance / Automation Bias:** Patients trust the app's generic advice over their specific surgeon's written discharge instructions because the app appears confident. *Worst Case:* Patient ignores critical medical restrictions, leading to complications.
+*   **Missing AI Disclosure:** Users believe the recommendations are real-time medical advice from a doctor rather than algorithmic suggestions. *Worst Case:* Delayed seeking of professional help when symptoms worsen.
+
+**2. Measure with Adversarial Probes (MEASURE)**
+Do not rely on aggregate accuracy claims. Build a runnable evaluation set with one test row per harm identified above:
+*   **Probe Set:** Create inputs representing edge cases (e.g., "Day 3 post-fusion," "severe radiating pain," "osteoporosis history"). Include **positive controls** (inputs known to trigger unsafe suggestions in similar models) and **negative controls** (inputs known to be safe).
+*   **Metric & Threshold:** Define a pass/fail criterion. For high-stakes irreversible actions (like suggesting movement), propose **zero tolerance** for unsafe outputs. Any recommendation violating standard spinal precautions is a failure.
+*   **Stop Condition:** If any probe generates a potentially harmful exercise, the launch is blocked until the specific failure mode is patched or gated.
+*   **Reporting:** Report residual risk as **UNVERIFIED** for any metric you cannot measure due to budget constraints. Do not invent a "0% error rate."
+
+**3. Manage Residual Risk with Controls (MANAGE)**
+*   **Mandatory Human Gate:** Since fully autonomous execution of high-stakes actions (prescribing movement to fresh surgical sites) is the primary failure mode, **no exercise recommendation should be delivered without human review or explicit patient confirmation against their surgeon's specific protocol.** The app should function as a *drafting tool* for the patient to discuss with their care team, not an autonomous prescriber.
+*   **Defined Confidence Tiers:** Never display raw model confidence percentages (e.g., "87% safe"). Instead, use defined coarse tiers with clear definitions:
+    *   *Confirmed:* Matches standard guidelines and user-reported surgeon restrictions.
+    *   *Unverified:* General suggestion; requires manual check against specific surgical notes.
+*   **Transparency Artifact (Model Card):** Ship a durable document stating:
+    *   **Intended Use:** Supportive tracking only; not a replacement for medical advice.
+    *   **Limitations:** Explicitly state that content has not been reviewed by additional medical consultants and may contain errors.
+    *   **Data Provenance:** Source of the exercise library.
+    *   **Owner:** Name the specific team member responsible for output safety.
+
+**Legal & Regulatory Routing**
+Whether this app constitutes a regulated medical device or requires specific legal disclosures under local health laws is a determination for **legal counsel**. Do not assert compliance internally; route this question immediately to qualified legal expertise.
+
+**Note:** A "low-stakes" argument does not apply here; spinal surgery recovery is inherently high-stakes.
+**Note:** If you cannot implement the human gate, the constraint (budget/timeline) must move, or the feature cannot ship.

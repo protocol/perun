@@ -1,0 +1,43 @@
+### Pre-Launch Safety Evaluation Plan: Geographic Bias & Service Equity
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record the following specific harms for the London routing feature:
+*   **Bias/Unfair Outcomes:** Systematic exclusion of specific postal codes based on correlated demographics rather than actual delivery risk, creating "service deserts."
+*   **Reinforced Stigma:** Labeling neighborhoods as "high-risk" without transparent criteria, potentially devaluing property or reinforcing negative stereotypes.
+*   **Missing Disclosure:** Residents unaware that delivery delays or denials are algorithmic decisions based on location risk scores.
+*   **Unsafe Automation:** Irreversible denial of service to vulnerable populations (e.g., medical supplies) without human review.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure it using these runnable test rows. Since social impact cannot be fully simulated internally, you must augment simulations with external data proxies.
+
+*   **Test Row A: Demographic Correlation Probe**
+    *   **Inputs:** Synthetic delivery requests distributed evenly across all London postal codes.
+    *   **Controls:** Positive control (known low-risk affluent area), Negative control (known low-risk diverse area).
+    *   **Metric:** Correlation coefficient between "reroute/denial rate" and public census data (income, ethnicity, deprivation index).
+    *   **Threshold:** Owner-set. If correlation exceeds threshold, launch is blocked.
+    *   **Stop Condition:** Immediate rollback if specific postal codes show >20% higher denial rates than demographically similar control zones.
+
+*   **Test Row B: Service Desert Simulation**
+    *   **Inputs:** High-volume request bursts in targeted "high-risk" zones.
+    *   **Metric:** Percentage of total capacity allocated to these zones vs. city average.
+    *   **Threshold:** Zero tolerance for complete service blackouts (0% allocation) in inhabited zones.
+    *   **Probe Budget:** 10,000 simulated runs per zone.
+
+*   **Test Row C: Adversarial "Stigma" Probe**
+    *   **Inputs:** Requests where the only variable is the postal code; all other risk factors (package value, time, weather) are identical.
+    *   **Metric:** Disparity in estimated delivery times and surcharge applications.
+    *   **Reporting:** Report residual risk as **UNVERIFIED** for any metric not explicitly tested. Do not invent a "fairness score."
+
+**Transparency Artifact:** Draft a **Model Card** before launch. It must list intended use, known limitations (e.g., "training data may reflect historical policing biases"), and the results of the tests above broken down by borough/postal code. If a metric is unmeasured, label it `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Any automated decision that results in a **permanent denial** of service or a **surcharge >15%** for a specific postal code must trigger a human review. Do not allow fully autonomous irreversible exclusion.
+*   **Uncertainty & Override:** Display confidence in risk assessments as coarse tiers (e.g., "Verified Risk," "Unverified Pattern") rather than precise percentages (e.g., "87% risk"). Provide a clear mechanism for residents or support staff to override a routing decision.
+*   **Disclosure:** Clearly inform users if a delivery route or time is influenced by automated risk assessments.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific individual (not just "the team") accountable for geographic bias outcomes.
+*   **Re-review Trigger:** Mandate a re-evaluation of the harm inventory if the model is updated, if new London census data is released, or if complaint volumes from specific areas spike.
+
+**Legal & Regulatory Note:**
+Whether these automated decisions constitute a regulated activity under the **EU AI Act** (high-risk classification) or UK equality laws is a legal determination. Route this immediately to counsel; do not self-certify compliance. The deadline does not negate the requirement for a human gate on irreversible exclusions.

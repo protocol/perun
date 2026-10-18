@@ -1,0 +1,44 @@
+### Pre-Launch Safety Protocol: MobilityFirst Balance Test
+
+**Critical Constraint Acknowledgement:** Software cannot physically prevent a fall or replace a missing safety harness or spotter. Because your inventory of physical safety measures is limited, the system must operate under a **"Safety-First Stop"** logic. If physical supervision is not confirmed, the test must not proceed. No virtual margin can compensate for the absence of required physical safeguards for high-risk elderly patients.
+
+#### 1. Decision Logic Review Process (The "Hard Gate")
+Implement this logic flow before any exercise begins. This is a binary gate; there is no "proceed with caution" state if physical safety is missing.
+
+*   **Step A: Mandatory Human Confirmation (Pre-Scan)**
+    *   **Input:** Clinic staff must manually toggle a "Spotter Present & Harness Ready" switch in the interface before the camera activates.
+    *   **Logic:** If `Spotter_Status != CONFIRMED`, then `Test_State = LOCKED`. Display message: "Safety Protocol Violation: A human spotter and harness are required before proceeding."
+    *   **Rationale:** Prevents the system from attempting to assess stability in an unsafe environment due to staff oversight or pressure to maximize throughput.
+
+*   **Step B: Computer Vision Pre-Check (Environmental Scan)**
+    *   **Input:** Camera scans for a second human figure (the spotter) within arm's reach of the patient and verifies the patient is wearing the harness (if detectable) or is in the designated safe zone.
+    *   **Logic:**
+        *   IF `Spotter_Detected == FALSE` OR `Patient_Position != SAFE_ZONE`:
+        *   THEN `Test_State = ABORT`.
+        *   Action: System refuses to load the first exercise. Alert: "Safety spotter not detected in frame. Please ensure a staff member is standing by."
+    *   **Fallback:** If the CV model has low confidence (<90%) in detecting the spotter, default to **ABORT**. Do not guess.
+
+*   **Step C: Dynamic Instability Threshold (During Test)**
+    *   **Input:** Real-time sway metrics.
+    *   **Logic:** Set the threshold for "instability" extremely low for the pilot.
+    *   **Action:** At the *first* sign of significant sway (before a fall is imminent), the system immediately pauses the exercise and instructs the spotter: "Assist Patient Now."
+    *   **Constraint:** The system does not attempt to "guide" the patient back to balance; it triggers the human intervention immediately.
+
+#### 2. User Instruction Set (Clinic Staff & Patients)
+
+**For Clinic Staff (The Spotters):**
+1.  **Zero-Exception Rule:** Never bypass the "Spotter Present" toggle. If you are the only staff member, you cannot run this test alone. You must secure a second person.
+2.  **Positioning:** Stand within arm's reach of the patient at all times, regardless of what the screen says. The software is an assistant, not a guardian.
+3.  **Override Authority:** If the system says "Proceed" but you feel the patient is unsteady or the harness is loose, **stop immediately**. Your judgment overrides the algorithm.
+4.  **Emergency Stop:** Keep a physical kill-switch (or a dedicated keyboard key) accessible to instantly freeze the visual stimuli if the patient becomes confused or agitated.
+
+**For Patients:**
+1.  **Disclosure:** "This test uses a camera to guide your movements. It is not a safety device. A staff member is here to catch you if you fall."
+2.  **Instruction:** "Follow the screen only if you feel steady. If you feel dizzy or unsafe, stop moving and call for your spotter immediately. Do not try to 'beat' the test."
+
+#### 3. Pilot Limitation Declaration
+*   **Exclusion Criteria:** Automatically disqualify any patient flagged by intake as "High Fall Risk" from the automated CV test until sufficient physical harnesses are available. These patients must receive manual assessment only.
+*   **Data Logging:** Record every instance where the system aborted a test due to missing spotter detection. This data proves the necessity of the gate and informs future staffing requirements.
+
+**Note:** This protocol treats the lack of physical equipment as a hard stop, not a variable to be optimized.
+**Note:** Legal counsel must review the patient disclosure language regarding the system's non-safety-critical nature before the pilot begins.

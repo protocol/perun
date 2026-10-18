@@ -1,0 +1,33 @@
+**Evaluation Plan: Stress Tests for Low-Power Silent Ischemia Detection**
+
+Given the high-stakes nature of detecting silent ischemia in diabetic patients and the constraint of older wearable hardware, the following stress tests focus on ensuring sensitivity is not compromised by power-saving modes. These tests treat missed events as critical failures.
+
+**1. Signal Degradation & Noise Injection Test**
+*   **Probe Set:** Simulate heart rate variability (HRV) and skin conductance signals with added noise profiles typical of low-power sensor sampling (e.g., reduced resolution, intermittent dropouts, motion artifacts). Include "silent ischemia" positive controls (subtle HRV shifts without chest pain indicators) and negative controls (normal exertion patterns).
+*   **Metric:** Sensitivity (True Positive Rate) specifically for ischemic events under noisy conditions.
+*   **Threshold:** Owner-set zero tolerance for missed ischemic events in positive controls; specificity must remain above a safe baseline to prevent alarm fatigue.
+*   **Stop Condition:** Any missed ischemic event in the positive control set triggers an immediate halt to deployment.
+*   **Owner:** Lead Algorithm Engineer.
+
+**2. Battery-Throttled Latency & Accuracy Test**
+*   **Probe Set:** Run the detector on emulated older hardware configurations that enforce aggressive CPU throttling and reduced sampling rates when battery drops below 20%, 10%, and 5%. Inject known ischemic episodes of varying durations (short bursts vs. sustained events).
+*   **Metric:** Time-to-detection latency and detection accuracy at each battery throttle level.
+*   **Threshold:** Detection latency must not exceed the clinical window for intervention; accuracy must not degrade below the baseline established on full-power hardware.
+*   **Stop Condition:** If latency exceeds the clinical window or accuracy drops significantly at any battery level, the low-power mode logic must be revised.
+*   **Owner:** Embedded Systems Lead.
+
+**3. Edge-Case Physiological Variability Test**
+*   **Probe Set:** Test against subgroup data representing diabetic patients with atypical baseline HRV or skin conductance (e.g., due to neuropathy). Include adversarial inputs where non-ischemic stress mimics ischemia.
+*   **Metric:** False Negative Rate stratified by patient subgroup; False Positive Rate for non-ischemic stress.
+*   **Threshold:** No statistically significant increase in False Negatives for any subgroup compared to the general population.
+*   **Stop Condition:** Identification of a subgroup with unacceptably high miss rates requires model retraining or subgroup-specific tuning before pilot.
+*   **Owner:** Clinical Data Scientist.
+
+**4. Continuous Operation & Memory Leak Stress Test**
+*   **Probe Set:** Run the detector continuously for 72+ hours on target hardware with periodic ischemic simulations every 4 hours. Monitor memory usage and processing time per inference.
+*   **Metric:** System stability (crashes/freezes) and consistency of detection performance over time.
+*   **Threshold:** Zero crashes; performance variance <5% over the 72-hour period.
+*   **Stop Condition:** Any system crash or progressive degradation in detection speed/accuracy.
+*   **Owner:** QA Lead.
+
+**Residual Risk Note:** Sensitivity metrics derived from these tests are valid only for the specific hardware configurations and noise profiles tested; performance on untested device models remains **UNVERIFIED**. Because this feature executes high-stakes health monitoring, the pilot study must include a human-in-the-loop review protocol for all flagged events until long-term reliability is proven.

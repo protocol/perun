@@ -1,0 +1,35 @@
+### Pre-Launch Validation Workflow for Parking Enforcement Bot
+
+**Step 1: Construct the Harm Inventory**
+Before testing, explicitly document the specific failure modes where the bot harms disabled drivers. Record:
+*   **Bias/Fairness:** Does the model fail more often on older vehicles, specific plate colors, or non-standard placard placements common among certain demographics?
+*   **Hallucination as Fact:** The bot declaring "No Permit Present" when a placard is obscured by glare, snow, or a steering wheel, treating uncertainty as a confirmed violation.
+*   **Unsafe Automation:** The system issuing a fine (an irreversible financial penalty) without human review when visual confidence is low.
+*   **Missing Disclosure:** Drivers receiving fines without knowing an AI made the initial determination, preventing them from understanding the basis of the error.
+
+**Step 2: Build Adversarial Test Sets (Measure)**
+Create a dedicated evaluation dataset that does not rely on "average" parking scenarios. You must include:
+*   **Positive Controls (Known Violations):** Clear images of cars in disabled spots without permits. The system must catch these.
+*   **Negative Controls (Known Compliant):** Cars with valid, clearly visible permits. The system must *never* fine these.
+*   **Edge-Case Probes (The Risk Zone):**
+    *   Images with heavy shadow, glare, or night-time lighting obscuring the placard.
+    *   Plates or placards partially blocked by wipers, cargo, or dirt.
+    *   Temporary paper placards that are crumpled or faded.
+    *   Vehicles where the permit is inside the window but reflective glass hides it.
+*   **Metric & Threshold:** Define a "False Positive Rate" specifically for the *Negative Controls* and *Edge-Case Probes*. Set a stop condition: If the bot issues even one false fine on a known-compliant or edge-case image in the test set, the automated fine feature cannot launch.
+
+**Step 3: Implement the Human-in-the-Loop Gate (Manage)**
+Because your pipeline cannot cross-reference real-time permit databases, **fully automated fines are unsafe.**
+*   **Mandatory Review:** Any image where the model's confidence is not absolute, or where lighting/occlusion is detected, must be routed to a human reviewer before a fine is issued.
+*   **Uncertainty Tiering:** Do not display a percentage (e.g., "87% sure") to reviewers. Instead, classify outputs as:
+    *   *Confirmed Violation* (Clear view, no permit visible) → Route to human for final sign-off.
+    *   *Unverified/Obscured* (Glare, shadow, partial view) → **Auto-Reject** the fine generation; flag for manual patrol check.
+*   **Override Mechanism:** Ensure the human reviewer can easily overturn the bot's suggestion with a single click, and that this override is logged for future model retraining.
+
+**Step 4: Transparency and Governance**
+*   **Model Card:** Publish an internal document detailing the system's limitations (e.g., "Cannot verify digital permits," "High error rate in low light").
+*   **Disclosure:** Ensure the fine notice explicitly states that an automated system assisted in the detection, providing a clear, low-friction path for drivers to appeal with photo evidence of their permit.
+*   **Ownership:** Assign a specific city planner or engineer as the owner of this workflow who must re-evaluate the harm inventory if the camera hardware or model version changes.
+
+**Note:** Do not proceed to full automation until the "Edge-Case Probes" yield zero wrongful fines in your testing.
+**Note:** Legal requirements for AI disclosure in municipal enforcement must be verified by city counsel; this workflow recommends disclosure as a safety control, not a legal verdict.

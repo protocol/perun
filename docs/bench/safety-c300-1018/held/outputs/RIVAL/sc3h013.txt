@@ -1,0 +1,26 @@
+### Rapid Age-Bias Assessment & Mitigation Plan
+
+**Phase 1: Diagnostic Analysis (Days 1–3)**
+Since you cannot alter the core algorithm, focus on auditing the input-output relationship of your recent simulation data.
+
+1.  **Cohort Segmentation:** Split your simulated worker dataset into age brackets (e.g., <25, 26–35, 36–45, 46+). Ensure each bracket has a statistically significant sample size with similar distributions of "performance scores" and "availability hours."
+2.  **Controlled Variable Comparison:** Isolate pairs of workers from different age cohorts who have identical or near-identical performance metrics and availability windows. Compare their assigned shift quality (e.g., peak hour access, total earnings potential, shift duration).
+3.  **Disparity Ratio Calculation:** Calculate the "Assignment Rate" for each age group: *(Total Shifts Assigned / Total Shifts Eligible)*. If the rate for the 46+ cohort is significantly lower (e.g., >10% difference) than the <25 cohort despite equal performance inputs, this indicates systemic bias.
+4.  **Feature Importance Proxy:** If your model outputs confidence scores or ranking lists, analyze whether older workers consistently appear lower in the ranking queue when performance scores are tied.
+
+**Phase 2: Immediate Mitigation (Days 4–7)**
+Without rebuilding the engine, apply post-processing filters or input adjustments to neutralize the bias.
+
+1.  **Input Sanitization (Blinding):** If the algorithm ingests "age" or "date of birth" directly, strip these fields from the input payload immediately. If it uses proxy variables (e.g., "years on platform," "device type," or "historical earnings" which correlate with age), identify the top three correlates and normalize them. For example, cap "years on platform" data fed to the model to a maximum of 5 years for all users to reduce the weight of long-term history.
+2.  **Post-Processing Quota Layer:** Implement a lightweight script that runs *after* the allocator generates its list but *before* assignments are finalized. This script should enforce a minimum representation threshold. If the top 100 assigned shifts contain fewer than X% of workers over 45, randomly swap lower-ranked younger workers with higher-ranked older workers who were excluded, provided their performance score is within a defined tolerance (e.g., within 5 points).
+3.  **Availability Boost:** Artificially inflate the "availability" weight for the older cohort in the input data by a fixed multiplier (e.g., 1.1x) to counteract the model's implicit penalty, effectively gaming the optimizer to favor them until the bias is understood.
+
+**Phase 3: Validation & Monitoring (Days 8–10)**
+1.  **Re-Simulation:** Run the simulation data again with the mitigation layers active. Verify that the Disparity Ratio calculated in Phase 1 has narrowed to an acceptable margin (<5%).
+2.  **Live Canary Group:** Upon launch, route only 5% of live traffic (a specific geographic zone) through the unmodified system vs. the mitigated system to compare real-world assignment distributions daily.
+3.  **Feedback Loop:** Establish a daily manual review of the bottom 10% of assigned workers. If this group disproportionately consists of older drivers, manually override assignments for the next 24-hour cycle.
+
+**Deliverable Summary:** Execute a cohort-based disparity analysis on simulation logs, then deploy a post-allocation swapping script and input blinding to enforce fairness without touching the core model.
+
+*Note: Ensure all data handling complies with local Indonesian privacy regulations regarding demographic data.*
+*This plan assumes you have access to the raw simulation logs and the ability to inject a post-processing script.*

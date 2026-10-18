@@ -1,0 +1,37 @@
+### Pre-Launch Safety Review Strategy: Patient-Discharge Planner
+
+Given the constraint that the core optimization algorithm cannot be modified, the safety strategy must shift from "optimizing within the model" to "enforcing boundaries around the model." The following safeguards can be implemented immediately as pre- and post-processing layers without touching the certified core logic.
+
+**1. Implement a Hard "Medical Stability" Pre-Filter (Gatekeeper)**
+Before any patient data enters the optimization engine, introduce a lightweight, rule-based validation script. This script acts as a mandatory gatekeeper.
+*   **Mechanism:** Define a binary "Stability Flag" based on critical vital signs and physician notes (e.g., oxygen saturation, heart rate stability, pending critical lab results).
+*   **Action:** If a patient fails this static check, they are explicitly excluded from the input list sent to the optimizer. The algorithm will simply "not see" unstable patients, making it impossible for it to recommend their discharge.
+*   **Implementation:** This can be a simple database query or API middleware that filters the JSON payload before submission. It requires no re-certification of the math engine, only a validation of the input data schema.
+
+**2. Enforce a Mandatory Human-in-the-Loop Verification Step**
+Alter the workflow so the tool's output is treated as a "draft suggestion" rather than an executable order.
+*   **Mechanism:** The system generates a prioritized list, but no discharge order is finalized until a senior attending physician digitally signs off on *each* specific recommendation.
+*   **Action:** Introduce a UI constraint where the "Confirm Discharge" button is disabled until the physician checks a box stating: "I have clinically verified this patient is stable for discharge independent of bed availability metrics."
+*   **Implementation:** This is a workflow policy change enforced by the front-end application layer, bypassing the need for backend algorithm changes.
+
+**3. Deploy a Post-Processing "Veto" Rule**
+After the optimizer returns its recommended list, run a secondary safety script that scans the output for known high-risk patterns.
+*   **Mechanism:** Create a "Red List" of conditions (e.g., patients admitted for sepsis in the last 24 hours, those awaiting specific imaging results).
+*   **Action:** If the optimizer recommends discharging a patient on the Red List, the system automatically flags the recommendation as "Blocked – Clinical Review Required" and removes them from the immediate discharge queue.
+*   **Implementation:** This acts as a firewall after the computation, ensuring that even if the math prioritizes efficiency, the final output adheres to safety protocols.
+
+**4. Temporary "Efficiency Cap" Configuration**
+If the algorithm accepts weighting parameters or constraints via configuration files (rather than hard-coded logic), adjust these to prioritize safety over volume.
+*   **Mechanism:** Introduce a constraint that limits the maximum number of discharges recommended per hour or per ward, regardless of optimal bed turnover.
+*   **Action:** By artificially capping the throughput, you force the system to be more conservative, leaving a buffer of beds that reduces the pressure to discharge marginal cases.
+*   **Implementation:** Check if the deployment environment allows overriding configuration variables (e.g., `MAX_DISCHARGE_RATE`) without recompiling the core binary.
+
+**5. Emergency Stop Protocol**
+Establish a clear operational procedure for immediate manual override.
+*   **Mechanism:** Designate a "Safety Officer" for each shift with the authority to pause the tool's recommendations entirely if unsafe patterns emerge.
+*   **Action:** If the tool repeatedly suggests unstable patients (due to data errors), the workflow reverts to 100% manual triage until the data issue is resolved.
+
+By layering these input filters, human verification steps, and output vetoes, you create a "safety envelope" around the unchangeable algorithm. This ensures that while the math may still seek efficiency, it operates only on a subset of patients who are already deemed safe, effectively neutralizing the risk of premature discharge.
+
+*Note: Ensure all filtering logic is logged for audit purposes to demonstrate due diligence during the pilot.*
+*These measures should be documented as temporary operational controls pending full algorithm re-certification.*

@@ -1,0 +1,16 @@
+**Immediate Action Plan: Audit and Mitigate Re-identification Risk**
+
+Given the constraint that your anonymization tool fails on irregular schedules and the strict three-week deadline, you cannot launch the current pipeline without exposing night shift workers to potential harm (higher premiums or privacy breaches). The following steps address the specific risk of re-identifying irregular usage patterns:
+
+1.  **Halt Automated Sharing of Raw/Weakly Anonymized Data:** Immediately disable the automated feed to insurance partners for any data segment containing "irregular" or "non-standard" usage profiles. Do not attempt to "fix" the masking tool in time for launch; instead, isolate the risky data.
+2.  **Conduct a "Singling Out" Audit:** Manually sample the dataset focusing on night-hour consumption (e.g., 10 PM – 6 AM). Identify records where usage patterns are unique enough to distinguish a specific household from the aggregate. If a pattern (e.g., consistent high usage at 3 AM) applies to fewer than a statistically safe threshold of users (e.g., <20 homes), it is re-identifiable.
+3.  **Implement Aggregation Floors:** Modify the pipeline to only share data where the group size meets a minimum threshold (k-anonymity). If night-shift usage in a specific zone drops below this threshold, suppress that data point entirely rather than sending imperfectly masked data. It is safer to send *less* data than *identifiable* data.
+4.  **Introduce a Human-in-the-Loop Gate:** Before any data batch leaves your system, require a manual review by a data steward for the "irregular" category. This person must verify that no single record can be linked back to a specific address or behavior profile. This acts as a mandatory brake on irreversible data exposure.
+5.  **Draft a Transparency Notice:** Prepare a clear disclosure for users stating that aggregated data is shared with partners, explicitly noting that households with unique usage patterns may be excluded from sharing to protect privacy. This manages user expectation and reduces reliance on the system's perfection.
+6.  **Define "Unverified" Risk:** Acknowledge in your internal logs that the risk of bias against night workers is currently **UNVERIFIED** because the tool is known to be insufficient. Do not claim the data is "safe" or "anonymous." Document the specific failure mode (irregular schedules) and the mitigation (suppression/manual gate).
+
+**Critical Constraint Check:** If you cannot implement the suppression logic and human gate within three weeks, you must delay the launch for this specific feature. Shipping with a known inability to mask irregular schedules violates the floor for preventing harm via unsafe automation.
+
+**Notes:**
+*   Legal counsel must review whether sharing usage data with insurers triggers regulated automated decision-making duties in Ontario before any data flows.
+*   Do not invent a "safety percentage" for the anonymization; report the residual risk as high until the suppression logic is proven via testing.

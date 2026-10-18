@@ -1,0 +1,31 @@
+**Immediate Safety Directive:** Do not launch this feature for widespread clinical use in four weeks with the current testing gap. An automated decision that halts life-saving drug delivery based on unverified pressure thresholds in neonatal care constitutes a high-stakes, irreversible action with a known, unmeasured failure mode (false negatives due to viscosity variance). Shipping without resolving this violates the fundamental safety floor for medical automation.
+
+**Step-by-Step Mitigation Plan (Given Constraints):**
+
+1.  **Implement a Mandatory Human-in-the-Loop Gate:** Immediately reconfigure the device logic. The system must **never** autonomously stop the pump based solely on the occlusion detector in this software version. Instead, when pressure anomalies are detected, the device must trigger a high-priority alarm requiring explicit nurse confirmation before stopping flow. This shifts the "stop" decision from the unverified algorithm to a human operator, mitigating the risk of false-negative-induced under-dosing.
+
+2.  **Define Coarse Confidence Tiers, Not Precision Metrics:** Do not publish or rely on a specific "accuracy rate" or "false negative percentage" for the viscosity gap. These are **UNVERIFIED**. Instead, label the detector's output in this specific neonatal context as "Unverified/Single-Source" regarding viscosity variations. Display this status clearly on the device interface or accompanying documentation to prevent automation bias.
+
+3.  **Execute Targeted Stress Tests with Proxy Fluids:** Since exact viscosity replication is impossible now:
+    *   **Probe Set:** Test using the lowest and highest viscosity fluids currently available in your lab that bound the expected neonatal range, even if imperfect.
+    *   **Positive Control:** Introduce known physical blockages to ensure the alarm triggers at safe pressure limits regardless of fluid type.
+    *   **Negative Control:** Run unobstructed flows with these proxy fluids to measure false positive rates (unnecessary alarms).
+    *   **Metric:** Record the pressure delta between the alarm trigger and the actual occlusion point for each fluid.
+    *   **Stop Condition:** If the alarm fails to trigger before a clinically dangerous pressure buildup in *any* proxy fluid test, the autonomous feature is blocked.
+
+4.  **Draft a Transparency Artifact (Model/Data Card):** Create a document detailing:
+    *   **Intended Use:** Occlusion detection for general ICU use; **Limitation:** Neonatal viscosity variance is unverified; autonomous stopping is disabled for this subgroup until further validation.
+    *   **Known Failure Modes:** Potential delay in detection for high-viscosity neonatal medications.
+    *   **Owner:** Name the specific engineer responsible for the next validation phase.
+
+5.  **Route Regulatory Determination:** Engage legal counsel immediately to determine if this device falls under specific medical device regulations (e.g., South Korea MFDS, FDA, or EU MDR) regarding automated decision-making in life-support systems. Do not assert compliance internally.
+
+**Readiness Criteria for Widespread Clinical Use:**
+The feature is **not ready** until:
+*   The viscosity simulation gap is closed with physically representative testing data, OR the autonomous stopping function remains disabled for neonatal use cases indefinitely.
+*   A human-in-the-loop confirmation is mandatory for all pump-stop actions in the neonatal context.
+*   The transparency artifact explicitly states the limitations regarding viscosity and the UNVERIFIED status of autonomous performance in that domain.
+*   Legal counsel confirms the regulatory pathway for the proposed human-gated deployment.
+
+**Note:** The four-week deadline cannot override the requirement to measure known high-stakes risks; an unmeasured risk is not a zero risk.
+**Note:** "False negatives" in this context are a patient safety hazard, not a statistical metric to be optimized later.

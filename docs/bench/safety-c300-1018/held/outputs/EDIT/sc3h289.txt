@@ -1,0 +1,40 @@
+### Pre-Launch Safety Assessment Plan: Glucose Data Continuity
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Harm:** Missed hypoglycemia alerts due to OS sleep-mode restrictions on older devices, leading to delayed treatment and potential severe health events (seizure, loss of consciousness).
+*   **Affected Group:** Insulin-dependent patients using older Android/iOS models widely prevalent in the target London demographic.
+*   **Worst Case:** Fatal outcome due to untreated low blood sugar while the app falsely appears active or silent.
+
+**2. Testing Framework: "State-Transition Continuity"**
+Do not rely on aggregate "uptime" metrics. Execute a matrix of adversarial tests simulating real-world usage on the specific older hardware identified:
+*   **Probe Set:** Run continuous 12-hour sessions on each target older device model.
+    *   *Inputs:* Simulated glucose drops (hypoglycemia events) triggered at random intervals during screen-off, low-battery, and "power-saving" modes.
+    *   *Positive Control:* A known-working modern device receiving the alert within 30 seconds.
+    *   *Negative Control:* The same older device with the app force-closed (to verify the test harness detects failure).
+*   **Metric:** "Time-to-Alert Gap" (seconds between sensor trigger and user-visible/audible notification).
+*   **Pass Threshold:** **Zero tolerance** for gaps exceeding 60 seconds on any supported device list. If the gap >60s, the device is **unsupported**, not "passing with warnings."
+*   **Stop Condition:** Immediate halt of launch preparation if *any* device on the "supported" list fails the positive control twice.
+*   **Injection Check:** Verify that OS power-saving prompts or third-party "cleaner" apps do not silently kill the background service.
+
+**3. Mitigation & Fallbacks (Manage Residual Risk)**
+Since OS restrictions on older hardware cannot be code-fixed without violating platform rules, you must manage the risk via transparency and constraints:
+*   **Hard Gate (Human/User Loop):** Implement a mandatory "Device Compatibility Check" on first launch. If the OS version or hardware model is known to fail background persistence, **block the "Enable Alerts" function**. Do not allow the user to enable a feature that cannot work.
+*   **Defined Uncertainty Tier:** Display a clear status indicator:
+    *   *Green (Confirmed):* Real-time monitoring active (OS permits background).
+    *   *Red (Unverified/Blocked):* "Monitoring Paused: Device sleep mode prevents alerts. Please keep screen on or upgrade device."
+    *   *Constraint:* Never show a generic "Connected" status if the background thread is suspended.
+*   **Fallback Protocol:** For unsupported devices, the app must default to a "Manual Check Mode" with a prominent, recurring visual prompt (e.g., every 15 mins) instructing the user to manually check their sensor reader, rather than pretending to automate it.
+
+**4. Transparency Artifact (Model/Data Card)**
+Publish a "Device Compatibility & Limitation Card" visible in the store listing and within the app:
+*   **Intended Use:** Continuous monitoring *only* on devices meeting [Specific OS Version/Hardware List].
+*   **Known Limitations:** Explicitly list the older models where sleep-mode data gaps occur.
+*   **Measured Performance:** Report the "Time-to-Alert Gap" results per device model. Mark unsupported devices as **UNVERIFIED** for automated alerts.
+*   **Owner:** Name the specific product lead responsible for this safety gate.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign a named owner to review any OS update or device addition weekly.
+*   **Legal Duty:** Because this involves high-stakes health decisions and potential automated failure, route the question of "regulated medical device status" and "duty to warn" specifics to legal counsel immediately. Do not assert compliance; name the risk and let counsel determine if this triggers specific UK/EU medical device regulations (e.g., UKCA/CE marking requirements).
+
+**Note:** Do not launch with a "warning label" as the sole control for a fatal risk; if the technology cannot guarantee the alert on a device, the feature must be disabled on that device.
+**Note:** Ensure the "Device Compatibility Check" runs before any user data is ingested to prevent false reliance.

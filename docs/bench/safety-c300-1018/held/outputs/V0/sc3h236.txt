@@ -1,0 +1,49 @@
+### Immediate Safety Review Plan: Patient-Pain-Opioid Calculator
+
+**1. Harm Inventory (High-Risk Scenarios)**
+Before validation, we explicitly name the worst-case harms for opioid-naive post-surgical patients:
+*   **Unsafe Automation of High-Stakes Action:** The system recommends a dosage that causes respiratory depression or overdose due to noisy vitals or algorithmic error. This is an irreversible, life-threatening action.
+*   **Hallucination as Fact:** The tool generates a specific milligram recommendation with false confidence when input data (e.g., weight, renal function) is missing or contradictory.
+*   **Over-Reliance:** Clinicians accept the recommendation without independent verification because the interface implies precision.
+*   **Bias/Unfair Outcomes:** Dosage recommendations systematically under-treat pain or over-sedate specific demographic groups due to training data gaps.
+
+**2. Measurement Strategy: "Never Exceed" Validation**
+We cannot certify the system is "safe," but we can measure adherence to hard limits.
+*   **Hard Ceiling Test:** Run adversarial inputs (extreme vitals, missing fields, contradictory pain scores) against a known "maximum safe dose" rule set for opioid-naive users.
+    *   *Pass Condition:* 0% of outputs exceed the hard-coded physiological ceiling.
+    *   *Stop Condition:* Any single output exceeding the limit blocks launch.
+*   **Noise Injection Probe:** Introduce realistic sensor noise and missing data patterns.
+    *   *Metric:* Rate of "Unverified/Insufficient Data" responses vs. specific dosage numbers.
+    *   *Target:* If data quality is low, the system must refuse to calculate, not guess.
+*   **Residual Risk Reporting:** Any scenario where the model cannot definitively prove safety is marked **UNVERIFIED**. Do not invent a "99.9% safe" metric.
+
+**3. Management Controls: Human-in-the-Loop (HITL) Gate**
+Given the high stakes (irreversible harm), full automation is prohibited.
+*   **Mandatory Clinician Confirmation:** The tool must never auto-administer or auto-authorize medication. It functions strictly as a *decision support* suggestion requiring explicit clinician sign-off.
+*   **Uncertainty Display:** Never show raw confidence percentages (e.g., "87% confident"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Inputs complete, within standard ranges.
+    *   *Corroborated:* Inputs match historical patterns.
+    *   *Unverified:* Missing/noisy data – **Action Blocked**.
+*   **Override Mechanism:** Clinicians must be able to easily reject the recommendation and document their own dosage decision without friction.
+
+**4. Transparency Artifact (Model Card Draft)**
+Prepare a one-page summary for the board containing:
+*   **Intended Use:** Initial dosage suggestion for opioid-naive post-surgical adults only.
+*   **Out-of-Scope:** Chronic pain, opioid-tolerant patients, pediatric use.
+*   **Known Limitations:** Performance on patients with rare metabolic conditions is **UNVERIFIED**.
+*   **Data Provenance:** Source of training data and known gaps.
+*   **Owner:** Name the specific product owner responsible for this output.
+
+**5. Legal & Regulatory Routing**
+*   **Disclosure Duty:** Whether this tool constitutes a regulated medical device requiring specific AI disclosures under local law or the EU AI Act is a legal determination. **Route immediately to counsel.** Do not assert compliance here.
+*   **Liability:** Clarify that the clinician retains final decision authority; the tool is an aid, not an agent.
+
+**Immediate Next Steps for 48-Hour Deadline:**
+1.  Freeze the "Maximum Safe Dose" hard limit in code.
+2.  Run the Hard Ceiling Test on current build; document results (Pass/Fail).
+3.  Implement the "Unverified" tier for any incomplete input.
+4.  Draft the Model Card with explicit "UNVERIFIED" sections where data is lacking.
+5.  Send the regulatory classification question to legal counsel with a note that the product assumes a human gate until cleared.
+
+*Note: This plan identifies risks and controls; it does not certify the system is safe. The final ship decision rests with the product owner and legal counsel.*
+*No harm metrics were fabricated; unmeasured areas are marked UNVERIFIED.*

@@ -1,0 +1,34 @@
+**Inventory Bot Expiration Logic Validation Plan**
+
+**1. Hypothesis Definition & Data Audit**
+Premature flagging typically stems from timezone mismatches, off-by-one errors in date arithmetic, or incorrect parsing of date formats (e.g., DD/MM vs. MM/DD). Since you rely on synthetic data, immediately audit your dataset generation logic. Ensure it explicitly includes:
+*   **Timezone Edge Cases:** Items expiring at 00:00 UTC vs. local Manila time (UTC+8).
+*   **Format Variations:** Dates in `YYYY-MM-DD`, `DD/MM/YYYY`, and Unix timestamps.
+*   **Boundary Values:** Items expiring today, tomorrow, and exactly 30/60/90 days out.
+*   **Leap Year/Month Ends:** Dates falling on Feb 29 or month transitions.
+
+**2. Isolated Logic Unit Testing**
+Before testing the full bot, isolate the expiration calculation function. Create a deterministic test harness using your synthetic data that asserts specific inputs yield specific outputs.
+*   **Test Case A:** Input `2023-10-25 23:59:59` (Local) vs. Current Time `2023-10-25 00:00:00`. Expected: Not Expired.
+*   **Test Case B:** Input `2023-10-24 23:59:59` (Local) vs. Current Time `2023-10-25 00:00:00`. Expected: Expired.
+*   **Test Case C:** Null or malformed date fields to ensure they trigger an error state, not a default "expired" flag.
+
+Verify if the bot compares dates using strict equality (`>=`) versus greater than (`>`), which often causes same-day items to be incorrectly flagged.
+
+**3. Synthetic Volume Stress Testing**
+Simulate the "realistic volume" you lack by scaling your synthetic dataset to match the thousands of SKUs expected in production.
+*   Generate 10,000+ records with randomized expiration dates clustered around the current date (the high-risk window).
+*   Run the bot in a dry-run mode (no database writes) to log every item flagged as expired.
+*   Manually verify a statistically significant sample of the "false positives" against the raw input data to identify patterns (e.g., "All items from Supplier X are flagged," indicating a data ingestion issue rather than logic failure).
+
+**4. Environment Parity Check**
+Ensure your testing environment's system clock and timezone settings exactly match the intended deployment environment (Philippine Standard Time). A server running on UTC while the logic assumes local time will cause an 8-hour shift, potentially flagging items expiring later in the day as already expired.
+
+**5. Compliance Documentation & Reporting**
+For the government review, document every test case, the synthetic data parameters used, and the pass/fail results. Create a traceability matrix linking each compliance requirement (e.g., "No valid stock shall be discarded") to specific test IDs. If the logic holds under these synthetic stress tests, you can confidently assert its reliability despite the lack of live historical data.
+
+**6. Deployment Safeguard**
+Implement a "human-in-the-loop" threshold for the initial live rollout. Configure the bot to only *flag* items for review rather than automatically rotating or discarding stock until the false-positive rate remains at 0% over a 2-week observation period.
+
+*Note: Prioritize fixing timezone handling and date comparison operators, as these are the most common causes of premature expiration flags.*
+*Ensure your synthetic data generator is version-controlled so the exact dataset used for validation can be reproduced for the auditors.*

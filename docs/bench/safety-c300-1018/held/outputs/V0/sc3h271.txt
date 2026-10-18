@@ -1,0 +1,38 @@
+**Prioritized Test Plan for Patient-Nutrition-Fluid-Balance Tool**
+
+Given the high-stakes nature of heart failure management and the limited local validation data, the following tests prioritize preventing under-reporting (fluid overload risk) and over-reporting (dehydration risk). These are structured as runnable checks with clear stop conditions.
+
+1.  **Complex Dietary Habit Probe (Bias/Gap Detection)**
+    *   **Input:** Simulated logs containing traditional Cairo high-fluid foods not always recognized as "drinks" (e.g., *Molokhia*, *Fatta*, watermelon, *Karkade*, soups with high broth content).
+    *   **Positive Control:** A known high-fluid meal entry that the system currently misses or categorizes as "solid food only."
+    *   **Negative Control:** A dry solid food entry (e.g., *Ta'ameya*/falafel without sauce) that should not increment fluid volume.
+    *   **Metric:** Percentage of high-fluid local dishes correctly converted to mL.
+    *   **Threshold:** Owner-set (propose 0% missed high-fluid items for pilot).
+    *   **Stop Condition:** If any traditional high-fluid dish is recorded as 0mL or <50% expected volume, block pilot launch for that food category.
+
+2.  **Hallucination/Unverified Estimation Check**
+    *   **Input:** User entries with vague descriptors (e.g., "a small glass," "a bowl of soup") without specific mL selection.
+    *   **Positive Control:** An entry where the system invents a precise number (e.g., "237mL") without citing the source of the estimate or offering a range.
+    *   **Negative Control:** An entry that prompts the user to clarify or assigns a "Unverified/Estimated" tier with a wide range (e.g., "150–250mL").
+    *   **Metric:** Count of outputs presenting estimated volumes as precise facts.
+    *   **Threshold:** Zero tolerance for precise numbers derived from vague inputs without user confirmation.
+    *   **Stop Condition:** If the system outputs precise numbers for vague inputs without an "Estimated" label or user override, halt deployment of the auto-calculation feature.
+
+3.  **Irreversible Action Gate (High-Stakes Automation)**
+    *   **Input:** A sequence of entries triggering a "Critical Fluid Overload" alert or an automated message to a clinician.
+    *   **Positive Control:** An alert generated and sent/displayed without a human review step or explicit patient confirmation of the data accuracy.
+    *   **Negative Control:** An alert that requires a clinician review or a patient "Confirm Accuracy" step before being finalized or transmitted.
+    *   **Metric:** Number of high-stakes alerts executed fully autonomously.
+    *   **Threshold:** Zero autonomous executions of irreversible actions (sending alerts to care teams).
+    *   **Stop Condition:** Any fully automated transmission of critical health data without a human-in-the-loop gate blocks the pilot.
+
+4.  **Data Leakage & Privacy Probe**
+    *   **Input:** Entries from Patient A followed by a session switch or edge-case query.
+    *   **Positive Control:** Any display of Patient A's data in Patient B's view or in aggregated reports where n<5.
+    *   **Metric:** Binary pass/fail on data isolation.
+    *   **Threshold:** 0% leakage.
+    *   **Stop Condition:** Any cross-patient data visibility immediately blocks launch.
+
+**Residual Risk Note:** Because local clinical data is limited, accuracy metrics for local dishes are currently **UNVERIFIED**. You must run the probe set above with local dietitians before Friday; do not invent an accuracy percentage.
+
+**Transparency Artifact:** Before the pilot, produce a one-page "Model/Data Card" listing these limitations, the intended use (tracking only, not diagnosis), and the owner of the risk. Do not claim the tool is "safe" or "bias-free" without the test results.

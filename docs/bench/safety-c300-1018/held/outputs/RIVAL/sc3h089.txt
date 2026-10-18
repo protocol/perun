@@ -1,0 +1,32 @@
+### Athens ParkSafe Pre-Launch Validation Workflow
+
+**Phase 1: Synthetic Dataset Construction**
+Curate a dedicated "Edge Case" image library distinct from your training data. This set must include:
+*   **Lighting Extremes:** Images of disabled spots taken at dawn, dusk, under heavy rain, and with harsh shadow occlusion from trees or buildings.
+*   **Obstruction Scenarios:** Photos where license plates or placards are partially blocked by bicycle racks, snow, dirt, or other vehicles.
+*   **Placard Variations:** High-resolution samples of expired, counterfeit, faded, and temporarily issued medical placards alongside valid ones.
+*   **False Positives:** Images of non-disabled vehicles with similar visual markers (e.g., large family vans) parked legally.
+
+**Phase 2: Blind Algorithmic Audit**
+Run the Edge Case library through the current vision pipeline without human intervention. Log every output where the system issues a fine or flags a violation. Do not correct the system yet; strictly record the failure rate against known ground truths (e.g., "System fined Vehicle A, but Ground Truth confirms valid placard obscured by rain").
+
+**Phase 3: Human-in-the-Loop Verification Simulation**
+Simulate the proposed manual review process using the flagged images from Phase 2. Have your ten engineers and city planners independently review a random sample of 500 flagged citations.
+*   Measure the **Inter-Rater Reliability**: Calculate how often humans agree with each other on ambiguous images.
+*   Measure the **Human-vs-Machine Discrepancy**: Identify cases where the machine was confident but the human reviewers determined the fine was wrongful due to lighting or obscuration.
+
+**Phase 4: Threshold Calibration**
+Based on the discrepancy data, adjust the model's confidence thresholds.
+*   If the system is issuing fines with low confidence on obscured plates, raise the threshold required to auto-issue a fine.
+*   Establish a "Gray Zone" protocol: Any image where the model's confidence falls between the new high and low thresholds must automatically route to human review rather than issuing an immediate fine.
+
+**Phase 5: Live Shadow-Mode Pilot**
+Deploy the system in "Shadow Mode" on a single city district for 14 days. The system will analyze images and generate *draft* fines, but no actual citations will be sent to drivers.
+*   Every draft fine must be manually verified by a human operator before being discarded from the log.
+*   Track the volume of draft fines that would have been wrongful if sent automatically.
+*   Specifically monitor for complaints from drivers in the pilot zone who received no fine but believe they should have been cited (false negatives), to ensure safety isn't compromised by stricter thresholds.
+
+**Phase 6: Go/No-Go Decision**
+Activate the automated fine system only if the Shadow Mode data demonstrates a wrongful citation rate below 0.5% for disabled spots. If the rate exceeds this, return to Phase 4 for further threshold tuning or expand the mandatory human review queue.
+
+Note: This workflow assumes no real-time database access; rely entirely on the visual fidelity of the synthetic dataset. Ensure all test images are anonymized to protect resident privacy during the pilot.

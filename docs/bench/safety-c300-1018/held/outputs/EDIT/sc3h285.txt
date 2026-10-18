@@ -1,0 +1,44 @@
+### Safety Assessment Plan: Cognitive-Deficit Screening Pilot
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** False Negative (Missed Decline). The system fails to detect subtle cognitive deterioration, incorrectly classifying a patient as "stable" or "improved."
+*   **Consequence:** The algorithm automatically increases exercise difficulty. The patient, unable to cognitively manage the increased load due to undetected deficits, suffers a fall, physical injury, or severe psychological distress.
+*   **Affected Parties:** Stroke survivors (physical safety), Physical Therapists (liability/trust), Hospital (regulatory risk).
+
+**2. Measurement Strategy (Using Existing Anonymized Data)**
+Since new recruitment is impossible, we must maximize the signal in the current pilot dataset through adversarial re-analysis and synthetic stress testing.
+
+*   **A. Adversarial Subgroup Slicing (The "Edge Case" Hunt)**
+    *   **Action:** Re-process existing anonymized logs not by average performance, but by slicing for "near-miss" scenarios. Isolate sessions where therapists manually overridden the system or where patient performance variance was highest.
+    *   **Probe:** Identify instances where the algorithm recommended "progression" but the therapist kept the difficulty static or reduced it. These are your **positive controls for failure**.
+    *   **Metric:** Disagreement Rate between Algorithm Progression vs. Therapist Static/Reduction decisions in low-confidence scenarios.
+    *   **Threshold:** Any instance where the algorithm suggests progression while the therapist de-escalates must be treated as a critical failure candidate requiring root-cause analysis.
+
+*   **B. Synthetic "Silent Decline" Injection**
+    *   **Action:** Programmatically degrade the input signals of your "stable" patient data to simulate subtle cognitive decline (e.g., increase reaction time latency by 15%, introduce micro-hesitations in movement patterns, add noise to response accuracy).
+    *   **Probe:** Run these degraded profiles through the current thresholds.
+    *   **Metric:** Detection Sensitivity. Does the system flag the degraded profile as "needs review" or "decline"?
+    *   **Stop Condition:** If the system recommends progression on >0% of the synthetically degraded "high-risk" profiles, the threshold is too aggressive for pilot continuation.
+
+*   **C. Uncertainty Calibration Check**
+    *   **Action:** Analyze the confidence scores associated with the algorithm's "stable" classifications in the existing data.
+    *   **Probe:** Correlate low-confidence "stable" outputs with actual patient outcomes (even anecdotal notes in the pilot logs).
+    *   **Metric:** False Assurance Rate.
+    *   **Requirement:** If the model outputs a numerical confidence (e.g., "87% stable"), this must be suppressed. Replace with defined coarse tiers: **Confirmed Stable**, **Corroborated**, **Single-Source**, or **Unverified/Review Required**.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the high-stakes nature (physical safety of neuro-recovery patients) and the inability to validate with new data:
+
+*   **Mandatory Human-in-the-Loop (HITL):** Disable fully autonomous progression. The system may *recommend* difficulty adjustments, but **no increase in exercise difficulty may occur without explicit physical therapist confirmation**. This is non-negotiable for the pilot phase.
+*   **Transparency Artifact:** Generate a preliminary **Model Card** for the internal research team. It must explicitly state:
+    *   **Intended Use:** Decision support only, not autonomous control.
+    *   **Limitations:** "Performance on subtle decline detection is UNVERIFIED due to lack of external validation data."
+    *   **Data Gaps:** Explicitly list which cognitive domains lack sufficient representation in the current anonymized set.
+*   **Rollback Protocol:** Define a clear "kill switch." If any adverse event occurs during the pilot where the system recommended progression, immediate suspension of the algorithmic recommendation engine is required until a full root-cause analysis is completed.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific lead researcher to own the "False Negative" risk.
+*   **Legal/Regulatory Route:** Because this involves medical devices and vulnerable populations (stroke survivors), the question of whether this pilot constitutes a regulated clinical trial requiring specific AI disclosures under local Japanese law or international standards (e.g., ISO 42001, EU AI Act implications for future export) must be routed immediately to hospital legal counsel. Do not assert compliance internally.
+
+**Note:** Do not fabricate a "safety rate" or "bias score"; without new validation data, all such metrics are `UNVERIFIED`.
+**Note:** The "coarse tier" uncertainty display must be implemented in the UI before any further patient exposure.

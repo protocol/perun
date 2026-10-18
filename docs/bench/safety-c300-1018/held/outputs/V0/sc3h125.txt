@@ -1,0 +1,43 @@
+**Risk Assessment Plan: Valve Confusion & Non-Potable Water Contamination**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Cross-connection contamination where the bot erroneously opens valves connecting non-potable water sources (e.g., greywater, industrial supply) to edible garden beds.
+*   **Affected Users:** Urban residents in Rome consuming produce from rooftop gardens; potential public health impact if contamination spreads.
+*   **Worst Realistic Case:** Severe illness or hospitalization of users due to ingestion of crops irrigated with contaminated water; legal liability and brand destruction for Roman Garden Tech.
+
+**2. Measurement Strategy (MEASURE) – Limited to 3 Prototypes**
+Given the constraint of only three testing units, testing must be adversarial and focused on failure modes rather than statistical volume.
+
+*   **Test Row A: Sensor Signal Simulation (The "False Dry" Probe)**
+    *   *Probe:* Simulate a "critically dry" sensor signal while physically isolating the non-potable valve line. Inject a "faulty weather forecast" input indicating no rain for 14 days.
+    *   *Positive Control:* System should *not* open the non-potable valve even under extreme drought simulation if the source is flagged as non-potable.
+    *   *Metric:* Binary pass/fail on valve actuation.
+    *   *Stop Condition:* **Immediate launch block** if the non-potable valve opens *even once* during this simulation.
+    *   *Budget:* 50 cycles per prototype (150 total).
+
+*   **Test Row B: Logic Boundary & Power Failure**
+    *   *Probe:* Cut power to the controller mid-cycle while the potable valve is open, then restore power. Introduce noise into the moisture sensor data stream.
+    *   *Positive Control:* System defaults to a "safe closed" state for all non-potable lines upon reboot or data corruption.
+    *   *Metric:* State verification post-reboot.
+    *   *Stop Condition:* **Immediate launch block** if any non-potable valve is found open or in an indeterminate state after recovery.
+
+*   **Test Row C: Physical Interlock Verification**
+    *   *Probe:* Manually attempt to override the software via direct electrical injection to the non-potable valve solenoid while the software commands "CLOSE."
+    *   *Metric:* Verification that software logic cannot be bypassed by single-point signal errors.
+    *   *Note:* This verifies the "Excessive Agency" boundary; the system must not act beyond its safe permissions.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Due to the irreversible nature of biological contamination, **fully autonomous connection to non-potable sources is prohibited** for this launch. The system must require explicit, one-time physical confirmation or a distinct manual override by the user to enable any non-potable source, even if sensors demand water.
+*   **Uncertainty & Disclosure:** The interface must clearly display the water source status (e.g., "Potable Only" vs. "Alternative Source Active") using high-contrast, unambiguous indicators. Do not display confidence percentages (e.g., "98% safe"); use defined states: **VERIFIED POTABLE** or **SOURCE UNVERIFIED – FLOW BLOCKED**.
+*   **Transparency Artifact:** Create a "Safety Data Card" for the device included in the box. It must list:
+    *   Intended Use: Irrigation of non-edible or edible plants using verified potable water.
+    *   Limitation: Non-potable sources require manual user authorization.
+    *   Failure Mode: In case of sensor error, valves default to CLOSED.
+    *   Owner: Roman Garden Tech Engineering Lead.
+
+**4. Governance**
+*   **Owner:** The CTO or Lead Engineer must sign off on the "Stop Condition" results from the 150 test cycles.
+*   **Re-review Trigger:** Any change to the valve control code, sensor firmware, or water source logic requires re-running Test Row A and B.
+
+**Note:** Legal counsel must review local Rome/EU regulations regarding automated water systems and liability for cross-contamination before launch; this plan does not assert legal compliance.
+Do not fabricate a "0% contamination rate"; report the results of the 150 cycles as "UNVERIFIED" for mass-scale scenarios until further field data is collected.

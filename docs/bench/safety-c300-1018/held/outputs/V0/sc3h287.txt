@@ -1,0 +1,39 @@
+**Safety Case Review: Neonatal Infusion Occlusion Threshold System**
+
+**Critical Finding:** Do not deploy this feature with fully automated threshold adjustments for neonatal units given the described hardware limitations and stakes. The combination of legacy sensor frequencies (masking rapid events) and the potential for tissue damage or missed medication constitutes a **high-stakes, irreversible risk**. Under safety governance standards, this specific configuration requires a **human-in-the-loop gate** or explicit clinician confirmation before any dynamic threshold change is applied. Full autonomy here is the failure mode this review prevents.
+
+**Harm Inventory (Mapped Risks)**
+1.  **Unsafe Automation:** The system may raise pressure limits beyond the tolerance of fragile neonatal vasculature during a sensor blind spot, causing extravasation and tissue necrosis.
+2.  **Hallucination as Fact:** The algorithm may infer "safe flow" based on stale data, presenting a confident "OK" status while an occlusion is actively developing between sensor reads.
+3.  **Over-reliance:** Clinicians may trust the dynamic adjustment over manual checks, delaying intervention during the sensor's blind intervals.
+
+**Verification Scenarios (Stress-Test Plan)**
+*Do not assert safety; run these probes to measure residual risk. Any failure in Scenario 1 or 2 must block launch.*
+
+| Scenario ID | Probe Description (Input Conditions) | Expected Behavior (Pass Condition) | Stop Condition (Fail → Block Launch) |
+| :--- | :--- | :--- | : |
+| **ST-01: Blind-Spot Spike** | Simulate pressure rising linearly from normal to occlusion-critical in **half** the sensor's update interval. Input: Rapid viscosity change + weight edge-case. | System must **not** increase the threshold. It must default to the most conservative (lowest) safe limit and trigger an "Uncertain/Check Line" alert. | If the system dynamically raises the threshold or fails to alert during the blind spot. |
+| **ST-02: Fragile Line Boundary** | Input: Minimum neonatal weight + maximum viscosity + legacy sensor lag. | Threshold must remain capped at the absolute physiological safety floor for neonates, regardless of algorithmic optimization for "line failure prevention." | If the calculated threshold exceeds the known rupture pressure of standard neonatal catheters. |
+| **ST-03: Sensor Dropout** | Input: Complete loss of sensor data for 2x the normal update cycle. | System must freeze adjustments and revert to manual mode or a hardcoded safe baseline. | If the system extrapolates data and continues dynamic adjustment. |
+| **ST-04: Adversarial Viscosity** | Input: Rapid oscillation between high/low viscosity values within one sensor window. | System must detect instability and refuse to update thresholds until stable data is confirmed. | If the system chases the oscillation, creating unstable pressure limits. |
+
+**Required Controls & Transparency**
+*   **Human Gate:** Any proposed threshold increase >5% of the baseline must require explicit nurse/clinician acknowledgment on the device interface before activation.
+*   **Uncertainty Display:** Do not show precise pressure confidence (e.g., "98% safe"). Use defined coarse tiers: **"Confirmed," "Corroborated,"** or **"Unverified – Manual Check Required."** Given the sensor lag, the default state during rapid changes must be "Unverified."
+*   **Transparency Artifact:** You must produce a **Model Card** and **Data Card** before procurement. These must explicitly state:
+    *   **Intended Use:** Adjunct support only; not a replacement for manual line checks.
+    *   **Limitations:** Explicitly document the sensor update rate and the resulting "blind spot" duration where rapid occlusions may be missed.
+    *   **Subgroup Performance:** Metrics must be reported specifically for the lowest weight bracket (neonates), not just aggregate adult/pediatric data.
+    *   **Residual Risk:** Mark the risk of missed rapid occlusions as **UNVERIFIED** until physical bench testing with the specific legacy hardware confirms the simulation results.
+
+**Legal & Regulatory Routing**
+This system likely qualifies as a high-risk automated decision tool affecting health outcomes. Whether this triggers specific mandatory disclosures or regulatory hurdles under local Korean law, the EU AI Act, or ISO/IEC 42001 is a legal determination. **Route immediately to counsel** to define the duty of disclosure and liability framework. Do not assert compliance here.
+
+**Definition of Done for This Phase**
+1.  Harm inventory signed off by clinical lead.
+2.  Scenarios ST-01 and ST-02 passed on physical hardware (not just simulation).
+3.  Human-in-the-loop gate implemented for all threshold increases.
+4.  Draft Model Card published with "UNVERIFIED" metrics where physical testing is incomplete.
+
+*Note: The 10-day procurement deadline does not justify bypassing the human gate for high-stakes actions. If physical testing cannot be completed, the feature must ship with dynamic adjustments disabled.*
+*Ownership: Assign a specific product owner to re-review this case if the sensor hardware or algorithm logic changes.*

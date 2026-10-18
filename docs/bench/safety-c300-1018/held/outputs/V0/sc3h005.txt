@@ -1,0 +1,29 @@
+### Pre-Launch Ethical Review Plan: Dynamic Pricing & Battery Signals
+
+**1. Harm Inventory (Map)**
+Before testing, formally document the specific risk: **Exploitative Pricing based on Urgency**.
+*   **Harm:** Users with low battery are in a constrained state (unable to wait, unable to shop around). Charging them more leverages this vulnerability rather than reflecting supply/demand.
+*   **Affected Group:** Riders with <20% battery, potentially correlated with lower-income users who may have older devices or less access to charging infrastructure.
+*   **Worst Case:** Systematic extraction of wealth from vulnerable users during emergencies, leading to regulatory scrutiny, public backlash, and loss of trust.
+
+**2. Measurement Strategy (Measure)**
+Since the core algorithm cannot be changed, you must measure its output behavior rigorously using historical data or a shadow-mode deployment. Do not assert fairness; measure it.
+*   **Create Adversarial Test Sets:** Construct synthetic ride requests mirroring real demand but varying *only* the battery signal (e.g., 5% vs. 90%) while holding location, time, and demand constant.
+*   **Define Metrics:** Calculate the "Battery Penalty Rate"—the percentage price increase attributable solely to low battery status.
+*   **Establish Stop Conditions:** Set a hard threshold (e.g., "If low-battery fares exceed high-battery fares by >X% in identical contexts, launch is blocked"). This must be owned by product leadership, not just engineering.
+*   **Segmented Analysis:** Run these tests across different neighborhoods in São Paulo to ensure the penalty does not disproportionately affect specific socioeconomic zones.
+*   **Report Residual Risk:** If the algorithm inherently penalizes low battery, report the exact magnitude as `UNVERIFIED` regarding ethical safety until mitigated. Do not invent a "safe" percentage.
+
+**3. Risk Mitigation & Governance (Manage)**
+*   **Human-in-the-Loop Gate:** Because pricing changes are reversible but financial harm is immediate, implement a manual approval gate for any fare adjustment logic driven by non-standard signals (like battery) before full rollout.
+*   **Uncertainty & Disclosure:** If the feature launches, users must know why prices vary. However, explicitly stating "you are paying more because your battery is low" may be legally and reputationally dangerous. **Route this disclosure decision to legal counsel immediately.** Do not assume transparency alone solves the exploitation issue.
+*   **Fallback Mechanism:** Even with a code freeze on the *core* algorithm, can a wrapper rule cap the maximum surcharge applied specifically when battery <15%? If not, the recommendation is to **disable the battery signal entirely** until the next development cycle.
+*   **Documentation Artifact:** Produce a "Decision Card" for this feature. It must list: the intended use, the measured "Battery Penalty Rate," the known limitation (potential exploitation of urgency), and the owner responsible for monitoring complaints post-launch.
+
+**4. Final Recommendation**
+If your testing reveals that low battery correlates with higher fares in identical supply/demand conditions, this constitutes a deceptive pattern and potential exploitation. The ethical course of action is not to "manage" the rollout but to **exclude the battery signal** from the pricing model. Efficiency gains do not justify predatory outcomes.
+
+***
+
+**Note:** This plan identifies the risk but cannot certify the system as "fair" or "compliant"; that determination requires legal review of Brazilian consumer protection laws.
+**Note:** A "code freeze" on the core algorithm does not prevent disabling specific input signals (like battery) via configuration if the architecture allows.

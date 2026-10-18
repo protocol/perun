@@ -1,0 +1,40 @@
+**Protocol: Preventing Premature Patient Drop-off in RuralCare Reminder Bot**
+
+**1. Harm Inventory & Worst-Case Analysis**
+*   **Harm Identified:** Unsafe automation of high-stakes actions (irreversible loss of care access).
+*   **Mechanism:** The current logic treats a single missed appointment as a permanent opt-out or failure state, automatically severing the communication channel.
+*   **Affected Group:** Patients with chronic conditions in rural Kansas, who face high barriers to re-entry (transportation, limited clinic hours).
+*   **Worst Realistic Case:** A patient misses one appointment due to a transient issue (e.g., car trouble, acute flare-up), is permanently dropped from the reminder system, misses subsequent critical care, and suffers a preventable health crisis or hospitalization.
+
+**2. Immediate Mitigation (Human-in-the-Loop Gate)**
+Since the telecommunication contract locks calling *rules* but likely not the *workflow logic* or *escalation paths*, you must insert a human gate before the "stop calling" action executes.
+*   **Action:** Modify the system state so that after **one** missed appointment, the bot does *not* stop calling. Instead, it flags the patient for **manual review** by a staff member.
+*   **Fallback:** If manual review cannot happen within 24 hours, the bot must default to a "soft" retry schedule (e.g., call again in 2 days with a modified script: "We missed you, please call us back") rather than a hard stop.
+*   **Constraint Adherence:** This requires no change to the telecom provider's low-level calling rules (frequency/time), only a change in your internal decision logic on when to cease attempts.
+
+**3. Testing Plan (Measure, Don't Assert)**
+Do not certify the system as "safe." Instead, run these specific evaluations before the two-week launch:
+
+*   **Test Row A: The "One-Strike" Failure Mode**
+    *   **Probe:** Simulate 50 patient profiles with chronic conditions. Trigger exactly one missed appointment event for each.
+    *   **Positive Control:** 10 profiles where the system *must* flag for human review (verify a ticket/alert is created).
+    *   **Negative Control:** 10 profiles where the patient confirms attendance (verify no alert is created).
+    *   **Metric:** Percentage of "one-miss" patients who receive a subsequent contact attempt or human outreach within 48 hours.
+    *   **Pass Threshold:** 100% of "one-miss" patients must receive follow-up (zero automatic drop-offs).
+    *   **Stop Condition:** If any test profile is automatically dropped without human flagging, **do not launch**.
+
+*   **Test Row B: Vulnerable Subgroup Stress Test**
+    *   **Probe:** Simulate patients with known barriers (e.g., limited English proficiency, elderly demographics if data allows, or high-risk condition tags).
+    *   **Metric:** Compare follow-up success rates against the general population.
+    *   **Goal:** Ensure the logic does not disproportionately drop these groups due to higher initial miss rates.
+
+**4. Transparency & Governance**
+*   **Model/Data Card:** Draft a one-page internal card stating: "Intended Use: Appointment reminders. Limitation: Cannot distinguish between intentional opt-out and transient barriers without human review. Known Failure Mode: Single-miss auto-drop (mitigated by new gate)."
+*   **Owner:** Assign one team member as the owner of the "Drop-off Review" queue.
+*   **Disclosure:** Ensure the automated call discloses it is a bot. If the logic changes to "we will keep calling until you confirm," ensure this is clear to avoid harassment complaints.
+
+**5. Residual Risk Statement**
+Even with this protocol, patients may still disengage. The risk is reduced from "automatic abandonment" to "delayed human intervention." You must monitor the "human review" queue daily post-launch. If the queue overflows, the fallback must be to continue automated gentle reminders, not to stop.
+
+**Note:** This plan addresses the product behavior harm; legal requirements for automated health disclosures in Kansas must be verified by counsel.
+**Note:** Do not invent a "safety score"; report the pass/fail status of the Test Rows above.

@@ -1,0 +1,26 @@
+### Pre-Launch Safety Review Plan for RiverFlow Technologies
+
+**Phase 1: Diverse Usage Profile Simulation (False Positive Mitigation)**
+To prevent unintended shut-offs, you must validate your detection logic against a "Normal Behavior Matrix" before the regulatory deadline. Since extended field testing is not feasible, construct a high-fidelity simulation suite using the following distinct residential profiles specific to Chennai's context:
+
+*   **The Multi-Generational Household:** Simulate overlapping peak usage (early morning baths, cooking, cleaning) where aggregate flow is high but continuous, not erratic.
+*   **The Garden/Cleaning Profile:** Model high-volume, sustained flow for weekend car washing or terrace cleaning, which mimics a leak's volume but lacks its pressure signature.
+*   **The Intermittent User:** Replicate irregular patterns of single occupants who may leave taps running accidentally versus intentional long-duration usage.
+*   **Infrastructure Noise:** Inject data artifacts representing common local pressure fluctuations or pipe vibrations that sensors might misread as flow anomalies.
+
+Run your current algorithm against these synthetic datasets. Any profile triggering a shut-off without a corresponding pressure drop or duration threshold breach indicates a logic flaw requiring immediate parameter tuning. Focus on adjusting the "time-to-confirm" window; increasing the observation period from seconds to minutes can often distinguish between a sudden spike (leak) and sustained high usage (normal activity).
+
+**Phase 2: Human Oversight Safeguards (The "Soft-Shutoff" Protocol)**
+Automated hard shut-offs pose a significant risk to resident welfare. Implement a graded response mechanism validated through the following steps:
+
+1.  **Tiered Alerting:** Before any physical valve closure, the system must trigger a local audible alarm and a mobile notification to the homeowner. Define a mandatory "grace period" (e.g., 5–10 minutes) allowing the user to acknowledge the alert or manually override the shutdown via a physical button on the meter or a verified app command.
+2.  **Partial Flow Restriction:** Instead of a binary open/close state, program the valve to restrict flow to a "trickle" (sufficient for drinking/cooking, insufficient for flooding) upon initial detection. Full closure should only occur if the trickle flow persists beyond a secondary, stricter threshold.
+3.  **Remote Verification Loop:** For the pilot phase, route all "imminent shut-off" events to a central dashboard manned by your engineering team. Require a dual-confirmations strategy: the algorithm flags the event, but a human operator must validate the pattern against the user's historical baseline before authorizing a hard shut-off if the user does not respond.
+
+**Phase 3: Rapid Validation Method**
+Given the three-week constraint, bypass traditional beta testing in favor of a "Shadow Mode" deployment. Install the meters in the pilot households but keep the physical shut-off valves disabled (or manually overridden). Let the system run in monitoring-only mode for 7 days, logging every instance where it *would* have shut off the water.
+
+Review these logs daily with your team. Every logged "would-be shut-off" is a test case. Categorize them as True Positives (actual leaks) or False Positives (normal usage). If the False Positive rate exceeds 1% of total events, the logic is not ready for automation. This approach provides real-world data validation without risking service interruption, satisfying both safety requirements and the regulatory timeline.
+
+*Note: Ensure all simulated data accounts for Chennai's specific seasonal water pressure variations to avoid skewing results.*
+*Prioritize the "Soft-Shutoff" protocol implementation immediately, as it is the critical fail-safe against algorithmic error.*

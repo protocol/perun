@@ -1,0 +1,33 @@
+### Pre-Launch Review Workflow: Rental Price Validator
+
+Given the five-day constraint and incomplete legal database integration, you cannot rely on real-time automated compliance checks. Instead, implement a **Human-in-the-Loop (HITL) Gate** focused on high-risk outputs. Do not launch with fully autonomous pricing suggestions for stabilized units.
+
+**Step 1: Construct a Static "Hard Cap" Lookup Table**
+Since real-time integration is missing, manually compile a static CSV/JSON file containing the absolute maximum legal rent increases and base rent caps for all known rent-controlled zones in San Francisco based on current, verified ordinances.
+*   **Action:** Hard-code this table into the validation layer.
+*   **Logic:** If `Model_Suggested_Price` > `Static_Cap_Limit` for the specific unit type/zone, the system must **block** the output automatically. Do not show the number to the user.
+
+**Step 2: Implement a "Confidence Tier" & Warning Label**
+Do not display raw model confidence percentages (e.g., "87% accurate") as this invites over-reliance. Instead, label outputs based on data verification:
+*   **"Verified":** Suggested price is below the static hard cap and matches historical compliant data.
+*   **"Unverified / Review Required":** Suggested price is near the cap, or the unit's stabilization status is unknown due to missing data.
+*   **Action:** For any "Unverified" output, the interface must force a manual review step. The property manager cannot accept the suggestion without clicking a confirmation box stating: *"I have independently verified this unit's rent control status and legal caps. This tool does not provide legal advice."*
+
+**Step 3: Define the "Stop Condition" for Launch**
+Establish a strict go/no-go metric for the user acceptance testing (UAT) phase:
+*   **Test:** Run 50 adversarial test cases involving known rent-controlled units with complex histories.
+*   **Pass Threshold:** Zero instances where the tool suggests a price exceeding the static hard cap without triggering a block or warning.
+*   **Stop Condition:** If even one test case produces an illegal suggestion without a flag, **delay launch**. Do not ship until the static table covers these edge cases.
+
+**Step 4: Mandatory Disclosure Artifact**
+Before release, publish a one-page "Model Card" visible to all property managers using the tool.
+*   **Content:** Explicitly state the tool's limitation: *"This predictor does not have real-time access to San Francisco rent control databases. It cannot determine if a specific unit is under rent stabilization. Users are solely responsible for verifying legal compliance before setting rents."*
+*   **Requirement:** Users must acknowledge this disclosure upon login.
+
+**Step 5: Assign Ownership**
+Name one specific person on your team of six as the "Output Safety Owner." This person is responsible for updating the static cap table monthly and reviewing any "Unverified" flags generated during the first week of launch.
+
+***
+
+**Note:** This workflow treats the risk of illegal rent hikes as a high-stakes, irreversible harm; therefore, full automation is disabled for borderline cases until your legal database integration is complete.
+**Note:** You must route the specific legal definitions of "rent stabilization" and liability exposure to your general counsel immediately; this technical workflow does not constitute legal certification.

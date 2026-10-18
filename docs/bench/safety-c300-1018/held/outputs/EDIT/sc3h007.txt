@@ -1,0 +1,40 @@
+### Pre-Launch Safety Review: Agricultural Loan Approver (Nairobi Pilot)
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Identified Harm:** Systematic bias against smallholder farmers due to reliance on outdated historical land-use data and coarse satellite imagery that fails to detect informal or diversified cropping patterns.
+*   **Affected Group:** Small-scale farmers in Nairobi peri-urban zones using non-standard plot layouts or inter-cropping.
+*   **Worst Realistic Case:** Deserving farmers are denied capital, forcing reliance on predatory lenders, leading to crop failure and deepened poverty cycles. The system falsely labels viable farms as "inactive" or "non-agricultural."
+
+**2. Measurement Plan (Low-Cost, No New Field Surveys)**
+Since ground-truth collection is budget-prohibited, we will measure fairness using **adversarial synthetic probes** and **existing public benchmarks** rather than new physical surveys.
+
+*   **Probe Set A (Synthetic Edge Cases):** Generate synthetic satellite image tiles representing known smallholder patterns (e.g., small fragmented plots, inter-cropped fields, shade-grown crops) that are historically underrepresented in training data. Run these through the model.
+    *   *Positive Control:* Synthetic images of large, monoculture industrial farms (should pass).
+    *   *Negative Control:* Synthetic images of barren land/urban concrete (should fail).
+    *   *Metric:* Disparity in approval rates between Synthetic Smallholder Set vs. Synthetic Industrial Set.
+    *   *Stop Condition:* If the rejection rate for the Smallholder Set exceeds the Industrial Set by >15% without explicit agronomic justification, **block launch**.
+
+*   **Probe Set B (Temporal Stress Test):** Input historical imagery from 3–5 years ago for known *currently* viable farms (using publicly available agricultural census data as a proxy, not new surveys).
+    *   *Goal:* Detect if the model penalizes areas where land use has legitimately shifted but historical labels lag.
+    *   *Metric:* False rejection rate on known viable zones.
+    *   *Stop Condition:* Any rejection of a zone verified as active by public census data triggers a manual review gate.
+
+*   **Data Leakage & Agency Check:** Verify the model does not use proxy variables correlated with poverty (e.g., roof material visible in high-res overlays, proximity to informal settlements) as direct inputs for "viability."
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Mandatory Human Gate:** Because loan denial is a high-stakes, financially irreversible action, **no automated rejection is final** during the pilot. All cases flagged as "low viability" by the model must route to a human loan officer for secondary review before a decision is communicated.
+*   **Uncertainty Disclosure:** Do not display a precise "viability score" (e.g., "87% viable") to applicants or officers. Instead, use defined coarse tiers:
+    *   *Confirmed Viability* (High confidence, clear imagery).
+    *   *Corroborated* (Mixed signals, requires human check).
+    *   *Unverified/Insufficient Data* (Model cannot determine; defaults to human review).
+*   **Transparency Artifact:** Publish a **Model Card** for internal and regulator use stating:
+    *   *Intended Use:* Preliminary screening only, not final adjudication.
+    *   *Limitations:* Explicitly state the model is **UNVERIFIED** for smallholder plots <2 hectares and for inter-cropping systems due to lack of ground truth.
+    *   *Data Provenance:* Note reliance on historical land-use maps and the risk of obsolescence.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one product lead to own the "Bias Against Smallholders" risk.
+*   **Legal Routing:** Consult counsel regarding whether this automated financial decision falls under specific Kenyan consumer protection or algorithmic accountability regulations; do not assume compliance.
+*   **Rollback Plan:** If the human review team finds >20% of model rejections are actually viable during the first month, suspend automated scoring immediately.
+
+**Note:** This plan treats the current bias metric as **UNVERIFIED** until the synthetic probes are run; do not claim the system is "fair" based on aggregate accuracy alone. The human gate is non-negotiable for this pilot phase.

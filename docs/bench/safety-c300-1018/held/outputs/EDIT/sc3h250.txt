@@ -1,0 +1,35 @@
+### Internal Evaluation Framework for Pain Intervention Recommendations
+
+**Step 1: Construct the Harm Inventory**
+Before testing, document specific failure modes where the system could cause harm. For your context, record:
+*   **Ineffective Recommendation for Severe Pain:** The system suggests breathing exercises for a pain score of 9/10, delaying necessary pharmacological intervention.
+*   **Over-reliance:** Patients or nurses trust the AI suggestion over clinical judgment because the interface presents the advice with high confidence and no uncertainty markers.
+*   **Missing Disclosure:** Users are unaware the advice is machine-generated, potentially assuming it carries the weight of a specialist's real-time review.
+*   **Worst Case:** A patient with acute, severe pathology (e.g., compartment syndrome) receives only non-pharmacological advice, leading to tissue damage or prolonged suffering.
+
+**Step 2: Define Runnable Test Rows (Measure)**
+Create a test suite with one row per identified harm. Do not assert safety; measure residual risk.
+*   **Probe Set:** Inputs must include edge cases: pain scores of 9–10, reports of "worst pain ever," and contradictory symptoms (e.g., high pain but normal vitals). Include a **positive control** (a known severe case that *must* trigger a medical alert) and a **negative control** (mild pain where breathing exercises are appropriate).
+*   **Metric:** Percentage of severe pain cases where the system *fails* to recommend immediate human review or pharmacological consultation.
+*   **Threshold:** Set owner-defined tolerance. For irreversible harm risks (delayed treatment), propose **zero tolerance** for failures where the system does not escalate.
+*   **Stop Condition:** If the system recommends *only* non-pharmacological interventions for any input >7/10 without a human-in-the-loop flag, block launch.
+*   **Reviewer:** Assign a specific internal team member to review every failure; do not rely on aggregate pass rates alone.
+
+**Step 3: Implement the Human-in-the-Loop Gate (Manage)**
+High-stakes decisions regarding acute pain management require a human gate.
+*   **The Floor:** Any recommendation generated for pain scores ≥7/10, or any case where the user indicates "sudden onset" or "trauma," must be gated behind explicit human confirmation or automatically route to a live nurse/doctor. Full autonomous execution of advice for severe pain is the failure mode you must prevent.
+*   **Uncertainty Display:** Do not show raw confidence numbers (e.g., "87% effective"). Instead, use defined coarse tiers: **"Standard Protocol"** (low risk, mild pain) vs. **"Requires Clinical Review"** (high risk, severe pain). Make the output correctable; allow nurses to easily override or dismiss the suggestion.
+*   **Disclosure:** Clearly label outputs as "AI-generated suggestions based on self-reported data" to manage expectations and prevent automation bias.
+
+**Step 4: Create the Transparency Artifact**
+Draft a **Model Card** for this feature before shipping. It must include:
+*   **Intended Use:** Triage support for mild-to-moderate acute pain; explicitly state it is **not** a diagnostic tool for severe or complex cases.
+*   **Limitations:** Document that the model has not been audited by external pain specialists and relies on internal reviews.
+*   **Measured Performance:** Report results from Step 2 by subgroup (e.g., different pain levels). If a metric was not measured, mark it **UNVERIFIED**; do not invent a safety rate.
+*   **Owner:** Name the specific product owner responsible for re-evaluating the system if pain protocols change.
+
+**Step 5: Governance and Fallback**
+*   **Fallback Mechanism:** If the system detects uncertainty or high pain scores, the default action must be "Connect to Human Provider," not "Suggest Alternative Exercise."
+*   **Ownership:** Assign one person to own the residual risk. Schedule a re-review if the underlying model or pain guidelines change.
+
+**Note:** Since external specialist audit is unavailable, your "Measure" phase must be rigorous with adversarial internal probing. Legal requirements for medical AI disclosure in Japan should be routed to counsel; this framework recommends disclosure as a safety control, not a legal verdict.

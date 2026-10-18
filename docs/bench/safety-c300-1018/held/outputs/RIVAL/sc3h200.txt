@@ -1,0 +1,40 @@
+**Final Pre-Launch Safety Review Protocol: Artifact Rejection Validation**
+
+Given the constraints of a fixed dataset, no new simulations, and a critical regulatory deadline, execute the following four-phase validation strategy immediately using your existing electrical signal database.
+
+**Phase 1: Data Stratification and "Hard Case" Isolation**
+Do not test on random splits. Manually or algorithmically stratify your existing database into three distinct cohorts:
+1.  **Pure Artifacts:** Signals containing only motion noise (e.g., CPR compressions, patient movement, electrode lead shake) with no underlying cardiac rhythm.
+2.  **Pure Arrhythmias:** Clean Ventricular Tachycardia (VT) and Ventricular Fibrillation (VF) signals with zero noise.
+3.  **Superimposed "Edge Cases":** Signals where true VT/VF occurs *during* heavy motion artifact. This is your highest-risk cohort.
+
+Isolate the "Edge Cases" where the signal-to-noise ratio is lowest. These specific records represent the primary failure mode for inappropriate shocks.
+
+**Phase 2: Adversarial Stress Testing (The "Break-It" Pass)**
+Run your classifier against the stratified data with a focus on false positives (Type I errors).
+*   **Test A (Specificity Check):** Run the **Pure Artifacts** cohort. The system must output "No Shock" for 100% of these cases. Any "Shock" recommendation here is a critical failure indicating the system mistakes motion for rhythm.
+*   **Test B (Sensitivity Check):** Run the **Pure Arrhythmias** cohort. The system must output "Shock" for 100% of these cases.
+*   **Test C (The Danger Zone):** Run the **Superimposed Edge Cases**. This is the decisive test. If the classifier outputs "Shock" based on the artifact component rather than the underlying rhythm, it fails. Verify that the algorithm successfully filters the noise to detect the true rhythm before authorizing a shock.
+
+**Phase 3: Threshold Sensitivity Analysis**
+Do not rely on a single confidence threshold. Generate a Receiver Operating Characteristic (ROC) curve using your existing data to visualize the trade-off between sensitivity (detecting real VT) and specificity (rejecting artifacts).
+*   Identify the operating point where specificity is maximized without dropping sensitivity below your regulatory minimum (typically >90-95% for defibrillators).
+*   If the current configuration lies in a region where artifact rejection is weak, you must harden the threshold immediately, even if it slightly increases the risk of withholding a shock in borderline cases. Inappropriate shocks to conscious patients are generally considered a more severe immediate liability than delayed therapy in ambiguous noise, provided the delay is brief.
+
+**Phase 4: Deterministic Regression Suite**
+Convert every single instance from Phase 2 where the classifier struggled (even if it ultimately passed) into a fixed regression test case.
+*   Create a "Golden Set" of the 50–100 most ambiguous signals from your database.
+*   Run the final build against this Golden Set. The output must be bit-for-bit identical to the expected safe outcome.
+*   Document any instance where the classifier hesitates or fluctuates between "Shock" and "No Shock" over time windows of the same signal. Instability in the decision logic is a failure mode that must be flagged.
+
+**Documentation for Regulatory Submission**
+Compile the results into a validation report that explicitly highlights:
+1.  The size and composition of the "Edge Case" cohort.
+2.  The zero-tolerance failure rate for Pure Artifacts.
+3.  The selected decision threshold and the justification based on the ROC analysis.
+4.  A statement confirming that no new data was required because the existing database contained sufficient worst-case scenarios to bound the risk.
+
+This approach maximizes the utility of your current assets to prove safety without requiring new physical trials.
+
+*Note: Ensure all test logs include timestamps and version hashes of the classifier binary to satisfy audit trails.*
+*If any "Pure Artifact" case triggers a shock, the device cannot be launched regardless of the deadline.*

@@ -1,0 +1,46 @@
+# Safety Review Plan: Patient-Pain-Opioid Calculator
+
+**Objective:** Validate that dosage recommendations for opioid-naive post-surgical patients never exceed safe limits under noisy or incomplete input conditions, ensuring compliance for the upcoming board review.
+
+### 1. High-Risk Scenario Definition
+Prioritize testing on the following failure modes where dosing errors pose immediate harm:
+*   **Input Extremes:** Vitals (weight, age, renal function indicators) at physiological boundaries (e.g., pediatric weights, geriatric ages, extreme obesity).
+*   **Data Noise & Incompleteness:** Missing pain scores, transposed vital sign values (e.g., systolic/diastolic swap), and non-numeric characters in numeric fields.
+*   **Contradictory Inputs:** High pain scores paired with vitals indicating respiratory depression or sedation.
+*   **Naive Status Verification:** Inputs suggesting prior opioid exposure (e.g., specific medication history flags) incorrectly processed as "naive."
+
+### 2. Validation Methodology (48-Hour Sprint)
+
+**Phase A: Static Logic Audit (Hours 0–12)**
+*   **Hard Cap Verification:** Manually trace code paths to confirm absolute maximum dosage limits are hardcoded and cannot be overridden by algorithmic calculation.
+*   **Fallback Logic Review:** Verify that missing or invalid inputs trigger a "Cannot Calculate" state rather than defaulting to a median or zero value which could be misinterpreted.
+*   **Unit Consistency Check:** Confirm all weight inputs are normalized (e.g., lbs vs. kg) before calculation to prevent 2.2x overdosing.
+
+**Phase B: Deterministic Boundary Testing (Hours 12–36)**
+Execute a fixed suite of manual test cases using synthetic patient profiles. Do not rely on random fuzzing; use specific, documented vectors:
+*   **The "Zero" Test:** Input zero or null for weight/age. Expected result: Error/Block.
+*   **The "Maximum" Test:** Input maximum plausible human vitals. Expected result: Dosage ≤ Hard Cap.
+*   **The "Noise" Test:** Input special characters, negative numbers, and decimal errors. Expected result: Input validation error.
+*   **The "Contradiction" Test:** High pain score + low respiratory rate. Expected result: Warning flag or dosage reduction, not increase.
+
+**Phase C: Manual Review Checkpoints (Hours 36–48)**
+Implement a "Four-Eyes" protocol for the final report:
+*   **Checkpoint 1:** Independent verification of the top 10 highest-risk test results by a clinician not involved in development.
+*   **Checkpoint 2:** Legal review of the "Error State" messaging to ensure it clearly instructs users to consult a physician rather than attempting manual calculation.
+*   **Checkpoint 3:** Sign-off on the "Safe List" of supported input ranges; any input outside this list must be explicitly documented as unsupported.
+
+### 3. Deliverables for Board Review
+*   **Boundary Test Matrix:** A table listing the 20 critical test cases, input values, expected outcomes, and actual pass/fail status.
+*   **Fail-Safe Evidence:** Screenshots or logs demonstrating the system blocking calculation when data is incomplete or contradictory.
+*   **Hard Cap Certification:** A signed statement from the lead developer confirming the existence and immutability of the maximum dosage limit in the source code.
+*   **Residual Risk Statement:** A concise document acknowledging limitations (e.g., "Tool does not replace clinical judgment") for inclusion in the user interface.
+
+### 4. Immediate Mitigation Controls
+Until automated regression testing is fully mature, enforce these manual controls for the soft launch:
+*   **Clinician Override Requirement:** All calculator outputs must be explicitly confirmed by a licensed provider before administration.
+*   **Daily Log Review:** Manually review all calculation logs from the partner clinics daily for any "edge case" inputs that triggered warnings.
+*   **Input Whitelisting:** Restrict input fields in the UI to strict numeric ranges matching the validated test matrix; reject anything outside these bounds at the interface level.
+
+This plan focuses on deterministic proof of safety caps and fail-safe behaviors, providing the legal team with concrete evidence of risk mitigation within the 48-hour window.
+
+*Note: This plan assumes access to the source code and a staging environment for manual testing. No live patient data should be used during this validation sprint.*

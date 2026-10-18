@@ -1,0 +1,31 @@
+**Risk Mitigation Strategy: Connectivity Loss in Emergency Override Protocols**
+
+Given the strict budget constraints and the high-stakes nature of automatic door unlocking for evacuation, the following strategy prioritizes software-level resilience and procedural controls over new hardware acquisition.
+
+**1. Implement "Fail-Safe" Local Logic (Software Update)**
+The primary gap in connectivity loss scenarios is reliance on a continuous signal from the municipal network. The mitigation is to shift the decision logic to the edge (the lock or local building controller).
+*   **Action:** Update firmware to treat a loss of connectivity *as* a trigger condition if accompanied by any local anomaly detection (e.g., local smoke sensor input, manual break-glass activation, or power fluctuation patterns consistent with fire system faults).
+*   **Constraint Adherence:** This requires only a code deployment to existing units, utilizing the current simulation logs to define the specific "loss + anomaly" signature that triggers an unlock.
+
+**2. Define Coarse Confidence Tiers for Automation**
+Do not present the system status as a precise percentage (e.g., "99% connected") to operators, as this invites over-reliance.
+*   **Action:** Implement a three-tier status display for building management: **Confirmed Link** (bi-directional handshake active), **Degraded/Unverified** (connection lost or intermittent; local fail-safe logic now active), and **Fault** (local hardware error).
+*   **Protocol:** In the "Degraded/Unverified" state, the system must default to unlocking doors if any local trigger occurs, rather than waiting for municipal confirmation. This manages the risk of false negatives during a fire.
+
+**3. Mandatory Human-in-the-Loop Gate for Re-locking**
+While unlocking during a suspected emergency should be automatic (to prevent trapping residents), *re-locking* must never be fully automated after a connectivity event.
+*   **Action:** Hard-code a rule that once doors are unlocked via the fail-safe mechanism, they cannot re-engage automatically until a verified human administrator explicitly resets the system after physical verification of safety.
+*   **Rationale:** This prevents the system from accidentally locking residents back inside if the network connection flickers back online erroneously during an ongoing evacuation.
+
+**4. Leverage Existing Logs for Adversarial "Red Team" Simulation**
+Since new physical rigs cannot be purchased, repurpose the eight-person team to manually stress-test the existing simulation logs.
+*   **Action:** Conduct a structured "tabletop" review where developers intentionally corrupt the existing log data to simulate specific failure modes: packet loss, delayed timestamps, and contradictory signals (e.g., "all clear" signal received while local sensors detect heat).
+*   **Deliverable:** Produce a "Residual Risk Report" documenting how the updated firmware behaves in these specific corrupted log scenarios. Do not claim the system is "safe"; instead, list the specific connectivity failure patterns that remain **UNVERIFIED** due to the lack of large-scale physical drilling.
+
+**5. Transparency and Disclosure Artifact**
+Create a one-page "Operational Limitations Card" for the city inspection and building managers.
+*   **Content:** Clearly state that during connectivity loss, the system operates on local heuristics which have been tested against historical logs but not large-scale live drills. Explicitly list the "Unverified" scenarios identified in step 4.
+*   **Legal Routing:** Note that the determination of whether this automated decision falls under specific municipal liability regimes or requires specific resident disclosure is a legal question to be routed to counsel, not asserted by the engineering team.
+
+**Note:** This strategy assumes the existing locks have sufficient battery backup to execute the unlock command during a power failure associated with connectivity loss.
+**Note:** The "Unverified" status of large-scale crowd dynamics must be clearly communicated to the city inspector as a known residual risk.

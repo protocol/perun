@@ -1,0 +1,34 @@
+### Simulation Test Plan: CPAP Compliance Interruption Skew
+
+**Objective:** Quantify the frequency of brief mask interruptions and measure their impact on false non-compliance flags before nationwide rollout.
+
+**1. Synthetic Data Generation (The Probe Set)**
+Create a synthetic dataset representing 10,000 patient-nights. Do not use real patient data yet.
+*   **Base Patterns:** Generate standard compliant usage curves (e.g., 7+ hours continuous).
+*   **Interruption Variables:** Inject "mask-off" events with varying durations (5s, 30s, 60s, 120s) and frequencies (1x/night, 5x/night, 10x/night).
+*   **Edge Cases:** Include interruptions occurring exactly at the start/end of the session and during deep sleep phases (if metadata allows).
+*   **Controls:**
+    *   *Positive Control:* A dataset with known interruptions that should trigger a "non-compliant" flag based on current logic (to verify the bug exists).
+    *   *Negative Control:* A dataset with no interruptions or interruptions below the clinical threshold that should remain "compliant."
+
+**2. Execution & Metric Definition**
+Run the current compliance algorithm against this synthetic dataset.
+*   **Primary Metric:** **False Non-Compliance Rate.** Calculate the percentage of patients who were clinically compliant (total usage > threshold) but were flagged as non-compliant solely due to brief interruptions.
+*   **Secondary Metric:** **Interruption Sensitivity.** Plot the relationship between interruption duration/frequency and the likelihood of a false flag.
+*   **Stop Condition:** If the False Non-Compliance Rate exceeds 1% (or your owner-defined tolerance for insurance impact), **block the launch**. This is a high-stakes error affecting coverage.
+
+**3. Subgroup Analysis**
+Slice results by simulated patient profiles:
+*   Patients with naturally fragmented sleep vs. continuous sleep.
+*   Users near the compliance threshold (e.g., 3.9 hours vs. 4.1 hours) are at highest risk; ensure the simulation heavily weights this group.
+
+**4. Mitigation Validation (Iterative)**
+Before deploying, test proposed logic changes in the same simulation:
+*   **Grace Periods:** Does ignoring interruptions <30 seconds reduce false flags without missing genuine non-use?
+*   **Aggregation Windows:** Does shifting from minute-by-minute checks to 15-minute rolling averages stabilize the score?
+*   **Uncertainty Flagging:** If the data is ambiguous, can the system output "Review Required" instead of "Non-Compliant"?
+
+**Deliverable:** A report showing the False Non-Compliance Rate for the current build vs. proposed fixes, with a clear recommendation on whether the current logic is safe for insurance-related decisions.
+
+**Note:** Because this system determines insurance coverage, it constitutes a high-stakes automated decision; a human-in-the-loop review process for flagged cases is strongly recommended before full automation.
+**Note:** Ensure your final transparency documentation (model/data card) explicitly states how "interruptions" are defined and measured, marking any untested duration thresholds as UNVERIFIED.

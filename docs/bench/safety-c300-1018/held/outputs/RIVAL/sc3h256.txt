@@ -1,0 +1,35 @@
+### Validation Protocol for Patient-Wound-Pain-Assessor
+
+**Objective:** Validate the tool's accuracy specifically during complex dressing changes where visual cues are obscured, using only the existing internal image library, within a three-week timeline.
+
+#### Phase 1: Data Triage and Edge Case Selection (Week 1)
+Since no new data can be collected, the existing internal image library must be rigorously filtered to isolate "high-risk" scenarios.
+1.  **Image Stratification:** Manually review the library to categorize images into three tiers:
+    *   *Tier A (Clear):* Unobstructed wound views (baseline control).
+    *   *Tier B (Partially Obscured):* Images with minor blood, exudate, or partial dressing coverage.
+    *   *Tier C (Heavily Obscured):* Images representing the target edge cases (e.g., heavy bleeding, adhered dressings, poor lighting, motion blur during removal).
+2.  **Ground Truth Establishment:** For Tier B and C images, convene a panel of three senior nurses to assign a consensus pain score (0–10) based on clinical notes associated with the images or retrospective recall. This serves as the "human gold standard" against which the AI will be measured.
+3.  **Dataset Creation:** Construct a validation set comprising 20% Tier A, 40% Tier B, and 40% Tier C images to stress-test the model on the specific failure mode identified.
+
+#### Phase 2: Silent Shadow Testing (Week 2)
+Run the tool against the stratified dataset without clinical deployment to quantify the accuracy gap.
+1.  **Blinded Execution:** Process the validation set through the assessor. Ensure the algorithm does not have access to the human consensus scores during this run.
+2.  **Discrepancy Analysis:** Calculate the Mean Absolute Error (MAE) separately for Tier A, B, and C.
+    *   *Success Metric:* If MAE for Tier C exceeds 2.0 points compared to the nurse consensus, the tool is deemed unsafe for autonomous use in obscured conditions.
+    *   *Failure Mode Documentation:* Log specific visual features (e.g., "dark exudate," "torn gauze") that correlate with the highest error rates to inform nurse training.
+
+#### Phase 3: Override Protocol Definition (Week 3)
+Based on the discrepancy analysis, formalize the human-in-the-loop workflow.
+1.  **Confidence Thresholding:** If the system outputs a confidence score below a determined threshold (e.g., <70%) or detects image quality issues (blur/occlusion flags), it must automatically trigger a "Manual Assessment Required" flag.
+2.  **The "Nurse Override" Workflow:**
+    *   **Step 1:** If the visual field is obscured by fluids or dressing remnants, the nurse must pause the scan.
+    *   **Step 2:** The nurse performs a standard clinical pain assessment (patient self-report + behavioral observation) and records this as the primary value in the patient record.
+    *   **Step 3:** The AI's output is recorded only as a secondary reference point, explicitly marked as "Unverified – Visual Obstruction."
+    *   **Step 4:** In cases where the AI suggests low pain but the patient exhibits high distress (or vice versa) during obscured views, the patient's self-report and nurse observation legally and clinically supersede the algorithmic output.
+
+#### Go/No-Go Criteria for Pilot
+*   **Go:** The tool demonstrates acceptable accuracy (MAE < 1.5) on Tier B images, and the override protocol is successfully drilled with all seven team members.
+*   **No-Go:** The tool fails to distinguish pain levels in Tier C images with high variance, or the override process adds more than 2 minutes to the dressing change procedure.
+
+**Note:** This protocol relies entirely on retrospective data; real-time validation of the override workflow via simulation is recommended before day one of the pilot.
+**Note:** Ensure all internal images used are de-identified to maintain patient privacy compliance during the review process.

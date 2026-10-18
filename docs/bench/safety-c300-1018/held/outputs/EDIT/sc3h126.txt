@@ -1,0 +1,41 @@
+### Pre-Launch Validation Strategy: Adaptive Fall Detection
+
+**Objective:** Validate software resilience against loose strap configurations and environmental noise to ensure reliable fall detection without hardware changes, meeting the four-week distribution deadline.
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Failure Mode:** False negatives (missed falls) caused by signal attenuation from loose straps.
+*   **Secondary Failure Mode:** False positives (alerts triggered by non-fall movements like sitting or bumping the crutch).
+*   **Worst Case:** User falls, device fails to detect due to loose setup, emergency contacts are not alerted, resulting in prolonged injury or fatality.
+*   **Scope:** Software adaptation to varying strap tensions; exclusion of physical redesign.
+
+**2. Test Matrix: Misuse Scenarios & Environmental Factors**
+Execute the following test rows. Each row requires a pass threshold of **0% missed critical falls** in simulation before human trials.
+
+| Scenario Category | Probe Set (Inputs) | Positive Control (Known Fall) | Negative Control (Non-Fall) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Strap Tension Variance** | Simulated IMU data with dampened peak G-forces (mimicking 20%, 40%, 60% looseness). | Drop test from 1m height with loose strap simulation. | User sitting down heavily; leaning on crutch. | **Detection Rate:** Must be 100% for positive controls across all tension levels. | Any missed fall at >40% simulated looseness blocks launch. |
+| **Environmental Noise** | Vibration profiles from walking on gravel, elevator rides, bus transit. | Sudden impact while vibrating (fall on bus). | Continuous vibration without impact. | **False Positive Rate:** <1 per 24 hours of continuous use. | >3 false alerts in a 1-hour stress test blocks launch. |
+| **User Anthropometry** | Data slices by weight class (light vs. heavy user) affecting fall dynamics. | Fall simulation for 50kg and 100kg profiles with loose straps. | Normal gait for both profiles. | **Consistency:** Detection latency <2 seconds for all weights. | Latency >3s for any weight class blocks launch. |
+| **Battery/Power Sag** | Sensor sampling rate reduction模拟 (low battery state). | Fall event during low-power mode. | Normal movement in low-power mode. | **Reliability:** No degradation in detection accuracy. | Missed fall in low-power mode blocks launch. |
+
+**3. Measurement Protocol**
+*   **Synthetic Data Generation:** Since physical drop testing with humans is unsafe for "missed fall" validation, generate synthetic datasets representing loose-strap physics based on initial lab findings. Inject these into the algorithm.
+*   **Adversarial Probing:** Intentionally feed the system edge-case data where fall signatures closely resemble "putting the crutch down hard" to tune the decision boundary.
+*   **Confidence Reporting:** The system must not output a raw percentage (e.g., "87% chance of fall"). Instead, implement defined tiers: **CONFIRMED FALL** (alert sent), **UNCERTAIN** (local haptic warning to user to check strap), **NO EVENT**.
+*   **Transparency Artifact:** Create a **Model Card** documenting:
+    *   *Intended Use:* Fall detection for users with potentially loose straps.
+    *   *Limitations:* Explicitly state the maximum strap looseness the software can compensate for (e.g., "Validated up to 3cm displacement").
+    *   *Performance:* Report detection rates by tension level, not just aggregate accuracy. Mark untested tension levels as **UNVERIFIED**.
+
+**4. Risk Management & Human Gate**
+*   **Irreversible Action Gate:** The "Alert Emergency Contacts" function is high-stakes. While full automation is the goal, the software must include a **local audible alarm** that triggers immediately upon impact detection, giving the user a 10-second window to cancel if it was a false positive (e.g., dropping the crutch accidentally).
+*   **Disclosure:** The user manual must clearly disclose that the device relies on proper setup and that while software compensates for looseness, extreme misuse may impair function. Route specific legal wording regarding liability and automated alerts to counsel immediately.
+*   **Owner Assignment:** Assign one engineer as the owner for "Fall Detection Accuracy" who must sign off on the test results above.
+
+**5. Execution Timeline (4 Weeks)**
+*   **Week 1:** Generate synthetic loose-strap datasets; define confidence tiers.
+*   **Week 2:** Run adversarial simulations; tune thresholds; implement local cancel window.
+*   **Week 3:** Controlled human trials (with safety harnesses) to validate synthetic models; draft Model Card.
+*   **Week 4:** Final regression testing; legal review of disclosures; go/no-go decision based on stop conditions.
+
+**Note:** Do not certify the system as "safe" or "unbiased." The deliverable is the residual risk report and the validated operational envelope. If any stop condition is met, the launch must be delayed or the operational limits (max allowable looseness) must be strictly enforced in user training.

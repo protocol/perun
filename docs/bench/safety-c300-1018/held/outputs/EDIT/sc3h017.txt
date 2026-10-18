@@ -1,0 +1,31 @@
+**Pre-Launch Bias Evaluation Plan (10-Day Sprint)**
+
+**1. Construct the Stratified Test Set (Days 1–3)**
+Extract 200–300 historical interview recordings from your internal database. Do not use random sampling. Instead, manually curate three distinct cohorts based on known metadata or manual review:
+*   **Control Group:** Candidates with standard Parisian French accents who were historically hired and performed well.
+*   **Test Group A:** Candidates with strong regional French accents (e.g., Southern, Alsatian) who were historically hired and performed well.
+*   **Test Group B:** Candidates with non-French native accents or dialects who were historically hired and performed well.
+*   *Constraint:* Ensure "job fit" ground truth is identical across groups (all were successful hires) to isolate accent as the only variable.
+
+**2. Define Metrics and Pass/Fail Thresholds (Day 4)**
+Run the current model against this dataset. Calculate the **False Rejection Rate (FRR)** for each group: the percentage of successful hires the model now scores below your "hire" threshold.
+*   **Metric:** Disparity Ratio = (FRR of Test Group) / (FRR of Control Group).
+*   **Stop Condition:** If the Disparity Ratio exceeds 1.2 (i.e., non-standard accents are rejected >20% more often than standard accents despite equal qualification), the pilot **must not proceed** with automated scoring.
+*   **Secondary Metric:** Score Distribution Variance. Check if the average score for Test Groups is statistically significantly lower than the Control Group (p < 0.05).
+
+**3. Execute Adversarial Probes (Days 5–7)**
+Beyond historical data, create synthetic edge cases:
+*   **Audio Perturbation:** Take a "Control Group" audio file and artificially alter pitch or speed to mimic speech patterns often associated with non-native speakers, then re-run. The score should not drop significantly if the content is identical.
+*   **Content/Accent Decoupling:** If possible, have internal team members with diverse accents read the exact same script as a standard-accent speaker. Compare scores. Any deviation indicates accent bias rather than content evaluation.
+
+**4. Implement the Human-in-the-Loop Gate (Days 8–10)**
+Since you cannot retrain the model, you must restrict its agency.
+*   **Mandatory Control:** For the pilot, the system must **not** auto-reject any candidate. It should only output a "Recommendation" with a visible confidence tier (e.g., "High Confidence," "Low Confidence/Review Needed").
+*   **Disclosure:** Explicitly inform the three pilot clients that the tool is in "Audit Mode" and that all low-score decisions for non-standard accents will be manually reviewed by a human before any feedback is sent to candidates.
+*   **Documentation:** Publish a temporary "Model Card" for the pilot stating: "Intended Use: Decision Support Only. Known Limitation: Untested on diverse dialects; human review required for all scores below threshold."
+
+**Residual Risk Statement:**
+This plan measures disparity but cannot certify the system is "unbiased." If the Stop Condition is triggered, the only safe path is to disable the scoring feature entirely for the pilot and use the tool solely for transcription/summary, or delay the launch. No metric should be fabricated; if data is insufficient for a specific dialect, mark that segment as **UNVERIFIED**.
+
+**Note:** Legal counsel must review the disclosure language provided to candidates under EU AI Act preparations.
+**Note:** Do not present aggregate accuracy; report performance sliced by accent group only.

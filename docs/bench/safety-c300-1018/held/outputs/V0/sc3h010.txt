@@ -1,0 +1,31 @@
+### Admissions Predictor Safety Review Plan
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for the Seoul admissions context:
+*   **Bias/Unfair Outcomes:** The model systematically assigns lower success probabilities to applicants from underrepresented backgrounds due to patterns in legacy data, reinforcing historical inequalities.
+*   **Over-reliance/Automation Bias:** Applicants or counselors treat the predicted score as a definitive verdict rather than a probabilistic estimate, leading qualified students to self-reject ("chilling effect").
+*   **Missing Disclosure:** Users are unaware the score is machine-generated, based on limited legacy data, and cannot account for unrecorded socioeconomic resilience.
+*   **Unsafe High-Stakes Automation:** The tool implicitly gates access to higher education without human review of edge cases or contextual factors missing from the dataset.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert fairness; measure disparate impact using the constraints provided.
+*   **Proxy-Based Disparate Impact Testing:** Since direct socioeconomic indicators are unavailable, construct proxy variables from existing legacy fields (e.g., high school type, region, postal code granularity allowed by privacy rules) to approximate underrepresented groups.
+*   **Adversarial "Twin" Probes:** Create paired synthetic profiles identical in academic merit but differing only in the proxy variables. Run these through the predictor to quantify score divergence.
+*   **Chilling Effect Simulation:** Model the "self-rejection" rate by estimating how many applicants with scores below a certain threshold (e.g., <60%) would opt out, then cross-reference this with the proxy groups to see if the drop-off is disproportionate.
+*   **Metric & Thresholds:** Define a "Disparate Impact Ratio" (selection rate of protected group / selection rate of majority group). Set a stop condition: if the ratio falls below 0.8 (the 80% rule of thumb) or if the false-negative rate for underrepresented proxies exceeds a defined tolerance, the feature must not launch in its current form.
+*   **Reporting:** Report all findings as `UNVERIFIED` until these specific probes are run. Do not invent a "fairness score."
+
+**3. Risk Management & Communication (MANAGE)**
+*   **Human-in-the-Loop Gate:** No applicant should be automatically discouraged or rejected based solely on this score. Any score below a high-confidence threshold must trigger a mandatory human review by an admissions officer who can consider factors outside the legacy data.
+*   **Uncertainty Communication:** Never display a raw percentage (e.g., "72% chance of success") as it implies false precision. Instead, use defined coarse tiers with clear text definitions:
+    *   *Strong Candidate* (Corroborated by multiple legacy indicators)
+    *   *Potential Candidate* (Mixed signals; human review recommended)
+    *   *Data Insufficient* (Legacy data does not capture key success drivers)
+*   **Mandatory Disclosure:** Clearly state on the user interface: "This score is an automated estimate based on historical data that may not reflect your unique circumstances or recent changes in educational access. It is not a final decision."
+*   **Transparency Artifact:** Publish a Model Card detailing the "Intended Use" (advisory only), "Limitations" (legacy data gaps, lack of socioeconomic inputs), and "Known Risks" (potential bias against specific regions/school types).
+
+**4. Governance (GOVERN)**
+Assign a specific owner (e.g., Lead Admissions Officer) responsible for re-evaluating the model if the legacy data source changes or if post-launch monitoring shows a drop in diversity metrics. Route all questions regarding legal compliance with Korean privacy laws and anti-discrimination statutes to legal counsel immediately; do not attempt to resolve regulatory duties within this technical plan.
+
+*Note: This plan identifies risks and controls but does not certify the system as safe or unbiased. The final decision to ship rests with the university leadership.*
+*Legal determinations regarding "regulated automated decisions" must be confirmed by counsel before launch.*

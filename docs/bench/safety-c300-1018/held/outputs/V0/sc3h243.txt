@@ -1,0 +1,28 @@
+### Pre-Launch Safety Plan: Wound Care Healing Prediction
+
+**1. Harm Inventory & Risk Statement**
+The primary risk is **systematic overestimation of healing rates** due to reliance on month-old static data. In a home-care setting for elderly patients with compromised circulation, this could lead to:
+*   **Delayed Interventions:** Nurses prioritizing other patients based on false confidence in healing progress.
+*   **Worsening Conditions:** Undetected infection or necrosis leading to hospitalization or amputation.
+*   **Over-Reliance:** Clinicians trusting the model's timeline over direct visual inspection.
+
+*Residual Risk Status:* **UNVERIFIED**. Accuracy cannot be certified without real-time validation against current patient states.
+
+**2. Validation Strategy (Pre-Launch)**
+Since real-time EHR data is unavailable, validation must shift from automated batch testing to **adversarial manual probing** and **conservative bounding**:
+*   **Static Snapshot Stress-Test:** Manually audit 50 random cases from the month-old snapshot. Compare model predictions against the *actual* current status of these specific patients (via phone call or recent nurse notes). Calculate the "drift error" introduced by the one-month lag.
+*   **Worst-Case Bounding:** If the model predicts "Healed in 14 days" for a patient with poor circulation, manually override this to a conservative tier (e.g., "Review Required in 3 days") unless corroborated by a human. Do not ship raw numerical dates; ship **time-bands** (e.g., "Immediate," "3-5 Days," "1-2 Weeks") with explicit definitions.
+*   **Negative Control Probe:** Input data for known non-healing chronic wounds. If the model predicts a finite healing date with high confidence, flag this as a critical failure mode requiring a human gate before any output is shown.
+
+**3. Deployment Monitoring Protocols (Manual Checks)**
+During the two-week regional rollout, implement the following **human-in-the-loop** gates:
+*   **The "Red Flag" Override:** Any prediction suggesting a wound will heal within 7 days for a patient with documented compromised circulation must trigger a mandatory nurse verification step before the care plan is finalized. The system must not auto-schedule the next visit based solely on this prediction.
+*   **Daily Drift Log:** Nurses must record a binary flag for every visited patient: "Did the wound status match the model's predicted trajectory? (Yes/No)." Aggregate these daily. If >10% of visits show "No" (specifically where the model was too optimistic), pause the tool's prioritization recommendations immediately.
+*   **Uncertainty Disclosure:** Every output must display a visible disclaimer: *"Prediction based on data up to [Date]. Actual healing varies significantly with circulation status. Confirm with physical inspection."* Do not display confidence percentages (e.g., "87% sure"); use defined tiers like **"Corroborated"** (recent data exists) vs. **"Unverified"** (relying on old snapshots).
+
+**4. Governance & Ownership**
+*   **Owner:** The Squad Lead must sign off on the "Drift Log" daily.
+*   **Stop Condition:** Immediate rollback of automated prioritization if two consecutive days show systematic overestimation in the "compromised circulation" subgroup.
+*   **Transparency Artifact:** Create a one-page **Model Card** for the nursing staff detailing: intended use (prioritization aid only), data limitation (month-old snapshots), and the specific failure mode (overestimation).
+
+**Note:** This plan measures residual risk but does not certify the model as safe or unbiased. Legal requirements for automated medical decision support in India must be routed to counsel; this plan assumes the tool is an aid, not a diagnostic authority.

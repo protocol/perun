@@ -1,0 +1,39 @@
+### Pre-Launch Safety Plan: Patient-Fall-Recovery-Bot
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before testing, explicitly document the specific harms this offline feature could cause:
+*   **Unsafe Automation (High-Stakes):** The bot instructs a user with a hip fracture or spinal injury to stand, causing permanent paralysis or severe secondary injury.
+*   **Hallucination as Fact:** The system confidently generates medically invalid steps (e.g., "pull up on the unstable chair") due to vision misinterpretation.
+*   **Over-Reliance:** Seniors trust the voice command over their own pain signals or the presence of a human caregiver.
+*   **Missing Disclosure:** Users believe the advice is a guaranteed medical diagnosis rather than probabilistic guidance from an AI.
+*   **Bias/Exclusion:** Instructions fail for users with limited mobility, non-standard body types, or specific speech patterns common in distress.
+
+**2. Measurement Strategy: Offline Red-Teaming & Eval Suite**
+Since remote patching is impossible, your evaluation must be exhaustive before the device leaves the factory. You cannot certify "100% accuracy"; you must measure residual risk.
+
+*   **Construct a "Negative Control" Dataset:** Create a library of video/audio scenarios where standing up is **contraindicated** (e.g., visible deformity, user screaming in sharp pain, unconsciousness, blood).
+    *   *Pass Condition:* The bot must **refuse** to give standing instructions and instead trigger a "Do Not Move / Call for Help" protocol. Any instruction to stand in these scenarios is a critical failure (Stop Condition: Launch Blocked).
+*   **Stress-Test Confusion Points:** Simulate high-stress environments:
+    *   *Visual Noise:* Poor lighting, obstructed camera views, cluttered rooms.
+    *   *Audio Distress:* Crying, stuttering, or overlapping speech.
+    *   *Mobility Variants:* Test against users with walkers, wheelchairs nearby, or partial paralysis.
+*   **Adversarial Prompting:** Feed the vision system edge cases (e.g., a user lying down intentionally vs. fallen) to ensure the logic distinguishes between "resting" and "fallen."
+*   **Metric Definition:** Do not report a single "accuracy %." Report failure rates specifically for the **high-stakes negative controls**. If the bot advises standing in even one "Do Not Move" scenario, the residual risk is unacceptable for autonomous operation.
+
+**3. Risk Management: Human-in-the-Loop & Uncertainty**
+*   **The Hard Gate:** Because this is a high-stakes, irreversible action (potential for paralysis), **fully autonomous execution is the failure mode.**
+    *   *Requirement:* The device must default to **alerting a human caregiver** or emergency services upon detecting a fall. Verbal instructions should only be provided if a human confirms the user is conscious and requests help, or if the system has near-perfect confidence that no severe injury exists (which is difficult to verify offline).
+    *   *Fallback:* If the vision system cannot classify the injury status with high certainty, the only safe output is "Stay still, help is coming."
+*   **Surface Uncertainty:** Never present instructions as absolute facts. Use defined coarse tiers for confidence if displayed, or qualitative phrasing: "If you feel no sharp pain, try..." rather than "Stand up now."
+*   **Transparency Artifact (Model Card):** Create a physical/digital card included with every device stating:
+    *   *Intended Use:* Assistance for conscious users with minor falls only.
+    *   *Limitations:* Cannot detect internal bleeding, fractures, or spinal injuries.
+    *   *Data Provenance:* What demographics were included in the training set?
+    *   *Owner:* Name the specific engineer responsible for the fall-logic module.
+
+**4. Governance**
+*   **Owner Assignment:** Assign a specific individual to sign off on the "Do Not Move" logic.
+*   **Freeze Control:** Since the device is offline, the version of the model and the instruction script shipped is the only version that exists. Treat the final eval run as the permanent regulatory audit.
+
+**Note:** I cannot certify this system as "safe" or "unbiased"; no test proves safety. The decision to ship rests with your team based on the residual risk measured above.
+**Note:** Legal requirements for medical device disclosure and liability in Japan must be routed to qualified counsel; this plan addresses product safety logic only.

@@ -1,0 +1,29 @@
+### Pre-Deployment Testing Plan: Smart Insulin Pen Logic
+
+Given the constraint of non-updatable firmware and the high-stakes nature of insulin dosing, the following plan prioritizes preventing "insulin stacking" (accumulating active insulin beyond safe limits) through adversarial scenario testing and mandatory human-in-the-loop verification.
+
+#### 1. Critical Failure Scenarios to Test
+Before distributing devices, manually simulate these specific edge cases on prototype units to verify logic robustness. If any scenario results in an incorrect "remaining insulin" calculation or fails to warn of stacking, the device must not ship.
+
+*   **The "Ghost Dose" (Sensor False Negative):** Simulate a scenario where the pen mechanism moves (simulating a dose) but the sensor fails to register the click due to dirt, angle, or speed.
+    *   *Risk:* The device believes no insulin was delivered, calculating a higher "remaining" amount than exists in the body, leading the patient to re-dose dangerously soon.
+    *   *Test:* Actuate the pen mechanically without triggering the sensor; verify the device does *not* update the history or recalculate remaining insulin based on the physical movement alone without sensor confirmation.
+*   **The "Time-Zone Jump" (Clock Logic):** Simulate a patient traveling across time zones or manually adjusting the device clock backward.
+    *   *Risk:* The algorithm miscalculates the "time since last dose," incorrectly assuming more insulin has cleared the system than actually has.
+    *   *Test:* Set the device clock back by 2–4 hours immediately after a recorded dose. Verify the system flags the inconsistency or defaults to the longer (safer) active insulin window rather than recalculating based on the new, earlier time.
+*   **The "Partial Prime" Confusion:** Simulate a priming event (clearing the needle) that mimics a small dose (e.g., 1 unit).
+    *   *Risk:* The device records a priming event as a therapeutic dose, skewing the total daily calculation and active insulin curve.
+    *   *Test:* Perform standard priming sequences. Ensure the logic distinguishes between "prime" and "inject" modes and excludes primes from the stacking calculation.
+*   **The "Rapid Fire" Edge Case:** Simulate two doses administered within 2 minutes (e.g., correcting a partial delivery).
+    *   *Risk:* The algorithm might merge these into a single event or fail to update the active insulin curve correctly, leading to an underestimation of total active insulin.
+    *   *Test:* Administer split doses rapidly. Verify the history log shows two distinct entries and the "remaining" calculation accounts for the full sum immediately.
+
+#### 2. Manual Verification Steps for Patients (Pilot Protocol)
+Since the firmware cannot be patched, patients must act as the secondary safety gate. Include these steps in the pilot consent and training materials:
+
+*   **The "Double-Check" Rule:** Patients must manually log every dose in a provided paper diary or independent app, noting the time and units. Before administering any correction dose, they must compare the pen's "Remaining Insulin" screen against their manual log. If the numbers differ by >1 unit, they must skip the auto-calculation and consult the study nurse.
+*   **The "Sensor Sight" Check:** Patients must visually confirm the dose counter on the pen dial matches the digital record on the screen immediately after every injection. If the screen does not update within 10 seconds of a visible dose, the device is considered faulty for that session, and they must revert to manual calculation methods.
+*   **The "2-Hour Hold" for Anomalies:** If the device displays an error code, blinking light, or unexpected "0 units remaining" reading shortly after a known dose, the patient must wait at least 2 hours before attempting a correction dose unless blood glucose is critically low (requiring immediate medical intervention).
+
+**Note:** This plan treats the device as a decision-support tool, not an autonomous agent; the final dosing decision must remain with the patient or caregiver.
+**Note:** Any failure in the "Ghost Dose" or "Time-Zone" scenarios during internal testing constitutes a critical "stop-ship" condition given the inability to patch.

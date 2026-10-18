@@ -1,0 +1,38 @@
+### Test Plan: Timezone Edge Cases for Static-Location Medication Bot
+
+Given the constraint of static string locations and the high stakes of medication timing, the following edge cases must be manually verified. These focus on scenarios where static data fails to capture dynamic time realities, risking missed or duplicate doses.
+
+**1. Daylight Saving Time (DST) Transitions**
+*   **Spring Forward (Lost Hour):** Verify behavior when a user's static location observes DST and the clock jumps forward.
+    *   *Risk:* A reminder scheduled for the "missing" time (e.g., 2:00 AM) may never fire or fire an hour late.
+    *   *Test:* Simulate a transition date for a static location like "New York, USA". Confirm the bot adjusts the trigger to the new local time without skipping the dose.
+*   **Fall Back (Repeated Hour):** Verify behavior when the clock falls back.
+    *   *Risk:* The bot might fire the reminder twice (once for each instance of the repeated hour) or fail to fire if logic incorrectly de-duplicates based on UTC.
+    *   *Test:* Simulate a transition for "London, UK". Ensure exactly one reminder fires at the correct local intent, not twice.
+*   **Non-Observant Regions:** Verify locations within countries that do not uniformly observe DST (e.g., "Arizona, USA" vs. "New York, USA").
+    *   *Risk:* Applying a national DST rule to a static string that represents a non-observant region causes a one-hour shift error for half the year.
+    *   *Test:* Confirm the bot distinguishes between static strings that observe DST and those that do not, even if they share a country name.
+
+**2. Travel and Static Data Mismatch**
+*   **Cross-Timezone Travel (The "Static" Trap):** Since locations are static strings, the bot cannot know a user has traveled.
+    *   *Risk:* A user travels from "Paris" to "Tokyo" but their profile remains "Paris". Reminders fire on Paris time, causing the user to take medication at the wrong local time in Tokyo.
+    *   *Test:* Manually verify the user flow for updating the static string *before* travel. Test the failure mode: if the user forgets to update, does the system offer a manual "I have traveled" override or a secondary confirmation prompt based on device time vs. profile time?
+*   **Ambiguous Location Strings:**
+    *   *Risk:* Static strings like "Springfield" or "London" exist in multiple timezones.
+    *   *Test:* Input ambiguous city names. Verify the system forces a disambiguation (e.g., "London, UK" vs. "London, Canada") during onboarding or profile edit. If it defaults to one, document the error risk for users in the other.
+
+**3. Irregular Time Zones and Offsets**
+*   **Half-Hour and Quarter-Hour Offsets:**
+    *   *Risk:* Hardcoded integer offsets (e.g., UTC+5) fail for regions like India (UTC+5:30) or Nepal (UTC+5:45).
+    *   *Test:* Verify static strings for "Mumbai, India" and "Kathmandu, Nepal" resolve to the correct minute-level offset, not a rounded hour.
+*   **Historical Rule Changes:**
+    *   *Risk:* Governments occasionally change DST rules or permanent offsets. Static logic based on old rules will fail.
+    *   *Test:* Check if the underlying timezone library used to interpret the static strings is updated to the latest IANA timezone database version.
+
+**4. High-Stakes Safety Gates (Human-in-the-Loop)**
+*   **Confidence Tiering:** If the bot calculates a time based on a static string that conflicts with the user's device time, it must not auto-correct silently.
+    *   *Requirement:* The system must display a defined coarse tier warning (e.g., "Timezone Mismatch Detected") and require explicit user confirmation before sending a reminder that deviates significantly from the device's local clock.
+*   **Irreversible Action Prevention:** Missing a dose or taking a double dose is a high-stakes harm.
+    *   *Requirement:* For any detected ambiguity or transition period, the system must default to a "safe" state (e.g., sending a clarification notification rather than a "Take Now" command) until the user confirms their current local time.
+
+**Note:** This plan identifies risks inherent to static data; it does not certify the system as safe. Legal requirements for automated health decisions must be routed to counsel.

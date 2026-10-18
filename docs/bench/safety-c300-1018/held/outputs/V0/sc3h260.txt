@@ -1,0 +1,38 @@
+### Fallback Mechanism Design: "Conservative Lockout with Manual Override"
+
+Given the risk of database lag causing the system to miss new safe limits for newly added medications, the fallback mechanism must default to **safety via restriction**, not permission.
+
+**Logic Flow:**
+1.  **Detection:** When a nurse selects a medication, the system checks the timestamp of the local drug library entry against the central server's last update.
+2.  **Trigger Condition:** If the local entry is missing, flagged as "pending update," or the synchronization timestamp exceeds a defined threshold (e.g., >24 hours old for new entries), the fallback activates immediately.
+3.  **Fallback Action (Hard Gate):** The pump **blocks** the programming of any infusion rate for that specific medication. It displays a clear error: *"Safety limits for [Drug Name] are currently updating. Automatic rate calculation is disabled."*
+4.  **Recovery Path (Human-in-the-Loop):** The interface provides a "Manual Override" button that is **not** a bypass, but a workflow shift.
+    *   Selecting this requires a second nurse verification (dual authentication).
+    *   It forces the entry of the rate based on the **physical drug label or hospital protocol sheet** (external source of truth), not the pump's database.
+    *   The event is logged as a "Fallback Activation" with user IDs, timestamp, and the manually entered rate for immediate post-event review.
+
+This ensures that if the data is uncertain, the machine refuses to act autonomously, forcing a deliberate human decision backed by external verification.
+
+---
+
+### Pre-Launch Review Process: "Failure Mode Injection"
+
+To verify this logic before the one-month deadline, execute a targeted "Red Team" validation focusing solely on the fallback trigger. Do not test happy paths; test only the breaks.
+
+**1. Define the Probe Set (The "Known-Bad" Controls)**
+Create three specific test scenarios representing your highest risk:
+*   **Scenario A (Missing Data):** Simulate a drug entry existing in the hospital formulary but absent in the pump's local cache.
+*   **Scenario B (Stale Data):** Simulate a drug entry where the "last updated" timestamp is artificially set to a date prior to the latest safety guideline release.
+*   **Scenario C (Sync Interruption):** Simulate a network failure during the drug library update push, leaving the database in a partial-write state.
+
+**2. Execution Protocol**
+*   **Step 1:** Load these three scenarios into a staging environment mirroring the hospital network configuration.
+*   **Step 2:** Have nurses attempt to program rates for the affected drugs using standard workflows.
+*   **Step 3:** **Pass Criterion:** The system *must* block automatic calculation in 100% of these trials. Any instance where the pump accepts a rate automatically without the fallback trigger is a **Stop Condition** for launch.
+*   **Step 4:** Verify the "Manual Override" path. Confirm it requires dual authentication and successfully logs the event.
+
+**3. Residual Risk Reporting**
+Document the results as "Verified" for the specific probes above. Explicitly state that any drug not covered by these three failure modes remains **UNVERIFIED**. Do not claim the system is "safe" or "bias-free"; report that the specific risk of "database lag allowing dangerous rates" is mitigated by the Conservative Lockout, provided the dual-auth override is followed.
+
+**Note:** This approach treats the inability to update the library not as a software bug to be ignored, but as a known operational hazard requiring a procedural control (dual-check).
+**Note:** Legal counsel must review the "Manual Override" workflow to ensure it aligns with nursing liability standards in your jurisdiction.

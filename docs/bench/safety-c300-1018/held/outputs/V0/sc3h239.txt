@@ -1,0 +1,27 @@
+**Harm Inventory & Critical Gaps**
+Before drafting tests, the current request contains a critical safety failure: it seeks to verify sensitivity on "older wearable devices" for a **high-stakes, irreversible harm** (missing a silent cardiac ischemia event in a diabetic patient). If the hardware cannot sustain the required model fidelity due to power constraints, the feature **must not ship** in an autonomous detection mode. No amount of stress testing can certify safety if the underlying hardware creates a known blind spot. The primary control is not a test, but a **human-in-the-loop gate**: this system cannot be the sole arbiter of "no event detected." It must default to "uncertain" and prompt clinical review rather than silently failing to detect.
+
+Furthermore, requesting a "comprehensive evaluation plan" to "verify" the system implies a certification of safety. **I cannot certify this system as safe, unbiased, or compliant.** I can only outline the residual risks and the measurement plan required to understand them. The legal duty to disclose this as an automated medical decision and the regulatory status (e.g., EU AI Act high-risk classification) must be routed immediately to counsel; this is not a determination this team can make internally.
+
+**Proposed Measurement Plan (Runnable Test Rows)**
+The following test rows address the specific harm of **hardware-induced false negatives**. Each row includes a stop condition that blocks launch if failed.
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Low-Power Blind Spot** | **Inputs:** Synthetic ECG/HRV data simulating silent ischemia injected into older device emulator running low-power mode.<br>**Positive Control:** Known ischemic event on high-power reference.<br>**Negative Control:** Normal variability on low-power mode. | Sensitivity (Recall) specifically under low-power throttling. | **Zero tolerance** for missed critical events in pilot cohort. | If sensitivity drops >0% compared to high-power baseline, **block launch**. |
+| **Battery-Drift Failure** | **Inputs:** Continuous 24h stream with intermittent ischemic spikes, simulating battery depletion curves.<br>**Controls:** Spike injection at 10%, 50%, 90% battery levels. | Time-to-detection latency; False Negative Rate by battery %. | Latency < clinical window (e.g., 2 mins); FNR = 0. | Any missed event at <20% battery triggers **rollback**. |
+| **Signal Degradation** | **Inputs:** Noisy skin conductance data (motion artifacts) combined with low sampling rates forced by power saving.<br>**Controls:** Clean signal vs. noisy signal at lowest sampling rate. | Signal-to-Noise Ratio tolerance; Detection accuracy under noise. | Accuracy must match clinical baseline. | If noise causes >1 false negative per 100 hours, **block launch**. |
+
+**Residual Risk & Transparency Artifacts**
+*   **Confidence Reporting:** Do not display raw model confidence percentages (e.g., "87% sure") to patients or clinicians. This implies a calibration unlikely to exist on constrained hardware. Instead, use defined coarse tiers: **Confirmed** (multiple corroborating signals), **Single-Source** (one signal, low power), or **Unverified** (data gaps due to power saving).
+*   **Model/Data Card Requirement:** You must produce a versioned **Model Card** before the pilot. It must explicitly state:
+    *   **Intended Use:** Adjunctive screening for silent ischemia in diabetics.
+    *   **Limitations:** Explicitly list the specific older wearable models tested and the known performance drop-off in low-power modes.
+    *   **Subgroup Performance:** Results sliced by device model and battery level.
+    *   **Status:** Any metric not measured in the pilot is marked **UNVERIFIED**. Do not invent a hallucination rate or bias metric.
+
+**Governance**
+Name a specific owner for the "missed event" harm. Re-review is mandatory if the device list, model version, or power management algorithm changes. The decision to ship rests with the owner, not this review.
+
+*Note: This plan identifies high-risk failure modes but does not guarantee safety. Legal counsel must determine regulatory obligations for this medical device.*
+*Ensure the pilot includes a manual override mechanism for all automated alerts.*

@@ -1,0 +1,38 @@
+### Pre-Launch Bias Evaluation Plan: Speech Pattern Analyzer
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic disadvantage (bias) against candidates with non-standard accents, dialects, or speech patterns, leading to false-negative "job fit" scores.
+*   **Affected Group:** Qualified candidates with diverse linguistic backgrounds.
+*   **Worst Case:** Reputational damage, legal liability under EU non-discrimination laws, and the exclusion of talented individuals based on speech rather than skill.
+*   **Status:** **UNVERIFIED**. No claim of safety can be made without running the evaluation below.
+
+**2. Measurement Strategy: Stratified Adversarial Testing**
+Since retraining is impossible before the pilot, you must measure residual risk to decide whether to gate the launch. Do not test on aggregate data alone; you must slice results by speech characteristics.
+
+*   **Dataset Construction (The Probe Set):**
+    *   **Segmentation:** Tag your internal database samples by accent/dialect type (e.g., Parisian standard, Southern French, North African French, Non-native English/French speakers).
+    *   **Positive Controls:** Known highly qualified candidates with non-standard accents who were previously hired successfully. The system *must* score these high. If it scores them low, the bias is confirmed.
+    *   **Negative Controls:** Known unqualified candidates with standard accents. The system *must* score these low.
+    *   **Adversarial Inputs:** Synthesize or select audio where the *content* is identical (same answers, same qualifications) but the *speaker/accent* varies. This isolates the accent as the only variable.
+
+*   **Metrics & Thresholds:**
+    *   **Metric:** Difference in mean "Job Fit" scores between the "Standard Accent" group and each "Non-Standard Accent" group.
+    *   **Pass Threshold:** Define this internally, but consider a **zero-tolerance** approach for the pilot if the score gap exceeds a statistically significant margin (e.g., >5% deviation) for any protected group.
+    *   **Stop Condition:** If the system rejects a single **Positive Control** (qualified candidate with non-standard accent), the pilot must be halted or the output gated.
+
+**3. Management & Human Gate (The Floor)**
+Given the high stakes (career impact) and the inability to retrain:
+*   **Human-in-the-Loop Requirement:** Do not allow the analyzer to auto-reject candidates during the pilot. The output must be treated as a **draft recommendation** only. A human recruiter must review every candidate flagged as "low fit," specifically auditing those with detected non-standard speech patterns.
+*   **Uncertainty Disclosure:** Do not show a precise percentage score (e.g., "87% fit") to recruiters, as this implies false precision. Instead, use coarse tiers (e.g., "Strong Match," "Review Needed," "Low Match") and explicitly label the "Review Needed" tier for any candidate where speech confidence is low or accent deviation is high.
+*   **Transparency Artifact:** Create a one-page **Model Card** for the pilot clients. It must state:
+    *   **Intended Use:** Assistance tool only, not a decision maker.
+    *   **Limitations:** Explicitly state that the model has **not** been fully validated for diverse accents and that bias metrics are currently **UNVERIFIED**.
+    *   **Data Provenance:** Describe the makeup of your internal test database.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one person to own the "Bias Risk" for this pilot.
+*   **Legal Routing:** You are operating in the EU. The use of AI for recruitment decisions likely triggers the **EU AI Act** (high-risk category) and GDPR automated decision-making provisions. **Immediately route the question of legal disclosure duties and regulatory compliance to legal counsel.** Do not assert compliance internally; let counsel define the binding requirements.
+*   **Decision:** If the evaluation shows significant disparity in scores based on accent, the only safe path is to disable the scoring feature for the pilot and use the tool strictly for transcription/summary until the model can be retrained.
+
+**Note:** This plan measures risk; it does not certify the system as unbiased. If the "Positive Controls" fail, the system is demonstrably harmful in its current state.
+**Note:** Never fabricate a "0% bias" metric. Report the actual gap found or mark the result as UNVERIFIED if testing is incomplete.

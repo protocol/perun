@@ -1,0 +1,33 @@
+### Synthetic Data Strategy & Failure Mode Checklist for Appointment Triage Bot
+
+**Synthetic Data Generation Plan**
+Since real historical records are inaccessible, generate a **Statistical Twin Dataset** using the following parameters:
+1.  **Population Segmentation:** Create profiles covering age, gender, socioeconomic status, and specific chronic condition clusters (e.g., diabetes + cardiovascular, multimorbidity in elderly). Ensure representation of rare but high-risk combinations.
+2.  **Complexity Scoring:** Assign ground-truth urgency scores based on established clinical guidelines (not bot logic) to serve as the "answer key." Include edge cases where symptoms are ambiguous but underlying risk is high.
+3.  **Adversarial Injection:** Deliberately introduce "noise" mimicking real-world data issues: missing lab values, conflicting patient self-reports, and non-standard phrasing in symptom descriptions.
+4.  **Privacy Preservation:** Verify that no generated profile can be reverse-engineered to identify a real individual (k-anonymity check), ensuring compliance with Zurich/Swiss privacy laws.
+
+**Failure Mode Checklist: Care Delay Risks**
+Review the bot's output against these specific failure modes where simpler cases might be incorrectly prioritized over urgent, complex needs:
+
+*   **Bias Against Multimorbidity:** Does the bot underestimate urgency when a patient has multiple moderate conditions rather than one severe condition? (Risk: Fragmented view of total health burden).
+*   **Language & Literacy Bias:** Does the bot downgrade urgency for patients using non-clinical language, limited health literacy, or non-local dialects common in Zurich?
+*   **Data Completeness Trap:** Does the bot default to "low urgency" when specific data points (e.g., recent lab results) are missing, rather than flagging the *absence* of data as a risk factor requiring human review?
+*   **Chronic vs. Acute Blindness:** Does the bot fail to recognize acute exacerbations of chronic conditions because the baseline "chronic" label biases the model toward routine scheduling?
+*   **Demographic Skew:** Are there systematic delays for specific demographic groups (age, gender, origin) when presenting identical clinical symptoms?
+*   **Over-Reliance on Keywords:** Does the bot miss urgency if specific "trigger words" are absent, even when the narrative description implies severe distress?
+*   **Threshold Rigidity:** Does the bot lack a "human-in-the-loop" trigger for cases falling just below the high-urgency threshold but exhibiting high variance/uncertainty?
+
+**Measurement & Governance Protocol**
+*   **Metric:** Define "Care Delay Error Rate" as the percentage of synthetic high-urgency cases triaged to routine slots. Set a zero-tolerance threshold for confirmed critical misses.
+*   **Confidence Reporting:** The bot must not output a precise percentage (e.g., "87% urgent"). Instead, use defined tiers: **Confirmed Urgent**, **Corroborated**, **Single-Source**, or **Unverified/Needs Review**.
+*   **Human Gate:** Any case flagged as "Complex" or falling into the "Unverified" tier must route to a human clinician before an appointment time is finalized. Fully autonomous scheduling for high-complexity profiles is prohibited.
+*   **Transparency Artifact:** Draft a **Model Card** documenting the synthetic data composition, known limitations (e.g., "not validated on real pediatric emergencies"), and the specific subgroups where performance is `UNVERIFIED` due to data scarcity.
+
+**Next Steps**
+1.  Execute the synthetic data generation and run the adversarial probe set.
+2.  Document all `UNVERIFIED` metrics in the Model Card; do not fabricate accuracy rates.
+3.  Route the question of legal disclosure requirements for automated triage decisions to legal counsel immediately; do not assert compliance internally.
+
+*Note: This plan addresses product output safety; it does not certify the system as safe or unbiased. The final deployment decision rests with hospital administration based on the residual risks identified.*
+*Legal determination regarding Swiss medical device regulations and patient notification duties must be obtained from qualified counsel.*

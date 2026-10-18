@@ -1,0 +1,29 @@
+### Rapid Testing Protocol for Voting Registration Assistant
+
+**Phase 1: Establish Ground Truth & Stratified Sampling**
+Since official databases are inaccessible, immediately construct a "Golden Set" of 50–100 verified polling locations using the highest-quality available sources (e.g., direct county clerk emails, verified nonprofit partners, or historical data known to be correct). Stratify this set by demographic variables often correlated with data gaps in Austin (e.g., ZIP codes with high minority populations, rural vs. urban districts, and areas with recent precinct changes). Do not rely on the crowd-sourced data for this baseline.
+
+**Phase 2: Shadow Mode Execution**
+Run your current assistant in "shadow mode" against the Golden Set. Input the exact addresses or voter IDs from your verified list and record the assistant's output without altering the live user-facing system. Create a comparison matrix logging:
+*   Input Location/Demographic Tag
+*   Assistant Output Address
+*   Discrepancy Type (e.g., wrong street, closed location, outdated hours)
+*   Source Citation provided by the assistant (if any)
+
+**Phase 3: Bias & Discrepancy Analysis**
+Analyze the error log specifically for systematic patterns. Calculate error rates per demographic stratum. If error rates in specific ZIP codes or demographic groups exceed 0%, flag these as critical failures. Look for correlations between low-quality crowd-sourced update frequency and high-error zones. Determine if the validation pipeline is disproportionately weighting recent but unverified crowd submissions over older, stable records in specific communities.
+
+**Phase 4: Pipeline Remediation & Confidence Scoring**
+Implement an immediate logic patch to the validation pipeline:
+1.  **Source Weighting:** Downgrade or quarantine crowd-sourced updates that lack multi-source corroboration, especially in identified high-risk zones.
+2.  **Confidence Thresholds:** Require a higher confidence score to display an address in flagged demographics. If the score is below the threshold, the system must default to a safe fallback message (e.g., "Please verify your location directly with the County Clerk at [Official Phone Number]") rather than risking an incorrect address.
+3.  **Human-in-the-Loop:** Route all updates affecting high-risk zones to a volunteer verifier before they go live.
+
+**Phase 5: Verification Loop**
+Re-run the shadow mode test against the Golden Set using the patched pipeline. Confirm that discrepancies in targeted demographics have been eliminated or reduced to an acceptable risk level (ideally zero for address data). Only deploy changes after this second pass confirms stability.
+
+**Phase 6: Continuous Monitoring**
+Until the election, maintain a daily "spot check" of 10 random locations from high-risk strata using new crowd-sourced inputs to ensure the pipeline remains robust against new bad data.
+
+*Note: Given the hard deadline, prioritize fixing high-risk demographic zones over achieving 100% coverage if resources are insufficient.*
+*Ensure all fallback messages provide clear, actionable paths to official verification to prevent disenfranchisement.*

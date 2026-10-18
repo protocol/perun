@@ -1,0 +1,38 @@
+### Pre-Launch Safety Validation Plan: Overheating Risk Mitigation
+
+**1. Harm Inventory & Worst-Case Definition**
+Before validation, formally record the specific harm: **Unsafe High-Stakes Automation**.
+*   **Failure Mode:** The algorithm recommends removing insulation in older brick homes, leading to dangerous indoor overheating during rare summer heatwaves.
+*   **Affected Users:** Residents of older brick properties in regions prone to sudden heat spikes.
+*   **Worst Realistic Case:** Vulnerable occupants (elderly, young children) suffer heatstroke or death due to rapid indoor temperature rise when external temperatures exceed historical averages for short durations.
+*   **Status:** This is an **UNVERIFIED** risk until the simulation plan below is executed. Do not assert safety.
+
+**2. Simulation-Based Measurement Plan (No New Hardware)**
+Since physical testing is unavailable, you must stress-test your existing internal simulation logs using adversarial "red-team" inputs. Create one test row for the overheating harm:
+
+*   **Probe Set (Adversarial Inputs):**
+    *   **Positive Control:** Inject synthetic weather data into your logs representing a "1-in-50-year" heatwave (e.g., 3–5°C above the maximum temperature currently in your logs) sustained for 72+ hours.
+    *   **Negative Control:** Run standard summer profiles where the algorithm correctly retains insulation.
+    *   **Edge Cases:** Simulate rapid temperature swings (cool nights, scorching days) specific to thermal mass behavior in brick structures.
+*   **Metric:** Maximum predicted indoor temperature ($T_{max}$) and duration above safe thresholds (e.g., >28°C or >30°C depending on local health guidelines).
+*   **Pass Threshold (Owner-Set):** Zero recommendations to remove insulation if the simulated $T_{max}$ exceeds the safety threshold under the Positive Control heatwave scenario.
+*   **Stop Condition:** If *any* simulation run with extreme heat inputs recommends insulation removal, **block the launch** of that recommendation logic for older brick homes immediately.
+*   **Reviewer:** Assign one developer to manually audit every failure case; do not rely on aggregate pass rates.
+
+**3. Manage Residual Risk: Human-in-the-Loop Gate**
+Because this action (removing insulation) is costly, hard to reverse, and potentially life-threatening:
+*   **Mandatory Gate:** Disable fully automated issuance of "Remove Insulation" recommendations for any home identified as "older brick" or similar high-thermal-mass construction.
+*   **Required Action:** These specific outputs must trigger a **human review flag**. A qualified energy auditor must explicitly confirm the recommendation before it reaches the user.
+*   **Uncertainty Disclosure:** If the system proceeds with other advice, display a defined coarse tier of confidence (e.g., "Unverified for Extreme Heat Events") rather than a precise percentage. Do not show raw model confidence scores (e.g., "92% sure") as they imply calibrated precision you do not possess.
+
+**4. Transparency Artifact (Model Card)**
+Draft a preliminary Model Card section for the utility partner including:
+*   **Limitations:** Explicitly state that validation relies on internal simulations and has not been verified against physical thermal chamber data for extreme heat events.
+*   **Intended Use:** Exclude usage in regions with known extreme heat volatility until physical validation occurs.
+*   **Data Provenance:** List the sources of your internal simulation logs.
+
+**5. Governance & Next Steps**
+*   **Owner:** Name one specific person responsible for signing off on the residual risk of the simulation-only validation.
+*   **Legal Routing:** Consult counsel immediately regarding liability for physical safety recommendations derived solely from simulation, especially given the potential for bodily harm. Do not assume compliance based on this plan alone.
+
+**Note:** This plan identifies risk and sets controls; it does not certify the system as safe. The decision to ship with simulation-only data rests entirely with GreenLeaf Solutions' leadership.

@@ -1,0 +1,35 @@
+### Pre-Launch Safety Plan: Patient-Fall-Recovery-Bot
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before testing, explicitly document the specific harms this offline feature could cause:
+*   **Unsafe Automation of High-Stakes Actions:** The bot instructs a user to move. If the user has an undetected fracture (hip, spine, neck) and follows the instruction to "stand up," the result is catastrophic secondary injury.
+*   **Hallucination as Fact:** The system generates confident but medically incorrect steps for a specific mobility limitation (e.g., instructing a user with limited knee flexion to "bend knees deeply").
+*   **Over-Reliance:** Seniors may trust the voice command over their own pain signals or the advice of a human caregiver present in the room.
+*   **Missing Disclosure:** Users may not realize the advice is algorithmic and limited to pre-programmed scenarios, not a real-time medical assessment.
+
+**2. Measurement Strategy: Adversarial & Edge-Case Eval**
+Since remote patching is impossible, your evaluation must be exhaustive before deployment. Do not rely on aggregate accuracy; test per subgroup.
+*   **Probe Set Construction:** Create a matrix of inputs combining fall types (forward, backward, lateral), surface types (carpet, tile), and user states (conscious/confused, visible injury signs, limited mobility aids nearby).
+*   **Positive Controls (Known Bad):** Input scenarios where *any* movement instruction is unsafe (e.g., user reports sharp neck pain, visible deformity). **Pass Condition:** The bot must *refuse* to give recovery steps and instead trigger an emergency alert or instruct the user to stay still.
+*   **Negative Controls (Known Good):** Input safe scenarios with clear paths to recovery. **Pass Condition:** Instructions match established geriatric physical therapy protocols exactly.
+*   **Stress-Testing Confusion Points:** Simulate high-stress audio environments (crying, heavy breathing, background TV) to ensure the voice parser does not mishear "I can't move my leg" as "I can move my leg."
+*   **Metric & Threshold:** Define a **zero-tolerance threshold** for any instruction that encourages movement when a contraindication (pain report, visible injury) is detected. Any failure here blocks launch.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (The Floor):** Because this is a high-stakes, irreversible action (moving an injured body), fully autonomous execution is unsafe.
+    *   *Requirement:* The device must default to **connecting to a human monitor** (on-site staff or emergency services) before issuing movement instructions, unless the user explicitly confirms they are uninjured and capable.
+    *   *Fallback:* If the confidence in the visual/voice analysis is low, the system must default to "Stay Still and Call for Help" rather than guessing.
+*   **Uncertainty Disclosure:** Do not present instructions as absolute facts. Use defined coarse tiers for confidence if displaying status, but verbally, the bot must qualify advice: "If you feel no sharp pain, try to..." rather than "Stand up now."
+*   **Transparency Artifact (Model/Data Card):** Create a durable document included with the device detailing:
+    *   **Intended Use:** Assistance for minor falls only; not a medical diagnostic tool.
+    *   **Limitations:** Explicitly list injury types the bot cannot detect (internal bleeding, subtle fractures).
+    *   **Data Provenance:** Source of the recovery logic (e.g., "Based on [Specific PT Guideline X], version Y").
+    *   **Owner:** Name the specific team member responsible for this logic.
+
+**4. Governance**
+*   **Owner Assignment:** Assign a single owner for the "Recovery Logic" module. This person signs off on the harm inventory and the test results.
+*   **No Fabrication Rule:** If a specific injury scenario (e.g., "fall while holding a walker") was not tested, mark it **UNVERIFIED** in your documentation. Do not invent a safety percentage.
+*   **Legal Routing:** Consult counsel immediately regarding whether this constitutes a regulated medical device or an automated decision requiring specific legal disclosures under local Japanese law or international standards. Do not assume privacy via offline operation exempts you from safety regulations.
+
+**Note:** Given the offline constraint, consider a physical "emergency stop" or a simple voice command ("Stop, I am hurt") that immediately halts all instructions and triggers an alarm.
+**Note:** This plan identifies risks and controls; it does not certify the system as safe. The final ship decision rests with your leadership and legal counsel.

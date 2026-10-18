@@ -1,0 +1,32 @@
+### Internal Review Workflow for Patient-Discharge Generator
+
+**1. Harm Inventory & Protocol Mapping (Week 1)**
+Before testing, define the specific failure modes: omission of medication schedules, missing warning signs, or incorrect dosage instructions. Map your generator's output fields directly against the hospital's existing standard care protocols for each surgery type. Create a "Golden Set" of 20–30 historical, de-identified discharge summaries that have been clinically verified as correct. These will serve as your negative controls (known-good outputs).
+
+**2. Adversarial Probe Design (Week 2)**
+Construct a test suite where every row targets a specific harm:
+*   **Probe Set:** Inputs covering edge cases (e.g., patients with multiple comorbidities, rare surgical complications, or conflicting medication lists).
+*   **Positive Controls:** Intentionally flawed inputs designed to trigger hallucinations or omissions (e.g., ambiguous surgeon notes) to ensure the system flags uncertainty rather than fabricating facts.
+*   **Metric:** Binary pass/fail on critical elements (Medication, Warning Signs, Follow-up Date).
+*   **Stop Condition:** Any single instance of a missing critical safety element or a fabricated instruction triggers an immediate launch block. Do not set a "tolerance rate" for missing medical steps; the threshold is zero for high-stakes omissions.
+
+**3. Execution & Tiered Confidence Reporting (Week 3)**
+Run the generator against your probe set. Do not report a "confidence percentage" (e.g., "95% accurate") as this implies a calibration you cannot verify without external data. Instead, categorize every generated output into defined coarse tiers:
+*   **Confirmed:** All critical fields match the protocol exactly; no ambiguity.
+*   **Corroborated:** Critical fields present but phrasing varies slightly from standard templates.
+*   **Unverified:** Any missing field, ambiguous instruction, or deviation from protocol.
+Outputs falling into "Unverified" must never reach a patient.
+
+**4. Mandatory Human-in-the-Loop Gate (Week 4 & Ongoing)**
+Because this feature executes a high-stakes, irreversible action (directing patient recovery), full automation is unsafe. Implement a strict human gate:
+*   **Pre-Launch:** Your five engineers cannot be the sole reviewers. You must secure a commitment from at least one licensed clinician (nurse or physician) within the hospital to review the "Golden Set" results and sign off on the protocol mapping. If no clinician is available, **do not launch**; the constraint of "no external reviewers" cannot override the safety floor for medical advice.
+*   **Live Operation:** Every single generated discharge summary must be reviewed and explicitly approved by a qualified human before being sent to a patient. The system should draft the document, but the "Send" action requires human confirmation.
+*   **Disclosure:** Clearly label the document as "AI-Assisted Draft, Clinician Verified" so patients understand a human has validated the content.
+
+**Deliverable Artifacts:**
+*   A versioned **Model Card** documenting the intended use (surgical follow-up only), the specific protocols used for validation, the known limitations (e.g., "does not handle rare drug interactions"), and the owner of the system.
+*   A **Data Card** listing the source of your training data and the "Golden Set" composition.
+
+**Notes:**
+*   If a clinician cannot be found to validate the protocol mapping, the project must be paused regardless of the four-week deadline; shipping without clinical oversight creates unacceptable liability and patient risk.
+*   Never fabricate a safety metric; if a specific surgery type lacks sufficient test data, mark its status as `UNVERIFIED` and exclude it from the initial launch scope.

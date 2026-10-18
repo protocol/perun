@@ -1,0 +1,36 @@
+### Internal Safety Validation Checklist: Patient Sleep Position Tracker
+
+**1. Dataset Stratification & Coverage Verification**
+*   [ ] Confirm the anonymized dataset includes entries across the full spectrum of target body weights (e.g., <50kg to >100kg).
+*   [ ] Verify representation of common mattress types used in Mumbai households (e.g., firm coir, standard foam, soft spring) within the existing data.
+*   [ ] Isolate all data points where the subject was in a sustained supine position for durations exceeding the safety threshold.
+*   [ ] Identify edge cases in the dataset: partial rolling, frequent micro-movements, and instances where sensor contact might be intermittent.
+
+**2. Sensor Sensitivity Logic Review**
+*   [ ] Simulate repositioning logic using low-weight data subsets to ensure the sensor does not fail to detect pressure distribution changes.
+*   [ ] Simulate repositioning logic using high-weight data subsets to confirm the sensor distinguishes between static pressure and actual position shifts.
+*   [ ] Validate that the algorithm correctly filters out "noise" (e.g., breathing movements, bed shaking) without delaying true positive detection of supine stagnation.
+*   [ ] Cross-reference false-negative rates in the dataset against specific mattress firmness levels to identify potential calibration gaps.
+
+**3. Vibration Timing & Activation Mechanisms**
+*   [ ] Verify that the time-to-activation calculation remains consistent regardless of the detected body weight.
+*   [ ] Confirm that the vibration trigger executes immediately upon logic confirmation in the simulated timeline, with no observed latency >2 seconds.
+*   [ ] Ensure the vibration intensity and duration in the logic model are sufficient to rouse a sleeper without causing distress, based on pilot feedback logs included in the dataset.
+*   [ ] Check for "double-trigger" scenarios where minor movements immediately after a vibration might incorrectly reset the timer or cause immediate re-activation.
+
+**4. Failure Mode & Edge Case Analysis**
+*   [ ] Review dataset instances where power fluctuations or sensor disconnections occurred; ensure the logic defaults to a safe state or alerts the caregiver app rather than silently failing.
+*   [ ] Analyze scenarios where patients manually adjust bedding; confirm the system does not interpret this as a successful position change if the supine posture remains.
+*   [ ] Validate that the system handles continuous supine positions exceeding 2x the recommended limit without entering an error loop or stopping vibrations.
+
+**5. Caregiver Feedback Correlation**
+*   [ ] Match timestamps of automated vibration triggers in the data with caregiver notes regarding patient awakening or repositioning success.
+*   [ ] Flag any discrepancies where the log shows a vibration trigger but caregiver notes indicate the patient remained supine and unroused.
+
+**6. Final Go/No-Go Criteria**
+*   [ ] All high-weight and low-weight simulations show 100% detection of sustained supine positions.
+*   [ ] No false negatives identified across any mattress type present in the pilot data.
+*   [ ] Vibration timing remains within the safe clinical window for all validated scenarios.
+
+*Note: This checklist relies strictly on the integrity and completeness of last month's anonymized dataset; any demographic or hardware gaps in that specific collection cannot be computationally filled.*
+*Proceed to physical bench testing with representative weights only after this data review confirms logical consistency.*

@@ -1,0 +1,40 @@
+### Risk Assessment and Human-in-the-Loop Plan for Interview Scheduling Bot
+
+**1. Harm Inventory: Bias and Unfair Outcomes**
+The primary risk is systematic disadvantage against candidates with names perceived as foreign due to parsing errors.
+*   **Affected Group:** International candidates, specifically those with non-Germanic name structures.
+*   **Worst Realistic Case:** Qualified candidates are automatically rejected or never invited to interview, leading to discriminatory hiring outcomes, legal liability under EU regulations, and reputational damage for both BuildRight HR and the client.
+*   **Status:** **UNVERIFIED** (No quantitative bias rate has been measured yet; do not invent a percentage).
+
+**2. Measurement Plan (Runnable Before Launch)**
+Do not assert safety. Execute the following specific test rows to measure residual risk within the 10-day window:
+*   **Probe Set A (Positive Control):** Input 50 resumes with known "foreign" names that previously triggered cancellation. *Metric:* False Cancellation Rate. *Threshold:* Owner-defined (recommend zero tolerance for this specific error type). *Stop Condition:* If >0% false cancellations occur, the automated gate remains closed for this segment.
+*   **Probe Set B (Negative Control):** Input 50 resumes with common local names. *Metric:* False Positive Rate (unnecessary manual flags).
+*   **Probe Set C (Adversarial/Edge):** Input resumes with hyphenated names, single names, or non-Latin characters. *Metric:* Parsing Failure Rate.
+*   **Reporting:** Publish results as "Measured" or "UNVERIFIED." Do not claim the system is "unbiased."
+
+**3. Management Strategy: Human-in-the-Loop (HITL) Gate**
+Given the high stakes (career opportunity denial) and the known parsing flaw, full automation is unsafe. Implement the following immediate controls without retraining:
+*   **The Gate:** Any candidate whose name parsing confidence is below 100% OR whose name matches a pattern associated with previous errors (e.g., specific character sets, length anomalies) must be routed to a **manual review queue**.
+*   **Action:** The bot drafts the invitation but **does not send** it. A human recruiter must verify the name parsing and explicitly approve the invitation within the legacy system interface.
+*   **Fallback Rule:** If the parser fails to extract a name cleanly, default to "Manual Review Required" rather than "Cancel."
+*   **Uncertainty Display:** Internal dashboards must flag these cases with a clear "Unverified Parsing" label, not a misleading confidence score (e.g., avoid "87% match").
+
+**4. Transparency Artifact (Model Card Lite)**
+Before go-live, create a one-page document attached to this feature containing:
+*   **Intended Use:** Scheduling interviews based on parsed resume data.
+*   **Known Limitations:** "The name parsing algorithm has demonstrated errors with non-Germanic name structures, leading to potential false cancellations."
+*   **Measured Performance:** Insert results from Step 2 here. If testing is incomplete, state "UNVERIFIED."
+*   **Owner:** Name a specific BuildRight HR team member responsible for reviewing flagged cases.
+
+**5. Governance and Legal Routing**
+*   **Ownership:** Assign a specific owner to re-review this logic if the parser or data source changes.
+*   **Legal Duty:** Whether this automated decision constitutes a regulated high-risk activity under the **EU AI Act** or requires specific candidate disclosure is a legal determination. **Route this question immediately to counsel.** Do not assume compliance based on this technical plan.
+
+**Summary of Immediate Actions:**
+1.  Halt full automation for any name parsing that is not deterministic.
+2.  Run the three probe sets above immediately.
+3.  Draft the transparency note acknowledging the known limitation.
+4.  Engage counsel regarding EU AI Act obligations for automated recruitment tools.
+
+*Note: This plan treats the 10-day deadline as fixed, utilizing rule-based gating rather than model retraining. No safety certification is implied; residual risk remains until measured.*

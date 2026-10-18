@@ -1,0 +1,29 @@
+### Internal Review Workflow for Patient-Discharge Summaries
+
+Given the high stakes of omitting critical care instructions and the inability to hire external medical reviewers, your team must implement a rigorous, multi-layered internal validation protocol. This workflow treats every generated summary as a potential safety hazard until proven otherwise through deterministic and adversarial testing.
+
+**Phase 1: Protocol Digitization and Golden Set Creation**
+Before testing the AI, codify the "truth." Collaboratively extract mandatory discharge elements from your hospital's existing surgical protocols into a structured checklist (e.g., JSON schema or strict decision tree). This checklist must include non-negotiable fields: medication names/dosages/frequencies, specific warning signs requiring ER visits, wound care steps, and follow-up appointment details.
+Using this checklist, manually author a "Golden Set" of 50 diverse patient scenarios covering common surgeries, complex comorbidities, and edge cases (e.g., pediatric vs. geriatric, polypharmacy). For each scenario, write the *perfect* discharge summary that adheres strictly to protocol. This serves as your ground truth for comparison.
+
+**Phase 2: Deterministic and Adversarial Testing**
+Run your generator against the 50 Golden Set scenarios. Do not rely on subjective reading; perform a field-by-field comparison between the AI output and the expected Golden Set output.
+*   **Omission Check:** Automatically flag any output missing a mandatory field defined in your protocol checklist.
+*   **Contradiction Check:** Identify any advice that conflicts with the input surgical data (e.g., prescribing a drug the patient is allergic to).
+*   **Adversarial Prompting:** Dedicate one engineer to act as a "red teamer," attempting to trick the system into omitting steps by providing vague, conflicting, or incomplete input data. The system must either request clarification or refuse to generate rather than hallucinate safe defaults.
+
+**Phase 3: The "Four-Eyes" Manual Verification Gate**
+Until the system achieves 100% accuracy on the Golden Set over multiple iterations, no output can go to a patient without human intervention. Implement a mandatory dual-verification step for every real-world use case:
+1.  **Generator Output:** The AI produces the draft care plan.
+2.  **Engineer/Medic Cross-Check:** A designated team member (rotating duty) must manually verify the draft against the source surgical data using the digitized checklist. They must physically sign off (digitally) confirming that all mandatory fields are present and accurate.
+3.  **Final Release:** Only verified documents are sent to patients.
+
+**Phase 4: Continuous Monitoring and Feedback Loop**
+Deploy a "report an error" mechanism in the patient-facing document. Log every instance where a patient or hospital staff identifies a missing or confusing instruction. Conduct a weekly "morbidity and mortality" style review meeting where the team analyzes any near-misses or failures in the verification process, updating the Golden Set and protocol checklist accordingly.
+
+**Critical Constraint:** If the system fails to include a mandatory safety element in even one test case during Phase 2, the launch must be delayed. No amount of speed justifies the risk of patient harm due to omitted medical instructions.
+
+***
+
+*Note: This workflow shifts the burden of safety from the AI to your internal process, ensuring human accountability remains the final barrier against error.*
+*Ensure all test data used is synthetic or properly de-identified to comply with privacy regulations.*

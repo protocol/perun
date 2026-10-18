@@ -1,0 +1,23 @@
+### Manual Verification Checklist: Patient-Diet-Hydration Monitor (Late Beta)
+
+**1. Medication Regimen Reconciliation (Pre-Analysis)**
+*   [ ] **Static Baseline Confirmation:** Verify the patient's current diuretic dosage and type against the last known EHR snapshot. Flag any patient where the "last updated" timestamp exceeds 72 hours.
+*   [ ] **Manual Intake Interview:** Before relying on system flags, conduct a direct verbal confirmation with the patient/caregiver: "Have there been any changes to your water pills or new medications since your last visit?"
+*   [ ] **Proxy Indicator Check:** Look for indirect signs of unrecorded medication changes in the data (e.g., sudden, unexplained spikes in urine output or weight loss that contradict dietary intake), which may suggest an unlogged dosage increase.
+
+**2. Hydration Risk Flag Validation (During Analysis)**
+*   [ ] **Contextualize "Normal" Ranges:** Do not accept system-generated "normal" hydration statuses at face value for patients on high-dose diuretics. Manually review the raw intake/output ratio against the specific drug's known half-life and peak effect times.
+*   [ ] **Symptom Cross-Reference:** If the system flags "low risk" but the patient reports dizziness, dry mouth, or dark urine, override the automated assessment immediately. Treat subjective symptoms as higher fidelity than the algorithm when medication data is stale.
+*   [ ] **Trend vs. Snapshot Review:** Analyze the 48-hour trend line rather than single-day data points. A gradual drift in fluid balance might be missed by daily thresholds but visible in a manual trend review, indicating a regimen change the system doesn't see.
+
+**3. High-Stakes Decision Gate (Pre-Intervention)**
+*   [ ] **Human-in-the-Loop for Critical Alerts:** Any recommendation to restrict fluid intake or contact a physician for potential dehydration must be reviewed by a clinician before reaching the patient. No automated messages regarding critical fluid restrictions are to be sent without this signature.
+*   [ ] **Uncertainty Disclosure:** Ensure all patient-facing reports include a clear statement: "This analysis is based on your last recorded medication list. If your prescription has changed recently, these results may be inaccurate."
+*   [ ] **Fail-Safe Protocol:** Define a clear "Stop Condition": If a patient's weight drops >2% in 24 hours *and* medication status is unverified (>72 hours old), the protocol defaults to "Immediate Clinical Review" regardless of the system's calculated risk score.
+
+**4. Documentation & Feedback Loop**
+*   [ ] **Discrepancy Logging:** Record every instance where manual verification contradicts the system's output. Tag these specifically as "Potential Unrecorded Med Change" to build a dataset for future model training.
+*   [ ] **Owner Sign-off:** The lead clinician for each case must sign off on the "Medication Data Validity" section of the daily report, explicitly accepting responsibility for the data's freshness.
+
+*Note: This checklist treats stale medication data as a critical unknown, not a minor gap. The "Human-in-the-Loop" gate is non-negotiable for any action affecting fluid intake limits.*
+*Legal and regulatory duties regarding automated health decisions must be routed to your counsel; this checklist addresses operational safety only.*

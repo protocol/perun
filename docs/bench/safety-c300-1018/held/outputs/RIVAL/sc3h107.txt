@@ -1,0 +1,25 @@
+### Testing Strategy for Patient-Matching and Cross-Language Accuracy
+
+**1. Synthetic Data Generation for Matching Logic**
+Since legacy database constraints limit query speed and you lack diverse real-world data, create a localized synthetic dataset offline before loading it into your test environment. Generate 50–100 patient profiles specifically designed to trigger matching errors:
+*   **Collision Profiles:** Create pairs with identical names but different dates of birth (DOB) or phone numbers.
+*   **Transliteration Variants:** For common Tamil and English names, create variations (e.g., "Kumar" vs. "Kumaar," "S. Priya" vs. "Priya S.") to test if your logic relies too heavily on exact string matches or fails on formatting differences.
+*   **Edge Cases:** Include profiles with missing DOBs or shared family phone numbers to verify how the system handles ambiguity.
+
+Load this dataset into a isolated mirror of your legacy database. Run your matching algorithm against this set using automated scripts that do not rely on complex database queries but instead feed inputs directly to your application layer. Measure the "False Positive Rate" (wrong patient matched) and "False Negative Rate" (no patient matched). If the system matches a prescription to the wrong profile in the synthetic set, you have identified a logic gap without stressing the production infrastructure.
+
+**2. Deterministic Cross-Language Validation**
+To address the shortage of multilingual test cases without needing native speakers for every run, build a "Golden Set" of fixed test scenarios:
+*   **Template Freezing:** Identify the exact SMS templates used for the top 5 languages. Hard-code the expected output for a specific input (e.g., Patient X, Drug Y, Dosage Z) in a local file.
+*   **Character Encoding Checks:** Specifically test for characters unique to local scripts (e.g., Tamil vowels or consonant stacks) that often break when passed through legacy systems or SMS gateways. Create inputs that force these characters to appear in patient names and drug instructions.
+*   **Round-Trip Verification:** Manually verify the "Golden Set" outputs once with a bilingual team member. Thereafter, automate the comparison: the test script sends the input, captures the SMS payload, and compares it byte-for-byte against the pre-verified "Golden Set" string. Any deviation indicates a regression or encoding error.
+
+**3. Process Controls for UAT**
+Given the team size of six and the high risk of incorrect dosage information:
+*   **Manual Gate:** Do not automate the final send action for the initial cohort. Implement a "dry-run" mode where the system generates the message and logs the intended recipient ID and message content to a secure dashboard, but does not dispatch the SMS.
+*   **Dual-Verification:** Assign two developers to independently review the "dry-run" logs for any prescription where the patient match confidence score is below 100% or where the name match was fuzzy.
+*   **Shadow Mode:** For the first week of live operation, route all generated messages to a internal test phone number list instead of real patients. Compare the received messages against the database source manually before flipping the switch to real user numbers.
+
+This approach isolates logic errors using safe synthetic data, automates language validation against known good states, and adds human verification layers to prevent harm during the critical launch phase.
+
+*Note: Ensure all synthetic data mimics the format of real records but contains no actual PII. Prioritize fixing "False Positives" (wrong patient) over "False Negatives" (missed reminder), as the former poses a direct safety risk.*

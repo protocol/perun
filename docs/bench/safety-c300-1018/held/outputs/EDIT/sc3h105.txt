@@ -1,0 +1,44 @@
+### Pre-Launch Verification Protocol: Nairobi WildGuard Alert Calibration
+
+**Objective:** Minimize false positives (migration misidentified as poaching) to preserve ranger resources and battery life during the remote field trial, where updates are impossible.
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Harm:** Automation Bias/Over-reliance. Rangers ignore future alerts due to "cry wolf" fatigue caused by false positives during natural migration.
+*   **Secondary Harm:** Resource Depletion. False alarms waste fuel, time, and battery power on non-events.
+*   **Worst Case:** Rangers disable the system or fail to respond to a genuine poaching event during a migration period.
+
+**2. Simulation-Based Measurement Plan (The "Dry Run")**
+Since real-time updates are impossible, the threshold must be locked based on rigorous offline testing using your existing simulation data. Execute one test row per harm scenario:
+
+*   **Probe Set A (Negative Control - Natural Migration):** Run the algorithm against simulated pure migration patterns (no poachers).
+    *   *Metric:* False Positive Rate (FPR).
+    *   *Pass Threshold:* **Zero tolerance** for high-confidence alerts during pure migration. Any alert generated here is a failure of the threshold.
+    *   *Stop Condition:* If FPR > 0% in migration scenarios, do not deploy. Adjust thresholds or add migration-specific filters until FPR is zero.
+*   **Probe Set B (Positive Control - Poaching Event):** Run against simulated poaching patterns.
+    *   *Metric:* Detection Rate (Recall).
+    *   *Pass Threshold:* Must detect ≥90% of simulated poaching events (accepting some missed detections is safer than constant false alarms in this specific resource-constrained context).
+    *   *Stop Condition:* If Detection Rate drops below 80% while fixing false positives, the model logic is flawed; delay launch.
+*   **Probe Set C (Edge Case - Mixed Signals):** Simulate poaching occurring *during* migration.
+    *   *Metric:* Differentiation accuracy.
+    *   *Action:* Verify the system can distinguish the specific "anomaly" of poaching within the noise of migration.
+
+**3. Management Controls (Human-in-the-Loop)**
+*   **Uncertainty Tiering:** Do not output a binary "Poacher Detected" yes/no. Implement a three-tier confidence output for rangers:
+    1.  **Confirmed Anomaly:** High confidence, distinct from migration patterns (Action: Immediate dispatch).
+    2.  **Corroborated Suspicion:** Matches some poaching traits but overlaps with migration (Action: Monitor closely, verify with nearest patrol only if low cost).
+    3.  **Unverified/Migration Likely:** Fits natural movement models (Action: No alert).
+*   **Explicit Disclosure:** The device or accompanying briefing must state: *"Alerts are automated estimates. Natural migration may trigger low-confidence warnings. Verify before committing major resources."*
+
+**4. Governance & Ownership**
+*   **Owner:** Assign one technologist as the "Threshold Owner" responsible for signing off on the simulation results before the collars leave the lab.
+*   **Artifact:** Create a **Model Card** for this specific deployment version. It must list:
+    *   Intended Use: Poacher detection excluding known migration corridors/times.
+    *   Limitations: "Cannot distinguish poaching during heavy migration without human verification."
+    *   Measured Performance: The specific FPR and Detection Rates from the simulation probes above.
+    *   *Note:* If a metric was not tested, label it **UNVERIFIED**. Do not invent accuracy percentages.
+
+**5. Final Gate**
+Do not deploy the collars if the simulation shows *any* false positives on pure migration data. In a remote, non-updatable environment, a known false-positive bug is a critical failure. It is safer to deploy a system that misses some events than one that cries wolf until rangers stop listening.
+
+**Note:** This protocol relies entirely on the quality of your existing simulation data; if the simulations do not accurately reflect local migration nuances, the field trial results will be invalid.
+**Note:** Legal requirements for automated decision-making in conservation vary by region; consult local counsel regarding liability for missed detections.

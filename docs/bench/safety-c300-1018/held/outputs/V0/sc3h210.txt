@@ -1,0 +1,32 @@
+### Safety Review Strategy: Fall-Risk Assessment with Historical Data
+
+**1. Harm Inventory (MAP)**
+Before proceeding, explicitly record the following high-stakes risks for this specific feature:
+*   **Unsafe Automation of High-Stakes Actions:** The system predicts fall probability, directly influencing patient safety protocols (e.g., bed alarms, assistance levels). An underestimation of risk could lead to severe physical injury or death.
+*   **Bias/Unfair Outcomes:** Historical data (2+ years old) may not reflect current patient demographics or new medication formulations, potentially systematically disadvantaging groups prescribed newer therapies.
+*   **Hallucination as Fact:** The model might present a risk score for a new drug as a verified fact, despite being an extrapolation from unrelated historical data.
+*   **Over-reliance:** Staff may trust the automated score over clinical judgment, especially if uncertainty is not clearly displayed.
+
+**2. Measurement Plan (MEASURE)**
+Since live validation is prohibited and data is outdated, you cannot certify accuracy. Instead, measure the limits of your extrapolation:
+*   **Proxy Validation for New Drugs:** Do not claim the model predicts risk for new drugs directly. Instead, create a "stress test" using historical records of drugs with known high side-effect profiles similar to the new formulations. Treat these as positive controls. If the model fails to flag these known high-risk historical cases, it cannot be trusted to extrapolate to new ones.
+*   **Subgroup Analysis:** Slice the historical data by age, mobility status, and polypharmacy counts. Report performance metrics *per subgroup*, not just as an aggregate. If the model performs poorly on elderly patients with multiple medications in the old data, it is `UNVERIFIED` for similar patients today.
+*   **Extrapolation Uncertainty Metric:** Define a rule: if a patient is prescribed a medication class not present in the training window, the output must not be a single probability percentage. It must trigger a specific "Data Gap" flag.
+*   **Adversarial Probes:** Simulate inputs where gait stability is borderline but medication risk is high (based on literature, not just data). Verify the model weights the medication risk appropriately rather than ignoring it due to lack of historical correlation.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this involves irreversible physical harm (falls), **no automated decision should execute fall protocols without human confirmation.** The system must function as a *decision support tool* that highlights risk factors, not an autopilot that assigns care levels.
+*   **Defined Confidence Tiers:** Never display a raw probability (e.g., "87% risk") for patients on new medications. Use coarse, defined tiers:
+    *   *Verified:* Drug exists in training data; high historical correlation.
+    *   *Extrapolated:* Drug class exists; specific formulation is new. (Requires explicit clinician review).
+    *   *Unverified:* Drug class is novel relative to training data. (System refuses to score; defaults to "High Risk" protocol pending human assessment).
+*   **Transparency Artifact (Model Card):** Publish a versioned document stating:
+    *   **Intended Use:** Early warning for fall risk using historical patterns.
+    *   **Limitations:** Explicitly state that risk scores for medications introduced after the data cutoff are extrapolations, not measurements.
+    *   **Data Provenance:** Cite the two-year-old de-identified dataset and the specific gap regarding new formulations.
+
+**4. Governance (GOVERN)**
+*   **Owner Assignment:** Name a specific clinical lead responsible for reviewing any "Extrapolated" or "Unverified" flags.
+*   **Re-review Trigger:** Mandate an immediate re-evaluation of the model's logic whenever a new sedating therapy is added to the hospital formulary.
+
+**Note:** This strategy treats the lack of live data as a critical constraint, forcing the system to admit uncertainty rather than fabricate precision. Legal counsel must review whether this extrapolation approach meets local regulatory duties for medical devices.

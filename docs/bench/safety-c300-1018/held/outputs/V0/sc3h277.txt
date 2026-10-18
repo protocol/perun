@@ -1,0 +1,42 @@
+### Harm Inventory & Evaluation Plan for Restless Leg Syndrome Monitor
+
+**1. Named Harms & Worst Cases**
+*   **Bias/Unfair Outcomes:** The model, trained on a single local clinic's data, may fail to detect symptoms in populations with different body types, ages, or movement patterns not present in that clinic. *Worst Case:* Systematic misdiagnosis for specific demographic groups, delaying treatment for severe RLS.
+*   **Hallucination as Fact (False Negative):** The algorithm reports "no significant movement" when subtle indicative movements occurred. *Worst Case:* A patient is told they are healthy while their condition worsens, leading to delayed care.
+*   **Over-reliance:** Clinicians or users trust the "negative" result without clinical correlation. *Worst Case:* Dismissal of patient-reported symptoms because the machine said "normal."
+*   **Unsafe High-Stakes Automation:** Automatically generating a "clearance" or "no diagnosis" report without human review. *Worst Case:* Irreversible delay in medical intervention based solely on an unverified algorithmic output.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert sensitivity rates. Instead, execute these specific evaluations:
+
+*   **Test Row A (Subgroup Stress Test):**
+    *   *Probe Set:* Synthetic or manually annotated edge cases representing movement profiles missing from your current dataset (e.g., low-amplitude twitches, movements in higher BMI simulations, elderly gait variations).
+    *   *Controls:* Known-positive (subtle movement present) vs. Known-negative (stillness).
+    *   *Metric:* False Negative Rate (FNR) per subgroup.
+    *   *Threshold:* Owner-defined zero tolerance for missed high-severity markers in pilot; any miss triggers a block.
+    *   *Stop Condition:* If FNR > 0% for high-severity markers in any new subgroup, halt expansion.
+
+*   **Test Row B (Data Diversity Gap Analysis):**
+    *   *Probe Set:* Compare distribution of movement intensity and frequency in your single dataset against published medical literature ranges for RLS.
+    *   *Metric:* Coverage gap percentage.
+    *   *Status:* Mark as `UNVERIFIED` until external data is ingested.
+
+*   **Test Row C (Adversarial/Noise Injection):**
+    *   *Probe Set:* Input sleep data with non-RLS noise (e.g., partner movement, bed shaking) to ensure the model doesn't hallucinate RLS symptoms (False Positives) or miss real ones due to noise masking.
+    *   *Stop Condition:* Any confusion between noise and symptom triggers a review.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this is a medical diagnostic aid with irreversible consequences (delayed treatment), **no** "negative" or "normal" result should be delivered to a patient or finalised in a medical record without review by a qualified clinician. The system must output "Preliminary Analysis – Requires Review."
+*   **Uncertainty Disclosure:** Do not show a confidence percentage (e.g., "87% sure"). Instead, use defined tiers: *Confirmed Movement*, *Corroborated Pattern*, or *Unverified/Insufficient Data*. If the input falls outside your known data distribution, the output must explicitly state: "Analysis limited by data diversity; clinical correlation required."
+*   **Transparency Artifact:** Create a **Model Card** before broader rollout. It must list:
+    *   *Intended Use:* Screening aid only, not definitive diagnosis.
+    *   *Data Limitations:* Explicitly state training was limited to one Mumbai clinic; performance on other demographics is `UNVERIFIED`.
+    *   *Owner:* Name the specific team member responsible for monitoring harm reports.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one team member to own the "Bias/Missed Diagnosis" risk.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device requiring specific disclosures under Indian law or international standards is a legal determination. Route this question to counsel immediately; do not assume it is merely a "wellness" feature.
+*   **Expansion Strategy:** Do not roll out to a broader audience until Test Row A shows acceptable performance on diverse profiles. Acquire data partnerships with at least two distinct clinics representing different demographics before expanding the pilot.
+
+**Note:** Never certify the system as "safe" or "unbiased"; report residual risk only.
+**Note:** A "negative" result from this system is a high-stakes action requiring human verification by default.

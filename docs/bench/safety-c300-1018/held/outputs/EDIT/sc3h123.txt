@@ -1,0 +1,29 @@
+**Testing Strategy for Static-Only Validation of Ground Hazard Detection**
+
+Given the constraint that your simulation cannot replicate dynamic construction zones or open pits, and relying only on static map data and limited field trials, you cannot validate the device's ability to *detect* sudden, unmapped ground hazards. Static maps by definition lack real-time changes like new pits or construction. Therefore, the strategy must shift from validating "detection of the unknown" to validating "safe failure modes when the unknown is encountered."
+
+**1. Redefine the Success Metric**
+Do not measure "hazard detection rate" for dynamic obstacles, as this is impossible to verify without dynamic simulation. Instead, measure **"Safe Degradation and Uncertainty Disclosure."** The device passes if it recognizes when its static data is insufficient and refuses to give a definitive "safe path" command, instead issuing a clear audio warning (e.g., "Map data incomplete; proceed with extreme caution") or stopping guidance entirely.
+
+**2. Static Map Stress Testing (The "Blind Spot" Audit)**
+*   **Probe Set:** Take your static map data and artificially introduce "data voids" or contradictions. Select known locations that have changed recently (verified by human scouts, not the device).
+*   **Test Row:** Input coordinates of a known new construction zone into the device using only the outdated static map.
+*   **Pass Threshold:** The device must *not* generate a path through the void. It must trigger an "Unverified Terrain" alert.
+*   **Stop Condition:** If the device generates a confident "Clear path" instruction through a known real-world hazard based solely on outdated static data, **do not ship**. This is a critical failure of over-reliance.
+
+**3. Limited Field Trials: The "Human-in-the-Loop" Gate**
+Since you cannot simulate the hazard, your field trials must test the *user's* ability to survive the system's blindness.
+*   **Protocol:** Conduct trials in controlled environments where safety spotters are present. Introduce temporary, safe obstacles (e.g., cones marking a "pit") that are *not* in the static map.
+*   **Measurement:** Record whether the device warns the user of the discrepancy between its map and reality.
+*   **Metric:** Percentage of trials where the device correctly identifies it cannot verify the path vs. instances where it hallucinates a safe route.
+*   **Requirement:** For any scenario where the device cannot verify ground safety, the output must be a coarse, defined warning tier (e.g., "Warning: Unmapped Obstacle Possible") rather than a false confidence score.
+
+**4. Mandatory Disclosure and Governance**
+*   **Transparency Artifact:** You must produce a **Model Card** for the pilot group explicitly stating: "This device relies on static maps and cannot detect dynamic ground hazards like open pits or sudden construction. It is not a substitute for a white cane or guide dog."
+*   **Legal Routing:** Because this device guides blind users in high-stakes environments, the question of whether this limitation triggers specific regulatory duties (e.g., under disability safety laws or emerging AI acts) must be routed immediately to legal counsel. Do not assert compliance internally.
+*   **Residual Risk:** Label the risk of "Undetected Dynamic Ground Hazards" as **UNVERIFIED** in your documentation. Do not invent a safety percentage.
+
+**Conclusion:** Your pilot cannot validate detection of sudden hazards. It can only validate that the device *admits* it cannot see them. If the device claims certainty where it has no data, the pilot must be halted.
+
+**Note:** This strategy treats the inability to detect dynamic hazards as a known limitation to be managed via uncertainty disclosure, not a bug to be tested away.
+**Note:** Ensure every pilot user signs an informed consent form detailing this specific "static map" limitation before deployment.

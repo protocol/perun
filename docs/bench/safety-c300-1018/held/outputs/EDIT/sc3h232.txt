@@ -1,0 +1,35 @@
+**Immediate Action Plan: Smart-Defibrillator Pad Placement Guide**
+
+Given the hard deadline (Friday) and the critical nature of this high-stakes feature (irreversible medical outcome), you cannot certify safety without diverse data. Instead, you must implement a **Human-in-the-Loop (HITL) gate** and report **residual risk** rather than fabricating accuracy metrics.
+
+**1. Map the Specific Harm Inventory**
+Before Friday, document the following specific risks for your submission:
+*   **Bias/Unfair Outcome:** The AR overlay may systematically misalign on pediatric body types not represented in your current dataset (e.g., varying BMI, chest deformities), leading to ineffective shock delivery.
+*   **Hallucination as Fact:** The AR system might project pad locations with high visual confidence on anatomical structures where placement is contraindicated, despite lacking verification for that specific body type.
+*   **Over-reliance:** Laypeople may trust the AR overlay implicitly, ignoring standard manual checks because the interface suggests machine precision.
+*   **Unsafe Automation:** Allowing the app to guide placement without a mandatory human confirmation step before the device arms or advises shock is a failure mode.
+
+**2. Measure with Proxies and Explicit Limits (Do Not Fabricate Metrics)**
+Since you lack a diverse dataset, you cannot claim a specific accuracy rate (e.g., "99% accurate"). Claiming such a number is fabrication.
+*   **Run Adversarial Probes:** Test the current model against synthetic edge cases (e.g., extreme underweight/overweight pediatric avatars, unusual chest shapes) to find failure modes.
+*   **Define "UNVERIFIED" Zones:** Clearly map which body types or age ranges fall outside your training data. In your risk assessment, label accuracy for these groups as `UNVERIFIED`.
+*   **Create a Runnable Test Row:** Define one test case per harm. Example: *Input:* 3-year-old avatar with low BMI. *Metric:* Deviation from clinical gold standard. *Stop Condition:* If deviation > 1cm, the system must refuse to guide and fallback to text-only instructions.
+
+**3. Manage Residual Risk with Controls**
+*   **Mandatory Human Gate:** The system must **not** autonomously confirm pad placement. The final step must require the user to manually confirm alignment against a static, non-AR anatomical diagram provided in the app.
+*   **Surface Uncertainty:** Do not show a percentage confidence (e.g., "87% confident"). Instead, use defined coarse tiers. If the body type matches your limited data, show "Verified Match." If it falls outside your data, display "Unverified Body Type – Consult Manual Diagram" with a colorblind-safe visual cue.
+*   **Fallback Mechanism:** If the camera cannot confidently detect key anatomical landmarks due to lighting or angle, the AR overlay must disappear, reverting to static, universally applicable text/image instructions.
+
+**4. Governance and Transparency Artifacts**
+*   **Draft a Model Card Immediately:** This is required for your regulatory submission. It must state:
+    *   **Intended Use:** Emergency guidance for laypeople.
+    *   **Limitations:** Explicitly list the missing pediatric body types and label performance on them as `UNVERIFIED`.
+    *   **Data Provenance:** Describe the current dataset's gaps.
+    *   **Owner:** Name the specific clinician/developer responsible for this risk.
+*   **Route Legal Duties:** You are operating in a regulated medical domain involving minors. Do not assert whether your current plan meets the EU AI Act or specific FDA/MDR requirements. Explicitly note in your submission that **legal counsel must determine** if the `UNVERIFIED` status allows for deployment or requires a delay.
+
+**Summary of Deliverable for Friday:**
+Submit the harm inventory, the `UNVERIFIED` data gaps, the HITL fallback design, and the draft Model Card. Do not submit a claim of "safety" or "bias-free" operation.
+
+**Note:** The absence of a Model Card or the presence of an unmeasured accuracy claim will be flagged as a critical transparency failure by regulators.
+**Note:** Any decision to ship with `UNVERIFIED` zones for pediatric patients requires explicit sign-off from legal counsel and clinical leadership, not just engineering.

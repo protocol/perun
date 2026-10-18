@@ -1,0 +1,28 @@
+### Pre-Launch Safety Review: Agricultural Loan Approver (Nairobi Pilot)
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Systematic bias against smallholder farmers due to reliance on outdated historical land use data and satellite imagery that fails to capture current, non-standard farming practices (e.g., intercropping, small plot fragmentation).
+*   **Affected Group:** Small-scale farmers in Nairobi and surrounding regions lacking formal land registration or historical digital footprints.
+*   **Worst Case:** Deserving farmers are denied capital, reinforcing economic exclusion and preventing livelihood improvement, while the system falsely appears "objective."
+
+**2. Measurement Strategy (Low-Cost/No New Field Surveys)**
+Since new ground-truth collection is budget-prohibited, you must measure outputs against existing proxies and adversarial cases:
+*   **Proxy Validation:** Cross-reference rejected applications with publicly available agricultural census data or NGO reports on smallholder density in specific regions. If rejection rates in known high-density smallholder zones exceed the baseline by a significant margin, flag as **UNVERIFIED/Biased**.
+*   **Adversarial "Synthetic" Testing:** Create a test set of synthetic or historical satellite images where smallholder plots are manually annotated (using open-source maps like OpenStreetMap) to simulate viable farms that the model might miss. Run these through the system; a high false-rejection rate on this known-good set indicates a flaw.
+*   **Segmented Analysis:** Do not look at aggregate approval rates. Slice results by plot size, region, and proximity to urban centers. A disparity in rejection rates between large commercial farms and plots under a certain hectare threshold is a primary signal of bias.
+*   **Stop Condition:** If the false-rejection rate for smallholder proxies exceeds the rate for large commercial farms by >10% (owner-set threshold), **block launch**.
+
+**3. Risk Management & Human Gate**
+*   **Mandatory Human-in-the-Loop:** For the pilot phase, **no loan rejection is final** if the applicant self-identifies as a smallholder or falls below a specific plot-size threshold. These cases must trigger a manual review by a loan officer who can consider context the satellite misses (e.g., recent land clearing, informal irrigation).
+*   **Uncertainty Disclosure:** Do not present the model's output as a definitive "Viability Score." Instead, use defined tiers: **"Confirmed Viability," "Corroborated,"** or **"Insufficient Visual Evidence – Manual Review Required."** Never show a raw percentage (e.g., "87% viable") as this implies a calibration you do not have.
+*   **Transparency Artifact:** Draft a **Model Card** before launch. It must state:
+    *   *Intended Use:* Preliminary viability screening only, not final credit decisioning.
+    *   *Limitations:* Known reliance on historical data; high risk of false negatives for smallholders/non-traditional plots.
+    *   *Performance:* Report metrics **by subgroup** (small vs. large plots). If specific bias metrics are unmeasured due to data gaps, explicitly mark them as **UNVERIFIED**. Do not invent a fairness score.
+
+**4. Governance**
+*   **Owner:** Assign one team member as the "Fairness Owner" responsible for reviewing every manual override during the pilot.
+*   **Re-review Trigger:** The model must be re-evaluated if the source satellite data changes or if the manual override rate exceeds 20%.
+
+**Note:** Legal requirements for automated decision-making in Kenyan financial services must be routed to local counsel; this review does not assert legal compliance.
+Do not scale beyond the pilot until the manual override process proves the model can be corrected by humans effectively.

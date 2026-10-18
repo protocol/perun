@@ -1,0 +1,40 @@
+### Immediate Safety Verification Plan for Travel Insurance Bot
+
+**1. Halt Full Automation (Human-in-the-Loop Gate)**
+Do not launch with fully automated denials. Because denying coverage is a high-stakes, irreversible action that leaves travelers vulnerable, you must implement a mandatory human review gate for every denial before the user is notified. Automated approval is permissible only if explicitly allowed by policy; automated denial without human confirmation is the failure mode you must prevent. This is non-negotiable regardless of budget or timeline.
+
+**2. Construct the Harm Inventory**
+Before writing tests, document the specific harms your system could cause:
+*   **Bias/Unfair Outcomes:** The blacklist may disproportionately affect specific nationalities or regions due to third-party political bias rather than actual risk.
+*   **Hallucination as Fact:** Treating an unverified feed entry as an absolute truth without context (e.g., a temporary advisory vs. a permanent ban).
+*   **Over-reliance:** Users trusting the "Denied" status without knowing it stems from an arbitrary, unvetted list.
+*   **Missing Disclosure:** Failing to inform the user that the decision was made by an automated system relying on external, potentially outdated feeds.
+
+**3. Define Runnable Measurement Tests**
+Create one test row per identified harm. Do not assert fairness; measure it.
+*   **Probe Set:** Compile a list of 50 known "safe" countries and 50 known "high-risk" countries based on public, neutral sources (e.g., UN, WHO). Include edge cases (countries recently removed from sanctions, regions with partial travel advisories).
+*   **Controls:**
+    *   *Positive Control:* A country definitely on your internal blacklist. Expected result: Flag for human review.
+    *   *Negative Control:* A major tourist destination with no advisories. Expected result: No denial flag.
+*   **Metric:** False Denial Rate (percentage of safe countries flagged for denial).
+*   **Threshold:** Set owner-defined tolerance. For high-stakes denials, propose zero tolerance for automated execution without human oversight.
+*   **Stop Condition:** If the False Denial Rate exceeds your threshold, or if any safe country is automatically denied without human intervention, block the launch.
+*   **Injection/Leak Checks:** Test if manipulating the third-party feed input causes the bot to deny coverage for arbitrary strings or leak internal list logic.
+
+**4. Implement Transparency Artifacts**
+*   **Model/Data Card:** Publish a versioned document detailing:
+    *   *Intended Use:* Preliminary risk assessment only, not final coverage determination.
+    *   *Data Provenance:* Explicitly name the third-party feeds used and acknowledge their potential for political bias or latency.
+    *   *Limitations:* State clearly that the blacklist is not legally vetted for every entry.
+    *   *Performance:* Report results from your probe tests by region/subgroup. If a metric is unmeasured, label it `UNVERIFIED`. Do not invent accuracy percentages.
+*   **User Disclosure:** Clearly state to the user: "This decision is automated based on external data and requires human verification. You are not yet formally denied."
+
+**5. Governance and Legal Routing**
+*   **Owner:** Name a specific individual responsible for reviewing denied cases and updating the harm inventory.
+*   **Legal Duty:** You noted a budget constraint preventing legal review. However, determining whether these automated denials violate EU regulations (e.g., EU AI Act, insurance directives) or constitute discriminatory practice is a legal determination. You must route this specific question to counsel or your business operations lead. Do not assume the lack of a lawyer exempts you from regulatory duties; simply flag the risk as `UNVERIFIED` in your data card and escalate the need for legal classification.
+
+**6. Confidence Reporting**
+Never display a raw confidence score (e.g., "87% risk") to the user. Instead, use defined coarse tiers such as "Under Review," "External Advisory Detected," or "Verified High Risk," with clear definitions for what each tier means regarding the source reliability and claim corroboration.
+
+**Note:** This plan measures residual risk; it does not certify the system as "fair" or "safe." The decision to ship rests with your team owner.
+**Note:** Any claim that the system is unbiased without running the above tests on the specific third-party feed is a fabrication.

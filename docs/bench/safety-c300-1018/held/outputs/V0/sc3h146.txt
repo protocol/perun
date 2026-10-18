@@ -1,0 +1,41 @@
+### Rigorous Review Plan for Pacemaker Battery Depletion Algorithms
+
+Given the high-stakes nature of cardiac life-support and the specific risk of undetected rapid voltage drops, the following plan prioritizes harm prevention over speed. The constraint of night-shift-only lab access requires a "simulate-by-day, validate-by-night" workflow to maximize the limited window.
+
+**1. Harm Inventory & Worst-Case Definition**
+Before executing tests, formally document the specific failure mode: "False Negative on Rapid Voltage Drop."
+*   **Affected Party:** Cardiac patients dependent on continuous pacing.
+*   **Worst Realistic Case:** Sudden device silence leading to patient syncope or death without prior clinician alert.
+*   **Constraint Acknowledgement:** Any test row that cannot be completed due to lab limits must be marked `UNVERIFIED`, not assumed safe.
+
+**2. Measurement Strategy: The Night-Shift Protocol**
+Design one runnable test row specifically for the "rapid drop" stress condition. Do not rely on aggregate accuracy metrics.
+*   **Probe Set (Positive Control):** Synthesize or retrieve historical data traces simulating rapid voltage decay under stress (e.g., high pacing load, temperature extremes) where failure *did* occur.
+*   **Probe Set (Negative Control):** Stable voltage traces under similar stress conditions where no failure occurred.
+*   **Metric:** Sensitivity (True Positive Rate) specifically for the "rapid drop" class.
+*   **Pass Threshold:** Owner-defined zero tolerance for false negatives in the positive control set. If the model misses even one simulated rapid drop, the stop condition is triggered, and clinical trials cannot proceed.
+*   **Execution Plan:**
+    *   *Day Shift (Remote/Offline):* Generate adversarial input vectors and stress simulations. Prepare the test harness.
+    *   *Night Shift (Lab):* Run the physical or high-fidelity hardware-in-the-loop validation against the prepared probes.
+    *   *Review:* Immediate analysis of any misses before the next night's window.
+
+**3. Managing Residual Risk: Human-in-the-Loop Gate**
+Because this is an irreversible, high-stakes action (withholding a warning leads to potential death), full automation of the "all clear" decision is prohibited.
+*   **Uncertainty Rendering:** Do not display raw confidence percentages (e.g., "98% reliable") to clinicians. Instead, use defined coarse tiers: *Confirmed Stable*, *Corroborated Warning*, or *Unverified/Review Required*.
+*   **The Gate:** If the model outputs "Stable" but the input data falls outside the verified training distribution (e.g., a novel stress pattern), the system must default to "Review Required," forcing a human expert to inspect the raw voltage trace before suppressing an alert.
+
+**4. Transparency Artifact (Model Card)**
+Prepare a versioned Model Card for the regulatory submission. It must include:
+*   **Intended Use:** Prediction of battery depletion under defined stress conditions.
+*   **Limitations:** Explicitly state the specific stress conditions tested and label any untested scenarios as `UNVERIFIED`.
+*   **Subgroup Performance:** Report sensitivity separately for the "rapid drop" edge case, not just overall accuracy.
+*   **Owner:** Name the specific engineer responsible for the algorithm's output safety.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign a single owner for the "rapid drop" harm who signs off on the night-shift results.
+*   **Regulatory Duty:** Do not assert internally whether this specific algorithm triggers mandatory AI disclosure under Korean medical device law or international standards. Route the question of "regulated automated decision" status immediately to legal counsel. The engineering team provides the harm inventory and test results; counsel determines the regulatory classification.
+
+**Final Directive:** If the night-shift validation fails to catch the positive control cases, or if the "rapid drop" scenario cannot be physically tested within the two-week window, the residual risk remains `UNVERIFIED`. Under no circumstances should the team fabricate a safety metric to meet the trial timeline. The ship decision belongs to the product owner, armed with these explicit gaps.
+
+*Note: This plan assumes the ability to synthesize stress data during day shifts; if physical generation is required for every probe, the scope must be reduced to the single most lethal scenario.*
+*Legal determinations regarding national approval criteria must be confirmed by qualified counsel, not derived from this technical review.*

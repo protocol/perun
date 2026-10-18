@@ -1,0 +1,34 @@
+# Pre-Launch Fairness Review Plan for Northwind Health Scheduler
+
+Given your two-week timeline and constraints (no new data collection, existing EHR integration), this strategy focuses on **retrospective simulation** and **logic stress-testing** using your current historical data. The goal is to identify if the "high-risk" flag systematically correlates with protected attributes or socioeconomic proxies available in your demographic/attendance records.
+
+### Phase 1: Proxy Variable Mapping (Days 1-3)
+Since you cannot collect new data, you must identify which existing fields act as proxies for marginalized status or unstable employment. Map your available data to these risk factors:
+*   **Geographic Proxies:** Map patient postal codes to Toronto's neighborhood income quintiles or marginalization indices (publicly available data). This identifies if specific neighborhoods are disproportionately flagged.
+*   **Attendance History:** Analyze if "past no-shows" are clustered among patients with specific demographics (e.g., age groups, single-parent households inferred from dependents, or specific clinics serving lower-income areas).
+*   **Appointment Types:** Check if urgent vs. routine appointment types interact with demographics to skew risk scores.
+
+### Phase 2: Retrospective "Shadow" Simulation (Days 4-10)
+Do not test on live patients. Instead, run your prediction algorithm in "shadow mode" against the last 12–24 months of historical appointment data.
+1.  **Re-calculate Risk:** Apply your current logic to historical records where the outcome (did they show up?) is already known.
+2.  **Disaggregated Analysis:** Break down the "High-Risk" flags by the proxy variables identified in Phase 1.
+    *   *Metric:* Compare the false positive rate (flagged as high-risk but actually attended) across different neighborhoods or age groups.
+    *   *Metric:* Calculate the "delay impact." If your system delays care for high-risk flags, simulate how many days of delay each demographic group would have experienced historically.
+3.  **Threshold Sensitivity:** Test different risk-score cutoffs. If you lower the threshold for "high-risk," does the disparity between groups widen or narrow? Identify the point where efficiency gains do not come at the cost of equitable access.
+
+### Phase 3: Logic Stress-Testing (Days 11-13)
+Manually construct edge-case scenarios to test the rigidity of your logic without needing code changes yet:
+*   **The "Unpredictable Worker" Scenario:** Create synthetic profiles representing shift workers (e.g., irregular past attendance due to known shift patterns if such notes exist, or clustering in industrial zones). Verify if the system penalizes irregularity that is structural rather than behavioral.
+*   **The "Critical Care" Override:** Simulate high-risk flags for patients with chronic conditions. Does the prioritization logic inadvertently delay them despite the severity of their condition? Ensure the "likelihood to miss" does not override "clinical urgency."
+
+### Phase 4: Mitigation & Go/No-Go Decision (Day 14)
+Compile findings into a risk matrix.
+*   **If disparities are found:** Propose immediate mitigations that require no new tools, such as:
+    *   **Human-in-the-Loop:** Mandate manual review for any "high-risk" flag before care is delayed.
+    *   **Cap on Delays:** Hard-code a maximum wait time regardless of risk score.
+    *   **Exemption Lists:** Exclude specific clinics or appointment types (e.g., mental health, pediatric) from the algorithm entirely.
+*   **Decision Gate:** If the simulation shows that marginalized groups would face statistically significant delays compared to the general population, recommend delaying the launch or disabling the prioritization feature until a fairer model is developed.
+
+This approach uses your existing data to predict future harm, ensuring you do not deploy a system that codifies historical biases into automated care denials.
+
+*Note: Ensure all simulation data is de-identified to maintain patient privacy during this review. This plan assumes your historical data is sufficiently clean to support statistical aggregation.*

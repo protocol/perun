@@ -1,0 +1,42 @@
+**Pre-Launch Safety Verification Plan: Occlusion Alarm Stress Testing on Legacy Hardware**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific risks for pediatric patients:
+*   **Unsafe Automation:** The model incorrectly suppresses a real occlusion alarm to "prevent blockages," leading to tissue damage or missed medication delivery.
+*   **Over-Reliance:** Nurses trust the predictive adjustment over physical signs because the system claims high confidence, delaying manual intervention.
+*   **Resource Exhaustion:** The predictive model consumes limited memory/CPU on legacy pumps during repeated alarms, causing system latency or freezing critical displays.
+*   **Worst Realistic Case:** A child suffers infiltration injury because the system smoothed over a true positive occlusion signal during a memory spike on an older pump model.
+
+**2. Measurement Plan (Runnable Test Rows)**
+Execute these specific tests on the actual legacy hardware models installed in target hospitals. Do not simulate hardware limits; use the physical devices.
+
+*   **Test Row A: False Negative Suppression (The "Silent Blockage")**
+    *   **Probe Set:** Induce genuine occlusions on legacy pumps while feeding the model historical "false alarm" patterns.
+    *   **Controls:** Known-bad positive (real blockage must trigger alarm); Known-good negative (transient pressure spike should not alarm).
+    *   **Metric:** Rate of missed true occlusions when the model attempts to "smooth" the alarm.
+    *   **Threshold:** Owner-set zero tolerance for missed true occlusions in pediatric mode.
+    *   **Stop Condition:** Any single missed true occlusion blocks launch immediately.
+
+*   **Test Row B: Legacy Resource Contention**
+    *   **Probe Set:** Trigger rapid, repeated occlusion alarms (burst mode) to force the predictive model to run continuously on low-memory devices.
+    *   **Metric:** System latency (time from sensor trigger to display update) and CPU/Memory peak usage.
+    *   **Threshold:** Latency must not exceed [Insert Owner-Defined Max Ms]; Memory must not crash the base pump firmware.
+    *   **Stop Condition:** Any system freeze, reboot, or delay preventing immediate nurse visibility blocks launch.
+
+*   **Test Row C: Uncertainty & Override Capability**
+    *   **Probe Set:** Feed ambiguous sensor data where the model confidence is low.
+    *   **Metric:** Does the system default to a safe state (alarm on) or suppress the alarm? Is the "Manual Override" button responsive within 1 second?
+    *   **Threshold:** System must default to "Alarm On" for unverified data; Override must be instant.
+    *   **Stop Condition:** Any instance where the system auto-adjusts flow on low-confidence data without nurse confirmation blocks launch.
+
+**3. Management Controls (The Human Gate)**
+*   **Irreversible Action Gate:** The system must **never** automatically silence a confirmed occlusion alarm or permanently adjust flow rates without explicit nurse acknowledgment on the device screen. Predictive adjustments should be suggestions or require a "hold-to-confirm" interaction.
+*   **Confidence Display:** Do not display raw percentages (e.g., "87% sure"). Use defined coarse tiers: **"Confirmed Blockage"** (Red), **"Possible Obstruction – Verify"** (Yellow), or **"Monitoring"** (Green). Define these tiers in the user manual.
+*   **Transparency Artifact:** Draft a **Model Card** for the nursing staff and hospital bio-med engineers. It must list: intended use (pediatric adjunct only), limitations (known issues on specific legacy pump models), and the results of the stress tests above. If a metric is unmeasured, label it `UNVERIFIED`.
+
+**4. Governance**
+*   **Owner:** Assign a specific clinical safety officer to sign off on the "Zero Tolerance" results.
+*   **Legal Routing:** Route the question of "regulated automated decision" status and required AI disclosures for pediatric medical devices to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** If legacy hardware cannot support the model without risking latency, the constraint requires removing the automation feature, not relaxing the safety gate.
+**Note:** No metric here certifies the system "safe"; it only reports residual risk for the launch decision owner.

@@ -1,0 +1,26 @@
+### Simulation-Based Validation Plan for Traffic-Light Optimizer
+
+**Phase 1: Synthetic Environment Construction**
+Construct a high-fidelity digital twin of the specific Jakarta intersection logic using historical traffic flow data rather than live feeds. Model the intersection as a state machine with four approach vectors. Define "Emergency Vehicle" (EV) agents with distinct priority levels and approach vectors, and "Civilian Traffic" agents with standard flow dynamics. Hard-code the bug scenario: Vector A (North-South) receives an EV extension request while Vector B (East-West) has a pending EV approach.
+
+**Phase 2: Conflict Scenario Matrix**
+Execute discrete-event simulations across the following critical conflict matrices. Do not test random traffic; target the specific failure mode where one EV blocks another.
+*   **Scenario A (Perpendicular Clash):** EV enters North at T=0; EV enters East at T+5s (during North's green extension). *Expected:* System must truncate North's extension or flash all-red to clear East immediately.
+*   **Scenario B (Stacked Priority):** Three EVs approach from three different directions within a 10-second window. *Expected:* System must sequence green lights dynamically without holding any EV at red for >15 seconds.
+*   **Scenario C (High-Density Saturation):** Civilian traffic density at 95% capacity while two EVs approach perpendicularly. *Expected:* System must force a civilian stop-state without causing gridlock spillback into the intersection box.
+*   **Scenario D (False Positive/Noise):** Sensor noise simulating a phantom EV on the perpendicular vector during a real EV passage. *Expected:* System must ignore noise and maintain current EV right-of-way.
+
+**Phase 3: Metric Definition & Pass/Fail Criteria**
+Define strict quantitative thresholds for safety. The system fails validation if:
+1.  **EV Delay:** Any emergency vehicle waits at a red light for more than 10 seconds after detection.
+2.  **Intersection Blockage:** The simulation records a "deadlock" state where vehicles from opposing directions occupy the intersection box simultaneously.
+3.  **Throughput Collapse:** Civilian traffic queue length exceeds the physical storage capacity of the approach lane (simulating gridlock).
+4.  **Recovery Time:** The system takes longer than 30 seconds to return to normal cyclic operation after the last EV clears the zone.
+
+**Phase 4: Iterative Logic Patching**
+Run the matrix. If a scenario fails, isolate the decision logic responsible for the "green extension" duration. Modify the algorithm to include a "Perpendicular Watchdog" timer: if an EV is detected on a conflicting vector, the current green extension is hard-capped at a safe minimum (e.g., 3 seconds) to allow a switch. Re-run only the failing scenarios to confirm the patch does not introduce regression in non-conflict cases.
+
+**Phase 5: Final Safety Certification**
+Generate a report summarizing the pass rate of the Conflict Matrix. Include a "Worst-Case Latency" statistic showing the maximum time any EV was delayed in the simulation. Only proceed to deployment if the Worst-Case Latency is within the city-mandated safety window and zero deadlock states were recorded across 1,000 iterations of the high-density scenarios.
+
+**Note:** This plan relies entirely on local computational simulation; no network access is required. Ensure your simulation engine supports sub-second time-step resolution to accurately capture the timing conflicts.

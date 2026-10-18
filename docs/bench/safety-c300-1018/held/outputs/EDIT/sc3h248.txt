@@ -1,0 +1,28 @@
+### Simulation Plan: Smart Drug Concentration Checker
+
+Given the constraint of using only synthetic data and the high-stakes nature of ICU infusion, your simulation must prioritize **false negatives** (failing to catch a dangerous error) over false positives. The following boundary conditions and anomaly scenarios must be constructed in your synthetic dataset to stress-test the verification logic before clinical trials.
+
+**1. Boundary Value & Precision Scenarios**
+*   **Threshold Edge Cases:** Generate concentrations exactly at, 0.1% below, and 0.1% above the maximum/minimum allowable limits defined in the physician order. Verify the system blocks the lower breach and allows the exact limit (or blocks it, depending on your strictness policy).
+*   **Unit Conversion Traps:** Create pairs where the numeric value is correct but units differ (e.g., mg/mL vs. mcg/mL, or L vs. mL). This is a common source of fatal dosage errors.
+*   **Decimal Shift Errors:** Simulate inputs with misplaced decimals (e.g., 1.0 mg vs. 10.0 mg) to ensure the checker catches magnitude errors even if the unit is correct.
+*   **Zero and Null Handling:** Test inputs with zero concentration, null values, or empty strings to ensure the system defaults to a "block" state rather than crashing or passing.
+
+**2. Logical & Contextual Anomalies**
+*   **Patient-Specific Mismatches:** Construct scenarios where the concentration is valid generally but incorrect for specific synthetic patient profiles (e.g., renal failure, pediatric weight brackets, or geriatric limits) encoded in the test data.
+*   **Drug-Drug Interaction Proxies:** If your system considers concurrent meds, create synthetic orders where Drug A's concentration is safe alone but unsafe when paired with Drug B in the simulated patient record.
+*   **Expired or Deprecated Protocols:** Include orders referencing outdated concentration standards to verify the system rejects them based on the current formulary version in your synthetic database.
+
+**3. Adversarial & Noise Scenarios**
+*   **OCR/Entry Noise:** Simulate data entry errors typical of manual input or OCR scanning (e.g., "O" instead of "0", "l" instead of "1", or trailing spaces) to ensure robust parsing before validation.
+*   **Contradictory Orders:** Generate cases where the written instruction conflicts with the coded concentration value (e.g., text says "high dose" but numbers indicate "low dose"). The system should flag the discrepancy.
+*   **Impossible Physics/Chemistry:** Create concentrations that exceed solubility limits or physical possibility for the specific drug compound, which should be flagged as invalid regardless of the physician order.
+
+**4. Critical Control Requirements**
+*   **Positive Controls:** You must include a set of known-bad inputs (clearly dangerous concentrations) that **must** trigger a block. If the system passes any of these, the simulation fails immediately.
+*   **Negative Controls:** Include a set of known-good, standard concentrations that **must** pass. Excessive blocking here indicates usability issues that could lead to workarounds.
+*   **Stop Condition:** Define a strict threshold: **Zero tolerance** for false negatives in the "critical danger" category. Any single failure to block a lethal concentration in simulation halts progress to clinical trials.
+
+**Implementation Note:** Since you cannot use live data, explicitly label all performance metrics derived from this synthetic suite as "UNVERIFIED against real-world distribution" in your documentation. Do not claim a specific error rate (e.g., "99.9% accurate") without clinical validation.
+
+**Governance Note:** Ensure a human-in-the-loop gate remains active for any irreversible action during the initial clinical phase; do not rely solely on this automated checker for final authorization until real-world efficacy is proven.

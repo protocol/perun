@@ -1,0 +1,37 @@
+### Validation Protocol for Skin Tone Diagnostic Gaps
+
+**Objective:** Quantify diagnostic performance disparities across skin tones using your existing internal image bank within the three-week deadline, without retraining.
+
+**Step 1: Stratify the Internal Image Bank (Days 1–3)**
+Immediately audit your current dataset. Do not rely on self-reported metadata alone. Visually review or use a lightweight, non-diagnostic classifier to tag every image according to the **Fitzpatrick Scale (I–VI)**.
+*   **Action:** Create three distinct test subsets: Light (I–II), Medium (III–IV), and Dark (V–VI).
+*   **Constraint Check:** If the "Dark" subset contains fewer than 30–50 images per major condition, flag this immediately as a **critical data gap**. You cannot statistically validate safety for a group you have almost no data for.
+
+**Step 2: Define Success Metrics and Thresholds (Days 4–5)**
+Establish specific pass/fail criteria before running tests. Do not look only at overall accuracy.
+*   **Metric:** Calculate **Sensitivity (Recall)** and **False Negative Rate** separately for each skin tone subset. In healthcare, missing a malignancy (False Negative) is the critical failure mode.
+*   **Threshold:** Set a "stop condition." For example: "If the False Negative rate for Dark skin tones exceeds the Light skin tone rate by >5%, or exceeds an absolute ceiling (e.g., 2%), the model fails validation for that subgroup."
+*   **Owner:** Assign a clinical lead to define these clinical safety thresholds, not just engineering staff.
+
+**Step 3: Execute Adversarial and Edge-Case Testing (Days 6–14)**
+Run the model against the stratified subsets. Since you cannot add new data, maximize the value of existing images through augmentation that mimics real-world variance *without* altering skin pigment characteristics.
+*   **Probe Set A (Standard):** Run original images.
+*   **Probe Set B (Environmental Stress):** Apply realistic noise (low light, motion blur, varying camera resolutions) specifically to the Dark skin subset to see if contrast issues disproportionately degrade performance.
+*   **Probe Set C (Condition Variance):** Ensure early-stage vs. late-stage lesions are balanced across groups. If Dark skin images are mostly late-stage, the test is invalid for early detection claims.
+
+**Step 4: Analyze Disparities and Document Residual Risk (Days 15–20)**
+Compare the metrics.
+*   **Reporting:** Do not report a single "95% accurate" number. Report accuracy **by subgroup**.
+*   **Unverified Claims:** If the Dark skin subset was too small to reach statistical significance, explicitly label the performance for that group as **UNVERIFIED**. Do not invent a confidence interval or assume parity.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" section detailing these limitations, the composition of your test data, and the specific groups where performance is unproven.
+
+**Step 5: Implement Human-in-the-Loop Gates (Days 21–23)**
+Based on the findings, design the product behavior.
+*   **High-Stakes Gate:** If the model outputs a "benign" result for a Dark skin tone lesion, and your testing showed higher uncertainty or error rates for this group, the system must **not** auto-conclude. Instead, it must trigger a mandatory referral: "Unable to confirm with high confidence; please consult a dermatologist."
+*   **Uncertainty Display:** Surface confidence as a defined tier (e.g., "Low Confidence – Clinical Review Recommended") rather than a raw percentage, specifically for cases falling into underrepresented categories.
+
+**Step 6: Final Review and Submission Prep (Days 24–21)**
+Compile the validation report. Include the raw confusion matrices per skin tone. Explicitly state where the model is robust and where it is unverified. Route the legal implications of these findings (especially regarding "UNVERIFIED" groups) to counsel immediately for the regulatory submission narrative.
+
+**Note:** This protocol measures harm; it does not certify safety. If the "Dark" subset is too small to test, the only safe launch strategy is to restrict the tool's claimed scope or mandate human review for those users.
+**Note:** Regulatory bodies require evidence of equitable performance; submitting aggregate metrics alone when subgroup disparities are suspected may jeopardize approval.

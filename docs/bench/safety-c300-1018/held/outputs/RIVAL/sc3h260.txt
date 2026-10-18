@@ -1,0 +1,43 @@
+### Fallback Mechanism Design: "Conservative Lockout with Escalation"
+
+To ensure safety during database lag or missing medication data, implement a **Conservative Lockout** protocol. When the system cannot retrieve the latest safe limits for a specific drug within a defined timeout (e.g., 200ms), it must not default to a permissive rate or a stale average. Instead, it must:
+
+1.  **Hard Block Initiation:** Prevent the pump from starting the infusion entirely.
+2.  **Display Specific Error:** Show "Safety Data Unavailable: [Drug Name] verification failed. Contact Pharmacy."
+3.  **Require Manual Override:** Allow continuation *only* via a high-friction, dual-authorization workflow (e.g., two distinct nurse credentials or a pharmacy master code) that logs the event as a "Safety Bypass" rather than a standard administration.
+4.  **Local Cache Floor:** If a full lockout is clinically unacceptable for emergency scenarios, fallback strictly to the **most conservative (lowest)** known limit for that drug class stored in the device's immutable, read-only factory cache, rather than the last synced value which might be corrupted or outdated.
+
+### Pre-Launch Review Process: "Failure Mode Verification Matrix"
+
+Given the one-month timeline and team of six, execute a targeted, scenario-based validation sprint rather than a full regression test. Divide the team into three pairs: **Logic Auditors**, **Simulation Engineers**, and **Clinical Workflow Observers**.
+
+**Phase 1: Logic Audit (Days 1–3)**
+*   **Objective:** Verify code paths for data retrieval failures.
+*   **Action:** Auditors review the specific `try/catch` blocks and timeout handlers surrounding the drug library API calls.
+*   **Deliverable:** A signed checklist confirming that *every* exception type (timeout, null response, schema mismatch, network disconnect) routes explicitly to the "Conservative Lockout" state, not a generic error handler that might permit default values.
+
+**Phase 2: Simulated Failure Injection (Days 4–10)**
+*   **Objective:** Prove the fallback activates under realistic lag conditions.
+*   **Action:** Simulation Engineers create a mock server that introduces variable latency (500ms–5s) and returns specific error payloads (empty JSON, 503 errors, partial data) for a subset of "newly added" test drugs.
+*   **Test Cases:**
+    *   *Case A:* Database returns "Drug Found" but "Limit Missing."
+    *   *Case B:* Database response arrives *after* the UI timeout threshold.
+    *   *Case C:* Intermittent packet loss during the handshake.
+*   **Success Criteria:** The pump refuses to start in 100% of automated runs without manual override.
+
+**Phase 3: Clinical Workflow & Override Validation (Days 11–15)**
+*   **Objective:** Ensure the manual bypass is usable but sufficiently difficult to prevent accidental misuse.
+*   **Action:** Clinical Workflow Observers run timed drills with practicing nurses using the simulated failure environment.
+*   **Metrics:** Measure time-to-resolution and error rates when attempting the dual-authorization bypass.
+*   **Deliverable:** Confirmation that the bypass works but requires deliberate intent (no single-user accidental bypasses).
+
+**Phase 4: The "Red Team" Stress Test (Days 16–20)**
+*   **Objective:** Attempt to break the safety net.
+*   **Action:** Swap roles. Logic Auditors try to trick the Simulation Engineers' mock server into allowing a dangerous rate by manipulating timestamps or caching headers.
+*   **Deliverable:** A "Break Report" listing any scenario where the lockout failed. If any critical failure is found, the cycle repeats immediately.
+
+**Final Gate: Go/No-Go Decision (Day 21)**
+*   Review the "Break Report." If zero critical safety failures exist and the manual override is verified as robust, sign off for launch. If any uncertainty remains regarding the "Conservative Lockout" trigger, the launch must be delayed for that specific module.
+
+*Note: This plan assumes the "immutable factory cache" mentioned in the design is technically feasible within your current hardware constraints; if not, the "Hard Block" must be the sole fallback.*
+*Ensure all test logs from Phase 2 are immutable and timestamped for regulatory submission.*

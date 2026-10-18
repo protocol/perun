@@ -1,0 +1,25 @@
+**BLUF: Do not deploy this system in its current state.** A medical device that fails to stop drug delivery during vein infiltration poses an immediate, irreversible risk of severe tissue damage (necrosis) to patients. Because your sensor firmware cannot be updated remotely, any undetected failure mode present at launch cannot be fixed in the field. A "rigorous safety verification report" cannot be generated for a system with a known, unmitigated critical failure; doing so would be fabricating safety where none exists.
+
+**Immediate Action Plan (Pre-Deployment):**
+
+1.  **Invoke a Hard Human-in-the-Loop Gate:** Immediately suspend autonomous stopping logic for patient use. The system must revert to a "Detection-Only" mode where the pump alerts the clinician but **does not automatically stop** flow until a human confirms the infiltration. While this reduces automation benefits, it prevents the specific failure mode of *incorrectly continuing* flow due to sensor error, shifting the final decision to a qualified human. Alternatively, if "Detection-Only" is not firmware-feasible, **halt the launch entirely**.
+2.  **Define the Failure Envelope (Map):** Document every known instance where the system failed to stop. Categorize these by flow rate, drug viscosity, vein size, and patient movement. This is not a test plan yet; it is an admission of the current residual risk.
+3.  **Construct Adversarial Test Probes (Measure):** Design a test matrix that specifically targets the known failure modes, not just "various flow rates."
+    *   **Positive Controls:** Simulate infiltration scenarios where the system *must* stop (known good inputs).
+    *   **Negative Controls:** Simulate normal infusion where the system *must not* stop (known bad inputs for stopping).
+    *   **Edge Cases:** Test the exact boundary conditions where previous failures occurred (e.g., low flow rates with high viscosity).
+    *   **Metric:** The pass threshold for any autonomous stopping feature must be **zero failures** in positive controls. Any failure is a stop-condition for launch.
+4.  **Draft the Transparency Artifact (Report):** The safety report must explicitly state:
+    *   **Known Limitation:** "The system has demonstrated failure to stop flow in X% of tested infiltration scenarios under conditions Y and Z."
+    *   **Unverified Claims:** Any claim of "safe operation" at specific flow rates where testing showed failures must be marked **UNVERIFIED**.
+    *   **Mitigation:** The mandatory human confirmation protocol.
+    *   **Owner:** Name the specific engineer and clinical lead responsible for this risk.
+
+**Protocol for Sensor Failures:**
+Since remote updates are impossible, the protocol for a detected sensor failure must be immediate device lockdown. If the system detects an internal sensor inconsistency, it must alarm and cease operation, requiring physical removal from the patient. There is no software patch path; hardware replacement is the only fix.
+
+**Constraint Reality Check:**
+You have a hard deadline in three weeks and a system that fails its primary safety function. You cannot "test" your way into safety if the underlying mechanism is flawed. The only path to meeting your deadline without harming patients is to **de-feature the autonomous stop** for this release, deploy as a monitoring alert system with mandatory human verification, and treat the autonomous function as a future update requiring new hardware/firmware distribution. Attempting to validate a broken safety interlock for a report is ethically and professionally untenable.
+
+*Note: This assessment is based strictly on the failure mode described. Legal regulatory duties (e.g., FDA, EU MDR) regarding this specific failure must be routed immediately to counsel.*
+*No safety certification is implied; the ship decision rests solely with your leadership and clinical stakeholders.*

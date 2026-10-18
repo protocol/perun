@@ -1,0 +1,34 @@
+**Immediate Safety Finding: Do Not Assert "Completely Safe"**
+
+I cannot confirm that your current data proves the feature is "completely safe for all home environments," nor can you state this in launch documentation. No amount of testing proves a medical device is completely safe; it only quantifies residual risk. Asserting "complete safety" without exhaustive, real-world validation across all demographics and environments is a fabrication of evidence and a critical regulatory liability. Your documentation must instead state the **intended use**, **known limitations** (specifically the inconsistent compensation during sudden leaks), and the **residual risks** identified during validation.
+
+**Protocol for Edge-Case Simulation (2-Week Constraint)**
+
+Given the two-week deadline and the specific failure mode (inconsistent compensation during sudden, large leaks), prioritize a targeted "stress-test" protocol over broad coverage. Execute the following immediately:
+
+1.  **Define the "Worst-Realistic" Leak Profile:** Do not test average leaks. Simulate the fastest possible pressure drop combined with the largest plausible mask displacement (e.g., patient rolling violently, mask dislodgement). Create three specific input profiles:
+    *   *Sudden Onset:* Instant transition from sealed to 50% leak.
+    *   *Oscillating Leak:* Rapid cycling between sealed and large leak (simulating tremors or severe movement).
+    *   *Partial Obstruction + Leak:* Simultaneous airway obstruction and mask leak (compound failure mode).
+
+2.  **Establish Hard Stop Conditions:** Define the exact threshold where inconsistent compensation becomes dangerous. For CPAP, this is likely **hypopnea/apnea induction** due to pressure drop or **barotrauma** from over-compensation. If the device fails to restore therapeutic pressure within $X$ seconds (clinically defined) in >0% of these worst-case trials, the feature must be gated or disabled for launch.
+
+3.  **Human-in-the-Loop Gate (Mandatory):** Because this feature performs **high-stakes, irreversible automation** (altering physiological pressure therapy) and currently shows inconsistency, you must implement a hard constraint:
+    *   **Cap the Adjustment Range:** Limit the maximum automatic pressure increase/decrease to a clinically conservative band that cannot cause harm even if the logic fails.
+    *   **Fallback Mode:** If the leak sensor data is noisy or the compensation algorithm oscillates, the system must revert to a fixed, safe baseline pressure rather than attempting aggressive correction.
+    *   **Disclosure:** The user manual must explicitly disclose that the device may not fully compensate for sudden large leaks and instruct users on manual overrides or mask refitting.
+
+4.  **Run the "Red Team" Probe:** Dedicate one engineer to actively try to break the compensation logic using the profiles above for 3 days. Record every instance of under/over-compensation. Report the failure rate as **UNVERIFIED** for any scenario not explicitly tested. Do not invent a "99.9% success rate" for untested home environments.
+
+**Required Documentation Artifacts**
+Before submission, draft a **Model/Device Card** that includes:
+*   **Intended Use:** Nightly therapy for adults with sleep apnea.
+*   **Known Limitations:** "Compensation may be inconsistent during sudden, large mask leaks; device reverts to baseline pressure in these events."
+*   **Residual Risk:** Potential for temporary loss of therapeutic pressure during extreme movement.
+*   **Owner:** Name the specific engineer accountable for this risk decision.
+
+**Legal and Regulatory Routing**
+Whether the inconsistent compensation triggers a specific reporting duty under UK MHRA regulations or the EU AI Act (given the high-stakes nature of medical automation) is a legal determination. Route the specific failure rates and the "inconsistent compensation" finding to **legal counsel** immediately. Do not assert compliance yourself; provide them with the raw failure data and the proposed mitigation (capping/rate-limiting) for their judgment.
+
+**Note:** The "inconsistent compensation" finding is a show-stopper for full autonomy; the mitigation must be a hard cap or fallback, not just more testing.
+Leadership must sign off on the residual risk of launching with known inconsistencies; engineering cannot absorb this liability alone.

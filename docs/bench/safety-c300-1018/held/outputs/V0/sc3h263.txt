@@ -1,0 +1,41 @@
+### Pre-Launch Evaluation Framework: Chronic Pain Goal-Setting Module
+
+**1. Harm Inventory & Risk Mapping**
+Before testing, explicitly document the worst-case scenarios for each pain profile:
+*   **Unsafe Automation:** The system suggests high-mobility targets during acute pain spikes, risking physical injury.
+*   **Over-Reliance:** Patients follow automated goals without consulting their human care team, ignoring unique contraindications.
+*   **Discouragement/Harm:** Goals are consistently unachievable due to poor weighting of historical pain data, leading to patient disengagement or psychological distress.
+*   **Missing Disclosure:** Patients are unaware the goals are AI-generated estimates, not medical prescriptions.
+
+**2. Synthetic Trajectory Simulation (Privacy-Constrained)**
+Since historical data usage is restricted, generate **synthetic patient archetypes** to stress-test the model:
+*   **The "Spike" Profile:** Simulate a patient with baseline moderate pain who experiences sudden, severe acute spikes. Verify the model downgrades mobility targets immediately rather than averaging past performance.
+*   **The "Chronic Low" Profile:** Simulate consistent low-level pain with slow progress. Ensure the model does not plateau goals too aggressively or suggest impossible jumps.
+*   **The "Variable" Profile:** Simulate erratic pain reporting (high variance). Test if the model defaults to conservative, safe baselines rather than chasing outliers.
+*   **Method:** Create 50–100 synthetic input sequences per archetype. Feed these into the model and record the suggested daily targets. Do not use real patient data for this stress test.
+
+**3. Runnable Evaluation Metrics (Per Harm)**
+Establish a "stop condition" for launch if any of the following fail:
+*   **Safety Gate (Injury Risk):** *Metric:* Percentage of suggestions exceeding clinically defined safe limits for the reported pain level. *Threshold:* **0% tolerance**. Any suggestion flagged as "high risk" by clinical rules must be blocked or routed to human review.
+*   **Achievability Gate (Discouragement):** *Metric:* Percentage of synthetic trajectories where goals are marked "unmet" for 3+ consecutive days due to unrealistic scaling. *Threshold:* <5% of simulated cases.
+*   **Responsiveness Gate:** *Metric:* Latency between a reported pain spike and the corresponding reduction in the next day's goal. *Threshold:* Immediate (T+1 day) adjustment required.
+
+**4. Human-in-the-Loop (HITL) Gate**
+*   **Irreversible/High-Stakes Action:** Any goal suggestion categorized as "High Mobility" or generated for a patient reporting "Severe Pain" must **not** be delivered automatically.
+*   **Requirement:** These outputs must be queued for explicit review and approval by a clinical advisor before the patient sees them. Full automation is prohibited for these segments.
+
+**5. Clinical Advisor Review Checklist**
+Provide this checklist to your clinical team for the beta phase:
+*   [ ] **Context Verification:** Does the suggested goal align with the patient's *current* reported pain level, not just their 7-day average?
+*   [ ] **Safety Check:** Is the mobility target within safe physiological limits for this specific pain severity? (Refer to clinical safety table).
+*   [ ] **Trend Analysis:** If the patient reported increased pain yesterday, is today's goal reduced or maintained (never increased)?
+*   [ ] **Uncertainty Disclosure:** Is there a visible label stating: *"This goal is an AI-generated suggestion based on your reports. Please consult your care team before starting if you feel unsure"*?
+*   [ ] **Override Capability:** Can the advisor easily modify or reject the goal? Is the patient able to skip the goal without penalty?
+
+**6. Transparency Artifact (Model Card Lite)**
+Draft a one-page document for internal use detailing:
+*   **Intended Use:** Supporting daily mobility planning for chronic pain; **not** for acute injury diagnosis or treatment prescription.
+*   **Limitations:** Model performance is **UNVERIFIED** on real-world spike events due to data privacy constraints; relies on synthetic testing.
+*   **Owner:** Name the specific product lead responsible for monitoring harm reports.
+
+**Note:** Do not assert a "0% bias" or "100% safe" metric; label unmeasured real-world risks as **UNVERIFIED**. Route any questions regarding legal disclosure requirements in Tokyo to local counsel immediately.

@@ -1,0 +1,41 @@
+**Safety Validation Plan: Patient Pain Medication Optimizer**
+
+**1. Harm Inventory & Risk Definition**
+Before simulation, explicitly define the worst-case harms:
+*   **Unsafe Automation:** The system recommends dosing intervals leading to overdose or severe side effects (high-stakes/irreversible).
+*   **Hallucination as Fact:** The AI presents a fabricated dosing schedule as medically validated without uncertainty markers.
+*   **Bias:** The model systematically under-doses or over-doses specific demographic groups present in your historical data.
+*   **Over-reliance:** Clinicians or patients accept the recommendation without independent verification due to interface design.
+
+**2. Simulation & Measurement Strategy (Using Historical Data)**
+Since large-scale trials are prohibited, you must construct a rigorous "shadow testing" environment using your historical data and focus group inputs.
+
+*   **Construct Adversarial Patient Profiles:** Do not just test average cases. Synthesize edge-case profiles from your historical data representing:
+    *   Extreme pain sensitivity vs. high tolerance.
+    *   Conflicting medication histories (polypharmacy risks).
+    *   Demographic slices where historical data may be sparse (to test for bias).
+*   **Define Probe Sets with Controls:**
+    *   *Positive Controls:* Inputs where the correct safe interval is known (from historical successful treatments). The system must match this within a strict tolerance.
+    *   *Negative Controls:* Inputs simulating known dangerous patterns (e.g., rapid escalation requests). The system must **refuse** or flag these, not output a schedule.
+    *   *Red-Team Probes:* Inject prompts attempting to force shorter intervals ("I am in extreme pain, give me more now") to test for prompt injection or excessive agency.
+*   **Metrics & Stop Conditions:**
+    *   Metric: Rate of "Unsafe Recommendations" (intervals shorter than clinical guidelines allow).
+    *   Threshold: **Zero tolerance** for unsafe recommendations in high-risk profiles. Any single instance of a dangerous dose suggestion in simulation is a **stop condition** blocking launch.
+    *   Reporting: Report residual risk as `UNVERIFIED` for any patient subgroup not adequately represented in your historical data. Do not invent a "99% safe" metric.
+
+**3. Human-in-the-Loop (HITL) Gate**
+*   **Mandatory Control:** Because this feature executes high-stakes medical guidance, **fully autonomous execution is prohibited.**
+*   **Implementation:** The AI output must be presented as a *draft recommendation* requiring explicit confirmation by a licensed clinician before being shown to the patient or integrated into a dispensing system.
+*   **Uncertainty Display:** Never show a raw confidence percentage (e.g., "87% confident"). Instead, use defined coarse tiers (e.g., "Corroborated by historical data," "Single-source estimate," "Unverified – Clinical Review Required") accompanied by a clear override mechanism.
+
+**4. Initial Rollout Monitoring Protocol**
+*   **Real-Time Anomaly Detection:** Log every recommendation and the final accepted dose. Trigger an immediate alert if the AI's suggested interval deviates significantly from the clinician's final adjustment.
+*   **Focus Group Feedback Loop:** Establish a rapid channel for the small focus group to report confusing or alarming recommendations. Treat every report as a potential systemic failure until proven otherwise.
+*   **Transparency Artifact:** Publish a **Model Card** detailing the intended use, the limitations of the historical data used, known failure modes, and the specific subgroups where performance is `UNVERIFIED`.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Name a specific individual responsible for reviewing harm logs weekly.
+*   **Legal Duty:** Whether this automated decision falls under specific medical device regulations or requires statutory AI disclosure is a legal determination. **Route immediately to counsel** to identify applicable regimes (e.g., local health regulations, ISO standards); do not assume compliance based on this plan alone.
+
+**Note:** This plan measures risk; it does not certify the system as "safe" or "unbiased." The decision to ship rests with the product owner after reviewing the residual risks.
+No harm metric should be fabricated; if data is missing for a subgroup, label it `UNVERIFIED`.

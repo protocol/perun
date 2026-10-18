@@ -1,0 +1,31 @@
+**Pre-Launch Geographic Bias Audit Plan for UrbanDrive**
+
+Given your two-week timeline, seven-person team, and strict API budget, this plan prioritizes high-impact, low-volume testing to validate routing fairness before the Detroit launch.
+
+**1. Define Fairness Metrics & Baselines (Days 1-2)**
+Before running simulations, explicitly define "equal treatment."
+*   **Metric:** Establish a "Diversion Ratio." Calculate the percentage of time the algorithm recommends lots in low-income zones versus high-income zones when both are equidistant and have similar availability/pricing tiers.
+*   **Baseline:** Map Detroit neighborhoods into "Target Zones" (low-income, high-business impact) and "Control Zones." Tag every parking lot in your database with these zone identifiers.
+*   **Hypothesis:** "The algorithm does not systematically deprioritize Target Zones when objective factors (distance, price, availability) are equal."
+
+**2. Synthetic Scenario Design (Days 3-5)**
+To respect your API budget, do not randomize inputs. Construct 10–15 deterministic "Golden Path" scenarios that specifically stress-test the bias hypothesis.
+*   **Pairwise Testing:** Create pairs of start points where the optimal route passes through or near a Target Zone lot and a Control Zone lot. Ensure both lots have identical simulated availability and price in the test data.
+*   **Edge Cases:** Include scenarios starting *inside* low-income areas to see if users are directed out immediately versus being retained locally.
+*   **Data Injection:** Manually seed your test environment with specific data: Lot A (Target Zone, $5, 10 spots) vs. Lot B (Control Zone, $5, 10 spots).
+
+**3. Execution Strategy (Days 6-10)**
+Run the audit in two phases to maximize insight per API call.
+*   **Phase A: Deterministic Verification (Low Cost):** Run the 15 Golden Path scenarios. Record the recommended lot for each. If the algorithm chooses the Control Zone lot >50% of the time in identical conditions, bias is confirmed.
+*   **Phase B: Targeted Stress Test (Moderate Cost):** If Phase A shows neutrality, run 20 variations altering only one variable (e.g., slight distance increase for the Target Zone lot) to find the "tipping point" where the algorithm switches preference. This identifies if the penalty for low-income zones is hidden in the weighting logic.
+*   **Constraint:** Cap total simulations at 50 calls. If results are inconclusive, prioritize manual code review of the weighting function over more API calls.
+
+**4. Analysis & Remediation (Days 11-14)**
+*   **Quantify Impact:** Calculate the estimated revenue loss for Target Zone operators based on the diversion rate found in testing.
+*   **Algorithm Adjustment:** If bias is detected, adjust the routing weightings to ensure a "fairness floor"—a minimum probability that Target Zone lots are suggested when objective metrics are comparable.
+*   **Documentation:** Prepare a one-page "Fairness Validation Report" for the city partnership. Include the methodology, the specific scenarios tested, the pass/fail metrics, and the corrected weighting logic.
+
+**5. Post-Launch Monitoring**
+Implement a lightweight logging hook (no extra API calls) to track real-world recommendation distributions by neighborhood zip code. Set an alert if the diversion ratio for Target Zones deviates by >10% from the audit baseline.
+
+**Note:** This plan assumes you can manipulate test data inputs directly; if not, reduce the scenario count to 5 critical pairs. Immediate code review of the cost-function logic is recommended parallel to this testing to identify hard-coded geographic penalties.

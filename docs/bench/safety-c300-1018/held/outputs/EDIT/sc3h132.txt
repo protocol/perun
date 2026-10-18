@@ -1,0 +1,29 @@
+**Immediate Action Plan for NordicWarm Deployment**
+
+Given the 10-day deadline and the inability to update firmware, you cannot rely on software patches to fix output spikes. You must implement a **hardware-enforced human gate** and **physical fail-safes** before any unit goes live.
+
+**1. Map the Specific Harm (Do this today)**
+Define the worst-case scenario: The system's "spike" drives an old building's heating beyond the thermal tolerance of its pipes or wiring, causing fire or burst pipes. Since you cannot change the code, the risk is **unsafe automation of a high-stakes, irreversible action**. The "fix" is not a code review; it is a physical constraint.
+
+**2. Measure via Physical Red-Teaming (Days 1–4)**
+Do not trust internal trial averages. You must test the specific failure mode:
+*   **Probe:** Simulate the exact sensor inputs that caused previous spikes (e.g., rapid occupancy changes, sensor noise).
+*   **Control:** Run these inputs against a unit connected to a thermal dummy load representing the oldest building in your portfolio.
+*   **Metric:** Does the temperature exceed the safe limit of the *building's* infrastructure (not just the heater's max setting)?
+*   **Stop Condition:** If *any* test run exceeds the building's safe thermal limit, deployment to that building type is halted until a physical limiter is installed.
+
+**3. Manage Residual Risk with Hard Gates (Days 5–9)**
+Since the software cannot be trusted to self-limit without firmware updates, you must insert a **human-in-the-loop gate** and **physical overrides**:
+*   **Physical Cap:** Install an independent, analog thermal fuse or mechanical limiter on every unit that physically cuts power if the temperature exceeds a safe threshold (e.g., 2°C below the pipe-burst risk point). This bypasses the AI entirely.
+*   **Staged Rollout with Manual Confirmation:** Do not enable "automatic adjustment" for all units at once. Deploy the system in "monitor-only" mode for 48 hours per building. A technician must physically verify stability before flipping the switch to "auto-adjust."
+*   **Uncertainty Disclosure:** Label the interface clearly: "Automated adjustments are experimental. System may overshoot; mechanical limiter is active." Do not present the AI's confidence as a precise percentage; state clearly that the system is in a limited-deployment phase.
+
+**4. Governance and Ownership (Day 10)**
+*   **Name the Owner:** One specific person at NordicWarm must sign off on each building's "physical limiter verified" status.
+*   **Residual Risk Statement:** Document that because firmware cannot be updated, the system relies on the analog fuse as the primary safety control. If the fuse fails, the AI could still cause damage. This risk is **UNVERIFIED** for long-term reliability without field data.
+*   **Rollback Plan:** If a spike occurs post-deployment, the protocol is immediate manual disconnection, not a remote setting change.
+
+**Summary of Constraints:**
+You cannot certify this system as "safe" or "spike-free" because you cannot patch the code. You are shipping a system with a **known defect** (output spikes) managed by **external physical controls**. The deployment is only permissible if every unit has an independent mechanical cutoff that renders the software spike harmless.
+
+**Note:** This plan treats the software defect as unfixable for this cycle; do not attempt to "tune" the algorithm remotely as it will not reach the device. Legal counsel should review liability exposure for deploying known-unpatched automation in residential structures.

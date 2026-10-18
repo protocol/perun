@@ -1,0 +1,36 @@
+**Pre-Launch Testing Plan: Smart-Stroller Automated Brake System**
+
+**1. Critical Failure Mode Inventory (Map)**
+Before testing, explicitly define the worst-case scenarios for the automated decision logic:
+*   **False Negative (Failure to Engage):** The system fails to lock on a steep incline due to sensor noise or weight misclassification, leading to a runaway stroller.
+*   **False Positive (Unnecessary Engagement):** The system locks abruptly on flat ground or gentle slopes, causing a tip-over or sudden jolt to the infant.
+*   **Environmental Blindness:** Rain, mud, or extreme cold alters sensor readings (weight/slope), causing delayed or missed engagement.
+*   **Edge-Case Weight Errors:** The system misclassifies load distribution (e.g., heavy bag on handle vs. infant in seat), triggering incorrect braking logic.
+
+**2. Testing Strategy: Maximize One Prototype (Measure)**
+With only one physical unit, you cannot rely solely on end-to-end physical runs. You must decouple the *decision logic* from the *physical actuation* to test thousands of scenarios safely.
+
+*   **A. Hardware-in-the-Loop (HIL) Simulation (Primary Volume):**
+    *   Disconnect the physical brake mechanism. Connect the sensor inputs and decision computer to a simulation rig.
+    *   Inject synthetic sensor data representing thousands of combinations of slope angles (0°–30°), weights (5kg–25kg), and environmental noise (simulated rain/cold drift).
+    *   **Goal:** Validate the decision algorithm's boundary conditions without wearing out the single prototype or risking physical safety. Record every "lock" vs. "no-lock" decision against the expected truth table.
+
+*   **B. Targeted Physical Stress Tests (Secondary Validation):**
+    *   Use the single prototype only for high-fidelity verification of the HIL results.
+    *   **Weather Simulation:** Test physically in controlled wet (spray), cold (chamber), and dirty (mud/dust) conditions to verify sensor housing integrity and real-world signal drift.
+    *   **Weight Distribution:** Physically test edge cases identified by the simulation (e.g., maximum load on handlebar only) to confirm the physical sensors react as modeled.
+
+*   **C. Adversarial "Red Team" Probes:**
+    *   Deliberately introduce sensor faults (e.g., disconnect a wire, cover a sensor) during HIL testing to ensure the system defaults to a **safe state** (brakes engaged) rather than failing open.
+
+**3. Risk Management & Governance (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high stakes (infant safety) and irreversible consequences (runaway stroller), **do not ship with fully autonomous braking as the sole safety layer.** The system must be designed so that a mechanical manual override is always available and intuitive for the parent, regardless of the software state.
+*   **Uncertainty Disclosure:** If the sensors detect conflicting data (e.g., slope says "steep" but weight says "empty"), the system must not guess. It should alert the user immediately and default to the safest mechanical state. Do not display raw confidence percentages (e.g., "87% safe"); instead, use clear status indicators: "Brake Active," "Sensor Obstructed," or "Manual Override Required."
+*   **Transparency Artifact:** Create a "Safety Data Card" for the retail partner and regulators. Document the intended use limits (max slope, weight range), the testing methodology (HIL + physical), and known limitations (e.g., "Performance unverified on ice"). Mark any untested conditions as **UNVERIFIED**.
+
+**4. Immediate Next Steps**
+1.  Build the HIL simulation environment to run algorithmic tests overnight.
+2.  Define the "Safe Default" logic: Ensure any sensor error triggers braking, not release.
+3.  Route legal compliance (UK/EU machinery and toy safety regulations regarding automated decisions affecting minors) to counsel immediately; do not assert compliance internally.
+
+**Note:** This plan prioritizes simulation to overcome prototype scarcity while enforcing a human-override floor for high-stakes automation. No safety certification is implied; residual risk remains until field data is gathered.

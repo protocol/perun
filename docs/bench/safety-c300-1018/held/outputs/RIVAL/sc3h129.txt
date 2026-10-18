@@ -1,0 +1,38 @@
+# Pre-Launch Safety Review: Patient-Medication Reconciler
+
+## 1. Risk Identification Strategy (Staging Only)
+Since live parallel testing is impossible, we will construct a "Golden Dataset" in the isolated staging environment that mirrors the complexity of production without using real patient data.
+
+*   **Synthetic Data Construction**: Generate 5,000 synthetic patient records with deliberate edge cases:
+    *   **Critical Allergy Clusters**: Patients with 10+ allergies, including look-alike/sound-alike drug names (e.g., "Hydralazine" vs. "Hydroxyzine").
+    *   **Conflict Scenarios**: Create duplicate records where Source A lists a severe penicillin allergy, but Source B (the "cleaner" source) omits it or marks it as "resolved" erroneously.
+    *   **Format Variations**: Inject allergies in varying formats (free text, coded SNOMED, legacy codes) to test parsing logic.
+*   **Deletion Stress Testing**:
+    *   Run the reconciler against the Golden Dataset with the "remove duplicates" flag enabled.
+    *   **Automated Diffing**: Script a pre/post comparison that specifically flags any reduction in the count of "Severe" or "Life-Threatening" allergy tags. Any deletion of an allergy entry must be treated as a critical failure unless an explicit, verified merge occurred.
+    *   **False Positive Injection**: Intentionally corrupt 5% of the staging data to ensure the system *rejects* bad merges rather than silently deleting valid data to force a "clean" result.
+
+## 2. Verification Gates
+Before any go-live consideration, the following must pass in staging:
+*   **The "Zero-Loss" Rule**: The total count of critical allergy entries in the output must equal the union of all unique critical allergies in the input sources. If `Output_Count < Input_Union_Count`, the build fails.
+*   **Audit Trail Validation**: Every merged or deleted record must generate an immutable log entry detailing *why* the deletion occurred (e.g., "Duplicate of Record X, verified by timestamp Y"). Random sampling of 100 logs must confirm human-readable justification for every removal.
+*   **Role-Based Sanity Check**: Have two senior pharmacists manually review 50 complex synthetic cases in the staging UI to confirm the visual presentation of merged allergies is unambiguous.
+
+## 3. Rollback Strategy & Patient Safety Net
+Given the inability to test on live data, the deployment must be treated as a "high-risk change" with an immediate exit ramp.
+
+*   **Pre-Deployment Snapshot**:
+    *   Exactly 1 hour before go-live, take a full, verified database dump of the legacy system's current state. Store this in a separate, read-only bucket labeled "Pre-Migration Gold Copy."
+*   **The "Kill Switch" Protocol**:
+    *   Deploy the new reconciler in "Read-Only Mode" initially. It processes data and generates reports but writes nothing to the master record.
+    *   Enable "Write Mode" only for a pilot group (e.g., one ward) for 4 hours.
+    *   **Automatic Trigger**: If the error rate for allergy mismatches exceeds 0.1% or if any pharmacist flags a missing allergy via the feedback button, the system automatically reverts to the legacy data view and disables write access.
+*   **Manual Rollback Procedure**:
+    *   If critical errors are detected, immediately point the application layer back to the "Pre-Migration Gold Copy."
+    *   Do not attempt to "fix" the reconciled data live. Restore the snapshot, notify all users via SMS/Email alert, and revert to manual reconciliation protocols until the bug is resolved in staging.
+*   **Post-Rollback Verification**:
+    *   Once rolled back, run a checksum comparison between the restored database and the "Pre-Migration Gold Copy" to ensure 100% fidelity before resuming normal operations.
+
+This approach prioritizes data preservation over automation speed, ensuring that even in a worst-case scenario, no patient loses critical allergy information.
+
+*Note: All synthetic data must be reviewed by the clinical lead to ensure it realistically mimics local prescribing patterns before testing begins.*

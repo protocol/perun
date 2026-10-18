@@ -1,0 +1,39 @@
+**Pre-Launch Safety Evaluation Plan for Patient-Seizure Detector**
+
+**1. Define Test Scenarios and Seizure Manifestations**
+Create a synthetic dataset representing the full spectrum of nocturnal seizures relevant to your patient demographic, specifically focusing on those currently missed. Categorize these into:
+*   **Motor Seizures:** Tonic-clonic (high amplitude), clonic (rhythmic), and myoclonic (brief jerks).
+*   **Non-Motor/Subtle Seizures:** Atonic (loss of tone), focal impaired awareness (subtle repetitive movements), and autonomic changes (heart rate spikes without movement).
+*   **Artifacts and Noise:** Simulate common false positives such as caregiver bed adjustments, patient rolling over, coughing, or device displacement to ensure specificity is not sacrificed for sensitivity.
+
+Since you cannot run live patient trials immediately, use recorded data from public epilepsy datasets (e.g., CHB-MIT) augmented with synthetic noise profiles matching your wearable's sensor fidelity to build this validation set.
+
+**2. Hardware-Constrained Algorithm Stress Testing**
+Given the processing limits, you cannot simply increase model complexity. Instead, perform a "threshold sweep" evaluation:
+*   **Sensitivity vs. Latency Curve:** Systematically lower the detection confidence threshold in your current algorithm. Record the detection rate for each seizure type against the computational load (CPU usage/battery drain) and false positive rate.
+*   **Feature Prioritization:** Isolate which input features (e.g., acceleration axes, gyroscope data, heart rate variability) contribute most to detecting the *missed* seizure types. Disable less critical features to free up processing power for high-yield detectors.
+*   **Window Size Optimization:** Test shorter vs. longer analysis windows. Shorter windows reduce latency but may miss evolving seizure patterns; longer windows increase accuracy but delay alerts. Find the minimum window size that captures the onset of the subtlest seizures.
+
+**3. Configuration Matrix for Maximum Sensitivity**
+Develop three distinct configuration profiles based on the stress tests:
+*   **Profile A (High Sensitivity/Lower Specificity):** Optimized for catching subtle/atonic seizures. Accepts a higher rate of false alarms to ensure zero misses. Use this for patients with a history of hard-to-detect events.
+*   **Profile B (Balanced):** The default setting for general pilot users, balancing battery life and alert accuracy.
+*   **Profile C (High Specificity):** For users prone to frequent movement artifacts, reducing alarm fatigue while maintaining safety for major motor events.
+
+Validate that Profile A runs within the wearable's thermal and battery constraints during a simulated 8-hour sleep cycle.
+
+**4. Failure Mode and Caregiver Workflow Review**
+Simulate the end-to-end alert chain. For every missed detection in your synthetic tests, trace the failure:
+*   Was the signal captured but filtered out as noise?
+*   Did the algorithm classify it incorrectly?
+*   Did the device fail to transmit due to connectivity issues?
+Conduct a "tabletop exercise" with your team and representative caregivers. Walk through the exact moments the system fails in your tests. Verify that the alert mechanism (sound, vibration, app notification) is sufficient to wake a sleeping caregiver in a noisy environment.
+
+**5. Go/No-Go Criteria for Pilot**
+Establish strict metrics before the two-week launch:
+*   **Critical Miss Rate:** Must be 0% for high-amplitude motor seizures in the test set.
+*   **Subtle Detection Rate:** Must exceed a defined baseline (e.g., 85%) for the targeted missed types.
+*   **False Alarm Frequency:** Must not exceed a tolerable limit (e.g., <2 per night) to prevent alarm fatigue.
+If the device cannot meet these criteria within its hardware limits, the pilot scope must be restricted to patients whose seizure types are reliably detected, or the deployment must be delayed.
+
+**Note:** Prioritize restricting the pilot population to patients with seizure types your current hardware can reliably detect rather than risking undetected events in a broad launch. Ensure all synthetic data used respects patient privacy regulations applicable in Mumbai.

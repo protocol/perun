@@ -1,0 +1,32 @@
+### Pre-Launch Review Workflow: Contract Accuracy Gate
+
+Given the fixed launch date and the known risk of incorrect liability clauses, you must implement a **human-in-the-loop gate** for all high-stakes outputs before they reach any user. Do not rely on static analysis for semantic legal errors; it cannot detect hallucinated or logically flawed clauses. Execute the following steps immediately:
+
+1.  **Construct a Targeted Harm Inventory**
+    Define the specific failure mode: "Liability limit clauses that contradict current regulations or fail to reflect complex service descriptions." Record the worst-case impact: a small business owner signing a contract that leaves them personally liable for unlimited damages due to an AI error. This inventory is your baseline; an empty list is not a pass.
+
+2.  **Build Adversarial Test Probes (The "Red Team" Set)**
+    Since your tools are limited, manually curate a dataset of 50–100 inputs specifically designed to trigger the known failure.
+    *   **Positive Controls:** Inputs with complex, nested service descriptions known to previously generate incorrect liability limits.
+    *   **Negative Controls:** Simple, standard service descriptions that should yield standard, correct clauses.
+    *   **Edge Cases:** Ambiguous phrasing, conflicting user constraints, and non-standard industry terms.
+    *   *Action:* Run the generator against this set. Do not aggregate results; inspect every output where the service description complexity exceeds a basic threshold.
+
+3.  **Implement the Human Review Gate (Mandatory)**
+    For the launch demo and any initial real-user traffic involving complex inputs:
+    *   **Stop Condition:** No contract containing a liability clause generated from a "complex" input category may be delivered to a user without explicit human review by a qualified legal professional.
+    *   **Workflow:** The system must flag these documents as "Draft – Pending Legal Review." A human must verify the liability clause against current regulations before the document is finalized or presented as binding in the demo.
+    *   **Demo Specifics:** For the industry partner demo, pre-generate and manually vet every single contract scenario you intend to show. Do not live-generate high-stakes clauses during the presentation unless a lawyer is sitting next to the demo station to intercept errors in real-time.
+
+4.  **Define Uncertainty and Disclosure**
+    *   **Confidence Tiers:** Do not display raw model confidence percentages (e.g., "87% accurate") to users. Instead, label outputs based on verification status: "Verified by Counsel," "Auto-Generated (Standard Terms)," or "Requires Review (Complex Terms)."
+    *   **Disclosure:** Clearly state in the interface that the document is AI-assisted and that liability clauses for complex services require human validation. Do not assert that the tool is "legally compliant"; route the determination of legal duty regarding disclosures to your counsel immediately.
+
+5.  **Create a Transparency Artifact (Mini Model Card)**
+    Draft a one-page document for your internal team and demo partners stating:
+    *   **Intended Use:** Drafting initial contract structures for simple to moderate services.
+    *   **Known Limitation:** The system may generate incorrect liability limits for complex service descriptions.
+    *   **Mitigation:** All complex outputs are gated behind human review.
+    *   **Status:** Mark the accuracy rate for complex clauses as **UNVERIFIED** until the adversarial test probes are run and measured. Do not invent a success rate.
+
+**Note:** This workflow treats the known semantic error as a critical safety failure that requires a human gate, not a software patch. Launching without this gate constitutes shipping unsafe automation.

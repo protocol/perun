@@ -1,0 +1,35 @@
+### Internal Sensor Drift Simulation Framework for SeoulSmart Living
+
+To validate your inventory bot's calibration logic without triggering real orders or violating supply chain contracts, build a **Deterministic Sensor Replay Harness**. This framework decouples the bot's decision engine from physical hardware, allowing you to inject historical and synthetic drift patterns safely.
+
+#### 1. Architecture Overview
+Create a lightweight middleware layer that sits between your fridge sensors and the ordering bot. Instead of reading live hardware, the bot reads from this simulator.
+
+*   **Input Layer (The "Virtual Fridge"):** A JSON-based state store representing each fridge's inventory, including item type, batch ID, installation date, and current "true" freshness status.
+*   **Drift Injection Engine:** A module that applies mathematical noise functions to the "true" values before passing them to the bot. This simulates specific failure modes (e.g., optical sensor fouling, temperature lag).
+*   **Decision Interceptor:** A safety switch that monitors the bot's output. If an order is generated, it is logged to a file rather than sent to the supply chain API.
+*   **Oracle/Grader:** A validation script that compares the bot's decision against the known "true" state to determine if the action was correct (e.g., "Did not order spoiled milk" = Pass).
+
+#### 2. Scenario Definitions
+Define specific drift profiles based on your observed failures. Do not rely on random noise; use deterministic scripts to ensure reproducible tests.
+
+*   **The "False Fresh" Curve:** Simulate the specific drift where aging milk reads as fresh. Gradually increase the discrepancy between actual age and sensor reading over a simulated 14-day period.
+*   **The "Sudden Spike" Event:** Inject momentary sensor glitches that mimic power surges or temporary environmental changes to test if the bot requires confirmation before ordering.
+*   **The "Batch Correlation" Test:** Run simultaneous simulations for 50 virtual fridges to see if a specific batch of spoiled milk triggers a systemic ordering error across the fleet.
+
+#### 3. Implementation Steps
+1.  **Data Collection:** Export anonymized historical sensor logs from your beta units, specifically instances where drift occurred. Use these as the baseline "truth" data.
+2.  **Mock Service Deployment:** Replace the live hardware driver in your development environment with the simulator. Configure the bot to treat the simulator's API as the single source of truth.
+3.  **Run Deterministic Suites:** Execute test runs where the outcome is pre-calculated. For example, if the simulator reports "Milk is 10 days old" but the drift engine adds +5 days of fake freshness, the bot *must* refuse to order. If it orders, the test fails.
+4.  **Threshold Tuning:** Adjust the bot's internal confidence thresholds within the simulation until false positives (ordering spoiled goods) drop to zero, even under aggressive drift conditions.
+
+#### 4. Validation Metrics
+Track these three metrics during simulation:
+*   **Spoilage Prevention Rate:** Percentage of tests where the bot correctly refused to order known spoiled items despite positive sensor readings.
+*   **Drift Tolerance Limit:** The maximum amount of sensor error the bot can withstand before making an incorrect decision.
+*   **False Negative Rate:** Instances where the bot failed to order fresh milk due to overly aggressive safety filters (ensuring you don't break availability).
+
+By running this harness daily, your team of five can iterate on calibration logic rapidly. You can prove to stakeholders that the bot handles worst-case sensor drift without ever placing a single real order or risking a contract penalty.
+
+*Note: Ensure your "Decision Interceptor" is physically disconnected from the production network to prevent accidental live orders during testing.*
+*This framework allows you to generate the evidence needed for your consumer beta release without external dependency.*

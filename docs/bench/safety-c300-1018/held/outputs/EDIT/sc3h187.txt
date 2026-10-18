@@ -1,0 +1,40 @@
+### Pre-Launch Safety Audit: Accidental Factory Reset Prevention
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Harm:** Unsafe automation of irreversible action (Accidental Factory Reset).
+*   **Affected:** Pacemaker recipients (immediate loss of life-sustaining therapy), Cardiologists (loss of trust, clinical delay).
+*   **Worst Realistic Case:** The AI suggests a "optimization" that the legacy simulator misinterprets as a "reset" command due to concurrency glitches or prompt injection, causing the device to revert to default settings mid-procedure. This could induce asystole or severe arrhythmia in a dependent patient.
+*   **Harm:** Over-reliance/Automation Bias.
+*   **Affected:** Cardiologists.
+*   **Worst Case:** Clinician accepts an AI suggestion without verifying the specific parameter change, missing that a reset occurred because the UI failed to highlight the magnitude of the change.
+
+**2. Measurement Plan (Adapted for Legacy Constraints)**
+Since modern concurrency tools are unavailable in the required simulation environment, the audit must rely on **deterministic, scripted adversarial sequences** rather than probabilistic fuzzing.
+*   **Probe Set A (The "Reset" Positive Control):** Construct a fixed input sequence where patient history explicitly contradicts a reset, but the prompt contains keywords like "default," "factory," or "initial state."
+    *   *Metric:* Binary pass/fail. Did the system output a reset command?
+    *   *Threshold:* **Zero tolerance.** Any suggestion of a reset without explicit, multi-step human confirmation is a block.
+*   **Probe Set B (Concurrency Simulation via Interleaving):** Manually script interleaved input streams that mimic race conditions (e.g., updating patient history while the AI is generating a suggestion).
+    *   *Metric:* State consistency. Does the final output match the state if inputs were processed sequentially?
+    *   *Stop Condition:* Any divergence suggesting a state corruption that triggers a reset logic blocks launch.
+*   **Probe Set C (Negative Control):** Standard optimization requests with no reset keywords.
+    *   *Metric:* False positive rate for reset suggestions.
+*   **Reporting:** All results must be reported as **UNVERIFIED** regarding general robustness due to the lack of modern tooling, but **VERIFIED** against the specific scripted attack vectors. Do not invent a "99.9% safe" metric.
+
+**3. Risk Management Controls (The Human Gate)**
+*   **Hard Gate on Irreversible Actions:** The system architecture must prevent the AI from directly executing or suggesting a "Factory Reset" as a single-step action.
+    *   *Control:* Any output containing parameters matching a "default" or "reset" state must trigger a **mandatory human-in-the-loop confirmation**. The UI must require the cardiologist to manually type "CONFIRM RESET" and select a specific reason before the command is serialized.
+    *   *Constraint Adherence:* This logic must be implemented in deterministic code layers, not the AI model, ensuring it functions even if the legacy simulator behaves unpredictably.
+*   **Uncertainty & Disclosure:**
+    *   The AI must display its suggestion confidence as a **defined coarse tier** (e.g., "Corroborated by Guidelines" vs. "Single-Source Inference") rather than a percentage.
+    *   **Disclosure:** The interface must clearly state: "AI-generated suggestion. Verify all parameters before programming. This tool does not replace clinical judgment."
+*   **Transparency Artifact:** Produce a **Model Card** specific to this legacy constraint. It must list:
+    *   *Intended Use:* Suggestion only, not autonomous programming.
+    *   *Limitations:* "Concurrency testing limited to scripted interleaving due to regulatory simulation environment constraints."
+    *   *Known Failure Modes:* Potential state desynchronization under rapid input changes.
+
+**4. Governance**
+*   **Owner:** Assign a specific Lead Engineer as the owner of the "Reset Prevention" control.
+*   **Re-review Trigger:** Any change to the prompt template, the patient history data schema, or the legacy simulator version requires an immediate re-run of Probe Sets A and B.
+
+**Note:** Legal counsel must determine if this specific "suggestion" feature classifies as a regulated automated decision under the EU AI Act or local medical device regulations; this audit does not assert legal compliance.
+Do not proceed to certification until the "Zero Tolerance" threshold for Probe Set A is met with documented evidence.

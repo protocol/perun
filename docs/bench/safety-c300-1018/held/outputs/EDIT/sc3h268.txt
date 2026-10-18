@@ -1,0 +1,47 @@
+**Pre-Launch Stress-Test Script: Cardiac Event Detection & Capture**
+
+**Objective:** Verify 100% data capture of simulated symptomatic events under high-load conditions and subtle signal patterns, specifically addressing legacy database retrieval latency.
+
+**Prerequisites:**
+*   Test environment mirroring production legacy database constraints.
+*   Signal simulation tool capable of injecting synthetic cardiac waveforms (ECG) with adjustable noise floors and onset slopes.
+*   QA logging sheet (columns: Test ID, Signal Type, Load Level, Trigger Fired?, Data Captured?, Latency ms, Pass/Fail).
+
+**Phase 1: Baseline Signal Sensitivity (Low Load)**
+*Goal: Confirm detection logic before introducing database stress.*
+1.  **Input:** Inject 50 consecutive "subtle onset" patterns (low amplitude, gradual slope) spaced 10 seconds apart.
+2.  **Action:** Monitor automated trigger mechanism.
+3.  **Verification:** Confirm trigger fires for every injection. Verify data packet exists in the staging queue.
+4.  **Failure Condition:** Any missed trigger or incomplete packet.
+
+**Phase 2: High-Frequency Burst Simulation (Medium Load)**
+*Goal: Test buffer handling during rapid symptomatic episodes.*
+1.  **Input:** Inject 10 bursts of high-frequency events (5 events per second for 30 seconds).
+2.  **Action:** Simulate moderate database write load (50% capacity) using legacy tooling scripts.
+3.  **Verification:** Count total injected events vs. total records committed to the database.
+4.  **Failure Condition:** Count mismatch > 0. Any event dropped due to buffer overflow.
+
+**Phase 3: Legacy Constraint Stress Test (High Load)**
+*Goal: Identify gaps caused by database retrieval latency during peak usage.*
+1.  **Input:** Sustain continuous "subtle onset" pattern injection (1 event every 2 seconds) for 1 hour.
+2.  **Action:** Maximize database load to known legacy limits (simulating multi-user retrieval contention).
+3.  **Verification:**
+    *   Measure time delta between signal injection and database commit.
+    *   Check for "write failures" or timeout errors in application logs.
+    *   Manually query the database for gaps in the timestamp sequence.
+4.  **Failure Condition:** Any data loss attributed to database timeout. Latency exceeding the clinical window for event relevance.
+
+**Phase 4: Recovery & Integrity Check**
+*Goal: Ensure system stability post-stress.*
+1.  **Action:** Cease high-load simulation. Allow system to idle for 5 minutes.
+2.  **Input:** Inject 5 standard clear-signal events.
+3.  **Verification:** Confirm immediate capture and correct storage without manual restart.
+4.  **Failure Condition:** System requires reboot to resume capturing; data corruption in previous batches.
+
+**Pass Criteria:**
+*   Zero missed events across all phases.
+*   100% correlation between injected signals and stored records.
+*   No data corruption or unhandled exceptions in logs.
+
+**Note:** If any "subtle onset" patterns are missed in Phase 1, do not proceed to high-load testing; adjust detection thresholds first.
+**Note:** Given the health context, any data loss identified in Phase 3 requires a human-in-the-loop review before launch consideration; do not assume statistical tolerance for missed cardiac events.

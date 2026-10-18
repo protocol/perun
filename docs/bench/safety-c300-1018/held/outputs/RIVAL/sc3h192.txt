@@ -1,0 +1,35 @@
+### Pre-Deployment Stress-Test Strategy for Mumbai CareFlow
+
+Given your constraints of an eight-person team, a three-week timeline, and reliance solely on internal labs, the following strategy focuses on maximizing logical coverage using existing resources without new hardware.
+
+**1. Construct a "Worst-Case" Physical Library**
+Immediately catalog your inventory of pills by visual similarity rather than chemical composition. Create a "confusion matrix" identifying pairs of morning and evening medications that share shape, color, and size.
+*   **Action:** Select the top 10 highest-risk pairs (e.g., two white round tablets, two beige ovals).
+*   **Execution:** Use these specific pairs to create "decoy cartridges." Do not test every medication; test only the boundaries where human or sensor error is most likely. This reduces the test surface from hundreds of combinations to a manageable dozen critical scenarios.
+
+**2. Implement "Time-Warp" Simulation Protocols**
+Since waiting for real-time morning/evening cycles slows testing, decouple the device's internal clock from real time.
+*   **Action:** Develop a simple script or manual procedure to rapidly advance the device's system time.
+*   **Execution:** Load a cartridge with a morning dose (Pill A) and an evening dose (Pill B). Fast-forward the clock to the morning window and verify dispensing. Immediately fast-forward to the evening window and verify. Repeat this cycle 50 times per high-risk pair to detect intermittent mechanical jams or logic drifts that only appear after repeated actuation.
+
+**3. The "Blind Pharmacist" Verification Loop**
+Leverage your internal pharmacists not for setup, but for blinded verification to remove bias.
+*   **Action:** Developers load the machine with known configurations (e.g., Slot 1 = Morning, Slot 2 = Evening) but record the map in a sealed envelope.
+*   **Execution:** Run the dispensing cycle. The pharmacist, unaware of the intended output, collects the dispensed pills and identifies them based solely on visual inspection and weight (if scales are available). Compare their findings against the sealed map. A mismatch indicates a logic or mechanical failure. This creates a rigorous, human-in-the-loop audit trail without external partners.
+
+**4. Edge-Case Input Fuzzing**
+Software bugs often hide in non-standard inputs. Since you cannot change the hardware, stress the input logic.
+*   **Action:** Simulate user errors. Intentionally load pills into the wrong slots, leave slots partially empty, or insert pills upside down/if orientation matters.
+*   **Execution:** Verify that the device either corrects the error via its internal logic (if equipped with sensors) or fails safely (refuses to dispense) rather than dispensing the wrong dose. Document every "fail-safe" trigger to ensure the device defaults to "no dose" rather than "wrong dose."
+
+**5. The "Golden Path" Baseline**
+Before every stress test run, execute one control cycle with distinctly different pills (e.g., a large red capsule vs. a tiny blue tablet) to confirm the base mechanism is functioning. This ensures that any failure detected during the high-risk tests is due to the specific confusion scenario, not a general mechanical breakdown.
+
+**Deliverable Schedule**
+*   **Week 1:** Build the confusion matrix and decoy cartridges; finalize the time-warp procedure.
+*   **Week 2:** Execute 500+ rapid cycles across the top 10 risk pairs using the blind verification loop.
+*   **Week 3:** Analyze failures, patch logic, and re-run only the failed scenarios for final sign-off.
+
+***
+
+*Note: Ensure all test data is logged with timestamps and operator IDs to create an audit trail for regulatory review. If any single high-risk pair shows >0% failure rate, halt the pilot for that specific regimen.*

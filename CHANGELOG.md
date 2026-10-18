@@ -3,6 +3,37 @@
 All notable changes to this repository are documented here. Format loosely
 follows Keep a Changelog; versioning follows Semantic Versioning.
 
+## [1.594.0] — 2026-10-18
+
+### Changed
+- `docs/bench/bizops-r4-1018/`: round 4 on the business-ops `SKILL.md` (PCSS only, $0, GLM-5.1 judge v2 both orders). Three candidate edits were tuned on the spent `bizops-sup-1018` scenarios, one (variant b: answer every question in order, closed form for a missing input) was frozen and preregistered, then run once on 150 fresh held-out scenarios against the shipped text and the rival. Edit vs rival 0.503 [0.433, 0.573] (61 / 29 / 60), shipped vs rival 0.507 [0.437, 0.577] (60 / 32 / 58), paired edit minus shipped -0.003 [-0.063, 0.060]: the ship rule (lower bound above 0) failed, so `SKILL.md` is unchanged, and no win is claimed. `docs/perun-vs-rivals.md` business-ops row records it. Synthetic, single-generator evidence.
+
+### Changed
+- `docs/bench/bizops-shipped-1018/`: preregistered descriptive bench (n=150, GLM-5.1 judge v2, PCSS only, $0) of the business-ops `SKILL.md` as shipped, which differs from the benched text e by 16 lines. On the same 150 scenarios it scores 0.580 [0.507, 0.650] against the rival; paired against e +0.017 [-0.037, 0.073] and against the earlier v0 +0.107 [0.040, 0.173]. `docs/perun-vs-rivals.md` now cites the shipped text's own value and says it differs from e. No `SKILL.md` change. Synthetic, single-generator evidence.
+
+### Changed
+- `docs/bench/bizops-sup-1018/`: preregistered superiority test (n=200 fresh held-out scenarios disjoint from every earlier bench set, GLM-5.1 judge v2, PCSS only, $0) of the shipped business-ops `SKILL.md` against its rival, rule fixed in advance: win-rate 95% CI lower bound above 0.5. Result 0.463 [0.403, 0.522] (72 wins / 41 ties / 87 losses): not a win. `docs/perun-vs-rivals.md` business-ops row records it. No `SKILL.md` change. Synthetic, single-generator evidence.
+
+### Added
+- `docs/bench/contribution-r3-1018/`: a preregistered round 3 for the `contribution` skill against github-contributor (fresh held-out n = 90 written after the freeze, tune n = 30 logged in `ledger-tune.jsonl`, judge protocol v2 with GLM-5.1 in both orders, PCSS only, $0). One frozen Answer shape edit scored 0.472 [0.383, 0.567] against 0.522 [0.439, 0.606] for the current text; paired difference -0.050 [-0.156, +0.056]. The keep rule (paired lower bound above 0) fails and superiority over the rival is not shown, so `SKILL.md` is unchanged. Synthetic, single-generator evidence.
+
+### Added
+- `docs/bench/delivery-sup-1018/`: preregistered n=150 forward test (fresh held-out tickets, PCSS only, $0, three judges, both orders, strict agreement then majority) of the shipped, unedited `agentic-delivery/SKILL.md` against Superpowers. Win rate 0.550 [0.507, 0.593] (31 W / 103 T / 16 L), so the preregistered rule (CI lower bound above 0.5) passes and the `docs/perun-vs-rivals.md` row is now a win. The margin is narrow (lower bound 0.507), it is the fourth look at one claim after non-wins at n=40 (0.562 [0.487, 0.637]) and n=60 (0.517 [0.450, 0.583]), and the evidence is synthetic, single-generator and judge-panel based. One amendment (ticket redraw cap 6 to 30) was logged before any plan existed.
+
+### Changed
+- `idea-critic/SKILL.md` decision method: step 5 now recomputes the requester's figures (totals, units x duration against capacity, ROI and payback, calendar) and opens the answer with each mismatch and its corrected number; step 6 now makes the decision a capped, time-boxed first step when real money is committed, with one numeric kill metric, a date inside that first window and a named pivot or stop action. Adds the `decision-recomputes-figures-and-caps-first-step` fixture to `evals/evals.json`. The exact text was frozen before the held-out run.
+- Evidence (`docs/bench/idea-critic-r9-1018/`, preregistered, PCSS only, no paid call): on 150 fresh held-out scenarios (6-word shingle overlap at most 0.10 with all other bench text) the edit scored 0.570 [0.510, 0.630] (55 W / 61 T / 34 L) against the gstack plan-ceo-review rival and the previous text 0.470 [0.407, 0.533] (42 / 57 / 51); paired edit minus previous +0.100 [0.033, 0.163], so the preregistered ship rule (paired lower bound above 0) and the win rule (lower bound above 0.5) both pass. The `docs/perun-vs-rivals.md` idea-critic rows are updated. Caveats: the win margin is 0.010, one run, one edit chosen on an 80-scenario tune set (paired +0.081, interval [-0.013, 0.175]) from three candidates, open-model judges and a single generator family; the previous text tied the rival in rounds 5 to 8, so a second fresh set should confirm it.
+- size-budget-raise: .claude/skills/idea-critic/SKILL.md 15519→15931 the two decision-method steps above (+412 bytes) kept by the n=150 held-out run (previous text 0.470 to edit 0.570)
+
+### Changed
+- `docs/roadmap.md` (regenerated from `docs/roadmap-input.json`): the stage signal, direction and evidence lines no longer say no skill beats its rival; they now cite the four preregistered fresh-set wins on `docs/perun-vs-rivals.md` (agentic-ceo, positioning and product-discovery replicated; agentic-delivery narrow), with the caveat that the scenarios are synthetic, from one generator family, and judged by LLMs, and the others at parity or behind.
+
+### Added
+- `docs/bench/wins-rep-1018/`: preregistered fresh replication (n=150 per skill, scenarios disjoint from every earlier bench set, same rivals and GLM-5.1 judge v2 in both orders as `confirm-v2-1017`, PCSS only, $0) of the three standing wins in `docs/perun-vs-rivals.md`. Rule fixed in advance: win-rate 95% CI lower bound above 0.5 keeps "Win". All three pass: agentic-ceo 0.637 [0.577, 0.697] (70 W / 51 T / 29 L), positioning 0.737 [0.680, 0.790] (90 / 41 / 19), product-discovery 0.690 [0.633, 0.747] (77 / 53 / 20); judge slot-1 rates 0.583, 0.507 and 0.563, all inside 0.4 to 0.6. The agentic-ceo estimate is below the first run's 0.733 and outside its interval. This is the second look at each claim; evidence is synthetic, single-generator and single-judge, not a claim about real users. Skill arms are the unedited shipped `SKILL.md` files (agentic-ceo differs from the first run's arm by one later wording-only commit).
+
+### Changed
+- `docs/perun-vs-rivals.md`: the agentic-ceo, positioning and product-discovery rows now show the replication beside the first run and keep "Win".
+
 ## [1.593.0] — 2026-10-18
 
 ### Added

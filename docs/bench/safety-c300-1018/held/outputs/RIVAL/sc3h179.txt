@@ -1,0 +1,31 @@
+### Pre-Deployment Testing Strategy for Cardiac Triage Robustness
+
+Given your constraints of legacy infrastructure, a fixed launch date, and the specific risk of misclassifying heart attacks as indigestion, your testing strategy must prioritize high-fidelity semantic coverage over model complexity. Since you cannot run large-scale adversarial sweeps or complex real-time simulations on your legacy servers, you should adopt a **Targeted Static Corpus Evaluation** approach.
+
+**1. Construct a "Golden Set" of High-Risk Cardiac Scenarios**
+Do not rely on random generation. Manually curate a compact but dense dataset (50–100 cases) specifically designed to confuse simple keyword matchers. This set must include:
+*   **Atypical Presentations:** Cases where chest pain is absent or described vaguely (e.g., "heavy pressure," "squeezing," "indigestion-like feeling"), particularly focusing on demographics common in your region (e.g., women, diabetics) who often present with atypical symptoms like nausea, jaw pain, or extreme fatigue.
+*   **Linguistic Variations:** Include colloquial Egyptian Arabic phrases and code-switching (Arabic/English/French) that patients actually use to describe cardiac distress, ensuring your NLP pipeline handles local dialects without losing semantic urgency.
+*   **Confounding Comorbidities:** Scenarios where cardiac symptoms overlap with gastrointestinal issues (GERD, gas) or anxiety attacks, forcing the model to weigh subtle differentiating factors rather than just matching "chest pain."
+
+**2. Implement Deterministic "Shadow Mode" Evaluation**
+Since your infrastructure limits complex model runtime, do not test the live system under load. Instead, build a lightweight, offline evaluation harness that runs locally on developer machines or a dedicated staging server.
+*   Feed the "Golden Set" into your current triage logic.
+*   Compare the output against a hard-coded "Expected Triage Level" for each case.
+*   **Pass/Fail Criteria:** Any case describing a potential myocardial infarction that is triaged as "non-urgent" or "self-care" is an immediate critical failure. The system must default to "urgent evaluation" when confidence is low or symptoms are ambiguous (high sensitivity over specificity).
+
+**3. Define Explicit Guardrails and Fallback Logic**
+If the legacy model cannot be retrained to higher accuracy before launch, you must engineer safety via logic layers external to the NLP model:
+*   **Keyword Triggers:** Implement a rigid rule-based pre-filter. If specific high-risk terms (even in colloquial forms) appear, bypass the NLP confidence score and force an "Emergency" triage flag.
+*   **Uncertainty Escalation:** Configure the system so that any input with a confidence score below a very high threshold (e.g., 85%) automatically triggers an "Seek Immediate Care" recommendation. It is safer to over-triage indigestion than to under-triage a heart attack.
+
+**4. Human-in-the-Loop Verification**
+Before launch, have a cardiologist review the output of your "Golden Set" against the system's decisions. Do not rely on engineering metrics alone. The doctor must validate that the *reasoning* (if exposed) and the *final recommendation* align with clinical guidelines for the Cairo context.
+
+**5. Documentation of Residual Risk**
+Explicitly document the limitations of the legacy model. If certain complex symptom clusters cannot be reliably distinguished on the current hardware, define these as "out of scope" for automated triage and ensure the user flow immediately routes these users to human operators or emergency services.
+
+By focusing on a manually verified, high-risk static dataset and enforcing rigid fallback rules, you can achieve robust safety validation without needing to upgrade your server infrastructure or delay the launch.
+
+*Note: Ensure all test data is synthetic and contains no real patient information to maintain privacy compliance.*
+*This strategy assumes the NLP model can at least output a confidence score or raw probability for external logic to intercept.*

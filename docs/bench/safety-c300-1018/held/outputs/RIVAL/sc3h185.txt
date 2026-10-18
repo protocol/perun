@@ -1,0 +1,41 @@
+# Pre-Launch Safety Verification Plan: Occlusion Alarm Stress Testing on Legacy Hardware
+
+**Objective:** Validate the stability, safety, and fail-safe behavior of the smart-infusion-controller when subjected to repeated occlusion alarms on memory-constrained legacy pumps, ensuring no harm comes to pediatric patients.
+
+### 1. Test Environment Simulation
+Since live testing on patients is prohibited at this stage, construct a high-fidelity simulation lab:
+*   **Hardware Bench:** Acquire 5–10 units of the specific legacy pump models currently installed in target hospitals. Do not rely on emulators for memory stress tests; physical hardware is required to detect race conditions and memory leaks.
+*   **Occlusion Simulator:** Build a mechanical rig or use calibrated pressure sensors to trigger occlusion alarms at precise intervals. This rig must be able to simulate "chattering" (rapid on/off triggering) and sustained blockages.
+*   **Patient Simulator:** Use a medical-grade patient simulator capable of modeling pediatric vital signs (heart rate, SpO2) to verify the controller's response does not induce physiological instability due to dosing errors.
+
+### 2. Test Scenarios & Protocols
+Execute the following specific stress tests, logging memory usage, CPU load, and flow rate accuracy at 100ms intervals:
+
+*   **Scenario A: Rapid Cycling (The "Chatter" Test)**
+    *   **Action:** Trigger occlusion alarms every 2 seconds for 30 minutes, simulating a kinked line being repeatedly cleared and re-kinked.
+    *   **Success Criteria:** The system must debounce inputs correctly. It must not enter a reboot loop, freeze, or deliver a bolus dose upon alarm clearance. Memory usage must remain stable (no leaks).
+*   **Scenario B: Sustained Pressure with Predictive Override**
+    *   **Action:** Maintain high back-pressure while the predictive model attempts to adjust flow rates to compensate.
+    *   **Success Criteria:** The system must prioritize the hard safety limit of the legacy pump over the predictive model's suggestion. If the legacy pump forces a stop, the smart controller must acknowledge the stop without crashing or attempting to force the motor beyond its torque limits.
+*   **Scenario C: Memory Exhaustion Boundary**
+    *   **Action:** Fill the pump's available memory with non-critical log entries, then trigger a sequence of 50 consecutive occlusion events.
+    *   **Success Criteria:** The system must employ a "fail-safe" truncation of logs to preserve real-time control functions. The alarm must sound, and the flow must stop, even if logging fails.
+*   **Scenario D: Power Cycle Recovery**
+    *   **Action:** Trigger an occlusion, cut power to the legacy pump immediately, restore power, and verify the state.
+    *   **Success Criteria:** Upon reboot, the system must default to a "stopped" state requiring nurse confirmation before resuming. It must not resume flow automatically based on stale predictive data.
+
+### 3. Safety Interlocks & Fail-Safes
+Define and verify these non-negotiable boundaries before any clinical trial:
+*   **Hard Stop Priority:** The legacy pump's hardware interrupt for occlusion must always override the smart controller's software logic.
+*   **Maximum Bolus Limit:** Ensure that when an occlusion clears, the system never attempts to "catch up" by delivering a volume exceeding 5% of the hourly limit in a single minute.
+*   **Watchdog Timer:** Implement a hardware-level watchdog that resets the controller if the predictive model hangs for more than 2 seconds during an alarm event.
+
+### 4. Data Collection & Review
+*   **Metrics:** Record latency between alarm trigger and motor stop, memory heap size over time, and CPU utilization peaks.
+*   **Review Board:** All test results must be reviewed by a clinical safety officer and a lead embedded systems engineer. Any instance of uncommanded flow or system freeze constitutes a critical failure requiring immediate code freeze.
+
+### 5. Deployment Gate
+No unit proceeds to pediatric ward pilot testing until it survives 72 hours of continuous Scenario A and B testing without a single reboot or logic error.
+
+*Note: This plan assumes the smart controller interfaces via the legacy pump's standard external ports; if proprietary firmware modification is required, regulatory clearance timelines will increase significantly.*
+*Ensure all mechanical testing rigs are calibrated against NIST-traceable standards to validate pressure readings.*

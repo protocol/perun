@@ -1,0 +1,33 @@
+### Pre-Launch Safety Plan: Equity Evaluation for Traffic Light Optimization
+
+Given the constraint that the simulation software does not fully model pedestrian behavior in poorer districts, the safety plan must rely on **proxy metrics**, **sensitivity analysis**, and **conservative bounding** rather than direct pedestrian flow simulation. The following method evaluates equity using available traffic data to infer potential disparities.
+
+**1. Define Proxy Metrics for Vulnerable Populations**
+Since direct pedestrian modeling is unavailable, use vehicle traffic patterns as proxies for human presence in lower-income districts.
+*   **Transit Bus Latency:** Map bus routes heavily utilized in lower-income areas. Treat increased bus wait times or schedule deviation as a direct proxy for negative impact on residents who rely on public transit.
+*   **Non-Motorized Traffic Corridors:** Identify road segments with high densities of cycling infrastructure or known informal crossing points in target districts. Monitor vehicle throughput delays on these specific segments; significant increases in vehicle idling may indicate prolonged red lights that would logically correlate with extended pedestrian wait times.
+*   **Intersection Density:** Prioritize evaluation on intersections within poorer districts that have the highest ratio of residential entries to major arterial roads, as these are most likely to suffer from "green wave" optimizations favoring through-traffic.
+
+**2. Conduct Comparative Baseline vs. Optimized Simulations**
+Run parallel simulations for peak hours using the current timing (Baseline) and the proposed algorithm (Optimized).
+*   **Segmented Data Collection:** Do not rely solely on city-wide averages. Aggregate results specifically by neighborhood classification (e.g., Index of Multiple Deprivation deciles).
+*   **Metric Comparison:** Calculate the percentage change in average wait time and maximum queue length for the defined proxy metrics in lower-income districts compared to the city-wide average.
+*   **Equity Threshold:** Establish a hard safety gate: If the optimization increases wait times for the defined proxies in lower-income districts by more than 5% relative to the baseline, or if the disparity gap between wealthy and poorer districts widens by more than 10%, the configuration fails the safety check.
+
+**3. Perform Sensitivity Analysis on Missing Variables**
+Address the missing pedestrian data by simulating worst-case scenarios through parameter manipulation.
+*   **Artificial Congestion Injection:** Manually increase simulated vehicle demand on side streets in poorer districts to mimic the friction caused by unmodeled pedestrian crossings. If the optimizer aggressively cuts green light duration in response to this artificial congestion to clear main arteries, it indicates a high risk of real-world bias against those areas.
+*   **Minimum Green Time Stress Test:** Systematically lower the global minimum green light setting in the simulation. Observe if the optimizer disproportionately reduces cycle times in lower-income zones compared to commercial zones. This reveals if the algorithm inherently deprioritizes areas with lower baseline traffic volumes.
+
+**4. Implement a "Human-in-the-Loop" Review**
+Before any live deployment, require a manual review of the top 10 most negatively impacted intersections identified in the simulation.
+*   **Qualitative Overlay:** Cross-reference simulation failures with local knowledge from community liaisons regarding school zones, market hours, and elderly care facilities in those specific districts.
+*   **Conservative Override:** If the simulation shows neutral results but local knowledge suggests high pedestrian activity not captured by proxies, manually enforce stricter minimum green light constraints for those specific nodes.
+
+**5. Deployment Guardrails**
+*   **Phased Rollout:** Deploy the optimizer to only one non-critical district first, monitoring real-world bus telemetry and community feedback for two weeks before expanding.
+*   **Kill Switch:** Establish an automated trigger that reverts to baseline timing if real-world bus latency in target districts exceeds the simulation's predicted worst-case scenario.
+
+This approach leverages existing traffic data to infer pedestrian impact, ensuring that efficiency gains do not come at the cost of equity, even without perfect behavioral modeling.
+
+*Note: This plan assumes access to granular traffic volume data segregated by neighborhood. Immediate engagement with local transit authorities is required to validate bus route proxies.*

@@ -1,0 +1,29 @@
+**BLUF:** You cannot validate that the patch resolves the glitch "under all simulated patient conditions" or guarantee "no patient is ever left without an audible alert" within three weeks using only existing test beds. Absolute certainty is unachievable; instead, you must execute a risk-based validation plan that identifies residual risk, implements a human-in-the-loop gate for high-stakes failures, and transparently reports unverified scenarios to regulators.
+
+**Step 1: Harm Inventory & Worst-Case Definition**
+Immediately document the specific failure mode: "Silencing during high-pressure events." Define the affected population (ICU patients with acute respiratory distress) and the worst-case realistic outcome (patient death due to undetected barotrauma or hypoxia). Do not claim this list is exhaustive; acknowledge that unknown failure modes may exist outside your current simulation scope.
+
+**Step 2: Targeted Adversarial Testing (Measure)**
+Design a runnable test plan focused strictly on the silencing glitch, not general functionality.
+*   **Probe Set:** Create inputs representing known high-pressure triggers (e.g., coughing, tube occlusion, disconnection) combined with edge cases your existing hardware can simulate (e.g., rapid pressure spikes, sensor noise).
+*   **Controls:** Include a "known-bad" control (the unpatched system must silence) and a "known-good" control (a manual alarm trigger must sound).
+*   **Metric & Threshold:** The pass threshold for any high-pressure event is **zero silencing incidents**. One failure constitutes a stop condition for launch.
+*   **Limitation Statement:** Explicitly label any patient condition your current test beds cannot simulate as **UNVERIFIED**. Do not invent a success rate (e.g., "99% safe") for these untested scenarios.
+
+**Step 3: Manage Residual Risk with Human Gates**
+Because you cannot test "all" conditions:
+*   **Uncertainty Disclosure:** The device interface must clearly indicate when alarm logic is operating in a "verified" vs. "unverified" pressure range if such distinction is technically feasible, or simply maintain a fail-safe default (alarm on) when sensor data is ambiguous.
+*   **Human-in-the-Loop:** For the submission and any initial deployment, mandate that the device does not autonomously silence *any* high-pressure alarm without a secondary, independent hardware watchdog or immediate nurse confirmation. Full autonomous silencing of high-stakes alerts is the failure mode you are mitigating, not the feature to be shipped without a backup.
+*   **Fallback:** If the software patch fails any single test row, the fallback is not "re-test," but "revert to always-on alarm" until the root cause is resolved.
+
+**Step 4: Transparency Artifact (Model/Data Card)**
+Prepare a safety card for the regulatory submission that includes:
+*   **Intended Use & Limitations:** Clearly state which pressure profiles were tested and which were **UNVERIFIED** due to hardware constraints.
+*   **Known Failure Modes:** Disclose the original silencing glitch and the specific conditions under which the patch was validated.
+*   **Owner & Version:** Name the lead engineer responsible for this validation and the specific software version tested.
+*   **No Certification:** Do not assert the system is "safe" or "bias-free." State that residual risk remains for untested conditions.
+
+**Step 5: Governance & Legal Routing**
+Assign a single owner to sign off on the residual risk. Since this is a life-critical medical device, route the question of whether your "UNVERIFIED" scenarios trigger specific regulatory disclosure duties or prohibit submission under local medical device laws to legal counsel immediately. Do not assert compliance yourself.
+
+**Note:** Absolute guarantees ("every possible failure mode," "no patient ever") are scientifically impossible to prove; regulators expect risk management, not perfection. If the three-week deadline prevents testing a critical high-pressure scenario, the only safe path is to delay submission or disable the auto-silence feature entirely until testing is complete.

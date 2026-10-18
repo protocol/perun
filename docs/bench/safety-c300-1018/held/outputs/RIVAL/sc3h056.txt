@@ -1,0 +1,34 @@
+### Strategy for Identifying and Fixing Critical Mistranslations
+
+Given the high stakes of emergency response and the lack of native speaker verification, your testing framework must rely on deterministic constraints, automated back-translation, and semantic consistency checks rather than subjective fluency.
+
+**1. Define a "Golden Set" of Critical Patterns**
+Do not test random sentences. Curate a fixed dataset of 50–100 high-priority emergency templates (e.g., "Evacuate immediately," "Do not drink tap water," "Shelter in place"). For each English source, define the *exact* required meaning in a structured format (e.g., JSON intent objects) rather than relying on a single "correct" translation string. This allows you to test for semantic preservation even if the phrasing varies.
+
+**2. Implement Automated Back-Translation Loops**
+Since you lack native speakers, use a secondary, independent translation engine (e.g., if your primary is Google, use DeepL or Azure as the verifier) to translate the output back to English.
+*   **Metric:** Calculate the semantic similarity between the original English input and the back-translated English output.
+*   **Threshold:** Flag any pair with a similarity score below 95% for immediate engineering review. High divergence often indicates lost negation ("do not" becomes "do"), changed urgency ("immediately" becomes "soon"), or altered scope ("all residents" becomes "some residents").
+
+**3. Enforce Deterministic Keyword Constraints**
+Create a hard-fail rule set for critical vocabulary. In emergency contexts, specific terms must never be translated loosely.
+*   **Negative Constraints:** Ensure words like "NOT," "NO," "STOP," and "AVOID" are present in the target language output. If the source contains a negation and the target does not contain the corresponding negative marker, the build fails.
+*   **Urgency Markers:** Map high-severity English terms (e.g., "CRITICAL," "DANGER," "EVACUATE") to their mandatory target equivalents. If the API returns a synonym with lower severity (e.g., translating "Evacuate" to "Leave" instead of "Flee/Evacuate"), flag it.
+
+**4. Stress Test with Adversarial Inputs**
+Mistranslations often occur with edge cases. Generate variations of your golden set including:
+*   **Typos and Noise:** "Evacuate immedately" or "Do not drnk water."
+*   **Ambiguity:** Phrases with double meanings that require context.
+*   **Mixed Languages:** Inputs containing both English and local loanwords.
+Run these through the pipeline to ensure the system degrades gracefully (e.g., returns an error or a safe default) rather than hallucinating a confident but wrong translation.
+
+**5. Deployment Guardrails**
+*   **Shadow Mode:** Before full deployment, route live traffic to your new system in parallel with a legacy system or a static rule-based fallback. Compare outputs in real-time.
+*   **Human-in-the-Loop Fallback:** For any message flagged by the automated checks above, default to a safe, pre-verified static message (e.g., "Emergency Alert: Please seek official information channels") rather than risking a dynamic mistranslation.
+
+**6. Continuous Regression Suite**
+Integrate these tests into your CI/CD pipeline. Any code change or API version update must pass the "Golden Set" with 100% semantic fidelity before merging. Treat any deviation in critical safety warnings as a P0 bug that blocks deployment.
+
+By shifting from "does this sound right?" to "does this preserve the exact logical intent and critical keywords?", you can rigorously validate safety without needing fluent humans for every test case.
+
+*Note: Prioritize fixing negation errors first, as these reverse the meaning of safety instructions. Consider partnering with local universities for volunteer verification if time permits before monsoon season.*

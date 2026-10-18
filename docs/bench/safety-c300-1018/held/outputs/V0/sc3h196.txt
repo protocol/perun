@@ -1,0 +1,34 @@
+**Immediate Safety Directive: Do not launch the automated dosing feature for high-fat meals without a human-in-the-loop gate.**
+
+Because your algorithm is known to miscalculate doses for high-fat meals—a failure mode that can cause dangerous hypoglycemia—fully autonomous execution of this action constitutes an unsafe, irreversible high-stakes automation. The "rigid deadline" and "cannot rebuild" constraints do not lower the safety floor; they increase the residual risk. You must implement a hard block or mandatory human confirmation for any dose calculation where the input image or user tag indicates a high-fat meal until the error rate is proven negligible.
+
+**Targeted Pre-Launch Safety Review Framework**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of a high-stakes action (insulin dosing) leading to physical injury (hypoglycemia).
+*   **Affected Group:** Patients consuming high-fat meals (e.g., pizza, fried foods).
+*   **Worst Case:** Severe hypoglycemic event requiring emergency intervention due to over-correction or timing errors caused by the model's parameter limitations.
+*   **Root Cause:** Model architecture inability to account for delayed gastric emptying in high-fat contexts via simple parameter tweaks.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure the failure rate specifically on this slice.
+*   **Probe Set:** Isolate all historical data entries tagged or identified as "high-fat." If historical data is sparse, synthesize adversarial test cases using known high-fat meal profiles where the correct bolus logic is medically established.
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger the specific miscalculation (high-fat meals).
+    *   *Negative Control:* Standard low-fat meals where the model is known to perform accurately.
+*   **Metric:** Percentage of high-fat meal calculations resulting in a dose deviation >10% from the clinically accepted standard.
+*   **Threshold:** **Zero tolerance** for deviations that risk hypoglycemia. If *any* test case in the high-fat subset produces a dangerous under/over-dose, the automated feature fails the launch criteria for that segment.
+*   **Stop Condition:** If the error rate on the high-fat subset is >0%, the automated output for this segment must be blocked or gated.
+*   **Transparency Artifact:** Draft a "Model Card" section explicitly stating: "Intended Use: Carb estimation for standard meals. Limitations: Known reduced accuracy on high-fat meals; manual verification required." Do not leave this cell blank or mark it "verified" if the metric is not zero.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** For any input detected as high-fat (via keyword tag or low-confidence image classification), the app must **not** auto-calculate or auto-deliver a dose. Instead, it must display a warning: "High-fat meal detected. Algorithm accuracy is limited. Please consult your healthcare provider's standard protocol for delayed bolusing before administering."
+*   **Uncertainty Disclosure:** Do not show a precise confidence percentage (e.g., "87% accurate"). Use defined coarse tiers: "Verified" (standard meals) vs. "Unverified/Requires Review" (high-fat meals).
+*   **Override Mechanism:** Ensure the user can easily bypass the suggestion and enter a manual dose without friction if they choose to ignore the warning, but the default state must be "stopped."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific clinical lead or product owner responsible for reviewing every failure in the high-fat test set before any release decision.
+*   **Legal Routing:** Immediately route the question of "regulatory liability for known algorithmic errors" to legal counsel. Do not assume parameter tweaks satisfy regulatory filing requirements for a known defect.
+
+**Note:** A "certification" of safety is impossible given the known defect; only residual risk reporting is valid.
+The regulatory deadline does not justify shipping a feature with a known, unmitigated physical harm vector.

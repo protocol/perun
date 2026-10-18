@@ -1,0 +1,22 @@
+### Safety Testing Protocol for Smart-Wheelchair Ramp
+
+**1. Controlled Simulation Matrix**
+Given the constraint of only two building types, you must simulate the remaining variables using a "Human-in-the-Loop" dummy system before any live user testing.
+*   **Variable Mapping:** Create a grid combining the two available door widths (e.g., Narrow: 32", Wide: 36"+) against three approach speeds (Slow: <0.5 m/s, Normal: 0.8 m/s, Fast: >1.2 m/s).
+*   **The "Shadow" Test:** Do not use real users for initial timing calibration. Use a weighted mannequin on a wheelchair dolly pushed by an engineer at measured speeds. Place pressure-sensitive mats or laser tripwires at the "entrapment zone" (the gap between the door frame and the ramp edge).
+*   **Failure Injection:** Manually trigger sensor noise or delay the retraction signal by 500ms increments during these shadow tests to observe where the mechanical stop engages. The ramp must hit a physical hard-stop or reverse immediately upon detecting resistance in this zone, regardless of the sensor timer.
+
+**2. The "Two-Second" Rule Validation**
+Your logic must enforce a mandatory dwell time. The ramp must remain fully extended for a minimum of 10 seconds after the proximity sensor loses the signal, ensuring the user has fully cleared the threshold before retraction begins. Test this by having the "user" stop abruptly halfway across the ramp. If the ramp begins to retract while weight is still detected on the platform, the logic fails.
+
+**3. Manual Override Requirements**
+Before public installation, every unit must be equipped with three distinct, redundant override mechanisms that bypass the automated logic entirely:
+*   **Immediate Stop (E-Stop):** A large, red, latching physical button mounted on the ramp housing and at the doorway interior. Hitting this must cut power to the motor instantly, locking the ramp in its current position.
+*   **Manual Crank Interface:** A standardized socket (e.g., hex drive) accessible from the ground allowing facilities staff to physically retract or extend the ramp if the motor fails or locks up. This must be possible without special tools.
+*   **Local Mode Switch:** A key-operated switch inside the building that disables the proximity sensor entirely, keeping the ramp either permanently retracted or permanently extended until toggled back. This prevents deployment during maintenance or false sensor triggers.
+
+**4. The "Four-Week" Critical Path**
+With four weeks remaining, prioritize the **failure mode** over the success mode. Spend the first two weeks solely on the "Shadow Tests" described above, intentionally trying to trap the dummy. If the system traps the dummy even once, the launch must be delayed. No amount of successful deployments validates safety; only the absence of entrapment during forced failure does. Use the final two weeks to install the manual overrides and train facility staff on their use. Do not proceed to live user testing until the dummy has survived 50 consecutive failure-injection cycles without incident.
+
+*Note: Since you cannot test all door widths physically, mathematically model the ramp's arc trajectory against standard Indian building codes for the untested widths to ensure no geometric collision is possible.*
+*Note: Document every "near miss" during shadow testing as a critical bug; do not classify them as "operator error."*

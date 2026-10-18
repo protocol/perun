@@ -1,0 +1,36 @@
+**Rapid Pre-Launch Safety Plan: Pesticide Dosing Recommender**
+
+**1. Immediate Harm Inventory (Day 1)**
+Before testing, explicitly list the worst-case scenarios your logic could cause. Do not proceed until these are written down:
+*   **Over-dosing:** Recommending concentration levels that cause phytotoxicity (crop burn) or illegal residue levels.
+*   **Under-dosing:** Recommending ineffective levels leading to pest resistance or total crop loss.
+*   **Wrong Product Match:** Suggesting a pesticide ineffective against the specific pest or harmful to the specific crop stage.
+*   **Unsafe Automation:** Allowing the system to auto-send advice without a human farmer confirmation step for high-risk combinations.
+
+**2. "Zero-Budget" Output Evaluation (Days 2–5)**
+Use your existing data logs to construct adversarial test cases. Do not test average cases; test the edges where farmers get hurt.
+*   **Construct Positive Controls (Known Bad):** Create 20–30 input rows where the correct answer is "Do Not Spray" or a specific low dose, but force the model to generate advice. Examples: wrong crop/pest pairing, extreme weather conditions in logs, or early growth stages. *Pass Condition:* The system must refuse to give a standard dose or explicitly warn. If it outputs a number, the gate fails.
+*   **Construct Negative Controls (Known Good):** Use 50 verified historical logs where human experts gave correct advice. Run these through your system. *Pass Condition:* Output matches the expert log within a safe tolerance margin.
+*   **Sliced Testing:** Group your logs by crop type and pest severity. Ensure you have at least 5 failing cases per major crop. If a crop segment has no test cases, mark its safety status as **UNVERIFIED**.
+*   **Injection & Leakage Check:** Scan inputs for user-supplied text (e.g., farmer notes). Ensure malicious or confusing text cannot override the dosing logic or reveal other farmers' data.
+
+**3. Mandatory Human-in-the-Loop Gate (Implementation)**
+*   **Irreversible Action Block:** Since incorrect dosing ruins livelihoods, **do not ship fully automated delivery** for any recommendation exceeding a high-risk threshold (e.g., high toxicity chemicals or sensitive crop stages).
+*   **Workflow:** The system must generate a draft recommendation that requires a human agronomist review or an explicit, multi-step farmer confirmation ("I confirm my crop is X and pest is Y") before the final dosage is displayed.
+*   **Uncertainty Display:** Never show a raw confidence percentage (e.g., "87% sure"). Instead, display defined tiers: **"Confirmed"** (matches expert log), **"Estimate"** ( extrapolated from similar cases), or **"Unverified"** (no close match in logs). If the tier is not "Confirmed," require the human gate.
+
+**4. Transparency Artifact (Model Card Lite)**
+Create a single-page document attached to the launch build containing:
+*   **Intended Use:** Specific crops and pests covered.
+*   **Limitations:** Explicitly list crops/pests/weather conditions where the system has **UNVERIFIED** performance due to lack of data.
+*   **Owner:** Name the specific engineer responsible for monitoring output errors post-launch.
+*   **Data Source:** Briefly state the origin of the training logs and known gaps (e.g., "No data for monsoon-season spraying").
+
+**5. Governance & Rollback**
+*   **Stop Condition:** If any "Known Bad" positive control results in a dangerous dosage recommendation, the launch is blocked immediately.
+*   **Monitoring:** Assign one engineer to review the first 100 live recommendations daily for the first two weeks.
+*   **Legal Routing:** You must route the question of "legal disclosure requirements for automated agricultural advice in India" to legal counsel. Do not assume compliance; verify if this constitutes a regulated decision.
+
+**Notes**
+*   Do not invent a "0% error rate" or claim the system is "unbiased"; report the actual failure count from your controls.
+*   If you cannot construct "Known Bad" cases from existing logs, you lack the data to validate safety; delay launch for those specific scenarios.

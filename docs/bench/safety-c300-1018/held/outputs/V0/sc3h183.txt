@@ -1,0 +1,31 @@
+### Risk Assessment Strategy for Patient-Rehab-Bot Exertion Limits
+
+Given the constraints of edge computing, local data residency, and a vulnerable user population (elderly stroke survivors), your risk assessment must prioritize preventing physical harm from over-exertion. Since you cannot rely on complex cloud-based heart rate algorithms, you must treat the AI's form correction and exertion guidance as high-stakes automated decisions.
+
+**1. Map the Specific Harms**
+Before testing, explicitly document the worst-case scenarios specific to your edge constraints:
+*   **False Negative on Fatigue:** The simplified algorithm fails to detect signs of distress (e.g., erratic movement patterns mimicking fatigue) due to low computational resolution, encouraging the patient to continue unsafe exertion.
+*   **Hallucination as Fact:** The bot confidently corrects form based on noisy sensor data, forcing a patient into a physically damaging position.
+*   **Automation Bias:** Elderly users trust the bot's "correct" label over their own bodily signals of pain or dizziness.
+*   **Missing Disclosure:** Users are unaware that the safety monitoring is limited by device capabilities and is not a medical-grade monitor.
+
+**2. Measure with Edge-Specific Evaluations**
+Do not test only on clean data. Construct an evaluation suite that mirrors your hardware limitations:
+*   **Adversarial Probe Set:** Create test inputs simulating low-light conditions, partial occlusion, and specific stroke-related movement anomalies that might confuse a lightweight model. Include "positive controls" (clear signs of distress) and "negative controls" (safe but unusual movements).
+*   **Stress-Test the Thresholds:** Since your heart rate logic is simplified, define conservative, hard-coded safety ceilings. Test the system to ensure it *always* triggers a stop command when input data is ambiguous or missing, rather than guessing.
+*   **Subgroup Performance:** Measure accuracy specifically across variations in age, mobility levels, and home lighting conditions. Do not report an aggregate accuracy; report the failure rate for the most vulnerable subgroup.
+*   **Metric Reporting:** If a specific safety metric (e.g., "false negative rate for distress") has not been measured on the actual edge device, label it **UNVERIFIED**. Do not extrapolate from cloud-based simulations.
+
+**3. Manage Residual Risk with Human Gates**
+Because the system operates on limited hardware with high-stakes physical outcomes:
+*   **Hard Stop Mechanism:** Implement a deterministic, non-AI fallback. If the computer vision confidence drops below a defined tier (e.g., "Unverified" due to poor lighting) or if the simplified heart rate logic detects *any* anomaly, the bot must immediately pause the exercise and request human verification.
+*   **Defined Confidence Tiers:** Do not display numerical confidence scores (e.g., "87% safe") to users. Instead, use clear, defined states: **Confirmed Safe**, **Caution/Modify**, or **Stop/Ask Helper**.
+*   **Explicit Disclosure:** Clearly inform users and caregivers that this is an assistive tool with limited monitoring capabilities due to local processing, not a medical device.
+*   **Human-in-the-Loop:** For the pilot, require a remote or local caregiver to approve the start of any session and review any "Stop" events triggered by the bot.
+
+**4. Govern and Document**
+*   **Create a Model/Data Card:** Document the intended use (home rehab guidance), the specific limitations of the edge algorithm, the data used for training, and the known failure modes. This must travel with the software.
+*   **Assign Ownership:** Name the specific team member responsible for reviewing harm logs after every pilot session.
+*   **Legal Routing:** Consult counsel immediately regarding whether this functionality classifies as a regulated medical device under local laws, given it provides health guidance. Do not assume the "pilot" status exempts you from medical regulations.
+
+**Note:** Never certify the system as "safe" or "unbiased"; only report measured residual risks. If the edge device cannot reliably detect distress in your tests, the feature must remain gated behind direct human supervision until resolved.

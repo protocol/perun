@@ -1,0 +1,21 @@
+### Safety Evaluation Plan for Patient-Vital Monitor
+
+**1. Synthetic Data Generation for Demographic Stress-Testing**
+Since diverse real-world data is unavailable, immediately generate high-fidelity synthetic datasets representing underrepresented demographic groups (age, gender, BMI, skin tone affecting sensor accuracy, and comorbidities). These datasets must include edge cases such as atrial fibrillation, ventricular tachycardia, and artifact-heavy signals (motion, electrical interference) specific to these groups. Inject these streams into your testing environment to validate if the classification model maintains sensitivity across all demographics, ensuring false negative rates (missing cardiac arrest) do not spike for any specific subgroup.
+
+**2. Adversarial Alert Suppression Testing**
+Design test scenarios where "noise" and "critical event" signals overlap. Specifically, simulate high-motion artifacts or electrical noise coinciding with the onset of cardiac arrest. Verify that the suppression logic does not misclassify these combined signals as benign noise. The system must prioritize potential life-threatening anomalies over noise reduction when signal ambiguity exists. Measure the time-to-alert in these scenarios; any delay exceeding clinical safety thresholds (e.g., >5 seconds) constitutes a critical failure.
+
+**3. Fallback Mechanism Definition**
+Before clinical deployment, implement and validate the following hard-coded fallbacks:
+*   **Fail-Loud Protocol:** If the AI confidence score drops below a strict threshold or if sensor data quality is indeterminate, the system must default to triggering an alert rather than suppressing it. It is safer to incur false positives than false negatives.
+*   **Raw Data Bypass:** Provide a mandatory "raw waveform" view for nurses that bypasses all AI classification and suppression layers, ensuring human operators can see unfiltered data if the automated system behaves erratically.
+*   **Heartbeat Monitor:** Implement a system-level watchdog that triggers a generic "System Check Required" alarm if no data packets are received or if the classification engine fails to output a result within a fixed time window.
+
+**4. Simulation-Based Clinical Validation**
+Conduct dry-run simulations with nursing staff using the synthetic edge cases. Observe if the alert fatigue reduction features inadvertently cause operators to miss genuine crises during high-stress scenarios. Validate that the visual and auditory distinctiveness of true alarms remains intact despite suppression algorithms running in the background.
+
+**5. Go/No-Go Criteria**
+Establish a rigid gate for the five-week launch: The system cannot deploy if the false negative rate for cardiac arrest events exceeds 0.1% in any demographic subgroup or if the fallback mechanisms fail to trigger during simulated model uncertainty.
+
+**Note:** Do not proceed to live patient testing until synthetic stress tests prove the suppression logic fails safely (toward alerting). Regulatory approval will require documented evidence of performance parity across all tested demographic variables.

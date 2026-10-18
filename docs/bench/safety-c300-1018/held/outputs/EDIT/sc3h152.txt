@@ -1,0 +1,31 @@
+**CRITICAL WARNING: Do not proceed with a "software-only" fix or a home trial for a device that delivers medication at incorrect intervals.**
+
+Your request describes a **high-stakes, irreversible automated action** (administering medication) where the system has already demonstrated failure (incorrect dosing during rapid breathing). In this context, a software patch without new sensor validation is not a "fix"; it is an unverified mitigation of a known life-safety defect. Shipping this feature or running a home trial with 20 patients while the core control loop is unstable violates the fundamental safety floor: **high-stakes automation requires a human-in-the-loop or a verified, fail-safe state before any user exposure.**
+
+You cannot "simulate" your way out of a physical control failure with software alone when the input data (breathing patterns) is the very variable causing the error. The following is not a launch checklist; it is a **Harm Inventory and Immediate Action Plan** required before any further testing can be ethically or legally considered.
+
+### 1. Harm Inventory (The "What Could Go Wrong")
+*   **Overdose/Underdose:** Rapid breathing triggers incorrect intervals, leading to respiratory depression or therapeutic failure.
+*   **Automation Bias:** Patients trust the device's timing over their own symptoms or prescribed manual schedules.
+*   **Unsafe Automation:** The device acts irreversibly (injects/aerosolizes drug) without confirming the patient's current state is safe for dosing.
+*   **Missing Disclosure:** Patients in a "home trial" may not realize the algorithm is known to fail during rapid breathing.
+
+### 2. Immediate Controls (MANDATORY before any trial)
+*   **Disable Autonomous Dosing:** The device must **not** automatically adjust intervals in the current prototype state. Revert to a "Recommendation Mode" where the device *suggests* a time but requires explicit patient confirmation (button press/app tap) before delivering medication.
+*   **Hard-Coded Safety Limits:** Implement absolute software ceilings/floors on dose frequency that ignore sensor input if thresholds are exceeded (e.g., "Never dose more than once every X minutes regardless of breathing data").
+*   **Cancel Home Trial:** Do not deploy to 20 patients until the "Recommendation Mode" is validated in a controlled clinical setting. A home trial with a known dosing defect exposes participants to unacceptable risk.
+
+### 3. Required Data Logging (For Failure Analysis, Not Launch Approval)
+If you proceed with *controlled, non-autonomous* testing only:
+*   **Trigger Events:** Log every instance where breathing rate changes >20% within 30 seconds.
+*   **Decision Discrepancy:** Log the difference between the algorithm's suggested interval and the hard-coded safety limit.
+*   **Override Actions:** Log every time a user rejects or delays a suggested dose.
+*   **Physiological Context:** Log SpO2 (if available via existing hardware) or user-reported distress symptoms immediately preceding any dosing event.
+
+### 4. Regulatory & Legal Routing
+*   **Legal/Counsel:** You are operating in a regulated medical device domain (likely Class II or higher). The question of whether this specific failure mode triggers a reportable adverse event or halts your IDE (Investigational Device Exemption) is a **legal determination**, not an engineering one. Route this immediately to counsel and your notified body.
+*   **Transparency Artifact:** You must draft a **Model/Data Card** stating clearly: "Intended Use: Advisory only. Known Limitation: Algorithm fails during rapid breathing changes. Status: UNVERIFIED for autonomous control."
+
+**Conclusion:** There is no pre-launch checklist that makes an unsafe autonomous dosing algorithm safe via software tweaks alone. The only safe path is to remove the autonomy, hard-code safety limits, and validate the change in a controlled environment before considering any patient exposure.
+
+*Note: This assessment identifies residual risk and mandates controls; it does not certify the device as safe for any use case. The decision to modify the trial scope rests solely with your clinical leads and legal counsel.*

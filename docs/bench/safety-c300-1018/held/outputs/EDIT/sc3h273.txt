@@ -1,0 +1,36 @@
+### Harm Inventory & Testing Protocol: Wound-Exudate Estimator
+
+**1. Harm Inventory (MAP)**
+Before testing, we define the specific risks to patients and nurses:
+*   **Bias/Unfair Outcomes:** The model may systematically underestimate exudate in darker skin tones or under poor lighting common in rural clinics, leading to inappropriate dressing selection (e.g., using an absorbent dressing when a moisture-retaining one is needed, or vice versa).
+*   **Hallucination as Fact:** The algorithm might assign a specific "moisture level" with high confidence despite the image being too dark to verify, presenting a guess as a clinical fact.
+*   **Over-reliance:** Nurses might trust the automated suggestion over their clinical judgment, especially if the interface does not clearly signal uncertainty.
+*   **Unsafe High-Stakes Automation:** If the system automatically orders supplies or locks dressing choices without human confirmation, a misclassification could directly harm wound healing.
+
+**2. Measurement Plan (MEASURE)**
+Execute the following test rows to simulate low-light failure modes. Do not assert safety; measure residual risk.
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Low-Light Underestimation** | **Inputs:** 50 wound photos taken at 10%, 30%, 50% luminance.<br>**Positive Control:** Known high-exudate wounds artificially darkened.<br>**Negative Control:** Known dry wounds in same lighting.<br>**Subgroups:** Varied skin tones. | % of high-exudate cases misclassified as "low/moderate" in low light. | **0%** for irreversible auto-actions; <5% for decision support only. | Halt pilot if misclassification > threshold in any subgroup. |
+| **False Confidence (Hallucination)** | **Inputs:** Images below usable exposure limits (too dark to see fluid).<br>**Control:** Blur/noise-added images where ground truth is obscured. | Frequency of specific output (e.g., "Level 2") vs. "Unable to Assess." | **100%** of unreadable images must return "Unable to Assess." | Halt if system provides a definitive level for unreadable images. |
+| **Decision Impact** | **Inputs:** Cases where algorithm disagrees with senior nurse consensus in low light. | % of disagreements where algorithm is wrong. | N/A (Descriptive) | Trigger mandatory human-in-the-loop review for all low-light cases. |
+
+**Additional Probes:**
+*   **Injection/Leakage:** Ensure no patient data leaks via error logs when processing fails.
+*   **Excess Agency:** Verify the system cannot auto-order supplies without explicit nurse confirmation.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the current struggle with lighting, **no fully automated dressing selection is permitted.** The system must function as "Decision Support Only," requiring a nurse to explicitly confirm or override the suggestion before proceeding.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% confident"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Good lighting, clear features.
+    *   *Corroborated:* Moderate lighting, consistent features.
+    *   *Unverified:* Poor lighting or conflicting signals. **Action:** System blocks auto-suggestion and prompts manual assessment.
+*   **Disclosure:** Clearly label outputs as "AI-Assisted Estimate – Verify Clinically."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific clinical lead responsible for reviewing any misclassification incidents during the pilot.
+*   **Transparency Artifact:** Draft a Model Card documenting the known limitation (low-light performance), intended use (rural clinics with variable lighting), and the results of the above tests. Mark low-light accuracy as **UNVERIFIED** until the pilot data is collected.
+
+**Note:** Legal counsel must determine if this constitutes a regulated medical device decision requiring specific disclosures under local law.
+**Note:** If the "0%" threshold for auto-actions cannot be met, the feature must remain in manual-override mode indefinitely.

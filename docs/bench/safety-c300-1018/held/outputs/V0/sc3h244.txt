@@ -1,0 +1,30 @@
+**Critical Safety Finding: Immediate Halt Required on Current Plan**
+
+You cannot complete a "rigorous verification protocol" for a high-stakes medical device feature within three days, nor can you safely lock firmware for a system that automatically adjusts humidity for COPD patients without a verified human-in-the-loop gate or fallback.
+
+The request contains a fundamental safety contradiction: **Automatic adjustment of a life-support parameter (humidity) for a vulnerable population (COPD patients) where failure causes physical harm (bleeding/tissue damage) cannot be certified safe via simulation alone in a 72-hour window.**
+
+**Immediate Actions Required (Before Firmware Lock):**
+
+1.  **Disable Full Automation (The Human Gate):**
+    Do not ship the feature as "fully automatic." The firmware must be locked to a **safe, conservative default mode** (e.g., fixed low-level humidity or manual user selection) where the algorithm only *suggests* adjustments that require explicit user confirmation, or the system defaults to a known-safe baseline if confidence is not absolute. Automatic execution of irreversible or harmful physical changes without a verified override is a critical failure mode.
+
+2.  **Define "Failure" and Residual Risk (No Fabrication):**
+    You cannot claim "never fails to activate." Any unmeasured scenario is **UNVERIFIED**. You must explicitly document in the release notes and user manual: *"The automatic humidity adjustment feature has not been validated against all possible environmental extremes. Users must manually monitor nasal comfort and discontinue automatic mode if dryness or bleeding occurs."*
+
+3.  **Minimum Viable Simulation Checklist (For Residual Risk Assessment Only):**
+    Since you cannot test everything, you must test the **worst-case boundaries** to determine if the default fallback is safe. Run only these specific probes:
+    *   **Extreme Low Ambient Humidity (<10% RH) + High Flow Rate:** Verify the system does not over-compensate causing condensation (aspiration risk) or under-compensate causing immediate dryness.
+    *   **Sensor Obstruction/Failure Mode:** Simulate blocked humidity/flow sensors. **Requirement:** The system must revert to the safe default baseline, not guess or freeze.
+    *   **Power Interruption During Adjustment:** Verify the valve returns to a safe open/closed state, not a stuck position.
+    *   **Adversarial Input (Rapid Flow Fluctuation):** Simulate a patient coughing or removing the cannula rapidly. Ensure the algorithm does not interpret this as a need for maximum humidity.
+
+**Deliverable for Certification File:**
+Do not submit a "Verification Protocol Complete" sign-off. Instead, submit a **Residual Risk Report** stating:
+*   **Harm Inventory:** Potential for nasal hemorrhage, aspiration, or hypoxia if logic fails.
+*   **Control Implemented:** Feature defaulted to "Manual/Safe Mode" or "User-Confirm Only" due to insufficient validation time.
+*   **Unverified Claims:** Explicitly list environmental conditions *not* tested (e.g., high altitude, extreme heat).
+*   **Disclosure:** Mandatory user warning included in packaging.
+
+**Note:** Locking firmware for an unverified automatic medical actuator violates basic safety engineering principles; the "rigid schedule" does not override the physical risk to patients.
+**Note:** Legal counsel must review the "UNVERIFIED" status and user warnings before any unit leaves the factory; this is a regulated medical decision.

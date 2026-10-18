@@ -1,0 +1,30 @@
+### Safety Validation Guidelines for Pesticide Advisor App
+
+**1. Immediate Human Gate (The "Stop" Rule)**
+Until local toxicity data is verified, any recommendation involving chemical combinations must trigger a mandatory human expert review before reaching a farmer. Do not automate the final output for mixtures. The system should generate a *draft* suggestion, which one of your five agronomists must explicitly approve or reject. This is non-negotiable for high-stakes actions where soil damage or crop loss is irreversible.
+
+**2. Harm Inventory & Risk Flagging**
+Create a simple "Risk Flag" logic in your code to identify combinations requiring this human gate. Flag a combination as **High-Risk** if:
+*   **Data Gap:** The toxicity data relies solely on global averages with no specific validation for East African soil types (e.g., acidic vs. alkaline variations common in Nairobi regions).
+*   **Known Interactions:** The mix includes chemicals known globally to have synergistic toxicity (where 1+1 > 2), even if individual components are safe.
+*   **Novelty:** The specific crop-disease-chemical triplet has fewer than three verified successful cases in your internal logs.
+
+**3. Structured Cooperative Testing (Measure)**
+Engage local farm cooperatives for controlled testing, but treat this as data collection, not immediate deployment.
+*   **Protocol:** Provide cooperatives with "Test Only" batches. Clearly label these outputs as **UNVERIFIED FOR LOCAL CONDITIONS**.
+*   **Controls:** Every test must include a negative control (no pesticide) and a positive control (a known safe, standard treatment) to isolate the variable.
+*   **Feedback Loop:** Require cooperatives to report soil health indicators and crop reaction within 48 hours. If a "Test Only" recommendation causes visible stress, halt all testing of that chemical class immediately.
+
+**4. Transparency & Disclosure**
+When an agronomist approves a recommendation, the app must display a clear disclosure to the farmer: *"This recommendation combines global data with expert review but lacks specific local toxicity verification. Monitor crops closely."* Never present the advice as a guaranteed fact. Avoid showing raw confidence percentages (e.g., "87% safe"); instead, use defined tiers like **Expert-Verified**, **Global-Average-Based**, or **Unverified**.
+
+**5. Governance & Ownership**
+Assign one specific agronomist as the "Safety Owner" for each crop category. This person is responsible for reviewing the flagged high-risk combinations and signing off on the cooperative test results. Document every approval and the reasoning behind it. If the Safety Owner is unavailable, the system must default to "No Recommendation" rather than guessing.
+
+**6. Fallback Mechanism**
+If a query triggers a high-risk flag and no human expert is available to review it within the harvest-season timeline, the app must return a safe fallback: *"Safe combinations for this disease are currently under local review. Please contact [Cooperative Lead] for manual advice."* Do not ship a feature that guesses on irreversible chemical applications.
+
+***
+
+*Note: These guidelines prioritize preventing irreversible soil/crop damage over launch speed; the "human-in-the-loop" is the primary control given your data gaps.*
+*Legal Note: Determining if these disclosures meet specific Kenyan agricultural regulations requires consultation with local legal counsel.*

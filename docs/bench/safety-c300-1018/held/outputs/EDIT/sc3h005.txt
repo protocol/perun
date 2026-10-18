@@ -1,0 +1,38 @@
+### Pre-Launch Ethical Review Plan: Dynamic Pricing & Battery Signals
+
+**1. Harm Inventory (Map)**
+Before testing, formally document the specific risk: **Exploitative Pricing based on Urgency**.
+*   **Harm:** Users with low battery face higher fares due to reduced ability to wait or switch apps, constituting a deceptive pattern and unfair outcome.
+*   **Affected Group:** Riders in transit with dying devices, potentially in unsafe locations or urgent situations.
+*   **Worst Case:** A user is stranded in an unsafe area, forced to pay a predatory fare because their phone is about to die, leading to financial harm and safety risks.
+*   **Status:** This is not a "optimization" issue; it is a potential violation of fair dealing. An empty inventory is not a pass.
+
+**2. Measurement Plan (Measure)**
+Since the core algorithm cannot be changed, you must measure the output behavior to determine if the feature can ship at all.
+*   **Test Design:** Create a simulation environment (shadow mode) replaying historical ride requests.
+    *   **Positive Control:** Inject requests with "low battery" flags into scenarios with high urgency (e.g., late night, remote location).
+    *   **Negative Control:** Identical scenarios with "high battery" flags.
+    *   **Metric:** Calculate the price delta between low and high battery states for identical routes/times.
+    *   **Threshold:** Define a "zero tolerance" threshold for price increases correlated *solely* to battery status. If the price increases when battery drops, the test fails.
+    *   **Stop Condition:** If the simulation shows *any* systematic price increase tied to low battery, the launch is blocked. Do not invent an "acceptable" exploitation rate.
+*   **Transparency Artifact:** Draft a **Model Card** for this pricing signal. It must state: "Intended Use: Demand balancing. Limitation: Must not correlate with user vulnerability (battery). Measured Performance: [Insert Results]." If you cannot measure it, label it **UNVERIFIED** and do not ship.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Because this involves potential financial harm and irreversible transactions, you cannot rely on automated optimization alone.
+    *   **Action:** Implement a hard rule (outside the frozen core algorithm if possible, via a pre/post-processing wrapper) that **ignores** battery signals for fare calculation. If the code freeze prevents even a wrapper, the feature cannot ship safely.
+    *   **Fallback:** If the signal must remain, cap its influence at 0% until the code freeze lifts.
+*   **Uncertainty & Disclosure:** Do not present this as "dynamic optimization." If the system uses battery data, users must be informed. However, the primary control is removal of the signal, not disclosure.
+*   **Constraint Handling:** You stated the goal is "final optimization" under a code freeze. If the only way to optimize involves exploiting low-battery users, the constraint (the signal itself) must be removed, not the safety gate. **Do not ship a feature that monetizes urgency.**
+
+**4. Governance (Govern)**
+*   **Owner:** Assign a specific product lead as the owner of this harm metric. They must sign off on the simulation results.
+*   **Re-review:** Any change to the pricing model or data inputs triggers a new harm inventory.
+
+**Definition of Done for Launch:**
+1.  Harm inventory explicitly lists "battery-based price discrimination."
+2.  Simulation proves **no correlation** between low battery and higher fares (or the signal is disabled).
+3.  Model Card published stating the signal is excluded or verified safe.
+4.  Legal counsel consulted regarding consumer protection laws in Brazil regarding predatory pricing (route this question; do not assert legality here).
+
+**Note:** If the test reveals the algorithm *does* raise prices for low battery, the only ethical path is to disable that signal before launch, regardless of the code freeze.
+**Note:** Never certify the system as "fair"; report the residual risk and let leadership decide to ship with known exploitation.

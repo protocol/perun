@@ -1,0 +1,34 @@
+**BLUF:** You cannot validate "equal treatment" or certify the algorithm as unbiased before launch; no test proves fairness. However, you can map the specific harm, run a targeted audit within your API budget, and implement a human gate to prevent irreversible damage to low-income areas.
+
+### 1. Harm Inventory (MAP)
+*   **Harm:** Systematic exclusion of specific neighborhoods (Bias/Unfair Outcome).
+*   **Affected Parties:** Parking lot operators in low-income areas (revenue loss); Drivers (reduced choice); Community (economic stagnation).
+*   **Worst Case:** The app creates a digital redlining effect, permanently diverting economic activity away from targeted zones, violating the city partnership's intent and triggering reputational or legal risk.
+*   **Status:** **UNVERIFIED**. You have observed the pattern but lack a measured rate of exclusion.
+
+### 2. Measurement Plan (MEASURE)
+Given your strict API budget, do not attempt broad simulation. Run one high-value test row focused on the identified failure mode:
+
+*   **Probe Set:** Construct 20 specific trip scenarios starting from diverse entry points into Detroit, with destinations explicitly located *inside* the affected low-income zones and *inside* comparable high-income zones.
+*   **Controls:**
+    *   *Positive Control (Known Bad):* A route where the only available spot is in the low-income zone. If the app directs elsewhere, bias is confirmed.
+    *   *Negative Control (Known Good):* A route where the only available spot is in a high-income zone. The app must direct there.
+*   **Metric:** "Diversion Rate" – The percentage of times the algorithm skips a valid, safe spot in a low-income zone in favor of a non-superior alternative.
+*   **Threshold:** Owner-set. Given the severity, propose **zero tolerance** for systematic diversion where no safety/traffic justification exists.
+*   **Stop Condition:** If the Diversion Rate exceeds your threshold in the probe set, **block launch** to the city partner until the routing logic is adjusted.
+*   **Budget Strategy:** Run these 20 critical cases manually or via script. Do not waste calls on random scenarios.
+
+**Transparency Artifact:** Draft a preliminary **Model Card** section for the city partner. State the intended use (congestion reduction), the known limitation (potential geographic bias currently under audit), and the measured results of the 20-case probe. Mark any untested demographics as `UNVERIFIED`. Do not invent an accuracy percentage.
+
+### 3. Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate:** Since directing traffic away from a neighborhood is an automated decision with economic consequences, you cannot fully automate the launch.
+    *   *Action:* For the initial two-week launch, implement a "shadow mode" or capped exposure. Do not let the algorithm autonomously reroute *all* traffic away from the identified zones without a manual review of the routing logic by a product owner.
+    *   *Fallback:* If the algorithm detects a spot in a flagged zone, force a secondary check or prioritize showing it to the user unless a hard traffic constraint exists.
+*   **Uncertainty Disclosure:** Do not tell the city partner the system is "fair." State: "We have identified a risk of geographic bias. We are running a targeted audit with a stop-condition that blocks full deployment if diversion is detected."
+*   **Constraint Adherence:** You have two weeks. Do not retrain the model. Use rules-based overrides (e.g., "If lot is in Zone X and safe, boost priority score by 20%") to counteract the bias immediately.
+
+### 4. Governance (GOVERN)
+*   **Owner:** Assign one of the seven team members as the specific owner of "Geographic Equity." They must sign off on the 20-case test results.
+*   **Legal Route:** The city partnership may trigger regulatory scrutiny regarding automated decisions affecting economic opportunity. **Route to counsel** immediately to determine if this constitutes a regulated automated decision under local or federal guidelines. Do not assert compliance yourself.
+
+**Note:** A "0% bias" claim is impossible to verify; report the residual risk from your 20-case test instead. If the test fails, the only safe path is to delay the full automated rollout, not to hide the result.

@@ -1,0 +1,29 @@
+### Simulation Scenarios for Flood-Warning Data Gap Handling
+
+To ensure the RiverSafe Systems flood-warning model maintains safety during intermittent sensor connectivity in Bangkok, the following simulation scenarios should be executed. These scenarios focus on verifying that missing data triggers conservative safety mechanisms rather than suppressing alerts.
+
+**1. The "Silent Rise" Scenario (Critical Node Failure)**
+*   **Condition:** Simulate a complete loss of data from the primary water-level sensor in a high-risk zone (e.g., Khlong Toei) for 30 minutes, while upstream sensors indicate a rapid inflow trend.
+*   **Expected Behavior:** The system must not assume "no change" or "zero risk." Instead, it should trigger a "Data Integrity Warning" and escalate to a "Probable Flood Alert" based on the last known high-water mark and upstream trends. The logic must default to "evacuate" when visibility is lost during a rising trend.
+
+**2. The "Stale Data" Trap (Time-Lag Injection)**
+*   **Condition:** Inject valid but timestamped data that is 45 minutes old into the aggregation stream, mimicking a node that is connected but failing to push real-time updates.
+*   **Expected Behavior:** The ingestion layer must reject or flag data exceeding the freshness threshold (e.g., >5 minutes). The alerting engine should treat this as a missing data event, not a stable condition. If the last *valid* real-time reading was near the threshold, the system must maintain an active alert status until fresh data confirms safety.
+
+**3. The "Partial Mosaic" Scenario (Sparse Coverage)**
+*   **Condition:** Randomly drop 60% of incoming packets across a cluster of five neighboring sensors, leaving only one functional node in a specific watershed.
+*   **Expected Behavior:** The aggregation logic must detect the reduced confidence level. Instead of calculating a simple average (which might dilute a spike), the system should weigh the single functional node heavily if it reports danger. The output should be an alert with a "Low Confidence/High Risk" annotation, prompting manual verification by operators rather than silencing the alarm.
+
+**4. The "Recovery Spike" Scenario (Intermittent Reconnection)**
+*   **Condition:** Simulate a node going offline for 20 minutes during a heavy rain event, then reconnecting and sending a backlog of data showing a sharp spike that occurred during the blackout.
+*   **Expected Behavior:** The system must process the delayed backlog immediately as if it were real-time. If the backfilled data exceeds thresholds, an immediate retroactive alert must be issued. The logic must prevent the "gap" from smoothing out the spike in time-series interpolation.
+
+**5. The "False Calm" Scenario (Zero-Value Glitch)**
+*   **Condition:** Force a disconnected sensor to report static "0" or "null" values repeatedly, simulating a default failure mode rather than a true dry reading.
+*   **Expected Behavior:** The system must distinguish between a true zero (dry sensor) and a failure zero (flatline despite context). If surrounding nodes or rainfall radar indicate activity, a flatline sensor must be treated as a fault, triggering a maintenance alert and assuming the worst-case water level for public safety notifications.
+
+**Validation Criteria:**
+For all scenarios, success is defined as the system issuing an alert or a specific "uncertainty warning" to residents. Any scenario where missing or stale data results in an "All Clear" message constitutes a critical failure of the safety logic.
+
+*Ensure these simulations use historical Bangkok flood data as the baseline context to validate realistic threshold breaches.*
+*Prioritize testing the notification delivery pipeline specifically during these fault states to confirm messages reach residents even when backend data is degraded.*

@@ -1,0 +1,32 @@
+### Safety Validation Plan: Cairo NutriScan Allergen Scanner
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly record the worst-case failure: a **False Negative** where an allergen (e.g., peanut) is present but the system reports "Safe," leading to patient anaphylaxis. Secondary risks include **False Positives** (safe food rejected, causing operational friction) and **Over-reliance** (staff ignoring visual checks because the machine said "Safe").
+
+**2. Measurement Strategy (Using Existing Data)**
+Since you cannot acquire new diverse lighting data immediately, you must stress-test the current library to find breaking points:
+*   **Adversarial Sub-slicing:** Do not test only on aggregate accuracy. Slice your current image library by simulated difficulty: low-light crops, high-glare sections, and occluded views. If the model fails consistently in low-light slices, those conditions are your "abstain" triggers.
+*   **Positive/Negative Controls:** For every allergen class, curate a "known-bad" set (images with the allergen) and a "known-good" set (visually similar non-allergens, e.g., sunflower seeds vs. pine nuts). The system must pass 100% on the "known-bad" set in your test harness; any failure here is a hard block.
+*   **Proxy Stress Testing:** Since lighting diversity is missing, artificially degrade your test images (add noise, reduce contrast, blur) to mimic the missing conditions. Measure the drop-off in accuracy. The point where accuracy dips below your safety tolerance defines your operational limit.
+
+**3. Establishing Abstention Thresholds (Confidence Tiers)**
+Do not display raw confidence percentages (e.g., "87% safe") to users; this implies a precision your uncalibrated model likely lacks and invites dangerous over-trust. Instead, implement **Defined Coarse Tiers** based on your test results:
+*   **Tier 1: Confirmed Safe:** Model confidence > X% AND image quality metrics (brightness/sharpness) within safe ranges established during stress testing. Action: Display "No Allergens Detected."
+*   **Tier 2: Unverified / Low Confidence:** Model confidence < X% OR image quality falls outside safe ranges (e.g., too dark). Action: **ABSTAIN.** The system must output "Unable to Verify – Manual Check Required."
+*   **Tier 3: High Risk:** Model detects potential allergen features even with low confidence. Action: Warn "Potential Allergen Detected – Verify Manually."
+
+Set the threshold for Tier 2 aggressively. It is safer to abort and force a human check than to risk a false negative. The "cost" of this plan is increased manual reviews, which is the necessary trade-off for the hard deadline and limited data.
+
+**4. Human-in-the-Loop Gate (Mandatory)**
+Because this involves irreversible health risks, **full automation is prohibited.** The system must never be the sole decision-maker for clearing a meal as "Allergen-Free."
+*   **Workflow:** The AI acts as a triage tool. If it says "Safe," a human staff member must perform a final visual confirmation against the ingredient list before serving. If the AI says "Unverified" or "Risk," the meal is held for senior review.
+*   **Disclosure:** Clearly label outputs as "AI-Assisted Screening – Not a Guarantee."
+
+**5. Governance & Artifacts**
+*   **Owner:** Assign one person responsible for reviewing any "False Negative" incidents post-launch.
+*   **Transparency Card:** Create a one-page "Model Card" for the hospital staff. It must state: Intended Use (screening only), Limitations (performance degrades in low light/poor angles), and the explicit instruction that the AI does not replace human verification.
+*   **Legal Routing:** Whether this system triggers specific medical device regulations or liability statutes is a legal determination. Route this question to counsel immediately; do not assume the "screening only" label absolves regulatory duty.
+
+**Deliverable Status:** Plan outlined. No metrics are certified; all thresholds must be calculated by running the proposed stress tests on your specific library.
+
+*Note: Do not invent a "0% risk" claim; report residual risk as "Unverified" until stress tests are complete. If the stress tests show high failure rates in common lighting, the launch must be delayed or scope reduced.*

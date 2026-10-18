@@ -1,0 +1,50 @@
+### Product Output Safety Review: Legal Aid Chatbot
+
+**Immediate Constraint Warning:** Launching an automated system providing legal defense strategies in eviction proceedings without a human-in-the-loop gate for high-stakes advice constitutes an unsafe automation of irreversible actions. Eviction results in loss of housing; incorrect advice can lead to immediate homelessness. A fully autonomous launch in three weeks violates the safety floor for high-stakes domains.
+
+#### 1. Harm Inventory (MAP)
+Before testing, we must name the specific harms this feature could cause to tenants:
+*   **Hallucination as Fact:** The bot invents case law, statutes, or procedural deadlines that do not exist, leading tenants to file incorrect motions or miss court dates.
+*   **Bias/Unfair Outcomes:** Advice systematically fails for non-English speakers or specific demographic groups due to training data gaps.
+*   **Over-reliance:** Tenants trust the bot's "static" advice despite changing local court rules or emergency moratoriums, believing they have a valid defense when they do not.
+*   **Missing Disclosure:** Users may believe they are speaking to a licensed attorney or that the advice is guaranteed current.
+*   **Unsafe Automation:** The bot provides a specific "defense strategy" (an irreversible action path) without human verification, risking wrongful eviction.
+
+#### 2. Measurement Framework (MEASURE)
+Do not assert accuracy. You must run adversarial evaluations. Since you cannot update the knowledge base in real-time, your testing must prove where the bot *fails* so you can block those outputs.
+
+**Evaluation Plan: One Test Row Per Harm**
+You must construct a probe set for common NY eviction scenarios (e.g., non-payment, holdover, warranty of habitability).
+
+| Harm Type | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Hallucination** | **Inputs:** 50 varied fact patterns.<br>**Positive Control:** Queries about laws repealed in 2023 (must fail).<br>**Negative Control:** Queries about settled, static statutes (must pass). | % of responses citing non-existent statutes or deadlines. | **Zero Tolerance** for fabricated citations. | Any hallucinated case law triggers immediate rollback of that topic. |
+| **Outdated Advice** | **Inputs:** Scenarios relying on pandemic-era moratoriums (now expired).<br>**Control:** Current NY housing court rules vs. old rules. | % of responses advising expired protections as active. | **Zero Tolerance** for active reliance on expired laws. | If >0% of users are told an expired law applies, block the feature. |
+| **Bias** | **Inputs:** Identical legal facts presented in AAVE, Spanish, and formal English. | Disparity in quality/specificity of defense strategies offered. | No significant drop in actionable advice quality across dialects. | Systematic downgrade in non-standard English triggers review. |
+| **Over-reliance** | **Inputs:** Edge cases where the static KB is known to be incomplete. | Does the bot express uncertainty or defer to a human? | 100% of edge cases must show "Unverified" tier or human referral. | Any confident assertion on unknown topics blocks launch. |
+
+**Transparency Artifact Requirement:**
+You must produce a **Model Card** before launch. It must state:
+*   **Intended Use:** Preliminary information only, not legal representation.
+*   **Limitations:** Explicitly list that the knowledge base is static and may not reflect rulings from the last [Date].
+*   **Performance:** Report results from the table above. If a metric is unmeasured, label it **UNVERIFIED**. Do not invent an accuracy percentage.
+
+#### 3. Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate (Mandatory):** You cannot auto-dispense specific "defense strategies" for eviction. The system must be redesigned to:
+    1.  Provide general procedural information only.
+    2.  Flag any request for a specific defense strategy for **human lawyer review** before the user sees the response.
+    3.  If human review is impossible within the user's timeframe, the bot must explicitly state: "I cannot verify a defense strategy for your specific case with our static data. Please contact [Legal Aid Hotline]."
+*   **Uncertainty Display:** Never show a confidence percentage (e.g., "87% sure"). Use defined coarse tiers:
+    *   **Confirmed:** Matches static KB exactly.
+    *   **Unverified:** KB gap detected; requires human review.
+*   **Disclosure:** Every output must clearly state: "This is an automated tool using static data. It is not a lawyer and may not reflect the latest court rules."
+
+#### 4. Governance (GOVERN)
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any flagged failures.
+*   **Re-review Trigger:** Any change in NY eviction law requires an immediate pause on affected bot functions until the static KB is manually updated and re-tested.
+
+**Final Determination:**
+A fully autonomous launch providing defense strategies is **not safe** under these constraints. You must implement the human gate for specific advice or limit the scope to general information only. The decision to ship rests with your team, but proceeding without these controls risks severe harm to vulnerable tenants.
+
+*Note: Legal duty regarding automated advice disclosure must be routed to counsel; this review does not assert regulatory compliance.*
+*Standards referenced: NIST AI RMF (Map, Measure, Manage), Model Cards (Mitchell et al.).*

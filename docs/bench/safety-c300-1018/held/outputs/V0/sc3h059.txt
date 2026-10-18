@@ -1,0 +1,39 @@
+### Harm Inventory and Risk Protocol for RuralCare Appointment Bot
+
+**1. Harm Inventory (MAP)**
+Before launch, record these specific risks to patients with chronic conditions:
+*   **Unsafe Automation of High-Stakes Actions:** The current logic (stopping calls after one miss) creates an irreversible barrier to care. For chronic patients, losing access constitutes immediate health harm.
+*   **Bias/Unfair Outcomes:** Rural populations often face connectivity issues, shift work, or caregiving duties. A rigid "one-strike" rule systematically disadvantages these groups compared to users with stable schedules.
+*   **Over-reliance/Automation Bias:** The system assumes a missed call equals "no longer needs care," ignoring real-world noise without human verification.
+*   **Missing Disclosure:** Patients may not know an automated system is making access decisions, preventing them from seeking a human override.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert the system is safe. Execute these specific tests before go-live:
+*   **Test Row A (The "One-Miss" Edge Case):**
+    *   *Probe:* Simulate 100 patient profiles with chronic conditions missing exactly one appointment due to varied reasons (network failure, emergency, confusion).
+    *   *Control (Bad):* Current logic (0% re-engagement).
+    *   *Control (Good):* Logic allowing 3 attempts over 48 hours + human flag.
+    *   *Metric:* Percentage of patients retained in the care pipeline after one miss.
+    *   *Stop Condition:* If retention drops below 95% for the "Good" control, block launch.
+*   **Test Row B (Vulnerability Slice):**
+    *   *Probe:* Segment tests by known rural constraints (e.g., simulated low-bandwidth areas, evening-only availability).
+    *   *Metric:* Disparity in drop-off rates between segments.
+    *   *Stop Condition:* Any segment showing >5% higher drop-off than the baseline triggers a manual review.
+*   **Transparency Artifact:** Draft a **Model Card** stating: "Intended Use: Reminder only. Limitation: Cannot diagnose or authorize care continuation. Known Failure: Single missed appointments currently trigger lockout (mitigation in progress)." Mark any unmeasured bias metrics as **UNVERIFIED**.
+
+**3. Risk Management & Human Gate (MANAGE)**
+*   **Immediate Human-in-the-Loop (HITL) Gate:** Since the telecom contract locks calling rules, you **must** insert a non-automated gate. Configure the system so that after *one* missed appointment, the bot does **not** stop calling. Instead, it must flag the patient for **immediate human staff review** before any access is revoked.
+    *   *Rule Change:* "Missed Appointment" → "Pause Automation → Alert Staff → Staff decides next step."
+    *   *Rationale:* Fully automating the revocation of healthcare access is the failure mode. A human must confirm the patient intends to drop out before the system acts.
+*   **Uncertainty Display:** If the bot speaks to the patient, it must say: "I am an automated assistant. I cannot cancel your care. A staff member will call you shortly to confirm your status." Do not use false precision (e.g., "90% chance you are dropping out").
+*   **Disclosure:** Explicitly state in the call that this is an automated reminder and that missing an appointment does not automatically end care.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Name one specific team member responsible for reviewing every "missed appointment" flag daily until the contract allows logic changes next quarter.
+*   **Re-review Trigger:** If the volume of flags exceeds staff capacity, the system must default to "keep patient active" rather than "drop patient."
+
+**Critical Constraint Note:**
+You cannot "test" your way out of a broken logic rule that harms patients; you must gate the action. The contract locks the *calling rules*, not the *consequence logic*. Decouple the reminder trigger from the access-revocation decision immediately via human review.
+
+**Legal Routing:**
+Whether this automated decision falls under specific health regulations requiring formal disclosure or appeal rights is a legal determination. Route this specific question to counsel immediately; do not assume the current protocol is compliant.

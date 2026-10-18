@@ -1,0 +1,45 @@
+### Engagement Verification Protocol for RuralCare
+
+**Objective:** Verify that patients with chronic conditions remain engaged in the care system despite missing appointments, ensuring no patient is dropped after a single missed visit.
+
+**1. Define Critical Patient Cohorts**
+Before testing, segment your synthetic test data into three high-risk profiles to ensure the logic handles complexity:
+*   **Profile A (New Onboarding):** Patient with only one scheduled appointment history.
+*   **Profile B (Chronic/Recurring):** Patient with a history of 3+ kept appointments and one missed.
+*   **Profile C (Vulnerable/High-Risk):** Patient flagged with a chronic condition (e.g., diabetes, hypertension) where continuity of care is critical.
+
+**2. Test Scenarios & Expected Behaviors**
+Execute the following manual or automated call-flow simulations. Since telecommunication rules are locked, these tests verify that your *internal* logic triggers the correct sequence within those constraints.
+
+*   **Scenario 1: The "Single Strike" Failure Mode**
+    *   *Action:* Simulate a missed appointment for Profile A.
+    *   *Verification Point:* Confirm the system logs the miss but **does not** flag the account as "inactive" or "dropped."
+    *   *Success Criterion:* The system schedules or attempts a follow-up reminder call within 24 hours. The patient status remains "Active - Follow-up Required."
+
+*   **Scenario 2: The Chronic Care Continuity Check**
+    *   *Action:* Simulate a missed appointment for Profile B.
+    *   *Verification Point:* Verify the system triggers an escalation path (e.g., a second call attempt, a different time of day, or a flag for human staff review) rather than termination.
+    *   *Success Criterion:* At least two distinct contact attempts occur before any "give up" logic is considered. The care plan remains intact.
+
+*   **Scenario 3: The Re-engagement Loop**
+    *   *Action:* Simulate a patient missing an appointment, then successfully answering a subsequent reminder call.
+    *   *Verification Point:* Ensure the system resets the "missed" counter and successfully books the rescheduled appointment.
+    *   *Success Criterion:* The patient is returned to the standard reminder cycle immediately upon contact; no penalty flags persist.
+
+**3. Data & Logic Audit**
+Since you cannot change the telecom provider's rules, you must audit your internal state machine:
+*   **State Transition Review:** Inspect the code or configuration where `Appointment_Status` changes from `Missed` to `Inactive`. Ensure there is no direct transition allowed after `Count = 1`.
+*   **Hard-Coded Limits:** Search for any logic that says `IF missed_appointments >= 1 THEN stop_calls`. This must be refactored to `IF missed_appointments >= 3 THEN escalate_to_human` (or your specific policy limit).
+*   **Chronic Condition Flag:** Verify that the "Chronic Condition" tag acts as a shield against automatic drop-off logic. If a patient has this tag, the threshold for disengagement should be significantly higher or require manual override.
+
+**4. Go/No-Go Criteria for Launch**
+Do not launch until the following are confirmed:
+*   100% of test profiles (A, B, and C) survive one missed appointment without losing "Active" status.
+*   Evidence exists (call logs) showing at least one retry attempt for every missed appointment in the test suite.
+*   No patient record shows "Service Terminated" solely due to a single missed visit.
+
+**5. Emergency Mitigation (Pre-Launch)**
+If code changes are too risky for the two-week window:
+*   Implement a daily "Safety Net" report: Export all patients marked "Missed" in the last 24 hours. Manually review this list every morning to ensure no one was incorrectly dropped, and manually re-activate them if the system failed.
+
+*Note: This protocol assumes you can modify internal application logic or configuration even if telecom rules are fixed. If the "drop" behavior is enforced entirely by the telecom provider's black-box settings, you must contact them immediately for an emergency exception, as no internal test can override their hard limits.*

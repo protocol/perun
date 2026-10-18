@@ -1,0 +1,38 @@
+### Pre-Launch Testing Protocol: Patient-Vehicle Matching Verification
+
+**Objective**
+Verify that the scheduler correctly identifies non-ambulatory patients and assigns them exclusively to wheelchair-accessible vehicles (WAV), despite read-only constraints and potential legacy data inconsistencies.
+
+**1. Synthetic Data Mirroring (The "Shadow" Dataset)**
+Since you cannot modify the live hospital database, create a local, read-write "shadow" dataset that mirrors the legacy schema.
+*   **Action:** Extract a sanitized sample of 50–100 real patient records.
+*   **Modification:** In your local copy, intentionally introduce specific data inconsistencies found in legacy systems (e.g., null values in `mobility_level`, conflicting flags between `uses_wheelchair` and `ambulatory_status`, or outdated codes).
+*   **Goal:** This allows your team to test how the scheduler handles "dirty" data without risking live patient safety or violating read-only restrictions.
+
+**2. Boundary Condition Test Cases**
+Construct specific test scenarios within your shadow dataset to target the matching logic's failure points:
+*   **The "Null" Trap:** Patients with `mobility_level` = `NULL` or empty strings but `appointment_type` = "Physical Therapy." The system must default to WAV or flag for manual review, not assign a standard sedan.
+*   **The "Conflicting Flag" Trap:** Patients marked `ambulatory: true` but `equipment_needed: "wheelchair"`. The logic must prioritize explicit equipment needs over general mobility flags.
+*   **The "Partial Data" Trap:** Records missing specific ramp-height requirements. The system should assign a high-floor WAV rather than a low-floor one, or trigger an alert.
+*   **The "False Negative" Control:** Clearly ambulatory patients with no equipment needs must *not* be assigned to WAVs (to ensure resource efficiency isn't sacrificed for safety).
+
+**3. The "Dry-Run" Execution Loop**
+Run the scheduling algorithm against the shadow dataset in a staging environment that mimics production connectivity.
+*   **Input:** Feed the corrupted synthetic records into the scheduler.
+*   **Process:** Execute the matching engine as if it were a live dispatch cycle.
+*   **Output Inspection:** Do not just check for errors. Inspect the resulting assignment list.
+    *   *Pass Criteria:* 100% of patients with any indication of wheelchair need are assigned to WAVs.
+    *   *Fail Criteria:* Any non-ambulatory patient is assigned to a standard vehicle, OR the system crashes/skips records with null values instead of flagging them.
+
+**4. Manual Review Gate Implementation**
+Establish a mandatory "Human-in-the-Loop" rule for the pilot phase.
+*   **Protocol:** Configure the system to automatically route any assignment where data confidence is below 100% (e.g., missing fields, conflicting flags) to a "Pending Review" queue.
+*   **Verification:** Your logistics coordinators must manually verify these edge cases before the ride is confirmed. This acts as a safety net while the algorithm is refined.
+
+**5. Evidence Logging**
+For every test run, log the input record, the specific data inconsistency, the algorithm's decision, and the final vehicle assignment. This evidence is required to sign off on the pilot launch with the three hospital partners.
+
+***
+
+**Note:** Ensure all synthetic data is strictly anonymized to comply with patient privacy regulations before importing it into your testing environment.
+**Note:** This protocol assumes your staging environment can ingest the shadow dataset without attempting to write back to the live hospital read-only endpoint.

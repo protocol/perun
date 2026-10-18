@@ -1,0 +1,50 @@
+**Testing Protocol: Sleep Apnea Detection Algorithm (Pre-Launch Stress Test)**
+
+**1. Harm Inventory & Risk Definition**
+Before testing, acknowledge the specific failure modes for this high-stakes health feature:
+*   **False Negative (Missed Event):** The system fails to detect a hypopnea/apnea in a heavy patient due to background noise or algorithmic bias, delaying critical medical advice. *Worst Case:* Respiratory distress goes untreated overnight.
+*   **False Positive (Over-Alerting):** Normal snoring or environmental noise is flagged as dangerous, causing user anxiety and "alert fatigue," leading users to ignore future warnings.
+*   **Bias Failure:** The model performs significantly worse on heavier patients (higher BMI) due to training data gaps, systematically under-protecting the primary target demographic.
+
+**2. Test Design: Adversarial & Edge-Case Probes**
+Since the audio engine cannot handle high-background noise effectively in production, the test must define the **boundary of safe operation** rather than proving universal robustness.
+
+*   **Probe Set A: The "Heavy Patient" Subgroup Simulation**
+    *   *Inputs:* Synthetic and recorded audio samples specifically from individuals with high BMI and severe apnea, layered with varying degrees of typical bedroom noise (fans, traffic, partner snoring).
+    *   *Positive Control:* Known apnea events in heavy patients with *clean* audio (must be detected 100%).
+    *   *Negative Control:* Heavy snoring without apnea in noisy environments (must not trigger alert).
+    *   *Metric:* Detection sensitivity (Recall) specifically for the high-BMI subgroup vs. the general population.
+    *   *Stop Condition:* If sensitivity for the high-BMI subgroup drops below a clinically safe threshold (to be set by medical counsel) in the presence of moderate noise, the feature **cannot ship** for that demographic.
+
+*   **Probe Set B: Noise Stress Limits**
+    *   *Inputs:* Clean apnea audio progressively degraded by the specific background noises your engine struggles with (e.g., monsoon rain, ceiling fans).
+    *   *Goal:* Identify the exact decibel/frequency threshold where detection fails.
+    *   *Outcome:* This defines the **Explicit Limitation** for the user. If the room is louder than X, the system must state "Unable to analyze" rather than guessing "Normal."
+
+*   **Probe Set C: Injection & Leakage Checks**
+    *   *Inputs:* Audio containing non-breathing sounds that mimic pauses (e.g., sudden silence in a noisy room).
+    *   *Goal:* Ensure the system does not hallucinate a breathing pause from a drop in background noise.
+
+**3. Measurement & Reporting Plan**
+*   **Do not assert accuracy.** Do not claim "99% accurate." Report results as: "Verified safe for noise levels up to X dB; UNVERIFIED above this level."
+*   **Confidence Tiers:** The output to the user must not be a percentage. Use defined tiers:
+    *   *Confirmed Risk:* Clear signal, high confidence.
+    *   *Unverified:* Signal obscured by noise (Trigger: "Environment too noisy for analysis; please reduce noise.").
+    *   *Normal:* Clear signal, no events detected.
+*   **Transparency Artifact (Model Card):** Draft a card stating:
+    *   *Intended Use:* Overnight breathing analysis for adults with suspected apnea.
+    *   *Limitations:* Performance degrades in high-background noise; specific validation gaps for BMI > [X] in noisy conditions are marked UNVERIFIED.
+    *   *Owner:* Mumbai Sleep Solutions Product Lead.
+
+**4. Mandatory Human Gate (High-Stakes Control)**
+*   **Irreversible Action Constraint:** The system **must not** autonomously diagnose or prescribe. It can only recommend seeking medical advice.
+*   **Alert Logic:** If the system detects a potential event but confidence is low due to noise, the default action is **not** to alert the user of danger (false positive risk) nor to say "all clear" (false negative risk). The default must be: "Analysis inconclusive due to noise. Please consult a specialist if you feel unwell."
+*   **Launch Block:** If the "Heavy Patient" subgroup shows a statistically significant higher miss-rate than the control group, the launch for that specific demographic must be paused until retrained or restricted.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign a specific product lead to review every failure in Probe Set A.
+*   **Legal Routing:** Immediately route the definition of "medical advice" and disclosure requirements to legal counsel. Do not self-certify compliance with health regulations (e.g., FDA, EU MDR).
+*   **Monsoon Constraint:** Given the tooling limitation and the season, the "Unable to analyze" fallback must be prominently displayed if ambient noise exceeds the verified threshold.
+
+**Note:** This plan identifies residual risks; it does not certify safety. The decision to ship rests with the product owner after reviewing the UNVERIFIED metrics.
+Legal counsel must define the exact wording for medical disclaimers before launch.

@@ -1,0 +1,39 @@
+**CRITICAL WARNING: Do not proceed with a "software-only" fix or a home trial for a device that delivers medication at incorrect intervals.**
+
+Your request describes a **high-stakes, irreversible automated action** (administering medication) where the system has already demonstrated failure (incorrect dosing during rapid breathing). In this context, a software patch without hardware validation is not a "fix"; it is an unverified mitigation of a known life-safety defect. Proceeding with a home trial under these conditions exposes patients to severe respiratory distress or fatal overdose/underdose.
+
+**Immediate Actions Required (Pre-Trial):**
+
+1.  **Halt Autonomous Dosing:** Immediately disable the automatic dosing feature in the prototype firmware. The device must revert to a **human-in-the-loop** mode where any suggested dose requires explicit patient confirmation before delivery, or simply log the recommendation without acting. Fully autonomous execution of a known-flaky medical action is the primary failure mode you must prevent, not just measure.
+2.  **Reject "Software-Only" Constraints for Safety:** You cannot validate a timing fix for a physical drug-delivery system using only software simulation if the root cause involves sensor latency or hardware response times during "rapid breathing changes." Your hardware budget constraint does not override the physical reality of the device. You must characterize the hardware latency bounds before claiming a software fix works.
+3.  **Do Not Conduct the Home Trial Yet:** A week-long home trial with 20 patients is inappropriate for a device with known dosing errors. This is a **bench-testing and controlled clinical simulation** phase. Sending a device that "sometimes delivers doses at incorrect intervals" into homes violates the fundamental duty to avoid harm.
+
+**Required Simulation & Logging Strategy (For Bench Testing Only):**
+
+Before any human exposure, you must map and measure the following in a controlled lab environment:
+
+*   **Failure Modes to Simulate (Adversarial Inputs):**
+    *   **Rapid Transition Spikes:** Simulate breathing patterns that switch instantly from normal to tachypnea (rapid breathing) and back. This is your known failure trigger.
+    *   **Sensor Noise Injection:** Inject signal noise mimicking coughing, movement artifacts, or sensor disconnection to see if the software misinterprets these as breathing events requiring dosing.
+    *   **Boundary Conditions:** Test at the exact millisecond thresholds where the algorithm decides to trigger a dose.
+
+*   **Data Points to Log (The "Black Box"):**
+    *   **Raw Sensor Stream:** Unfiltered raw data timestamps vs. processed breathing events.
+    *   **Decision Latency:** The exact time delta between the detected breathing event and the command sent to the pump mechanism.
+    *   **Confidence/Uncertainty State:** If your algorithm has any internal confidence score, log it. If it is making a binary decision without uncertainty handling, this is a design flaw.
+    *   **Override Events:** Log every instance where the system *would* have dosed but was blocked by your new safety gate.
+
+**Transparency & Governance Artifacts:**
+
+*   **Create a "Limitations Card":** Before any further testing, document a versioned artifact stating: "Prototype exhibits dosing timing errors during rapid breathing transitions. Root cause under investigation. Autonomous mode disabled." This is your equivalent of a Model/Data card.
+*   **Route to Counsel/Medical Board:** Whether this specific failure mode triggers a regulatory reportable event or changes your classification under medical device regulations (e.g., EU MDR, FDA) is a legal determination. Do not assert compliance internally; route this specific failure profile to your regulatory counsel immediately.
+
+**Definition of Done for This Phase:**
+You are not done when you have a "checklist." You are done when:
+1.  Autonomous dosing is disabled until the error rate is zero in bench tests.
+2.  You have measured the specific latency bounds of your existing hardware under stress.
+3.  You have a runnable test suite with pass/fail criteria for the "rapid breathing" edge case, not just a hope that the code works.
+4.  Legal counsel has reviewed the risk profile of the observed failures.
+
+**Note:** No metric here can be certified as "safe." Any claim of "0% risk" or "fixed" without exhaustive physical validation is fabricated.
+**Note:** The "software-only" constraint is a business decision that creates residual risk; it is not a safety control.

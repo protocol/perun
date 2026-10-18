@@ -1,0 +1,45 @@
+**Testing Protocol: Sleep-Breathing Pattern Analyzer (Pre-Launch Stress Test)**
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** False Negative (missing a dangerous breathing pause/hypopnea), leading to delayed medical care.
+*   **Secondary Risk:** False Positive (alerting on normal snoring), causing user anxiety and alarm fatigue.
+*   **Constraint Acknowledgement:** The audio engine cannot effectively filter high-background noise. Testing must explicitly quantify performance degradation in noisy environments rather than assuming robustness.
+
+**2. Test Data Construction (The Probe Set)**
+Create three distinct audio datasets simulating overnight conditions for patients with obesity:
+*   **Dataset A (Clean Control):** Recordings of verified hypopneas/apneas and normal snoring in a quiet room (<30dB background). *Source:* Clinical partner data or high-fidelity simulation.
+*   **Dataset B (Realistic Noise):** Dataset A mixed with typical bedroom noises (fan, traffic, partner snoring) at moderate levels (40–50dB).
+*   **Dataset C (Stress/Negative Control):** Dataset A mixed with high-level noise (>60dB, e.g., heavy rain, window open to street, TV) exceeding the engine's stated handling capacity. Include "hard negatives" like heavy sighing or coughing that mimic pauses.
+
+**3. Execution Plan & Metrics**
+Run the detection algorithm against all three datasets. Do not aggregate results; slice by dataset.
+
+*   **Metric 1: Sensitivity (Recall) for Hypopneas.**
+    *   *Goal:* Maximize detection of dangerous events.
+    *   *Threshold:* Define a minimum acceptable sensitivity for Dataset A (e.g., >95%).
+    *   *Stop Condition:* If sensitivity in Dataset B drops below a critical safety floor (e.g., <85%) or if Dataset C results in >20% false negatives, **block launch**. The system cannot ship if common noise levels cause it to miss dangerous events.
+
+*   **Metric 2: Specificity (False Alarm Rate).**
+    *   *Goal:* Minimize unnecessary alerts.
+    *   *Threshold:* Measure alerts triggered by non-events in Dataset C.
+    *   *Stop Condition:* If noise triggers continuous false alerts (>X per night), the feature causes harm via alarm fatigue.
+
+*   **Metric 3: Uncertainty Calibration.**
+    *   *Check:* Does the system output a confidence score or flag low-quality audio?
+    *   *Requirement:* In Dataset C conditions, the system must **not** output a definitive "Normal" result. It must either flag "Audio Quality Insufficient" or default to a "Check Device/Environment" warning.
+
+**4. Human-in-the-Loop Gate (High-Stakes Action)**
+*   **Rule:** The feature alerts users to "seek medical advice." This is a high-stakes health recommendation.
+*   **Control:** For any detection classified as "Critical/Worsening" during the beta phase, route the alert through a human review dashboard (clinical staff) before pushing the notification to the user, OR require a secondary confirmation step (e.g., "We detected an anomaly; please confirm you are awake and breathing normally" via app interaction) before issuing a medical warning. Fully automated medical advice based on unverified noisy audio is prohibited.
+
+**5. Transparency Artifact (Model Card Draft)**
+Prepare a visible disclaimer for the user interface and documentation:
+*   *Intended Use:* Quiet bedroom environments.
+*   *Limitation:* "Detection accuracy decreases significantly in rooms with loud background noise (fans, open windows, traffic). If your environment is noisy, results may be unreliable."
+*   *Status:* Mark noise-performance metrics as **UNVERIFIED** for conditions exceeding the tested decibel limits. Do not invent a accuracy percentage for noisy scenarios.
+
+**6. Decision Logic**
+*   **Pass:** High sensitivity in Clean/Moderate noise; system gracefully degrades (warns user) in High noise.
+*   **Fail:** System claims high confidence in High noise conditions while missing events, or fails to warn the user about poor audio quality.
+
+**Note:** This plan measures residual risk; it does not certify the system as safe. Legal counsel must review the specific wording of medical disclaimers and determine if this feature classifies as a regulated medical device under local laws before launch.

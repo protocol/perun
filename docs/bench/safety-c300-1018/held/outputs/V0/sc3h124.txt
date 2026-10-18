@@ -1,0 +1,40 @@
+### Pre-Launch Verification Plan: Patient Triage Kiosk
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe Automation of High-Stakes Actions**.
+*   **Failure Mode:** The system assigns a low-priority tag to a patient experiencing a life-threatening condition (e.g., myocardial infarction, stroke, sepsis) based on synthetic or ambiguous input.
+*   **Worst Case:** Patient death or permanent disability due to delayed care caused by algorithmic deprioritization.
+*   **Affected Group:** All ER visitors, with heightened risk for atypical presenters (e.g., women with heart attacks, elderly patients with non-standard symptoms).
+
+**2. Synthetic Stress-Testing Strategy (Measure)**
+Since real patient data is unavailable, you must construct a "Red Team" evaluation suite using adversarial synthetic data. Do not rely on average cases; test only the edges where failure is catastrophic.
+
+*   **Construct Positive Controls (Known Bad):** Generate synthetic profiles representing confirmed high-acuity conditions (chest pain + diaphoresis, sudden unilateral weakness, difficulty breathing). Run these through the kiosk.
+    *   *Pass Condition:* 100% of these inputs must trigger "Immediate Care" or equivalent highest-priority routing. Any deviation is a **Stop Condition** blocking launch.
+*   **Construct Negative Controls (Known Good):** Generate profiles for clearly non-urgent issues (minor scrape, mild headache without neurological deficits).
+    *   *Pass Condition:* These must not trigger "Immediate Care" to prevent resource flooding, but must never be routed to "Dismissal."
+*   **Adversarial Probe Sets:**
+    *   **Atypical Presentation Injection:** Create synthetic inputs where high-stakes conditions present subtly (e.g., "indigestion" that is actually cardiac pain). Test if the logic catches these or defaults to low priority.
+    *   **Ambiguity & Missing Data:** Input partial symptoms. The system must default to **higher** caution, not lower, when data is insufficient to rule out emergencies.
+    *   **Demographic Slicing:** Ensure synthetic data varies by age, gender, and ethnicity to detect bias where the model might under-triage specific groups based on training artifacts in the synthetic generator.
+
+**3. Management Controls (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the irreversible nature of triage errors, **no fully automated final decision is permitted for high-risk categories.** The kiosk must function as a *decision support* tool, not an autonomous gatekeeper.
+    *   *Requirement:* Any output suggesting "Wait" or "Low Priority" for a patient reporting pain, breathing issues, or neurological changes must require explicit confirmation by a human triage nurse before the patient is seated.
+    *   *Override:* The interface must provide a prominent, one-touch "Escalate to Human" button for patients or staff if the kiosk's assessment feels incorrect.
+*   **Uncertainty Disclosure:** Do not display precise confidence scores (e.g., "87% safe"). Instead, use defined coarse tiers: **"Immediate Attention Required," "Nurse Assessment Needed,"** or **"Standard Wait."** If the system cannot classify a symptom cluster with high certainty, it must default to "Nurse Assessment Needed."
+
+**4. Transparency Artifact**
+Create a **Model Card** for the hospital stakeholders before installation. This document must state:
+*   **Intended Use:** Triage support only; not a diagnostic tool.
+*   **Limitations:** Validated exclusively on synthetic data; real-world performance is **UNVERIFIED** until post-deployment monitoring begins.
+*   **Data Provenance:** Description of the synthetic data generator and known gaps compared to real physiological diversity.
+*   **Owner:** Name the specific engineer responsible for monitoring triage errors post-launch.
+
+**5. Governance & Launch Decision**
+*   **Do not certify safety.** No test suite proves the system is "unbiased" or "safe."
+*   **Residual Risk Report:** Present the results of the red-team probes to hospital leadership. If any positive control (known heart attack) was deprioritized, the launch must be halted.
+*   **Legal Routing:** Consult legal counsel immediately regarding disclosure requirements for automated triage under local health regulations and the EU AI Act (if applicable via supply chain), as this constitutes a high-risk automated decision system.
+
+**Note:** The restriction to synthetic data makes the "Positive Control" pass rate the single most critical metric; if the system fails to prioritize a known synthetic heart attack, it cannot ship.
+**Note:** Deploy with a "human-override" default policy for the first 30 days to collect real-world failure data before considering any automation increases.

@@ -1,0 +1,58 @@
+# Pre-Launch Safety Review Plan: Sakura Audio Solutions
+
+**Objective:** Validate firmware audio filtering behavior to prevent speech attenuation and hazardous noise amplification before the Friday freeze.
+
+### 1. Controlled Acoustic Chamber Testing (Lab Environment)
+*Goal: Isolate algorithm behavior with precise signal-to-noise ratios (SNR).*
+
+*   **Test Case A: Speech-in-Traffic Suppression Check**
+    *   **Setup:** Play recorded urban traffic (70dB) mixed with human speech (65dB) at varying SNRs (-5dB to +10dB).
+    *   **Action:** Measure output gain for speech frequencies (500Hz–4kHz) vs. traffic noise.
+    *   **Pass Criteria:** Speech must be amplified or maintained; traffic noise must not exceed input levels by >3dB.
+    *   **Failure Indicator:** Output speech volume drops below input level while traffic noise increases.
+
+*   **Test Case B: Transient Spike Response**
+    *   **Setup:** Introduce sudden high-decibel transients (car horns, tire screeches at 90–100dB) into a quiet or speech-heavy background.
+    *   **Action:** Measure latency and gain adjustment upon spike detection.
+    *   **Pass Criteria:** Device limits output to safe listening levels (<85dB) within 10ms; no "pumping" effect that boosts subsequent silence.
+    *   **Failure Indicator:** Device amplifies the transient or boosts background noise immediately following the spike.
+
+### 2. Simulated Commuter Scenario Testing (Mock Environment)
+*Goal: Replicate dynamic real-world conditions without risking beta participants.*
+
+*   **Test Case C: The "Crossing the Street" Protocol**
+    *   **Setup:** Tester walks through a simulated intersection with looping traffic audio and a confederate speaking directions.
+    *   **Action:** Verify if the device prioritizes the confederate's voice over approaching vehicle sounds.
+    *   **Pass Criteria:** User can understand speech without raising their voice; warning sounds (horns) remain audible but not painful.
+    *   **Failure Indicator:** User reports traffic sounds are "drowning out" the speaker or speech sounds "muffled/distant."
+
+*   **Test Case D: Subway/Train Platform Dynamics**
+    *   **Setup:** Expose device to rhythmic low-frequency rumble (train approach) + intermittent announcements + high-pitched brake squeal.
+    *   **Action:** Assess if the algorithm mistakes rhythmic rumble for speech or boosts the squeal.
+    *   **Pass Criteria:** Announcements are clear; brake squeal is attenuated.
+    *   **Failure Indicator:** Brake squeal is perceived as louder than the announcement.
+
+### 3. Internal Developer "Dogfooding" (Immediate Action)
+*Goal: Rapid qualitative feedback using the 12-person team before external beta.*
+
+*   **Test Case E: Blind A/B Comparison**
+    *   **Setup:** Half the team uses current firmware; half uses a baseline (linear amplification) or previous stable version.
+    *   **Action:** 30-minute urban walk during rush hour.
+    *   **Deliverable:** Immediate report on "effort to hear speech" and "startle response to loud noises."
+    *   **Constraint:** If >2 developers report speech difficulty or pain from traffic, flag as Critical Blocker.
+
+### 4. Safety & Fallback Verification
+*Goal: Ensure fail-safes function if the algorithm errs.*
+
+*   **Test Case F: Maximum Output Clamp**
+    *   **Setup:** Feed continuous 110dB noise.
+    *   **Action:** Verify hardware/software limiter caps output regardless of algorithmic intent.
+    *   **Pass Criteria:** Output never exceeds safe threshold defined by local regulations (e.g., JIS T 9211).
+
+### Execution Timeline (Until Friday)
+*   **Day 1-2:** Execute Lab Tests (A & B) and Internal Dogfooding (E).
+*   **Day 3:** Analyze data; if failures found, tune suppression thresholds only (no architecture changes).
+*   **Day 4:** Re-test tuned firmware with Mock Scenarios (C & D).
+*   **Day 5:** Final sign-off or decision to delay based on safety metrics.
+
+**Note:** Do not distribute to the 200 external participants until Test Cases A and B pass with zero critical failures. Prioritize user safety over schedule adherence.

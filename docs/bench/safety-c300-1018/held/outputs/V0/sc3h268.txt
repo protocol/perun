@@ -1,0 +1,42 @@
+**Pre-Launch Stress-Test Script: Cardiac Event Detection & Capture**
+
+**Objective:** Verify 100% data capture fidelity for simulated symptomatic events under high-load conditions, specifically targeting the detection of subtle onset patterns within legacy database retrieval constraints.
+
+**Prerequisites:**
+*   Access to the legacy database test environment.
+*   Signal simulation tool capable of injecting synthetic cardiac waveforms (normal, noisy, subtle onset).
+*   Logging utility to timestamp injection events and database write confirmations.
+
+**Test Procedure:**
+
+**Phase 1: Baseline & Subtle Onset Calibration (Low Load)**
+1.  **Inject Control Set:** Simulate 50 clear, high-amplitude symptomatic events.
+    *   *Pass Criteria:* 50/50 events captured with <100ms latency.
+2.  **Inject Subtle Onset Set:** Simulate 50 events with low-amplitude, gradual onset patterns (mimicking early ischemia or arrhythmia).
+    *   *Pass Criteria:* 50/50 events captured. Any miss indicates a detection algorithm failure, not a load issue. Halt and fix detection logic before proceeding.
+
+**Phase 2: High-Frequency Stress Simulation (Legacy Constraint Focus)**
+*Goal: Force the legacy database into high-retrieval latency while maintaining event frequency.*
+
+3.  **Burst Injection Protocol:**
+    *   Configure the simulator to inject symptomatic events in bursts: 10 events per second for 60 seconds (600 total events).
+    *   Repeat this burst cycle 5 times with a 30-second cooling period between cycles.
+    *   *Constraint Simulation:* While injecting, run a parallel script executing complex, non-critical read-queries against the legacy database to artificially inflate retrieval times and lock contention.
+4.  **Data Integrity Verification:**
+    *   Immediately after each burst cycle, query the database for the count of recorded events matching the injection timestamps.
+    *   *Pass Criteria:* Zero data loss. Count of recorded events must equal count of injected events (600 per cycle).
+    *   *Latency Check:* Record the time delta between injection timestamp and database commit timestamp. Flag any event where latency exceeds the clinical safety threshold (e.g., >2 seconds).
+
+**Phase 3: Endurance & Recovery**
+5.  **Sustained Load:** Run a continuous stream of mixed signals (80% normal, 20% subtle symptomatic) at 5 events/second for 4 hours.
+    *   *Pass Criteria:* No degradation in capture rate over time; memory usage remains stable; no database connection drops.
+6.  **Recovery Test:** Immediately following the 4-hour run, inject 10 critical high-priority events.
+    *   *Pass Criteria:* All 10 events captured successfully, proving the system recovers instantly from high-load states.
+
+**Reporting Requirements:**
+*   Log every missed event with its specific signal characteristics (amplitude, frequency, noise level).
+*   Report the maximum observed latency during burst phases.
+*   Provide a pass/fail status for the "Zero Data Loss" requirement. Do not proceed to launch if any simulated symptom fails to result in a successful data capture.
+
+**Note:** This script validates technical capture fidelity; it does not assess clinical accuracy or regulatory compliance.
+**Note:** Given the health context, any detected data loss requires an immediate human review gate before further testing.

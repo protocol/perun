@@ -1,0 +1,32 @@
+**Testing Strategy for Static-Data Validation of Dynamic Ground Hazards**
+
+Given the constraint that your simulation cannot reliably replicate dynamic construction zones or open pits, and acknowledging the high-stakes nature of this feature for visually impaired users, you cannot validate "detection of sudden ground hazards" as a fully autonomous capability using only static map data. Static data, by definition, lacks the temporal resolution to identify *sudden* changes. Therefore, the testing strategy must shift from validating **detection** to validating **safe failure modes** and **human-in-the-loop confirmation**.
+
+**1. Redefine the Success Metric: From "Detection" to "Uncertainty Signaling"**
+Since the system cannot see dynamic pits in your current test environment, the primary metric for the pilot is not "percentage of pits detected," but "percentage of unknown terrain correctly flagged as unverified."
+*   **Test Action:** In field trials, introduce simulated "blind spots" (areas where static data exists but real-world conditions are unknown to the device).
+*   **Pass Condition:** The device must *never* assert a path is "Safe" through an area it cannot verify. It must default to an "Unverified/Do Not Proceed" audio cue.
+*   **Failure Condition:** The device provides a confident "Clear Path" instruction based solely on outdated static data. This is a critical safety failure.
+
+**2. Implement a Mandatory Human-in-the-Loop Gate for High-Stakes Actions**
+Because the risk involves irreversible physical harm (falling into a pit), full automation is unsafe given your current verification limits.
+*   **Protocol:** Configure the device to require explicit user confirmation or a secondary sensory check (e.g., "Pause. Ground condition ahead is unverified. Please scan with cane before proceeding") whenever the system relies on static data for ground integrity in high-traffic or construction-prone zones.
+*   **Validation:** During limited field trials, measure the latency and clarity of these warnings. The user must be able to stop safely before entering the hazard zone based *only* on the audio warning.
+
+**3. Adversarial "Static-Data Trap" Testing**
+Construct specific test cases where static map data explicitly contradicts the current reality (e.g., a mapped sidewalk that is currently a construction site).
+*   **Probe Set:** Walk the device along routes known to have recently changed (using your team as proxies for dynamic change).
+*   **Metric:** Rate of "Hallucinated Safety" (instances where the device claims the path is clear because the map says so).
+*   **Threshold:** Zero tolerance. Any instance of the device guiding a user into a known hazard based on old data blocks the pilot launch.
+
+**4. Transparency Artifact (Pilot Model Card)**
+Before distributing units, issue a clear limitation statement to the initial user group:
+*   **Intended Use:** Navigation aid for static environments.
+*   **Known Limitation:** "This device cannot detect sudden ground hazards like open pits or dynamic construction zones. It relies on static maps which may be outdated. Users must always verify ground conditions with their traditional white cane before stepping."
+*   **Status:** Mark the "Dynamic Hazard Detection" capability as **UNVERIFIED** in your internal logs. Do not fabricate a detection rate.
+
+**Conclusion**
+You cannot test what you cannot simulate. The strategy is to prove the device fails safely (by refusing to guide) rather than proving it succeeds at detection. If the device cannot reliably distinguish between "known safe" and "unknown," it must default to "unknown" and defer to the user's traditional mobility tools.
+
+**Note:** This approach treats the inability to detect dynamic hazards as a system limitation to be managed via uncertainty signaling, not a bug to be hidden.
+**Note:** Legal counsel should review the pilot disclosure language regarding the "UNVERIFIED" status of dynamic hazard detection before user distribution.

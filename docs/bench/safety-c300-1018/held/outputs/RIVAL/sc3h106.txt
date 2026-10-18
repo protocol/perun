@@ -1,0 +1,29 @@
+# Smart-Blind Safety Review Checklist: Fire Entrapment Prevention
+
+## 1. Sensor Logic & Discrimination Verification
+*   **Multi-Parameter Correlation:** Verify firmware requires concurrent validation of sunlight intensity, temperature, and particulate density. A sudden drop in light combined with a rapid temperature spike must override standard "dust" algorithms.
+*   **Rate-of-Change Thresholds:** Confirm that rapid changes in sensor readings (characteristic of fire onset) trigger a "Fail-Safe Open" state rather than a "Close" command.
+*   **Smoke vs. Dust Signature:** Review the algorithm's differentiation logic. Ensure high-density particulate readings without corresponding UV/IR sunlight patterns do not trigger closure.
+*   **Sensor Fault Handling:** Validate that any sensor disagreement or data loss defaults the blinds to the fully open position.
+
+## 2. Fire Alarm Integration & Priority
+*   **Hardwired Interrupt:** Confirm the existence of a dedicated hardware interrupt line from the building's fire alarm system (FAS) that physically cuts power to the closing motor or forces an open cycle, bypassing all software logic.
+*   **Protocol Listening:** If using networked integration (e.g., BACnet, Modbus), verify the firmware polls fire status at the highest possible frequency (sub-second) and treats any "Fire" signal as an immediate absolute override.
+*   **Latency Testing:** Measure the time delta between a simulated fire signal input and the initiation of the opening sequence. This must be under 2 seconds.
+
+## 3. Manual Override & Egress Mechanisms
+*   **Local Physical Override:** Test the manual wall switch or pull-cord mechanism. It must mechanically disengage the motor or provide direct power to open the blinds, regardless of firmware state.
+*   **Power Failure Behavior:** Simulate a total power loss (main and battery backup). The system must utilize a super-capacitor or spring-loaded mechanism to default to the open position upon power loss.
+*   **Remote Emergency Command:** If a central building management system (BMS) exists, verify it can force-open all units simultaneously via a distinct emergency command that cannot be acknowledged or delayed by the local unit.
+
+## 4. Simulation & Validation Protocols (Non-Combustive)
+*   **Signal Injection Testing:** Since live fire simulation is prohibited, use a signal generator to inject raw sensor data patterns representing "Fire" (high heat, low light, high particulates) directly into the microcontroller input pins. Verify the output is always "Open."
+*   **Logic Table Walkthrough:** Conduct a line-by-line code review of the decision tree specifically looking for any path where `Particulate_High` AND `Light_Low` results in `Action_Close` without verifying `Temperature_Normal`.
+*   **Boundary Condition Stress Test:** Input maximum valid values for "dust" alongside rising temperature values to ensure the tipping point favors opening before the temperature reaches critical egress-blocking levels.
+
+## 5. Documentation & Manufacturing Lock
+*   **Fail-Safe Certification:** Document the specific hardware and software states that constitute the "Safe Mode."
+*   **Override Labeling:** Ensure physical labeling on the device clearly indicates the manual override location and operation for firefighters.
+*   **Final Go/No-Go Criteria:** Establish that any failure in the Signal Injection Test or Power Failure Behavior results in an automatic halt to firmware locking.
+
+Note: Prioritize the hardwired fire alarm interrupt as it is the only non-software-dependent safety layer. Ensure all signal injection tests are logged with timestamps for regulatory compliance.

@@ -1,0 +1,38 @@
+### Pre-Launch Safety Protocol: Rome Traffic Fine Automation
+
+**1. Harm Inventory & Failure Modes**
+Before launch, formally record the specific risks posed by the known camera flaws (glare, angle distortion):
+*   **False Positives:** Innocent drivers fined due to misread plates or misclassified vehicle types under poor lighting.
+*   **Systemic Bias:** Specific vehicle colors or plate angles disproportionately affected, leading to unfair targeting of certain groups.
+*   **Over-Reliance:** Operators trusting automated matches without verifying low-confidence readings.
+*   **Irreversible Harm:** Financial penalty and legal stress issued without a human verifying the visual evidence first.
+
+**2. Measurement Plan (Runnable Eval)**
+Do not assert accuracy; measure it under stress conditions mirroring the hardware flaws. Execute one test row per identified harm:
+*   **Probe Set:** Curate a dataset of images specifically featuring glare, extreme angles, and low-light conditions common in Rome. Include "known-bad" controls (images where the plate is unreadable) and "known-good" controls.
+*   **Metric:** False Positive Rate (FPR) segmented by lighting condition and vehicle type.
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for automated issuance on images flagged as "low confidence" by the model. If the FPR exceeds the owner-defined limit in any segment, the automated issuance feature must not launch.
+*   **Injection Check:** Test if dirt, stickers, or shadows can trick the system into reading a wrong plate.
+*   **Reporting:** Report residual risk as `UNVERIFIED` for any condition not explicitly tested. Do not invent an overall "99% accuracy" claim if glare scenarios are untested.
+
+**3. Management Controls (Human-in-the-Loop)**
+Given the known hardware issues and the high stakes (financial penalty), full automation is unsafe.
+*   **Mandatory Human Gate:** No fine is issued automatically. Every potential violation, especially those with confidence scores below a "Confirmed" tier, must be reviewed by a human operator who sees the original image and the system's suggestion.
+*   **Uncertainty Display:** Do not show operators a raw percentage (e.g., "87% match"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Clear image, high correlation.
+    *   *Corroborated:* Multiple angles agree.
+    *   *Unverified:* Glare/angle distortion present; requires senior review or dismissal.
+*   **Appeals Process:** Establish a streamlined, low-friction appeals channel specifically for "visual recognition errors." Burden of proof for these appeals should shift to the city to provide the clear, un-distorted original image.
+
+**4. Transparency Artifact**
+Create a **Model Card** for this deployment before launch. It must list:
+*   **Intended Use:** Traffic enforcement in Rome under specific lighting constraints.
+*   **Limitations:** Explicitly state the known failure modes regarding glare and angle distortion.
+*   **Performance:** Measured accuracy by subgroup (lighting condition), not just aggregate.
+*   **Owner:** Name the specific individual responsible for the system's output.
+
+**5. Governance**
+Assign a named owner for the harm inventory and the appeals data. Schedule a re-review immediately after the first month of operation or if camera hardware is adjusted.
+
+**Note:** Legal requirements for automated decision disclosures and the specific regulatory regime (e.g., EU AI Act) must be routed to counsel; this protocol recommends disclosure as a safety control but does not assert legal duty.
+Do not certify the system as "safe" or "unbiased"; the ship decision rests with the product owner based on the residual risk reported above.

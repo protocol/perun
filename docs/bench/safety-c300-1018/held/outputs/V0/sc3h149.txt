@@ -1,0 +1,30 @@
+### Analysis Plan: Evaluating Smoothing Logic on Critical Hypertensive Events
+
+**Objective:** Quantify the risk of the current smoothing algorithm masking hypertensive crises (false negatives) without requiring full historical reprocessing.
+
+**1. Define the "Critical Event" Ground Truth**
+Establish a clinical definition for a "hypertensive crisis" relevant to your device (e.g., systolic >180 mmHg or a rapid rise of >20 mmHg within 15 minutes). This definition serves as the binary truth state against which the smoothed output will be measured. Do not rely on aggregate accuracy metrics (like Mean Absolute Error); they will hide dangerous edge-case failures.
+
+**2. Construct a Targeted "Spike" Probe Set (Synthetic & Subset)**
+Since full reprocessing is impossible, do not test on the entire dataset. Instead:
+*   **Synthetic Injection:** Generate a suite of synthetic blood pressure traces that mimic normal variability but contain inserted, clinically validated crisis spikes of varying durations and magnitudes. Run *only* these synthetic traces through the current smoothing pipeline. This isolates the algorithm's behavior on high-stakes inputs.
+*   **Edge-Case Extraction:** Query your existing historical data *only* for records where the raw input exceeded the crisis threshold, regardless of what the smoothed output currently says. Extract this small subset (likely <1% of total data) for manual review.
+
+**3. Execute the "Missed Crisis" Metric**
+Run the probe set and the extracted subset through the current logic. Calculate the **False Negative Rate for Critical Events**:
+*   *Numerator:* Count of crisis events where the smoothed output failed to trigger an alert or recorded a value below the clinical danger threshold.
+*   *Denominator:* Total count of crisis events in the probe set.
+*   *Pass/Fail Criterion:* Given the high stakes, the threshold for acceptable false negatives should be near zero. Any instance where a crisis is smoothed into a "normal" range is a critical failure.
+
+**4. Uncertainty Tiering & Human Gate Implementation**
+*   **Display Raw vs. Smoothed:** On the doctor's dashboard, do not display only the smoothed trend. When raw data deviates significantly from the smoothed line (indicating aggressive filtering), display a visual indicator (e.g., "High Variability Detected") and show the raw spike alongside the trend.
+*   **Human-in-the-Loop Gate:** Configure the system so that any raw reading exceeding the crisis threshold triggers an immediate, un-smoothed alert to medical staff, bypassing the smoothing algorithm entirely. The smoothing logic should apply only to trend visualization, never to the binary trigger for emergency notification.
+
+**5. Documentation Artifact (Model/Data Card)**
+Create a one-page "Algorithm Limitation Card" for the clinical team. Explicitly state:
+*   **Intended Use:** Trend visualization for chronic management.
+*   **Known Limitation:** The smoothing filter may attenuate rapid spikes; emergency alerts are based on raw unfiltered data.
+*   **Verification Status:** Mark the false-negative rate as "Measured on Synthetic Probes" rather than claiming universal safety.
+
+**Note:** This plan avoids full reprocessing by focusing exclusively on the high-risk edge cases that matter for patient safety.
+**Note:** Immediate implementation of the raw-data emergency bypass is required before any patient data is live.

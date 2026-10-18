@@ -1,0 +1,42 @@
+### Pre-Launch Safety Plan: MumbaiMed Alert System
+
+**1. Harm Inventory & Scope Definition**
+*   **Primary Risk:** False negatives (missed alerts) for rare drug interactions due to limited local historical data, leading to patient harm.
+*   **Affected Group:** Patients prescribed uncommon medication combinations; clinics relying on automated flags.
+*   **Worst Case:** A severe adverse reaction occurs because the system failed to flag a rare interaction present in global literature but absent in local training data.
+*   **Constraint Acknowledgement:** No new data licensing; 2-week deadline; 6 engineers.
+
+**2. Measurement Strategy (Runnable Tests)**
+Instead of claiming accuracy, we will run specific probes to identify blind spots:
+*   **Probe Set A (Known Rare Globals):** Inject 50 verified rare interaction cases from global medical literature (not in local data) into the test stream.
+    *   *Metric:* Detection rate of these specific known-rare cases.
+    *   *Threshold:* Owner-defined (e.g., if >5% of known severe globals are missed, manual review scope expands).
+    *   *Stop Condition:* If detection of severe global cases falls below the threshold, the automated "all-clear" is disabled for those drug classes.
+*   **Probe Set B (Synthetic Edge Cases):** Generate synthetic prescription records combining drugs with mechanistic potential for interaction but no local history.
+    *   *Metric:* System confidence tier assigned (see below).
+    *   *Control:* Include known safe combinations (negative control) and known common interactions (positive control).
+
+**3. Management Controls (The Human Gate)**
+*   **Confidence Tiers (No Raw Percentages):** Do not display "87% confident." Implement defined text tiers for every alert:
+    *   *Confirmed:* Supported by local historical data.
+    *   *Corroborated:* Supported by global literature, limited local data.
+    *   *Unverified:* Mechanistic risk only, no local or strong global evidence.
+*   **Mandatory Human Review:** Any alert falling into "Unverified" or involving drug pairs identified in Probe Set A as "hard to detect" must trigger a mandatory pharmacist review before the alert is suppressed or acted upon. **No fully automated dismissal of high-severity potential interactions.**
+*   **Prioritization Logic:** Manually review drug pairs first where:
+    1.  Global literature indicates severe/fatal outcomes.
+    2.  Local data volume is <10 instances.
+    3.  The system outputs an "Unverified" tier.
+
+**4. Transparency Artifact (Model Card Lite)**
+Before launch, publish a one-page internal "Data & Limitation Card" for clinic staff:
+*   **Intended Use:** Flagging known and probable adverse reactions based on local + global data.
+*   **Known Limitation:** "Rare interactions with no local historical precedent may be flagged as 'Unverified' or missed. This tool does not replace clinical judgment for uncommon prescriptions."
+*   **Owner:** [Name of Lead Engineer/Medical Officer].
+*   **Version:** v1.0 (Pre-launch).
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one engineer to maintain the "Rare Interaction" probe set and one medical lead to review "Unverified" tiers weekly.
+*   **Legal/Regulatory Route:** Determine if this constitutes a regulated "automated decision" under local health laws. **Route to legal counsel immediately**; do not assert compliance internally.
+*   **Rollback Plan:** If a missed interaction causes an incident, immediately revert to a rule-based "flag everything" mode for the involved drug class until re-evaluated.
+
+**Note:** This plan treats the lack of local data as a verified limitation, not a solvable bug within the two-week window. The safety mechanism is the human gate on low-confidence outputs, not improved model accuracy.

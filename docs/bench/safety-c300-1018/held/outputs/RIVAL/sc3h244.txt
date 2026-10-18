@@ -1,0 +1,31 @@
+**Verification Protocol: Smart Oxygen Humidification Activation**
+
+**Objective:** Confirm the humidification mechanism activates reliably under all defined operating conditions before the firmware lock in 72 hours. This protocol relies solely on simulation and environmental chamber testing; no code changes are permitted.
+
+**1. Environmental Boundary Testing (Chamber Simulations)**
+Simulate the full range of ambient conditions specified in your requirements to verify sensor triggering thresholds.
+*   **Low Humidity/High Flow Stress:** Set chamber to 10% relative humidity (RH) at 20°C. Run device at maximum prescribed flow rate. Verify immediate humidifier activation.
+*   **High Humidity/Near-Threshold:** Set chamber to 80% RH at 25°C. Run device at minimum flow rate. Verify the system correctly identifies when humidification is *not* required (preventing over-humidification), then lower ambient RH incrementally to trigger activation. Record the exact trigger point.
+*   **Temperature Extremes:** Test at the lower (e.g., 10°C) and upper (e.g., 35°C) operational temperature limits. Cold air holds less moisture; ensure the algorithm compensates correctly to prevent dryness at low temperatures even if relative humidity appears moderate.
+*   **Rapid Environmental Shift:** Simulate a patient moving the device from a cold hallway to a warm bedroom. Introduce a rapid step-change in temperature and humidity while the device is running at a steady flow. Verify the control loop reacts within the specified latency window without oscillation or failure to engage.
+
+**2. Usage Scenario & Flow Dynamics**
+Test the interaction between flow rate changes and the humidification logic.
+*   **Flow Ramp-Up:** Start at zero flow, then rapidly increase to therapeutic levels (e.g., 1 L/min to 5 L/min). Confirm activation occurs before dry air reaches the patient interface.
+*   **Intermittent Flow (Breathing Simulation):** Use a lung simulator to mimic irregular breathing patterns, including apnea pauses and sudden gasps. Ensure the system does not falsely deactivate during short pauses or fail to reactivate upon resumption of flow.
+*   **Power Interruption Recovery:** Cut power for 10 seconds while the device is active, then restore. Verify the device boots, re-reads sensors, and re-engages humidification immediately if conditions warrant, without requiring manual reset.
+*   **Low Water Reservoir:** Run tests with the water chamber at 10% capacity. Verify the device either maintains safe humidification levels or fails safely (alerting the user) rather than delivering dry air silently.
+
+**3. Sensor Failure & Degradation Modes**
+Since code cannot change, verify how the system handles imperfect data.
+*   **Sensor Lag Simulation:** If possible, introduce a delay in sensor feedback via the test harness to ensure the control algorithm does not time out and disable the heater.
+*   **Out-of-Range Values:** Simulate sensor readings at the extreme edges of the ADC range. Confirm the firmware defaults to a safe state (e.g., "Humidify On" or "Alarm") rather than crashing or disabling the feature.
+
+**4. Documentation & Pass Criteria**
+*   **Pass Criterion:** The humidifier must activate within 2 seconds of detecting a "dry" condition across all 15+ test permutations.
+*   **Data Logging:** Ensure all test runs log timestamp, ambient temp/RH, flow rate, and humidifier state (On/Off) to internal memory or external debug port for certification review.
+*   **Go/No-Go Decision:** Any single failure to activate when required constitutes a "No-Go" for the firmware lock. Given the hardware schedule, a failure requires a hardware recall plan or a labeling restriction, as code fixes will be impossible.
+
+Execute these tests immediately in parallel streams if multiple chambers are available. Prioritize the "Low Humidity/High Flow" and "Rapid Environmental Shift" scenarios as highest risk for patient safety.
+
+*Note: Ensure all test equipment is calibrated prior to starting to avoid false negatives. If any scenario reveals a failure, document the exact threshold values for potential user manual warnings.*

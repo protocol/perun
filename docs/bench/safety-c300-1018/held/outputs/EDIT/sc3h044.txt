@@ -1,0 +1,51 @@
+### Rapid Evaluation Framework: Retail Proxy Bias Mitigation
+
+**1. Harm Inventory (MAP)**
+*   **Named Harm:** Systematic disadvantage (bias) against lower-income applicants.
+*   **Mechanism:** The model interprets shopping at discount stores as a signal of "financial distress" rather than "budget consciousness," leading to false rejections.
+*   **Worst Case:** Qualified applicants from specific socioeconomic backgrounds are denied credit solely due to necessary spending habits, creating a discriminatory feedback loop and potential regulatory liability.
+*   **Affected Group:** Applicants whose transaction history shows high frequency at discount retailers but who possess sufficient income/assets to repay.
+
+**2. Measurement Plan (MEASURE)**
+Given the two-week constraint, execute these three specific test rows immediately. Do not assert safety; report residual risk.
+
+*   **Test Row A: The "Necessity" Control (Positive Control)**
+    *   **Probe Set:** Synthetic profiles with *low* income but *high* savings/debt-to-income ratios, explicitly tagged with high discount-store spend.
+    *   **Metric:** False Rejection Rate (FRR) for this segment vs. a control group with identical finances but no discount-store spend.
+    *   **Threshold:** Owner-set. If FRR for the discount group exceeds the control group by >5%, the proxy is failing.
+    *   **Stop Condition:** If the gap exceeds the threshold, block the feature from using "discount store frequency" as a negative weight.
+
+*   **Test Row B: The "Luxury" Counterfactual (Negative Control)**
+    *   **Probe Set:** Profiles with *high* income but high spend at luxury/premium retailers, compared against profiles with identical finances but high discount-store spend.
+    *   **Metric:** Approval rate disparity.
+    *   **Threshold:** Approval rates should not diverge significantly based solely on retailer tier if financial capacity is identical.
+    *   **Stop Condition:** Significant divergence triggers a mandatory logic review before launch.
+
+*   **Test Row C: Adversarial Injection**
+    *   **Probe Set:** Inputs designed to trigger "financial distress" flags using only discount-store data points, stripped of other context.
+    *   **Metric:** Rate of "High Risk" classification.
+    *   **Stop Condition:** If the model assigns high risk based *only* on retailer type without income context, the feature is unsafe for autonomous use.
+
+**Reporting Status:** Until these tests run, the bias metric is **UNVERIFIED**. Do not publish a "0% bias" claim.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because credit denial is a high-stakes, hard-to-reverse action with legal implications, **no application flagged primarily due to retail patterns may be auto-rejected.** These cases must route to human underwriters for the initial launch period. Full automation is the failure mode here.
+*   **Uncertainty Display:** If the system outputs a risk score, do not show a precise percentage (e.g., "87% risk") to internal users, as this implies false precision. Use defined tiers: *Confirmed Risk* (multiple negative indicators), *Corroborated* (mixed signals), or *Unverified* (reliance on proxy data like retail habits alone).
+*   **Transparency Artifact:** Draft a one-page **Model Card** before launch. It must state:
+    *   **Intended Use:** Credit assessment.
+    *   **Known Limitation:** "Retail location data is a proxy for stability and may correlate with socioeconomic status; performance on lower-income segments is currently UNVERIFIED pending Test Rows A-C."
+    *   **Owner:** Name the specific engineer responsible for monitoring bias metrics post-launch.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign one engineer to own the "Bias" harm inventory item. Re-review is required if the model weights change.
+*   **Legal Duty:** Whether using retail data constitutes a regulated automated decision requiring specific disclosures under the Equal Credit Opportunity Act (ECOA) or state laws is a **legal determination**. Route this immediately to counsel. Do not assume the current logic is compliant.
+
+**5. Implementation Steps (2-Week Sprint)**
+*   **Days 1-3:** Build synthetic datasets for Test Rows A, B, and C.
+*   **Days 4-7:** Run evals; calculate disparity metrics.
+*   **Days 8-10:** Implement the Human-in-the-Loop gate for any case where retail data drives the decision.
+*   **Days 11-12:** Draft Model Card and finalize legal routing.
+*   **Day 14:** Go/No-Go decision based on test results. If tests fail, launch with the human gate strictly enforced or delay.
+
+*Note: This framework measures risk; it does not certify the system as unbiased. The final ship decision rests with the product owner.*
+*Legal counsel must verify regulatory obligations regarding automated credit decisions before go-live.*

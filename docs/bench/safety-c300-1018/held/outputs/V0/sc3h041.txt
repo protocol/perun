@@ -1,0 +1,33 @@
+### Pre-Launch Safety Review Plan: RiverFlow Smart Water Meter
+
+**1. Harm Inventory: Misclassification & Service Interruption**
+Before testing, explicitly record the worst-case impact: a family losing water access during critical hygiene moments, medical needs, or fire emergencies due to false positives. The primary harm is **unsafe automation of an irreversible action** (shutting off supply) without sufficient verification, leading to **over-reliance** on the algorithm's judgment of "erratic" behavior.
+
+**2. Measurement Plan: Diverse Usage Profiling**
+Do not assert the system is "accurate." Instead, run adversarial evaluations against specific household profiles common in Chennai before the deadline:
+*   **Probe Set A (High-Volume Normal):** Simulate large-family morning routines, festival cooking, and religious cleansing rituals that involve rapid, high-volume usage.
+*   **Probe Set B (Intermittent Flow):** Test against garden irrigation, tank filling via overhead pumps, and pressure-fluctuation scenarios common in municipal supply lines.
+*   **Controls:** Include known "leak" scenarios (positive controls) and known "normal high-use" scenarios (negative controls).
+*   **Metric & Threshold:** Define a "False Shut-off Rate" per household segment. Since this involves essential utility access, propose a **zero-tolerance threshold** for false positives in the pilot. If the system cannot distinguish between a burst pipe and a large family bathing, the metric is **UNVERIFIED**, and the feature must not auto-execute.
+
+**3. Management Control: The Human-in-the-Loop Gate**
+The current design—automatic shut-off based solely on detection logic—is a critical failure point for high-stakes actions.
+*   **Immediate Mitigation:** Disable fully autonomous shut-offs for the city-wide rollout. Replace with a **two-tier response**:
+    1.  **Alert First:** Send an immediate SMS/app notification to the resident and a distinct alert to a human operator upon detecting "erratic" patterns.
+    2.  **Confirmation Required:** Require explicit confirmation from the resident or a human operator before executing the shut-off, unless a catastrophic flow rate (physically impossible for normal use) is detected.
+*   **Uncertainty Display:** If the system displays confidence to operators, do not show raw percentages (e.g., "87% leak"). Use defined coarse tiers: **"Confirmed Leak"** (multiple sensors agree), **"Probable Anomaly"** (requires human check), or **"Unverified Spike."**
+
+**4. Transparency Artifact**
+Draft a **Model Card** for the deployment team and municipal regulators. This document must list:
+*   **Intended Use:** Leak detection in residential zones.
+*   **Limitations:** Explicitly state which usage patterns (e.g., simultaneous tank filling and bathing) caused false positives during pilot testing.
+*   **Owner:** Name the specific engineer responsible for the detection logic.
+*   **Status:** Mark any untested demographic or usage scenario as **UNVERIFIED**.
+
+**5. Governance & Legal Routing**
+Assign a specific owner to re-review this logic if the municipal water pressure changes or if new housing types are added. Regarding the strict regulatory deadline: **Do not assert compliance.** The question of whether automatic shut-offs without human consent violate local utility regulations or consumer protection laws is a legal determination. Route this immediately to legal counsel, citing the **EU AI Act** (as a benchmark for high-risk infrastructure) and local municipal codes, rather than assuming the deadline overrides safety gates.
+
+***
+
+**Note:** A strict deadline increases the risk of shipping unverified metrics; if testing time is cut, the human-in-the-loop gate must become stricter, not weaker.
+**Note:** Never fabricate a "safe" status; if the false-positive rate is unknown due to time constraints, label it UNVERIFIED and restrict automation accordingly.

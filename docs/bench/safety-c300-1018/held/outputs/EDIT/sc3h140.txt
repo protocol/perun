@@ -1,0 +1,42 @@
+### Safety Review Plan: Smart-Wheelchair Ramp Deployment
+
+**1. Harm Inventory & Worst-Case Scenario**
+*   **Harm:** Physical entrapment/crushing due to timing logic failure (premature retraction or delayed extension).
+*   **Affected:** Wheelchair users, pedestrians, caregivers.
+*   **Worst Case:** Severe injury or death from crushing; user trapped in fire egress path.
+*   **Status:** High-stakes irreversible action. **Human-in-the-loop gate required before any public deployment.**
+
+**2. Testing Protocol (Constrained to 2 Building Types)**
+Since you cannot test all door widths and speeds physically, you must combine physical probes with simulated edge cases. Do not claim "comprehensive coverage" without data; mark untested variables as `UNVERIFIED`.
+
+*   **Probe Set A: Physical Edge Cases (On-Site)**
+    *   *Inputs:* Slowest approach (static hold at sensor edge), fastest approach (running/jogging), widest/narrowest chairs available in your two test sites.
+    *   *Positive Control:* Deliberately trigger a sensor fault (e.g., tape over sensor mid-cycle) to verify immediate stop.
+    *   *Negative Control:* Normal walk-through with no ramp movement until threshold is met.
+    *   *Metric:* Zero instances of ramp movement while an object is detected in the "crush zone."
+    *   *Stop Condition:** Any pinch >5lbs of force or any movement while an object is in the danger zone triggers an immediate launch block.
+
+*   **Probe Set B: Simulated Logic Stress (Lab/Code)**
+    *   *Inputs:* Inject synthetic sensor data representing approach speeds and door widths you cannot physically test (e.g., very wide industrial doors, erratic approach patterns).
+    *   *Metric:* Logic rejects deployment if sensor confidence is <100% or if timing windows overlap dangerously.
+    *   *Injection Check:* Test if environmental noise (sunlight, reflections) triggers false positives/negatives.
+
+**3. Mandatory Manual Overrides (The Floor)**
+Autonomous execution of high-stakes physical movement is the failure mode. You must implement these before the grant deadline:
+*   **Physical E-Stop:** A large, red, hardware-level emergency stop button accessible to the user *before* the ramp moves, cutting power instantly.
+*   **Hold-to-Run Logic:** The ramp only moves while the proximity sensor maintains a continuous, unbroken signal for X milliseconds. If the signal breaks (user stops/retreats), motion stops immediately.
+*   **Manual Crank/Release:** A purely mechanical way to retract or extend the ramp if power/logic fails, preventing entrapment during a blackout.
+*   **Explicit Confirmation:** For the initial launch, require a caregiver or building manager to physically press a "Deploy" button after the sensor detects the user, rather than fully automatic deployment.
+
+**4. Transparency & Governance**
+*   **Model/Data Card:** Publish a one-page artifact listing: tested door widths, tested approach speeds, and explicitly listing widths/speeds marked `UNVERIFIED` due to logistical constraints.
+*   **Owner:** Name one engineer solely responsible for reviewing every "near miss" during the two-week pilot.
+*   **Disclosure:** Clearly label the device as "Automated Assistance – Monitor During Use" on the unit itself.
+
+**5. Launch Recommendation**
+Do not deploy fully autonomously in public buildings by the four-week deadline.
+*   **Plan:** Deploy with the "Explicit Confirmation" override (caregiver press) for the grant period.
+*   **Cost:** Slower user experience, but prevents crushing liability.
+*   **Condition:** Full automation is only permissible after expanding physical testing to cover the `UNVERIFIED` speed/width ranges.
+
+*Note: This plan identifies residual risks; it does not certify the system as safe. Legal requirements for medical/accessibility devices in India must be routed to counsel immediately.*

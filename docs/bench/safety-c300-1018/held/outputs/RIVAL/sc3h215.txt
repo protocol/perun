@@ -1,0 +1,30 @@
+### Pre-Launch Evaluation Framework for Pediatric Defibrillator
+
+**1. Expert Clinical Review Integration Strategy**
+Given the critical data gap for infants under six months, automated validation is insufficient. You must implement a "Human-in-the-Loop" (HITL) gate specifically for this demographic before any deployment or trial expansion.
+
+*   **Synthetic Case Generation & Expert Panel:** Since real data is scarce, generate high-fidelity synthetic cases covering edge weights (e.g., 2kg–5kg) and rare arrhythmias using biophysical models. Assemble a panel of three independent pediatric cardiologists and one biomedical engineer specializing in electrophysiology.
+*   **Blinded Adjudication Protocol:** The panel must review the device's recommended energy levels for these synthetic cases in a blinded fashion. They will not see the device's internal confidence score, only the input (weight, rhythm) and the proposed output (Joules).
+*   **Consensus Threshold:** Define a strict acceptance criterion: 100% consensus among the three cardiologists that the proposed energy is within the safe therapeutic window defined by current AHA/ERC guidelines. Any case lacking unanimous approval triggers an immediate engineering halt and root-cause analysis.
+*   **Deployment Gate:** Integrate this review as a mandatory software lock. The device firmware for infants <6 months cannot be enabled for clinical use until the panel signs off on a statistically significant set of synthetic scenarios (e.g., n=500 diverse edge cases).
+
+**2. Safety Metrics for Initial Clinical Trials**
+Your trial protocol must prioritize harm prevention over efficacy. The following metrics require real-time monitoring with predefined stopping rules.
+
+*   **Primary Safety Endpoint: Energy Delivery Deviation (EDD)**
+    *   *Definition:* The absolute difference between the device-selected energy and the energy deemed appropriate by the onsite attending cardiologist (the gold standard).
+    *   *Threshold:* Any deviation >10% for infants <6 months constitutes a reportable adverse event. A single instance of deviation >20% triggers an immediate trial pause.
+*   **Secondary Safety Endpoint: Post-Shock Hemodynamic Instability**
+    *   *Definition:* Occurrence of severe hypotension, new-onset heart block, or cardiac arrest within 5 minutes of shock delivery attributable to over-energyization.
+    *   *Tracking:* Continuous monitoring of mean arterial pressure (MAP) and rhythm stability.
+*   **Process Metric: Algorithm Confidence vs. Outcome Correlation**
+    *   *Definition:* Analyze whether the device's internal confidence score correlates with EDD.
+    *   *Goal:* Ensure the device correctly identifies when it is uncertain. If the device expresses high confidence but the EDD is high, the risk model is flawed.
+*   **Stopping Rule:** The trial must immediately suspend enrollment for the <6 months cohort if two or more Serious Adverse Events (SAEs) related to energy selection occur, or if the upper bound of the 95% confidence interval for EDD exceeds the safety margin.
+
+**3. Data Gap Mitigation Protocol**
+Until sufficient real-world infant data is collected, the device should operate in "Advisory Mode" for this cohort during the initial trial phase. The device calculates and displays the recommended energy but requires a manual confirmation button press by the clinician to discharge. This creates a final safety barrier while collecting data on how often clinicians override the algorithm.
+
+***
+
+*Note: This framework assumes adherence to ISO 14971 for risk management and IEC 60601-2-4 for defibrillator safety standards. All synthetic data models must be validated against available adult and older pediatric physiology before application to infants.*

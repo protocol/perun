@@ -1,0 +1,33 @@
+### Pre-Launch Safety Assessment Plan for Patient-Hydration Tracker
+
+**1. Establish a Static Medical Guardrail Layer**
+Before running dynamic tests, hardcode absolute safety boundaries derived from established nephrology guidelines (e.g., KDIGO) directly into the application logic, bypassing the AI for critical checks.
+*   **Hard Limits:** Define minimum and maximum fluid intake thresholds based on standard clinical safety margins (e.g., never suggest <500ml or >2000ml without specific physician override flags).
+*   **Logic Check:** Ensure the AI's output is validated against these static rules. If the AI suggests a value outside these bounds, the system must default to a safe, standard recommendation or trigger a "Consult Your Doctor" alert instead of displaying the AI's value.
+
+**2. Construct a Synthetic "Edge Case" Dataset**
+Since your historical dataset lacks diversity, you must manually construct a synthetic test suite representing high-risk physiological profiles that are underrepresented in your data. Do not rely on the existing data for these tests.
+*   **Profile Creation:** Create dummy patient profiles representing extreme but plausible scenarios:
+    *   **Anuric Patients:** Patients with zero urine output.
+    *   **Comorbidities:** Profiles with concurrent heart failure or liver cirrhosis where fluid restriction is critical.
+    *   **Environmental Stressors:** Inputs simulating high-temperature exposure (common in Tokyo summers) combined with low activity levels.
+    *   **Data Extremes:** Input values at the very edges of your data types (e.g., extremely low weight, maximum age).
+*   **Expected Outcomes:** For each synthetic profile, define the medically correct "safe range" manually with a consulting nephrologist. This serves as your ground truth.
+
+**3. Execute Deterministic Regression Testing**
+Run the suggestion engine against the synthetic dataset in a controlled, offline environment.
+*   **Comparison Protocol:** Compare every AI-generated recommendation against the pre-defined "safe range" for that specific synthetic profile.
+*   **Failure Criteria:** Any suggestion falling outside the safe range, or any suggestion that triggers a hallucination (e.g., citing non-existent medical rules), is an immediate critical failure.
+*   **Sensitivity Analysis:** Slightly vary input parameters (e.g., change weight by 1kg) to ensure the output does not fluctuate wildly, which indicates instability in the model's reasoning.
+
+**4. Implement a "Human-in-the-Loop" Review Gate**
+Given the high stakes and the identified instability, automated testing is insufficient for final clearance.
+*   **Blind Review:** Have a qualified nephrologist review a random sample of 50–100 AI suggestions generated from both historical and synthetic data without knowing which is which.
+*   **Adversarial Prompting:** Manually attempt to "break" the system by inputting contradictory or confusing data (e.g., reporting high fluid intake but zero weight gain) to see if the AI forces a dangerous logical leap to maintain coherence.
+
+**5. Deployment Safeguards**
+*   **Disclaimer Enforcement:** Ensure every screen displaying fluid limits includes a prominent, non-dismissable warning that the tool is an adjunct aid and not a substitute for professional medical advice.
+*   **Feedback Loop:** Build a mechanism for users to flag "unsafe" advice, which immediately queues the interaction for human review and temporarily suspends AI recommendations for that user profile.
+
+**Note:** Do not launch before the static guardrails (Step 1) are proven to block 100% of the dangerous outputs identified in your current testing.
+**Note:** Given the limited dataset, consider delaying the full public release to a closed beta with intensive monitoring rather than a wide holiday launch.

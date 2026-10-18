@@ -1,0 +1,37 @@
+### Testing Strategy for Patient-Appointment Reminder Service
+
+Given your four-week deadline and lack of a dedicated privacy officer, your testing strategy must prioritize high-risk failure modes: incorrect recipient matching and unauthorized disclosure of diagnosis details. The following plan focuses on validating these specific boundaries using synthetic data and deterministic logic checks.
+
+**1. Data Sanitization and Synthetic Fixture Creation**
+Before testing logic, isolate the risk in your data source. Create a separate, sanitized copy of the legacy database for testing purposes.
+*   **Action:** Manually curate a "Golden Set" of 50–100 test records. This set must include:
+    *   Valid, current phone numbers linked to specific patients.
+    *   Known outdated/invalid numbers (e.g., disconnected formats, numbers belonging to other patients in your test set).
+    *   Edge cases: Missing phone numbers, duplicate entries for the same patient, and patients with no scheduled appointments.
+*   **Constraint:** Ensure no real patient data leaves your secure development environment. Use fabricated diagnosis details (e.g., "Routine Checkup," "Hypertension Follow-up") that mimic the structure of real data but contain no actual PHI.
+
+**2. Validating Number-Matching Logic (The "Who" Test)**
+The primary goal is to prove that a message generated for Patient A is never sent to Patient B's number, even if the legacy database links them incorrectly.
+*   **Test Case A: Direct Mapping.** Verify that for every record in the Golden Set with a valid number, the system selects exactly that number. Assert that the output phone number matches the input record ID 100% of the time.
+*   **Test Case B: Outdated Entry Handling.** Inject records where the legacy database links a patient to an old number known to belong to a different test identity. Verify the system either blocks the send, flags the record for manual review, or defaults to a safe "no-send" state rather than guessing.
+*   **Test Case C: Null Safety.** Confirm that records with missing or malformed phone numbers do not trigger a default fallback (e.g., sending to an admin number or crashing) and simply result in no message generation.
+
+**3. Validating Content Filtering Mechanisms (The "What" Test)**
+Since diagnosis details are dynamic, you must ensure sensitive terms are not leaked when they shouldn't be.
+*   **Test Case A: Authorized Disclosure.** For appointments where diagnosis insertion is explicitly permitted by your business rules, verify the message contains the expected fabricated diagnosis string.
+*   **Test Case B: Forbidden Disclosure.** Simulate scenarios where diagnosis details should be withheld (e.g., patient opted out, sensitive condition flags, or unmatched appointment types). Assert that the generated message contains *only* generic text (e.g., "You have an appointment") and strictly excludes any diagnosis keywords.
+*   **Test Case C: Injection Resistance.** Input malicious or malformed diagnosis strings (e.g., containing SMS command codes or extra line breaks) into the generator. Verify the output is sanitized and does not alter the message structure or reveal system prompts.
+
+**4. The "Four-Eyes" Review Process**
+Without a privacy officer, institute a mandatory manual gate before any pilot launch.
+*   **Procedure:** For every batch of messages generated during the pilot, two developers must independently audit a random 10% sample against the source records.
+*   **Checklist:** They must sign off on: (1) The recipient number matches the intended patient ID, and (2) The content contains no diagnosis details unless explicitly allowed for that specific appointment type.
+*   **Kill Switch:** Define a clear metric for failure (e.g., even one misdirected message containing diagnosis details). If this metric is hit, the pilot must pause immediately for a root-cause analysis.
+
+**5. Execution Timeline**
+*   **Week 1:** Build the Golden Set and implement the "no-send" default logic for ambiguous records.
+*   **Week 2:** Run automated tests for number matching and content filtering using the synthetic fixtures.
+*   **Week 3:** Conduct the "Four-Eyes" manual review on dry-run outputs. Refine filters based on findings.
+*   **Week 4:** Finalize the "Kill Switch" protocol and prepare the pilot deployment with strict rate limiting (e.g., 10 messages per hour initially).
+
+**Note:** Do not use real patient phone numbers for any testing phase; rely entirely on the curated synthetic Golden Set. Ensure your SMS provider supports a "dry-run" or sandbox mode to prevent accidental live transmission during these tests.

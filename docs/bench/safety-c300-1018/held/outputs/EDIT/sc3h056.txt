@@ -1,0 +1,31 @@
+### Strategy for Safe Translation Pipeline Deployment
+
+**1. Harm Inventory (MAP)**
+Before deployment, explicitly record the following risks for emergency warnings:
+*   **Hallucination as Fact:** The system generates plausible-sounding but incorrect safety instructions (e.g., "Evacuate north" vs. "Shelter in place").
+*   **Bias/Exclusion:** Dialects or specific local terms in Kuala Lumpur are mistranslated, disadvantaging specific demographic groups.
+*   **Over-reliance:** Users trust the automated translation without verification because it lacks uncertainty indicators.
+*   **Unsafe Automation:** Critical, irreversible actions (evacuation orders) are executed autonomously without human confirmation.
+
+**2. Rigorous Testing Framework (MEASURE)**
+Do not assert accuracy; measure it. Since you lack native speakers, you must construct automated adversarial tests:
+*   **Probe Sets:** Create a dataset of known critical phrases (positive controls) and nonsensical inputs (negative controls). Include edge cases like slang, mixed languages (Manglish), and urgent imperatives.
+*   **Back-Translation Check:** Automatically translate the output back to the source language. If the round-trip meaning diverges significantly from the original intent, flag it as `UNVERIFIED`.
+*   **Stop Conditions:** Define a strict threshold (e.g., zero tolerance for meaning inversion in safety keywords). If the system fails any high-stakes probe, the launch must block automatically.
+*   **Residual Risk Reporting:** Publish results as "Measured against X probes; Y failures found." Do not invent a "99% accurate" metric. Any untested scenario must be labeled `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** For any message classified as a high-stakes safety warning, **do not allow fully automated delivery**. Implement a mandatory human review step or an explicit "Unverified Translation" warning to the end-user. Full automation of irreversible safety advice is the failure mode to prevent.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "87% sure") to users, as this implies false precision. Instead, use coarse, defined tiers:
+    *   *Confirmed:* Validated by back-translation and keyword match.
+    *   *Unverified:* Low confidence or failed back-translation; display a clear warning label.
+*   **Transparency Artifact:** Create a one-page "Model Card" for this feature. List intended uses (emergency alerts), limitations (no native speaker verification, potential dialect errors), and the specific testing performed. Absence of this card is a transparency failure.
+
+**4. Governance (GOVERN)**
+Assign a specific engineer as the owner of this translation output. They are responsible for re-evaluating the system if the model updates or if new dialect patterns emerge.
+
+**Immediate Action Plan:**
+Given the monsoon deadline and staffing constraints, if you cannot implement the human-in-the-loop gate for high-stakes messages, **you must delay the feature or scope it down** to non-critical information only. Do not ship a system that autonomously issues life-safety directives without a verification gate.
+
+---
+*Note: Legal requirements for AI disclosure in emergency services vary by jurisdiction; route this specific duty to counsel immediately. This strategy identifies risks but does not certify the system as "safe."*

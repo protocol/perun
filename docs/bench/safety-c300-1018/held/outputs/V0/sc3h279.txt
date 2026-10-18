@@ -1,0 +1,35 @@
+### Product Output Safety Review Framework: Patient Pain-Catastrophizing Detector
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for this feature:
+*   **False Negatives (Missed Detection):** The lightweight model fails to identify subtle catastrophizing cues, leading to missed intervention opportunities for struggling patients.
+*   **False Positives (Over-Labeling):** The model incorrectly flags normal pain expression as catastrophizing, potentially causing user distress or stigma.
+*   **Over-Reliance:** Users or clinicians trust the "low risk" output as a definitive medical assessment, ignoring silent suffering the model cannot detect.
+*   **Missing Disclosure:** Users are unaware the analysis is automated, limited by on-device constraints, and not a substitute for clinical diagnosis.
+*   **Unsafe Automation:** The system automatically suppresses alerts or resources based on a potentially flawed "low risk" classification without human review.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert accuracy. Build an evaluation suite with one test row per harm:
+*   **Probe Set for False Negatives:** Curate a dataset of journal entries containing *subtle* linguistic markers of catastrophizing (e.g., indirect hopelessness, somatic focus) that complex models catch but simple ones might miss. Include a known-bad positive control (clear catastrophizing) and a known-good negative control (neutral pain description).
+*   **Metric & Threshold:** Measure the False Negative Rate (FNR) specifically on the "subtle" subset. Set a stop condition: if FNR on subtle cues exceeds an owner-defined threshold (e.g., >5%), the feature cannot launch without mitigation.
+*   **Adversarial Testing:** Test for prompt injection via user input that might trick the simplified model into ignoring negative patterns.
+*   **Reporting:** Report the residual risk as `UNVERIFIED` for any metric not yet measured. Do not invent an accuracy percentage.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this involves health insights and potential missed interventions (high-stakes), do not allow the tool to autonomously decide "no intervention needed." If the model outputs "low risk," the system must still offer easy access to human support resources rather than closing the loop.
+*   **Uncertainty Disclosure:** Do not show a raw confidence score (e.g., "87% safe"). Instead, use defined coarse tiers for output (e.g., "Patterns Detected," "No Clear Patterns Detected – Check In With a Professional"). Explicitly state that on-device limitations mean subtle cues may be missed.
+*   **Transparency Artifact:** Create a **Model Card** for this specific lightweight version. It must list:
+    *   **Intended Use:** Screening aid only, not diagnosis.
+    *   **Limitations:** Explicitly state that on-device constraints limit the detection of subtle linguistic nuances compared to server-side models.
+    *   **Performance:** Report measured performance by subgroup (if available) or mark as `UNVERIFIED` pending testing.
+    *   **Owner:** Name the specific team member responsible.
+
+**4. Governance (GOVERN)**
+*   Name the owner of the "False Negative" risk.
+*   Schedule a re-review if the on-device model is updated or if new linguistic patterns of catastrophizing are identified in literature.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device or requires specific legal disclosures under local Japanese law or international standards is a determination for **counsel**. Route this question immediately; do not assert compliance here.
+
+**Definition of Done:**
+The harm inventory is complete; the false-negative eval suite is built and run; high-stakes "all-clear" decisions are gated behind resource offers; a Model Card exists with honest limitations; and legal questions are routed to counsel.
+
+*Note: This framework identifies risks and controls; it does not certify the model as safe or unbiased. The final ship decision rests with the product owner.*

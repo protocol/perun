@@ -1,0 +1,34 @@
+### Product Output Safety Plan: Smart Insulin Pump Site Monitor
+
+**1. Harm Inventory (MAP)**
+Before launch, we explicitly name the risks this automated decisioning feature poses:
+*   **Unsafe Automation of High-Stakes Actions:** The system triggers medical alerts and potentially alters insulin delivery based on automated detection. A false negative (missed occlusion) leads to hyperglycemia; a false positive causes unnecessary anxiety and potential site changes.
+*   **Over-reliance:** Clinicians or users may trust the "all clear" status despite the known limitation in simulating rare occlusion patterns.
+*   **Hallucination as Fact:** The system might present a detected pattern as a confirmed occlusion when it is merely a sensor artifact, due to insufficient training on edge cases.
+
+**2. Measurement Strategy (MEASURE)**
+Since your CI pipeline cannot simulate rare patterns, we cannot claim a specific "detection rate" or "false positive rate." These metrics are **UNVERIFIED** until proven otherwise.
+*   **Manual Red-Team Protocol:** Establish a "War Room" where engineers manually inject historical rare-occlusion datasets and adversarial sensor noise into the staging environment. Record every miss.
+*   **Test Rows:** For each identified harm (e.g., "Missed Rare Occlusion"), define a probe set using known bad cases (positive controls) and normal operation cases (negative controls).
+*   **Stop Condition:** If the manual protocol reveals *any* missed occlusion in the positive control set that results in a failed alert, the launch is blocked. There is zero tolerance for failure in this specific high-stakes gate.
+
+**3. Risk Management & Rollout (MANAGE)**
+*   **Human-in-the-Loop Gate (The Floor):** Because this involves irreversible health risks and unverified edge cases, **fully autonomous action is prohibited** for the initial phase.
+    *   *Phase 1 (Expo Launch):* The system acts as a **Decision Support Tool only**. It flags potential occlusions to the clinician/user for explicit confirmation before any alarm sounds or delivery changes. No fully automated alerts go out without human verification.
+    *   *Phase 2 (Post-Expo):* Only after collecting sufficient real-world data to retrain the simulator and prove reliability via the manual protocol can you consider reducing the human gate for low-risk alerts. High-stakes actions (stopping delivery) remain gated.
+*   **Uncertainty Disclosure:** The interface must not display precise confidence percentages (e.g., "98% sure"). Instead, use defined coarse tiers: **"Confirmed," "Corroborated,"** or **"Unverified – Manual Check Required."** Clearly label the feature as "Assistive" and disclose that it is an automated system with known limitations regarding rare patterns.
+*   **Rapid Response Channel:** Establish a dedicated, 24/7 "Red Phone" line connecting expo users directly to your engineering team. Any report of a missed event triggers an immediate rollback to manual monitoring mode for that user.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign one specific engineer as the "Safety Owner" responsible for reviewing every missed event report daily.
+*   **Transparency Artifact:** Create a **Model Card** for the expo release. It must state:
+    *   *Intended Use:* Assistive monitoring for site occlusions.
+    *   *Limitations:* Explicitly state that rare occlusion patterns are **UNVERIFIED** due to simulation constraints.
+    *   *Performance:* Report results from the manual red-team protocol, not simulated aggregate stats.
+*   **Legal Routing:** Because this is a medical device making consequential decisions, you must route the question of legal disclosure requirements and regulatory compliance (e.g., MFDS in Korea, ISO 13485) to legal counsel immediately. Do not assert compliance internally.
+
+**Summary of Constraints:**
+We cannot certify this system as "safe" or "unbiased." The plan relies on a human gate to mitigate the unverified risk of rare occlusions. If the two-month deadline prevents establishing the manual red-team protocol or the 24/7 response channel, the constraint must move; the safety floor cannot relax.
+
+*Note: This plan addresses product output safety; it does not replace formal regulatory submission or clinical validation required for medical devices.*
+*Ensure legal counsel reviews the "Assistive" classification before the expo.*

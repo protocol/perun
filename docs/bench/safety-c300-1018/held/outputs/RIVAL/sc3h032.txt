@@ -1,0 +1,43 @@
+# Synthetic Data Strategy & Failure Mode Review Checklist
+
+## 1. Synthetic Data Generation Strategy
+Since real records are prohibited, construct a "Privacy-Preserving Synthetic Cohort" using the following layers:
+
+*   **Statistical Archetypes:** Define 20–30 distinct patient profiles based on public epidemiological data for chronic conditions (e.g., "Elderly with multimorbidity," "Young adult with unstable diabetes"). Do not use real names or IDs; use deterministic hashes (e.g., `PATIENT_001`).
+*   **Complexity Grading:** Assign each archetype a ground-truth "Clinical Complexity Score" (1–10) and "Urgency Flag" based on established medical guidelines. This serves as the oracle for evaluating bot decisions.
+*   **Edge Case Injection:** Deliberately generate 15% of data as "adversarial cases":
+    *   *Ambiguous Presentation:* Symptoms mimicking low-acuity issues but indicating high-risk underlying conditions.
+    *   *Conflicting Inputs:* Patient self-report says "stable," but medication list suggests recent escalation.
+    *   *Non-Standard Phrasing:* Use dialects, broken syntax, or indirect descriptions of pain common in the Zurich demographic.
+*   **Temporal Drift:** Create sequences where a patient's condition degrades rapidly over three simulated interactions to test if the bot updates priority dynamically or sticks to the initial triage.
+
+## 2. Failure Mode Review Checklist
+Use the synthetic cohort to stress-test the bot against these specific failure modes where simple cases might incorrectly supersede complex needs:
+
+### A. Triage Logic & Prioritization Errors
+- [ ] **Complexity Inversion:** Does the bot assign a higher priority to a simple acute issue (e.g., minor sprain) over a complex chronic instability (e.g., fluctuating heart failure metrics)?
+- [ ] **Keyword Over-reliance:** Does the bot miss urgency because the patient avoids specific "alarm words" (e.g., describing "pressure" instead of "pain")?
+- [ ] **Multimorbidity Blindness:** When a patient lists three moderate conditions, does the bot fail to recognize the compounded risk compared to a single severe condition?
+- [ ] **Medication Interaction Oversight:** Does the bot ignore urgent signals hidden in complex medication regimens or recent dosage changes?
+
+### B. Context & Continuity Failures
+- [ ] **History Amnesia:** In multi-turn conversations, does the bot forget earlier stated symptoms that elevate urgency?
+- [ ] **Static Scoring:** Does the bot fail to escalate priority when a synthetic patient reports worsening symptoms over time?
+- [ ] **Demographic Bias:** Do synthetic profiles with non-native language patterns or older age brackets receive systematically lower urgency scores than identical clinical presentations in standard phrasing?
+
+### C. Safety & Escalation Gaps
+- [ ] **False Negative Rate:** What percentage of "High Urgency" synthetic cases are incorrectly triaged to "Routine"? (Target: 0% for critical flags).
+- [ ] **Escalation Threshold:** Is the threshold for human handoff too high for complex cases, causing artificial delays?
+- [ ] **Ambiguity Handling:** When faced with conflicting synthetic data, does the bot default to "low risk" (unsafe) or "needs review" (safe)?
+
+### D. Operational Stress Tests
+- [ ] **Volume Saturation:** Under simulated high load, does the bot degrade by skipping complex analysis steps for intricate cases?
+- [ ] **Input Noise:** Does the bot's decision change significantly if irrelevant details are added to a complex case description?
+
+## 3. Validation Metrics
+- **Sensitivity for Complex Cases:** % of high-complexity synthetic patients correctly identified as urgent.
+- **Delay Simulation:** Average simulated wait time difference between bot triage and ideal human triage for the complex cohort.
+- **Equity Variance:** Disparity in triage accuracy across different synthetic demographic groups.
+
+*Note: Ensure all synthetic data generation scripts are version-controlled and auditable for hospital administration review.*
+*This checklist assumes the bot operates as a decision-support tool, not a final diagnostic authority.*

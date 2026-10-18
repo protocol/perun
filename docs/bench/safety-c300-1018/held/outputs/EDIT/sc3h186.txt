@@ -1,0 +1,31 @@
+### Pre-Launch Safety Strategy: Patient Sleep Apnea Bot
+
+**1. Validation Plan Under Tooling Constraints**
+Since your environment cannot simulate complex airway dynamics, you must shift from simulation-based validation to **evidence-grounded evaluation**.
+*   **Harm Inventory:** Explicitly record the worst-case harm: "Bot recommends a position that increases apnea events, leading to hypoxia or cardiac stress."
+*   **Static Rule Guardrails:** Before any AI generation, hard-code deterministic rules based on established clinical guidelines (e.g., "If user reports central sleep apnea or severe obesity, default to 'Consult Physician' rather than generating a position").
+*   **Adversarial Probe Set:** Construct a test suite of edge-case inputs (e.g., conflicting symptoms, extreme BMI, pregnancy) where the correct output is known to be "No Recommendation/Seek Help." The pass threshold for these high-risk probes must be **100% refusal or safe fallback**. Any hallucinated position on these inputs blocks launch.
+*   **Residual Risk Reporting:** Do not claim the system is "safe" or "validated for all positions." Label the un-simulated dynamic interactions as **UNVERIFIED** in your internal risk log.
+
+**2. Post-Launch Monitoring & Human Gate**
+*   **Human-in-the-Loop (HITL) Gate:** Because suggesting a sleeping position is a high-stakes health intervention with irreversible nightly exposure, **do not fully automate the initial launch.** Implement a tiered rollout where recommendations for users with "moderate-to-severe" self-reported symptoms are flagged for human clinician review before being displayed, or require explicit, informed user confirmation that overrides the default flow.
+*   **Rapid Feedback Loop:** Deploy an in-app "Did this help or worsen your sleep?" prompt immediately upon waking. Treat any report of "worsened symptoms" as a critical incident triggering an immediate pause on recommendations for that user profile and a manual review.
+*   **Confidence Tiers:** Do not display raw model confidence percentages (e.g., "87% sure"). Instead, use defined coarse tiers: **"Clinically Supported"** (matches guideline), **"Theoretical"** (plausible but unverified for this profile), or **"Unverified"** (triggers a hard stop).
+
+**3. Draft User Warnings and Disclaimers**
+*Display the following prominently before the first recommendation and on the results screen:*
+
+> **IMPORTANT SAFETY NOTICE**
+> This tool provides automated suggestions based on general patterns and **does not** simulate your specific airway dynamics. It is **not** a medical device and cannot diagnose or treat sleep apnea.
+>
+> **Limitations:**
+> *   Recommendations may be ineffective or potentially harmful for complex cases (e.g., central sleep apnea, severe obesity, or concurrent respiratory conditions).
+> *   This bot has **not** been validated against real-time airway simulation for your specific physiology.
+>
+> **Action Required:**
+> *   **Stop immediately** and consult your physician if you experience increased snoring, gasping, chest pain, or excessive daytime fatigue after using these recommendations.
+> *   Do not use this tool as a substitute for prescribed therapies (e.g., CPAP) unless explicitly directed by your doctor.
+> *   By proceeding, you acknowledge that this advice is **experimental** and assume full responsibility for monitoring your own physical response.
+
+**Note:** Legal counsel must review these disclaimers to determine if Indian medical device regulations (e.g., CDSCO) classify this feature as a regulated SaMD (Software as a Medical Device), which would alter the launch requirements.
+**Note:** A formal Model Card detailing intended use, data provenance, and known failure modes must be published internally and made available to users to satisfy transparency standards.

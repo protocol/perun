@@ -1,0 +1,40 @@
+### Fallback Mechanism: "Conservative Lockout with Manual Override"
+
+Given the one-month deadline and the risk of database lag for new medications, do not attempt to guess safe limits. Instead, implement a **Conservative Lockout** protocol.
+
+1.  **Default-Deny Logic:** If the system cannot verify a drug's safe limits against the local cache within 200ms (indicating a potential lag or missing entry), the system must **block** the programming of that specific rate immediately. It must not default to a "standard" limit or the last known value.
+2.  **Explicit Uncertainty Signal:** The interface must display a high-visibility warning: *"Drug data unverified. Automatic safety check unavailable."* Do not show a confidence percentage (e.g., "87% safe"); use this defined text tier only.
+3.  **Human-in-the-Loop Gate (Irreversible Action):** To proceed with the infusion despite the missing data, the nurse must:
+    *   Manually select "Override Safety Check."
+    *   Enter a second verification code or have a second clinician scan their badge (dual confirmation).
+    *   Acknowledge a prompt stating: *"I have manually verified the dosage against the physical drug label and hospital protocol."*
+4.  **Audit Trail:** Every override is logged with timestamp, user ID, drug name, and the specific reason code ("Database Lag") for immediate post-event review.
+
+### Pre-Launch Review Process: "Adversarial Failure Simulation"
+
+Do not certify the system as "safe." Instead, execute a **Red-Team Validation Sprint** over the next two weeks to measure residual risk.
+
+**1. Construct the Harm Inventory (Day 1-2)**
+Document the specific failure mode: *Bias/Exclusion* (new drugs blocked disproportionately) and *Unsafe Automation* (allowing a dangerous rate due to stale data). Define the worst-case scenario: *Patient harm due to unchecked overdose of a newly added high-alert medication.*
+
+**2. Execute Runnable Test Rows (Day 3-10)**
+Run one specific test row per identified harm. Do not rely on unit tests alone.
+*   **Probe Set A (The Lag Simulation):** Inject a test harness that simulates a 5-second delay or total failure in retrieving data for 50 specific "new" drug entries.
+    *   *Positive Control:* Attempt to program a known dangerous rate for a "missing" drug. **Pass Condition:** System blocks entry 100% of the time until override is completed.
+    *   *Negative Control:* Attempt to program a standard rate for a fully cached drug. **Pass Condition:** System allows entry without override friction.
+*   **Probe Set B (The Override Stress Test):** Simulate high-stress nursing workflows where users attempt to bypass the lockout rapidly.
+    *   *Metric:* Count of successful overrides without dual-confirmation. **Threshold:** Zero. Any success here is a critical failure requiring a code freeze.
+*   **Probe Set C (Injection/Leakage):** Attempt to inject malicious drug names or manipulate the local cache to force a "safe" status on a dangerous input.
+    *   *Stop Condition:* If the system accepts a manipulated "safe" flag from an unverified source, halt launch preparations.
+
+**3. Report Residual Risk & Transparency Artifact (Day 11-14)**
+*   **Model/Data Card:** Publish a versioned document attached to this feature release. It must state: *Intended Use:* Rate limiting for cached drugs. *Limitation:* New drugs added <24hrs ago trigger a manual override workflow. *Measured Performance:* List the pass/fail rates from Probe Sets A-C by drug category. Mark any untested drug classes as **UNVERIFIED**.
+*   **Ownership:** Assign a specific Product Owner and Clinical Lead who sign off on the residual risk of the manual override process.
+
+**4. Legal & Regulatory Routing**
+*   Because this involves high-stakes automated decisions affecting patient health, route the question of "Is a manual override legally sufficient under local medical device regulations?" to legal counsel immediately. Do not assert compliance internally. Name the regimes (e.g., local medical device laws, ISO 42001) for counsel to evaluate, but encode no dates or binding verdicts in this plan.
+
+**Launch Decision:** If Probe Set A or B yields any failure where a dangerous rate is accepted without the human gate, the launch must be blocked. The fallback is not a patch; it is a safety gate.
+
+*Note: This plan assumes the "database lag" is the only failure mode; if network partitioning causes total system unavailability, a separate offline mode protocol is required.*
+*Ensure the "Override" button is physically distinct and harder to click than standard inputs to prevent automation bias.*

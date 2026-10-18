@@ -1,0 +1,35 @@
+### Rapid Pre-Launch Safety Review Plan: Pesticide Dosing Recommender
+
+**1. Immediate Harm Inventory (Day 1)**
+Before testing, explicitly list the worst-case scenarios your logic could cause. Do not assume safety. Record:
+*   **Over-dosing:** Leading to crop phytotoxicity (burning/death) or illegal residue levels.
+*   **Under-dosing:** Leading to pest resistance or total crop loss.
+*   **Wrong Chemical:** Recommending a pesticide banned for the specific crop or region.
+*   **Hallucinated Advice:** Generating plausible-sounding but factually incorrect mixing ratios or safety warnings.
+*   **Missing Disclosure:** Farmers believing the advice is infallible expert opinion rather than an algorithmic suggestion.
+
+**2. "Zero-Budget" Output Evaluation (Days 2–4)**
+You cannot wait for perfect metrics. Use your existing data logs to run adversarial probes immediately. Create a spreadsheet with one row per harm identified above.
+*   **Probe Set:** Extract 50 edge cases from your logs (e.g., rare crops, extreme weather conditions, mixed pest infestations).
+*   **Positive Controls:** Manually insert 10 known-bad inputs (e.g., "Apply 10x dose," "Use banned chemical X on crop Y") to verify the system *rejects* or *flags* them. If it complies, the gate is broken.
+*   **Negative Controls:** Use 10 standard, verified scenarios to ensure the system still works for normal cases.
+*   **Metric:** Pass/Fail per row. **Threshold:** Zero tolerance for any output that suggests a banned chemical or an irreversible over-dose.
+*   **Stop Condition:** If any positive control passes (i.e., the AI gives the bad advice), launch is blocked until the logic is patched.
+
+**3. Mandatory Human-in-the-Loop Gate (Launch Requirement)**
+Because incorrect dosing causes irreversible financial and biological damage, **fully automated execution is unsafe.**
+*   **The Control:** For any recommendation that deviates from standard baseline doses by >20%, or involves high-toxicity chemicals, the system must pause and require explicit human confirmation before showing the advice to the farmer.
+*   **Implementation:** If code changes are too hard in two weeks, default the system to "Draft Mode" for the first 1,000 interactions, where a human agronomist reviews the output before it is sent via SMS/app.
+
+**4. Transparency & Uncertainty Artifacts**
+*   **Confidence Tiers:** Do not show raw probabilities (e.g., "87% confident"). Instead, label outputs as **"Verified"** (matches established guidelines), **"Estimated"** (based on similar cases), or **"Unverified"** (no close match in logs). If "Unverified," the system must advise consulting a local expert.
+*   **Model Card (Lite):** Create a one-page document attached to the tool stating: intended use (smallholder dosing only), known limitations (does not account for soil pH if not provided), and the fact that it is an AI assistant, not a certified agronomist.
+*   **Disclosure:** Every message must start with: "AI-generated advice. Verify with local experts before mixing."
+
+**5. Governance**
+*   Name one engineer as the "Safety Owner" responsible for reviewing any failure logs daily post-launch.
+*   **Legal Routing:** You must consult counsel immediately regarding liability for crop damage and whether this constitutes a regulated automated decision in India. Do not assume you are exempt.
+
+**Deliverable Status:** This plan identifies critical failure modes and enforces a human gate on high-stakes actions using only your current team and logs.
+
+**Note:** Never fabricate a "0% error rate"; report any untested scenarios as "UNVERIFIED." If the system cannot distinguish between a banned and allowed chemical in your probes, do not launch.

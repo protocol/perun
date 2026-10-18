@@ -1,0 +1,46 @@
+### Pre-Launch Safety Evaluation Plan: CairoMobility Aids
+
+**1. Harm Inventory & Worst-Case Definition**
+Before generating data, explicitly define the failure mode: **"False Negative Recommendation."**
+*   **Harm:** The system fails to recommend a transfer board for a non-weight bearing patient who strictly requires one.
+*   **Affected Party:** The patient (risk of fall, injury, or therapist strain) and the therapist (liability, physical injury).
+*   **Worst Realistic Case:** A therapist relies on the system's silence as "no board needed," attempts a manual lift, and causes patient injury.
+*   **Status:** This is a high-stakes, irreversible physical risk.
+
+**2. Synthetic Stress-Testing Strategy (Measure)**
+Since live trials are prohibited, construct a "Red Team" dataset of synthetic patient profiles to probe the logic boundaries. Do not test only "happy paths."
+
+*   **Probe Set A: The Ambiguity Edge Cases**
+    *   Generate 500+ synthetic records where input data is intentionally ambiguous (e.g., "patient weight 85kg, partial weight bearing status unclear," or "conflicting notes on hip surgery date").
+    *   **Positive Control:** Include cases that *must* trigger a recommendation (clear non-weight bearing). If the system misses these, the logic is broken.
+    *   **Negative Control:** Include cases that clearly do *not* need a board.
+    *   **Metric:** False Negative Rate on the "Ambiguous" set.
+    *   **Threshold:** Given the physical risk, propose a **zero-tolerance** threshold for false negatives in the "clear need" category. For ambiguous cases, any failure rate must be quantified as `UNVERIFIED` risk until human review is added; do not invent an "acceptable" error rate.
+
+*   **Probe Set B: Adversarial Inputs**
+    *   Test inputs with missing fields, contradictory vitals, or out-of-range values to ensure the system does not hallucinate a "safe" recommendation from garbage data.
+
+*   **Reporting:** Publish the results showing exactly where the model fails. Do not claim the system is "safe" or "99% accurate." Report: "In synthetic testing, the system failed to recommend a board in X% of ambiguous high-risk cases."
+
+**3. Mandatory Human-in-the-Loop Gate (Manage)**
+Because this tool advises on physical safety with a known risk of false negatives, **fully autonomous silence is not an option.**
+
+*   **The Gate:** The system must never output a definitive "No Board Needed" based solely on algorithmic confidence.
+*   **Uncertainty Rendering:** Do not show a percentage (e.g., "87% safe"). Instead, use defined coarse tiers:
+    *   **"Confirmed Need"** (Clear indicators present) → Recommend Board.
+    *   **"Unverified / Ambiguous"** (Missing data or conflicting signals) → **System must withhold a specific recommendation and trigger a mandatory human review.**
+*   **Fallback Procedure:** If the system provides no recommendation (or flags "Unverified"), the default protocol for the therapist must be: **"Assume Board Required."** The system must explicitly state: *"Safety Protocol: Due to insufficient data, manual assessment is required. Default to using a transfer board."* This reverses the risk from "missing a board" to "unnecessarily using a board," which is the safer failure mode.
+
+**4. Transparency Artifact (Model Card)**
+Create a one-page "Intended Use & Limitations" document for the therapists.
+*   **Intended Use:** Decision support for transfer board selection in Cairo PT departments.
+*   **Limitations:** Explicitly state: "This tool may fail to recommend a board when input data is ambiguous. It is not a replacement for clinical judgment."
+*   **Data Source:** "Tested on synthetic data only; no live patient trials conducted."
+*   **Owner:** Name the specific team member responsible for reviewing incident reports post-launch.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign one person to own the "False Negative" risk.
+*   **Legal Duty:** Whether this tool classifies as a regulated medical device under Egyptian law or requires specific AI disclosures is a legal determination. Route this immediately to counsel; do not assert compliance here.
+
+**Note:** Do not launch without the "Default to Board" fallback hard-coded into the UI for any ambiguous case.
+**Note:** Treat any metric claiming "0% risk" as fabricated; rely on the defined fallback procedure instead.

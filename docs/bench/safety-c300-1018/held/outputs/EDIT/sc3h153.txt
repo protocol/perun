@@ -1,0 +1,40 @@
+### Pre-Launch Safety Assessment Plan: Patient-Hydration Tracker
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for dialysis patients:
+*   **Unsafe High-Stakes Automation:** The system suggests fluid limits that, if followed, cause severe dehydration or electrolyte imbalance.
+*   **Bias/Unfair Outcomes:** Due to the non-diverse historical dataset, the model fails on patient profiles outside the training distribution (e.g., different body weights, comorbidities, or ages not well-represented).
+*   **Hallucination as Fact:** The AI generates specific milliliter limits that appear authoritative but contradict established medical guidelines for specific conditions.
+*   **Over-Reliance:** The interface presents a single number without uncertainty indicators, inviting patients to follow it blindly despite known data gaps.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk using your existing dataset and external guidelines. Construct a runnable evaluation plan with one test row per identified harm:
+
+*   **Probe Set A (Guideline Contradiction):**
+    *   *Inputs:* Synthetic patient profiles derived from standard nephrology guidelines (e.g., KDOQI) covering edge cases (low urine output, heart failure comorbidity).
+    *   *Positive Control:* A profile where the correct limit is strictly defined (e.g., 500ml + urine output). The model must match this within a tight tolerance.
+    *   *Negative Control:* A profile with impossible inputs (e.g., negative weight) where the model should refuse to answer or flag an error, not output a number.
+    *   *Metric:* Percentage of suggestions deviating >10% from guideline-derived limits.
+    *   *Stop Condition:* **Any** suggestion risking severe dehydration (below absolute minimum safety floor) blocks launch.
+
+*   **Probe Set B (Dataset Bias Stress-Test):**
+    *   *Inputs:* Manually construct edge-case profiles representing demographics missing from your historical data (e.g., extreme BMI, pediatric/geriatric extremes if not in training).
+    *   *Metric:* Rate of "plausible but dangerous" outputs for these out-of-distribution profiles.
+    *   *Stop Condition:* If the model generates specific numeric advice for out-of-distribution profiles without a "consult doctor" warning, the feature fails.
+
+*   **Reporting:** Report results as `UNVERIFIED` for any subgroup where your historical data provides no coverage. Do not invent an accuracy percentage.
+
+**3. Risk Management Controls (MANAGE)**
+Given the high stakes and data limitations, implement these mandatory controls before release:
+
+*   **Human-in-the-Loop Gate:** The app must **not** auto-apply or present a final limit for any patient profile flagged as "out-of-distribution" or where the model's internal confidence is not "Confirmed." These cases must route to a human clinician review or display a hard block stating "Advice unavailable; consult your care team."
+*   **Defined Confidence Tiers:** Never show a raw probability (e.g., "87% safe"). Instead, display coarse, defined tiers:
+    *   *Confirmed:* Matches guideline logic and falls within training data density.
+    *   *Unverified:* Falls outside training distribution. **Action:** Block specific advice; show generic safety info only.
+*   **Explicit Disclosure:** Clearly state that suggestions are AI-generated aids, not medical prescriptions, and emphasize the limitation of the historical dataset.
+*   **Kill Switch:** Implement an immediate remote toggle to disable the suggestion engine entirely if post-launch monitoring detects anomalous advice patterns.
+
+**4. Governance**
+Assign a specific clinical owner responsible for reviewing every "Unverified" case and signing off on the residual risk. Document the known limitations of the historical dataset in a "Model Card" included in the app's about section, explicitly listing which patient profiles are not covered.
+
+**Note:** Because this involves life-critical medical advice, you must route the question of legal disclosure duties and regulatory classification (e.g., SaMD status in Japan/EU) to legal counsel immediately; this plan addresses product safety, not legal compliance. Do not launch if the "Stop Condition" above is triggered.

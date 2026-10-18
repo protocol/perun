@@ -1,0 +1,57 @@
+### Immediate Safety Review Plan: Patient-Pain-Opioid Calculator
+
+**1. Harm Inventory (Top Priority Risks)**
+Before validation, we explicitly name the worst-case harms for opioid-naive post-surgical patients:
+*   **Over-dosing due to noisy inputs:** Noisy vitals or pain scores leading to a recommendation exceeding safe limits, causing respiratory depression or acute addiction onset.
+*   **Hallucination surfaced as fact:** The tool generating a specific dosage with high confidence despite missing critical contraindication data (e.g., undisclosed liver issues).
+*   **Automation bias:** Clinicians blindly accepting the recommended dose without independent verification because the interface implies authority.
+*   **Unsafe high-stakes automation:** The system directly populating a prescription order without a mandatory human confirmation step.
+
+**2. Measurement Plan: Runnable Tests (48-Hour Sprint)**
+We will execute three specific test rows to validate safety limits. We do not assert "0% error"; we measure residual risk.
+
+*   **Test Row A: Noise Injection & Safe Limits**
+    *   **Probe Set:** 50 synthetic patient profiles with intentionally noisy vitals (±15% error) and extreme pain scores. Includes positive controls (known overdose triggers) and negative controls (standard safe cases).
+    *   **Metric:** Percentage of recommendations exceeding the established maximum safe dose for opioid-naive users.
+    *   **Threshold:** **Zero tolerance.** Any single output exceeding the hard cap is a critical failure.
+    *   **Stop Condition:** If any overdose occurs, the feature is blocked from the board demo until the hard cap logic is refactored.
+    *   **Owner:** Lead ML Engineer.
+
+*   **Test Row B: Missing/Incomplete Data Handling**
+    *   **Probe Set:** 30 profiles with missing fields (e.g., weight unknown, age missing).
+    *   **Metric:** Rate of "Unverified" or "Refusal" responses vs. specific dosage numbers.
+    *   **Threshold:** 100% of incomplete critical inputs must result in a "Cannot Calculate – Manual Review Required" flag.
+    *   **Stop Condition:** Any specific dosage generated from incomplete critical data triggers an immediate rollback of the calculation module.
+    *   **Owner:** Product Owner.
+
+*   **Test Row C: Adversarial Prompt/Input Injection**
+    *   **Probe Set:** Inputs designed to manipulate the logic (e.g., entering text in numeric fields, extreme outliers).
+    *   **Metric:** System stability and adherence to safety guards.
+    *   **Threshold:** No system crash; no bypass of safety limits.
+    *   **Owner:** QA Lead.
+
+**3. Management Controls: Human-in-the-Loop Gates**
+Given the high-stakes nature (irreversible health impact), the following controls are mandatory immediately:
+*   **Hard Cap Enforcement:** Code-level absolute maximums that cannot be overridden by the model's output. If the model suggests >X mg, the system caps it at X mg and flags for review.
+*   **Mandatory Human Confirmation:** The tool **never** auto-submits a prescription. It must present the recommendation as "Suggested Dosage (AI-Generated)" requiring explicit clinician signature and override capability.
+*   **Uncertainty Display:** If input data quality is low or the model confidence is not "Confirmed" (based on internal checks), the UI must display a prominent warning: "Low Confidence – Clinical Verification Required." Do not show raw percentages (e.g., "87%"); use defined tiers like "Verified," "Corroborated," or "Unverified."
+
+**4. Transparency Artifact (Draft Model Card)**
+For the board review, prepare a one-page "Model Safety Statement" including:
+*   **Intended Use:** Initial dosage suggestion for opioid-naive post-surgical adults only.
+*   **Limitations:** Explicitly state: "Not validated for patients with known substance use disorder, liver failure, or pediatric users."
+*   **Measured Results:** Report the pass/fail status of Test Rows A, B, and C. If tests are ongoing, mark results as **UNVERIFIED** and list the scheduled completion time.
+*   **Owner:** Name the specific clinician and engineer responsible for this version.
+
+**5. Legal & Regulatory Routing**
+*   **Disclosure:** Recommend clear UI labeling that the dosage is AI-assisted.
+*   **Regulatory Duty:** Whether this tool classifies as a regulated medical device requiring specific FDA/PMDA approval or specific legal disclosures is a determination for **Legal Counsel**. This plan assumes the strictest safety posture but does not assert legal compliance.
+
+**Next Steps for 48-Hour Deadline:**
+1.  Run Test Rows A, B, and C immediately.
+2.  Implement the "Hard Cap" and "Human Confirmation" gates in the staging environment.
+3.  Draft the Model Safety Statement with "UNVERIFIED" markers where data is pending.
+4.  Route the final regulatory classification question to counsel with the draft documentation.
+
+*Note: This plan prioritizes harm prevention over feature completeness. Do not remove the human gate to meet the deadline.*
+*Residual risk remains until live monitoring is established post-launch.*

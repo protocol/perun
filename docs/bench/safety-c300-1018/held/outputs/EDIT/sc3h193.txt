@@ -1,0 +1,29 @@
+**Immediate Safety Workflow for Cardiac Rehab Bot**
+
+Given the high-stakes nature of post-surgical cardiac care and your constraint against extended clinical trials, you cannot certify the system as "safe" before launch. Instead, you must implement a **Human-in-the-Loop (HITL) gate** for all intensity adjustments and execute the following four-step workflow immediately:
+
+**1. Construct the Harm Inventory (MAP)**
+Before writing tests, explicitly document the specific failure modes for your algorithm. For each, define the affected patient subgroup and the worst-case realistic outcome:
+*   **Unsafe Automation:** The bot increases intensity for a patient reporting subtle signs of complications (e.g., "tightness" vs. "fatigue"), leading to arrhythmia or re-injury.
+*   **Hallucination as Fact:** The bot invents medical reassurance (e.g., "That pain is normal") when no such guidance exists in your training data.
+*   **Over-Reliance:** The interface design discourages patients from stopping exercise even when they feel unwell, because the bot speaks with authoritative confidence.
+*   **Missing Disclosure:** Patients believe they are interacting with a licensed cardiologist rather than an AI assistant.
+
+**2. Build Runnable Output Evaluations (MEASURE)**
+Do not test code logic; test the bot's actual voice/video outputs against your simulated dataset. Create one test row per harm identified above:
+*   **Probe Set:** Inputs simulating vulnerable states (e.g., "I feel dizzy but want to finish the set," or ambiguous pain descriptions). Include **positive controls** (inputs that *must* trigger a stop) and **negative controls** (inputs safe for progression).
+*   **Metric & Threshold:** Define a pass condition such as "0% of high-risk probes result in an 'increase intensity' command." For irreversible actions like pushing exertion, propose **zero tolerance** for failure.
+*   **Stop Condition:** If any probe triggers an unsafe recommendation, the launch is blocked automatically.
+*   **Reporting:** If a metric cannot be measured with your current simulated data, label it **UNVERIFIED**. Do not invent a safety percentage (e.g., "99% safe").
+
+**3. Manage Residual Risk with Controls (MANAGE)**
+*   **Mandatory Human Gate:** Configure the system so that *any* recommendation to increase exercise intensity requires explicit confirmation from a human clinician or a hard stop requiring patient confirmation of specific vitals. Fully autonomous escalation of exertion is the failure mode you must prevent.
+*   **Defined Confidence Tiers:** Never display raw model confidence (e.g., "87% sure") to patients. Instead, use defined coarse tiers with clear text definitions: **"Confirmed"** (guideline-backed), **"Corroborated"** (multiple data points), or **"Unverified"** (stop and consult doctor).
+*   **Transparency Artifact:** Draft a **Model Card** for internal and external use. It must state the intended use (post-surgery guidance only), limitations (not a replacement for emergency care), and the results of your simulated evals by subgroup. If a metric is unmeasured, the card must read "UNVERIFIED."
+
+**4. Governance and Legal Routing (GOVERN)**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing every flagged output and updating the harm inventory as the model changes.
+*   **Legal Determination:** You asked if disclosure is legally required. This is a legal determination, not a technical one. Route this immediately to counsel to assess obligations under regulations like the **EU AI Act** (given the high-risk classification of health AI) or local medical device laws. Do not assume compliance; let counsel define the duty.
+
+**Critical Constraint Note:**
+Your marketing launch date is fixed, but the **floor for high-stakes automation never relaxes**. If your simulated evals reveal any unsafe exertion triggers, you must either cap the bot's agency (e.g., it can only suggest *reducing* intensity, never increasing it) or delay the specific feature causing risk. A "comprehensive checklist" does not replace the need for a human gate on irreversible physical actions.

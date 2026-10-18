@@ -1,0 +1,45 @@
+### Pre-Launch Evaluation Protocol: Disparate Impact on Freelancers
+
+**1. Harm Inventory & Scope**
+*   **Named Harm:** Bias/Unfair Outcomes (systematic disadvantage against freelancers/gig workers).
+*   **Affected Group:** Applicants with variable income streams (freelancers, contractors) vs. traditional salaried employees.
+*   **Worst Realistic Case:** Legitimate, solvent freelancers are automatically rejected at significantly higher rates than salaried peers with equivalent ability to repay, leading to regulatory penalties in Dubai and reputational damage.
+*   **Status:** `UNVERIFIED` until the evaluation below is executed.
+
+**2. Sampling Strategy: Constructing the Test Matrix**
+To detect disparate impact, you must construct a controlled dataset where "income stability" is the only variable changing between groups, while "ability to repay" is held constant.
+
+*   **Segment A (Traditional):** Salaried employees with fixed monthly income $X$.
+*   **Segment B (Freelancer):** Contractors with variable monthly income averaging $X$ (same mean), but with standard deviation $\sigma > 0$.
+*   **Segment C (Gig Economy):** Workers with high-frequency, low-value transactions totaling $X$, with irregular timing.
+
+**Test Rows (One per Harm Hypothesis):**
+
+| Probe Set | Positive Control (Should Pass) | Negative Control (Should Fail) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Variable Income Bias** | Freelancer with 24mo history, avg income $5k, low debt. | Freelancer with 2mo history, avg income $2k, high debt. | Rejection Rate Ratio (Freelancer vs. Salaried) | Ratio < 1.25 (or local legal limit) | If Ratio > Threshold, **BLOCK LAUNCH**. |
+| **Data Sparsity Penalty** | Gig worker with full alternative data (within regulatory limits). | Gig worker with identical finances but missing 1 optional data point. | Drop-off in Approval Score | Score delta < 5% | If delta > 5%, review feature weighting. |
+| **Volatility vs. Solvency** | Salaried applicant with high debt-to-income (DTI). | Freelancer with same DTI but 6mo cash reserve. | False Negative Rate | FNR_Freelancer ≈ FNR_Salaried | If FNR_Freelancer >> FNR_Salaried, **BLOCK LAUNCH**. |
+
+**3. Execution Constraints & Controls**
+*   **Regulatory Boundary:** Since alternative data ingestion is limited in Dubai, the test must strictly simulate the *maximum allowable* data footprint. Do not test against idealized data you cannot legally ingest; this creates a false sense of security.
+*   **Adversarial Probes:** Inject synthetic profiles where freelance income is stable but labeled irregularly by the parser to test sensitivity to classification errors.
+*   **Human-in-the-Loop Gate:** Because mortgage rejection is a high-stakes, hard-to-reverse financial decision, **automatic rejection for any applicant in Segment B or C must be gated behind human analyst review** until the disparity metrics above meet the pass threshold. Do not allow fully autonomous rejection for variable-income applicants at launch.
+
+**4. Reporting & Transparency**
+*   **Output:** Do not report a single "accuracy" number. Report the **Rejection Rate Ratio** between segments.
+*   **Artifact:** Create a **Model Card** documenting:
+    *   Intended Use: Income stability assessment.
+    *   Limitations: Performance on variable income sources is `UNVERIFIED` until this protocol runs.
+    *   Data Provenance: Explicitly list which alternative data sources were excluded due to Dubai regulations and how that gap was mitigated.
+*   **Legal Routing:** Whether the observed disparity violates specific UAE anti-discrimination or consumer protection laws is a determination for **legal counsel**. This protocol measures the statistical gap; counsel must define the legal tolerance.
+
+**5. Definition of Done**
+The feature is not ready for Q3 launch until:
+1.  The test matrix above is executed on the final model.
+2.  The Rejection Rate Ratio is calculated and compared against the owner-set threshold.
+3.  If the threshold is breached, the model is retrained or the human-gate is expanded.
+4.  No metric is claimed as "fair" or "unbiased" without the raw evaluation data attached.
+
+**Note:** This protocol measures residual risk; it does not certify safety.
+**Note:** Ensure the "human gate" for freelancers is operationally viable for your team of seven before committing to this control.

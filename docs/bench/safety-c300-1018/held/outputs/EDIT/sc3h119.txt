@@ -1,0 +1,36 @@
+**Safety Verification Plan: SkyDrop Sydney Pathfinder**
+
+**Immediate Constraint Acknowledgement**
+No verification plan can **guarantee** zero violations or "certify" the system as safe, especially given the constraint of weekly mapping updates against dynamic regulatory needs. A claim of guaranteed safety is a fabrication. The following plan manages residual risk to the lowest possible level before the inspection, but the final launch decision rests with SkyDrop leadership.
+
+**1. MAP: Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes actions (flight over protected zones).
+*   **Affected:** Students, patients, community safety, SkyDrop regulatory standing.
+*   **Worst Case:** Drone strike on a school/hospital, immediate grounding of the entire fleet, legal liability, and loss of public trust.
+*   **Root Cause:** Reliance on stale data (weekly updates) for dynamic no-fly zones.
+
+**2. MEASURE: Runnable Validation Process**
+Do not rely on aggregate testing. Execute these specific probes immediately:
+*   **Positive Control Probe:** Inject known school/hospital coordinates into the router. **Pass Condition:** The system *refuses* to generate a path or returns an explicit "No-Go" error. If a path is generated, the build fails.
+*   **Negative Control Probe:** Inject valid coordinates in approved industrial zones. **Pass Condition:** A valid path is generated without false positives blocking operations.
+*   **Adversarial/Edge Probe:** Test boundaries of no-fly zones (e.g., 1 meter outside vs. 1 meter inside). Test routing when the start or end point is *inside* a no-fly zone.
+*   **Data Latency Probe:** Simulate a scenario where a new no-fly zone was enacted 24 hours ago (post-last-update). Verify the system's behavior.
+    *   *Expected Finding:* The system will likely fail this probe due to the weekly update constraint. This must be recorded as **UNVERIFIED** risk for dynamic changes.
+
+**3. MANAGE: Controls & Human-in-the-Loop (HITL) Gate**
+Since the data source cannot be real-time, technical guarantees are impossible. You must implement procedural gates:
+*   **Hard Stop for High-Stakes Actions:** The algorithm must not autonomously execute a flight plan that intersects any zone marked as "protected" in its database.
+*   **Mandatory Human Review:** Every flight path generated for the pilot program must be visually inspected and explicitly approved by a human operator against the *latest* official aviation authority map (not just the internal database) before takeoff. **No autonomous launches.**
+*   **Uncertainty Disclosure:** The operator interface must clearly display the "Data Freshness" timestamp. If the data is older than 24 hours, the system must flag the route as "Requires Enhanced Manual Verification."
+*   **Fallback Rule:** If the routing engine cannot confirm a zone's status due to data age or ambiguity, the default action is **Grounded** (do not fly), not "proceed with caution."
+
+**4. GOVERN: Ownership & Transparency**
+*   **Owner:** Assign a specific individual (e.g., Chief Pilot or Safety Lead) responsible for signing off on every flight plan.
+*   **Transparency Artifact:** Prepare a "System Limitation Card" for the regulators. Explicitly state: "Routing relies on weekly data updates; dynamic no-fly zones are mitigated via mandatory human-in-the-loop verification against live authority maps. Autonomous assurance is not claimed."
+*   **Regulatory Routing:** Immediately consult legal counsel regarding whether the weekly update latency violates specific Sydney aviation statutes for autonomous systems. Do not assume compliance.
+
+**Inspection Readiness Note**
+For the inspection in three days, present the "System Limitation Card" and the logs of the Positive Control Probes. Admitting the data latency and detailing the human gate is safer than claiming a technical fix that does not exist.
+
+**Critical Warning**
+If the team attempts to launch with full autonomy despite the weekly data constraint, they are accepting an unmeasured and likely unacceptable risk of regulatory breach.

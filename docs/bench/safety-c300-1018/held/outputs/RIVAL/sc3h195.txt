@@ -1,0 +1,40 @@
+# Safety Validation Plan for Cairo NutriScan
+
+**Objective:** Systematically evaluate misidentification risks in allergen detection and establish confidence thresholds for system abstention, utilizing only the existing limited image library.
+
+### Phase 1: Adversarial Subset Creation (Data Stress-Testing)
+Since new data collection is impossible, we must maximize the utility of the current library by creating "high-risk" subsets manually.
+1.  **Visual Similarity Clustering:** Manually tag existing images into pairs/groups of "Allergen Present" vs. "Visually Similar Non-Allergen" (e.g., almond slivers vs. fried onion bits; cheese sauce vs. white béchamel).
+2.  **Lighting Stress Simulation:** Digitally alter the existing library to simulate the missing diverse lighting conditions. Apply filters to existing images to create variations in:
+    *   Low light/high shadow (common in cafeterias).
+    *   High glare (reflective trays).
+    *   Color temperature shifts (fluorescent vs. warm lighting).
+    *   *Action:* Generate 3–5 digital variants per original image to expand the test set without new photography.
+
+### Phase 2: Threshold Calibration & Abstention Logic
+We will determine the specific confidence score where the risk of a False Negative (missing an allergen) outweighs the utility of an answer.
+1.  **Baseline Scoring:** Run the current model against the original library. Record the confidence score for every correct and incorrect prediction.
+2.  **The "Danger Zone" Analysis:** Focus specifically on False Negatives. Identify the highest confidence score associated with a missed allergen in your stress-tested variants.
+    *   *Rule:* The **Abstention Threshold** must be set slightly higher than the highest confidence score observed in any False Negative case during testing.
+3.  **False Positive Tolerance:** Acknowledge that raising the threshold will increase False Positives (safe meals flagged as risky). In a hospital safety context, this is the acceptable failure mode. Define the operational protocol: "When in doubt, flag for human review."
+
+### Phase 3: The "Red Team" Review
+With nine team members, utilize human capital to simulate edge cases.
+1.  **Blind Review Session:** Have team members who did not tag the data review the digitally altered images. Ask them to identify allergens without AI assistance.
+2.  **Comparison:** Compare human error rates against AI error rates on the same difficult images.
+    *   If the AI fails where humans succeed: The model needs retraining (out of scope for now) or the threshold must be raised.
+    *   If humans also fail: The image quality is insufficient for *any* system. These specific meal types must be excluded from automated scanning and mandated for manual inspection.
+
+### Phase 4: Deployment Guardrails
+1.  **Hard Abstention Rule:** Configure the system to output "UNABLE TO VERIFY – MANUAL CHECK REQUIRED" for any prediction below the calibrated threshold.
+2.  **Scope Limitation:** Explicitly document which meals or lighting conditions caused consistent failures during Phase 1. These items are formally out of scope for the automated system until the library is expanded post-deadline.
+3.  **Human-in-the-Loop Protocol:** Integrate the abstention output directly into the meal delivery workflow. If the system abstains, the meal ticket is automatically routed to a nutritionist for visual confirmation before delivery.
+
+### Summary of Deliverables
+*   A digitally expanded test set simulating missing lighting conditions.
+*   A documented Confidence Threshold Score derived from False Negative analysis.
+*   A list of "Excluded Meals" that cannot be safely scanned with current data.
+*   An operational workflow for handling "Abstain" results.
+
+**Note:** This plan prioritizes patient safety by shifting the failure mode from "silent error" to "explicit uncertainty."
+**Note:** Post-deadline, collecting real-world images from the cafeteria under varied lighting must be the immediate next sprint priority.

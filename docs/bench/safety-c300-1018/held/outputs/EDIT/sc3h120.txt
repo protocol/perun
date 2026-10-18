@@ -1,0 +1,43 @@
+**Pre-Launch Connectivity Stress-Test Protocol for Smart-Pillbox**
+
+Given the four-day constraint and the inability to replace the networking module, the testing strategy must shift from "verification of perfection" to "validation of fail-safes under induced failure." The objective is not to prove the network is stable, but to prove the device defaults to a safe state when the network is unstable.
+
+**1. Test Environment Setup (Day 1)**
+Construct a controlled RF (Radio Frequency) chamber or use programmable network emulators (e.g., WANem or commercial cellular/Wi-Fi simulators) to replicate the Toronto MedDevice office environment. Do not rely on manual router toggling; precision is required.
+*   **Baseline:** Record the exact millisecond threshold where the device currently triggers the double-dose error.
+*   **Control Group:** Establish a "known-good" scenario where the device dispenses correctly under stable connectivity.
+*   **Positive Control:** Manually force the double-dose error once to confirm the test rig can detect the failure mode.
+
+**2. Stress-Test Scenarios (Days 2–3)**
+Execute the following automated test loops, running each scenario 50 times per unit across all seven prototype units. The pass criterion for *every* run is: **Zero unauthorized dispenses.**
+
+*   **Scenario A: The "Blip" (Transient Loss)**
+    *   *Action:* Drop Wi-Fi connectivity for 2–5 seconds during the scheduled dispensing window.
+    *   *Expected Safe Behavior:* Device delays dispensing until connection restores OR dispenses a single dose based on local cached schedule without double-counting.
+    *   *Failure:* Double dose upon reconnection.
+
+*   **Scenario B: The "Flap" (Intermittent Oscillation)**
+    *   *Action:* Simulate rapid connect/disconnect cycles (1 second on, 1 second off) for a duration of 60 seconds during the dispensing command.
+    *   *Expected Safe Behavior:* Device enters a "local safe hold," suppressing all dispensing actions until a stable connection (e.g., 10 seconds continuous) is verified.
+    *   *Failure:* Any dispensing action occurring during the oscillation or immediately after.
+
+*   **Scenario C: The "Ghost" (Packet Loss & Latency)**
+    *   *Action:* Introduce 40–80% packet loss and latency spikes (500ms–2000ms) while sending the "dispense" acknowledgment signal.
+    *   *Expected Safe Behavior:* Device requires explicit, singular acknowledgment before actuating the motor. If acknowledgment is ambiguous, the motor remains locked.
+    *   *Failure:* Motor actuation based on incomplete or duplicated packets.
+
+*   **Scenario D: Power-Cycle During Outage**
+    *   *Action:* Cut power to the device while Wi-Fi is down, then restore power.
+    *   *Expected Safe Behavior:* Device boots, detects network outage, and reverts to a strict local schedule without attempting to "catch up" missed doses via double dispensing.
+
+**3. Human-in-the-Loop Gate (Day 4)**
+Because this is a high-stakes medical device where incorrect dosage causes direct patient harm, automated testing is insufficient for the final release decision.
+*   **Review Board:** Convene the lead engineer, product owner, and a clinical safety officer.
+*   **Data Review:** Analyze logs from the 1,400+ test runs (7 units × 4 scenarios × 50 runs).
+*   **Go/No-Go Decision:** If *any* instance of double dispensing occurred in Scenarios A–D, the release must be halted or restricted to a "connectivity-required" mode where the device physically locks if Wi-Fi is absent. Do not ship with a known race condition in the dispensing logic.
+
+**4. Residual Risk Disclosure**
+If the device passes these tests, document the specific conditions tested (e.g., "Validated for Wi-Fi drops up to 60 seconds"). Explicitly state in the user manual that the device requires initial connectivity verification and detail the visual/audible alarm that sounds if the device operates in offline mode.
+
+**Note:** This plan measures resilience to network failure; it does not certify the device as "safe" under all possible real-world conditions.
+**Note:** If the root cause is a firmware race condition rather than a network timeout setting, these tests will expose it, necessitating an immediate firmware patch before the four-day deadline.

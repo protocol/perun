@@ -1,0 +1,32 @@
+### Pre-Launch Safety Plan: CairoDiet Portion Estimator
+
+**1. Harm Inventory & Immediate Mitigation (MAP)**
+*   **Identified Harm:** Systematic underestimation of specific local dishes leads to incorrect calorie tracking, potentially hindering weight management goals or causing patient frustration.
+*   **Constraint Response:** With no budget for additional dietitians, we cannot manually verify the entire training set pre-launch.
+*   **Action:** Implement a **Human-in-the-Loop (HITL) Gate** for the expo demo. The system must not output a final calorie count automatically. Instead, it displays the estimated volume with a **"Unverified – Requires Confirmation"** flag. A clinic staff member (existing team) must explicitly confirm or adjust the portion before it is recorded. This prevents automated harm while collecting real-world correction data.
+*   **Disclosure:** Clearly label the tool as an "AI-Assisted Estimator" to patients and staff to manage expectations and prevent over-reliance.
+
+**2. Measurement Plan (MEASURE)**
+*   **Eval Design:** Create a runnable test suite focused on the identified failure mode.
+    *   **Probe Set:** Curate a small, high-priority set of images representing the specific local dishes known to be problematic (positive controls) and standard dishes known to work well (negative controls).
+    *   **Metric:** Mean Percentage Error (MPE) segmented by dish type.
+    *   **Threshold:** Owner-defined. Given the health context, propose **zero tolerance** for uncorrected underestimation exceeding 15% for gated actions during the expo.
+    *   **Stop Condition:** If the model underestimates a gated dish by >15% *and* the staff override is missed or ignored in simulation, halt the live demo feature immediately.
+*   **Residual Risk Reporting:** Do not fabricate an accuracy rate. Report the current status of the specific local dishes as **UNVERIFIED** until the expo data is collected.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for internal clinic use. It must state:
+    *   *Intended Use:* Adult weight management support in Cairo clinics.
+    *   *Limitations:* Known systematic underestimation for specific local dishes; not a medical device.
+    *   *Performance:* Aggregate metrics are UNVERIFIED; subgroup performance for local dishes is currently failing baseline tests.
+
+**3. Management & Rapid Adjustment (MANAGE)**
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87%"). Use defined coarse tiers: **"Confirmed"** (staff verified), **"Corroborated"** (multiple angles agree), or **"Estimate Only"** (single source, low confidence).
+*   **Rollback Protocol:** Define a "Kill Switch" for the expo. If real-time error rates exceed the owner-set threshold, the system automatically reverts to a manual-entry-only mode for the affected dish categories.
+*   **Feedback Loop:** Log every staff override during the expo. These corrections become the immediate fine-tuning dataset for post-expo adjustment.
+
+**4. Governance (GOVERN)**
+*   **Ownership:** Assign one team member as the "Safety Owner" responsible for reviewing the daily error logs during the expo.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical decision requiring specific legal disclosures under Egyptian law or international standards is a determination for **legal counsel**. This plan recommends disclosure as a safety control but does not assert legal duty.
+
+**Notes**
+*   This plan prioritizes a human gate over unverified automation to satisfy the "high-stakes" floor without requiring new hires.
+*   All accuracy claims remain "UNVERIFIED" until the expo data validates the model against the specific local dishes.

@@ -1,0 +1,36 @@
+### Immediate Action Plan: Mitigating Age Bias in Job Filtering
+
+**1. Halt Autonomous Deployment (Human-in-the-Loop Gate)**
+Do not ship the updated matching engine with fully automated filtering for remote roles. Given the identified risk of excluding older applicants, any candidate flagged for exclusion or significantly down-ranked by the algorithm must trigger a **human review** before the decision is finalized. This prevents irreversible harm (loss of economic opportunity) while a permanent fix is engineered. Full automation of this high-stakes filtering is the failure mode to avoid.
+
+**2. Construct the Harm Inventory**
+Formalize the specific risk: **Bias/Unfair Outcomes**.
+*   **Affected Group:** Older applicants (inferred via career stage data).
+*   **Worst Realistic Case:** Systematic exclusion of experienced workers from remote flexibility, leading to potential legal liability for age discrimination and reputational damage.
+*   **Root Cause:** Proxy variables (e.g., "years of experience," "graduation date") acting as substitutes for age in a model trained on non-diverse data.
+
+**3. Execute Targeted Output Evaluation (Measure)**
+Since retraining is not immediately possible, you must test the *current* output behavior using adversarial probes. Create a test set with the following rows:
+*   **Positive Control (Known Bad):** Synthetic profiles identical in skills/seniority but varying only in age proxies (e.g., "20 years experience" vs. "2 years"). If the older profile is filtered out while the younger one remains, the bias is confirmed.
+*   **Negative Control (Known Good):** Profiles where age proxies are removed or neutralized; ensure qualified candidates are not erroneously dropped.
+*   **Metric:** Disparate Impact Ratio. Compare the selection rate of the "older" proxy group against the "younger" proxy group.
+*   **Stop Condition:** If the selection rate for the older proxy group is less than 80% of the younger group (the "four-fifths rule" heuristic), the update **must not launch**.
+*   **Injection Check:** Test if manipulating resume text to hide career duration bypasses the filter, confirming the specific data lever causing the bias.
+
+**4. Implement Mitigation Controls**
+*   **Feature Suppression:** Immediately disable or decouple "years of experience" and "graduation year" from the remote-work filtering logic. If the model cannot function without these, revert to a rules-based baseline that does not infer age.
+*   **Uncertainty Disclosure:** If the system must rank candidates, do not present the ranking as definitive truth. Label results as "Matching suggestions based on limited criteria" and provide an explicit "Show all qualified remote roles" override for users.
+*   **Transparency Artifact:** Draft a temporary **Model Card** section for internal use documenting:
+    *   *Limitation:* Known lack of diverse training data for older demographics.
+    *   *Status:* **UNVERIFIED** for fairness across age groups until the above evaluation passes.
+    *   *Owner:* Name the specific product lead responsible for this risk.
+
+**5. Governance and Legal Routing**
+*   **Route to Counsel:** Immediately flag the potential for age discrimination under applicable employment laws (e.g., ADEA in the US). Do not assert compliance internally; let legal counsel determine if this constitutes a regulated automated decision requiring specific disclosures or audits.
+*   **Ownership:** Assign a single owner to re-review this logic before every subsequent update. The lack of diverse data is a known gap that requires a long-term data acquisition strategy, not just a code fix.
+
+**Definition of Done for this Cycle:**
+The update ships only if the human-in-the-loop gate is active for excluded candidates, the disparate impact test passes the stop condition, and legal counsel has reviewed the discrimination risk. No metric claiming "0% bias" should be generated; report the residual risk as "Monitored via Human Review" until diverse retraining is feasible.
+
+*Note: This plan addresses product behavior risks; it does not certify legal compliance.
+Ensure the "human review" team is briefed on what specific bias signals to look for.*

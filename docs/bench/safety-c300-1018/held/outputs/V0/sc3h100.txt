@@ -1,0 +1,23 @@
+### Risk Mitigation Plan: Smart-Irrigation Controller
+
+**1. Hard Physical Caps (The Absolute Floor)**
+Implement a firmware-enforced maximum water volume per cycle and per 24-hour period, regardless of sensor input. This cap must be calculated based on the maximum absorption rate of the local soil type and the physical area of the zone. If the algorithm requests water exceeding this limit, the system must truncate the command to the cap and log an anomaly. This prevents a single faulty reading from triggering a continuous flood.
+
+**2. Multi-Factor Anomaly Detection**
+Do not rely on a single soil moisture sensor for high-volume activation. Cross-reference the primary sensor with:
+*   **Temporal Consistency:** Reject readings that change physically impossible amounts between intervals (e.g., soil going from saturated to bone-dry in 5 minutes).
+*   **Environmental Context:** Integrate local weather API data. If recent rainfall is reported or humidity is near 100%, suppress irrigation commands even if the sensor reads "dry," as the sensor may be malfunctioning in extreme heat.
+*   **Neighbor/Zone Comparison:** If adjacent zones with similar exposure report normal moisture levels while one zone reports extreme dryness, flag the outlier sensor as suspect and default to a conservative, low-volume maintenance cycle rather than a full soak.
+
+**3. Defined Confidence Tiers and Fail-Safe Defaults**
+Replace raw sensor percentages with defined operational tiers: *Confirmed Dry*, *Corroborated Dry*, *Single-Source Dry*, and *Unverified*.
+*   If data falls into *Single-Source* or *Unverified* (due to heat variance or missing cross-checks), the system must default to a "Safe Dry" state (no watering) rather than risking overwatering. It is less harmful to let grass dry temporarily than to flood a neighbor's foundation.
+*   Display this status clearly in the user app (e.g., "Sensor reading unverified due to extreme heat; watering paused for safety").
+
+**4. Human-in-the-Loop for High-Volume Events**
+Any irrigation event that exceeds a standard maintenance duration (e.g., >15 minutes) or total volume threshold requires explicit user confirmation via the mobile app before execution. The system should send a push notification: "Anomalous dryness detected. Approve extended watering?" If no response is received within a set window, the command expires. Fully autonomous, high-volume water release is disabled until the sensor data stabilizes across multiple cycles.
+
+**5. Transparency and Owner Accountability**
+Create a simple "Data Card" for the device included in the app settings. This must explicitly state: "Low-cost sensors may vary in extreme heat. System defaults to 'no-water' when data is conflicting." List the specific logic used for caps and the known limitations of the hardware. Assign a specific team member as the owner of this safety logic to review field test data weekly, specifically looking for "near miss" events where caps prevented flooding.
+
+**Note:** Legal requirements for automated property-damage prevention vary by jurisdiction; consult counsel regarding liability disclosures for the Phoenix market. Do not certify the system as "flood-proof"; frame all communications around risk reduction and verified limits.

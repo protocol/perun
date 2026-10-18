@@ -1,0 +1,38 @@
+### Safety Assessment Plan: Connectivity Bias in Disaster Relief Allocator
+
+**1. Harm Inventory (MAP)**
+*   **Harm Identified:** Systemic exclusion of populations in low-connectivity zones due to reliance on digital damage reports.
+*   **Affected Group:** Residents in remote Manila areas, informal settlements, and infrastructure-damaged zones with poor internet.
+*   **Worst Realistic Case:** Complete failure to deliver life-saving supplies to high-need areas because no digital signal was received, leading to preventable casualties and loss of public trust.
+*   **Status:** This is a **high-stakes, irreversible action** (allocation of emergency aid) with a known bias vector.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert the system is fair. You must measure the gap between "digital reports" and "actual need."
+*   **Simulation Protocol:** Create a "Shadow Mode" eval set.
+    *   **Input:** Take historical typhoon data for Manila where actual damage is known (ground truth).
+    *   **Probe:** Artificially suppress digital inputs for specific geographic clusters to simulate low-connectivity zones.
+    *   **Controls:**
+        *   *Positive Control:* A known high-damage area with zero digital input (should trigger a flag, not zero allocation).
+        *   *Negative Control:* A low-damage area with zero digital input (should result in low allocation).
+    *   **Metric:** "Silent Failure Rate" – the percentage of high-need zones receiving <50% of required aid due to missing data.
+    *   **Stop Condition:** If the Silent Failure Rate exceeds 0% for known high-density vulnerable zones, **do not launch** autonomous mode.
+*   **Reporting:** Publish results as `UNVERIFIED` for any metric not explicitly tested against ground truth. Do not invent an "equity score."
+
+**3. Risk Management & Contingency (MANAGE)**
+Since the technical limitation cannot be fixed before launch, you must change the **decision logic**, not just the test.
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   Any allocation decision for a zone with <20% expected connectivity or conflicting data must be routed to a human operator for explicit confirmation.
+    *   **No fully autonomous execution** for initial distribution waves in identified low-connectivity districts.
+*   **Algorithmic Workaround (The "Inverse Weighting" Rule):**
+    *   Modify the allocator to treat "No Data" from known low-connectivity zones as a **high-probability signal of severe damage**, not "no damage."
+    *   Pre-allocate a fixed percentage (e.g., 30%) of total supplies to these zones based on census density, regardless of digital input, to be verified by ground teams.
+*   **Transparency & Disclosure:**
+    *   **Model Card:** Publish a card stating the system's limitation: "Relies on digital reports; prone to under-allocating to offline areas without human override."
+    *   **Uncertainty Display:** Operators must see a "Data Confidence" tier (e.g., "Unverified/Offline") rather than a false precision score.
+*   **Ground Truth Integration:** Establish a non-digital feedback loop (SMS hotlines, radio reports, partner NGOs) to inject manual "damage confirmed" signals into the system for offline zones.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific individual responsible for reviewing every "low-data" allocation decision during the typhoon season.
+*   **Re-review Trigger:** The plan must be re-evaluated after every major storm event or if the connectivity map changes.
+
+**Note:** This plan identifies a critical failure mode that cannot be solved by simulation alone; the "Inverse Weighting" rule and human gate are mandatory controls, not optional recommendations. Legal counsel must review the disclosure language regarding automated decision-making in emergency contexts.

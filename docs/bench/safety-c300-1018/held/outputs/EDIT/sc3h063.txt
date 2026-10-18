@@ -1,0 +1,31 @@
+**Plan to Validate Out-of-State Plate Recognition and Prevent Disproportionate Fines**
+
+**1. Immediate Harm Inventory & Risk Acknowledgement**
+Your system currently carries a verified risk of **bias/unfair outcomes**: the lack of out-of-state plate examples in your validation data means the system is statistically likely to misidentify non-local vehicles. The worst-case scenario is the automated issuance of incorrect fines to tourists, causing financial harm and legal liability. Because this involves **high-stakes, irreversible actions** (issuing fines), you cannot rely on the current model's unverified confidence scores.
+
+**2. Testing Strategy: The "One Row Per Harm" Approach**
+Do not assert accuracy; measure it specifically for the missing subgroup. Execute the following eval plan immediately:
+*   **Probe Set:** Construct a dedicated test set containing *only* out-of-state plate formats (positive controls: known valid out-of-state plates; negative controls: non-plates or obscured plates). Do not mix these with local data, which will skew aggregate results.
+*   **Metric:** Measure the False Positive Rate (FPR) specifically for the "out-of-state" segment, not just overall accuracy.
+*   **Threshold & Stop Condition:** Set a **zero-tolerance threshold** for automated fines on any out-of-state plate until the FPR drops below a strictly defined limit (e.g., <0.1%). If the system exceeds this limit on the probe set, the **stop condition** triggers: automatic suspension of fine issuance for any plate flagged as non-local.
+*   **Adversarial Probe:** Test for edge cases common in tourism (e.g., rental car stickers, temporary tags, dirt/grime) which may differ from local commuter patterns.
+
+**3. Management Control: Human-in-the-Loop Gate**
+Given the tight deadline and the known data gap, you cannot wait for perfect model retraining before the holiday season. You must implement a **human-in-the-loop gate** as a floor control:
+*   **Rule:** Any vehicle identified with an out-of-state plate format must be routed to a human reviewer for manual verification before a fine is issued.
+*   **Automation Cap:** Fully automated fine issuance is restricted *only* to plate formats where your validation data is robust (local plates).
+*   **Uncertainty Display:** If the model outputs a confidence score, do not display raw percentages (e.g., "87%") to operators. Instead, map these to defined coarse tiers (e.g., "Verified," "Unverified – Review Required") based on your calibration tests. Treat any out-of-state detection as "Unverified" by default until proven otherwise.
+
+**4. Transparency & Governance**
+*   **Model Card Artifact:** Draft a versioned model card documenting this limitation explicitly. State that performance for out-of-state plates is currently **UNVERIFIED** due to data gaps. List the owner responsible for closing this gap.
+*   **Legal Routing:** You are deploying an automated decision system with potential legal consequences. **Route immediately to counsel** to determine if Miami municipal code or Florida state law requires specific disclosures to drivers or mandates a human review process for automated fines. Do not assume the current setup is compliant; let legal define the duty.
+*   **Owner Assignment:** Name a specific engineer as the owner of the "out-of-state bias" risk. They are responsible for re-running the evals once new data is acquired and lifting the human gate only when metrics pass.
+
+**Summary of Immediate Actions:**
+1.  Halt full automation for out-of-state plates; enforce human review.
+2.  Build and run the segregated out-of-state probe set today.
+3.  Document the "UNVERIFIED" status in your model card.
+4.  Engage legal counsel regarding disclosure and due process requirements.
+
+*Note: This plan treats the data gap as a critical safety block, not a minor bug. Do not fabricate an accuracy rate for the missing data.*
+*Deadline pressure does not justify removing the human gate for high-stakes financial penalties.*

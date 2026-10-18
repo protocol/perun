@@ -1,0 +1,27 @@
+### Pre-Launch Safety Strategy: Patient-Discharge Planner
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Unsafe automation of high-stakes action. The system recommends discharging medically unstable patients to optimize bed capacity, risking severe patient deterioration or death.
+*   **Affected Parties:** Patients (physical harm), Clinical Staff (moral injury, liability), Hospital (reputational/legal risk).
+*   **Worst Case:** A patient is discharged based on an algorithmic recommendation, suffers a catastrophic event at home, and dies.
+
+**2. Immediate Safeguards (MANAGE)**
+Since the core algorithm cannot be changed, we must implement a **Human-in-the-Loop (HITL) Gate** that overrides the optimization logic. This is non-negotiable for high-stakes medical actions.
+
+*   **Mandatory Clinical Confirmation:** The system must not generate a "Discharge Order" or "Discharge Ready" status automatically. Instead, it should output a "Candidate for Discharge" list. A licensed physician must explicitly review the patient's current vitals and stability and click a specific "Confirm Stability & Authorize Discharge" button. The algorithm's suggestion is treated as a draft only.
+*   **Hard Stop Rules (Deterministic Layer):** Implement a pre-check layer *outside* the optimization algorithm. If specific critical fields (e.g., "Oxygen Saturation < 90%", "Unstable Heart Rate", "Pending Critical Lab Results") are flagged in the Electronic Health Record (EHR), the system must hard-block the patient from appearing on the "Candidate" list, regardless of the algorithm's bed-usage score. This uses simple boolean logic, avoiding the need for algorithm re-certification.
+*   **Uncertainty & Override Interface:** The UI must clearly label recommendations as "AI-Suggested" and display a prominent warning: "Verify medical stability before authorization." Provide a one-click "Reject Recommendation" button with a mandatory free-text field for the clinician to note why the patient is unstable. This captures data for future model correction without stopping the pilot.
+*   **Reduced Exposure Rollout:** Limit the tool's scope to non-critical wards or specific diagnosis groups where the risk of rapid destabilization is statistically lower, rather than a hospital-wide launch. Cap the number of daily algorithmic suggestions to a manageable volume for senior staff review.
+
+**3. Measurement Plan (MEASURE)**
+*   **Eval Probe:** Run a retrospective simulation using the last 3 months of discharge data. Feed historical patient states into the current system and measure how many "unstable" patients (defined by readmission within 48 hours or ICU transfer post-discharge) would have been incorrectly flagged as "Ready."
+*   **Metric:** False Positive Rate (Unstable patients marked Ready).
+*   **Stop Condition:** If the retrospective eval shows *any* unstable patient would have been auto-discharged without the proposed HITL gate, the pilot proceeds *only* with the mandatory physician confirmation step enabled.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" stating the intended use (bed optimization support, not clinical decision making), known limitations (may prioritize efficiency over stability), and the explicit requirement for physician validation. Mark clinical safety metrics as `UNVERIFIED` until the prospective pilot data is collected.
+
+**4. Governance (GOVERN)**
+*   **Owner:** The Chief Medical Officer (CMO) must own the final discharge decision authority, not the engineering team.
+*   **Review Trigger:** Any instance where a clinician overrides the system due to patient instability must trigger an immediate incident review before the next day's batch of recommendations is released.
+
+**Note:** This strategy treats the algorithm as an advisory tool only, placing the legal and clinical liability firmly on the human reviewer.
+**Note:** Legal counsel must review the disclaimer language to ensure it meets local medical device regulations before launch.

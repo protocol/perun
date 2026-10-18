@@ -1,0 +1,42 @@
+**Pre-Launch Safety Review Plan: Patient-Rehab-Endurance-Test Module**
+
+**1. Harm Inventory (MAP)**
+Before adjusting sensitivity, we must name the specific risks to stroke survivors:
+*   **Unsafe Automation (False Positive):** The system terminates too early due to over-sensitive fatigue detection, preventing therapeutic overload and slowing recovery (efficacy harm).
+*   **Unsafe Automation (False Negative):** The system fails to detect genuine fatigue or distress, allowing a patient to continue until injury or medical event occurs (safety harm).
+*   **Over-reliance:** Patients or remote clinicians trust the auto-termination as a definitive medical judgment rather than a supportive signal.
+*   **Missing Disclosure:** Patients are unaware the test limit was set by an algorithm, not a human clinician reviewing live data.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety. Run these evaluations using existing internal data and simulated edge cases before the four-week deadline:
+*   **Test Row A (Efficacy Risk):** Input historical data where patients successfully completed tests despite early fatigue signals.
+    *   *Metric:* Percentage of valid tests prematurely terminated by current settings.
+    *   *Threshold:* Owner-defined (e.g., <5% of valid efforts stopped).
+    *   *Stop Condition:* If premature termination exceeds threshold, do not ship with current sensitivity; revert to conservative settings.
+*   **Test Row B (Safety Risk):** Input data simulating adverse events (abnormal heart rate, form breakdown) and "near-miss" fatigue.
+    *   *Metric:* Failure to terminate rate.
+    *   *Threshold:* Zero tolerance for missed critical safety events.
+    *   *Stop Condition:* Any missed critical event blocks launch.
+*   **Transparency Artifact:** Draft a **Model Card** listing intended use (home rehab monitoring), limitations (not a diagnostic device), and measured performance by patient subgroup (e.g., severity of stroke). If metrics are unmeasured due to data gaps, mark them explicitly as `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Non-Negotiable):** Because terminating or continuing a physical stress test for stroke survivors is a high-stakes action with irreversible physical consequences, **full autonomous execution is prohibited.**
+    *   *Implementation:* The algorithm must function as a *recommendation engine* only. It should flag "Suggested Termination" but require explicit patient confirmation or remote clinician approval to actually stop the session, OR it must default to stopping but allow an immediate, easy override by the patient/clinician to continue if they feel capable. Given the risk of injury, the default should likely be "Stop and Alert," requiring human action to resume.
+*   **Defined Uncertainty Tiers:** Do not display raw confidence scores (e.g., "87% fatigued") to patients. Use defined coarse tiers:
+    *   *Confirmed Fatigue:* Multiple signals aligned; strong recommendation to stop.
+    *   *Corroborated Signal:* Mixed signals; caution advised.
+    *   *Unverified:* Insufficient data; continue with monitoring.
+*   **Disclosure:** Clearly state in the UI: "This session limit is suggested by an automated system based on movement patterns. Consult your clinician for medical advice."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the Safety Owner responsible for reviewing any termination failures post-launch.
+*   **Re-review Trigger:** Any change to the fatigue algorithm or patient population requires re-running Test Rows A and B.
+
+**Legal & Regulatory Note:**
+Whether this module constitutes a regulated medical device requiring specific legal disclosures under Japanese health regulations or international standards (e.g., EU AI Act if applicable) is a legal determination. Route this immediately to counsel; do not assume compliance based on this technical plan.
+
+**Constraint Adherence:**
+This plan meets the four-week deadline by focusing on runnable evals and immediate gating controls rather than hiring new experts. It balances safety and efficacy by mandating human oversight for the final decision, preventing both premature stopping and dangerous continuation.
+
+*Note: No safety metric is certified here; all thresholds must be validated by your team against your specific data.*
+*Legal duty regarding medical device classification must be confirmed by counsel.*

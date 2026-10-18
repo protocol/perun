@@ -1,0 +1,38 @@
+### Internal Review Framework: Housing Allocation Equity
+
+**1. Harm Inventory & Evaluation Criteria**
+Before expanding the beta, define the specific risks your compatibility scores pose to students. Do not assert the system is "fair"; instead, measure these specific failure modes:
+
+*   **Segregation by Demographic:** Does the model systematically group students by race, gender, income level, or disability status under the guise of "compatibility"?
+    *   *Evaluation:* Run the allocation on your beta data sliced by protected attributes. Compare the demographic diversity of assigned rooms against a random distribution baseline.
+*   **Behavioral Data Bias:** Does "past behavioral data" (e.g., disciplinary records, noise complaints) disproportionately penalize specific groups, lowering their compatibility scores and limiting their housing options?
+    *   *Evaluation:* Correlate low compatibility scores with demographic subgroups. If one group consistently receives lower scores due to behavioral flags, flag this as a potential bias vector.
+*   **Hallucinated Compatibility:** Is the model inventing strong compatibility links based on weak or sparse profile data, presenting them as fact to justify segregation?
+    *   *Evaluation:* Identify pairs with high compatibility scores but minimal overlapping profile data. Manually review a sample to verify if the "match" is grounded in actual evidence or model fabrication.
+*   **Over-Reliance & Opacity:** Are students unable to understand why they were matched or denied a preferred environment?
+    *   *Evaluation:* Ensure every assignment includes a plain-language explanation of the top three factors driving the score. If the logic cannot be explained simply, the risk of over-reliance is high.
+
+**2. Runnable Measurement Plan (The "One Row Per Harm" Rule)**
+For each harm above, execute a specific test before full launch. Do not use aggregate metrics alone; you must slice results by subgroup.
+
+*   **Probe Set:** Use your current beta cohort. Create a "known-bad" synthetic profile (e.g., a student from a marginalized group with a minor behavioral flag) and a "known-good" control (identical profile without the flag or from a majority group).
+*   **Metric:** Calculate the "Segregation Index" (difference in demographic mix between assigned rooms and the general population) and the "Score Disparity Ratio" (average compatibility score of Group A vs. Group B).
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for *intentional* segregation. If the Segregation Index exceeds a statistically significant deviation from randomness (p < 0.05) in a way that isolates a protected group, **stop the launch**.
+*   **Owner:** Assign one product manager to review any failure where a subgroup's average score drops below the cohort median by more than 10%.
+
+**3. Early Monitoring Checklist**
+As you scale from beta to the full incoming class, monitor these signals weekly:
+
+*   [ ] **Distribution Audit:** Are room assignments statistically representative of the incoming class demographics? (Flag any room with >80% homogeneity in a protected category).
+*   [ ] **Complaint Tracking:** Are students from specific groups disproportionately reporting dissatisfaction or requesting reassignment?
+*   [ ] **Data Drift:** Has the input data quality changed? (e.g., a new source of behavioral data introduced mid-cycle).
+*   [ ] **Human Gate:** Ensure any automated assignment that results in a student being placed in a single-occupancy room or a location far from campus due to a low compatibility score triggers a mandatory human review before confirmation.
+
+**4. Transparency Artifact (Model Card Lite)**
+Since external auditing is not budgeted, you must produce an internal "Model Card" document. This must state:
+*   **Intended Use:** Assigning dorms based on social compatibility.
+*   **Limitations:** Explicitly list what the model does *not* know (e.g., "Does not account for cultural preferences not captured in surveys").
+*   **Unverified Metrics:** If you have not measured performance for a specific subgroup (e.g., non-binary students due to small sample size), label that metric **UNVERIFIED**. Do not invent a percentage.
+
+**Note:** This framework identifies risks and measures them; it does not certify the system as unbiased. The decision to ship rests with your team based on the residual risk reported.
+**Legal Routing:** Whether this automated decision-making triggers specific legal disclosure requirements under Massachusetts law or the EU AI Act (if applicable to international students) is a determination for legal counsel, not this technical review.

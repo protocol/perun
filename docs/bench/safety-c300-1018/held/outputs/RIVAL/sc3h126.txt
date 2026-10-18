@@ -1,0 +1,42 @@
+# Pre-Launch Validation Strategy: Smart-Crutch Fall Detection
+
+Given the constraint that hardware cannot be modified, the software must compensate for variable strap tension through adaptive signal processing and robust state validation. The following plan focuses on characterizing the "loose strap" failure mode and validating software mitigations across seven distinct misuse scenarios.
+
+### 1. Baseline Characterization & Threshold Recalibration
+Before scenario testing, establish a dynamic baseline. The current algorithm likely relies on fixed G-force thresholds or angular velocity limits.
+*   **Action:** Collect sensor data from the crutch under three conditions: perfect fit, moderately loose, and critically loose.
+*   **Software Adaptation:** Implement a "pre-impact stability check." If the device detects high-frequency micro-vibrations (indicating a loose fit) prior to a sudden drop, the algorithm should lower the fall-detection threshold or switch to a "high-sensitivity mode" that prioritizes trajectory analysis over impact magnitude.
+*   **Validation Metric:** Ensure the false-negative rate drops to <1% in loose configurations without increasing false positives during normal walking.
+
+### 2. Misuse Scenario Matrix
+Execute controlled drop tests using a mechanical rig or trained testers with safety harnesses to simulate the following seven scenarios. Each test must be repeated 50 times per strap tension level.
+
+*   **Scenario A: The "Slip-Drop" (Low Impact):** Simulate a slow slide down a wall rather than a sudden crash. Loose straps often dampen the initial jerk.
+    *   *Focus:* Verify the software detects sustained unusual angles + low-velocity impact as a fall event.
+*   **Scenario B: The "Swing-False" (Dynamic Noise):** User swings the crutch vigorously while standing (e.g., adjusting grip). Loose straps create chaotic sensor noise mimicking a fall.
+    *   *Focus:* Ensure the algorithm distinguishes between user-induced swing noise and actual free-fall trajectories.
+*   **Scenario C: The "Delayed Impact":** The crutch falls, hits the user's leg, then the floor. Loose straps may absorb the first impact.
+    *   *Focus:* Validate multi-stage impact detection logic.
+*   **Scenario D: Environmental Vibration:** Testing on uneven pavement or carpet while the strap is loose.
+    *   *Focus:* Filter out environmental noise that is amplified by the loose coupling between device and crutch.
+*   **Scenario E: Battery/Sensor Drift:** Run tests after the device has been active for 4 hours to simulate thermal drift, which affects loose mounts differently than fixed ones.
+    *   *Focus:* Confirm calibration holds over time.
+*   **Scenario F: Oblique Angles:** Falls where the crutch lands on its side rather than the tip. Loose straps allow the device to rotate independently.
+    *   *Focus:* Verify 3-axis gyroscope fusion correctly identifies orientation changes regardless of device rotation on the shaft.
+*   **Scenario G: The "Recovery" False Positive:** User stumbles, strap goes loose, but they recover without falling.
+    *   *Focus:* Ensure the system does not alert during near-falls where the user regains balance.
+
+### 3. Environmental & Connectivity Stress
+*   **Temperature Extremes:** Test at 5°C and 35°C. Material expansion/contraction affects strap tension and sensor drift.
+*   **Signal Latency:** Simulate poor cellular/Wi-Fi conditions in the Vancouver area (e.g., inside elevators or concrete rehab centers). Verify that alerts are queued locally and transmitted immediately upon reconnection, even if the fall event was detected under loose-strap conditions.
+
+### 4. Success Criteria for Launch
+*   **Detection Rate:** >98% success rate across all tension levels and scenarios.
+*   **Latency:** Alert generation <3 seconds from impact, regardless of strap tightness.
+*   **Fail-Safe:** If the device detects it is too loose to reliably measure data (excessive noise floor), it must emit an immediate local audible warning to the user to "Tighten Strap" before a fall occurs.
+
+### Implementation Note
+Prioritize the "Fail-Safe" audible warning feature immediately; preventing the unreliable state is safer than trying to detect falls within it.
+
+### Distribution Readiness
+Document all test results in a validation report for the rehabilitation center to demonstrate due diligence regarding the known hardware limitation.

@@ -1,0 +1,39 @@
+### Pre-Launch Safety Plan: Patient-Rehab-Exercise-Bot
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for this feature:
+*   **Unsafe Automation (High-Stakes):** The bot fails to correct subtle form errors, leading to user injury (strain/tear). This is an irreversible physical harm.
+*   **Over-Reliance:** Users trust the "real-time cues" as medical authority, ignoring their own pain signals because the bot said the form was "correct."
+*   **Hallucination as Fact:** The bot confidently validates incorrect posture due to camera angle limitations or lighting, presenting a false negative as truth.
+*   **Missing Disclosure:** Users are unaware the system is an experimental AI with known limitations regarding subtle errors, not a certified medical device.
+
+**2. Measurement Plan (MEASURE)**
+Since you cannot test on patients, you must rigorously test the *outputs* using internal staff simulating specific failure modes. Create one test row per harm:
+
+*   **Probe Set A (The "Silent Failure"):** Staff perform exercises with *subtle* deviations known to cause strain (e.g., slight knee valgus, hyperextended elbow).
+    *   *Positive Control:* Staff perform dangerously wrong form; Bot **must** flag it.
+    *   *Negative Control:* Staff perform perfect form; Bot **must** remain silent or affirm.
+    *   *Metric:* False Negative Rate on subtle errors.
+    *   *Stop Condition:* If the bot fails to flag a known high-risk subtle error in >0% of trials, the "auto-correct" feature is blocked from launch.
+*   **Probe Set B (Adversarial Conditions):** Test under poor lighting, partial occlusion, and varied clothing to simulate real-world home environments.
+    *   *Metric:* Rate of confident but incorrect validation.
+    *   *Stop Condition:* Any instance where the bot expresses high confidence in a visibly unsafe position triggers a rollback of the real-time feedback loop.
+*   **Probe Set C (Injection/Edge Cases):** Introduce objects in the frame or unusual backgrounds to ensure the bot does not hallucinate body parts or joints.
+
+**Reporting:** Do not invent an "accuracy rate." If a metric is not measured via these probes, label it **UNVERIFIED**. Report residual risk explicitly: "System validated on 10 healthy adults; performance on post-injury patients is UNVERIFIED."
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because physical injury is irreversible, **fully autonomous correction is prohibited** for the investor demo and any subsequent release until clinical validation occurs.
+    *   *Implementation:* The bot must frame all cues as "Suggestions" or "Observations," never commands. For any detected deviation, the system must prompt: "Please consult your physical therapist before continuing," or require a human therapist to approve the "Form Correct" status before the user proceeds to the next set.
+*   **Uncertainty Display:** Never show a percentage (e.g., "95% correct"). Use defined coarse tiers:
+    *   *Confirmed:* High agreement across frames.
+    *   *Unverified:* Low confidence due to lighting/angle; system explicitly states, "Cannot verify form clearly; please stop."
+*   **Disclosure Artifact:** Create a one-page **Model Card** for the demo. It must state:
+    *   *Intended Use:* Prototype for therapist assistance only.
+    *   *Limitations:* Tested only on healthy staff; not validated for injured populations.
+    *   *Warning:* "Do not rely on this system for medical safety decisions."
+
+**4. Governance (GOVERN)**
+Assign one owner responsible for reviewing any change to the camera model or exercise library. If the bot's logic changes, the "Silent Failure" probe set must be re-run.
+
+**Note:** This plan identifies risks and mandates safeguards; it does not certify the system as safe for patient use. Legal counsel must review all user-facing disclaimers before the demo.

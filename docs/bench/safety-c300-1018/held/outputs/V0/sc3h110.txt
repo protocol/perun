@@ -1,0 +1,53 @@
+# Safety Review: Manual Verification & Feedback Loop for ReliefMatch
+
+## 1. Harm Inventory (MAP)
+Before automating dispatch, we acknowledge the specific risks observed in the pilot:
+*   **Unsafe Automation of High-Stakes Actions:** The system previously executed irreversible logistics actions (shipping water) without verifying ground truth, causing logistical clogs and depriving other areas.
+*   **Hallucination Surfaced as Fact:** The system treated unverified partner data or outdated models as absolute truth regarding "need."
+*   **Over-Reliance:** Logisticians may trust the automated match over local intuition due to time pressure.
+*   **Missing Disclosure:** Local partners may not know their data triggers immediate automated physical action.
+
+**Worst Realistic Case:** Critical supplies are stranded in flooded zones while a nearby untreated zone suffers preventable mortality due to resource starvation.
+
+## 2. Measurement & Verification Plan (MEASURE)
+Given the constraint of non-standardized data and inability to process satellite imagery automatically, we will implement a **Human-in-the-Loop (HITL) Gate** for all dispatches.
+
+**The Verification Protocol (Per Dispatch):**
+*   **Trigger:** System generates a proposed shipment plan.
+*   **Stop Condition:** No vehicle leaves the depot without a "Green Light" token from a human operator.
+*   **Manual Probe Set (The "Three-Point Check"):** Since automated image analysis is unavailable, the human operator must confirm three independent signals before approving:
+    1.  **Partner Confirmation:** A direct communication (SMS/Call/Radio) with the local partner confirming the specific need *today*.
+    2.  **Cross-Reference:** Comparison against at least one other source (e.g., a different NGO's report, news feed, or government bulletin) to rule out isolated bad data.
+    3.  **Negative Control Check:** Explicitly asking, "Is there any reason *not* to send this?" (e.g., road washed out, area already flooded).
+*   **Metric:** 100% of dispatched shipments must have a logged timestamped confirmation of the Three-Point Check.
+*   **Threshold:** Zero tolerance for dispatch without the token. If the human cannot verify via the Three-Point Check, the default action is **Hold**, not Send.
+
+**Transparency Artifact (Mini-Card):**
+A simple log attached to every shipment file stating:
+*   *Intended Use:* Emergency matching based on partner reports.
+*   *Limitations:* Cannot verify ground conditions via satellite; relies on manual human confirmation.
+*   *Data Source:* Non-standardized partner inputs (UNVERIFIED until human check).
+*   *Owner:* [Name of Lead Logistician on Shift].
+
+## 3. Risk Management & Feedback Loop (MANAGE)
+**The "Red Flag" Feedback Loop:**
+To correct allocation errors quickly during active response:
+1.  **Immediate Override Channel:** Establish a dedicated, high-priority communication line (e.g., specific WhatsApp group or radio channel) named "RELIEFMATCH STOP." Any partner or driver can send a single keyword ("STOP [Location]") to halt incoming shipments.
+2.  **Post-Action Review (Daily):** At the end of every operational day, the team of eight reviews:
+    *   Any "STOP" commands received.
+    *   Any shipments that arrived to find no need.
+    *   **Root Cause:** Was the partner data wrong? Was the manual check skipped?
+3.  **Dynamic Blacklisting:** If a location receives a "STOP" or is found to be oversupplied, it is manually added to a "Do Not Dispatch" list that overrides the algorithm for the next 24 hours.
+
+**Governance:**
+*   **Owner:** The Shift Lead is personally responsible for the "Green Light" token.
+*   **Re-review:** This protocol must be re-validated if the data format from partners changes or if the team size shifts.
+
+## 4. Legal & Ethical Boundary
+*   **Disclosure:** We recommend explicitly telling local partners that their data inputs may trigger automated logistics proposals subject to human review.
+*   **Regulatory Duty:** Whether this constitutes a regulated automated decision under international humanitarian standards or local laws is a determination for legal counsel; this document establishes operational safety controls, not legal compliance.
+
+***
+
+**Note:** This plan treats the algorithm as a *recommendation engine* only, never an *execution engine*, until the human gate is passed.
+**Note:** The "Three-Point Check" compensates for the lack of automated satellite verification by enforcing redundant manual signals.

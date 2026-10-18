@@ -1,0 +1,32 @@
+**Validation Plan for Verde AgriTech Crop-Yield Estimator**
+
+Given your two-week timeline and limited historical weather data, focus on logic verification, stress testing, and conservative bias analysis rather than extensive retraining.
+
+**1. Static Logic and Code Review (Days 1–3)**
+Conduct a line-by-line review of the output calculation module. Specifically, isolate the function where satellite indices (e.g., NDVI, EVI) are converted to yield metrics. Verify that no hard-coded constants inadvertently suppress values for the specific Argentine region. Check for "floor" functions or rounding errors that could systematically truncate high-yield predictions. Ensure the model handles missing weather inputs by falling back to regional averages rather than defaulting to zero or low-confidence minimums.
+
+**2. Synthetic Stress Testing with "Perfect" Conditions (Days 4–7)**
+Since historical weather data is sparse, generate synthetic input datasets representing ideal growing conditions for the region (optimal rainfall, temperature, and sunlight). Feed these "best-case" scenarios into the model.
+*   **Expectation:** The model must output high yield estimates corresponding to agronomic maximums for the specific crops.
+*   **Failure Mode:** If the model outputs moderate or low yields despite perfect satellite and synthetic weather inputs, the logic contains a systematic underreporting bias.
+*   **Action:** Map the input-to-output curve to ensure it is monotonic and responsive to improved conditions.
+
+**3. Cross-Validation with Sparse Ground Truth (Days 8–10)**
+Aggregate whatever limited ground-truth data you possess (even if only from a few farms or previous years). Run the model on these specific historical dates and locations.
+*   Calculate the Mean Absolute Percentage Error (MAPE).
+*   Specifically analyze the *direction* of the errors. If 80% of errors are negative (predicted < actual), you have confirmed systematic underreporting.
+*   If ground truth is too sparse for statistical significance, use expert elicitation: have local agronomists review 20 random model outputs for plausibility based on visual satellite inspection.
+
+**4. Sensitivity Analysis on Weather Gaps (Days 11–12)**
+Simulate the impact of your missing weather data. Run the model multiple times for the same satellite input while varying the missing weather parameters across their entire plausible range (drought to flood).
+*   Observe the variance in yield estimates.
+*   If the estimate collapses to a low value whenever weather data is uncertain, the model is overly penalizing uncertainty. Adjust the logic to reflect a "neutral" assumption rather than a "pessimistic" one when data is missing.
+
+**5. Conservative Release Strategy (Days 13–14)**
+Do not deploy a single point estimate. Modify the user output to display a range (e.g., "Estimated Yield: 4.5 – 5.2 tons/ha").
+*   Implement a visible "Confidence Score" based on data completeness.
+*   Add a disclaimer explicitly stating that estimates are predictive and should be one of several factors in financial decisions.
+*   Freeze the codebase 48 hours before launch for a final sanity check on the deployed binary/container to ensure no build-step optimizations altered the math.
+
+**Note:** Prioritize fixing the "missing data" fallback logic immediately, as this is the most likely source of systematic underreporting in your current context.
+Ensure your engineering team documents every assumption made during the synthetic data generation for future auditability.

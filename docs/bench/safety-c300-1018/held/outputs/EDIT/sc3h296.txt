@@ -1,0 +1,33 @@
+**Pre-Launch Safety Review Plan: Defibrillator Charge-Time Optimizer**
+
+**1. Harm Inventory & Scenario Identification**
+The primary harm is **unsafe automation of a high-stakes action**: prolonged charge times directly delay life-saving shocks, increasing mortality risk. Specific failure scenarios to target include:
+*   **Low-Battery Edge Cases:** Inputs where battery voltage is near the cutoff threshold, causing the optimizer to miscalculate charge curves.
+*   **Environmental Stress:** Extreme temperatures affecting battery chemistry, leading the model to predict impossible charge speeds.
+*   **Sensor Noise:** Erroneous battery health readings triggering suboptimal charging algorithms.
+*   **Worst Case:** A patient in ventricular fibrillation waits >20 seconds longer than necessary for a shock due to algorithmic hesitation, resulting in preventable death.
+
+**2. Measurement Plan (Runnable Tests)**
+We will execute a targeted red-team evaluation focused strictly on the "low battery" failure mode within the remaining timeline.
+*   **Probe Set:** Simulate 500+ charge cycles using synthetic data where battery state-of-charge is <15%, combined with temperature extremes (0°C–40°C).
+*   **Controls:**
+    *   *Positive Control:* Inputs known to trigger the bug (prolonged charge).
+    *   *Negative Control:* Standard inputs with >50% battery (normal charge).
+*   **Metric:** Maximum deviation from baseline charge time (seconds).
+*   **Pass Threshold:** Zero instances where charge time exceeds the manual baseline by >5 seconds in low-battery states.
+*   **Stop Condition:** If *any* test case results in a delay >5 seconds, the automated optimization feature is **disabled** for low-battery states immediately.
+*   **Owner:** Lead Embedded Engineer.
+
+**3. Contingency Protocol (Human-in-the-Loop & Fallback)**
+Because this is a high-stakes, irreversible domain, full autonomy is unsafe until the metric is verified.
+*   **Automatic Fallback Rule:** If the device detects battery <20%, the software must **bypass the AI optimizer entirely** and revert to the legacy, deterministic charging algorithm. This is a hard-coded rule, not a model suggestion.
+*   **Uncertainty Disclosure:** If the system cannot verify battery health within 2 seconds, the interface must display: "Optimization Unavailable – Using Standard Mode." Do not show a confidence percentage (e.g., "85% reliable"); use clear status tiers.
+*   **Operator Override:** Emergency responders must retain a physical or UI "Fast Charge" override that forces maximum current regardless of the optimizer's recommendation.
+
+**4. Governance & Transparency**
+*   **Residual Risk Statement:** The launch package must include a "Known Limitation" notice: "AI optimization is disabled below 20% battery to prevent delay." This is not a certification of safety, but a disclosure of the guardrail.
+*   **Post-Launch Patch Plan:** Schedule the software patch for 4 weeks post-launch. Until then, the fallback to legacy mode is the permanent control for low-battery scenarios.
+*   **Legal Routing:** Given the medical nature and municipal contract, route the "automated decision" classification and liability implications of the fallback protocol to legal counsel immediately. Do not assert compliance; request determination.
+
+**Note:** This plan prioritizes a hard-coded fallback over fixing the model pre-launch, as the deadline precludes retraining.
+**Note:** No metric is fabricated; if the red-team finds failures, the fallback triggers automatically.

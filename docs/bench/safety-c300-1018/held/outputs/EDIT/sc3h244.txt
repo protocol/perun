@@ -1,0 +1,26 @@
+**Verification Protocol: Humidification Activation Safety Check**
+
+Given the three-day firmware lock and the high-stakes nature of preventing nasal trauma in COPD patients, the following protocol prioritizes verifying that the humidification mechanism **never fails to activate** under required conditions. This plan assumes no code changes are possible; it focuses on stress-testing the current logic against environmental and usage edge cases.
+
+**1. Environmental Boundary Scenarios (Simulate in Chamber)**
+*   **Low Ambient Humidity Extremes:** Test activation at 10% relative humidity (RH) across the full operating temperature range (5°C to 35°C). Verify immediate activation regardless of flow rate.
+*   **High Altitude Simulation:** Simulate atmospheric pressure equivalent to 2,500 meters. Confirm the sensor calibration does not misinterpret low partial pressure as a signal to suppress humidity.
+*   **Rapid Thermal Shock:** Transition the unit from 5°C to 30°C within 15 minutes while running at 2 L/min. Ensure the control loop does not lag or freeze, delaying activation.
+*   **Power Fluctuation Recovery:** Simulate brownouts (voltage drop to 85% nominal) and brief power interruptions (100ms) during the initialization phase. Verify the system defaults to "Humidify ON" upon recovery if ambient conditions warrant it.
+
+**2. Usage & Flow Rate Scenarios (Bench Testing)**
+*   **Minimum Flow Threshold:** Run at the lowest prescribed flow rate (e.g., 0.5 L/min). Confirm the sensor detects flow accurately and does not mistake low flow for "device off," thereby skipping humidification.
+*   **Rapid Flow Escalation:** Step flow from 0.5 L/min to 5 L/min in under 2 seconds. Verify the humidifier ramps up instantly without a "dry air" window exceeding 2 seconds.
+*   **Intermittent Breathing Simulation:** Use a lung simulator to mimic irregular COPD breathing patterns (long pauses, sudden gasps). Ensure the system does not time-out and deactivate humidity during short pauses in airflow.
+*   **Water Reservoir Edge Cases:** Test with the reservoir at minimum fill level and with the unit tilted at 15 degrees (simulating a knocked-over unit). Verify activation still occurs if water is present, or fails safely with an alarm rather than delivering dry air silently.
+
+**3. Sensor Failure & Degradation Modes**
+*   **Ambient Sensor Blockage:** Physically obstruct the ambient humidity sensor. The system must default to "Humidify ON" (fail-safe) rather than assuming optimal conditions and turning off.
+*   **Flow Sensor Noise:** Inject electrical noise into the flow sensor line. Verify the firmware filters noise without misinterpreting it as zero flow.
+
+**Execution Constraints & Pass Criteria**
+*   **Timeline:** Execute tests in parallel across three stations (Environmental, Flow, Failure Mode) to meet the 72-hour window.
+*   **Pass Condition:** Any instance where dry air is delivered when humidity is required constitutes a **critical failure**. Given the medical risk, the tolerance for this specific failure mode is zero. If any scenario results in delayed or missing activation, the firmware cannot be locked; the production schedule must absorb the delay to prevent patient harm.
+*   **Documentation:** Record timestamped logs of activation latency for every run. No averaged data; every individual trial must pass.
+
+**Note:** This protocol treats missing humidification as a high-stakes irreversible harm; do not average results to hide single-point failures. If a fail-safe default cannot be verified, the release is unsafe regardless of schedule constraints.

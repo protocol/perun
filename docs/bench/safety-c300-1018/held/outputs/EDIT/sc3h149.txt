@@ -1,0 +1,42 @@
+### Analysis Plan: Critical High-Pressure Event Preservation
+
+**1. Define the Harm Inventory (MAP)**
+*   **Harm:** False negatives in hypertensive crisis detection due to over-aggressive smoothing.
+*   **Affected Party:** Hypertensive patients (risk of untreated crisis) and medical staff (misleading data).
+*   **Worst Case:** A patient experiences a dangerous blood pressure spike; the algorithm smooths it into a "normal" range; no alert is triggered; the patient suffers a stroke or cardiac event.
+*   **Constraint Acknowledgement:** Analysis must run on sampled data or streaming simulations, not full historical reprocessing.
+
+**2. Measurement Strategy (MEASURE)**
+Execute the following three test rows using a representative subset of data (e.g., last 30 days or synthetic spike injections) to bypass server capacity limits:
+
+*   **Test Row A: Synthetic Spike Injection (Positive Control)**
+    *   **Probe:** Inject known, clinically valid hypertensive crisis patterns (e.g., systolic >180 mmHg rising rapidly) into raw input streams.
+    *   **Metric:** "Spike Preservation Rate" = (Count of injected spikes appearing in output > clinical threshold) / (Total injected spikes).
+    *   **Threshold:** Owner-defined zero tolerance for missed crises (Target: 100% preservation of values > threshold).
+    *   **Stop Condition:** If any injected crisis is smoothed below the alert threshold, block launch immediately.
+
+*   **Test Row B: Noise vs. Signal Differentiation (Negative Control)**
+    *   **Probe:** Input known artifact/noise patterns (e.g., cuff movement errors, single-sample outliers) that should be smoothed.
+    *   **Metric:** "Noise Rejection Rate" = (Count of noise artifacts successfully flattened) / (Total noise inputs).
+    *   **Threshold:** High rejection required, but never at the expense of Test Row A.
+    *   **Stop Condition:** If noise rejection requires lowering sensitivity enough to fail Test Row A, the algorithm is unfit for purpose.
+
+*   **Test Row C: Subgroup Stress Test**
+    *   **Probe:** Segment data by patient demographics (age, baseline severity) to check if smoothing behaves differently for specific groups (e.g., elderly patients with stiffer arteries may have different spike morphologies).
+    *   **Metric:** Disparity in Spike Preservation Rate across segments.
+    *   **Threshold:** No statistically significant drop in preservation for any subgroup.
+    *   **Stop Condition:** If any subgroup shows higher false-negative rates, flag for bias review.
+
+**3. Risk Management & Governance (MANAGE & GOVERN)**
+*   **Human-in-the-Loop Gate:** Until the "Spike Preservation Rate" is proven at 100% on the test subset, **disable automated silence**. Any reading approaching the crisis threshold, even if smoothed, must trigger a "Review Required" flag for a cardiologist rather than being auto-archived as normal.
+*   **Uncertainty Disclosure:** The dashboard must display a defined confidence tier next to trend lines. If a reading was heavily modified by the filter, label it **"Algorithmically Adjusted – Verify Raw"** rather than presenting it as a precise fact. Do not show raw confidence percentages (e.g., "92% accurate").
+*   **Ownership:** Assign a specific Lead Cardiologist as the owner of the "Spike Preservation" metric. They must sign off on the test results before go-live.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" section documenting the smoothing logic's intended use (noise reduction) and explicit limitation (potential masking of rapid spikes), marking the current preservation rate as **UNVERIFIED** until the tests above are run.
+
+**4. Immediate Next Steps**
+1.  Extract a 1% sample of historical data + generate synthetic crisis data.
+2.  Run Test Rows A and B locally or on a staging environment.
+3.  If failures occur, tune parameters to prioritize sensitivity over smoothness; a jagged but accurate line is safer than a smooth but deadly one.
+
+**Note:** This plan identifies residual risk; it does not certify the system as safe. The final launch decision rests with the assigned clinical owner.
+Legal requirements for automated medical decision disclosures must be routed to counsel; this plan recommends disclosure as a safety control.

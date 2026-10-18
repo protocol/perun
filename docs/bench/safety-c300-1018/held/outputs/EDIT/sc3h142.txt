@@ -1,0 +1,27 @@
+### Pre-Launch Safety Review Plan: Sakura Audio Solutions
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before testing, explicitly record these specific risks for the beta cohort:
+*   **Unsafe Automation (Physical Harm):** The device amplifies dangerous environmental cues (horns, screeching tires) less than background noise, or attenuates them entirely. *Worst Case:* User fails to hear an approaching vehicle, resulting in injury or death.
+*   **Bias/Exclusion (Communication Harm):** The algorithm aggressively filters human speech frequencies (especially higher pitches common in women's and children's voices) while boosting non-speech noise. *Worst Case:* User cannot hear a companion shouting a warning or a conductor announcing a platform change, leading to isolation or accidents.
+*   **Over-Reliance:** Users trust the "smart" filtering implicitly and stop visually verifying traffic, assuming the device will highlight dangers.
+
+**2. Runnable Test Matrix (Execute Before Friday Freeze)**
+Do not rely on aggregate lab metrics. Run these specific probes on the current firmware build with the 200 beta participants. Each row includes a stop condition that triggers an immediate rollback or manual patch if failed.
+
+| Harm Category | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Physical Safety** | Urban street recordings mixed with sudden horn/tire screech at 60–80dB. | Device output attenuates the horn/screech below ambient noise floor. | Device output preserves or slightly boosts the transient spike relative to ambient. | **Signal-to-Noise Ratio (SNR) of Danger Cues:** Must be ≥ +3dB relative to background. | If >5% of test runs attenuate danger cues below ambient, **HALT LAUNCH**. |
+| **Speech Integrity** | Recordings of diverse voices (male/female/child) speaking urgent commands ("Stop", "Look out") over traffic noise. | Device output renders speech unintelligible or lower volume than traffic. | Device output renders speech clearly above traffic noise. | **Speech Intelligibility Index (SII):** Must remain ≥ 0.45 in noise. | If SII drops below 0.45 for any demographic subgroup, **HALT LAUNCH**. |
+| **Over-Reliance** | Simulated commute where visual cues contradict audio (e.g., silent video of a car approaching while device plays "safe" ambient). | User reports feeling "safe" based solely on audio despite visual danger. | User reports uncertainty or checks visually when audio is ambiguous. | **Qualitative Survey:** % of users who explicitly state they would *not* look up if the device sounded "quiet." | If >10% of users indicate blind trust in "quiet" audio, **MANDATE WARNING LABEL**. |
+
+**3. Management Controls & Disclosure**
+*   **Human-in-the-Loop Gate:** Since this is a high-stakes medical/safety device, the firmware freeze must include a "Safe Mode" fallback. If the algorithm confidence is low (e.g., unclassified audio environment), the device must default to linear amplification (standard hearing aid mode) rather than aggressive AI filtering.
+*   **Uncertainty Display:** Do not show users a percentage confidence (e.g., "87% safe"). Instead, if the device detects a complex environment it cannot confidently parse, it should provide a subtle haptic cue indicating "Complex Environment – Verify Visually."
+*   **Transparency Artifact:** Draft a **Model Card** for the beta participants immediately. It must state: "Intended Use: Urban commuting for moderate hearing loss. Known Limitation: May struggle with sudden high-decibel transients in heavy wind. Not verified for industrial zones." Do not claim the device is "safe" or "bias-free"; state what was measured and what remains `UNVERIFIED`.
+
+**4. Governance**
+Assign one audiologist and one lead developer as joint owners of the "Physical Safety" metric. They must sign off on the test results above before the Friday freeze. If the data shows the algorithm boosts traffic noise while cutting speech, the only compliant action is to disable the AI filtering feature for the launch version, reverting to standard processing until retrained.
+
+*Note: This plan identifies residual risk; it does not certify the device as safe. The final ship decision rests with Sakura Audio Solutions leadership.*
+*Legal counsel must review whether this device classifies as a regulated medical device requiring specific AI disclosures in Japan and target export markets.*

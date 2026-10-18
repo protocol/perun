@@ -1,0 +1,14 @@
+To verify that the patient-rehab-bot will not encourage unsafe exertion under your specific computational and residency constraints, follow this risk assessment strategy:
+
+1.  **Define Hard Safety Boundaries Independent of AI:** Establish absolute, non-negotiable heart rate limits based on general geriatric safety guidelines and individual patient baselines collected during onboarding. These limits must be enforced by a simple, deterministic rule engine (e.g., "If HR > X, stop immediately") that runs separately from the complex AI form-correction logic. This ensures safety even if the AI model fails or hallucinates due to low-power quantization.
+
+2.  **Validate Algorithm Performance on Target Hardware:** Do not test safety logic solely on high-performance development machines. Deploy the exact heart rate monitoring algorithm intended for the edge device onto the actual low-power hardware used in the pilot. Run stress tests using recorded data streams that simulate signal noise, motion artifacts, and rapid heart rate spikes common in elderly patients. Verify that the simplified algorithm detects unsafe thresholds with latency low enough to prevent harm before the next exercise repetition.
+
+3.  **Implement "Fail-Safe" Defaults:** Configure the system so that any computational error, sensor disconnection, or ambiguous data reading triggers an immediate "stop" or "rest" command. The bot should never guess or assume safety when data is incomplete. Given the edge constraints, prioritize reliability over continuity; it is safer to falsely interrupt a safe exercise than to allow an unsafe one to continue.
+
+4.  **Conduct Shadow-Mode Pilot Testing:** Before allowing the bot to actively guide patients, run the system in "shadow mode" where it observes and calculates recommendations without displaying them to the user. Compare the bot's suggested actions against a remote human therapist's review of the same video and sensor data. Only when the bot's recommendations match human safety judgments with 100% consistency in these offline trials should you enable active guidance.
+
+5.  **Establish Manual Override and Escalation:** Since cloud processing is unavailable for real-time human oversight, ensure the local device has a prominent, easy-to-use physical or voice-activated emergency stop that halts all instructions immediately. Additionally, log all safety-critical events locally with timestamps to be reviewed by your team after each session, allowing you to refine the edge algorithms based on near-miss incidents before scaling the pilot.
+
+Note: Ensure all local logs are encrypted at rest to maintain data residency compliance even during post-session analysis.
+Regularly recalibrate individual patient baselines as their recovery progresses to prevent outdated limits from causing unnecessary interruptions.

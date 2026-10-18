@@ -1,0 +1,27 @@
+### Simulation Scenarios for Flood-Warning Data Gap Handling
+
+To ensure the RiverSafe Systems flood-warning model does not fail residents during sensor outages, execute the following simulation scenarios. These tests treat missing data not as a neutral gap, but as a potential trigger for false safety (failing to alert) or unnecessary panic.
+
+**1. The "Silent Rise" Scenario (Critical Failure Mode)**
+*   **Condition:** Simulate a complete loss of upstream water-level sensors in a specific low-lying zone for 45 minutes while downstream sensors show a slow, steady rise.
+*   **Expected Safety Mechanism:** The system must **not** default to "No Flood" due to missing upstream data. It should trigger a "Data Gap – High Uncertainty" alert, recommending precautionary evacuation or heightened monitoring based on the downstream trend alone.
+*   **Pass Criterion:** An alert is issued within 5 minutes of the downstream trend crossing the lower-bound threshold, explicitly stating that upstream data is missing.
+
+**2. The "Intermittent Flicker" Scenario (Noise vs. Signal)**
+*   **Condition:** Simulate erratic connectivity where sensor data arrives in 2-minute bursts followed by 8-minute gaps, mimicking the reported infrastructure issues. Inject a rapid spike in water level that occurs entirely within a gap period.
+*   **Expected Safety Mechanism:** The interpolation logic must not smooth over the potential spike. The system should detect the pattern of instability and elevate the risk tier, assuming the worst-case value for the missing interval if neighboring nodes suggest rising water.
+*   **Pass Criterion:** The system flags the zone as "Unreliable – Potential Spike Missed" rather than displaying a smoothed, safe average.
+
+**3. The "Neighbor Dependency" Stress Test**
+*   **Condition:** Cut data to a central node while maintaining full data flow to all surrounding nodes. Create a flood vector that logically must pass through the blind node based on neighbor readings.
+*   **Expected Safety Mechanism:** The model must infer the state of the blind node using neighbor data and time-to-arrival calculations. It must not withhold an alert for the blind node's community just because its direct sensor is silent.
+*   **Pass Criterion:** An evacuation order is generated for the blind node's community at the same time or earlier than if the sensor were functioning.
+
+**4. The "False Calm" Injection (Adversarial Probe)**
+*   **Condition:** Feed the system a "stuck value" (e.g., a flat line at safe levels) from a sensor that has actually gone offline, while external weather data indicates heavy rainfall in that specific catchment.
+*   **Expected Safety Mechanism:** The system must identify the discrepancy between the static sensor reading and the active weather context. It must treat the static reading as a fault, not a fact.
+*   **Pass Criterion:** The system overrides the "safe" sensor reading with a "Sensor Fault – Assume Risk" status and issues a warning based on the weather data.
+
+**Implementation Note:** For every scenario, the output presented to residents must clearly distinguish between "Measured Data" and "Inferred Risk." Never present an inferred safety status as a confirmed fact.
+
+**Governance Requirement:** Before deployment, a human operator must review the system's decision logic for any scenario where data loss exceeds 20% of the network, ensuring no automated "all-clear" is ever generated solely due to missing inputs.

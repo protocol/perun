@@ -1,0 +1,39 @@
+### Internal Review Workflow for Protein Calculation Tool
+
+**1. Define the Harm Inventory & Worst Case**
+Before sampling, explicitly record the primary risk: **Underestimation of protein requirements**.
+*   **Affected Group:** Hospitalized patients with pressure ulcers (specifically those with high wound severity or comorbidities).
+*   **Worst Realistic Case:** Delayed wound healing, infection progression, or increased mortality due to insufficient nutritional support.
+*   **Constraint Acknowledgement:** Without external datasets, your "ground truth" is the consensus of your clinical team applied to current guidelines (e.g., ESPEN or local protocols).
+
+**2. Stratified Sampling Strategy (Maximizing Existing Data)**
+Do not use random sampling alone; it may miss rare but dangerous edge cases. Divide your existing beta data into these strata to ensure coverage of high-risk scenarios:
+*   **Severity Extremes:** Top 10% and bottom 10% of wound severity scores.
+*   **Physiological Outliers:** Patients with renal impairment, sepsis, or extreme BMI (where standard calculations often fail).
+*   **Discordant Cases:** Instances where the algorithm's suggestion deviates significantly (>15%) from the treating dietitian's initial manual estimate.
+*   **Random Control:** A 20% random sample of the remaining data to check for systemic drift.
+
+**3. The Manual Verification Protocol (The Human Gate)**
+Establish a "Blind Dual-Review" process for the selected sample:
+*   **Step A (Blind Calculation):** Two senior clinicians independently calculate the required protein intake for each selected patient using *only* the official clinical guidelines and the patient's raw vitals/wound data. They must not see the algorithm's output yet.
+*   **Step B (Reconciliation):** The two clinicians compare their manual calculations. If they disagree, a third senior clinician adjudicates to establish the "Gold Standard" value.
+*   **Step C (Algorithm Comparison):** Compare the "Gold Standard" value against the algorithm's output.
+*   **Pass/Fail Criteria:**
+    *   **Critical Fail:** Algorithm underestimates the Gold Standard by >5%. (Immediate block on this patient case; triggers code review).
+    *   **Warning:** Algorithm overestimates by >20% (Risk of resource waste or renal stress).
+    *   **Pass:** Within ±5% of the Gold Standard.
+
+**4. Stop Conditions & Rollback Triggers**
+Define clear thresholds before starting the review:
+*   If **any** Critical Fail (underestimation) is found in the "Severity Extremes" or "Physiological Outliers" strata, **halt expansion** immediately.
+*   If >5% of the total sample shows Critical Fail or Warning status, the model is not ready for wider deployment.
+*   Document every failure mode (e.g., "fails when creatinine > X") to inform the next development cycle.
+
+**5. Transparency Artifact (Internal Model Card)**
+Create a one-page document attached to this beta release containing:
+*   **Intended Use:** Calculation aid for dietitians only; not for autonomous ordering.
+*   **Limitations:** Explicitly list the patient subgroups where performance was "UNVERIFIED" due to lack of data (e.g., "pediatric patients" or "severe burns" if not in your sample).
+*   **Owner:** Name the lead clinician responsible for reviewing any future discrepancies.
+*   **Disclosure:** Ensure the interface clearly labels outputs as "AI-Suggested Target – Requires Clinician Confirmation."
+
+**Note:** This workflow treats the algorithm as a decision-support tool, not an autonomous agent; final intake targets must always require explicit dietitian confirmation. Since you cannot purchase external validation, your "statistical significance" relies on the rigor of your stratified edge-case testing rather than sample size alone.

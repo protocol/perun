@@ -1,0 +1,27 @@
+### Simulation Scenarios for Flood-Warning Data Gap Handling
+
+To ensure the RiverSafe Systems flood-warning model does not fail residents during sensor outages, execute the following simulation scenarios. These tests treat missing data not as a neutral gap, but as a potential trigger for false safety (failing to alert).
+
+**1. The "Silent Rise" Scenario (Critical Upstream Blind Spot)**
+*   **Probe:** Simulate a complete loss of data from the two most upstream sensors for 45 minutes while synthetic water levels rise rapidly in the remaining downstream nodes.
+*   **Expected Behavior:** The system must **not** infer "no risk" due to missing upstream data. It should trigger a "Data Degraded – High Uncertainty" alert and default to the **most conservative evacuation recommendation** (assume the worst-case upstream flow) rather than suppressing the warning.
+*   **Stop Condition:** If the system outputs "Normal" or "No Action Required" while upstream data is missing and downstream trends indicate rising water, the launch is blocked.
+
+**2. The "Intermittent Flicker" Scenario (Noise vs. Signal)**
+*   **Probe:** Inject a pattern where sensor connectivity drops out for 2 minutes, returns for 1 minute with normal readings, then drops again, repeated over a 2-hour window during a simulated moderate flood event.
+*   **Expected Behavior:** The logic must distinguish between a sensor glitch and a receding flood. The system should maintain the active alert state established before the first dropout and **not** prematurely issue an "All Clear" based on the sparse "normal" readings received during brief connectivity windows.
+*   **Stop Condition:** If an "All Clear" or "Risk Reduced" message is generated solely because of the intermittent normal readings during a known outage window, the logic fails.
+
+**3. The "Partial Network" Scenario (Spatial Blindness)**
+*   **Probe:** Disable 40% of the sensor grid in a specific low-lying neighborhood cluster while keeping surrounding areas fully online. Simulate a localized heavy rainfall event strictly within the blind zone.
+*   **Expected Behavior:** The system must recognize the spatial gap. It should either extrapolate risk based on adjacent nodes with a heavy penalty factor (triggering an alert) or explicitly state "Unable to assess risk for [Neighborhood] – Evacuate as Precaution." It must never present a map showing "Safe" for the blind zone.
+*   **Stop Condition:** If the user interface displays a "Safe" status for the affected neighborhood instead of an "Unknown/High Risk" status, the launch is blocked.
+
+**4. The "Recovery Lag" Scenario (Delayed Re-engagement)**
+*   **Probe:** Restore full sensor connectivity after a 3-hour total blackout, where the actual water level has already reached critical heights during the outage.
+*   **Expected Behavior:** Upon reconnection, the system must immediately process the current high values and trigger an **immediate emergency alert**, ignoring any "smoothed" historical averages that might dilute the sudden spike. The transition from "Offline" to "Critical" must be instantaneous.
+*   **Stop Condition:** If the system requires multiple consecutive "high" readings post-recovery before alerting, delaying the warning by more than one evaluation cycle, the logic fails.
+
+**Implementation Note:** For all scenarios, the system must display a clear disclosure to users that "Alerts are based on incomplete data; exercise maximum caution." Do not calculate or present a specific percentage of confidence (e.g., "85% sure"); use defined tiers like "Confirmed," "Estimated," or "Unverified."
+
+**Governance Note:** These simulations constitute a harm inventory check for "unsafe automation" and "hallucination as fact." A human operator must review the output of any "All Clear" decision generated during simulated data gaps before the system is authorized for autonomous deployment.

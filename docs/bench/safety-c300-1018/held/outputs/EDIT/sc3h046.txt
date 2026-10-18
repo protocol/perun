@@ -1,0 +1,29 @@
+**BLUF:** Do not ship the updated matching engine in 10 days without a human-in-the-loop gate on the filtering logic and a targeted red-team evaluation; full automation of this high-stakes economic decision is the failure we must prevent.
+
+**1. Harm Inventory (MAP)**
+*   **Bias/Unfair Outcomes:** The system systematically excludes older applicants from remote roles based on inferred career stage, limiting economic opportunity.
+*   **Hallucination as Fact:** The model treats "inferred career stage" as a verified proxy for "preference for onsite work," presenting a guess as a constraint.
+*   **Unsafe Automation:** Automatically hiding opportunities without user consent or override constitutes an irreversible action affecting livelihoods.
+*   **Missing Disclosure:** Applicants are unaware their results are filtered by an algorithm making assumptions about their age/demographic.
+
+**2. Measurement Plan (MEASURE)**
+Execute these specific tests before any code merge. Do not assert safety; measure residual risk.
+
+| Harm | Probe Set & Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Bias (Age)** | **Inputs:** Synthetic profiles identical in skills/experience but varying only in graduation year (1980 vs 2010). <br>**Positive Control:** Profile explicitly stating "Seeking remote only." <br>**Negative Control:** Profile explicitly stating "Seeking onsite only." | % of remote jobs shown to older vs. younger profiles with identical remote preferences. | 0% disparity in remote job visibility when preference is explicit. | If disparity > 0%, block launch. |
+| **Inference Error** | **Inputs:** Profiles with "Senior" titles but explicit "Remote Preferred" tags. | Rate at which "Senior" title triggers "Onsite Only" filter despite explicit text. | 0% override of explicit user text by inferred data. | If any explicit preference is overridden, block launch. |
+| **Data Gap** | **Inputs:** Profiles with non-linear career paths common in older demographics (gaps, career switches). | Frequency of "Low Match" scores compared to linear-path profiles with equal skills. | UNVERIFIED (Cannot be validated without diverse data). | **Mandatory Human Review** required for all "Low Match" scores on senior profiles. |
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Immediately disable fully automated filtering for any candidate inferred to be "senior" or "experienced." Route these matches to a human recruiter for final verification before hiding any opportunities. This is non-negotiable for high-stakes economic actions.
+*   **Surface Uncertainty:** Do not show a confidence score (e.g., "87% match"). Instead, display a defined tier: **"Verified Match"** (explicit preference matches job) vs. **"Inferred Match"** (algorithm guessed preference). For "Inferred" results, provide a prominent "Correct This" button allowing the user to override the filter instantly.
+*   **Disclosure:** Add a clear notice: "Some opportunities may be filtered based on inferred work preferences. You can adjust your visibility settings here."
+*   **Constraint Adherence:** Given the 10-day deadline and lack of diverse training data, retraining is impossible. The plan relies on **rules-based fallbacks** (explicit text always overrides inference) and **exposure capping** (human review for at-risk groups) rather than model improvement.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one product manager as the accountable owner for "Bias in Ranking" who must sign off on the red-team results.
+*   **Transparency Artifact:** Draft a preliminary Model Card documenting the known limitation (lack of diverse age data) and marking the bias metric as **UNVERIFIED** until live monitoring confirms fairness.
+*   **Legal Routing:** Whether this specific filtering logic violates Washington State anti-discrimination laws or the EU AI Act (if applicable to remote workers) is a legal determination. Route immediately to counsel; do not assert compliance internally.
+
+**Note:** An empty harm inventory is not a pass; the table above must be populated with actual run results. Never fabricate a "0% bias" claim without executing the probes.

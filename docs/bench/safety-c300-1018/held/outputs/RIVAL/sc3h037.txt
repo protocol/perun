@@ -1,0 +1,38 @@
+# Testing Protocol: Equitable Food Access Verification
+
+**Objective:** Verify that the recommendation engine does not systematically deprioritize nutritious items for users in designated food desert zip codes compared to users in well-served areas, despite legacy database tagging limitations.
+
+### Phase 1: Synthetic Data & Baseline Establishment
+Since real-time nutritional tagging is constrained, create a static "Golden Set" of 50 essential nutritious items (e.g., fresh produce, whole grains, lean proteins) and 50 non-nutritious control items. Manually tag these in a test mirror of the legacy database to bypass real-time filtering issues during the audit.
+*   **Action:** Define two synthetic user profiles with identical purchase histories and budgets, differing only by location:
+    *   **Profile A (Control):** Located in a well-served Detroit neighborhood (e.g., Zip Code 48202).
+    *   **Profile B (Test):** Located in a designated food desert (e.g., Zip Code 48235).
+*   **Metric:** Establish a baseline "Nutrition Visibility Score" (NVS) representing the percentage of the Golden Set appearing in the top 20 search results for standard queries like "dinner," "healthy snack," or "fruit."
+
+### Phase 2: Comparative Recommendation Auditing
+Execute parallel automated queries for both profiles across three categories: generic searches ("milk"), dietary needs ("low sodium"), and budget constraints ("under $5").
+*   **Procedure:**
+    1.  Run 100 varied search scenarios for Profile A and record the rank position of every item in the Golden Set.
+    2.  Run the identical 100 scenarios for Profile B.
+    3.  Calculate the **Disparity Ratio**: (Average Rank in Food Desert) / (Average Rank in Control Area).
+*   **Pass/Fail Criteria:**
+    *   **Fail:** If nutritious items appear >20% lower in search rankings for Profile B than Profile A.
+    *   **Fail:** If the top 10 recommendations for Profile B contain <40% items from the Golden Set while Profile A contains >60%.
+    *   **Fail:** If "healthy" filters return significantly fewer total results for Profile B due to inventory mapping errors.
+
+### Phase 3: Legacy Constraint Stress Testing
+Simulate the legacy system's inability to tag items by introducing "unknown" nutritional data flags to 30% of the healthy inventory.
+*   **Procedure:** Re-run Phase 2 tests with incomplete data tags.
+*   **Verification:** Ensure the algorithm defaults to showing these items rather than hiding them when nutritional metadata is missing. The system must not assume "untagged" equals "unhealthy" or "unavailable" for specific zip codes.
+*   **Metric:** Measure the drop-off rate of untagged healthy items in search results between Profile A and Profile B. The drop-off must be statistically identical.
+
+### Phase 4: Human-in-the-Loop Validation
+Before launch, conduct a manual review of 50 random search results generated for the food desert profile.
+*   **Action:** Have a nutritionist and a community representative from the target neighborhood review the top 20 results for common queries.
+*   **Goal:** Qualitative verification that the items shown are culturally relevant, actually available for delivery in that zone, and genuinely nutritious, ensuring the algorithm isn't technically compliant but practically useless.
+
+### Reporting & Remediation
+Document any Disparity Ratio exceeding the threshold. If disparities are found, the launch must be delayed to adjust the ranking weights. The final report must include the NVS for both profiles and a heatmap of result diversity across the nine target neighborhoods.
+
+*Note: This protocol assumes a test environment mirroring production logic; do not run against live user data.*
+*Ensure the "Golden Set" is updated quarterly to reflect seasonal inventory changes.*

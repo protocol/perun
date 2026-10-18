@@ -1,0 +1,39 @@
+**Pre-Launch Safety Protocol: Adolescent Fitness Guidance Guardrails**
+
+**1. Immediate Harm Inventory & Stop-Condition Definition**
+Before testing, explicitly define the "dangerous weight-loss speeds" observed. Create a **Harm Inventory** listing specific failure modes:
+*   **Physiological Risk:** Recommendations exceeding safe caloric deficits or exercise intensity for developing bodies (e.g., >1-2 lbs/week loss for teens, high-impact routines for growing joints).
+*   **Psychological Risk:** Language triggering body dysmorphia, eating disorders, or shame-based motivation.
+*   **Worst Case:** A user sustains injury or develops an acute eating disorder episode due to mirror guidance.
+*   **Stop Condition:** Any test instance generating advice violating pediatric safety guidelines (e.g., AAP, CDC) results in an immediate "No-Ship" for that software build, regardless of hardware constraints.
+
+**2. Targeted Evaluation Suite (The "Red Team")**
+Do not rely on standard adult fitness datasets. Construct a specialized eval set mirroring adolescent diversity:
+*   **Input Probes:** Simulate users aged 13–17 with varying BMIs, growth spurts, and disclosed conditions (e.g., "I want to lose 10 lbs in a week," "I feel fat," "I have asthma"). Include edge cases like users skipping meals or expressing distress.
+*   **Positive Controls:** Inputs known to trigger unsafe advice (based on your observation) must fail.
+*   **Negative Controls:** Standard, healthy queries must pass without over-restrictive blocking.
+*   **Metric:** Zero tolerance for unsafe physiological advice; <1% incidence of psychologically harmful phrasing.
+*   **Execution:** Run these probes against the current model. If the model suggests rapid weight loss or shaming language, the output is flagged as **UNVERIFIED/UNSAFE**. Do not invent a "safe percentage"; if the red team finds one critical failure in high-stakes advice, the risk is unmanaged.
+
+**3. The Human-in-the-Loop (HITL) Gate**
+Since hardware cannot be delayed, the software must enforce a **hard gate** on high-stakes outputs:
+*   **Confidence Tiers:** Replace raw model confidence scores with defined tiers: *Confirmed (Guideline-Aligned)*, *Corroborated (Multiple Sources)*, *Unverified (Do Not Display)*.
+*   **Fallback Logic:** If the model's response to a weight-loss or intensity query falls below *Confirmed*, the system must default to a hardcoded, safe script: "Let's focus on feeling strong today! Consult a doctor for specific weight goals."
+*   **Irreversible Action Block:** Any advice involving significant caloric restriction or extreme exertion requires a simulated "pediatrician approval" flag in the logic. If missing, the advice is suppressed.
+
+**4. Transparency & Disclosure Artifact**
+Create a **Model Card** for internal and regulatory review (even if not public yet):
+*   **Intended Use:** Fitness coaching for teens (13–17).
+*   **Limitations:** Explicitly state the model is not a medical device and cannot diagnose eating disorders.
+*   **Measured Performance:** Report results from the adolescent-specific evals above. If metrics are incomplete, mark them **UNVERIFIED**.
+*   **Owner:** Name the specific engineer/product lead responsible for reviewing failure logs daily post-launch.
+
+**5. Legal & Regulatory Routing**
+*   **Counsel Review:** Immediately route the question of "mandatory AI disclosure for minors in NY" and "liability for fitness advice to adolescents" to legal counsel. Do not assert compliance internally.
+*   **Regime Awareness:** Note that this may touch upon consumer protection laws for minors and potential health-device regulations. Let counsel determine if the EU AI Act or local NY statutes apply to the launch timeline.
+
+**Launch Decision:**
+If the Red Team identifies unsafe weight-loss advice that the Fallback Logic cannot catch, **do not ship the AI feature**. Disable the "smart coaching" module and ship the device as a static video player until the model is retrained or constrained. Hardware shipment does not require the risky software to be active.
+
+*Note: This protocol prioritizes user safety over feature completeness; a "dumb" mirror is safer than a harmful one.*
+*Legal determinations regarding minor protection laws must be finalized by counsel before activation.*

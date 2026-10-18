@@ -1,0 +1,33 @@
+### Risk Assessment & Mitigation Plan: Patient Diet Compliance Tracker
+
+**1. Harm Inventory: Critical Failure Modes**
+The primary risk is **False Negative Compliance Reporting** (system reports "ate" when patient "skipped"). In a diabetic care context, this leads to:
+*   **Clinical Harm:** Medical teams may administer insulin based on false food intake data, causing severe hypoglycemia.
+*   **Over-reliance:** Clinicians may trust the automated flag over patient self-reporting or physical signs.
+*   **Bias/Exclusion:** Sensor logic may fail for specific meal types common in the local diet (e.g., low-contrast foods, specific plate colors) or for patients with different eating speeds, systematically disadvantaging those groups.
+
+**2. Low-Cost Validation Methods (Immediate Implementation)**
+Since third-party auditing is not an option, you must build internal "adversarial" tests using your existing team:
+*   **Red-Team "Edge Case" Probes:** Dedicate two developers to act as "adversarial patients." Do not just test normal meals. Test:
+    *   *Visual Tricks:* Covering food, moving food around the plate without eating, using plates that match the table cloth.
+    *   *Lighting/Environment:* Dim lighting, shadows cast by hands, eating outside the camera's optimal angle.
+    *   *Non-Food Objects:* Placing non-food items that resemble local meals on the plate to trigger false positives, then removing them to check for false negatives.
+*   **The "Known-Bad" Control Set:** Create a dataset of 50 videos/images where the patient *definitely* skipped the meal. Run the system against this. If the system reports "compliant" for even one of these, the threshold for flagging non-compliance is too lenient.
+*   **Subgroup Slicing:** Explicitly test with diverse local dishes (e.g., Koshary, Ful Medames) versus standard hospital trays to ensure the model isn't biased toward specific visual textures.
+
+**3. Human-in-the-Loop (HITL) Gate Design**
+Because this feature drives medication adjustments (a high-stakes, irreversible action), **full automation is unsafe.** You must implement a gating mechanism before any data reaches the medical team for decision-making:
+*   **The "Uncertainty" Tier:** Do not show the AI a binary "Compliant/Non-Compliant" label to the doctor. Instead, output three tiers:
+    1.  *Confirmed Skip* (High confidence, clear visual evidence of untouched food).
+    2.  *Unverified/Ambiguous* (Low confidence, poor lighting, partial occlusion).
+    3.  *Confirmed Consumed* (High confidence).
+*   **Mandatory Review Rule:** Any output falling into "Unverified/Ambiguous" OR any "Confirmed Skip" that contradicts a patient's manual log must trigger a **human review** by a nurse or dietitian before the medical team sees it. The system should *flag* the potential issue but never *finalize* the non-compliance report autonomously.
+*   **Disclosure:** The interface presented to the medical team must explicitly state: *"This adherence score is AI-generated and may contain errors. Verify with patient interview before adjusting medication."*
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one developer as the "Safety Owner" responsible for reviewing any false negative incidents daily during the first month.
+*   **Transparency Artifact:** Draft a one-page "Model Card" for your internal team and clinical partners. List the intended use (diet tracking), known limitations (fails in low light, specific food types), and the fact that accuracy metrics are currently `UNVERIFIED` pending your internal red-team results.
+*   **Legal Routing:** Because this impacts clinical decisions for diabetics, you must route the question of "legal disclosure requirements" and "regulated medical device status" to legal counsel immediately. Do not assume the current plan meets local health regulations in Cairo.
+
+**Note:** Do not invent an accuracy percentage (e.g., "99% accurate") for your launch materials; if you haven't measured it against a rigorous test set, label it `UNVERIFIED`.
+**Note:** If the "Uncertainty" tier triggers too many reviews for your staff to handle, reduce the system's autonomy scope rather than removing the human gate.

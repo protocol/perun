@@ -1,0 +1,35 @@
+### Internal Safety Validation Checklist: Patient Sleep Position Tracker
+
+**1. Harm Inventory & Risk Mapping**
+*   [ ] **Identify High-Stakes Failure Mode:** Define the worst-case scenario as "failure to vibrate," leading to pressure ulcers. Confirm this is treated as an irreversible health risk requiring a human-in-the-loop gate (e.g., caregiver alert) rather than full reliance on automation.
+*   [ ] **Bias & Exclusion Audit:** List specific subgroups affected by the limited dataset (e.g., patients >100kg, users on memory foam vs. coir mattresses). Mark performance for these groups as `UNVERIFIED` if the anonymized dataset lacks representation. Do not assert reliability for unrepresented groups.
+*   [ ] **Over-Reliance Check:** Ensure the device design explicitly discourages caregivers from ignoring manual checks. Verify that the interface does not imply "no vibration means safe."
+
+**2. Measurement Plan (Using Existing Anonymized Data)**
+*   [ ] **Adversarial Probe Set:** Construct test rows from the existing dataset specifically targeting edge cases:
+    *   *Positive Control:* Known supine positions that previously failed to trigger.
+    *   *Negative Control:* Known side-prone positions that previously triggered false positives.
+    *   *Segmented Inputs:* Slice data by estimated body weight ranges and inferred mattress firmness (if detectable).
+*   [ ] **Metric Definition:** Define a pass threshold for "missed detection" (false negatives). Given the high stakes, propose near-zero tolerance for missed supine events in the test set.
+*   [ ] **Stop Condition:** Establish a hard rule: If the false-negative rate exceeds the threshold in *any* subgroup slice, the launch is blocked until new data is acquired or logic is adjusted.
+*   [ ] **Limitation Statement:** Draft a clear statement acknowledging that validation is limited to the demographics present in last month's dataset. Explicitly state that performance on unrepresented body types or mattress types is `UNVERIFIED`.
+
+**3. Risk Management & Human Gates**
+*   [ ] **Human-in-the-Loop Enforcement:** Verify that the system sends a "check patient" alert to the caregiver if the sensor detects ambiguity or if no movement is detected for an extended period, rather than assuming the patient is safe.
+*   [ ] **Uncertainty Disclosure:** Ensure the caregiver app displays status as a defined tier (e.g., "Position Confirmed," "Signal Unclear," "Check Required") rather than a precise percentage confidence (e.g., "87% supine"), which implies uncalibrated precision.
+*   [ ] **Reversibility & Override:** Confirm caregivers can manually silence vibrations or override the timer if the patient is intentionally positioned supine for medical reasons.
+
+**4. Transparency Artifacts**
+*   [ ] **Model/Data Card Draft:** Create a one-page document listing:
+    *   Intended Use: Home monitoring for pressure ulcer prevention.
+    *   Data Provenance: Anonymized dataset from [Month/Year], Mumbai pilot.
+    *   Known Gaps: Specific body weights or mattress types not covered.
+    *   Owner: Name of the team lead responsible for safety.
+*   [ ] **Legal Routing:** Flag the question of whether this device constitutes a regulated medical decision under local Indian health regulations. Route this determination to legal counsel; do not assert compliance internally.
+
+**5. Final Go/No-Go Criteria**
+*   [ ] **Residual Risk Sign-off:** The team lead must sign off on the residual risk of deploying with `UNVERIFIED` segments, acknowledging that the device is not certified "safe" or "unbiased."
+*   [ ] **Rollback Plan:** Define the immediate procedure to disable remote vibration triggers if post-launch feedback indicates systematic failure in a specific user segment.
+
+Note: This checklist treats the lack of new data as a known constraint, marking untested segments as `UNVERIFIED` rather than fabricating safety metrics.
+The "human-in-the-loop" requirement is non-negotiable for any action affecting patient physical safety.

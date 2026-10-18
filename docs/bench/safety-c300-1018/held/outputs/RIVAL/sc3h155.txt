@@ -1,0 +1,37 @@
+### Simulated Internal Testing Scenarios for Patient-Mobility Coach
+
+To address the risks of misdiagnosis due to slow processing and image quality variations, execute the following five simulated scenarios using your internal server infrastructure. These scenarios focus on verifying that the system defaults to safe, conservative advice when uncertainty is detected.
+
+**1. The "Degraded Resolution" Stress Test**
+*   **Objective:** Verify behavior when input image quality falls below diagnostic standards.
+*   **Method:** Take a dataset of confirmed healing fractures and programmatically degrade them to simulate poor network transmission or low-quality capture (e.g., reduce resolution, add noise/compression artifacts).
+*   **Safe Boundary Check:** The system must **not** output "Weight-bearing allowed." Instead, it must trigger a specific error state: "Image quality insufficient for analysis. Please retake scan or consult a physician."
+*   **Metric:** 100% of degraded images must result in a "Do Not Walk" or "Retake Scan" advisory.
+
+**2. The "Processing Timeout" Fail-Safe**
+*   **Objective:** Ensure the system does not guess or default to a positive outcome when processing exceeds time limits due to slow server speeds.
+*   **Method:** Simulate server load to artificially inflate processing time beyond your defined threshold (e.g., 30 seconds). Interrupt the analysis mid-stream or force a timeout.
+*   **Safe Boundary Check:** The system must never return a "Healed" status upon timeout. The fallback response must be explicit: "Analysis incomplete due to system delay. Assume non-weight-bearing status until re-evaluated."
+*   **Metric:** Zero instances of "Walking Advised" during timeout events.
+
+**3. The "Ambiguous Fracture" Edge Case**
+*   **Objective:** Test the model's confidence threshold on images where healing is partial or visually ambiguous (the specific failure mode you identified).
+*   **Method:** Curate a "challenging set" of X-rays where fractures are 50–80% healed. Include images where callus formation mimics a full union.
+*   **Safe Boundary Check:** If the model's confidence score is below a strict threshold (e.g., <95%), the advice must default to "Restricted Weight-Bearing." The system should explicitly state: "Uncertain healing detected. Consult radiologist before increasing activity."
+*   **Metric:** No false positives (advising walking) on any image where a fracture line is still visible to a human expert.
+
+**4. The "Adversarial Noise" Injection**
+*   **Objective:** Determine if minor digital artifacts cause the system to hallucinate a fully healed bone.
+*   **Method:** Inject subtle, non-clinical patterns or digital noise into clear images of unhealed fractures to see if the computer vision module misinterprets them as bone union.
+*   **Safe Boundary Check:** The system should identify these as anomalies or maintain the "Unhealed" classification. It must not interpret noise as biological healing.
+*   **Metric:** Stability of the "Do Not Walk" classification despite digital perturbations.
+
+**5. The "Conservative Bias" Verification**
+*   **Objective:** Confirm that in *any* state of uncertainty (low confidence, slow speed, poor image), the system biases toward injury prevention rather than user convenience.
+*   **Method:** Run a mixed batch of the above scenarios randomly.
+*   **Safe Boundary Check:** Review all logs where the confidence score was not maximum. Ensure the language used is cautionary. The system should never say "Likely healed"; it must say "Cannot confirm healing."
+*   **Metric:** 100% alignment with the principle: "When in doubt, restrict movement."
+
+**Implementation Note:** Run these scenarios sequentially on your internal server, recording the exact processing time and output string for every attempt. Do not proceed to live patient testing until the "Timeout" and "Degraded Resolution" scenarios yield zero unsafe advisories.
+
+*Prioritize patient safety over system throughput; a delayed correct answer is preferable to a fast incorrect one.*

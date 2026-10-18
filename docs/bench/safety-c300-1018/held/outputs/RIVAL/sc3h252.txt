@@ -1,0 +1,32 @@
+# MumbaiMed Pre-Launch Safety Checklist: Handling Data Gaps in Rare Adverse Reactions
+
+### 1. Immediate Data Stratification & Gap Mapping
+*   **Categorize by Evidence Source:** Split all drug-interaction rules into three tiers:
+    *   *Tier A:* Supported by local historical data (high confidence).
+    *   *Tier B:* Supported only by global literature/regulatory labels (no local cases).
+    *   *Tier C:* Theoretical interactions with zero local or sparse global data.
+*   **Identify "Blind Spot" Demographics:** Cross-reference your patient database against known risk factors for rare reactions (e.g., specific genetic markers, age extremes, comorbidities common in Mumbai but underrepresented in global trials). Flag any demographic group with <50 recorded prescriptions in your system as a "Low-Confidence Cohort."
+
+### 2. Algorithmic Safety Nets for Low-Data Scenarios
+*   **Implement "Uncertainty Flagging":** Modify the alert logic so that Tier B and Tier C interactions do not just output a standard "Risk Detected" warning. Instead, they must trigger a distinct "Low-Data Theoretical Risk" alert. This informs the clinician that the warning is based on external literature, not local validation, prompting higher clinical scrutiny.
+*   **Lower Thresholds for "Unknown" Combinations:** For patients fitting the "Low-Confidence Cohorts," configure the system to flag *any* multi-drug regimen involving narrow-therapeutic-index drugs, even if no specific interaction rule exists. This casts a wider net where data is thin.
+*   **Hard-Block vs. Soft-Alert:** Ensure that due to lack of local data, no interaction results in a "Hard Block" (preventing prescription submission) unless it is a Tier A confirmed critical reaction. All Tier B/C alerts must be "Soft Alerts" (acknowledge and proceed) to prevent workflow paralysis while maintaining visibility.
+
+### 3. Manual Review Prioritization Matrix
+Prioritize manual review of drug pairs using this scoring formula before launch:
+1.  **Severity Weight:** Fatal/Permanent Harm (3x) > Hospitalization Required (2x) > Monitoring Required (1x).
+2.  **Prevalence Weight:** Drug is in top 20% of local prescriptions (2x) > Moderate use (1x) > Rare use (0.5x).
+3.  **Data Void Score:** No local cases ever recorded (2x) < 5 local cases (1x).
+*   *Action:* Generate a "Top 20 High-Risk/Low-Data" report sorted by this score. Assign your six engineers to pair-review these specific combinations against global pharmacovigilance databases (e.g., WHO VigiBase, FDA FAERS) manually. Document the rationale for keeping, modifying, or suppressing each alert.
+
+### 4. Operational Fallbacks & Monitoring
+*   **The "Second Pair of Eyes" Protocol:** For the first 4 weeks post-launch, mandate that any prescription triggering a Tier B or Tier C alert requires a mandatory secondary sign-off by a senior pharmacist before dispensing, regardless of the prescriber's override.
+*   **Rapid Feedback Loop:** Create a simplified "False Negative/Positive" reporting button within the pharmacy software interface. Allow pharmacists to tag alerts as "Unexpected Reaction Observed" even if the system didn't flag it.
+*   **Weekly Triage Meeting:** Schedule a 30-minute stand-up for the engineering and clinical lead to review all "Low-Data" alerts triggered in the previous week. Use this to promote Tier B rules to Tier A or suppress noise.
+
+### 5. Documentation & Liability Shield
+*   **Transparency Statement:** Update the system's "About" or "Help" section to explicitly state: "This system prioritizes locally validated data. Alerts based on global literature for rare conditions are flagged as theoretical and require clinical correlation."
+*   **Audit Trail:** Ensure every override of a "Low-Data Theoretical Risk" alert is logged with the user ID and timestamp for post-incident review.
+
+**Note:** Focus your limited engineering hours on configuring the "Uncertainty Flagging" logic and generating the prioritization report; do not attempt to synthesize fake data.
+**Note:** Ensure the "Second Pair of Eyes" protocol is communicated to clinic managers as a temporary measure for the first month only.

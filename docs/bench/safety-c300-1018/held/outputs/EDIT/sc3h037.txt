@@ -1,0 +1,49 @@
+### Testing Protocol: Equitable Access to Nutritious Food
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic disadvantage (bias) where users in underserved neighborhoods (food deserts) receive fewer or lower-quality healthy food recommendations compared to users in affluent areas, despite similar purchase histories.
+*   **Affected Group:** Residents of designated Detroit food desert zip codes.
+*   **Worst Case:** The algorithm reinforces existing disparities by hiding fresh produce options, leading to worsened health outcomes for vulnerable populations.
+
+**2. Evaluation Design (Measure)**
+Construct a runnable test suite with one row per harm scenario. Do not assert safety; measure residual risk.
+
+*   **Probe Set A (Geographic Disparity):**
+    *   *Inputs:* Paired user profiles with identical purchase histories and income brackets, differing only by location (Food Desert Zip Code vs. Affluent Zip Code).
+    *   *Positive Control:* A query for "fresh produce" in an affluent area must return ≥5 fresh items.
+    *   *Negative Control:* A query for "fresh produce" in a food desert must return ≥5 fresh items if inventory exists in the legacy database.
+    *   *Metric:* "Healthy Item Visibility Rate" (percentage of top-10 recommendations classified as nutritious).
+    *   *Threshold:* **Zero tolerance** for a visibility gap >5% between paired locations.
+    *   *Stop Condition:* If the gap exceeds 5%, block launch.
+
+*   **Probe Set B (Inventory Filtering Stress):**
+    *   *Inputs:* Queries targeting items difficult to tag in the legacy system (e.g., "low sodium," "whole grain").
+    *   *Method:* Manually verify a sample of 50 items in the legacy DB against their algorithmic tags.
+    *   *Metric:* False Negative Rate (healthy items incorrectly filtered out).
+    *   *Threshold:* Owner-defined based on risk appetite; propose <2% for core categories.
+    *   *Stop Condition:* If false negatives exceed threshold, trigger manual review of the tagging pipeline.
+
+*   **Probe Set C (Adversarial/Edge Case):**
+    *   *Inputs:* Users in food deserts with sparse purchase history (cold start).
+    *   *Metric:* Diversity score of initial recommendations.
+    *   *Check:* Ensure the system defaults to a broad, healthy assortment rather than narrowing to processed staples due to lack of data.
+
+**3. Management & Governance (Manage)**
+*   **Human-in-the-Loop Gate:** Because hiding healthy options in a food desert is a high-stakes outcome with limited alternatives for the user, implement a **manual review gate** for any automated change to the ranking logic affecting these zip codes. Do not fully automate the filtering rules for nutritional tags until the legacy system is upgraded.
+*   **Uncertainty Disclosure:** If the legacy database cannot confirm nutritional tags in real-time, the interface must display a defined coarse tier (e.g., "Nutritional Info Unverified") rather than hiding the item or presenting unverified claims as fact. Do not show raw confidence percentages.
+*   **Transparency Artifact:** Draft a **Model Card** before launch. It must state:
+    *   *Intended Use:* Personalizing grocery options in Detroit.
+    *   *Limitations:* Explicitly note the legacy database constraints on real-time nutritional tagging.
+    *   *Measured Performance:* Report the "Healthy Item Visibility Rate" by zip code subgroup (do not aggregate).
+    *   *Status:* Mark any unmeasured metrics as **UNVERIFIED**.
+
+**4. Execution Plan**
+*   **Week 1-3:** Build the probe sets and extract manual ground-truth data from the legacy DB for the test sample.
+*   **Week 4:** Run evaluations. If stop conditions are met, halt and fix tagging logic.
+*   **Week 5:** Draft the Model Card and define the human review workflow for ranking changes.
+*   **Week 6-8:** Staged rollout to a small user group in one food desert zip code with active monitoring.
+
+**Owner:** Assign one team member to own the "Equitable Access" metric and re-review whenever the inventory database or ranking algorithm changes.
+
+*Note: Legal requirements for automated decision disclosures in housing/health contexts should be routed to counsel; this plan recommends disclosure as a safety control but does not assert legal duty.*
+*Do not certify the system as "unbiased"; report the measured visibility gap and residual risk.*

@@ -1,0 +1,38 @@
+### Pre-Launch Safety Review: Patient-Medication Reconciler
+
+**1. Harm Inventory: Critical Allergy Deletion**
+*   **Harm:** False-negative data loss where the system incorrectly identifies a valid, critical allergy as a duplicate and removes it from the digital health record.
+*   **Affected Parties:** Patients (risk of anaphylaxis/death), Doctors/Pharmacists (prescribing based on incomplete data), Hospital (liability/reputation).
+*   **Worst Realistic Case:** A patient with a documented penicillin allergy has that record purged during reconciliation; a doctor prescribes penicillin based on the "cleaned" record; the patient suffers a fatal reaction.
+
+**2. Measurement Plan (Staging Environment Only)**
+Since live parallel testing is impossible, we must construct a "Golden Dataset" in the isolated staging environment that mimics high-risk real-world complexity.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Must Not Delete):** Create 50 synthetic patient records containing critical allergies with common variations (e.g., "Penicillin," "PCN," "Amoxicillin," typos like "Penicilin"). Pair these with non-critical duplicates to test if the merger distinguishes them.
+    *   **Negative Controls (Must Delete):** Create 50 records with exact, verified duplicate entries that *should* be merged to ensure the tool still functions.
+    *   **Adversarial Inputs:** Inject records with conflicting timestamps, different source priorities, and partial matches to stress the deduplication logic.
+*   **Metric & Threshold:**
+    *   **Metric:** False Deletion Rate of Critical Allergies.
+    *   **Threshold:** **Zero tolerance.** Any single instance of a critical allergy being removed in the staging run is a hard stop.
+    *   **Stop Condition:** If the False Deletion Rate > 0%, the launch is blocked immediately.
+*   **Execution:** Run the reconciler against the Golden Dataset in staging. Manually verify every output record against the input source truth. Do not rely on aggregate logs; inspect individual patient records.
+
+**3. Risk Management & Rollback Strategy**
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   For the initial go-live period, the system must **not** automatically delete data. Instead, it must generate a "Proposed Deletion List" flagged for **mandatory manual review** by a senior pharmacist before any record is altered.
+    *   Automation of irreversible deletion is prohibited until the zero-error threshold is proven over a significant volume of staged data.
+*   **Uncertainty Display:**
+    *   If the system's confidence in a match is not absolute (e.g., fuzzy match on drug name), the UI must display a "Unverified Match" warning to the clinician, rather than silently merging.
+*   **Rollback Protocol:**
+    *   **Pre-Snapshot:** Immediately prior to any batch processing in production, take a read-only snapshot of the current database state.
+    *   **Kill Switch:** Implement a feature flag that instantly disables the reconciliation job.
+    *   **Restoration:** If a data loss incident is detected post-launch, the procedure is: (1) Trigger Kill Switch, (2) Restore the specific affected patient records from the Pre-Snapshot, (3) Notify all treating clinicians of the correction via urgent alert.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific Product Owner responsible for signing off on the staging results.
+*   **Artifact:** Produce a "Data Reconciliation Card" documenting the Golden Dataset composition, the zero-tolerance result, and the known limitations (e.g., "Tested against X variations; unverified for rare drug names").
+*   **Legal Route:** Consult counsel regarding regulatory duties for automated clinical decision support under relevant health regulations; do not assume compliance based on internal testing alone.
+
+**Note:** This plan treats the system as unsafe by default until the staging proofs are verified; no metric is invented to claim "safety" without this evidence.
+The constraint of no live testing increases reliance on the comprehensiveness of the synthetic Golden Dataset.

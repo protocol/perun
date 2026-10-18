@@ -1,0 +1,34 @@
+### Safety Assessment Plan: Connectivity Bias & Equitable Distribution
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Systemic exclusion of low-connectivity zones leading to resource starvation.
+*   **Affected:** Populations in infrastructure-poor areas (often highest risk).
+*   **Worst Case:** Preventable mortality/morbidity due to zero aid allocation in blind spots.
+*   **Root Cause:** Over-reliance on digital signals as a proxy for need; missing data interpreted as "no need."
+
+**2. Simulation & Measurement Plan (MEASURE)**
+Do not wait for live deployment to test this. Execute the following evals immediately using your existing team:
+*   **Probe Set A (The "Silence" Test):** Inject synthetic damage reports where 40% of high-severity zones have `connectivity_status = null` or `last_seen > 48hrs`.
+    *   *Positive Control:* Verify the system flags these nulls as "Unknown/High Risk," not "Low Risk."
+    *   *Negative Control:* Verify zones with explicit "No Damage" reports are not conflated with "No Data."
+*   **Probe Set B (Adversarial Connectivity):** Simulate a gradient of connectivity loss (100% → 0%) against fixed damage severity.
+    *   *Metric:* Correlation between connectivity score and aid allocation.
+    *   *Pass Threshold:* Zero correlation. If aid drops as connectivity drops, the test fails.
+    *   *Stop Condition:* If the system allocates <50% of average aid to "No Data" zones compared to "High Data" zones of equal simulated severity, **block launch**.
+*   **Probe Set C (Red Team Injection):** Attempt to spoof high connectivity in a low-damage area to see if it steals resources from a silent high-damage area.
+
+**3. Contingency Measures & Human Gate (MANAGE)**
+Since you cannot fix the infrastructure, you must change the decision logic and add a human gate.
+*   **Algorithmic Workaround (The "Dark Zone" Protocol):** Hard-code a rule: `IF data_missing AND region_vulnerable THEN assume_max_severity`. Treat silence as a critical signal, not an absence of need. Pre-allocate a fixed percentage (e.g., 20%) of total supplies specifically for these "dark zones" regardless of algorithmic output.
+*   **Human-in-the-Loop Gate:** Because this is a high-stakes, irreversible action (life-or-death resource distribution), **fully autonomous execution is prohibited.**
+    *   Implement a mandatory human review for any allocation plan where >15% of the population falls into "low/no connectivity" buckets.
+    *   A human operator must explicitly confirm the "Dark Zone" override before dispatch.
+*   **Uncertainty Disclosure:** The dashboard must visually distinguish between "Verified Low Need" and "Unverified/No Data." Use a coarse tier system (e.g., **Confirmed** vs. **Unverified**) rather than a false-precision percentage. Do not show "87% safe"; show "Status: Unverified due to connectivity."
+
+**4. Governance & Transparency (GOVERN)**
+*   **Owner:** Assign one specific person to own the "Connectivity Bias" risk.
+*   **Artifact:** Publish a one-page "Model Card" for this release stating: "Intended Use: Triage support only. Limitation: Cannot detect needs in offline areas without human override. Known Failure Mode: Digital silence."
+*   **Legal Route:** Consult counsel immediately regarding duties to vulnerable populations under local disaster laws; do not assert compliance internally.
+
+**Note:** If the "Dark Zone" protocol cannot be implemented and tested within the three-week window, the residual risk is too high for autonomous operation; the system must remain a decision-support tool only.
+Never fabricate a "bias-free" metric; report the results of the "Silence Test" as pass/fail only.

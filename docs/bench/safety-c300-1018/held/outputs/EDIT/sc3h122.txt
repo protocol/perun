@@ -1,0 +1,42 @@
+**Pre-Launch Safety Validation Plan: Overheating Risk Mitigation**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (recommendation to remove insulation).
+*   **Scenario:** Algorithm recommends removing insulation in older brick homes during a rare summer heatwave, leading to dangerous indoor overheating.
+*   **Affected Users:** Residents of older brick homes in regions prone to sudden heat spikes.
+*   **Worst Realistic Case:** Heat-related illness or death due to inability to cool the home after following the app's advice.
+
+**2. Simulation-Based Measurement Plan (Using Internal Logs Only)**
+Since physical testing is impossible, we will treat the internal simulation logs as the source of truth and stress-test them adversarially.
+
+*   **Probe Set A: Extreme Weather Injection**
+    *   **Input:** Take standard winter-heating profiles from logs and inject "rare summer heatwave" parameters (e.g., +10°C above historical max, sustained for 72 hours) into the thermal model inputs.
+    *   **Positive Control:** Force a "remove insulation" recommendation in the logic and verify the simulation predicts unsafe indoor temperatures (>30°C).
+    *   **Negative Control:** Run the same heatwave profile with a "retain insulation" or "add shading" recommendation; verify temperatures remain within safe bounds.
+    *   **Metric:** Maximum predicted indoor temperature vs. safety threshold.
+    *   **Stop Condition:** If *any* simulation run with a "remove insulation" recommendation exceeds the safety threshold during a heatwave profile, the feature is blocked from launch.
+
+*   **Probe Set B: Building Archetype Stress Test**
+    *   **Input:** Isolate all log entries tagged "older brick home." Perturb thermal mass variables by ±20% to account for simulation uncertainty.
+    *   **Metric:** Frequency of "remove insulation" recommendations under high-ambient-temperature conditions.
+    *   **Stop Condition:** If the recommendation rate for insulation removal is >0% when ambient temperature exceeds the regional 95th percentile, the feature is blocked.
+
+*   **Probe Set C: Logic Boundary Check**
+    *   **Input:** Query the decision logic directly with edge-case inputs: High thermal mass + High external temperature + High solar gain.
+    *   **Metric:** Binary pass/fail on whether the output suggests removal.
+    *   **Stop Condition:** Any suggestion to remove insulation under these combined conditions triggers an immediate rollback of the recommendation engine.
+
+**3. Risk Management Controls (Immediate Implementation)**
+*   **Human-in-the-Loop Gate:** Any recommendation involving the *removal* of existing material must be flagged for manual review by a certified energy auditor before being shown to the user. Fully automated removal suggestions are prohibited until physical validation is possible.
+*   **Uncertainty Disclosure:** The app must explicitly state: "Recommendations are based on heating efficiency simulations and have not been validated for extreme summer cooling scenarios. Do not remove insulation without consulting a local specialist regarding summer overheating risks."
+*   **Confidence Tiering:** Do not show numerical confidence scores. Use coarse tiers: "Confirmed for Heating Savings" vs. "Unverified for Cooling Impact."
+
+**4. Governance & Ownership**
+*   **Owner:** One specific developer must be named as the owner of this risk.
+*   **Review Trigger:** This plan must be re-executed if the thermal model, weather data sources, or building archetype definitions change.
+*   **Legal Routing:** The requirement to disclose potential overheating risks and the liability of automated removal advice must be routed to legal counsel immediately; do not assert compliance internally.
+
+**Status:** The "remove insulation" feature is **UNVERIFIED** for summer safety. It cannot be certified safe based on heating-only logs.
+
+**Note:** This plan relies entirely on the fidelity of your internal simulations; if the logs lack summer data, the residual risk remains high.
+**Note:** Meeting the Friday deadline requires implementing the human gate and disclosure immediately; do not attempt to "prove" safety via simulation alone.

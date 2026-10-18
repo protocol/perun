@@ -1,0 +1,30 @@
+### Safety Validation Protocol for Sakura Tech Rehabilitation App
+
+**Phase 1: Data Stratification and Synthetic Expansion**
+Before engaging patients, divide the twenty participants into four distinct cohorts based on stroke severity (mild, moderate, severe, and variable recovery patterns). Since the cohort is small, do not rely solely on live data for edge cases. Engineering must generate synthetic video datasets representing "failure modes" (e.g., compensatory movements, tremors, or partial occlusion) that mimic the twenty patients but exaggerate errors. Run the computer vision model against this expanded synthetic set to ensure the system does not confidently misinterpret poor form as high strength.
+
+**Phase 2: The "Shadow Mode" Clinical Audit**
+Do not activate the automatic resistance recommendation engine for the patients yet. Instead, run the system in "Shadow Mode" for all twenty participants over three sessions each.
+1.  **Capture:** Record the patient performing exercises via the app.
+2.  **Silent Calculation:** The app calculates the suggested resistance level but displays nothing to the user or therapist.
+3.  **Blinded Review:** A clinical staff member, blinded to the app's output, assigns a manual resistance level based on standard clinical observation.
+4.  **Comparison:** Engineering reveals the app's calculated level. Compare the app's recommendation against the clinician's manual assessment.
+5.  **Threshold Check:** If the app recommends a resistance level more than 10% higher than the clinician's assessment, flag this as a critical "Overestimation Event."
+
+**Phase 3: The Safety Interlock Verification**
+Implement a hard-coded "conservative bias" rule for the pilot launch. If the computer vision confidence score drops below 85% due to lighting, angle, or ambiguous movement, the system must default to the *lowest* possible resistance setting or request human verification, rather than guessing. Engineering must demonstrate this fail-safe by intentionally degrading video quality during internal tests to prove the system refuses to prescribe high resistance under uncertainty.
+
+**Phase 4: Step-by-Step Go/No-Go Review Process**
+Establish a joint Engineering-Clinical review board to analyze the Shadow Mode results before live deployment:
+
+1.  **Data Aggregation:** Compile all "Overestimation Events" from Phase 2.
+2.  **Root Cause Analysis:** For every event, determine if the cause was algorithmic (model error), environmental (lighting/angle), or patient-specific (unique compensatory movement).
+3.  **Risk Scoring:** Assign a risk score to each event type. Any instance where the app suggested a level that could cause injury (e.g., exceeding safe joint load limits) is an automatic "No-Go."
+4.  **Calibration Adjustment:** If overestimation occurs in >5% of trials, recalibrate the model's safety margin downward globally.
+5.  **Final Sign-off:** Both the Lead Engineer and Lead Clinician must sign off confirming that zero unmitigated overestimation events exist in the dataset.
+
+**Phase 5: Controlled Live Pilot with Emergency Stop**
+Upon approval, enable the feature for the twenty patients with a mandatory "Human-in-the-Loop" constraint. The app may suggest a resistance level, but a therapist or the patient must manually confirm it before the device engages. Log every confirmation. If a patient manually lowers the recommended resistance, log this as a "Rejection Event" for post-pilot analysis.
+
+**Note:** This strategy prioritizes preventing harm over maximizing data collection speed.
+**Note:** Ensure all synthetic data generation respects patient privacy and uses no real identifiable information.

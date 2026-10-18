@@ -1,0 +1,55 @@
+**Safety Verification Test Plan: Smart-Infusion Pump Infiltration Detection**
+
+**1. Objective**
+To rigorously validate the infiltration detection and automatic stop mechanism under varying flow rates and to establish a protocol for managing sensor failures, ensuring patient safety prior to deployment.
+
+**2. Test Environment & Constraints**
+*   **Hardware:** Current production sensor firmware (non-updatable).
+*   **Variables:** Flow rates (low, medium, high), tissue simulants (varying density), infiltration volumes.
+*   **Safety Control:** All tests must be conducted on non-biological tissue simulants with a secondary mechanical emergency stop independent of the device software.
+
+**3. Experimental Design**
+
+*   **Phase A: Baseline Detection Sensitivity**
+    *   **Setup:** Calibrate pump with standard IV catheter in tissue simulant.
+    *   **Procedure:** Initiate infusion at three distinct flow rates (e.g., 50 mL/h, 100 mL/h, 250 mL/h).
+    *   **Induction:** Manually induce simulated infiltration at controlled intervals.
+    *   **Measurement:** Record time delta ($t_{detect} - t_{induce}$) and volume delivered post-induction ($V_{leak}$).
+    *   **Success Criteria:** $V_{leak}$ must remain below the clinically defined safety threshold for all flow rates.
+
+*   **Phase B: Stop Mechanism Reliability**
+    *   **Setup:** Same as Phase A.
+    *   **Procedure:** Trigger detection event repeatedly (n=50 per flow rate).
+    *   **Measurement:** Binary pass/fail of flow cessation within 2 seconds of detection signal.
+    *   **Failure Mode Analysis:** If flow continues, log sensor output vs. motor driver response to isolate whether the failure is sensing (false negative) or actuation (command ignored).
+
+*   **Phase C: Sensor Failure Simulation (Fault Injection)**
+    *   **Scenario 1: Signal Loss.** Disconnect sensor mid-infusion. Verify system defaults to "Fail-Safe Stop" rather than continuing blind infusion.
+    *   **Scenario 2: Noise/Artifact.** Introduce electrical noise or motion artifacts to the sensor line. Verify the system does not confuse noise for normal flow, nor ignore genuine infiltration signals amidst noise.
+    *   **Scenario 3: Drift.** Simulate sensor calibration drift. Determine the threshold at which detection fails.
+
+**4. Data Collection Metrics**
+*   **Detection Latency:** Time from infiltration onset to alarm trigger.
+*   **Actuation Latency:** Time from alarm trigger to flow stop.
+*   **Total Leakage Volume:** Calculated based on flow rate $\times$ total latency.
+*   **False Negative Rate:** Instances where infiltration occurred but no stop was triggered.
+*   **False Positive Rate:** Instances where flow stopped without infiltration (affects usability but not immediate safety).
+
+**5. Protocol for Managing Sensor Failures**
+Given the firmware cannot be updated remotely, the following operational protocols must be enforced if testing reveals non-zero failure rates:
+
+*   **Immediate Mitigation:** If Phase C reveals that signal loss does *not* trigger a stop, the device cannot be deployed without hardware recall or manual intervention. If it does stop, proceed to operational controls.
+*   **Clinical Workflow Requirement:** Mandate visual site checks by nursing staff every 15 minutes, regardless of device status. The device is a secondary safety layer, not a replacement for observation.
+*   **Alarm Escalation:** Configure the device to emit a distinct, high-priority audible alarm for "Sensor Fault" vs. "Infiltration Detected" to ensure staff differentiate between a broken sensor and a medical event.
+*   **Deployment Gate:** If any test in Phase B results in continued flow after confirmed detection, deployment is halted until the root cause (mechanical vs. logical) is resolved via hardware patch or component replacement.
+
+**6. Reporting Structure**
+The final safety verification report must include:
+*   Statistical summary of leakage volumes across all flow rates.
+*   Confirmed failure modes and their frequency.
+*   Explicit statement of residual risk if any failures were observed.
+*   Signed validation of the "Fail-Safe" behavior during sensor disconnection.
+
+This plan prioritizes empirical validation of the current fixed firmware to quantify risk and define necessary human-in-the-loop safeguards.
+
+*Note: This plan assumes access to standard tissue simulants and data logging tools. All testing must be supervised by a qualified biomedical engineer.*

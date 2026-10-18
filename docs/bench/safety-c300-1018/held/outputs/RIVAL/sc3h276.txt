@@ -1,0 +1,32 @@
+**Verification Plan for Smart Infusion Drug Library**
+
+**1. Establish a "Golden Source" Baseline**
+Since historical archives are inaccessible, you must reconstruct the expected state from authoritative, current external sources rather than internal legacy data. Obtain the latest official drug concentration limits directly from the original manufacturers' prescribing information, current national formulary guidelines (e.g., KFDA or Ministry of Health and Welfare updates), and your hospital's current Pharmacy & Therapeutics (P&T) committee minutes. Compile these into a small, verified "Golden Source" dataset containing only the drug-name, concentration, and effective date for high-alert medications. This dataset will likely be well under the 50MB limit.
+
+**2. Perform Deterministic Content Comparison**
+Execute a strict comparison between the active library in the deployment environment and your "Golden Source" baseline.
+*   **Completeness Check:** Verify that every entry in the Golden Source exists in the active library. Any missing entry represents a dangerous gap.
+*   **Accuracy Check:** Verify that the concentration limits and units in the active library match the Golden Source exactly.
+*   **Obsolescence Check:** Identify any entries in the active library that do not appear in the Golden Source. These are potential legacy outliers. Investigate these specific items manually against current P&T policies. If they are not explicitly re-authorized by current policy, they must be removed, regardless of their presence in the unaccessible archive.
+
+**3. Validate Logic and Alert Triggers**
+Data accuracy alone is insufficient; the alerting logic must be verified.
+*   **Boundary Testing:** For each high-alert medication, simulate infusion programming at the exact safe limit, just below the unsafe threshold, and just above it. Confirm the system allows the safe values and triggers the hard/soft stop precisely at the defined unsafe limit.
+*   **Unit Conversion Verification:** Test inputs across different measurement units (e.g., mg/mL vs. mcg/kg/min) to ensure the library correctly normalizes values before comparing them against limits, preventing errors where a correct dose is flagged due to unit mismatch.
+
+**4. Clinical Workflow Simulation**
+Conduct a "dry run" with nursing and pharmacy staff using high-fidelity simulators or a sandboxed environment.
+*   Present scenarios involving complex concentrations and rare high-alert drugs.
+*   Verify that the alerts are clear, actionable, and do not cause "alert fatigue" that leads to overriding genuine safety warnings.
+*   Confirm that the system behavior matches the updated protocols without referencing the pruned historical data.
+
+**5. Formal Attestation and Locking**
+Once the active library matches the Golden Source and passes logic tests:
+*   Generate a cryptographic hash (checksum) of the active library database file.
+*   Document the version number, the date of the Golden Source used, and the identities of the verifiers.
+*   Lock the database against further writes until the next scheduled update cycle. This ensures that the verified state cannot be accidentally corrupted before deployment.
+
+This approach shifts reliance from unavailable historical internal data to verifiable current external authority, ensuring safety through positive validation of what *should* be present rather than attempting to audit what *was* present.
+
+*Note: Ensure the "Golden Source" compilation is signed off by the Chief of Pharmacy before comparison begins.*
+*Note: Retain the script used for the deterministic comparison for future audit trails.*

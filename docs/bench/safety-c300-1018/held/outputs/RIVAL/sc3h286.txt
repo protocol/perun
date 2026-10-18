@@ -1,0 +1,26 @@
+### Safety Plan for Patient Diet Recommendation Engine
+
+**1. High-Risk Category Identification and Manual Validation**
+Given the known gaps in traditional local cuisine within the third-party database, immediate manual validation is required for high-risk food categories before any public release.
+*   **Scope Definition:** Isolate all traditional Egyptian dishes (e.g., *Koshary*, *Ful Medames*, specific bread types like *Aish Baladi*, and sweet pastries) and common local street foods. These are the highest probability candidates for data inaccuracies regarding Glycemic Index (GI).
+*   **Expert Review Protocol:** Assign the six team members (nutritionists and developers) to cross-reference the database entries against authoritative, localized medical resources (e.g., Egyptian Ministry of Health guidelines, peer-reviewed studies on Egyptian cuisine GI).
+*   **Validation Status Tagging:** Implement a strict tagging system in your internal staging environment:
+    *   *Verified:* Confirmed safe by human expert.
+    *   *Unverified/Gap:* Data missing or conflicting.
+    *   *High-Risk:* Known discrepancy or potential for high GI misclassification.
+*   **Exclusion Rule:** Any food item tagged as *Unverified* or *High-Risk* must be automatically excluded from the recommendation engine's active dataset until a nutritionist explicitly signs off on its safety.
+
+**2. Fallback Mechanism and Guardrails**
+To prevent potentially dangerous advice from reaching end users, the system must operate on a "fail-safe" principle where uncertainty results in restriction, not speculation.
+*   **The "Unknown" Fallback:** If the engine queries the database for a food item and receives no data, low-confidence data, or data flagged as *Unverified*, the system must not generate a specific meal recommendation. Instead, it should trigger a standardized safe response: *"We do not have sufficient verified data on this specific item to ensure it fits your diabetic management plan. Please consult your healthcare provider or choose from our list of verified staples."*
+*   **Conservative Estimation:** For items with partial data, do not interpolate or guess the GI. Assume the worst-case scenario (High GI) for calculation purposes. If assuming a high GI makes the meal unsuitable, the system should reject the recommendation.
+*   **Hard-Coded Safe List:** Create a small, manually curated "Allow List" of 20–30 staple foods with 100% verified GI values. If the algorithm cannot confidently validate a complex dish, fallback to suggesting combinations of these known-safe staples rather than risking an unverified traditional dish.
+*   **Human-in-the-Loop for Edge Cases:** For the initial three-week launch, disable fully automated recommendations for complex, multi-ingredient traditional meals. Route these requests to a dashboard where a nutritionist can quickly approve or deny the suggestion before it is shown to the user, or simply block them until the manual validation process is complete.
+
+**3. Pre-Launch Verification**
+*   Conduct a "Red Team" exercise where team members attempt to force the system to recommend known high-GI foods by exploiting the database gaps.
+*   Verify that the fallback messages appear correctly when data is missing.
+*   Ensure that no recommendation is served without a "Verified" status in the internal database.
+
+**Note:** This plan prioritizes patient safety over feature completeness; launching with a smaller, verified menu is safer than a comprehensive but risky one.
+Immediate execution of the manual validation phase is critical given the three-week timeline.

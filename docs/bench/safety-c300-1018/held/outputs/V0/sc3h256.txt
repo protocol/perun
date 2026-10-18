@@ -1,0 +1,39 @@
+### Validation Protocol: Patient-Wound-Pain-Assessor
+
+**1. Harm Inventory & Edge-Case Definition**
+Before testing, explicitly record the primary risk: **Hallucination surfaced as fact**. The system may assign a specific pain score to obscured wounds where visual evidence is insufficient, leading to under-medication or unnecessary distress. The "edge case" is defined as any image where >30% of the wound bed or surrounding tissue is obscured by dressing materials, blood, or exudate.
+
+**2. Runnable Test Plan (Measure)**
+Construct a validation set from your internal library strictly focused on these obscured scenarios. Do not rely on aggregate accuracy; measure performance specifically on this subset.
+*   **Probe Set:** Isolate all internal images matching the "obscured" definition.
+*   **Controls:**
+    *   *Positive Control:* A subset of obscured images where the true pain level (verified by nurse notes) is **high**, but visual cues are minimal. The system must not output "low pain."
+    *   *Negative Control:* Clear images of similar wounds where the system should function normally.
+*   **Metric & Threshold:** Measure the rate of "High Confidence" errors on obscured images.
+    *   *Stop Condition:* If the system assigns a specific numeric pain score with high confidence to an obscured image in the positive control set, **block launch**.
+*   **Injection/Leak Check:** Ensure the model does not hallucinate details from unrelated patient data when visual data is missing.
+
+**3. Human-in-the-Loop Gate (Manage)**
+Because pain assessment directly impacts patient care (a high-stakes action), fully automated scoring for obscured images is unsafe.
+*   **Uncertainty Tiering:** Do not display raw confidence percentages (e.g., "87%"). Instead, implement defined coarse tiers:
+    *   *Verified:* Clear visual data, high correlation.
+    *   *Unverified:* Visual data obscured or conflicting.
+*   **Mandatory Override:** If the system classifies an image as "Unverified" or detects obscuration, it must **withhold the pain score** and prompt the nurse: *"Visual data incomplete. Manual assessment required."* The nurse must manually enter the pain score to proceed. This acts as a hard gate; the system cannot auto-populate the record in these cases.
+
+**4. Transparency Artifact**
+Draft a **Model Card** for the nursing team before the pilot. It must state:
+*   *Intended Use:* Triage support for clear wound images.
+*   *Limitations:* "Performance is **UNVERIFIED** for obscured wounds. The system will default to 'Manual Entry' in these cases."
+*   *Owner:* Name the specific team member responsible for reviewing pilot failures.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign one person to review every "Unverified" flag generated during the pilot.
+*   **Regulatory Duty:** Whether this tool constitutes a regulated medical device requiring specific legal disclosures under local Indian law or international standards is a determination for **legal counsel**. Do not assert compliance; route this question immediately to your legal team while proceeding with the technical safeguards above.
+
+**Definition of Done for Pilot:**
+The pilot proceeds only if the "Unverified" tier correctly triggers for all obscured test images, forcing a manual nurse override, and no "High Confidence" hallucinations occur in the positive control set.
+
+***
+
+*Note: Do not fabricate an accuracy rate for obscured images; if the internal library is too small to form a statistically significant test set, mark the metric as UNVERIFIED and expand the manual gate.*
+*Ensure nurses are trained that "Unverified" is a safety feature, not a system error.*

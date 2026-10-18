@@ -1,0 +1,43 @@
+**Safety Validation Strategy & Mitigation Plan: Smart Glucose Monitor**
+
+**1. Immediate Risk Classification**
+This feature constitutes a **high-stakes, irreversible automated decision** with direct physical harm potential (missed hypoglycemia). Under no circumstances can this system ship with full autonomous execution of alarms if the failure mode involves silent misses due to known calibration drift. The "hard deadline" does not override the requirement for a human-in-the-loop gate or explicit uncertainty disclosure.
+
+**2. Harm Inventory (MAP)**
+*   **Primary Harm:** False Negative (Missed Alarm) during hypoglycemia due to sensor drift.
+    *   *Affected:* Users with diabetes; worst case is seizure, coma, or death.
+    *   *Status:* **KNOWN FAILURE MODE**.
+*   **Secondary Harm:** Automation Bias/Over-reliance.
+    *   *Affected:* Users trusting the "smart" prediction over physical symptoms or finger-stick verification.
+    *   *Status:* High risk due to "smart" branding.
+*   **Tertiary Harm:** Missing AI/Disclosure.
+    *   *Affected:* Users unaware the prediction degrades over time without recalibration.
+
+**3. Measurement Plan (MEASURE)**
+Do not assert a "reliability rate." An unmeasured rate is `UNVERIFIED`. Execute the following specific evals immediately:
+*   **Probe Set A (Drift Simulation):** Inject synthetic glucose traces with progressive calibration drift (simulating 1 week, 2 weeks, 4 weeks) into the algorithm.
+    *   *Positive Control:* Known hypoglycemic event + high drift → Must trigger "Uncertain/Check" state, not silence.
+    *   *Negative Control:* Normal glucose + high drift → Must not trigger false alarm.
+*   **Probe Set B (Edge Cases):** Rapid glucose drops combined with maximum observed drift.
+*   **Metric:** Percentage of hypoglycemic events where the system either alarms correctly OR explicitly degrades to a "Sensor Unreliable - Verify Manually" state.
+*   **Stop Condition:** If *any* simulated hypoglycemic event results in silence (no alarm, no warning) under drift conditions, **launch is blocked**. There is zero tolerance for silent failure in this category.
+
+**4. Mitigation & Management (MANAGE)**
+Since hardware cannot change and drift is inherent, the software must manage the residual risk via **Uncertainty Disclosure** and **Human Gates**:
+*   **Define Confidence Tiers:** Do not show raw probabilities (e.g., "87% risk"). Implement coarse, defined tiers:
+    *   *Confirmed:* Strong signal, low drift.
+    *   *Corroborated:* Signal present, moderate drift.
+    *   *Unverified/Drift Detected:* Signal unreliable due to time-since-calibration. **Action:** Suppress predictive alarm; trigger mandatory "Calibrate Now" or "Verify with Fingerstick" prompt.
+*   **Forced Human-in-the-Loop:** If the model detects input parameters consistent with drift (e.g., time > X hours since last calibration), the system must **refuse** to predict and instead demand user verification before resuming monitoring. This converts a "silent miss" into a "noisy interruption," which is safer.
+*   **Transparency Artifact (Model Card):** Ship a versioned document stating:
+    *   *Intended Use:* Adjunct to finger-stick testing, not replacement.
+    *   *Known Limitations:* Accuracy degrades after X hours; predictive alarms are disabled during drift states.
+    *   *Performance:* Report results from Probe Set A by subgroup (e.g., fast vs. slow droppers). Mark any untested drift duration as `UNVERIFIED`.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Name a specific individual responsible for the "Missed Alarm" risk.
+*   **Legal Duty:** This device likely falls under regulated medical device frameworks (e.g., EU MDR, FDA). The question of whether the current drift profile meets legal safety thresholds for market release is a **legal determination**. Route immediately to counsel with the raw data from Probe Set A. Do not assert compliance internally.
+*   **Decision:** The ship decision belongs to the product owner, not the engineering team. Present the residual risk: "We can detect drift and force manual checks, but we cannot guarantee prediction accuracy during drift without hardware changes."
+
+**Note:** Shipping a feature with a known silent-failure mode without a "degrade-to-safe" software state is a critical safety violation.
+**Note:** No metric claiming "99% safety" can be fabricated; report only measured pass/fail rates from the drift probes.

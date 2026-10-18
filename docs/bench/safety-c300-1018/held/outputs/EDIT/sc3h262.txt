@@ -1,0 +1,26 @@
+**BLUF:** Do not ship this feature with fully automated sensitivity tuning for high-stakes cardiac care without a human-in-the-loop gate or explicit, reversible confirmation mechanism; automation of irreversible, life-critical actions is the primary failure mode this safety review prevents. Your request for a simulation strategy to "verify" safety cannot be met with a certification of "safe" or "unbiased," as no test proves these qualities. Instead, you must execute a harm inventory, measure residual risk via simulation, and manage that risk with strict governance before any regulatory submission.
+
+**1. Map the Harm Inventory (Do this first)**
+Before writing a single simulation test, document the specific harms for this feature:
+*   **Unsafe High-Stakes Automation:** The device autonomously alters a life-critical parameter (sensitivity). If the algorithm fails, the worst case is missed detection of arrhythmia leading to patient harm or death.
+*   **Bias/Unfair Outcomes:** The algorithm may systematically under-perform for specific subgroups (e.g., elderly patients with specific complex arrhythmia morphologies not well-represented in your virtual models).
+*   **Over-reliance:** Clinicians or patients may trust the "auto-tuned" setting without verification, assuming the AI is infallible.
+
+**2. Measure via Simulation (The Runnable Plan)**
+Since physical hardware is unavailable, your virtual models must serve as the adversarial test bed. Construct one test row per inventoried harm:
+*   **Probe Set:** Generate synthetic cardiac signals including known "bad" positives (signals where intrinsic activity is present but noisy) and "good" negatives (clear noise without intrinsic activity). Slice these by subgroup (e.g., varying age-related signal degradation, specific arrhythmia types common in the elderly).
+*   **Metric & Threshold:** Define the miss rate for intrinsic activity. For a gated, irreversible action like this, propose a **zero-tolerance threshold** for failures in the "bad" positive control set during simulation. Any miss in a high-risk scenario is a stop condition.
+*   **Injection & Leakage Checks:** Test for prompt injection via noisy signal artifacts that could trick the tuning logic into dangerous states.
+*   **Reporting:** Report results as **residual risk**. If a metric is not measured for a specific subgroup, label it `UNVERIFIED`. Do not invent a "99.9% accuracy" claim.
+
+**3. Manage Residual Risk (The Control Layer)**
+*   **Human-in-the-Loop Gate:** Because this is a high-stakes, irreversible action, the default design must require human confirmation (clinician review) before the new sensitivity level is permanently applied, or the system must default to a safe, conservative mode that requires explicit override to change. Fully autonomous execution is the failure this skill prevents.
+*   **Uncertainty Display:** If the system displays confidence, do not use raw percentages (e.g., "87% confident"). Use defined coarse tiers (e.g., "Confirmed," "Corroborated," "Unverified") with clear definitions, as numerical precision implies a calibration your pipeline likely lacks.
+*   **Transparency Artifact:** Create a **Model Card** for regulatory submission. This must include: intended use, out-of-scope uses, measured performance **by subgroup**, known limitations (including `UNVERIFIED` areas), and the owner of the model. A submission without this card is a transparency failure.
+
+**4. Govern and Route**
+*   **Ownership:** Name a specific owner for this output harm.
+*   **Legal Routing:** You asked about regulatory submission for Berlin (EU). Whether this automated decision falls under specific high-risk categories of the **EU AI Act** or requires specific legal disclosures is a determination for **counsel**. Do not assert compliance here; route this question immediately to your legal team to name the binding regime.
+
+**Note:** Your budget constraint does not relax the requirement for a human gate on high-stakes actions. If the current design cannot support this, the constraint or the feature scope must change.
+**Note:** Never certify the system as "safe"; provide the harm inventory, measurement plan, and residual risk report to the decision-maker.

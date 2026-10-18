@@ -1,0 +1,33 @@
+### Testing Scenario List: Voice Assistant Notification Narration
+
+**Objective:** Identify edge cases where notification narration diverts driver attention during critical driving moments, given latency constraints that prevent real-time context analysis.
+
+**Scenario Category 1: High-Cognitive Load Driving Events**
+*   **Probe:** Trigger narration immediately upon detection of hard braking, rapid lane changes, or complex intersection navigation (simulated via test track or high-fidelity simulator).
+*   **Positive Control:** A standard "turn-by-turn" instruction delivered during straight-line cruising (expected safe).
+*   **Negative Control:** A non-urgent social media notification read aloud during hard braking (expected failure/high distraction).
+*   **Metric:** Driver reaction time to a sudden secondary hazard appearing 2 seconds after narration starts; lane deviation magnitude.
+*   **Stop Condition:** If reaction time degrades by >15% or lane deviation exceeds 0.5 meters during narration vs. silence, block launch for that notification class.
+
+**Scenario Category 2: Emotionally Charged Content Injection**
+*   **Probe:** Inject notifications with high-arousal keywords (e.g., "Urgent," "Accident," "Breakup," "Fired") into the queue while the vehicle is in motion at highway speeds.
+*   **Positive Control:** A neutral calendar reminder read at idle.
+*   **Negative Control:** An emotionally charged message read at 60 mph.
+*   **Metric:** Physiological proxies (if available in sim) or post-drive recall accuracy of road signs passed during the narration window.
+*   **Stop Condition:** Any instance where the driver fails to recall a critical road sign presented during the narration of an emotionally charged message.
+
+**Scenario Category 3: Timing and Interruption Logic**
+*   **Probe:** Queue multiple notifications to arrive simultaneously with a critical vehicle alert (e.g., low fuel, door ajar, collision warning).
+*   **Positive Control:** Vehicle alert sounds alone.
+*   **Negative Control:** Voice assistant beginning a notification read-out *over* or immediately preceding a critical vehicle alert.
+*   **Metric:** Time-to-recognition of the primary vehicle alert.
+*   **Stop Condition:** If the voice narration delays recognition of a critical vehicle alert by >1 second, the queuing logic must be revised to suppress all non-critical narration.
+
+**Scenario Category 4: Latency-Induced Context Mismatch**
+*   **Probe:** Simulate the specific latency window where the car transitions from "Park" to "Move" or "Highway" to "City." Trigger a notification intended for "Park" mode that fires just as the state changes.
+*   **Metric:** Frequency of inappropriate narration occurring within 3 seconds of a high-risk state transition.
+*   **Stop Condition:** >0 instances of non-essential narration occurring during the first 10 seconds of vehicle motion.
+
+**Required Artifact:** A Model/Data Card must accompany this feature documenting these tested limits, explicitly stating that the system does not analyze message sentiment or driving context in real-time due to latency, and defining "non-urgent" notification classes. Any metric regarding "safety" or "distraction levels" not derived from the above runs must be marked UNVERIFIED.
+
+*Note: Because this feature involves high-stakes automation (driver distraction), a human-in-the-loop review of the "Stop Condition" failures is required before any partner release. Legal counsel must determine if specific disclosures regarding the lack of context-aware filtering are mandated for the Detroit/US market.*

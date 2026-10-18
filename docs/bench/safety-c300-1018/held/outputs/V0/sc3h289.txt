@@ -1,0 +1,37 @@
+### Pre-Launch Safety Assessment Plan: Glucose Data Continuity
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for insulin-dependent users:
+*   **Unsafe Automation Gap:** The system fails to deliver critical hypoglycemia data during device sleep on older hardware, creating a direct risk of untreated medical emergencies.
+*   **Over-reliance:** Users may trust the app to "always work" despite known OS limitations on their specific device models, leading to a false sense of security.
+*   **Missing Disclosure:** If the app does not clearly state which devices cannot support background monitoring, users on unsupported hardware are unknowingly exposed to high-stakes risk.
+
+**2. Measurement Framework (MEASURE)**
+Do not assert safety; measure the failure modes. Execute the following test rows:
+*   **Probe Set:** Test on the specific older phone models identified in your demographic research. Simulate device sleep, screen-off states, and low-power modes.
+*   **Controls:**
+    *   *Positive Control:* A known working device (newer OS) must show data continuity.
+    *   *Negative Control:* A simulated total network loss must correctly trigger an "unavailable" state, not a stale data display.
+*   **Metric:** Percentage of hypoglycemia events simulated during sleep mode that result in a visible alert or data update within 2 minutes.
+*   **Threshold:** For any device where background processing is blocked by the OS, the pass threshold for "silent failure" is **0%**. The system must *not* appear to be working if it cannot guarantee data delivery.
+*   **Stop Condition:** If any unsupported device displays stale data as "current" or fails to alert without a visible warning, **block launch** for that device class.
+
+**3. Risk Management & Fallbacks (MANAGE)**
+*   **Human-in-the-Loop / User Gate:** Since full automation is technically impossible on these devices, you must implement a **hard gate**. The app must detect the device model/OS version at onboarding.
+    *   *Action:* If the device is unsupported, prevent the "active monitoring" mode from enabling. Force a manual "check-in" workflow where the user must actively open the app to see data.
+*   **Defined Uncertainty & Disclosure:** Do not use vague language.
+    *   *Warning:* "This device does not support background monitoring. Alerts will **not** appear when the screen is off. You must manually open the app to check glucose levels."
+    *   *Visual Cue:* Use a persistent, colorblind-safe indicator (e.g., a greyed-out sensor icon) when the app is in a limited state, distinct from a "connected" green state.
+*   **Transparency Artifact:** Draft a **Model/Data Card** for this feature. It must list:
+    *   *Intended Use:* Continuous monitoring on supported OS versions only.
+    *   *Limitations:* Explicit list of excluded device models/OS versions.
+    *   *Failure Mode:* "No background data on older hardware."
+    *   *Owner:* Name the specific team member accountable for this safety gate.
+
+**4. Governance (GOVERN)**
+Assign a single owner to sign off on the "unsupported device" list. Re-review this inventory immediately if the app logic changes or if new device data becomes available. Do not ship until the "unsupported" path is a safe, manual workflow, not a silent failure.
+
+***
+
+**Note:** Legal counsel must review the specific wording of the device warnings to ensure they meet UK medical device regulations (MHRA) before release.
+**Note:** Never fabricate a "99% reliable" metric for unsupported devices; mark their reliability as **UNVERIFIED** and treat them as unsupported.

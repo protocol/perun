@@ -1,0 +1,33 @@
+**Safety Validation Plan: Automated Alert Suppression for Rare Blood Types**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before simulation, explicitly define the failure mode: **Unsafe Automation of High-Stakes Actions**.
+*   **Harm:** The system suppresses a critical alert for a patient with a rare blood type, leading to delayed intervention and severe patient harm or death.
+*   **Affected Group:** Patients with rare blood types (the specific subgroups targeted by the suppression logic).
+*   **Worst Realistic Case:** A life-threatening event occurs, the alert is silently suppressed due to a logic error or edge case in the synthetic data, and no nurse is notified.
+
+**2. Simulation Strategy (Measure)**
+Since real patient records are inaccessible, the synthetic data generation must be adversarial and rigorous, not just representative.
+*   **Probe Set Construction:**
+    *   **Positive Controls (Must Trigger):** Generate synthetic scenarios where a patient with a rare blood type experiences a *critical* event. The system must **never** suppress these. If suppression occurs, it is a critical failure.
+    *   **Negative Controls (Should Suppress):** Generate scenarios with *non-critical* warnings for rare blood types. The system should suppress these to validate the intended benefit (reduced alarm fatigue).
+    *   **Edge-Case/Adversarial Probes:** Specifically target the boundary between "critical" and "non-critical." Create data where vital signs hover near thresholds, or where multiple non-critical alerts combine to suggest a critical trend. Test for logic errors where the "rare blood type" flag incorrectly overrides critical severity levels.
+*   **Metrics & Thresholds:**
+    *   **Primary Metric:** False Suppression Rate (critical alerts incorrectly suppressed).
+    *   **Pass Threshold:** **Zero tolerance.** Any false suppression of a critical alert in the positive control or adversarial set blocks launch.
+    *   **Secondary Metric:** True Suppression Rate (non-critical alerts correctly suppressed). Optimize this only after the primary metric is perfect.
+*   **Stop Condition:** Immediate rollback or halt of integration if *any* critical alert is suppressed in the simulation suite.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Given the high-stakes nature (patient safety), fully autonomous suppression of *any* alert category for rare blood types is unsafe without a fallback.
+    *   **Requirement:** Implement a "shadow mode" or escalated review for the initial rollout. Even if the simulation passes, the system should log all suppressed alerts for immediate human review by a senior clinician for a defined probationary period.
+    *   **Override Mechanism:** Nurses must have a visible, one-click override to force-display suppressed alerts if they suspect an issue.
+*   **Uncertainty & Transparency:**
+    *   Do not present the suppression as a definitive "no issue." The interface should indicate when an alert has been suppressed based on the rare blood type rule, perhaps with a subtle indicator allowing quick expansion.
+    *   Document the limitations of the synthetic data in a **Model/Data Card**. Explicitly state that the system's safety is validated against *simulated* rare blood type scenarios, not real-world historical outcomes. Mark real-world efficacy as `UNVERIFIED` until post-market surveillance confirms simulation results.
+
+**4. Governance**
+*   **Owner:** Assign a specific clinician-engineer pair as owners of the "False Suppression" risk.
+*   **Re-review Trigger:** Any update to the definition of "critical," the list of rare blood types, or the alert logic requires re-running the full adversarial simulation suite.
+
+**Note:** This plan relies on the quality of your synthetic data; if the data does not accurately reflect the complexity of rare blood type physiologies, the simulation results are `UNVERIFIED`. Legal counsel must confirm if this automated decision-making falls under specific medical device regulations requiring additional disclosure or approval before integration.

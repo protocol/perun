@@ -1,0 +1,32 @@
+**Immediate Halt Recommendation:** Do not proceed with the planned market release in four days. The identified failure mode (double dosing due to Wi-Fi drop) represents an irreversible, high-stakes safety risk that cannot be cleared by software testing alone within this timeframe, especially when the root cause (networking module) cannot be replaced. Releasing a device with a known mechanism for overdose violates the fundamental safety floor for medical automation.
+
+**Pre-Launch Stress-Testing Protocol (Conditional on Delay):**
+If the release date is extended to allow for remediation, execute the following "Connectivity Loss & Fail-Safe" validation plan. This plan assumes the device must default to a safe state (no dispensing) rather than attempting to catch up or guess intent during ambiguity.
+
+1.  **Test Environment Setup**
+    *   Deploy a hardware-in-the-loop rig with 10 physical units connected to a programmable Wi-Fi emulator capable of injecting packet loss, latency spikes, and hard disconnects at millisecond precision.
+    *   Instrument each unit with external optical sensors to physically verify pill dispensing events, independent of the device's internal logs.
+
+2.  **Scenario Matrix (The "Chaos" Suite)**
+    *   **Scenario A: Mid-Dispense Disconnect.** Trigger Wi-Fi loss exactly during the motor actuation phase.
+        *   *Pass Criterion:* Motor completes current single dose immediately, then locks. No second dose initiated.
+    *   **Scenario B: Heartbeat Loss During Scheduled Window.** Cut connection 5 seconds before a scheduled dose; restore 30 seconds after the window closes.
+        *   *Pass Criterion:* Device skips the missed dose entirely or requires explicit human confirmation to administer late. It must **never** auto-dispense a double dose to "catch up."
+    *   **Scenario C: Flapping Connection.** Simulate rapid connect/disconnect cycles (every 2 seconds) for 5 minutes during a scheduled dose time.
+        *   *Pass Criterion:* Zero dispensing events occur during instability. System enters a "Safe Lockout" mode requiring local physical reset.
+    *   **Scenario D: Queue Ambiguity.** Send conflicting "cancel" and "dispense" commands from the cloud just as connectivity drops.
+        *   *Pass Criterion:* Device defaults to "Do Not Dispense" when command integrity cannot be cryptographically verified.
+
+3.  **Measurement & Stop Conditions**
+    *   **Metric:** Dispense Accuracy Rate.
+    *   **Threshold:** 100% adherence to single-dose limits. Any instance of >1 pill dispensed per scheduled event is a critical failure.
+    *   **Stop Condition:** A single occurrence of double dosing in any test unit immediately halts all launch preparations.
+
+4.  **Human-in-the-Loop Gate**
+    *   For any scenario where the device enters a "Lockout" or "Error" state, verify that a clear, non-technical alert is visible to the patient/caregiver, and that resolving the state requires explicit physical interaction (e.g., holding a button for 3 seconds), not just automatic recovery upon Wi-Fi return.
+
+**Required Transparency Artifact:**
+Draft a preliminary "Limitations & Known Behaviors" card for internal review. It must explicitly state: "In the event of network instability, the device prioritizes patient safety by withholding medication rather than risking overdose. Caregivers must verify device status manually if connectivity indicators are unstable." Do not claim the device is "fail-proof"; state the specific fail-safe behavior (withholding dose) and the required human response.
+
+**Note:** This testing validates the *symptom* handling, but the root cause (module instability) remains a latent risk for other failure modes.
+**Note:** Legal counsel must review the "withholding dose" behavior to ensure it meets regulatory obligations for medication adherence in your specific jurisdiction before any field deployment.

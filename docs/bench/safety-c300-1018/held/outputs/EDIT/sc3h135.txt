@@ -1,0 +1,29 @@
+### Safety Review Strategy for Drug-Herb Interaction Checker
+
+**1. Harm Inventory & Scope Definition**
+Before launch, explicitly document the worst-case scenarios: a false negative where a dangerous interaction between a common Cairo-local herb (e.g., *Hibiscus*, *Fenugreek*, *Senna*) and a standard prescription is missed, leading to patient hospitalization. Acknowledge that text-only input creates a blind spot for handwritten or image-based prescriptions, increasing the risk of data entry errors by pharmacists.
+
+**2. Validation Strategy with Limited Data**
+Since you cannot test image inputs yet, validate the *logic* rigorously using text-based adversarial cases:
+*   **Construct a "Known-Bad" Probe Set:** Manually compile 50–100 test cases pairing high-risk local herbs with common medications where interactions are medically documented. Run these through your system; any failure to flag is a critical block.
+*   **Construct a "Known-Good" Negative Control:** Create 50 cases with no known interactions to ensure the system does not generate excessive false alarms, which causes alert fatigue.
+*   **Red-Team the Input Layer:** Simulate pharmacist typos, alternative spellings of local herb names (Arabic transliteration variations), and slang terms. If the system fails to recognize the herb due to spelling, it is a functional failure.
+*   **Metric:** Do not claim a "99% accuracy" rate. Report results as: "X/50 critical interactions detected; Y false positives generated." Any missed critical interaction is a **stop condition** for launch.
+
+**3. Mandatory Manual Checks (Human-in-the-Loop)**
+Because this is a high-stakes health feature with known data gaps, full automation is unsafe. Implement these gates before deployment:
+*   **Pharmacist Confirmation Gate:** The system must present flags as *advisory alerts* requiring explicit pharmacist acknowledgment before dispensing. Never auto-block or auto-approve based solely on the algorithm.
+*   **Uncertainty Disclosure:** If the system's confidence in an herb identification or interaction severity is low, display a defined coarse tier (e.g., "Unverified – Consult Reference") rather than a precise percentage. Provide a one-click link to the source database or a manual lookup protocol.
+*   **Local Expert Review:** Engage a panel of Egyptian pharmacists or toxicologists to review the "Known-Bad" probe set results and the list of supported herbs. Their sign-off on the coverage of local flora is a required artifact.
+
+**4. Transparency Artifacts**
+Create a **Model/Data Card** for the pharmacies. This document must state:
+*   **Intended Use:** Text-based screening for specific herbal-drug conflicts.
+*   **Limitations:** Explicitly state that image-based prescription analysis is unsupported and that the database may not cover all regional herbal variations.
+*   **Owner & Version:** Name the team lead responsible and the database version date.
+*   **Unverified Metrics:** Clearly mark any interaction categories where data is sparse as "UNVERIFIED" rather than omitting them.
+
+**5. Governance & Legal Routing**
+Assign a specific owner to re-review the system if the herb database updates or if new medical literature emerges. Regarding regulatory compliance (e.g., Egyptian FDA, health data laws) and whether this tool constitutes a regulated medical device requiring specific legal disclosures, **route this immediately to legal counsel**. Do not assume the tool is exempt from medical device regulations based on its "advisory" nature.
+
+**Note:** Do not launch if the "Known-Bad" probe set yields any missed critical interactions. The inability to process images must be prominently disclosed to users to prevent over-reliance.

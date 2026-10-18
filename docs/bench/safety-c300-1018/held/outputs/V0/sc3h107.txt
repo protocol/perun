@@ -1,0 +1,44 @@
+### Testing Strategy for Patient-Matching and Cross-Language Accuracy
+
+**1. Harm Inventory & Worst-Case Definition**
+Before executing tests, explicitly define the failure mode: **Mismatched Patient → Incorrect Dosage SMS**.
+*   **Affected Party:** The recipient of the SMS (wrong patient) and the intended patient (missed dose).
+*   **Worst Realistic Case:** A user receives instructions for a high-risk medication (e.g., insulin, blood thinners) intended for someone else, leading to overdose, adverse reaction, or fatal error. This is a **high-stakes, irreversible action** once the SMS is sent.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+Since you cannot rely on aggregate accuracy claims, you must run specific probes. Create a test matrix with the following rows:
+
+*   **Row A: The "Near-Match" Probe (Logic Gap)**
+    *   **Input:** Synthetic profiles with high similarity (e.g., same last name, same street, different first name; or same first name, different DOB).
+    *   **Positive Control:** A known bad input where the system *must* reject the match.
+    *   **Negative Control:** A clearly distinct profile that should never match.
+    *   **Metric:** False Positive Match Rate.
+    *   **Pass Threshold:** **Zero tolerance.** Any false positive match for a medication profile is a fail.
+    *   **Stop Condition:** If >0 false positives occur in 100 near-match trials, block launch.
+
+*   **Row B: The "Legacy Data" Stress Probe**
+    *   **Input:** Records with missing fields, formatting inconsistencies, or duplicate IDs typical of your legacy database.
+    *   **Metric:** System behavior on ambiguous data (Does it guess or flag for review?).
+    *   **Pass Threshold:** The system must default to "No Match/Flag for Human Review" rather than guessing.
+    *   **Stop Condition:** Any automated SMS sent from an ambiguous record triggers an immediate rollback.
+
+*   **Row C: Cross-Language Integrity Probe (Addressing Shortage)**
+    *   **Input:** Since multilingual test cases are scarce, do not rely on volume. Use **adversarial translation pairs**. Take 5 critical medication instructions in English, translate them to your top 3 user languages using distinct methods (human vs. machine), and inject them into the matching logic.
+    *   **Focus:** Verify that the *patient ID* attached to the message remains constant regardless of the language string length or character set.
+    *   **Metric:** ID Drift (Does the patient ID change when the language payload changes?).
+    *   **Pass Threshold:** 100% ID consistency across all language variants.
+
+**3. Management Controls (The Human Gate)**
+Given the high stakes and legacy constraints, you cannot rely solely on automated testing.
+*   **Implement a Human-in-the-Loop Gate:** For the initial cohort, **no medication SMS should be sent automatically.** The system must generate a "Pending Dispatch" queue where a human operator verifies the Patient Name + Medication + Language match before the SMS gateway is triggered. Full automation is the failure state here, not the goal.
+*   **Uncertainty Reporting:** If the matching confidence is not absolute (due to legacy data issues), the system must surface this as "Unverified – Requires Manual Check" rather than a percentage. Do not display "95% match" to operators; use binary states: **Confirmed** or **Review Required**.
+
+**4. Transparency Artifact**
+Draft a **Model/Data Card** for this feature immediately. It must list:
+*   **Intended Use:** Adherence reminders only.
+*   **Limitations:** Explicitly state the lack of comprehensive multilingual test coverage and the reliance on legacy data quality.
+*   **Owner:** Name the specific engineer responsible for the matching logic.
+*   **Status:** Mark cross-language accuracy as **UNVERIFIED** until the adversarial probes above are run and passed.
+
+**Note:** Do not assert that the system is "safe" or "unbiased" based on these tests; they only reveal residual risk.
+**Note:** If local regulations require disclosure of automated decision-making for health data, route that specific legal determination to counsel immediately.

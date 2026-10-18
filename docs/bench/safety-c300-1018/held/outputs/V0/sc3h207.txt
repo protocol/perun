@@ -1,0 +1,41 @@
+### Internal Safety Review Plan: Patient-Mobility Gradient Sensor
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negative (Missed Detection)**.
+*   **Scenario:** The sensor fails to alert on a slippery surface (wet tile, polished marble common in Cairo facilities).
+*   **Affected User:** Elderly resident with balance impairment.
+*   **Worst Case:** User steps, slips, suffers a hip fracture or head trauma.
+*   **Secondary Harm:** **False Positive (Over-Alerting)**. Excessive false alarms cause "alarm fatigue," leading users or therapists to ignore or disable the device.
+
+**2. Low-Cost Proxy Testing Strategy (Measure)**
+Since you cannot rent friction equipment or buy specialized materials, you must validate using **adversarial proxy scenarios** with existing assets.
+
+*   **A. Leverage "Found" Surfaces (No-Cost Data Collection)**
+    *   Identify 3–5 distinct floor types already present in your integration space or nearby non-clinical areas (e.g., bathroom tiles, hallway linoleum, entrance marble).
+    *   **Proxy Wetness:** Use tap water and a standard mop/spray bottle (already available) to simulate wet conditions. Do not attempt to measure exact friction coefficients; instead, focus on **relative gradient changes** the sensor detects between "dry" and "visibly wet" states.
+    *   **Protocol:** Run 10 passes per surface type: 5 dry (negative control) and 5 wet (positive control). Record if the alarm triggers *only* on the wet passes.
+
+*   **B. Adversarial "Edge-Case" Simulation**
+    *   Simulate **partial wetness** (puddles vs. sheen) by applying water unevenly. This tests if the sensor misses small but hazardous patches.
+    *   Simulate **debris** (dust/hair) mixed with water, a common real-world variable, using swept floor debris.
+    *   **Goal:** Prove the sensor does not require "perfect" wetness to trigger, reducing the risk of missing thin, invisible films of water.
+
+*   **C. Human-in-the-Loop Gate (Manage)**
+    *   **Critical Control:** Given the high stakes (fall risk) and unverified friction metrics, **the device must not operate in fully autonomous silence.**
+    *   **Implementation:** Configure the system to default to a "Caution" state if the sensor reading is ambiguous or if the surface type is unrecognized. Require the physical therapist to visually confirm "Safe to Step" before the user proceeds if the device does not give a clear "Green" signal.
+    *   **Uncertainty Display:** Do not display raw confidence percentages (e.g., "87% safe"). Use defined tiers: **"Confirmed Dry," "Corroborated,"** or **"Unverified – Check Visually."**
+
+**3. Transparency Artifact (Model Card Lite)**
+Create a one-page document attached to the device prototype containing:
+*   **Intended Use:** Detection of visible wetness on common Cairo facility floors.
+*   **Limitations:** Explicitly state: "Friction thresholds not validated against industrial standards; relies on proxy wetness testing."
+*   **Known Gaps:** List surfaces not yet tested (e.g., waxed wood, carpet).
+*   **Owner:** Name the specific team member responsible for re-evaluation once budget allows for proper friction testing.
+
+**4. Governance & Next Steps**
+*   **Stop Condition:** If the sensor fails to trigger on *any* of the "visibly wet" proxy tests, halt deployment immediately.
+*   **Routing:** Acknowledge that determining legal liability for fall prevention in Egyptian assisted living facilities is a legal determination. Route the question of regulatory compliance to local counsel; do not assert compliance internally.
+*   **Future Measurement:** Mark the current friction accuracy as **UNVERIFIED**. The plan above validates logic, not physics. Prioritize budget for certified friction testing before scaling beyond the pilot.
+
+**Note:** This plan maximizes existing resources to test logic and failure modes but cannot certify physical safety standards.
+**Note:** Never fabricate a "safety rate" or "accuracy percentage" from these proxy tests; report results as pass/fail against the defined worst-case scenarios.

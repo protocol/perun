@@ -1,0 +1,41 @@
+### Targeted Bias Review Plan for Northwind Pets Matcher
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Bias/unfair outcomes where qualified families are systematically denied due to neighborhood crime statistics acting as a proxy for protected demographic factors.
+*   **Affected Group:** Applicants from specific geographic zones correlated with demographic data.
+*   **Worst Case:** Qualified loving homes are permanently excluded from adoption opportunities; legal/reputational risk for Northwind Pets.
+
+**2. Measurement Strategy (Runnable Tests)**
+Since retraining is not feasible, you must measure the *impact* of the current logic to justify manual overrides or threshold adjustments. Execute these three specific test rows using your existing data:
+
+*   **Test Row A: Counterfactual Neighborhood Swap**
+    *   **Probe Set:** Take 50 approved applications from "low-crime" neighborhoods. Artificially change their address to a "high-crime" neighborhood while keeping all lifestyle/financial inputs identical.
+    *   **Controls:** Positive control (original address = approved); Negative control (known unqualified applicant = denied).
+    *   **Metric:** Denial Rate Delta. How many previously approved applicants are now denied solely due to the address change?
+    *   **Pass Threshold:** Owner-defined (e.g., <5% flip rate).
+    *   **Stop Condition:** If >20% of qualified applicants flip to "denied," block automated decisions for any applicant in high-crime zones.
+
+*   **Test Row B: Subgroup Performance Slice**
+    *   **Probe Set:** Segment historical or synthetic applications by neighborhood tier (Low/Medium/High crime).
+    *   **Metric:** False Rejection Rate per tier (qualified applicants marked as "incompatible").
+    *   **Pass Threshold:** Owner-defined parity limit (e.g., rejection rate in High tier cannot exceed Low tier by >10%).
+    *   **Stop Condition:** If disparity exceeds threshold, route all "High Tier" decisions to human review.
+
+*   **Test Row C: Adversarial Edge Cases**
+    *   **Probe Set:** Create profiles of ideal adopters (high income, perfect lifestyle match) located exclusively in the most penalized neighborhoods.
+    *   **Metric:** Percentage of "Ideal" profiles rejected.
+    *   **Stop Condition:** If any "Ideal" profile is rejected, the neighborhood weight is too high for safe automation.
+
+**3. Risk Management & Human Gate**
+*   **Immediate Control:** Implement a **Human-in-the-Loop (HITL) gate** for all applications triggered by the "high-crime" neighborhood variable. Do not allow the model to auto-deny these cases.
+*   **Uncertainty Disclosure:** If the system displays reasons for denial to users, do not show a precise confidence score (e.g., "87% incompatible"). Instead, use defined coarse tiers: *"Requires Manual Review due to Location Data Variance."*
+*   **Transparency Artifact:** Draft a **Model Card** section documenting:
+    *   **Intended Use:** Lifestyle matching only; not a safety or background check.
+    *   **Limitations:** Explicitly state that neighborhood crime data is used as a proxy for lifestyle stability and may correlate with demographic factors, leading to potential bias.
+    *   **Measured Results:** Insert the results from Tests A, B, and C above. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**4. Governance**
+*   **Owner:** Assign one team member as the "Bias Review Owner" responsible for reviewing HITL escalations weekly.
+*   **Re-review Trigger:** Any change to the neighborhood weighting logic or data source requires re-running Test Row A.
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased." If legal questions arise regarding fair housing or anti-discrimination laws, route immediately to counsel.

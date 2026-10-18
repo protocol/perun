@@ -1,0 +1,37 @@
+### Review Strategy: Sensor Drift & Measurement Accuracy
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks to stroke survivors and therapists:
+*   **Hallucination as Fact:** The system reports improved range of motion (ROM) due to sensor drift rather than actual patient progress, leading therapists to advance therapy prematurely or discharge patients incorrectly.
+*   **Bias/Unfair Outcomes:** Drift affects patients with higher tremors or limited mobility disproportionately, systematically under-reporting their capabilities compared to stable movers.
+*   **Over-reliance:** Therapists trust the automated "progress" metric without verifying raw data, assuming the wearable is clinically precise.
+*   **Unsafe Automation:** If the system auto-generates insurance documentation based on flawed ROM data, it could trigger fraudulent claims or deny necessary continued care.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert accuracy; measure it under adversarial conditions. Execute one test row per identified harm:
+*   **Probe Set:** Simulate a 45-minute therapy session using a robotic rig or human surrogate.
+    *   *Negative Control:* Device fixed rigidly; verify zero drift.
+    *   *Positive Control:* Intentionally shift the device 5mm mid-session during a static hold to mimic patient movement.
+    *   *Edge Cases:* Introduce tremors (simulating post-stroke conditions) and sweat/moisture to test sensor adhesion and signal noise.
+*   **Metric:** Absolute error in degrees between ground-truth motion and reported ROM over time.
+*   **Threshold:** Define a clinical tolerance (e.g., ±3 degrees). Any drift exceeding this during a session is a **stop condition**.
+*   **Stop Condition:** If >5% of simulated sessions exceed the error threshold, block deployment. Do not invent a "typical" error rate; report the worst-case observed drift.
+*   **Injection Check:** Test if sudden movements (e.g., a patient stumbling) cause permanent offset errors that persist for the rest of the session.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Until drift is proven negligible, **no automated progress report** is sent to therapists or insurance bodies. All data must be flagged as "Preliminary – Requires Therapist Verification."
+*   **Uncertainty Disclosure:** Do not display precise percentages (e.g., "92% flexibility"). Use defined coarse tiers: *Confirmed Range*, *Estimated Range (Sensor Shift Detected)*, or *Unverified*.
+*   **Reversibility:** Ensure therapists can easily manually correct ROM data and override the system's calculation without penalty.
+
+**4. Governance & Transparency (GOVERN)**
+*   **Owner:** Assign a specific clinical lead responsible for reviewing drift incidents.
+*   **Artifact:** Create a **Model/Data Card** for this feature. It must list:
+    *   Intended use: Home monitoring for stroke rehab (not acute diagnosis).
+    *   Limitations: Known failure modes when the device shifts.
+    *   Performance: Report accuracy **by subgroup** (e.g., patients with tremors vs. without), not just an aggregate average.
+    *   Status: Mark unmeasured metrics as **UNVERIFIED**.
+
+**Critical Constraint:** Given the two-week deadline, if you cannot complete the drift evaluation with positive/negative controls, the metric remains **UNVERIFIED**. Do not fabricate a reliability score to meet the insurance cycle. Deploying with unverified clinical data poses a direct safety risk to patients and legal liability for Sakura Rehab Tech. Route any questions regarding regulatory compliance (e.g., PMDA in Japan, ISO 13485) to legal counsel immediately; do not assert compliance here.
+
+*Note: This strategy prioritizes patient safety over the reimbursement deadline; shipping unverified clinical data is the primary failure mode to prevent.*
+*Legal determination of "clinical standard" compliance must be confirmed by counsel, not this review.*

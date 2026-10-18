@@ -1,0 +1,39 @@
+### Harm Inventory & Testing Strategy for Northwind Health Scheduler
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record these risks for the Toronto clinic context:
+*   **Bias/Unfair Outcomes:** The model may systematically deprioritize marginalized communities (e.g., racialized groups, low-income patients) or those with unpredictable work schedules (e.g., gig workers, shift workers) if past attendance correlates with socioeconomic instability rather than intent to miss care.
+*   **Unsafe High-Stakes Automation:** Automatically delaying care based on a prediction constitutes a high-stakes, potentially irreversible action that could worsen health outcomes.
+*   **Over-reliance:** Clinic staff may trust the "high-risk" flag as fact, ignoring clinical urgency or patient context.
+*   **Missing Disclosure:** Patients flagged as high-risk are unaware their appointment timing is influenced by an algorithmic prediction.
+
+**2. Measurement Plan (MEASURE)**
+Since new data collection is impossible, use existing EHR data (demographics, past attendance) to construct adversarial evals. Run one test row per harm:
+
+*   **Probe Set A (Socioeconomic Proxy):** Segment patients by postal code (as a proxy for income/neighbourhood marginalization in Toronto) and known shift-work industries if available in occupation fields.
+    *   *Positive Control:* Synthetic profiles matching high-marginalization demographics with perfect recent attendance.
+    *   *Negative Control:* Profiles matching low-marginalization demographics with identical missed-appointment history.
+    *   *Metric:* Disparity in "priority score" or wait-time extension between groups.
+    *   *Stop Condition:* If the wait-time extension for marginalized segments exceeds the threshold set by clinical leadership (propose zero tolerance for automatic denial of urgent care), block launch.
+*   **Probe Set B (Instability vs. Intent):** Isolate patients with historical gaps caused by documented emergencies vs. no-shows.
+    *   *Metric:* False positive rate where emergency-related gaps trigger "high-risk" flags.
+    *   *Stop Condition:* If false positives exceed owner-defined limits, disable automatic rescheduling.
+*   **Injection/Leakage Check:** Verify that no protected health information from other patients leaks into the scoring logic via shared clinic resources.
+
+**Result Reporting:** Do not invent a "fairness score." Report residual risk as **UNVERIFIED** for any subgroup where data is too sparse to run these probes.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Do not allow the system to automatically delay or deny appointments. The "high-risk" prediction must serve only as a **flag for human review**. A clinic coordinator must confirm the delay is clinically appropriate before acting. This is the floor for high-stakes medical access.
+*   **Uncertainty Display:** Present the prediction to staff as a coarse tier (e.g., "Review Recommended: Unverified Pattern") rather than a precise percentage (e.g., "87% risk"). Define what "Unverified" means in your internal docs to prevent over-trust.
+*   **Transparency Artifact:** Create a **Model Card** for this feature before launch. It must list:
+    *   *Intended Use:* Prioritizing follow-up reminders, not denying urgent care.
+    *   *Limitations:* Trained only on attendance/demographics; likely blind to socioeconomic barriers.
+    *   *Owner:* Name the specific product lead responsible.
+    *   *Performance:* Include the results of Probe Sets A and B, marking gaps as UNVERIFIED.
+
+**4. Governance (GOVERN)**
+Name the owner of this harm inventory today. Schedule a re-review immediately after the first 100 predictions are processed live.
+
+**Notes:**
+*   Legal determination on whether this constitutes a regulated automated decision under Ontario health privacy laws or the EU AI Act (if applicable to vendors) must be routed to counsel; do not assert compliance here.
+*   If the two-week deadline prevents running these probes, the only safe path is to disable the automated prioritization entirely until testing is complete.

@@ -1,0 +1,42 @@
+### Pre-Launch Evaluation & Mitigation Plan: Bariatric Micronutrient Screener
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for this feature:
+*   **False Negatives (Missed Deficiencies):** The system fails to flag a critical deficiency (e.g., Iron, B12, Vitamin D) common in post-bariatric patients, leading to delayed treatment and potential neurological or hematological damage.
+*   **Over-Reliance:** Clinicians trust the automated "All Clear" status without reviewing raw dietary logs, assuming the tool is more comprehensive than its limited internal data allows.
+*   **Bias/Exclusion:** The model performs poorly on specific subgroups (e.g., vegan post-surgery patients, elderly patients) if your historical records lack diversity in these areas.
+*   **Missing Disclosure:** Patients or junior staff are unaware that the screening is based on limited internal patterns rather than a comprehensive medical database.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert accuracy; measure residual risk using your internal historical records. Construct a runnable evaluation plan with one test row per harm:
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Known Failures):** Manually curate 50–100 historical cases where a deficiency *was* clinically diagnosed but was subtle in the dietary log. Ensure these cover the "specific micronutrient issues" you fear missing.
+    *   **Negative Controls:** Select 50–100 historical cases with confirmed adequate levels and no deficiency flags.
+    *   **Adversarial/Edge Cases:** Create synthetic logs based on known bariatric pitfalls (e.g., "high protein but zero supplementation," "vegan diet post-gastric bypass") where your internal data might be sparse.
+*   **Metrics & Thresholds:**
+    *   **Primary Metric:** False Negative Rate (FNR) for critical micronutrients.
+    *   **Stop Condition:** If the FNR for any critical nutrient (Iron, B12, Calcium, Vit D) exceeds **0%** in your positive control set, the feature **must not launch** as an autonomous screener. Given the high stakes, tolerance for missed critical deficiencies should be effectively zero.
+*   **Subgroup Slicing:** Run these tests separately for different surgery types (sleeve vs. bypass) and demographic segments present in your data. Report results as `UNVERIFIED` for any group with insufficient historical data.
+
+**3. Risk Management & Mitigation (MANAGE)**
+Since you cannot license external databases and face a hard deadline, you must manage the residual risk through process controls, not code fixes:
+
+*   **Human-in-the-Loop Gate (Mandatory):** The tool must **never** auto-clear a patient. It should function strictly as a *decision support* flagging system. Any output indicating "No Deficiency Detected" must still require a clinician's explicit review and sign-off before being recorded as a negative screen.
+*   **Uncertainty Disclosure:** Do not show confidence percentages (e.g., "95% safe"). Instead, use defined coarse tiers:
+    *   *Flagged:* Pattern matches known deficiency logs.
+    *   *Review Required:* Pattern is ambiguous or matches sparse data categories.
+    *   *Unverified:* No sufficient historical pattern found (default for rare/complex cases).
+*   **Transparency Artifact (Model Card):** Publish a one-page internal document stating:
+    *   **Intended Use:** Triage aid for common deficiencies only.
+    *   **Limitations:** Explicitly list micronutrients or patient types where historical data was too sparse to validate performance.
+    *   **Data Source:** "Internal historical records only; not validated against external medical gold standards."
+*   **Rollback Plan:** Define a trigger (e.g., >2 missed critical deficiencies reported in the first week) that immediately disables the automated flagging, reverting to manual review only.
+
+**4. Governance**
+Name a specific clinical lead as the owner of this risk. They must sign off on the residual risk acceptance before the six-week deadline. If legal requirements for AI disclosure in medical devices apply in your region, route this immediately to counsel; do not assume the internal tool exempts you from regulation.
+
+***
+
+**Note:** This plan treats the tool as a high-risk assistant, not a diagnostic authority. The "zero tolerance" stop condition for false negatives is non-negotiable for patient safety.
+**Note:** Ensure your "Positive Controls" are verified by senior clinicians, not just extracted from database fields, to guarantee ground truth.

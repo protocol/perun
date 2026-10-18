@@ -1,0 +1,27 @@
+### Remote Validation Strategy for Mobility Assessment Tool
+
+**1. Synthetic Data & Simulation Layer**
+Generate synthetic sensor datasets representing three distinct cohorts: stable climbers, unstable/shaky climbers, and non-climbers attempting stairs. Inject specific noise patterns mimicking Cairo's variable smartphone hardware and network latency. Run your algorithm against this baseline to establish a "known-good" and "known-bad" performance floor before touching real user data.
+
+**2. Structured Video Submission Protocol**
+Replace unstructured video uploads with a guided capture workflow within the app prototype:
+*   **Calibration Step:** Users record a 5-second static hold to normalize sensor baselines.
+*   **Controlled Task:** Users record a single flight of stairs from a fixed angle (tripod/furniture supported) to ensure ground-truth visibility.
+*   **Self-Reported Ground Truth:** Immediately after recording, the user answers three binary questions: "Did you feel unstable?", "Did you hold the railing?", "Would you attempt this alone?" This creates a labeled dataset without needing an observer.
+
+**3. The "Shadow Mode" Evaluation Workflow**
+Do not show results to users yet. Run the algorithm in "shadow mode" on incoming video/sensor pairs:
+*   **Blind Review:** Engineers compare the algorithm's "Stable/Unstable" classification against the user's self-reported ground truth and manual video review.
+*   **False Positive Hunt:** Specifically isolate cases where the app says "Stable" but the video shows shaking or the user reported feeling unstable. This is the critical failure mode (misguiding a patient they are safe when they are not).
+*   **Metric:** Calculate the **False Safe Rate** (instances marked safe that were actually unsafe). Do not rely on overall accuracy.
+
+**4. Halt Criteria (Stop Conditions)**
+Launch is blocked if any of the following thresholds are met during the remote validation of 50+ diverse submissions:
+*   **False Safe Rate > 0%:** Any instance where the system declares a user "Stable" who is visibly unstable or self-reports instability triggers an immediate halt. This is a high-stakes irreversible action (physical injury risk); zero tolerance is required.
+*   **Uncertainty Gap:** If the system cannot generate a low-confidence flag for borderline cases (e.g., shaky but completed), the feature cannot ship.
+*   **Data Drift:** If performance on synthetic data diverges significantly (>15%) from early real-world video results, pause for model retraining.
+
+**5. Human-in-the-Loop Gate**
+Until the False Safe Rate is proven to be 0% over a statistically significant sample, no automated "Safe to Climb" verdict is shown to the user. Instead, the app must display: *"Assessment incomplete. Please consult a physical therapist."* Only after passing the halt criteria can the system transition to providing automated feedback, and even then, it must include a disclaimer that this is an estimation, not a medical diagnosis.
+
+**Note:** This plan treats the assessment as a high-stakes automated decision requiring a human gate until proven safe; it does not certify the system as unbiased or safe. Legal requirements for medical device classification in Egypt must be routed to counsel.

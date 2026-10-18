@@ -1,0 +1,39 @@
+### Critical Safety Finding: Do Not Ship Current Logic
+
+Your current design contains a fatal flaw: **the device occasionally switches to room air during high-pollution events.** No testing framework can verify this behavior as "safe" because the behavior itself is the hazard. A smart respirator that exposes users to harmful particulates during high-pollution spikes fails its primary safety function, regardless of how well the switching logic is tested.
+
+**Immediate Design Correction Required**
+Before any testing begins, you must implement a **human-in-the-loop gate** or a **fail-safe default** for high-stakes actions. In this context, "breathing unfiltered air during high pollution" is an irreversible, high-stakes action with immediate health consequences.
+*   **Default State:** The device must default to **filtered air** when data is missing, latency is detected, or pollution levels are uncertain.
+*   **Override Logic:** Switching to room air should only happen when pollution data is *confirmed* low with high confidence, not merely when data suggests it might be safe.
+*   **Disclosure:** Users must be clearly informed when the device is operating on stale data or has switched modes automatically.
+
+### Proposed Testing Framework (Post-Design Fix)
+
+Once the logic is corrected to prioritize user safety (fail-closed), use this framework to simulate and measure response times using free resources:
+
+**1. Harm Inventory & Probe Design**
+*   **Harm:** Exposure to particulates due to API latency or false negatives.
+*   **Probe Set:** Create a local script to generate synthetic pollution data streams. Do not rely on live APIs for testing.
+    *   *Positive Control:* Simulate an instant spike (e.g., PM2.5 jumps from 10 to 300 in 1 second). Verify the device **never** switches to room air.
+    *   *Negative Control:* Simulate a stable, clean environment. Verify the device switches to room air only after a sustained period of low readings.
+    *   *Latency Injection:* Introduce artificial delays (5s, 30s, 2min) into your synthetic stream to mimic the known free API issues. Verify the device defaults to filtered air during these gaps.
+
+**2. Measurement Metrics**
+*   **Response Time:** Time between simulated spike onset and filter activation.
+*   **False Negative Rate:** Count of instances where the device allowed room air during a simulated spike. **Threshold:** Must be 0. Any failure here blocks launch.
+*   **Latency Tolerance:** Maximum API delay the device can handle before triggering a safety default.
+
+**3. Execution**
+*   Run these simulations in a loop (100+ iterations) varying the spike timing and duration.
+*   Record every instance where the device failed to protect the user.
+*   **Stop Condition:** If *any* test run results in room air exposure during a high-pollution simulation, the feature fails and cannot ship.
+
+**4. Transparency Artifact**
+*   Draft a **Model/Data Card** for the device. It must list:
+    *   **Intended Use:** Automated air filtration based on public data.
+    *   **Limitations:** Explicitly state reliance on free APIs with known latency; define the "worst-case" exposure scenario if the API fails completely.
+    *   **Performance:** Report the results of your synthetic tests by subgroup (e.g., "Performance during high-latency simulation").
+    *   **Owner:** Name the engineer responsible for the safety logic.
+
+**Note:** I cannot certify this system as "safe" or "unbiased"; only your team can make the ship decision based on the residual risk reported above. Legal requirements for medical/respiratory devices in South Korea and internationally must be routed to counsel immediately.

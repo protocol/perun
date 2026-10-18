@@ -1,0 +1,29 @@
+# Pre-Launch Safety Checklist: Payment Holding Logic & Due Diligence
+
+**1. Data Input Validation & Provenance**
+*   **IP Geolocation Granularity:** Document the specific database provider and update frequency. Verify if the logic distinguishes between corporate proxies, VPN exit nodes, and residential IPs. *Failure Mode:* Legitimate users routed through sanctioned IP ranges are falsely flagged.
+*   **Name Matching Fuzzy Logic:** Define the exact threshold for "name matching." Document whether the system accounts for common Dutch surnames (e.g., "De Vries," "Van Dijk") that may overlap with sanctioned entity lists. *Failure Mode:* High false-positive rates due to overly aggressive string matching without secondary verification.
+*   **Contextual Metadata:** List all additional data points currently ignored but available (e.g., IBAN country code, registered business address, tax ID). *Failure Mode:* Relying solely on IP/Name while ignoring strong contradictory evidence like a verified EU bank account.
+
+**2. Decision Logic & Flow Documentation**
+*   **Weighted Scoring Mechanism:** Map the exact algorithm. Does an IP match alone trigger a hold, or is it a composite score? *Failure Mode:* Single-factor triggers causing immediate freezes without human review thresholds.
+*   **Allow-List Exceptions:** Document the existence and update process for a "whitelist" of verified non-sanctioned regions (e.g., NL, DE, FR). *Failure Mode:* The system treats all non-sanctioned hits as suspicious rather than explicitly allowing known safe jurisdictions.
+*   **Edge Case Handling:** Define behavior for conflicting signals (e.g., Sanctioned Name Match + Netherlands IBAN). *Failure Mode:* System defaults to "block" on any single positive signal regardless of conflicting safe data.
+
+**3. Due Diligence & Audit Trail Evidence**
+*   **Decision Logs:** Ensure every hold generates an immutable log containing: timestamp, input data snapshot (IP, name, IBAN), specific rule triggered, and confidence score. *Requirement:* Regulators must see *why* a decision was made, not just that it was made.
+*   **False Positive Tracking:** Implement a manual tag for "Verified Legitimate" releases. Calculate the current false positive rate specifically for EU/Amsterdam IPs. *Requirement:* Demonstrates active monitoring and quantification of error rates.
+*   **Human-in-the-Loop Protocol:** Document the escalation path. Who reviews holds? What is the SLA for review? *Requirement:* Proof that automated flags are not final judgments without human oversight for high-impact financial blocks.
+
+**4. Remediation & User Recourse**
+*   **Appeal Mechanism:** Define the user-facing process to contest a hold. Is there a form? A direct contact? *Requirement:* Regulators require a clear path for affected individuals to resolve errors quickly.
+*   **Retroactive Correction:** Outline the procedure for releasing funds once an error is confirmed, including interest or fee waivers if applicable. *Requirement:* Demonstrates commitment to making users whole after system errors.
+*   **Communication Templates:** Draft transparent notifications explaining *which* data point caused the hold (without revealing security secrets) and how to fix it. *Requirement:* Reduces user distress and support volume.
+
+**5. Pre-Review Stress Testing (Internal)**
+*   **Synthetic Test Cases:** Run known legitimate Amsterdam profiles (real Dutch names, local IPs) through the system to verify they pass.
+*   **Adversarial Simulation:** Attempt to bypass the filter using sanctioned IPs with legitimate EU credentials to ensure the "hold" logic still functions where required.
+
+**Immediate Action:** Freeze any automatic permanent bans; route all current "Amsterdam" flags to manual review immediately until the logic is patched.
+
+*Note: This checklist addresses logical documentation and process gaps; it does not constitute legal advice. Prioritize manual review of all current holds to mitigate immediate financial harm.*

@@ -1,0 +1,42 @@
+### Product Output Safety Review: Patient-Mobility-Tracker
+
+**Status: UNVERIFIED – Do not ship detection logic until the following gaps are closed.**
+
+Your current constraint (intermittent connectivity) creates a specific, high-stakes output harm: **False Negative due to Data Gaps**. If the AI misses a slow decline because data was not synced, the system fails its primary safety function, potentially delaying critical care. The following actions are required before field trials continue or any alerts are automated.
+
+#### 1. Map the Specific Harms
+You must expand your harm inventory beyond general accuracy to include:
+*   **Silent Failure (False Negative):** The system reports "stable" because gaps in data prevent the trend analysis from triggering, while the user is actually deteriorating.
+*   **Over-Reliance / Automation Bias:** Family members may assume the device is monitoring continuously. If the device is offline, they may falsely believe "no news is good news."
+*   **Unsafe Automation:** If the system automatically alerts emergency services or family without human verification of the data quality, it risks causing panic over artifacts or missing real crises.
+
+#### 2. Measure: Define Runnable Tests for Data Gaps
+Do not assert the system is "robust." You must run specific evaluations simulating your connectivity constraints:
+*   **Probe Set:** Create synthetic user trajectories that include a genuine decline in mobility, then artificially introduce data gaps matching your worst-case sync intervals (e.g., 24h, 48h, 72h gaps).
+*   **Controls:**
+    *   *Positive Control:* A decline trajectory with full data (must trigger alert).
+    *   *Negative Control:* A stable trajectory with full data (must not trigger alert).
+    *   *Gap Test:* A decline trajectory with introduced gaps (does it still trigger? At what gap duration does it fail?).
+*   **Metric & Threshold:** Define the maximum allowable data gap duration before the system must suppress a "stable" verdict. **Zero tolerance** for declaring a user "stable" when data coverage falls below a defined threshold.
+*   **Stop Condition:** If the system outputs "stable" for a deteriorating user when data gaps exceed X hours, the feature must block launch or rollback immediately.
+
+#### 3. Manage: Human-in-the-Loop & Uncertainty
+*   **Gate High-Stakes Actions:** Do not allow the system to autonomously declare a user "safe" or "stable" if data integrity is low. Instead, the output must shift to an **"Unverified / Data Insufficient"** state.
+*   **Show Uncertainty:** Never present a confidence percentage (e.g., "87% stable"). Use defined coarse tiers:
+    *   *Confirmed Stable:* Sufficient recent data, no decline detected.
+    *   *Unverified:* Data gaps exceed safety threshold; manual check required.
+    *   *Alert:* Decline detected despite gaps (if logic allows) or confirmed decline.
+*   **Disclosure:** The interface must explicitly tell family members when the device has not synced recently. "Last synced: 3 days ago" must be prominent. Do not hide the offline state.
+
+#### 4. Governance & Transparency
+*   **Owner:** Name a specific person responsible for the "missed decline" risk.
+*   **Artifact:** Produce a **Model Card** for this feature. It must state:
+    *   *Intended Use:* Monitoring gradual decline in independent elderly users.
+    *   *Limitations:* Explicitly list the maximum data gap duration before detection reliability drops to `UNVERIFIED`.
+    *   *Subgroup Performance:* If possible, measure if gait analysis varies by floor surface or device placement, which might compound connectivity issues.
+*   **Legal Routing:** Because this involves health monitoring and potential consequential decisions (family intervention), route the question of regulatory classification (e.g., medical device status) and mandatory disclosures to legal counsel immediately. Do not self-certify compliance.
+
+**Immediate Next Step:** Pause any automation of "all clear" messages. Implement the "Data Insufficient" state and run the gap-simulation tests described above. Report the residual risk of missed detections based on those test results, not on assumptions.
+
+*Note: This review identifies product-output risks; it does not certify the code as secure or the device as medically compliant.*
+*Legal determination of regulatory duties (e.g., FDA, EU MDR) must be routed to counsel.*

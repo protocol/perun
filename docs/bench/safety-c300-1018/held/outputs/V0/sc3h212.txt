@@ -1,0 +1,28 @@
+### Pre-Launch Review Strategy: Nutrition Absorption Tracker
+
+**1. Harm Inventory & Risk Prioritization**
+The primary identified harm is **hallucination surfaced as fact**: the model systematically overestimates nutrient uptake in severe malabsorption cases, presenting these figures as reliable data. The worst-case scenario is patients reducing necessary supplementation based on false confidence, leading to acute health deterioration. Secondary risks include **automation bias**, where clinicians or patients trust the AI output over clinical intuition due to the lack of visible uncertainty markers.
+
+**2. Stress-Testing Without New Data (Measure)**
+Since new clinical trials are budget-prohibited, you must rigorously test against your existing dataset using adversarial techniques:
+*   **Synthetic Edge-Case Generation:** Do not rely on natural distribution. Programmatically modify existing "severe case" logs to create synthetic "super-severe" combinations (e.g., compounding rare syndrome flags) that push the model beyond its training boundaries. If the model outputs high confidence on these impossible or extreme inputs, the safety gate fails.
+*   **Adversarial Subgroup Slicing:** Re-run your evaluation strictly on the bottom 10% of patients by health metric. Calculate the error rate specifically for this cohort. If the overestimation bias exceeds a tolerable threshold (which you must define based on clinical safety, not statistical average), the feature cannot launch for that subgroup.
+*   **Positive/Negative Control Probes:** Inject known "zero-absorption" or "critical failure" scenarios into the test set. The model must flag these as low uptake or high uncertainty. If it estimates normal uptake, the logic is unsafe.
+*   **Metric Reporting:** Report these findings as **UNVERIFIED** for the general population if the severe case error rate is high. Do not publish an aggregate accuracy score that hides the failure in severe cases.
+
+**3. Risk Communication Draft (Manage)**
+*Subject: Important Information About Your Nutrition Tracker Estimates*
+
+"Dear Participant,
+The Nile MedTech tracker uses AI to estimate nutrient absorption. Please be aware: **This tool provides estimates, not medical facts.**
+*   **Limitation:** In cases of severe or complex digestive disorders, the system may **overestimate** how much nutrition your body is absorbing.
+*   **Action Required:** Do not change your supplementation or diet based solely on this app's numbers. Always verify these estimates with your clinical care team before making health decisions.
+*   **Uncertainty:** When you see an estimate, treat it as a 'single-source indication' rather than a confirmed measurement.
+Your safety is our priority; this tool is designed to support, not replace, your doctor's advice."
+
+**4. Governance & Human Gate**
+Implement a mandatory **human-in-the-loop gate** for any patient flagged with "severe" or "complex" syndromes. The system must not display a specific numerical uptake estimate to these users automatically; instead, it should prompt: "Estimate requires clinician review due to complex factors." This prevents irreversible harm from automated overestimation.
+
+**Notes**
+*   A formal Model Card documenting these specific limitations and subgroup failures must accompany the pilot; omitting this is a transparency failure.
+*   Legal counsel must review the disclosure language to determine if additional regulatory warnings are required for medical devices in your jurisdiction.

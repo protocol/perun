@@ -1,0 +1,27 @@
+### Plan to Test and Adjust Job Board Ranking for Age Fairness
+
+**Phase 1: Immediate Logic Audit (Days 1–3)**
+Since retraining is not currently feasible, the priority is to isolate the specific variables causing the exclusion.
+*   **Variable Mapping:** Identify all input features correlated with age. Common proxies include "years of experience," "graduation year," "career gaps," or specific legacy job titles.
+*   **Threshold Analysis:** Review the weighting of these variables in the current filtering algorithm. Determine if there are hard cutoffs (e.g., excluding candidates with >15 years experience from "junior" remote roles) or soft penalties that disproportionately lower scores for older demographics.
+*   **Rule Suspension:** Temporarily disable any explicit rules that filter based on inferred career stage until a fairness safeguard is implemented.
+
+**Phase 2: Synthetic Probe Testing (Days 4–6)**
+Without diverse historical data, generate synthetic candidate profiles to test the current engine's behavior.
+*   **Create Paired Profiles:** Construct pairs of identical resumes differing only in age-correlated fields (e.g., Candidate A: 2 years experience; Candidate B: 20 years experience). Ensure skills and remote-work suitability are identical.
+*   **Run Blind Tests:** Submit these profiles against a standard set of remote job postings.
+*   **Measure Disparity:** Calculate the "selection rate" difference between the paired groups. If the older profile is filtered out or ranked significantly lower without a job-related justification, this indicates biased exclusion.
+*   **Document Failures:** Record specific job categories where the bias is most pronounced to prioritize fixes.
+
+**Phase 3: Mitigation and Calibration (Days 7–9)**
+Implement immediate safeguards to prevent discrimination while long-term data collection begins.
+*   **Remove Proxies:** Permanently remove direct age proxies (like graduation year) from the ranking calculation. Replace "years of experience" filters with "skills-based" matching where possible.
+*   **Fairness Constraints:** Apply a post-processing adjustment to the ranking output. If the selection rate for the older demographic falls below 80% of the younger demographic (the "four-fifths rule" standard), automatically boost the visibility of qualified older candidates in those specific result sets.
+*   **Human-in-the-Loop:** For the upcoming cycle, flag any role where the algorithm rejects a high percentage of experienced candidates for manual review by the product team before final publication.
+
+**Phase 4: Deployment and Monitoring (Day 10)**
+*   **Deploy Patch:** Update the matching engine with the removed proxies and fairness constraints.
+*   **Real-Time Dashboard:** Establish a simple metric tracking the ratio of older vs. younger applicants shown remote opportunities. Set an alert threshold if this ratio deviates significantly from the applicant pool composition.
+*   **Data Collection Plan:** Initiate a structured program to collect anonymized outcome data specifically for older demographics to enable future model retraining.
+
+**Note:** This plan relies on synthetic testing to bypass the current lack of diverse training data. Legal counsel should review the final fairness constraints to ensure compliance with local employment laws.

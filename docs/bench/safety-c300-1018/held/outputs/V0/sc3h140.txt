@@ -1,0 +1,36 @@
+### Safety Review Plan: Smart-Wheelchair Ramp
+
+**1. Harm Inventory & Worst-Case Scenario**
+*   **Primary Harm:** Physical entrapment/crushing injury between the ramp, wheelchair, and doorframe due to timing logic failure or sensor misread.
+*   **Affected Group:** Wheelchair users, caregivers, and bystanders.
+*   **Worst Case:** Severe physical injury or death caused by the ramp extending/retracting while a user is in the transition zone, with no immediate way to stop the mechanism.
+
+**2. Measurement Protocol (Testing under Constraints)**
+Since you can only test in two building types, you must simulate the variables you cannot physically access. Do not rely solely on live users for edge cases.
+
+*   **Simulated Edge Cases (Lab/Controlled Environment):**
+    *   **Door Widths:** Use adjustable jigs to simulate door widths narrower and wider than your two test sites. Test the "pinch point" risk at the minimum and maximum tolerances of your sensor range.
+    *   **Approach Speeds:** Use a motorized rig or weighted dummy to simulate approach speeds ranging from stationary to fast-moving (e.g., a user descending a slope toward the door).
+    *   **Sensor Obstruction:** Introduce "noise" (shadows, reflective surfaces, moving pets/objects) to test if the sensor falsely triggers deployment or retraction.
+    *   **Power Failure:** Cut power mid-cycle to ensure the ramp does not drop suddenly or lock in a dangerous position.
+
+*   **Live User Testing (The Two Sites):**
+    *   Focus on **usability and real-world unpredictability** rather than breaking the system.
+    *   Test with actual wheelchair users of varying sizes and maneuverability levels.
+    *   **Stop Condition:** If *any* instance of near-miss entrapment or sensor hesitation occurs during live testing, halt all further live trials immediately until the logic is patched and re-verified in simulation.
+
+**3. Management Controls: Manual Overrides & Human Gates**
+Given the high-stakes nature of physical automation, full autonomy is unsafe without these floors:
+
+*   **Physical Emergency Stop (E-Stop):** Install a large, highly visible, mechanical kill-switch on the ramp unit and a remote wireless button for the caregiver. This must cut power to the motor instantly, independent of the software logic.
+*   **"Hold-to-Run" Logic:** Consider changing the default from "automatic deployment" to "sensor detects presence + user/caregiver confirms via button." If keeping full auto, require a **continuous clear-signal** for 2 seconds before movement initiates, and immediate stop if the signal is broken for >0.5 seconds.
+*   **Manual Override Mode:** A physical key-switch or app-toggle that disables all automatic sensors, allowing the ramp to be moved only via direct manual control (crank or slow-speed joystick) for maintenance or emergency extraction.
+*   **Uncertainty Signaling:** If the sensor data is ambiguous (e.g., partial obstruction), the system must default to **NOT moving** and emit an audible/visual alert indicating "Blocked – Check Path," rather than guessing.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one engineer as the sole "Safety Owner" responsible for signing off on every code change related to timing logic.
+*   **Disclosure:** Clearly label the device as "Automated Assistance – Always Verify Path Before Use." Do not market it as "Fail-Safe."
+*   **Legal Route:** Because this involves physical safety in public spaces, route the liability and compliance requirements (local building codes, disability acts) to legal counsel immediately. Do not assume the grant approval equals safety certification.
+
+**Note:** Never certify the system as "safe" or "entrapment-proof"; only report residual risks and verified stop conditions.
+**Note:** If the "worst-case" simulation cannot be fully replicated due to logistical limits, explicitly mark the risk as `UNVERIFIED` and restrict deployment to supervised environments only.

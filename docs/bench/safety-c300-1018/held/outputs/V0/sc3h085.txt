@@ -1,0 +1,32 @@
+### Risk Assessment Checklist: Inactivity vs. Absence Simulation
+
+To prevent the thermostat from misinterpreting inactivity as absence and causing dangerous overheating during winter storms, simulate the following behavioral patterns in your lab environment using internal telemetry proxies:
+
+1.  **The "Stationary Elder" Scenario**
+    *   **Simulation:** Generate telemetry showing zero motion sensor triggers for 4+ hours, but maintain consistent, low-level ambient noise or minute temperature fluctuations indicative of a living presence (e.g., breathing, small shifts).
+    *   **Risk:** Algorithm interprets zero motion as "house empty" and ramps heat to "rapid warm-up" mode, risking hyperthermia or dehydration for an immobile senior.
+    *   **Success Metric:** System maintains "Occupied-Eco" baseline rather than switching to "Away-Boost."
+
+2.  **The "Deep Sleep" Winter Night**
+    *   **Simulation:** Simulate a prolonged period (8+ hours) of absolute stillness during typical sleep hours, combined with a rapid external temperature drop (simulated storm).
+    *   **Risk:** Algorithm confuses deep, cold-induced sleep with departure, triggering aggressive heating cycles that disrupt sleep or create unsafe humidity/temperature spikes.
+    *   **Success Metric:** System recognizes the circadian context and external drop, maintaining steady, safe sleep temperatures without "absence" logic activation.
+
+3.  **The "Illness/Recovery" Confinement**
+    *   **Simulation:** Model a user remaining in a single room (e.g., bedroom or living room chair) for 12+ hours with no traversal between zones, typical of flu or recovery during a storm.
+    *   **Risk:** Lack of whole-house movement triggers "Away" status, causing the occupied room to overheat while unvisited rooms freeze, or conversely, the whole house overheats trying to warm "empty" zones.
+    *   **Success Metric:** System identifies single-zone sustained presence and adjusts only that zone safely, avoiding whole-house "empty" protocols.
+
+4.  **The "Power Flicker" Data Gap**
+    *   **Simulation:** Introduce intentional gaps in telemetry data (simulating storm-related connectivity loss or sensor lag) lasting 30–60 minutes, followed by resumed silence.
+    *   **Risk:** The system treats the data gap + silence as confirmed absence, initiating a high-power recovery cycle immediately upon reconnection.
+    *   **Success Metric:** System defaults to a conservative "Unknown/Safe" state rather than assuming "Away," preventing immediate aggressive heating.
+
+5.  **The "False Negative" Motion Profile**
+    *   **Simulation:** Feed data where motion sensors fail to detect very subtle movements (simulating sensor limitations with elderly users who move slowly), while power usage (lights, TV) remains active.
+    *   **Risk:** Over-reliance on motion alone leads to false "Away" classification despite clear electrical signs of life.
+    *   **Success Metric:** System fuses multiple data points (power draw, ambient sound proxies) to override missing motion data and retain "Occupied" status.
+
+**Implementation Note:** Since external validation is prohibited, your "positive control" for these tests must be a hardcoded lab scenario where the ground truth is explicitly "User Present, Immobile." Any deviation into "Away" logic is an immediate fail.
+
+**Safety Gate:** Do not deploy the "Away-Boost" heating function without a manual override or a secondary confirmation step (e.g., app notification) for users flagged as vulnerable in your pilot.

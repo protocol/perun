@@ -1,0 +1,31 @@
+# Pre-Launch Connectivity and Failure-Mode Analysis Checklist
+
+**Objective:** Verify CPAP data transmission reliability and data integrity under strict network security policies without requiring open standard cloud ports.
+
+### 1. Network Path & Port Validation
+*   [ ] **Map Allowed Egress Ports:** Document the specific non-standard ports (e.g., 443, 8443, or custom high-range ports) explicitly allowed by the clinic's firewall policy.
+*   [ ] **Protocol Compatibility Check:** Confirm the CPAP upload agent is configured to tunnel therapy data exclusively over allowed protocols (e.g., HTTPS/WSS) on the mapped ports.
+*   [ ] **DNS Resolution Test:** Verify the device can resolve the clinic's ingestion endpoint domain name within the restricted network segment.
+*   [ ] **Handshake Simulation:** Perform a "dry-run" connection test from a representative clinic workstation to the ingestion endpoint using only allowed ports to confirm TLS handshake success.
+*   [ ] **Deep Packet Inspection (DPI) Bypass:** Ensure data payloads do not trigger false-positive blocks by security appliances due to entropy or payload size, even if the port is open.
+
+### 2. Failure Mode & Fallback Mechanism Testing
+*   [ ] **Port Blockage Simulation:** Intentionally block the primary allowed port at the local workstation level to verify the system detects the failure immediately.
+*   [ ] **Retry Logic Verification:** Confirm the system attempts re-transmission according to the defined schedule (e.g., exponential backoff) without flooding the network.
+*   [ ] **Local Cache Integrity:** Verify that when transmission fails, data is securely written to the local encrypted store with no corruption or truncation.
+*   [ ] **Queue Persistence:** Reboot the device/service during a simulated outage to ensure the pending upload queue survives restarts and retains correct ordering.
+*   [ ] **Fallback Route Activation:** If a secondary communication path (e.g., alternate IP or port) is configured, verify automatic failover occurs when the primary path is unreachable.
+*   [ ] **Storage Capacity Limit:** Simulate a prolonged outage to fill the local cache; verify the system alerts administrators before reaching a state where new data would be dropped.
+
+### 3. Data Integrity & Recovery Verification
+*   [ ] **End-to-End Checksum:** Compare the checksum of a test therapy file on the local device against the received file at the ingestion endpoint after a successful retry.
+*   [ ] **Duplicate Prevention:** Force a network interruption mid-upload, then restore connectivity; verify the server accepts the resumed/completed file exactly once without creating duplicate records.
+*   [ ] **Timestamp Accuracy:** Ensure that data uploaded after a delay retains its original therapy timestamp, not the transmission timestamp, for accurate clinician review.
+*   [ ] **Backlog Clearance:** Simulate a 24-hour outage, restore connectivity, and measure the time required to clear the entire local backlog to ensure it meets clinical SLA requirements.
+
+### 4. Alerting & Observability
+*   [ ] **Local Status Indicator:** Verify the device or local service provides a clear visual or log-based status indicating "Queued," "Transmitting," or "Failed."
+*   [ ] **Admin Notification:** Confirm that a persistent failure (e.g., >4 hours) triggers an alert to the network engineering team via an allowed channel (e.g., email or specific monitoring port).
+*   [ ] **Clinician Dashboard Visibility:** Ensure the clinician interface correctly displays the "Last Synced" time so doctors know if data is current or stale.
+
+*Note: Execute all tests using synthetic patient data only. Coordinate port simulation tests with network security staff to avoid triggering incident response protocols.*

@@ -1,0 +1,39 @@
+### Safety Verification Framework for Smart-Respirator Switching Logic
+
+Given the constraints of free, high-latency public APIs and the critical safety risk of exposing users to harmful particulates, the verification framework must decouple **data acquisition latency** from **switching logic execution**. The device should not wait for a live API call to make a safety decision during rapid spikes.
+
+#### 1. Test Environment Architecture: The "Signal Simulator"
+Do not test against live public APIs for safety verification. Their latency and rate limits introduce non-deterministic variables that obscure whether a failure is due to network lag or flawed logic.
+
+*   **Build a Local Mock Server:** Create a lightweight local server (using Python/Flask or Node.js) that mimics the JSON structure of your target public API (e.g., WAQI or OpenWeatherMap).
+*   **Deterministic Spike Injection:** This simulator will serve pre-defined pollution profiles. You can instantly inject a "step function" spike (e.g., PM2.5 jumping from 35 to 300 in one second) without waiting for real-world conditions or API rate limits.
+*   **Latency Emulation:** Configure the mock server to artificially delay responses (e.g., +2 seconds) to simulate the known latency of free tiers. This allows you to test how your device handles stale data.
+
+#### 2. Critical Test Scenarios
+Execute the following specific scenarios to validate the switching logic:
+
+*   **Scenario A: The "Blind Spike" (Latency Stress Test)**
+    *   *Condition:* The mock API returns data with a 3-second delay. During this delay, real pollution spikes.
+    *   *Verification:* Ensure the device defaults to **Filtered Air** when data is stale or missing. The system must fail "safe," not "open." If the device cannot confirm air quality within $X$ milliseconds, it must assume the worst-case scenario.
+*   **Scenario B: Hysteresis and Oscillation**
+    *   *Condition:* Simulate pollution levels hovering exactly at the switching threshold (e.g., fluctuating between 148 and 152 AQI).
+    *   *Verification:* Verify that the device does not rapidly toggle valves (chattering), which damages hardware and confuses the user. Confirm that a "deadband" or time-averaging logic exists (e.g., must exceed threshold for 30 seconds before switching).
+*   **Scenario C: Rapid Step Response**
+    *   *Condition:* Instant jump from Safe (AQI 50) to Hazardous (AQI 300) in the simulated feed.
+    *   *Verification:* Measure the time delta between the simulated spike timestamp and the physical valve actuation. This isolates the internal processing time from network time.
+
+#### 3. Metrics for Success
+Define pass/fail criteria before running tests:
+*   **Max Time-to-Switch:** The absolute maximum time allowed from detecting a hazardous reading to closing the room-air valve (e.g., < 2 seconds).
+*   **Stale Data Timeout:** The duration of data silence before forcing a switch to filtered air (e.g., > 10 seconds silence = Filtered Air).
+*   **False Negative Rate:** Zero tolerance for remaining in "Room Air" mode when the simulator reports hazardous levels.
+
+#### 4. Implementation Strategy for the Team
+With seven engineers, split the workflow:
+*   **Team A (Simulation):** Builds the mock API server and defines the pollution profiles (monsoon dust storms, sudden industrial spikes).
+*   **Team B (Logic Hardening):** Implements the "Fail-Safe" defaults and hysteresis algorithms based on Team A's findings.
+*   **Team C (Physical Validation):** Connects the device to the mock server via a controlled network environment and measures physical valve response times using high-speed logging.
+
+By simulating the worst-case data conditions locally, you remove the unpredictability of free APIs and rigorously prove that the switching logic protects users even when data is slow or unavailable.
+
+*Note: Ensure all physical tests are conducted in a controlled chamber with verified particle counters to correlate simulated data with actual airflow changes.*

@@ -1,0 +1,39 @@
+**Risk Mitigation Plan: Rio CrowdSafe Crowd-Density Predictor**
+
+**1. Harm Inventory & Validation Strategy (Using Historical Video Data)**
+Since live simulations are prohibited, we will treat historical video data as our primary adversarial test bed. We will not certify the model as "safe"; instead, we will measure residual risk against specific failure modes.
+
+*   **Bias/Unfair Outcomes:** Segment historical data by neighborhood and event type. Verify the model does not systematically route tourists away from specific communities or into marginalized areas under the guise of "low density."
+    *   *Test:* Run the predictor on historical peaks for each zone. Metric: Disparity in recommended route safety scores between zones. Threshold: Owner-defined; any systematic exclusion triggers a rollback.
+*   **Hallucination as Fact (False Safety):** The model might label a narrow alley as "safe" because it was empty in past videos, ignoring structural incapacity for crowds.
+    *   *Test (Positive Control):* Inject known historical stampede/near-miss scenarios into the input. The model must *not* recommend those routes.
+    *   *Test (Negative Control):* Input known safe, wide-boulevard scenarios. The model must recommend them.
+    *   *Stop Condition:* If the model recommends a known high-risk alley in >0% of positive control tests, launch is blocked.
+*   **Over-reliance:** The interface must not present a single "best" route with false certainty.
+    *   *Mitigation:* Display route options with defined confidence tiers (e.g., "Verified Wide Path," "Single-Source Estimate," "Unverified/Narrow") rather than precise percentages. Never display raw model confidence scores.
+
+**2. Human-in-the-Loop (HITL) Gates for High-Stakes Actions**
+Directing crowd flow is a high-stakes, potentially irreversible action. Full automation of route guidance during peak density is prohibited.
+
+*   **The Gate:** Any route recommendation involving narrow alleyways (<3 meters width) or areas with historical incident data requires explicit human confirmation from the City Planning command center before being broadcast to users.
+*   **Dynamic Throttling:** If real-time input data quality drops (e.g., camera occlusion, sensor failure), the system automatically reverts to static, pre-approved safe routes managed by humans, rather than guessing.
+*   **Override Mechanism:** Human operators must have a "kill switch" to override algorithmic suggestions instantly and broadcast a manual "Avoid Area" alert.
+
+**3. Transparency & Governance Artifacts**
+*   **Model Card:** Before launch, publish a versioned Model Card detailing:
+    *   *Intended Use:* Tourist guidance during carnival; *Out of Scope:* Emergency evacuation or police crowd control.
+    *   *Data Provenance:* Specific historical video datasets used, including known gaps (e.g., "No night-time data for Sector 4").
+    *   *Measured Performance:* Accuracy metrics broken down by subgroup/zone, not just aggregate.
+    *   *Limitations:* Explicit statement that the model cannot predict sudden surges not present in training data.
+*   **Owner Assignment:** Name a specific Product Owner responsible for reviewing any model updates or data drift. No changes to the model or data pipeline occur without their sign-off.
+
+**4. Constraint Adherence**
+*   **Deadline:** This plan utilizes existing historical data and requires no new permits. The evals can be run immediately by the ten-person team.
+*   **No Live Simulation:** Reliance on "positive control" injection into historical data substitutes for live stress testing.
+*   **Legal Routing:** Whether specific AI disclosures are legally required for public safety apps in Rio is a determination for legal counsel. We recommend clear on-screen disclosure that routes are "AI-suggested" and not guaranteed safe, but final legal duty must be confirmed by counsel.
+
+**Residual Risk Statement:**
+We cannot verify a 0% failure rate. The metric for "safety" in narrow alleys is currently **UNVERIFIED** until the positive control tests are executed. If those tests fail, the launch date must be reconsidered or the feature scope reduced to "informational only" with no active routing.
+
+**Note:** Do not fabricate a "safe" certification; the ship decision rests with the named Owner after reviewing the test results.
+**Note:** Ensure the "confidence tiers" are defined in plain text (e.g., "Corroborated") rather than numbers to prevent automation bias.

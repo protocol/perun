@@ -1,0 +1,40 @@
+### Pre-Launch Pricing Fairness Audit Plan
+
+**Step 1: Define the Harm Inventory**
+Before testing, explicitly record the specific risk: "Device-based price discrimination." Define the affected groups (e.g., users of specific phone models like older Androids vs. latest iPhones) and the worst-case scenario (systematic overcharging of a demographic group correlated with specific devices, leading to regulatory fines and reputational damage). Do not proceed without this written record.
+
+**Step 2: Construct the Test Matrix (The "Probe Set")**
+Create a simple spreadsheet acting as your test suite. Since real-time monitoring is restricted, you will run these as batch simulations before launch.
+*   **Inputs:** Generate 50–100 synthetic booking requests varying *only* the device user-agent string (e.g., iPhone 15, Samsung Galaxy S23, budget Android models) while keeping all other variables constant (location: Riyadh, dates: holiday surge, car type: economy).
+*   **Controls:**
+    *   *Negative Control:* A request with a standard, neutral device string expected to return the base rate.
+    *   *Positive Control:* A manually engineered input where you force the pricing logic to trigger a known high-rate rule (to verify your test can detect a price change).
+*   **Segments:** Group tests by device manufacturer, OS version, and estimated price tier of the device.
+
+**Step 3: Execute Manual or Scripted Batch Runs**
+Given your single cloud provider constraints, do not rely on complex real-time dashboards.
+*   Run your synthetic requests against the staging environment.
+*   Log the output price for every request in your spreadsheet.
+*   Repeat this process for different times of day and booking lead times to ensure the device signal isn't interacting unpredictably with time-based surge pricing.
+
+**Step 4: Analyze for Disparate Impact**
+Calculate the average price for each device segment.
+*   **Metric:** Price variance percentage between the highest-priced device group and the lowest-priced device group for identical rental parameters.
+*   **Threshold:** Set a strict "stop condition" before running. For example: "If any device segment pays >2% more than the baseline without a justified cost factor, the launch is blocked."
+*   **Result Reporting:** If a discrepancy is found, label it **UNVERIFIED** regarding intent but **CONFIRMED** regarding output disparity. Do not guess the cause; simply report that the output differs by device.
+
+**Step 5: Implement the Human Gate**
+Because pricing is a high-stakes action affecting user wallets:
+*   Do not automate the final pricing rule deployment.
+*   Require a human reviewer to sign off on the test results from Step 4 before the code goes to production.
+*   If the model uses AI to set prices, ensure the system displays a clear disclosure to the user that rates are dynamically generated, and provide an easy way for customer support to override or explain a specific quote.
+
+**Step 6: Create the Transparency Artifact**
+Draft a one-page "Pricing Logic Card" for your internal team and auditors. It must list:
+*   Intended use (dynamic rental pricing).
+*   Known limitations (e.g., "Not validated on devices released in the last 30 days").
+*   The results of your device fairness test (attach the spreadsheet summary).
+*   Owner name and date of review.
+*   Mark any metric you did not explicitly test as **UNVERIFIED**. Do not invent a "0% bias" claim.
+
+**Note:** This plan measures output behavior; it does not certify the system as "fair" or "compliant." Legal determination of whether device-based pricing violates local consumer protection laws must be routed to counsel.

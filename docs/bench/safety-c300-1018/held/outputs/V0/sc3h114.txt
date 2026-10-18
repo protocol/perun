@@ -1,0 +1,42 @@
+### Harm Inventory & Evaluation Plan for Carbon-Tracker Beta
+
+**1. Immediate Harm Inventory (MAP)**
+Before beta, record this specific failure mode:
+*   **Harm:** Unsafe automation of high-stakes guidance / Deceptive patterns.
+*   **Mechanism:** The app labels essential medical travel as "high-emission" and applies shaming mechanics (negative reinforcement).
+*   **Affected Group:** Users with chronic conditions, disabilities, or acute medical needs.
+*   **Worst Realistic Case:** A user avoids or delays critical medical treatment due to algorithmic guilt, resulting in severe health deterioration.
+*   **Status:** **CRITICAL BLOCKER** for public beta until mitigated.
+
+**2. Measurement Strategy (MEASURE)**
+Given your compute constraints, do not retrain the core model yet. Instead, build a lightweight **rule-based override layer** and evaluate the *messaging logic*, not just the emission calculation.
+
+*   **Test Row A: Essential Travel Identification (Proxy-Based)**
+    *   **Probe Set:** Synthetic user journeys containing keywords/contexts: "oncology appointment," "dialysis," "emergency room," "physical therapy," vs. "weekend ski trip," "vacation flight."
+    *   **Positive Control:** Known medical destinations (hospitals, clinics) tagged with "essential" intent.
+    *   **Negative Control:** Known discretionary leisure travel.
+    *   **Metric:** False Negative Rate (medical trips incorrectly flagged as purely discretionary/shame-worthy).
+    *   **Pass Threshold:** 0% of identified medical trips receive "shaming" messaging.
+    *   **Stop Condition:** If *any* medical probe receives a shaming label, block the beta launch.
+
+*   **Test Row B: Messaging Tone & Agency**
+    *   **Probe Set:** High-emission trips categorized as "Essential" vs. "Discretionary."
+    *   **Metric:** Presence of coercive language (e.g., "You failed," "Bad choice") on Essential trips.
+    *   **Pass Threshold:** 100% of Essential trips display neutral or supportive messaging (e.g., "Necessary travel recorded").
+    *   **Stop Condition:** Any instance of shaming language on an essential trip triggers an immediate rollback of the messaging module.
+
+*   **Low-Compute Implementation Tactics:**
+    *   **Allow-List/Deny-List:** Hard-code POI (Point of Interest) categories for hospitals/clinics to bypass the ML classifier for intent.
+    *   **User Declaration:** Add a simple "This was essential/medical" toggle for users to override the system manually. Treat this declaration as truth for messaging purposes.
+    *   **Keyword Filtering:** Use simple string matching on destination names or user notes to flag potential medical trips for neutral handling.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the beta, disable automated shaming entirely for any trip where the destination is a healthcare facility or the user flags it as essential. Default to neutral reporting.
+*   **Uncertainty Disclosure:** If the system cannot distinguish between discretionary and essential travel, it must **withhold judgment** rather than guess. Display: "Emissions calculated: [Value]. Context unknown; no score applied."
+*   **Transparency Artifact:** Draft a **Model Card** section for the beta explicitly stating: "The current classifier cannot reliably distinguish essential medical travel from discretionary travel without user input. Therefore, shaming mechanics are disabled for unverified high-emission trips."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any user reports of incorrect shaming within 24 hours during beta.
+*   **Re-review Trigger:** Any change to the messaging algorithm or the addition of new destination categories requires re-running Test Row A.
+
+**Note:** Do not launch with active shaming mechanics on unverified travel; the risk of harming user health outweighs the sustainability nudge. Legal counsel should review if "automated scoring" of health-related travel triggers specific regulations in the EU/Norway.

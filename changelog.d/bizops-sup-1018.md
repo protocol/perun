@@ -1,2 +1,0 @@
-### Changed
-- `docs/bench/bizops-sup-1018/`: preregistered superiority test (n=200 fresh held-out scenarios disjoint from every earlier bench set, GLM-5.1 judge v2, PCSS only, $0) of the shipped business-ops `SKILL.md` against its rival, rule fixed in advance: win-rate 95% CI lower bound above 0.5. Result 0.463 [0.403, 0.522] (72 wins / 41 ties / 87 losses): not a win. `docs/perun-vs-rivals.md` business-ops row records it. No `SKILL.md` change. Synthetic, single-generator evidence.

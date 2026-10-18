@@ -1,0 +1,42 @@
+**Plan to Validate Credit-Limit Logic (2 Weeks, Zero Budget)**
+
+**1. Build the Harm Inventory (Day 1)**
+Document the specific risk: "Systematic exclusion of reliable low-income users due to irregular cash flow patterns." Define the worst case: A consistent repayer is denied a limit increase, forcing them into predatory lending. Assign one team member as the owner of this risk. Do not proceed without this written record.
+
+**2. Construct Manual "Golden Sets" (Days 2–4)**
+Since you cannot buy tools, manually curate three datasets from your existing transaction history (anonymized):
+*   **Positive Control (The Target):** 20 users with irregular income (e.g., gig workers, market traders) who have never missed a payment. Your system *must* approve these.
+*   **Negative Control (The Risk):** 20 users with regular income but a history of missed payments or overdrafts. Your system *must* reject or flag these.
+*   **Edge Cases:** 20 users with irregular income and one late payment in the last year. These require human review, not auto-rejection.
+
+**3. Run the "Paper Prototype" Test (Days 5–7)**
+Do not deploy code yet. Export the logic rules your engine uses. Manually apply these rules to your 60-user Golden Set using a spreadsheet.
+*   **Metric:** Calculate the "False Rejection Rate" specifically for the Positive Control group.
+*   **Stop Condition:** If more than 5% of your "reliable irregular" users are auto-rejected by the logic, **do not launch**. The harm is verified.
+
+**4. Implement a Human-in-the-Loop Gate (Days 8–10)**
+For the two weeks post-launch, disable full automation for any decision that denies a limit increase or flags a user as high-risk.
+*   **Rule:** Any output that restricts access must be reviewed by a human agent before the user is notified.
+*   **Override:** Agents can override the system if they see context the algorithm missed (e.g., a known seasonal dip in income). This prevents irreversible harm while you gather live data.
+
+**5. Define Uncertainty Tiers (Days 11–12)**
+Stop showing users a precise "credit score" or percentage confidence. Instead, categorize decisions internally as:
+*   **Confirmed:** Clear history, regular or irregular income, no misses. (Auto-approve).
+*   **Unverified:** Irregular income with mixed signals. (Route to Human Gate).
+*   **High-Risk:** Clear misses or fraud signals. (Auto-reject with explanation).
+Publish these definitions internally so the team knows exactly why a case was routed to human review.
+
+**6. Create a One-Page Transparency Card**
+Draft a simple document listing:
+*   **Intended Use:** Increasing limits for consistent repayers, including those with irregular income.
+*   **Known Limitation:** May struggle to distinguish between "irregular cash flow" and "financial distress" without human review.
+*   **Owner:** [Name of Team Lead].
+*   **Status:** "Unverified" for bias metrics until the post-launch manual review period is complete.
+Keep this in your project repo; do not claim the system is "unbiased."
+
+**7. Launch with a Rollback Switch**
+Go live only with the human gate active for all denials. Set a hard rule: if the volume of cases requiring human review exceeds your team's capacity to clear them within 24 hours, pause the feature immediately.
+
+**Notes**
+*   Route any questions about legal disclosure requirements for automated credit decisions in Nigeria to local counsel; do not assume compliance based on this plan.
+*   If the "False Rejection Rate" in step 3 is high, refine your logic rules manually before writing new code; do not rely on retraining models you cannot audit.

@@ -1,0 +1,45 @@
+### Testing Protocol: Equitable Access to Nutritious Food
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic disadvantage (bias) where users in underserved neighborhoods (food deserts) receive fewer or lower-quality healthy food recommendations compared to users in affluent areas, despite similar purchase histories or explicit health goals.
+*   **Affected Group:** Residents of designated Detroit food deserts; specifically those with historical purchases indicating interest in healthy options or dietary restrictions.
+*   **Worst Case:** The algorithm reinforces existing disparities by exclusively surfacing processed/non-perishable items to low-income zip codes while hiding fresh produce available in the inventory, leading to worsened health outcomes and loss of trust.
+
+**2. Measurement Plan (Runnable Eval)**
+Construct a test suite with one row per harm scenario. Do not assert safety; measure residual risk.
+
+*   **Probe Set A (Geographic Disparity):**
+    *   *Inputs:* Identical user profiles (same age, dietary goal: "heart healthy", budget: $50) assigned to zip codes in underserved Detroit neighborhoods vs. affluent suburbs.
+    *   *Positive Control:* A query where healthy items are known to be in stock for both locations.
+    *   *Negative Control:* A query where no healthy items are in stock for either location.
+    *   *Metric:* "Healthy Item Visibility Rate" (percentage of top-10 recommendations classified as nutritious).
+    *   *Threshold:* Owner-defined. (e.g., Visibility rate in food deserts must not be >X% lower than affluent areas when inventory exists).
+    *   *Stop Condition:* If the disparity exceeds the threshold, launch is blocked.
+
+*   **Probe Set B (Inventory Filtering Stress):**
+    *   *Inputs:* Users in food deserts querying for specific nutritious categories (e.g., "fresh vegetables", "low sodium").
+    *   *Constraint Simulation:* Simulate the legacy database lag by injecting delayed/missing nutritional tags for 10% of inventory.
+    *   *Metric:* "Fallback Quality Score" – does the system default to showing *some* healthy options based on item name/category when tags fail, or does it show nothing/only junk?
+    *   *Stop Condition:* If the system fails to surface *any* healthy alternatives due to missing tags in >5% of cases, the fallback logic must be rewritten.
+
+*   **Probe Set C (Over-reliance & Transparency):**
+    *   *Inputs:* Users asking "What is the healthiest option?"
+    *   *Metric:* Presence of uncertainty disclosure or source attribution (e.g., "Based on general guidelines" vs. "Verified by nutritionist").
+    *   *Stop Condition:* If the system presents recommendations as absolute facts without acknowledging data limitations (legacy tag issues), the UI must be updated to show confidence tiers (e.g., "Verified" vs. "Estimated").
+
+**3. Management & Governance**
+*   **Human-in-the-Loop Gate:** For the initial launch, any automated decision that restricts access to fresh produce categories for a specific zip code must trigger a manual review by a product owner before being finalized as a permanent filter.
+*   **Transparency Artifact:** Publish a **Model/Data Card** detailing:
+    *   *Intended Use:* Personalizing grocery lists, not providing medical advice.
+    *   *Limitations:* Explicitly state that nutritional tagging is limited by legacy systems and may be incomplete for certain items.
+    *   *Data Provenance:* Source of inventory data and definition of "nutritious" used.
+    *   *Subgroup Performance:* Report the visibility metrics from Probe Set A broken down by zip code.
+*   **Ownership:** Assign a specific product lead to own the "Equitable Access" metric. Re-evaluate whenever the inventory database or recommendation logic changes.
+
+**4. Critical Boundaries**
+*   **No Certification:** This protocol measures disparity; it does not certify the system as "unbiased" or "fair."
+*   **Unverified Metrics:** If real-world data on nutritional outcomes is unavailable pre-launch, mark those specific impact metrics as `UNVERIFIED` and define a post-launch monitoring plan. Do not invent accuracy rates.
+*   **Legal Routing:** If this service is deemed to make "automated decisions" with significant effect under local or federal regulations, route the determination of legal disclosure duties to counsel immediately.
+
+**Note:** Ensure the definition of "nutritious" is documented and agreed upon by a community health advisor to avoid embedding internal biases into the test controls.
+**Note:** The legacy database constraint requires the "Fallback Quality" test to be prioritized; if the system cannot gracefully handle missing tags, the recommendation engine is unsafe for launch.

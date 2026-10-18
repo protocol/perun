@@ -1,0 +1,43 @@
+### Harm Inventory & Testing Strategy for Northwind Health Scheduler
+
+**1. Named Harms & Affected Groups**
+Before testing, we explicitly name the risks your system introduces:
+*   **Bias/Unfair Outcomes:** The model may systematically deprioritize patients with irregular work schedules, low-income demographics, or specific ethnic backgrounds if historical "no-show" data reflects systemic barriers rather than individual reliability.
+*   **Unsafe High-Stakes Automation:** Automatically delaying care based on a prediction constitutes a high-stakes decision. If the model is wrong, a patient misses critical treatment.
+*   **Over-reliance:** Clinics may trust the "high-risk" flag as fact, ignoring clinical urgency or patient context.
+*   **Missing Disclosure:** Patients are unaware their appointment timing is influenced by an algorithmic risk score.
+
+**2. Measurement Plan (Using Existing Data)**
+Since new data collection is not possible, we must rigorously stress-test the existing logic using adversarial probes and subgroup analysis on your current EHR data.
+
+*   **Probe Set A: Subgroup Performance Sweep**
+    *   *Action:* Run the prioritization logic on historical data sliced by available demographics (age, gender, postal code as a proxy for income/neighborhood).
+    *   *Controls:* Compare "false positive" rates (flagged as high-risk but actually attended) across groups.
+    *   *Metric:* Disparity Ratio. If Group X is flagged 2x more often than Group Y despite similar attendance histories, the threshold fails.
+    *   *Stop Condition:* Launch is blocked if any protected subgroup shows a false-positive rate >10% higher than the baseline.
+
+*   **Probe Set B: The "Unpredictable Work" Simulation**
+    *   *Action:* Synthesize test profiles mimicking shift workers (e.g., varying appointment times, specific postal codes) vs. standard 9-5 profiles.
+    *   *Control:* Create identical clinical profiles where only work-pattern proxies differ.
+    *   *Metric:* Ranking Delta. Measure how many slots a "shift worker" is pushed back compared to a "standard worker."
+    *   *Stop Condition:* If shift-worker proxies are consistently delayed by >48 hours compared to controls without clinical justification, the logic is unsafe.
+
+*   **Probe Set C: Adversarial Edge Cases**
+    *   *Action:* Input profiles with sparse history (new patients) or complex social determinants often correlated with no-shows but not causation.
+    *   *Metric:* Default Behavior. Does the system default to "high risk" due to missing data?
+    *   *Stop Condition:* Any "high risk" assignment driven primarily by data sparsity rather than explicit history triggers a rollback.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human Review:** No patient flagged as "high risk" can be automatically rescheduled or delayed. The output must be a *recommendation* to staff, requiring explicit human confirmation before action.
+*   **Uncertainty Disclosure:** Do not show a percentage (e.g., "87% risk"). Display a coarse tier: "Review Recommended – Attendance Pattern Varied." Define what this tier means for staff.
+*   **Transparency Artifact:** Draft a Model Card stating: intended use (scheduling efficiency), limitations (does not account for transit issues, childcare, or acute symptom changes), and the specific subgroups where performance is `UNVERIFIED` due to data limits.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Name a specific product owner accountable for bias incidents.
+*   **Legal Duty:** Because this affects access to health care, the requirement for AI disclosure and the legality of automated triage in Ontario must be routed immediately to legal counsel. Do not assert compliance internally; verify if this triggers regulatory scrutiny under emerging AI health frameworks.
+
+**Definition of Done:**
+The feature ships only when the disparity metrics are measured, the human-in-the-loop gate is enforced for all delays, and the Model Card explicitly lists `UNVERIFIED` risks rather than claiming fairness.
+
+*Note: This plan measures residual risk; it does not certify the system as "unbiased."*
+*Legal determination on automated health decisions must be confirmed by counsel before launch.*

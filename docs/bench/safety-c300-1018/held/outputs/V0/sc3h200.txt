@@ -1,0 +1,51 @@
+### Pre-Launch Safety Review: Artifact Rejection Validation Plan
+
+**1. Construct the Harm Inventory (MAP)**
+Before testing, explicitly record the specific failure mode: **Unsafe Automation of High-Stakes Action**.
+*   **Harm:** The system misclassifies motion artifact as Ventricular Tachycardia (VT), triggering an inappropriate shock to a conscious patient.
+*   **Affected Party:** Conscious patients with non-shockable rhythms (e.g., sinus rhythm with motion, atrial fibrillation with motion).
+*   **Worst Realistic Case:** Severe pain, psychological trauma, potential induction of actual arrhythmia, and loss of responder trust in the device.
+*   **Status:** This is an irreversible, high-stakes automated action. By default, it requires a human-in-the-loop gate or explicit confirmation mechanism if the confidence tier is not "Confirmed."
+
+**2. Measurement Strategy Using Existing Data (MEASURE)**
+Since no new studies are possible, you must rigorously stress-test the existing database. Do not rely on aggregate accuracy; focus entirely on the false-positive rate for shockable rhythms.
+
+*   **Create Adversarial Probe Sets:**
+    *   **Positive Controls (The Danger Zone):** Isolate every instance in your database where motion artifact co-occurs with a non-shockable rhythm. If your database lacks sufficient labeled "motion + non-shockable" cases, synthetically inject recorded motion noise into clean non-shockable signals to create a "known-bad" test set. The system *must* reject these.
+    *   **Negative Controls:** Clean VT/VF signals without motion. The system *must* detect these.
+    *   **Edge Cases:** Signals with low amplitude, baseline wander, or electrode pop that mimic VT morphology.
+
+*   **Define Metrics and Thresholds:**
+    *   **Primary Metric:** False Positive Rate (FPR) for shock advice on non-shockable rhythms with artifact.
+    *   **Pass Threshold:** For a life-critical device, the threshold for inappropriate shock must be effectively **zero tolerance** for the identified "known-bad" probe set. Any failure in the positive control set is a stop condition.
+    *   **Stop Condition:** If the classifier shocks *any* sample in the "motion + non-shockable" probe set, the feature fails validation. Do not average this out with high true-positive rates.
+
+*   **Execution:**
+    *   Run the classifier against the adversarial probe set.
+    *   Document every failure case: What specific frequency or amplitude of motion caused the error?
+    *   **Residual Risk Report:** Report the specific failure modes found. If the FPR is not 0% on your adversarial set, label the risk as **UNVERIFIED** for those specific motion types. Do not invent a "99.9% safe" claim.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the high stakes and the inability to test on new human/animal subjects, full autonomous execution is the failure state. If the classifier outputs a "Shock" decision based on a signal containing *any* detected motion artifact, the system must default to **"No Shock"** or require explicit human confirmation (if the device form factor allows) rather than risking an inappropriate shock.
+*   **Uncertainty Display:** Do not display a raw probability (e.g., "87% VT"). Instead, implement defined coarse tiers for the internal logic:
+    *   *Confirmed VT:* Clean signal, high morphological match.
+    *   *Unverified/Artifact Detected:* Signal contains noise features. Action: Withhold shock.
+*   **Transparency Artifact:** Create a **Model Card** for this submission. It must include:
+    *   Intended Use: Distinguishing VT from motion artifact in emergency settings.
+    *   Limitations: Explicitly list the types of motion artifacts where the model failed or was not tested (e.g., "Performance unverified for CPR-induced motion > X frequency").
+    *   Data Provenance: Source of the electrical signal database.
+    *   Owner: Name the engineering lead responsible.
+
+**4. Governance**
+*   Name the owner of this output harm (the Engineering Lead).
+*   **Legal Routing:** You mentioned a regulatory deadline. Whether this specific validation method satisfies the **EU AI Act** (high-risk category) or **FDA** requirements for pre-market submission is a legal determination. Route the "adequacy of synthetic injection vs. clinical trials" question immediately to counsel. Do not assert that this data-only review is legally sufficient; only that it is the rigorous technical step possible within your constraints.
+
+**Definition of Done for this Review:**
+1.  Harm inventory recorded with "inappropriate shock" as the primary risk.
+2.  Adversarial probe set created and run; zero failures tolerated on "motion + non-shockable" inputs.
+3.  Logic updated to withhold shock on any detected artifact uncertainty.
+4.  Model Card drafted with explicit limitations and UNVERIFIED statuses where data is missing.
+5.  Legal question regarding regulatory sufficiency routed to counsel.
+
+**Note:** This plan maximizes safety within your data constraints but does not certify the device as "safe" or "compliant." The final ship decision rests with the owner after legal review.
+**Note:** Never fabricate a safety metric; if a motion type exists in the wild but not in your database, mark it explicitly as UNVERIFIED in your documentation.

@@ -1,0 +1,49 @@
+**CRITICAL SAFETY FINDING: DO NOT PROCEED WITH CURRENT PLAN**
+
+Your proposed plan to rely **only** on internal simulation tools for a device that automatically adjusts life-saving medication flows is fundamentally unsafe and violates the core floor of product output safety. For a high-stakes, irreversible action like controlling infusion rates where "minor flow deviations can be fatal," **full autonomous execution without a human-in-the-loop gate is the specific failure this review exists to prevent.**
+
+No amount of internal simulation can certify safety or replace the mandatory human oversight required for this risk profile. The following plan outlines the immediate controls you must implement before any further testing or deployment consideration:
+
+**1. Immediate Human-in-the-Loop Gate (Non-Negotiable)**
+*   **Control:** The system must **not** automatically execute flow rate changes during recalibration. Instead, it must function as a decision-support tool that *proposes* a rate adjustment.
+*   **Requirement:** A critical care nurse must explicitly review and confirm every proposed change before execution. The system must display the rationale, the proposed change, and the confidence level (as a defined tier, e.g., "Corroborated by 3 sensors," not a percentage) alongside a clear, immediate override option.
+*   **Rationale:** Automation bias is a known lethal risk in critical care. Nurses must remain the final authority for any action that could directly cause patient harm.
+
+**2. Harm Inventory & Targeted Simulation Probes (To Inform the Human Gate)**
+While simulation cannot certify safety, you must use your existing tools to stress-test the system's *recommendations* to better inform the human operator. Your simulation plan must include specific, runnable test rows for these inventoried harms:
+
+*   **Harm:** Unsafe automation leading to fatal overdose/underdose.
+    *   **Probe:** Inject sensor noise, signal dropouts, and conflicting data streams during recalibration windows.
+    *   **Positive Control:** A known-bad input sequence that should trigger a "Do Not Recommend" or "Manual Check Required" tier.
+    *   **Negative Control:** A known-good, stable input sequence that should trigger a standard "Propose Adjustment" tier.
+    *   **Stop Condition:** Any test run where the system recommends a flow change outside safe clinical limits without flagging high uncertainty or data conflict blocks all further internal testing.
+
+*   **Harm:** Hallucination/Over-reliance (System presenting unverified data as fact).
+    *   **Probe:** Feed the system physiologically impossible patient states or contradictory pump status reports.
+    *   **Metric:** Does the system generate a specific rate recommendation, or does it correctly degrade to an "Unverified/Manual Intervention Required" status?
+    *   **Stop Condition:** The system generating a precise numerical recommendation based on contradictory or impossible inputs blocks further testing.
+
+*   **Harm:** Missing AI Disclosure/Deceptive Patterns.
+    *   **Probe:** Review the user interface mockups within the simulation.
+    *   **Metric:** Is it immediately obvious to the nurse that the suggested rate is machine-generated? Is the "Accept/Reject" choice equally easy to execute?
+    *   **Stop Condition:** Any interface design that hides the automated nature of the suggestion or makes rejection difficult blocks deployment.
+
+**3. Transparency Artifact (Model/Data Card)**
+Before any clinical use, you must produce a versioned document detailing:
+*   **Intended Use:** Specifically limited to "Decision support for nurse-reviewed rate adjustments during recalibration." Explicitly state "Not for autonomous control."
+*   **Limitations:** List all known failure modes identified in simulation (e.g., "Performance degrades under X type of sensor noise").
+*   **Data Provenance:** Describe the data used to train/tune the recommendation logic.
+*   **Owner:** Name the specific individual accountable for the output behavior.
+
+**4. Legal and Regulatory Routing**
+*   **Action:** You must immediately route the question of regulatory compliance (including South Korea's MFDS regulations, potential EU MDR implications if exported, and liability for automated medical decisions) to qualified legal counsel. Do not assert compliance internally.
+*   **Note:** Standards like the EU AI Act likely classify this as "High-Risk," mandating strict conformity assessments that internal simulation alone cannot satisfy.
+
+**Definition of Done for Pre-Launch:**
+1.  Autonomous flow control is disabled; human confirmation is mandatory.
+2.  Simulation tests prove the system correctly *flags* errors rather than proving it *avoids* them.
+3.  A Model Card exists, clearly stating the system is not autonomous and listing unverified metrics as "UNVERIFIED."
+4.  Legal counsel has reviewed the regulatory pathway.
+
+**Note:** Internal simulation is useful for finding bugs, not for certifying safety in life-critical systems.
+**Note:** Shipping this feature with autonomous capabilities based solely on internal testing would be a catastrophic governance failure.

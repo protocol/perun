@@ -1,0 +1,33 @@
+**Immediate Action Plan: Inventory Bot Validation**
+
+**1. Implement a Human-in-the-Loop Gate (Effective Immediately)**
+Do not deploy the bot to live pharmacies with autonomous execution rights for flagging or rotating stock. Given the risk of wasting critical supplies, any item flagged as "expired" by the bot must trigger a mandatory human review by a pharmacist before removal or rotation occurs. Fully automated irreversible actions on medical inventory are unsafe until the logic is proven reliable. This is a non-negotiable safety floor, regardless of your deadline.
+
+**2. Construct a Targeted Harm Inventory & Edge Case Suite**
+Stop relying solely on generic synthetic data. Build a specific test set focused on the failure mode you observed:
+*   **Positive Controls:** Create 50+ synthetic records of medications that are *safe* but possess characteristics that might confuse the logic (e.g., dates near month/year boundaries, different date formats from various suppliers, time-zone discrepancies between Manila and rural clinics).
+*   **Negative Controls:** Include clearly expired items to ensure the bot still catches actual risks.
+*   **Edge Cases:** Test leap years, end-of-month transitions, and items with missing or malformed date metadata.
+*   **Metric:** Define a "False Positive Rate" threshold. If the bot flags even one safe medication as expired in this suite, it fails the gate. Do not guess a tolerance; aim for zero false positives on critical supplies.
+
+**3. Address the Data Gap Without Delay**
+Since your testing environment lacks realistic volume, do not assume the model generalizes well.
+*   **Action:** Request a sanitized, anonymized extract of real historical inventory logs from even a single pilot clinic to validate against. If legal/compliance blocks this, manually craft "worst-case" synthetic scenarios based on actual supplier date formats used in the Philippines.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" for internal use. Document that the system was trained/tested primarily on synthetic data, list the known limitation (premature expiration flagging), and state clearly that the current accuracy rate on real-world data is **UNVERIFIED**. Do not fabricate an accuracy percentage for the government review.
+
+**4. Refine Output Confidence and Disclosure**
+*   **Uncertainty Display:** If the bot's logic relies on probabilistic inference, do not display a raw confidence score (e.g., "92% expired") to users. Instead, use defined coarse tiers: "Confirmed Expired" (logic match + date passed), "Review Required" (date proximity or data ambiguity), and "Valid."
+*   **Disclosure:** Ensure pharmacy staff know this is an automated recommendation tool, not a final authority. The interface must make it easy to override the bot's suggestion without friction.
+
+**5. Governance and Ownership**
+*   **Owner:** Assign one specific developer as the owner of the "False Positive" risk. They are responsible for reviewing any failures in the test suite.
+*   **Legal Route:** For the upcoming government compliance review, route the question of "automated decision regulation" and "AI disclosure requirements" directly to Northwind Health's legal counsel. Do not assert whether the bot falls under specific AI acts; simply present the controls (human gate, testing plan) you have implemented.
+
+**Execution Timeline for Next Month:**
+*   **Week 1:** Freeze autonomous deployment. Build the edge-case test suite with positive/negative controls.
+*   **Week 2:** Run tests. If false positives exist, revert to rule-based logic for date comparison (deterministic code) rather than AI inference for this specific task.
+*   **Week 3:** Draft the transparency artifact (Model Card) noting data limitations.
+*   **Week 4:** Final review with legal counsel on disclosure wording; prepare for government audit with evidence of human gating.
+
+**Note:** Deterministic date calculations should not require AI; if you are using a generative model to compare dates, switch to standard code immediately to eliminate hallucination risk.
+**Note:** A "tight deadline" does not justify bypassing the human gate for actions that waste critical medical supplies.

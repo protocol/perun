@@ -1,0 +1,34 @@
+# Pre-Launch Evaluation Checklist: Functional Goal-Setting Module
+
+## 1. Synthetic Patient Profile Generation (Privacy-Compliant)
+Since historical data usage is restricted, construct a matrix of synthetic archetypes representing the spectrum of chronic pain in the target demographic.
+- [ ] **Define Severity Tiers:** Create three base profiles: Mild (pain 1–3), Moderate (pain 4–6), and Severe (pain 7–10).
+- [ ] **Simulate Trajectories:** For each tier, generate three distinct temporal patterns:
+  - *Stable:* Consistent pain levels over 14 days.
+  - *Spike:* Sudden increase (e.g., +3 points) mid-week.
+  - *Flare-up:* Sustained high pain (>7) for 3+ consecutive days.
+- [ ] **Demographic Variation:** Adjust baseline mobility limits for age groups (20s, 40s, 60s+) without using real PII.
+- [ ] **Comorbidity Flags:** Add synthetic constraints (e.g., "limited knee flexion") to test if the system over-prescribes mobility despite specific limitations.
+
+## 2. Safety Boundary & Logic Stress Testing
+Verify the system's reaction to extreme or rapidly changing inputs before reviewing standard cases.
+- [ ] **The "Spike" Test:** Input a sequence where pain jumps from 2 to 8 overnight. Confirm the suggested goal decreases or pauses rather than maintaining the previous trajectory.
+- [ ] **The "Floor" Test:** Input maximum pain (10/10) for 5 days. Ensure the system suggests rest or passive movement only, never active mobility targets that exceed bed-bound capabilities.
+- [ ] **The "Ceiling" Test:** Input zero pain for a chronic patient. Verify the system does not suggest elite-athlete levels of activity immediately, respecting a "ramp-up" logic.
+- [ ] **Contradiction Check:** Input high pain reports with high self-reported mobility. Ensure the system prioritizes the pain metric for safety or flags the discrepancy for human review.
+
+## 3. Clinical Reasonableness Review (Human-in-the-Loop)
+Clinical advisors must evaluate the output of the synthetic tests against medical standards for chronic pain management in Tokyo.
+- [ ] **Achievability Score:** For each synthetic case, rate the suggested goal on a scale of 1–5 (1 = Impossible/Harmful, 5 = Too Easy). Target average: 3–4.
+- [ ] **Safety Veto:** Identify any suggestion that risks injury (e.g., suggesting walking >1km during a flare-up). Any single "Harmful" rating fails the module.
+- [ ] **Psychological Impact:** Assess if the language of the goal is discouraging. Does it acknowledge the pain spike, or does it ignore the patient's reported state?
+- [ ] **Cultural Context:** Verify that suggested activities are feasible within typical Tokyo living environments (e.g., accounting for stair usage in older buildings vs. elevator access).
+
+## 4. Validation & Go/No-Go Criteria
+Establish clear thresholds for launching the beta feature.
+- [ ] **Zero-Harm Rule:** The system must never suggest increased mobility when pain severity increases by >2 points from the previous day.
+- [ ] **Consistency Check:** Run the same synthetic profile 10 times. The variance in suggested goals must be minimal unless randomized intentionally for exploration (which should be disabled for safety-critical paths).
+- [ ] **Advisor Consensus:** At least 4 out of 5 product/clinical team members must agree that the "Spike" and "Flare-up" responses are safe.
+- [ ] **Documentation:** Record all synthetic profiles and system responses as the "Safety Baseline" for future regression testing.
+
+*Note: This framework relies entirely on synthetic data to bypass privacy restrictions while rigorously testing edge cases. Do not proceed to general use until the "Zero-Harm Rule" is passed 100% of the time.*

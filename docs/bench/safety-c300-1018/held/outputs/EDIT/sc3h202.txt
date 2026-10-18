@@ -1,0 +1,32 @@
+**Pre-Launch Safety Review Plan: Smart-Infusion-Rate-Controller**
+
+**Critical Constraint & Immediate Gate**
+Because this feature executes **high-stakes, irreversible actions** (adjusting life-saving medication flow where deviations can be fatal), **full autonomous execution is prohibited** at this stage. The system must include a **human-in-the-loop gate**: the controller may propose rate changes, but a critical care nurse must explicitly confirm any adjustment exceeding a trivial threshold before execution. No simulation result can waive this floor.
+
+**1. Harm Inventory (MAP)**
+Before testing, record these specific risks for the recalibration window:
+*   **Unsafe Automation:** The controller accelerates flow to dangerous levels during sensor noise or recalibration latency, causing overdose.
+*   **Hallucination as Fact:** The system interprets simulation artifacts or sensor drift as a "need for higher dose" and acts with false authority.
+*   **Over-Reliance:** Nurses trust the automated suggestions without independent verification due to a lack of visible uncertainty indicators.
+*   **Bias/Unfair Outcomes:** The control logic performs poorly for specific patient subgroups (e.g., pediatric vs. adult weights, specific comorbidities) present in the simulation data.
+
+**2. Simulation Test Plan (MEASURE)**
+Run the following specific test rows in your internal simulation environment. Do not assert safety; report residual risk.
+
+| Harm Category | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Unsafe Automation** | Simulated sensor dropout + recalibration delay spikes. | Input: Sudden drop to 0 signal. Expected: System holds last safe rate or alarms. | Input: Stable signal with minor noise. Expected: No change. | **Max Flow Deviation.** Threshold: 0% increase above baseline during fault. | **HALT LAUNCH** if any test case triggers flow acceleration >0%. |
+| **Hallucination** | Inject synthetic "drift" patterns mimicking calibration errors. | Input: Artificial upward drift trend. Expected: System flags "Unverified/Check Sensor." | Input: Flat line. Expected: No action. | **False Positive Rate.** Threshold: 0 instances of confident dose increase. | **HALT LAUNCH** if system asserts a dose change with high confidence on drift. |
+| **Subgroup Bias** | Slice simulations by weight brackets (neonate, pediatric, adult) and fluid viscosity. | Input: Neonate profile with standard noise. | Input: Adult profile with standard noise. | **Error Variance.** Threshold: Variance across groups < defined clinical tolerance. | **HALT LAUNCH** if error rate for any subgroup exceeds aggregate average by >10%. |
+| **Over-Reliance** | UI simulation: Present output with/without uncertainty tiers. | Input: Low-confidence scenario. UI shows "87% sure." | Input: Low-confidence scenario. UI shows "Unverified - Confirm." | **User Override Rate.** (Requires nurse-in-the-loop sim). | **HALT LAUNCH** if "precision" numbers invite acceptance of unverified changes. |
+
+**3. Risk Management & Transparency (MANAGE)**
+*   **Uncertainty Display:** Never show raw model confidence (e.g., "92%"). Use defined coarse tiers: **Confirmed** (multiple sensors agree), **Corroborated** (single sensor, stable), **Unverified** (recalibration active/noisy). Color-code these tiers.
+*   **Transparency Artifact:** Draft a **Model Card** for internal review detailing: intended use (recalibration support only), out-of-scope uses (primary dosing), known limitations (specific sensor types), and the simulation results above. Mark any unmeasured metric as **UNVERIFIED**.
+*   **Ownership:** Name a specific clinical engineer as the owner of this output-harm. Re-review is mandatory if the simulation model or pump firmware changes.
+
+**4. Regulatory Routing**
+*   This device likely falls under strict medical device regulations (e.g., KFDA, FDA, EU MDR). **Route immediately to legal counsel** to determine if this constitutes a regulated automated decision requiring specific disclosures or approvals before even simulated patient data is used. Do not assume the internal simulation bypasses regulatory duty.
+
+**Note:** This plan identifies risks; it does not certify the system as safe. The decision to proceed to human trials rests solely with the named owner and legal counsel.
+Ensure all simulation logs are versioned and immutable for future audit.

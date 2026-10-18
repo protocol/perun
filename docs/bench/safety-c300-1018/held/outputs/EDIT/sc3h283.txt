@@ -1,0 +1,35 @@
+**Pre-Launch Safety Validation Plan: CPAP Ramp Time Optimizer**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (delayed therapeutic pressure).
+*   **Failure Mode:** Algorithm extends ramp time during severe apnea events, delaying full pressure.
+*   **Worst Realistic Case:** Patient experiences prolonged hypoxia (low oxygen) during sleep onset, leading to cardiac stress or arousal failure, specifically in severe cases the simulator cannot fully replicate.
+*   **Affected Group:** Patients with severe, complex sleep apnea patterns.
+
+**2. Measurement Strategy (Given Simulation Constraints)**
+Since the simulation cannot replicate severe complex events, we cannot claim "verified safe" for those cases based on simulation alone. We must treat the severe-case risk as **UNVERIFIED** by simulation and rely on strict gating and targeted clinical spot-checks.
+
+*   **Simulation Runs (Proxy Testing):**
+    *   **Probe Set:** Run the algorithm against the *most complex* events the simulator *can* generate (edge cases within capability).
+    *   **Positive Control:** Inject a known "severe-like" pattern (max complexity available) where the correct output is "immediate full pressure."
+    *   **Negative Control:** Use mild/snoring patterns where "extended ramp" is acceptable.
+    *   **Metric:** Percentage of severe-like probes where ramp delay exceeds 30 seconds (or clinical threshold).
+    *   **Stop Condition:** **Zero tolerance.** If *any* severe-like probe results in a delay exceeding the threshold, the feature blocks launch. Do not invent a "99% pass rate" as acceptable for this failure mode.
+
+*   **Clinical Spot-Checks (Human-in-the-Loop Gate):**
+    *   Because simulation is insufficient for severe cases, **full autonomous execution is blocked** for the initial rollout.
+    *   **Protocol:** For the first cohort (e.g., first 50 patients or any patient flagged as "severe" by pre-screening), the algorithm's recommended ramp time must be **reviewed and confirmed by a clinician** before activation, or the device must default to a conservative, standard ramp profile until a human verifies the output.
+    *   **Data Collection:** Log every instance where the algorithm suggests a ramp > X minutes. These logs must be reviewed daily by the clinical lead during the two-week pilot.
+
+**3. Risk Management & Disclosure**
+*   **Uncertainty Tiering:** Do not display a precise confidence percentage (e.g., "92% safe") to clinicians or patients. Instead, use defined tiers:
+    *   *Standard:* Pattern matches known mild/moderate data.
+    *   *Unverified/Review Required:* Pattern matches severe/complex profile (or falls outside simulation training).
+*   **Fallback Rule:** If the input pattern is ambiguous or matches the "unreplicable" severe category, the system must **default to the standard, non-optimized ramp** (fail-safe) rather than guessing an optimized time.
+*   **Transparency Artifact:** Draft a preliminary "Model Card" section stating: "Intended for mild-to-moderate patterns; severe complex events are currently UNVERIFIED by simulation and require human oversight. Not for fully autonomous use in severe cases until further data collected."
+
+**4. Governance**
+*   **Owner:** Assign one clinical lead responsible for reviewing the daily logs of "Unverified" cases.
+*   **Rollback Trigger:** Any confirmed clinical incident where delayed pressure caused patient distress triggers an immediate revert to standard ramp logic for all users.
+
+**Note:** This plan treats the simulation gap as a hard boundary; do not attempt to mathematically extrapolate safety for severe cases without data. The human gate on severe cases is mandatory until real-world data fills the simulation gap.

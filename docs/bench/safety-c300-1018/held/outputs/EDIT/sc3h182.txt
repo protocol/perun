@@ -1,0 +1,32 @@
+**Prioritized Edge-Case Simulation Plan for 48-Hour Certification Window**
+
+Given the high-stakes nature of automated alerts for home-care patients and the severe time constraint, your testing must focus exclusively on failure modes where the system fails to notify a caregiver during a critical oxygen shortage. Do not test "happy paths" or nominal operations; assume the core logic works and probe only the boundaries where safety breaks. Execute these simulations in the following order:
+
+1.  **The "Silent Death" Sequence (Network Outage at Critical Threshold)**
+    *   **Scenario:** Simulate the tank level crossing the critical threshold *exactly* while the device loses cellular/Wi-Fi connectivity.
+    *   **Action:** Cut network power immediately before the sensor reads the low level. Hold the outage for 15 minutes (exceeding any internal retry window). Restore network.
+    *   **Success Criterion:** The alert must fire immediately upon reconnection with a "delayed due to outage" flag, or the device must have triggered a local audible alarm that persisted until connection was restored. If the event is logged but no alert sends after reconnection, this is a critical failure.
+
+2.  **The "Brownout" Blindspot (Battery Failure During Transmission)**
+    *   **Scenario:** The battery dies *during* the handshake of an alert transmission.
+    *   **Action:** Initiate a low-tank alert, then physically cut power to the device mid-transmission (simulating a dead battery or loose connection). Replace the battery/power source immediately.
+    *   **Success Criterion:** Upon reboot, the device must recognize the unsent alert from non-volatile memory and re-transmit it automatically. If the reboot clears the alert queue, the system has failed.
+
+3.  **The "Flapping" Network (Intermittent Connectivity)**
+    *   **Scenario:** Rapid connection/disconnection cycles prevent the completion of a multi-packet alert.
+    *   **Action:** Script a network environment that drops packets or disconnects every 5 seconds for a 2-minute window starting at the moment of critical detection.
+    *   **Success Criterion:** Verify the device does not enter a crash loop or exhaust its battery trying to send. It must successfully queue the alert and deliver it once stability returns, without duplicating the alert hundreds of times (which could cause caregiver alert fatigue).
+
+4.  **The "False Security" Calibration (Sensor Lag vs. Empty Tank)**
+    *   **Scenario:** The sensor reports "OK" due to lag or calibration drift while the tank is actually empty.
+    *   **Action:** Simulate a sensor reading that stays just above the threshold while draining the virtual tank to zero, then introduce a sudden spike in usage (simulating a patient needing more oxygen).
+    *   **Success Criterion:** Ensure the system has a secondary "time-since-last-valid-reading" or "rate-of-change" failsafe that triggers an alert if data looks suspiciously static during high usage, preventing a silent empty tank.
+
+5.  **Caregiver Unreachable Cascade**
+    *   **Scenario:** The primary caregiver's phone is off or unreachable.
+    *   **Action:** Trigger a valid alert while blocking delivery to the primary endpoint.
+    *   **Success Criterion:** Verify the escalation policy fires immediately (e.g., secondary contact notified within 2 minutes). If the system waits too long or stops trying after one failure, it is unsafe.
+
+**Execution Note:** For each test, document the exact timestamp of the trigger, the failure injection, and the receipt of the alert. Any test where the alert does not arrive within the defined safety window (e.g., 5 minutes) must be marked as a "Stop Ship" finding.
+
+**Governance Note:** Because this device performs automated, high-stakes actions affecting patient safety, a human-in-the-loop review of these specific failure logs is mandatory before launch; do not rely solely on automated pass/fail flags.

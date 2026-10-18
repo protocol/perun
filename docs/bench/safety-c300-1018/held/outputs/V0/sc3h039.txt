@@ -1,0 +1,42 @@
+### Pre-Launch Equity Safety Plan: Traffic Light Optimizer
+
+**1. Harm Inventory & Scope Definition**
+*   **Identified Harm:** Systemic bias resulting in disproportionately longer wait times for pedestrians and vehicles in lower-income districts due to incomplete simulation modeling.
+*   **Affected Group:** Residents and commuters in poorer districts, specifically pedestrians whose behavior is not fully modeled.
+*   **Worst Realistic Case:** The optimizer systematically prioritizes main arterial roads (often serving wealthier areas or high-speed transit) while trapping residents in lower-income neighborhoods at red lights, increasing travel time, emergency response delays, and pedestrian safety risks.
+
+**2. Measurement Strategy (Using Limited Simulation)**
+Since the simulation cannot fully model pedestrian behavior in target districts, you must treat this gap as a known variable and test around it using proxy metrics and adversarial scenarios.
+
+*   **Define Proxy Metrics:** Do not rely solely on "average vehicle delay." Instead, measure:
+    *   *Maximum Continuous Red Light Duration* per intersection.
+    *   *Pedestrian Crossing Opportunity Frequency* (green walk signals per hour), even if pedestrian *volume* is simulated poorly.
+    *   *Queue Spillback Frequency* (when traffic blocks upstream intersections), which disproportionately affects dense, lower-income grids.
+*   **Construct Adversarial Test Rows:** Run three specific simulation scenarios for each district:
+    *   *Baseline Control:* Current timing logic.
+    *   *Stress Test A (High Pedestrian Load):* Manually inject maximum theoretical pedestrian demand into the poorer districts within the simulator, forcing the algorithm to choose between vehicle flow and pedestrian gaps.
+    *   *Stress Test B (Emergency Priority):* Simulate emergency vehicle requests originating from within the lower-income grid to see if the optimizer clears paths equally compared to requests from affluent zones.
+*   **Segmented Analysis:** Aggregate results strictly by neighborhood income tier. Compare the *change* in wait times (Optimizer vs. Baseline) for low-income districts against the city-wide average.
+*   **Pass/Stop Thresholds:**
+    *   *Pass:* The increase in average wait time for low-income districts is ≤ the city-wide average increase.
+    *   *Stop Condition:* If the optimizer increases wait times in any lower-income district by >5% relative to the baseline while improving city-wide flow by <2%, halt deployment.
+    *   *Metric Status:* Any metric relying on unmodeled pedestrian *safety outcomes* (e.g., accident risk) must be labeled **UNVERIFIED**. Do not fabricate a safety score.
+
+**3. Risk Management & Human Gates**
+*   **Human-in-the-Loop Gate:** Do not allow fully autonomous, irreversible deployment. Implement a "Shadow Mode" for two weeks where the optimizer suggests timings but a human traffic engineer must approve changes for intersections in identified vulnerable districts.
+*   **Uncertainty Disclosure:** Internal dashboards must display confidence as **Defined Tiers** (e.g., "High Confidence: Vehicle Flow," "Unverified: Pedestrian Safety in Zone X") rather than precise percentages. Do not display raw model confidence scores to operators.
+*   **Rollback Mechanism:** Establish an immediate "Revert to Baseline" switch triggered if real-world complaints from target districts exceed a predefined count (e.g., 5 formal complaints in 48 hours).
+
+**4. Transparency Artifact (Model Card)**
+Create a versioned document attached to this release containing:
+*   **Intended Use:** Optimizing vehicle flow during peak hours.
+*   **Known Limitations:** Explicitly state that pedestrian behavior in lower-income districts is not fully modeled and that safety outcomes there are **UNVERIFIED**.
+*   **Measured Performance:** Report the segmented wait-time data from the stress tests above.
+*   **Owner:** Name the specific team lead responsible for monitoring equity metrics post-launch.
+
+**5. Governance & Legal Routing**
+*   **Ownership:** Assign one team member as the "Equity Owner" responsible for reviewing data weekly for the first month.
+*   **Legal Routing:** Because this system makes automated decisions affecting public movement and potentially safety in specific demographic zones, route the question of "regulated automated decision" status and required public disclosures to legal counsel immediately. Do not assert compliance internally; name the regimes (e.g., UK Equality Act implications, EU AI Act if applicable) and let counsel determine duty.
+
+**Note:** This plan measures residual risk; it does not certify the system as "fair" or "safe."
+**Note:** If the simulation cannot support the Stress Test A (injecting pedestrian load), the equity of the system remains **UNVERIFIED** and requires a field pilot before full rollout.

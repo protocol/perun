@@ -1,0 +1,38 @@
+**Rapid Testing Protocol for Voting Registration Assistant**
+
+**1. Immediate Harm Inventory & Triage**
+Define the worst-case harm: systematic disenfranchisement of specific demographics due to incorrect polling locations. Given your reliance on crowd-sourced data, the primary risks are **bias/unfair outcomes** (specific neighborhoods receiving lower-quality data) and **hallucination surfaced as fact** (presenting unverified addresses as official).
+*   **Action:** Map your user base by demographic segments (e.g., zip code, language preference, device type). Identify which segments rely most heavily on crowd-sourced updates versus static official data.
+
+**2. Runnable Evaluation Plan (Measure)**
+Do not assert accuracy; measure it against known truths. Create a "Golden Set" of 50–100 known correct polling locations across diverse Austin neighborhoods.
+*   **Test Rows:** For each demographic segment identified above, run a test row containing:
+    *   **Probe Set:** Inputs representing addresses in that segment.
+    *   **Positive Control:** A known correct address for that segment (must return the exact official location).
+    *   **Negative Control:** An outdated or incorrect address (must trigger a "Unverified" flag or fallback, not a confident wrong answer).
+    *   **Metric:** Percentage of outputs matching the Golden Set exactly.
+    *   **Stop Condition:** If error rate > 0% for any high-stakes segment (e.g., historically underserved areas), halt deployment for that segment immediately.
+*   **Adversarial Probes:** Inject prompts mimicking confused users or edge cases (e.g., "Where do I vote if I live near [Landmark]?" where the landmark spans two districts) to test for hallucination.
+
+**3. Manage Residual Risk with Human Gates**
+Because this is a high-stakes, irreversible action (misdirecting a voter can cost them their vote), you cannot rely on full automation.
+*   **Human-in-the-Loop Gate:** Any polling location derived solely from crowd-sourced data (not matched to an official government source) must be flagged as **"Unverified – Confirm with County Clerk"** before showing to the user. Do not present unverified data as fact.
+*   **Confidence Tiers:** Replace numerical confidence scores (e.g., "90% sure") with defined text tiers:
+    *   **Confirmed:** Matched to official government database.
+    *   **Corroborated:** Matched by multiple independent crowd sources.
+    *   **Single-Source:** One crowd report; display with a prominent warning.
+    *   **Unverified:** No reliable data; display a directive to call the county hotline.
+*   **Fallback Mechanism:** If the system cannot verify an address within the defined tiers, it must default to providing the official County Clerk contact information rather than guessing.
+
+**4. Transparency Artifact (Model/Data Card)**
+Before launch, publish a simple "Data Card" for your users and volunteers:
+*   **Intended Use:** Providing polling location assistance; not a legal substitute for official voter registration documents.
+*   **Data Provenance:** Explicitly state reliance on crowd-sourced updates where official data is inaccessible.
+*   **Limitations:** List known gaps (e.g., "Recent boundary changes in Travis County may not be reflected immediately").
+*   **Owner:** Name the volunteer lead responsible for data validation.
+
+**5. Governance & Legal Routing**
+*   **Owner Assignment:** Assign one volunteer to own the "Bias/Disenfranchisement" risk. They must review failed test cases daily.
+*   **Legal Duty:** Whether your tool constitutes a regulated automated decision requiring specific legal disclosures under Texas election law or the EU AI Act (if accessible globally) is a legal determination. **Route this immediately to legal counsel or your organization's general counsel.** Do not assume compliance; ask explicitly about disclosure requirements for AI-assisted voting tools.
+
+**Note:** Never certify the system as "bias-free" or "100% accurate"; report residual risk as "Unverified" where testing is incomplete. If the deadline prevents full validation, cap exposure by limiting the tool to "Confirmed" data only and disabling crowd-sourced suggestions until post-election review.

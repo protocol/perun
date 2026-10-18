@@ -1,0 +1,44 @@
+### Step-by-Step Safety Review Process for Exercise Prescription Feature
+
+**1. Construct the Harm Inventory (Day 1)**
+Before testing, explicitly document the specific risks for stroke survivors. Do not proceed without listing:
+*   **Over-reliance/Automation Bias:** Patients or caregivers trusting the recommended resistance level despite visible struggle or pain.
+*   **Unsafe High-Stakes Automation:** The system prescribing resistance that exceeds current capability, risking re-injury or falls.
+*   **Bias/Unfair Outcomes:** The computer vision model failing to accurately assess strength for specific body types, skin tones, or movement patterns common in post-stroke paralysis.
+*   **Hallucination as Fact:** The system reporting a "strength score" with high confidence when the camera view is occluded or lighting is poor.
+*   **Missing Disclosure:** Users unaware that the resistance level is an AI estimate, not a clinically verified measurement.
+
+**2. Design High-Yield Evaluations for the Small Cohort (Days 2–3)**
+With only 20 patients, you cannot rely on aggregate statistics. You must use adversarial and edge-case testing:
+*   **Positive Control (Known Risk):** Intentionally introduce scenarios where the patient is visibly struggling or form is broken. Verify the system *lowers* or *halts* the recommendation. If it suggests increasing resistance here, the test fails immediately.
+*   **Negative Control (Known Safe):** Use stable, textbook-form exercises. Verify the system does not erroneously downgrade capable patients.
+*   **Subgroup Slicing:** Ensure the 20 patients cover the widest possible variance in impairment levels, skin tones, and home lighting conditions. Do not test only "average" cases.
+*   **Injection/Leakage Probe:** Test if unrelated movements or background objects confuse the strength assessment.
+
+**3. Implement the Human-in-the-Loop Gate (Mandatory Floor)**
+**Do not ship fully automated resistance adjustments.** For this pilot and the subsequent broader release:
+*   Any recommendation to *increase* resistance must require explicit confirmation from the patient or caregiver via a "Are you sure?" prompt that details the specific change.
+*   Any recommendation derived from low-confidence video data (e.g., poor lighting, partial occlusion) must be flagged as "Unverified" and default to the previous safe level or require clinical review.
+*   **Stop Condition:** If the system recommends an increase in resistance during a "Positive Control" (struggle) scenario in any of the 20 tests, the feature is blocked from launch until the logic is rewritten.
+
+**4. Define and Surface Uncertainty (Day 4)**
+Do not display raw confidence percentages (e.g., "87% strong") to users. Instead, implement defined coarse tiers:
+*   **Confirmed:** Clear view, consistent form, multiple frames agreeing.
+*   **Corroborated:** Good view, minor variability.
+*   **Unverified:** Poor lighting, occlusion, or erratic movement.
+*   *Action:* If the output is "Unverified," the system must withhold a new prescription and ask for a retry.
+
+**5. Create the Transparency Artifact (Day 5)**
+Draft a **Model Card** for this feature before launch. It must include:
+*   **Intended Use:** Home exercise support for stroke recovery (not a medical device diagnosis).
+*   **Limitations:** Explicitly state the model was validated on only 20 patients and may fail on unseen impairment types.
+*   **Owner:** Name the specific engineer and clinician responsible for monitoring outputs.
+*   **Metrics:** Report results as "Pass/Fail on safety controls" rather than invented accuracy rates. If a metric was not measured due to cohort size, label it **UNVERIFIED**.
+
+**6. Final Governance Check (Day 6)**
+*   Route the question of legal disclosure requirements and regulated medical device status to legal counsel immediately. Do not assert compliance internally.
+*   Confirm that the "Human-in-the-Loop" gate is active in the production build.
+*   Sign off on the residual risk: Acknowledge that with a small cohort, rare failure modes remain unknown.
+
+**Note:** This process prioritizes preventing physical harm over statistical significance. The "Human-in-the-Loop" gate is non-negotiable for high-stakes physical actions.
+**Note:** Do not fabricate a "99% safe" claim; report the specific safety controls passed and the limitations of the 20-person cohort transparently.

@@ -1,0 +1,34 @@
+### Pre-Launch Bias Audit Plan for Rental Pricing
+
+**Step 1: Construct the Harm Inventory**
+Before testing, explicitly record the specific risk: "Device-based pricing systematically disadvantages users of specific phone models (e.g., older Androids vs. latest iPhones), leading to unfair financial penalties." Define the worst-case scenario: A specific demographic group, correlated with a device type, is consistently quoted rates 15% higher than the baseline for identical rental parameters.
+
+**Step 2: Design the Probe Set (The "Runnable Test")**
+Since real-time monitoring is restricted, build a static evaluation dataset to run locally or in a staging environment before launch. Create three distinct input profiles for every rental scenario (same dates, location, car class):
+*   **Control Group:** Requests with neutral or standardized device headers.
+*   **Positive Control (Known Bad):** Artificially inject device headers known to be vulnerable to bias (e.g., specific older models) and manually hard-code a pricing rule that *should* trigger a higher rate in your logic to verify the test detects it.
+*   **Negative Control (Known Good):** Inject device headers that should result in the base rate.
+*   **Segmented Probes:** Rotate through the top 20 most common device models in Riyadh, ensuring representation of both budget and premium segments.
+
+**Step 3: Define Metrics and Pass Thresholds**
+*   **Metric:** "Price Variance by Device." Calculate the percentage difference between the quote for a specific device and the median quote for the same rental parameters.
+*   **Threshold:** Set a zero-tolerance threshold for unexplained variance. If the price difference exceeds 0% without a documented, non-device business justification (e.g., loyalty status, which must be decoupled from device), the test fails.
+*   **Stop Condition:** If any device segment shows a statistically significant price increase (>0%) compared to the control, the launch is blocked. Do not invent a "acceptable" bias rate; the goal is no unexplained discrimination.
+
+**Step 4: Execute the Audit (Manual/Semi-Automated)**
+Given the single cloud provider constraint and limited tooling:
+1.  Generate 500 synthetic booking requests covering your probe set.
+2.  Run these against your staging pricing engine.
+3.  Log the output prices and the corresponding device IDs in a simple spreadsheet.
+4.  Sort by device model and calculate the average price per model.
+5.  Visually inspect and statistically compare the averages. Look for clusters where specific phone models consistently yield higher prices.
+
+**Step 5: Manage Residual Risk**
+*   **Human-in-the-Loop Gate:** If the audit detects variance, do not launch. Require a code review to isolate the pricing logic tying device ID to rate.
+*   **Transparency Artifact:** Create a one-page "Pricing Logic Card" documenting that device type was tested as a variable, the results of the audit (e.g., "No price variance detected across 20 device models"), and the owner of this metric. This prevents future claims of "unverified" fairness.
+*   **Uncertainty Disclosure:** If your test coverage is limited to only the top 20 devices, explicitly mark coverage for niche devices as `UNVERIFIED` in your internal records. Do not claim "100% bias-free" if the test set was not exhaustive.
+
+**Step 6: Final Go/No-Go Decision**
+Present the variance log and the Pricing Logic Card to the product owner. The decision to ship rests with them, but the evidence of residual risk (or lack thereof) must be clear. If the data shows unexplained higher rates for specific devices, the feature must be reworked to decouple device info from pricing before the holiday surge.
+
+*Note: This plan addresses product-output safety by measuring harm rather than certifying safety. Legal requirements for algorithmic discrimination in Saudi Arabia should be routed to counsel.*

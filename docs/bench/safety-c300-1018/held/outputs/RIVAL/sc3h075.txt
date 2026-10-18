@@ -1,0 +1,39 @@
+### Pre-Launch Disparate Impact Evaluation Protocol
+
+To detect disparate impact on freelancers within your regulatory constraints, implement a **Stratified Counterfactual Sampling Strategy**. This approach isolates income stability as the variable of interest while holding creditworthiness constant, allowing you to measure rejection rate differentials without ingesting prohibited alternative data.
+
+**1. Define Stratified Cohorts**
+Construct two primary cohorts based on employment classification, ensuring equal representation of high-risk and low-risk profiles within each:
+*   **Cohort A (Traditional):** Salaried employees with fixed monthly income.
+*   **Cohort B (Freelance/Gig):** Workers with variable income but equivalent aggregate annual earnings.
+
+Sub-stratify both cohorts by income decile and debt-to-income (DTI) ratios to ensure the comparison is apples-to-apples. Do not rely on random sampling; use **judgmental sampling** to create "twin" pairs where the only differing attribute is the income source structure (fixed vs. variable).
+
+**2. Construct Counterfactual Test Cases**
+Generate synthetic test cases that mirror real-world applicant profiles but swap the employment type. For every traditional employee profile with a specific income history, create a freelance counterpart with:
+*   Identical total annual income.
+*   Identical DTI and credit score.
+*   Variable monthly cash flow patterns typical of the Dubai gig economy (e.g., seasonal spikes, irregular intervals), derived from allowed internal data sources.
+
+Ensure these synthetic cases respect regulatory limits by using only data fields currently permitted for ingestion. Do not introduce external bank transaction data if prohibited; instead, simulate the *statistical properties* of variable income using the allowed data points.
+
+**3. Execute Blind Model Scoring**
+Run the underwriting model on both cohorts in a sandboxed environment. Ensure the model is blind to the test nature of the data. Record the binary decision (Approve/Reject) and the continuous stability score for each case.
+
+**4. Calculate Disparate Impact Metrics**
+Apply the **Four-Fifths (80%) Rule** as your primary threshold:
+*   Calculate the approval rate for Cohort A (Traditional).
+*   Calculate the approval rate for Cohort B (Freelance).
+*   Divide the Freelance approval rate by the Traditional approval rate.
+*   **Flag:** If the result is less than 0.80, there is prima facie evidence of disparate impact.
+
+Supplement this with **Statistical Significance Testing** (e.g., Chi-Square test) given your sample size needs to be robust enough to detect signals with a team of seven. Aim for a minimum of 300 paired cases per stratum to achieve statistical power.
+
+**5. Root Cause Analysis via Feature Importance**
+For rejected freelance cases that were approved in their traditional counterpart form, analyze the model's feature importance weights. Determine if the "income variability" metric is disproportionately downgrading the stability score compared to how the model treats minor fluctuations in salaried bonuses. If the model penalizes variance mathematically without considering the *trajectory* of gig earnings, the logic requires recalibration before Q3.
+
+**6. Reporting and Mitigation**
+Document the rejection differential. If disparate impact is found, propose specific threshold adjustments or the introduction of a "gig-income normalization factor" that smooths variable earnings over a longer window, provided this remains within regulatory bounds.
+
+**Note:** Ensure all synthetic data generation is documented for audit trails required by Dubai financial regulators.
+This protocol requires no external data ingestion, adhering strictly to your stated constraints.

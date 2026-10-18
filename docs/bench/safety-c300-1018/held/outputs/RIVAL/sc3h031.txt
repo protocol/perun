@@ -1,0 +1,33 @@
+### Rapid Pre-Launch Safety Review Plan
+
+**Objective:** Identify critical dosage logic failures using existing data logs and current engineering capacity within 48 hours.
+
+**Phase 1: Data Segmentation & Baseline Reconstruction (Hours 0–4)**
+*   **Isolate Edge Cases:** Filter existing logs for inputs at the extremes of your expected range (e.g., smallest plot sizes, highest pest infestation levels, rare crop varieties). These are the most likely to trigger calculation overflows or underflows.
+*   **Reconstruct "Golden" Set:** Manually select 50 historical records where the recommended dose is known to be safe and effective based on agronomist verification or successful farmer outcomes. This is your "pass" baseline.
+*   **Construct "Failure" Set:** Identify any logged instances where farmers reported poor results, phytotoxicity (crop damage), or where the system previously returned error codes/null values. If no such logs exist, synthesize 20 theoretical high-risk scenarios (e.g., mixing incompatible chemicals, zero-area input) based on your product requirements.
+
+**Phase 2: Deterministic Logic Replay (Hours 4–24)**
+*   **Blind Re-calculation:** Have engineers write a simple script to replay the selected 70+ inputs through the current production logic *offline*. Do not use the live API; call the core dosing function directly to isolate logic from network/UI layers.
+*   **Threshold Assertion Checks:** Implement hard-stop assertions in the replay script for physical impossibilities and safety limits:
+    *   **Negative Values:** Any recommended dose < 0 is an immediate fail.
+    *   **Maximum Concentration:** Flag any dose exceeding the manufacturer's labeled maximum per hectare/liter.
+    *   **Dilution Ratios:** Ensure water-volume recommendations do not result in concentrations that burn foliage.
+    *   **Zero-Division/Nulls:** Verify the system handles missing soil data or pest counts without crashing or defaulting to a dangerous "full dose."
+*   **Unit Consistency Audit:** Manually trace unit conversions in the code for the top 10 most common pesticides in your logs. Verify that inputs (e.g., acres vs. hectares, ml vs. liters) are normalized correctly before calculation. This is a common source of 10x overdosing errors.
+
+**Phase 3: Peer "Red Team" Walkthrough (Hours 24–36)**
+*   **Role Reversal:** Pair engineers who did not write the dosing algorithm. Give them the "Failure Set" and ask them to attempt to break the logic by tweaking one input variable at a time (e.g., "What happens if a user enters 0.1 acres instead of 1?").
+*   **Assumption Challenge:** Review the hardcoded assumptions in the code (e.g., default spray volume, standard knapsack capacity). Verify these defaults match the reality of smallholder equipment in India. If the system assumes a motorized sprayer but the user has a manual one, the concentration advice may be lethal to the crop.
+
+**Phase 4: Go/No-Go Decision Matrix (Hours 36–48)**
+*   **Categorize Findings:**
+    *   **Critical:** Any scenario leading to crop death, human harm, or system crash. **Action:** Block launch until fixed.
+    *   **High:** Recommendations outside optimal efficacy ranges but not immediately destructive. **Action:** Add warning labels or restrict advice to "Consult an expert" for these edge cases.
+    *   **Low:** UI glitches or non-safety-related data formatting issues. **Action:** Log for post-launch patch.
+*   **Final Sign-off:** Require two senior engineers to independently verify that all "Critical" findings are resolved and that the "Golden" set passes 100% of assertions.
+
+**Deliverable:** A signed report listing the 70+ test cases used, the specific assertions passed/failed, and a definitive "Go" or "No-Go" status based on the presence of any unresolved Critical findings.
+
+*Note: If any "Critical" failure is found, do not launch; restrict the system to a "Beta/Advisory Only" mode requiring human confirmation.*
+*Preserve all log data used in this test to compare against post-launch performance for continuous monitoring.*

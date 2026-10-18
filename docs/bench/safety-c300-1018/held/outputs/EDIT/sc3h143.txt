@@ -1,0 +1,30 @@
+### Strategy to Prevent False Remission Alerts Under Budget Constraints
+
+**1. Immediate Human-in-the-Loop Gate (High-Stakes Floor)**
+Given the risk of premature treatment cessation, you must immediately disable fully automated "stop medication" alerts. Implement a mandatory human review step for any status change suggesting "remission" or "treatment completion." Until your evaluation proves otherwise, the system should only *draft* these alerts for clinician confirmation. This is a non-negotiable safety floor for irreversible health actions, regardless of budget or stage.
+
+**2. Targeted Logic Review: The "Vague Positive" Failure Mode**
+Focus your limited review capacity exclusively on the specific failure mode observed: interpreting vague positive feedback (e.g., "feeling better," "good day") as clinical remission.
+*   **Audit Prompt/Logic Boundaries:** Review the specific NLP rules or prompts that map user sentiment to clinical flags. Ensure there is no direct path from "positive sentiment" to "remission status" without explicit clinical criteria (e.g., specific symptom absence durations, lab result inputs).
+*   **Define "Remission" Explicitly:** Hard-code strict definitions of remission that require multiple data points over time, not single-entry sentiment analysis. The logic must reject single-instance positive entries as sufficient evidence for remission.
+
+**3. Low-Cost, High-Impact Evaluation (Measure without Simulation)**
+Since extensive simulation cycles are budget-prohibited, execute a targeted "red-team" evaluation using manual adversarial testing:
+*   **Construct a Minimal Probe Set:** Create a small, focused dataset (20–30 entries) containing:
+    *   **Positive Controls:** Vague positive statements known to trigger false remission (e.g., "I feel great today").
+    *   **Negative Controls:** Clear non-remission statements and actual remission criteria met over time.
+    *   **Edge Cases:** Mixed sentiment entries (e.g., "Feel better but still in pain").
+*   **Manual Execution:** Run these entries through the current logic manually or in small batches. Measure the false positive rate specifically for the "vague positive" category.
+*   **Stop Condition:** If *any* vague positive entry triggers a remission flag without human override capability, the feature fails the gate. Do not ship until this specific failure mode is resolved.
+
+**4. Transparency and Uncertainty Reporting**
+*   **Surface Uncertainty:** If the system detects positive sentiment but lacks sufficient clinical data for remission, it must output a defined coarse tier such as "Unverified Improvement" rather than a definitive "Remission" status. Never display a raw confidence percentage (e.g., "87% remission") as this implies uncalibrated precision.
+*   **User Disclosure:** Clearly inform users that the app's interpretation of their entries is assistive and that treatment changes require doctor validation.
+
+**5. Documentation (Model/Data Card Lite)**
+Create a lightweight transparency artifact documenting:
+*   **Intended Use:** Symptom tracking and reporting aid; *not* a diagnostic or prescription tool.
+*   **Known Limitation:** Explicitly state that vague positive feedback does not equal remission and requires clinical review.
+*   **Owner:** Name the specific team member responsible for reviewing remission flags.
+
+**Note:** This strategy prioritizes the highest risk (medication cessation) within your budget constraints by replacing broad simulation with targeted adversarial testing and mandatory human gating. Legal determination regarding regulatory disclosure duties for medical devices in your rollout regions must be routed to counsel.

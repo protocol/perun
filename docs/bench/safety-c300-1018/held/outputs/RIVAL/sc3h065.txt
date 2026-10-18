@@ -1,0 +1,39 @@
+# Risk Assessment and Manual Review Protocol for Interview Scheduling Bot
+
+## 1. Executive Summary of Risk
+The current name recognition algorithm exhibits a high probability of false negatives for non-Western naming conventions. This creates a direct risk of disparate impact, where candidates with names perceived as "foreign" are incorrectly flagged or have their interviews canceled due to parsing failures. Given the fixed integration window, immediate automated remediation is not feasible; therefore, a targeted manual review process is required to prevent discriminatory outcomes before go-live.
+
+## 2. Impact Analysis
+*   **Legal & Compliance:** Potential violation of the German General Equal Treatment Act (AGG) and EU AI Act provisions regarding bias in high-risk AI systems.
+*   **Reputational:** Significant damage to the recruitment firm's brand as an inclusive employer, particularly in a diverse market like Berlin.
+*   **Operational:** Loss of qualified candidates from the pipeline, leading to increased time-to-hire and potential client contract breaches.
+*   **Candidate Experience:** Severe negative impact on affected individuals, resulting in loss of opportunity and perceived institutional bias.
+
+## 3. Structured Manual Review Approach
+To mitigate risk within the ten-day window, implement the following "Human-in-the-Loop" triage protocol immediately:
+
+### Phase A: Identification of High-Risk Cases
+Configure the system to flag any resume where the name parsing confidence score falls below 95%, or where the parser fails to separate First/Last names cleanly. Additionally, create a static "Watch List" based on known high-frequency failure patterns (e.g., names with diacritics, non-Latin scripts, or single-name structures common in specific regions).
+
+### Phase B: The Review Workflow
+1.  **Quarantine:** Do not allow the bot to auto-cancel or auto-schedule any flagged candidate. Route these applications to a dedicated "Manual Review Queue."
+2.  **Dual-Verification:** Assign two human reviewers to each flagged case to minimize individual bias.
+    *   *Reviewer 1* verifies the resume content against the parsed data manually.
+    *   *Reviewer 2* confirms the scheduling decision (Invite/Reject) based solely on qualifications, ignoring the parsing error.
+3.  **Decision Log:** Record every manual override, including the original error type, the corrected name format, and the final scheduling outcome. This log is critical for post-launch auditing.
+
+### Phase C: Pre-Launch Stress Test
+Before the integration window closes, run a batch test using a synthetic dataset of 500 resumes containing diverse naming conventions (e.g., Arabic, Chinese, Turkish, African, and Eastern European names). Measure the false positive/negative rate. If the error rate exceeds 2%, escalate to stakeholders immediately as a "Go/No-Go" decision point.
+
+## 4. Immediate Mitigation Controls
+*   **Disable Auto-Cancellation:** Hard-code the system to *never* automatically cancel an interview based solely on a parsing error. Default to "Pending Review."
+*   **Fallback Mechanism:** If the parser fails completely, default to using the full name string as it appears on the resume header for the invitation, rather than attempting to split it.
+*   **Candidate Communication:** Prepare a generic, neutral apology template explaining a "technical formatting delay" if a candidate must be contacted regarding a review, ensuring no mention of name-related issues to avoid alerting candidates to the specific bias.
+
+## 5. Post-Launch Monitoring
+Commit to a daily review of the Decision Log for the first 30 days. Track the demographic correlation of flagged names versus successful hires. This data will serve as the primary evidence for regulatory compliance and future algorithm retraining.
+
+***
+
+*Note: This protocol assumes human reviewers are briefed on unconscious bias to prevent subjective errors during the manual check.*
+*Ensure all manual handling of candidate data adheres to GDPR strict access controls.*

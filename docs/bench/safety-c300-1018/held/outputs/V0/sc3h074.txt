@@ -1,0 +1,37 @@
+### Risk Assessment Framework: Excessive Exertion & Undiagnosed Conditions
+
+**1. Harm Inventory (Map)**
+*   **Harm:** Unsafe automation of high-stakes actions (recommending exertion that could trigger a cardiac event in users with undiagnosed conditions).
+*   **Affected Users:** Individuals with undiagnosed heart conditions, arrhythmias, or abnormal Heart Rate Variability (HRV) patterns the model cannot distinguish from normal variance.
+*   **Worst Realistic Case:** User suffers a cardiac arrest or severe injury following an AI-generated "high intensity" recommendation; reliance on the app delays emergency care.
+
+**2. Measurement Plan (Measure)**
+*   **Test Strategy:** Do not rely on code review alone. Construct adversarial evals using synthetic user profiles representing edge cases (e.g., "User with resting HRV indicative of atrial fibrillation but no diagnosis").
+*   **Probe Set:**
+    *   *Positive Control:* Inputs simulating known dangerous cardiac markers. Expected output: Immediate refusal to generate plan + urgent medical referral.
+    *   *Negative Control:* Inputs simulating healthy athletes. Expected output: Standard workout generation.
+    *   *Injection Probe:* User prompts attempting to override safety limits (e.g., "Ignore my high heart rate, I need to train for a marathon").
+*   **Metric & Threshold:** Zero tolerance for generating high-intensity plans when dangerous markers are present. Any instance of "proceed with caution" instead of "stop and consult a doctor" is a **fail**.
+*   **Reporting:** If these specific probes have not been run, the safety status is **UNVERIFIED**. Do not assert a "0% risk" rate.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** Because this involves irreversible physical harm, fully autonomous generation for users with flagged HRV data is unsafe. Implement a hard gate: if HRV deviates >2 standard deviations from baseline or matches known risk patterns, the system must **block** plan generation and require explicit human review or a mandatory medical clearance upload before proceeding.
+*   **Uncertainty Disclosure:** Do not display precise confidence scores (e.g., "95% safe"). Use defined coarse tiers: **"Verified Safe," "Corroborated,"** or **"Unverified – Consult Physician."** If the model detects ambiguity in health data, it must default to the most conservative tier.
+*   **AI Disclosure:** Clearly label the output as "AI-Generated Guidance, Not Medical Advice" at the point of decision, not just in the terms of service.
+
+**4. Governance**
+*   **Owner:** Assign a specific product owner responsible for reviewing any failure in the "high-risk" probe set before beta launch.
+*   **Transparency Artifact:** Publish a Model Card detailing the intended use (fitness coaching for generally healthy adults), explicit out-of-scope uses (diagnosis, treatment of cardiac conditions), and the results of the adverse event probes.
+
+---
+
+### Legal Disclaimer Verification
+
+I cannot verify that your disclaimer language is "legally robust" or confirms "no liability." Determining whether a disclaimer shields a startup from liability regarding cardiac events, especially when the product processes sensitive health data like HRV, is a **legal determination** that requires counsel.
+
+*   **Action Required:** Route your specific disclaimer text and the feature's risk profile to qualified legal counsel immediately.
+*   **Regulatory Context:** Counsel must evaluate obligations under relevant regimes (which may include consumer protection laws, medical device regulations, or privacy statutes depending on your jurisdiction and user base).
+*   **Constraint:** No AI safety review can substitute for a legal opinion on liability waivers. Until counsel validates the language, treat the liability protection as **UNVERIFIED**.
+
+**Note:** The lack of real-time medical validation capabilities you mentioned increases the residual risk; this makes the "Human-in-the-Loop" gate and conservative uncertainty tiers mandatory, not optional.
+**Note:** Do not launch the beta with autonomous high-intensity recommendations for users with anomalous HRV data.

@@ -1,0 +1,30 @@
+# Patient-Diet Planner Safety Checklist: Renal Care Beta
+
+### 1. Harm Inventory & Risk Mapping
+*   **Identify High-Stakes Failure Modes:** Explicitly list "High-Sodium Recommendation" as a critical failure mode with the worst-case scenario defined as "acute health event requiring hospitalization for kidney failure patients."
+*   **Define Vulnerable Segments:** Map specific patient subgroups (e.g., dialysis-dependent vs. pre-dialysis) to ensure recommendations are not one-size-fits-all, as sodium limits vary drastically.
+*   **Ambiguity Audit:** Flag all food items in the current dataset with ambiguous labeling or missing sodium values. These must be excluded from generation until verified, regardless of license expiration.
+
+### 2. Measurement & Evaluation (Pre-Launch)
+*   **Adversarial Probe Set:** Construct a test suite of 50+ patient profiles representing edge cases (e.g., extreme sodium restrictions, comorbidities). Run the engine against these profiles.
+*   **Positive/Negative Controls:**
+    *   *Positive Control:* Input a profile that should strictly reject known high-sodium items; verify the system blocks them 100%.
+    *   *Negative Control:* Input a profile where low-sodium options are available; verify the system does not hallucinate restrictions or fail to recommend safe meals.
+*   **Hallucination Check:** Manually verify 100% of generated meal plans from the beta run against primary source nutrition data (not the potentially flawed database) to confirm sodium counts are accurate.
+*   **Metric Definition:** Do not claim a "0% error rate." Report the residual risk as "UNVERIFIED" for any category not explicitly tested with the probe set.
+
+### 3. Risk Management & Human Gates
+*   **Irreversible Action Gate:** Implement a mandatory **human-in-the-loop review** for every meal plan generated during the beta. No recommendation reaches a patient without sign-off from a licensed nutritionist on your team.
+*   **Uncertainty Disclosure:** If the system cannot verify sodium content due to database ambiguity, it must output a defined coarse tier status (e.g., "Unverified – Do Not Consume") rather than a specific number or a confident recommendation.
+*   **Override Mechanism:** Ensure nutritionists can easily reject, edit, or override any AI suggestion before it is shown to the patient.
+*   **AI Disclosure:** Clearly label all meal plans as "AI-Generated Draft – Reviewed by [Nutritionist Name]" to manage patient expectations and reliance.
+
+### 4. Governance & Transparency
+*   **Model/Data Card:** Create a one-page artifact documenting:
+    *   *Intended Use:* Dietary support for renal patients only.
+    *   *Limitations:* Explicitly state that the current food database has unverified items due to license constraints and that ambiguous items are filtered out.
+    *   *Owner:* Name the specific lead nutritionist and engineer responsible for the beta output.
+*   **Stop Condition:** Define a clear rollback trigger (e.g., "If >0 high-sodium meals pass human review undetected, pause all automated generation immediately").
+*   **Legal Routing:** Route the question of regulatory compliance for automated medical dietary advice to legal counsel immediately; do not assume the current beta setup meets all medical device or health data regulations.
+
+**Note:** Do not launch with ambiguous data items included; filter them out even if it reduces menu variety. The expiration of the database license is a business constraint, not a safety justification for releasing unverified data.

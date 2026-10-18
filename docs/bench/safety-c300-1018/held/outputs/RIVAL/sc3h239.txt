@@ -1,0 +1,47 @@
+# Stress Test Plan: Low-Power Silent Ischemia Detection
+
+**Objective:** Verify the detector maintains high sensitivity for silent ischemic events under strict computational and energy constraints typical of older wearable hardware.
+
+### 1. Computational Throttling & Latency Stress
+*Simulate the processing bottlenecks of older chips during peak physiological activity.*
+*   **Test Condition:** Artificially limit CPU cycles to 40% of standard capacity and introduce 200ms processing latency per data window.
+*   **Input Scenario:** Rapid onset ischemic event (sharp HRV drop + skin conductance spike) occurring simultaneously with patient movement (motion artifact).
+*   **Success Criterion:** The system must flag the event within 15 seconds of onset. A miss due to processing backlog constitutes a critical failure.
+*   **Metric:** Time-to-detection vs. computational load; false negative rate under throttling.
+
+### 2. Aggressive Power-Saving Mode Transition
+*Evaluate detection continuity when the device switches to "deep sleep" or low-sampling modes.*
+*   **Test Condition:** Force the device into its lowest power state (reduced sensor sampling frequency, e.g., from 50Hz to 5Hz).
+*   **Input Scenario:** A "silent" ischemic event with subtle, low-amplitude signatures that rely on high-resolution data for detection.
+*   **Success Criterion:** The algorithm must either detect the event using downsampled data or trigger an immediate, low-energy wake-up to full resolution upon detecting preliminary anomalies.
+*   **Metric:** Detection sensitivity at minimum sampling rate; wake-up latency.
+
+### 3. Battery Voltage Sag Simulation
+*Test algorithm stability as battery voltage drops, which can introduce noise into analog sensor readings.*
+*   **Test Condition:** Simulate sensor input noise patterns characteristic of a battery at 15% capacity (voltage instability).
+*   **Input Scenario:** Prolonged, low-grade ischemic episode (common in diabetic patients) lasting 10 minutes.
+*   **Success Criterion:** The system must distinguish between voltage-induced sensor noise and genuine physiological signals without suppressing the alert.
+*   **Metric:** Signal-to-noise ratio tolerance; false negative rate during low-voltage simulation.
+
+### 4. Memory Constraint & Buffer Overflow
+*Ensure no data loss occurs when memory is fragmented or nearly full.*
+*   **Test Condition:** Restrict available RAM to the absolute minimum required for the OS and the app.
+*   **Input Scenario:** Continuous monitoring for 4 hours with three distinct, short-duration ischemic spikes.
+*   **Success Criterion:** No data packets are dropped during the spikes; the circular buffer correctly overwrites old non-event data without corrupting the active event window.
+*   **Metric:** Data packet loss percentage; integrity of the event window during buffer rotation.
+
+### 5. Thermal Throttling Endurance
+*Older devices often dim screens or throttle CPUs when overheating, even from prolonged use.*
+*   **Test Condition:** Simulate a thermal throttling event where the device reduces performance to cool down.
+*   **Input Scenario:** An ischemic event occurring exactly during the thermal throttle transition.
+*   **Success Criterion:** The detection logic remains prioritized over thermal management protocols; the event is not masked by the performance drop.
+*   **Metric:** Detection reliability during thermal state transitions.
+
+### 6. Multi-Day Degradation Drift
+*Assess if low-power optimization causes accuracy drift over time.*
+*   **Test Condition:** Run the device in low-power mode for a simulated 72-hour period with intermittent calibration checks disabled.
+*   **Input Scenario:** Standardized ischemic signatures injected every 6 hours.
+*   **Success Criterion:** Sensitivity remains constant (within 2% variance) from hour 1 to hour 72.
+*   **Metric:** Sensitivity drift over time; baseline stability.
+
+**Note:** These tests require hardware-in-the-loop simulation to accurately model voltage sag and thermal throttling effects on sensor fidelity. Prioritize Tests 1 and 2 immediately given the three-week timeline.

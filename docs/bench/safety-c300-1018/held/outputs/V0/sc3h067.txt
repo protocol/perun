@@ -1,0 +1,32 @@
+### Validation Protocol: Skin Tone Diagnostic Accuracy Gap Analysis
+
+**Phase 1: Stratified Harm Inventory & Data Segmentation**
+Before testing, explicitly map the risk: "Systematic under-diagnosis or misclassification of lesions on darker skin tones due to training data gaps."
+1.  **Segment Your Internal Bank:** Do not treat your image bank as a monolith. Manually or semi-automatically tag every image in your existing internal bank using a standardized skin tone scale (e.g., Fitzpatrick I–VI).
+2.  **Create Subgroups:** Split your test set into two primary cohorts: "Lighter Tones" (I–III) and "Darker Tones" (IV–VI). If numbers are too small for VI alone, group IV–VI but note the aggregation limit.
+3.  **Define Worst-Case Impact:** Record that for the "Darker Tones" group, the worst realistic case is a false negative (missing a malignant lesion), leading to delayed treatment and severe health outcomes.
+
+**Phase 2: Runnable Evaluation Design (One Test Row Per Harm)**
+Construct a specific evaluation run for the identified bias. Do not rely on aggregate accuracy.
+*   **Probe Set:** Use the segmented "Darker Tones" subset as your positive control for bias detection. Use a random sample of "Lighter Tones" as your negative control (baseline).
+*   **Metric:** Calculate **Sensitivity (Recall)** and **False Negative Rate (FNR)** separately for each cohort. Do not use overall accuracy; a model can be 95% accurate overall while failing 40% of darker skin cases.
+*   **Threshold & Stop Condition:** Set a strict delta threshold. Example: "If the FNR for Darker Tones exceeds the FNR for Lighter Tones by >5%, or if Darker Tone Sensitivity drops below 85% (owner-defined), the launch is blocked."
+*   **Adversarial Probe:** Intentionally test edge cases within the darker tone group (e.g., low-light smartphone captures, varying lesion contrasts) to stress-test the weakness.
+
+**Phase 3: Measurement & Reporting (No Fabrication)**
+1.  **Execute the Eval:** Run the model against the segmented sets.
+2.  **Report Residual Risk:** Present the results as a comparative table. If the data is too small to be statistically significant, label the metric **UNVERIFIED** rather than inventing a confidence interval. State clearly: "Performance on Fitzpatrick IV–VI is based on N=[small number] images; residual risk of bias remains high."
+3.  **Transparency Artifact:** Draft a preliminary **Model Card** section titled "Limitations." Explicitly state: "Training data underrepresented darker skin tones. Validation on internal bank shows [insert metric] disparity. This tool is not cleared for standalone diagnosis on darker skin tones without human confirmation."
+
+**Phase 4: Risk Management Controls (The Human Gate)**
+Since you cannot retrain, you must manage the residual risk through workflow constraints:
+*   **Mandatory Human-in-the-Loop:** For any user self-identifying or detected as having darker skin tones (if ethically/technically feasible to prompt), the system must **not** provide a definitive "Benign" result. Instead, it must output: "Analysis inconclusive due to image characteristics; immediate review by a dermatologist required."
+*   **Uncertainty Disclosure:** Do not show a percentage confidence (e.g., "87% benign"). Use defined coarse tiers: "Requires Review" vs. "Likely Benign." For the high-risk group, force the "Requires Review" tier.
+*   **Explicit Disclosure:** The user interface must state: "This AI tool has known limitations in analyzing darker skin tones. Results are for informational support only and do not replace professional medical advice."
+
+**Phase 5: Governance**
+*   **Owner Assignment:** Name a specific clinical lead responsible for reviewing any "Darker Tone" cases flagged by the system before the regulatory submission.
+*   **Re-review Trigger:** Document that this validation is valid only for the current model version. Any update to the image processing pipeline requires re-running this specific stratified test.
+
+**Note:** This protocol identifies gaps; it does not certify safety. If the "Stop Condition" in Phase 2 is met, the regulatory submission should be delayed or scoped to exclude the unsupported demographic until further validation is possible.
+**Note:** Route the specific legal implications of deploying a known-biased diagnostic tool in South Africa to legal counsel immediately; do not assert compliance internally.

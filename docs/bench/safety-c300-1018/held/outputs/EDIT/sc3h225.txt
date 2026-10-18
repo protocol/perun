@@ -1,0 +1,32 @@
+### Rapid Evaluation Protocol & Mitigation Plan
+
+**1. Evaluation Protocol: Quantifying Alarm Fatigue (48-Hour Sprint)**
+Since sensor thresholds are locked, measure the *consequence* of false positives on human behavior rather than the sensor accuracy itself.
+*   **Metric:** "Alert Acknowledgment Latency" (time from alert trigger to staff mark-as-reviewed) and "Skip Rate" (alerts dismissed without visual verification).
+*   **Method:**
+    *   **Tagging:** Manually label the last 200 alerts as "True Fall," "False Positive (Object Drop)," or "False Positive (Rapid Move)."
+    *   **Correlation:** Plot acknowledgment latency against the sequence of consecutive false alarms. Hypothesis: Latency increases exponentially after 2+ consecutive false alarms.
+    *   **Stop Condition:** If latency for true falls exceeds 90 seconds following a false alarm cluster, the risk is critical.
+*   **Deliverable:** A single chart showing response time degradation vs. false alarm frequency. This provides the evidence needed to justify emergency protocol changes to facility managers.
+
+**2. Immediate Mitigation Steps (Within Certification Constraints)**
+Do not touch sensor firmware. Change the **workflow** and **presentation** of the alert.
+
+*   **Implement a "Soft Gate" (Human-in-the-Loop):**
+    *   Route all audio-triggered alerts to a central monitoring station (or a designated lead nurse) for a 10-second visual verification via camera *before* broadcasting a loud floor-wide alarm.
+    *   Only "Floor Sensor + Audio Confirmation" triggers the immediate loud siren. Single-source triggers send a silent pager notification first. This reduces noise pollution and preserves the "loud alarm" for high-confidence events.
+
+*   **Contextual Disclosure & Confidence Tiers:**
+    *   Modify the staff notification interface to display uncertainty explicitly. Instead of "FALL DETECTED," use defined tiers:
+        *   **High Confidence:** "Fall Detected (Audio + Impact)" → Immediate Siren.
+        *   **Unverified:** "Potential Fall (Audio Only)" → Silent Pager + "Verify" button.
+    *   Add a visible disclaimer: "Automated detection; verify before action." This reduces automation bias where staff assume the machine is infallible.
+
+*   **Temporal Suppression Logic (Software Only):**
+    *   If the system detects >3 alerts from the same zone within 5 minutes, automatically downgrade subsequent alerts to "Silent Verify" mode for 15 minutes. This breaks the cycle of alarm fatigue without altering the underlying sensor sensitivity thresholds.
+
+*   **Staff Briefing:**
+    *   Immediately inform staff that the system is in a "High Sensitivity Pilot" and explicitly instruct them to expect false positives from dropped objects. Acknowledging the flaw reduces the tendency to ignore *all* alerts.
+
+**Note:** This plan treats the "locked threshold" as a fixed constraint and manages the residual risk through workflow gating and transparency.
+**Warning:** Do not claim the system is "safe" or "accurate" in communications; label performance metrics as "UNVERIFIED" until the pilot data is analyzed.

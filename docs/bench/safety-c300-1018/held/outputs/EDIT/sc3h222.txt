@@ -1,0 +1,33 @@
+**BLUF:** Do not deploy this feature as an automated suggestion engine within three weeks without a hard human-in-the-loop gate and verified edge-case performance; the current timeline precludes the clinical validation required to prove the protocol does not harm patients via over- or under-ventilation.
+
+**1. Immediate Harm Inventory & Gate (Do This First)**
+Your "risk assessment" must explicitly name the specific harms before writing another line of code:
+*   **Unsafe Automation of High-Stakes Actions:** Suggesting weaning in an ICU is a high-stakes, potentially irreversible action. If the system fails to suggest weaning (keeping a patient ventilated unnecessarily), it increases infection risk and ICU stay. If it suggests weaning too early (false positive), it risks respiratory failure and death.
+*   **Hallucination as Fact:** The model might interpret noisy vitals during a transient fluctuation as stable readiness, presenting a "wean now" suggestion with unwarranted confidence.
+*   **Over-reliance:** Clinicians may trust the automated suggestion over their own judgment if the interface does not clearly display uncertainty or conflicting data.
+
+**Action:** Implement a mandatory **Human-in-the-Loop (HITL) gate**. The system must *never* execute a weaning protocol change or present a suggestion as a definitive command. It must frame outputs as "Potential Candidate for Weaning – Requires Clinician Verification" with a one-click override to dismiss. Full autonomous execution is a failure condition.
+
+**2. Measurement Plan (Runnable Tests, Not Assertions)**
+You cannot claim the system is "safe" or "accurate" without running specific probes. Since you cannot run extended clinical trials, you must simulate the edge cases you identified:
+*   **Probe Set:** Construct a test suite using historical ICU data specifically targeting "rapid fluctuation" edge cases (e.g., sudden desaturation events, artifact noise from patient movement, sepsis onset).
+*   **Controls:** Include known "bad positives" (patients who appeared stable but crashed shortly after) and "good negatives" (patients correctly kept on support).
+*   **Metric & Threshold:** Define a stop condition. For example: "If the system suggests weaning for any patient in the 'bad positive' control set, the feature fails launch." Do not invent a "99% accuracy" number; if you haven't tested against a specific subgroup, mark that metric as **UNVERIFIED**.
+*   **Injection/Leakage Check:** Ensure the model isn't making decisions based on spurious correlations (e.g., time of day, specific nurse shifts) rather than physiology.
+
+**3. Manage Residual Risk & Transparency**
+*   **Surface Uncertainty:** Do not show a raw probability (e.g., "87% ready"). Instead, use defined coarse tiers: **"Confirmed Stability"** (multiple corroborating vitals over time), **"Corroborated"** (single strong signal), or **"Unverified/Fluctuating"** (noisy data). Publish the definition of these tiers to your clinical partners.
+*   **Transparency Artifact:** Create a **Model Card** immediately. It must state:
+    *   **Intended Use:** Decision support only, not autonomous control.
+    *   **Limitations:** Explicitly list the edge cases where performance is **UNVERIFIED** due to the lack of extended trials.
+    *   **Owner:** Name the specific clinician and developer responsible for reviewing failure modes.
+    *   **Data Provenance:** Source of the training data and known gaps.
+
+**4. Governance & Legal Routing**
+*   **Regulatory Duty:** This feature likely falls under strict medical device regulations (e.g., FDA, MFDS in Korea, EU MDR) and potentially the **EU AI Act** (high-risk category). Whether this requires a specific legal disclosure or a different approval pathway is a determination for **legal counsel**, not engineering. Route this immediately; do not assert compliance yourself.
+*   **Ownership:** Assign a named owner for every identified harm. If the model or data changes, the risk assessment must be re-reviewed.
+
+**Conclusion on Deadline:**
+You cannot validate "no unnecessary ventilation" without data that proves the system handles rapid fluctuations correctly. If your testing reveals **UNVERIFIED** status on these edge cases, the only safe path that meets the deadline is to **cap the exposure**: deploy only as a silent "second opinion" tool that logs suggestions for later review by clinicians, rather than an active prompt influencing immediate care. If the hospital partner requires active suggestions, you must communicate that the constraint (3 weeks) conflicts with the safety floor (verified edge-case handling); one of these must move.
+
+*Note: This review identifies product-output safety gaps; it does not certify the system as safe or compliant. Legal counsel must determine regulatory obligations.*

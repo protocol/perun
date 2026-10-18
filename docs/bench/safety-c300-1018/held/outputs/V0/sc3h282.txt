@@ -1,0 +1,39 @@
+### Internal Review Plan: Patient Fall Environment Scan (Beta Phase)
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negatives (Missed Hazards)**.
+*   **Affected Users:** Elderly patients with limited mobility; family caregivers.
+*   **Worst Realistic Case:** The app scans a room, reports "No Hazards," a patient trips on an undetected low-contrast rug or clutter, resulting in a fracture or head injury.
+*   **Secondary Harm:** **Over-reliance.** Caregivers may stop visually checking rooms because they trust the app's "All Clear."
+
+**2. Simulation Strategy (Low-Cost, High-Fidelity)**
+Since you cannot hire auditors or buy new devices, use your team and existing spaces to create a "Red Team" dataset.
+*   **Environment Staging:** Designate one team member's home or a conference room as the test bed. Do not rely on perfect lighting.
+*   **Adversarial Setup:** Deliberately stage hazards that are known failure modes for computer vision:
+    *   **Low Contrast:** Beige rugs on beige carpet; dark cords on dark wood.
+    *   **Occlusion:** Hazards partially hidden by furniture legs or shadows.
+    *   **Unusual Angles:** Simulate how an elderly user might hold the phone (shaky, low angle, poor lighting).
+    *   **Clutter Types:** Mix medical equipment (walkers, oxygen tanks) with household clutter to ensure the model distinguishes between safe medical aids and trip hazards.
+*   **The "Golden Set":** Create a fixed set of 20–30 photos/video clips containing known hazards (positives) and safe rooms (negatives). Run this exact set every time you update the model to track regression.
+
+**3. Measurement Protocol: One Row Per Harm**
+Do not just report an overall "accuracy." You must measure the specific risk of missing a fall hazard.
+*   **Metric:** **False Negative Rate (FNR)** specifically for "High-Risk Trip Hazards."
+*   **Threshold:** Set a **zero-tolerance stop condition** for high-severity hazards (e.g., loose rugs in walkways). If the model misses *one* staged rug in the Golden Set during beta, the feature must not ship or must trigger a mandatory human review flag.
+*   **Subgroup Testing:** Explicitly test images simulating low-vision conditions (blur, dim light) to ensure the model doesn't fail precisely when the user needs it most.
+*   **Reporting:** Report results as "UNVERIFIED" for any scenario you did not explicitly test (e.g., "Performance on shag rugs in dim light is UNVERIFIED"). Do not invent a global accuracy percentage.
+
+**4. Risk Management Controls (The Human Gate)**
+Given the high stakes (physical injury) and your startup constraints, you cannot rely on automation alone.
+*   **Mandatory Disclosure:** The UI must clearly state: *"This tool assists but does not replace a visual safety check. Always look for hazards yourself."*
+*   **Uncertainty Display:** If the camera input is blurry or lighting is poor, the app must not say "Safe." It must say **"Unable to Verify – Please Check Manually."** Use coarse tiers (Verified / Unverified) rather than precise percentages (e.g., "87% safe"), which imply false precision.
+*   **Human-in-the-Loop for Beta:** For the beta launch, consider requiring a human team member to review a random sample of "All Clear" scans daily to catch systemic drift before it harms a user.
+
+**5. Transparency Artifact (Model Card Lite)**
+Create a simple, versioned document for your internal team and beta users containing:
+*   **Intended Use:** Identifying common trip hazards in well-lit residential settings.
+*   **Known Limitations:** Explicitly list what you know it misses (e.g., "May miss low-contrast rugs," "Unreliable in dim light").
+*   **Owner:** Name the specific team member responsible for reviewing failure logs weekly.
+
+**Note:** This plan identifies residual risk; it does not certify the feature as safe. The decision to ship rests with your team lead.
+**Note:** If this feature influences insurance or medical discharge decisions, route the legal duty question to counsel immediately.

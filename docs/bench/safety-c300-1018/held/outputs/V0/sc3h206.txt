@@ -1,0 +1,36 @@
+### Safety Protocol: Glucose Trend Predictor (Beta Readiness)
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific failure modes for diabetic athletes:
+*   **False Negative (Missed Drop):** The system fails to alert before a rapid decline. *Worst Case:* User does not consume carbs/adjust insulin, leading to hypoglycemia, loss of consciousness, or seizure during exercise.
+*   **False Positive (Ghost Alert):** The system predicts a drop that does not occur. *Worst Case:* User consumes unnecessary carbs or reduces insulin, causing hyperglycemia or disrupting performance flow.
+*   **Latency Failure:** The alert arrives too late to act. *Worst Case:* User receives warning only after blood sugar has already crashed.
+*   **Over-Reliance:** User treats the prediction as a medical guarantee rather than a trend estimate, ignoring physical symptoms.
+
+**2. Retrospective Simulation Plan (Measure)**
+Since live hardware testing is unavailable, construct a "Red Team" eval set from your existing logs:
+*   **Probe Set Construction:** Isolate log segments containing high-intensity intervals where rapid glucose drops *actually* occurred (positive controls) and segments with stable glucose despite exertion (negative controls).
+*   **Adversarial Stress Testing:** Inject synthetic noise into the retrospective data to simulate sensor lag or erratic heart-rate spikes common in extreme sports. Run the model against these corrupted inputs to see if it hallucinates a drop or misses a real one.
+*   **Metric & Thresholds:**
+    *   *Lead Time:* Measure the gap between the model's alert timestamp and the actual nadir (lowest point) in the log. **Stop Condition:** If the average lead time is <15 minutes (or your clinically defined safe window), block launch.
+    *   *False Negative Rate:* Must be zero on known crash events in the test set. Any missed crash in the positive control set is a **blocker**.
+*   **Reporting:** Report results as "UNVERIFIED" for any scenario not covered by your historical logs (e.g., specific weather conditions or hydration levels not present in the data). Do not invent a "99% accuracy" claim.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate (Critical):** This feature cannot autonomously adjust insulin pumps or lock out user decisions. It must function strictly as an advisory alert. The user must manually confirm any action.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% risk"). Instead, use defined coarse tiers with clear definitions:
+    *   *Confirmed Trend:* Multiple data points align; high reliability.
+    *   *Emerging Risk:* Single-source indication; verify with manual check.
+    *   *Unverified:* Insufficient data; do not act solely on this alert.
+*   **Mandatory Disclaimer:** Every screen must state: "This is an AI estimate, not a medical device. Always verify with your CGM and physical symptoms before adjusting treatment."
+
+**4. Governance & Transparency**
+*   **Model Card:** Publish a versioned document detailing: intended use (athletic trends only, not basal dosing), data provenance (retrospective logs, limited diversity), and known limitations (untested in extreme heat/cold if data is missing).
+*   **Ownership:** Name one specific team member as the owner of this output harm. They must re-review the model if the underlying data source or algorithm changes.
+*   **Legal Routing:** Because this involves health outcomes and potential automated decision support, you must route the question of "regulated medical device status" and "mandatory disclosure laws" to legal counsel immediately. Do not assume startup status exempts you from health regulations.
+
+**Definition of Done for Beta:**
+The harm inventory is complete; the retrospective eval shows zero missed crashes in positive controls; lead time meets the clinical safety window; the UI displays uncertainty tiers rather than false precision; and a Model Card is published alongside the beta.
+
+*Note: This protocol identifies risks but does not certify the system as safe for medical use. The final ship decision rests with your leadership and legal counsel.*
+*Ensure all "UNVERIFIED" gaps in your data are clearly listed in the public beta documentation.*

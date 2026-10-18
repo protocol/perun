@@ -1,0 +1,41 @@
+### Pre-Launch Review Workflow: Rental Price Validator
+
+Given the five-day constraint and incomplete legal database integration, you cannot rely on real-time automated compliance. You must implement a **deterministic rule-based gate** and a **human-in-the-loop (HITL) workflow** before any suggestion reaches a property manager.
+
+**Step 1: Establish Static "Hard Cap" Rules (Immediate Implementation)**
+Since dynamic lookup is unavailable, hard-code the known, static maximum rent increase percentages and base rent limits for San Francisco rent-controlled units (e.g., the annual allowable increase percentage set by the Rent Board) directly into the application logic.
+*   **Action:** Create a configuration file with these static caps.
+*   **Logic:** If `Model_Suggested_Price` > `Static_Legal_Cap`, the system must **block** the output automatically. Do not show the number; return a "Requires Review" status.
+
+**Step 2: Implement the "Unverified" Confidence Tier**
+Do not display the model's raw confidence score (e.g., "85% accurate"). Instead, label every output with a defined transparency tier.
+*   **Label:** "Estimate Only – Not Verified Against Current Legal Caps."
+*   **Visual Cue:** Use a distinct color (e.g., amber) for any price generated while the legal database is offline.
+*   **Disclaimer:** Explicitly state: "This tool does not constitute legal advice. Landlords must verify compliance with current SF Rent Board ordinances before issuing notices."
+
+**Step 3: Mandatory Human-in-the-Loop Gate**
+For the launch window, remove full automation for any price suggestion that touches rent-controlled units.
+*   **Workflow:** When the model generates a price, it is held in a "Draft" state.
+*   **Review:** A designated compliance officer or senior product manager must manually verify the unit's status and the suggested price against the latest SF Rent Board bulletins (via manual web check) before the "Send to Landlord" button becomes active.
+*   **Constraint:** No automated email or API push containing a price suggestion can occur without this manual approval flag.
+
+**Step 4: Adversarial "Red Team" Validation (Days 1–2)**
+Before UTS concludes, run a specific set of test cases designed to break the system.
+*   **Probe Set:** Input data for known rent-controlled units with low base rents.
+*   **Positive Control:** Force a scenario where the model *should* suggest an illegal hike. Verify the **Hard Cap Rule** (Step 1) blocks it.
+*   **Negative Control:** Input a market-rate unit. Verify the system allows the flow but still displays the "Unverified" disclaimer.
+*   **Stop Condition:** If the system outputs an illegal price without flagging it or blocking it, **do not launch**.
+
+**Step 5: Documentation of Residual Risk**
+Create a one-page "Model Card" for internal use and property managers.
+*   **Limitations:** Explicitly list "Real-time regulatory checks are currently manual due to integration delays."
+*   **Owner:** Name the specific individual responsible for the manual review step.
+*   **Metric:** Mark the "Compliance Rate" as **UNVERIFIED**. Do not invent a percentage. State that compliance relies on the manual gate.
+
+**Step 6: Go/No-Go Decision**
+If the Hard Cap Rules cannot be coded and tested within 48 hours, or if staffing for the Manual Review Gate is not confirmed, the recommendation is to delay the launch of the pricing feature entirely. Releasing a tool that facilitates illegal rent hikes without a functioning gate creates immediate legal liability and harm to tenants.
+
+***
+
+**Note:** This workflow treats the incomplete legal integration as a critical failure mode, necessitating a manual override rather than a probabilistic guess.
+**Note:** Consult legal counsel immediately to confirm the static caps used in Step 1 are current for the specific launch date.

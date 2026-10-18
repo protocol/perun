@@ -1,0 +1,29 @@
+### Risk Assessment Strategy for Patient-Rehab-Bot (Edge-Deployed)
+
+**1. Map Specific Harms to Edge Constraints**
+Before testing, explicitly inventory how low-power constraints create risk. Do not assume "simpler code" means "safer." Record these specific failure modes:
+*   **False Negatives in Form Correction:** The simplified model fails to detect dangerous joint angles or rapid movements due to reduced resolution or frame rate, silently allowing injury.
+*   **Heart Rate Estimation Drift:** On-device algorithms may degrade under poor lighting or motion blur, reporting a "safe" heart rate when the patient is actually in distress.
+*   **Over-Reliance on Automation:** Patients may push harder because a machine is "watching" them, assuming the bot will stop them if they exceed limits, even if the bot's confidence is low.
+*   **Missing Uncertainty Disclosure:** The interface presents guidance as absolute fact without indicating when the sensor data was too noisy for the edge model to trust.
+
+**2. Measure with "Worst-Case" Edge Probes**
+Design evaluation tests that specifically target the limitations of your hardware, not just general accuracy.
+*   **Adversarial Inputs:** Test the bot with video inputs simulating low light, partial occlusion (e.g., loose clothing), and rapid movement to see if the form correction fails silently.
+*   **Positive/Negative Controls:** Use recorded sessions where a patient *clearly* exceeds safe limits (positive control) and sessions where they are safe (negative control). Run these on the actual edge device, not a powerful server, to verify the simplified model catches the danger.
+*   **Define Stop Conditions:** Establish a threshold where if the model's confidence drops below a certain level (e.g., due to sensor noise), the bot must default to "Stop and Rest" rather than guessing. If the bot guesses wrong on >0% of the "danger" control cases, the feature cannot ship.
+*   **Report Residual Risk:** If you cannot measure a specific failure rate due to limited test data, label it **UNVERIFIED**. Do not invent a safety percentage.
+
+**3. Manage Risk with Human-in-the-Loop Gates**
+Given the high stakes (physical injury to stroke survivors) and computational limits, full automation is unsafe.
+*   **Hard Gate on Exertion:** The bot should never autonomously encourage increased intensity if the heart rate signal is noisy or the form confidence is low. Instead, it must pause and request human verification (e.g., "Signal unclear. Please check your pulse manually or contact your therapist").
+*   **Defined Confidence Tiers:** Do not show patients raw numbers or percentages (e.g., "85% safe"). Use coarse, defined tiers like **"Verified Safe," "Caution,"** or **"Unverified – Stop."** Publish exactly what data quality is required for each tier.
+*   **Explicit Disclosure:** Clearly state to patients: "This device runs locally with limited processing. It assists but does not replace medical supervision. Always stop if you feel pain."
+
+**4. Govern and Document**
+*   **Owner Assignment:** Name one person responsible for reviewing any incident where the bot failed to flag unsafe exertion.
+*   **Transparency Artifact:** Create a simple "Model Card" for the pilot. List the intended use (home stroke rehab), the limitations (low-light performance, simplified heart rate logic), and the results of your edge-specific tests. If a metric wasn't tested, mark it **UNVERIFIED**.
+*   **Legal Routing:** Since this involves medical guidance and vulnerable users, route the question of regulatory classification (e.g., is this a medical device?) to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** Your constraint (no cloud) increases the burden on your local testing; you cannot rely on server-side fallbacks.
+**Note:** Never certify the bot as "safe"; only report the results of your specific stress tests and the controls in place.

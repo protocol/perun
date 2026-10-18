@@ -1,0 +1,38 @@
+**Risk Mitigation Plan: Smart-Irrigation Sensor Anomaly Safeguards**
+
+To prevent property damage from faulty sensor readings in extreme heat, implement the following logical safeguards in the controller firmware. These measures prioritize physical safety by capping water usage when data integrity is compromised.
+
+**1. Hard Absolute Flow Caps (The "Ceiling" Limit)**
+Implement a non-negotiable maximum flow rate per zone based on the physical pipe diameter and emitter capacity, regardless of sensor demand.
+*   **Logic:** If `Calculated_Flow` > `Max_Safe_Zone_Flow`, then `Actual_Flow` = `Max_Safe_Zone_Flow`.
+*   **Rationale:** Even if a sensor falsely reads "bone dry" due to heat interference, the system physically cannot release enough water to cause flooding within a single cycle.
+
+**2. Rate-of-Change Thresholds (Delta Checks)**
+Soil moisture levels change slowly in reality. Rapid fluctuations indicate sensor noise or failure.
+*   **Logic:** Compare the current reading to the previous reading. If the change exceeds a physically impossible threshold (e.g., >15% moisture change in 10 minutes), flag the data as anomalous.
+*   **Action:** Upon detection, ignore the new reading and revert to the last known "stable" value or a conservative default schedule.
+
+**3. Cross-Validation with Environmental Context**
+Utilize local weather data (temperature, recent precipitation, evapotranspiration rates) to validate sensor plausibility.
+*   **Logic:** If `Sensor_Reading` indicates "saturated" but `Recent_Rainfall` = 0 and `Temperature` > 100°F (high evaporation), the reading is likely faulty. Conversely, if the sensor reads "dry" immediately after a confirmed rain event, treat it as suspect.
+*   **Action:** Enter a "Safe Mode" where irrigation is limited to a minimal maintenance duration (e.g., 5 minutes) rather than the full calculated need.
+
+**4. Cumulative Volume Budgeting**
+Track total water usage over rolling time windows (hourly and daily) to prevent sustained overwatering caused by persistent false positives.
+*   **Logic:** Maintain a running total of water dispensed. If `Daily_Total` approaches a predefined safety budget (e.g., 120% of historical average for that season), hard-stop all further irrigation for 24 hours.
+*   **Rationale:** This acts as a final fail-safe against errors that pass individual cycle checks but accumulate to dangerous levels over time.
+
+**5. Fail-Close Default State**
+Design the system logic to default to "no irrigation" when data confidence is low, rather than attempting to guess.
+*   **Logic:** If multiple sensors disagree significantly (variance > 20%) or if a sensor fails a self-diagnostic check, the controller must halt watering for that zone.
+*   **User Notification:** Trigger an immediate alert to the homeowner's app indicating "Sensor Error - Watering Paused for Safety," requiring manual acknowledgment to resume.
+
+**6. Thermal Derating of Sensor Confidence**
+Since the sensors have known accuracy variances in extreme heat, dynamically adjust the trust weight of the data based on ambient temperature.
+*   **Logic:** As `Ambient_Temp` rises above 95°F, increase the threshold required to trigger watering. Require two consecutive anomalous readings instead of one, or demand a higher degree of dryness before activating.
+*   **Rationale:** This reduces the likelihood of the system reacting to transient heat-induced noise.
+
+By layering these safeguards, the system ensures that a single point of failure (a faulty sensor reading) cannot cascade into a flooding event. The logic shifts from "trust the sensor" to "verify the sensor against physical realities and historical limits."
+
+*Note: Ensure these limits are configurable per installation site to account for specific landscape grading and soil types.*
+*Field testing should intentionally simulate sensor spikes to verify these triggers engage before homeowner deployment.*

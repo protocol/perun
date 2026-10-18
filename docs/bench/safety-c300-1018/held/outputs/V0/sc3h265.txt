@@ -1,0 +1,36 @@
+### Remote Validation Strategy for Mobility Assessment Safety
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly record the primary harm: **False Stability Detection**. If the app labels an unsafe climb as "stable," an elderly patient may attempt stairs without assistance, leading to falls. The worst-case scenario is severe injury due to over-reliance on an unverified automated score. Secondary harms include **Over-reliance** (users trusting the app over medical advice) and **Missing Disclosure** (users unaware the assessment is probabilistic, not diagnostic).
+
+**2. Synthetic Data & Adversarial Probe Set**
+Since field tests are impossible, construct a "Virtual Patient" dataset:
+*   **Synthetic Generation:** Create video sequences simulating specific failure modes: shuffling gait, hesitation at step edges, hand-rail dependency, and near-falls. Inject sensor noise mimicking low-end smartphones common in the target demographic.
+*   **Adversarial Probes:** Deliberately feed the model videos of able-bodied actors mimicking instability (to test false positives) and unstable actors mimicking stability (to test false negatives).
+*   **Controls:** Include a "Known-Bad" set (clear falls/near-falls) and a "Known-Good" set (clinically verified stable climbs) to baseline your metrics.
+
+**3. Remote Video Validation Workflow**
+Implement a human-in-the-loop review for all ambiguous cases before the model learns from them:
+*   **Submission Protocol:** Recruit a remote cohort (via telehealth partners) to submit stair-climbing videos. Require dual-angle views if possible.
+*   **Blinded Review:** Have two independent clinicians review each video *without* seeing the app's score. They must label the climb as "Safe," "Unsafe," or "Uncertain."
+*   **Discrepancy Analysis:** Automatically flag any instance where the app says "Safe" but either clinician says "Unsafe" or "Uncertain." These are your critical false positives.
+
+**4. Measurement & Stop Conditions**
+Do not assert safety; measure residual risk. Define the following metrics:
+*   **False Safe Rate (FSR):** The percentage of clinically "Unsafe" climbs labeled "Safe" by the app.
+*   **Uncertainty Calibration:** The percentage of cases where the app's confidence score is high (>90%) but the human consensus is split.
+
+**Launch Halt Criteria (The Human Gate):**
+*   **Zero Tolerance for Critical Failure:** If the False Safe Rate exceeds 0% on the "Known-Bad" probe set, **halt launch immediately**. A single missed fall risk is unacceptable for high-stakes physical guidance.
+*   **Uncertainty Threshold:** If more than 15% of real-world video submissions result in "Uncertain" human reviews while the app outputs a definitive score, **halt launch**. This indicates the model is hallucinating precision.
+*   **Data Gap:** If synthetic data cannot replicate the lighting or motion blur of actual Cairo stairwells, mark the safety metric as **UNVERIFIED** and do not launch until this gap is addressed via targeted remote collection.
+
+**5. Transparency & Disclosure Artifacts**
+*   **Model Card:** Publish a versioned document stating the intended use (screening only, not diagnostic), the limitations (tested primarily on synthetic/remote video, not in-person), and the specific failure modes observed.
+*   **User Interface:** Display results as **defined coarse tiers** (e.g., "High Confidence: Stable," "Low Confidence: Consult Doctor") rather than raw percentages (e.g., "87% Stable"). Never show a number that implies uncalibrated precision.
+*   **Mandatory Disclaimer:** Clearly state: "This is an automated estimation. Do not attempt stairs if you feel unsteady, regardless of this result."
+
+**6. Governance**
+Assign one engineer as the "Safety Owner" responsible for reviewing every flagged discrepancy. Re-evaluate the harm inventory if the model version changes or if new video data reveals previously unseen failure modes.
+
+*Note: This strategy relies on remote proxies; it cannot guarantee real-world safety without eventual physical validation. Legal requirements for medical device disclosure in Egypt must be routed to local counsel.*

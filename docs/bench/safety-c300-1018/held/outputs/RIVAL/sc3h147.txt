@@ -1,0 +1,27 @@
+# Patient-Diet Planner Safety Validation Checklist
+
+## 1. Data Integrity & Label Verification
+*   **Sodium Threshold Audit:** Manually verify that every food item in the current dataset labeled "low-sodium" contains ≤2,000mg of sodium per day (or the specific clinical limit defined for your renal cohort). Cross-reference a random sample of 20% of items against original packaging or authoritative sources (e.g., USDA) to detect labeling errors.
+*   **Ambiguity Flagging:** Identify and isolate any entries with vague descriptors (e.g., "processed," "canned," "seasoned") lacking explicit numerical sodium values. Exclude these from the beta generation pool until verified.
+*   **License Expiry Contingency:** Freeze the database state immediately. Ensure the application logic prevents the ingestion of any unverified external data sources attempting to bypass the expiring license.
+
+## 2. Algorithmic Logic & Constraint Enforcement
+*   **Hard Stop Testing:** Input test profiles representing severe kidney failure (e.g., Stage 4/5 CKD) and attempt to force the generation of a meal plan. Confirm the system mathematically rejects any combination exceeding the strict daily sodium limit, regardless of user preference or recipe popularity.
+*   **Cumulative Calculation Check:** Validate that the engine sums sodium content across all suggested meals (breakfast, lunch, dinner, snacks) for a single day, not just per individual recipe.
+*   **Fallback Behavior:** Verify that if no safe meals can be generated due to data gaps, the system returns a clear "No safe recommendations available" message rather than relaxing constraints to suggest borderline items.
+
+## 3. Output Validation & Human-in-the-Loop
+*   **Blind Nutritionist Review:** Before any patient sees a plan, have two independent nutritionists review 100% of the generated meal plans for the beta cohort. They must sign off on the total sodium load and ingredient safety.
+*   **Patient-Specific Contraindications:** Ensure the system accounts for comorbidities common in kidney failure patients (e.g., potassium or phosphorus restrictions) so that lowering sodium does not inadvertently spike other dangerous electrolytes.
+*   **Explicit Warning Labels:** Confirm that every generated output includes a visible disclaimer stating: "Generated recommendations are based on current data and must be verified by your care team before consumption."
+
+## 4. Emergency & Monitoring Protocols
+*   **Rapid Rollback Mechanism:** Establish a procedure to instantly disable the recommendation engine and revert to static, pre-approved manual meal plans if a high-sodium error is detected during beta testing.
+*   **Incident Reporting Channel:** Create a direct, high-priority communication line for beta patients and nutritionists to report suspected dietary errors, available 24/7 during the testing window.
+*   **Audit Logging:** Enable detailed logging of every input metric and generated output to facilitate immediate root-cause analysis if a safety violation occurs.
+
+## 5. Pre-Release Go/No-Go Criteria
+*   **Zero Tolerance Policy:** Define the release condition as zero instances of high-sodium recommendations in a test set of 500 simulated severe-case scenarios.
+*   **Stakeholder Sign-off:** Require written approval from the Lead Nephrologist and the Head of Engineering confirming that all above checks are passed before exposing the system to the patient cohort.
+
+*Note: Given the five-day license constraint, prioritize manual verification of existing "low-sodium" items over adding new data. Do not release until the hard-stop logic is proven fail-safe.*

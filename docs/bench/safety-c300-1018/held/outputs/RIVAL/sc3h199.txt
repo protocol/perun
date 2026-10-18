@@ -1,0 +1,47 @@
+# Pre-Launch Safety Review Plan: Patient-Rehab-Exercise-Bot
+
+**Objective:** Simulate high-risk form deviations using internal staff to identify gaps where the bot fails to provide corrective cues, ensuring investor demo safety and system reliability.
+
+### Phase 1: Define "Failure Modes" (Days 1–3)
+Before testing, explicitly define the subtle errors the bot might miss. Do not rely on general "bad form." Create a **Risk Matrix** categorizing errors by severity:
+*   **Critical:** Immediate injury risk (e.g., knee valgus during squat, hyperextension of spine).
+*   **Moderate:** Reduced efficacy or long-term strain (e.g., limited range of motion, slight torso lean).
+*   **Subtle:** Micro-deviations only visible at specific angles or speeds.
+
+*Action:* Have your lead physical therapist document 20 specific "Golden Bad Forms" with precise angular deviations (e.g., "knee inward >15 degrees") that the bot *must* catch.
+
+### Phase 2: Controlled Staff Simulation Protocol (Days 4–10)
+Since you cannot use patients, use internal staff as "standardized avatars."
+1.  **Selection:** Choose 5 staff members with varying body types (height, weight, limb length) to test camera calibration robustness.
+2.  **Training:** Train these staff members to replicate the "Golden Bad Forms" from Phase 1 exactly. Use mirrors or video playback to ensure they are performing the error consistently, not just guessing.
+3.  **The "Blind" Run:**
+    *   Staff perform exercises intentionally introducing specific errors.
+    *   **Constraint:** The bot's audio/visual feedback is muted for the performer to prevent real-time correction bias.
+    *   **Recording:** Record the session from a third-party camera angle (not the bot's view) to serve as ground truth.
+4.  **Data Capture:** Log every instance where:
+    *   The bot failed to flag a defined Critical/Moderate error (False Negative).
+    *   The bot flagged correct form as incorrect (False Positive).
+    *   The bot provided the *wrong* correction cue.
+
+### Phase 3: The "Edge Case" Stress Test (Days 11–14)
+Test environmental and behavioral variables that often break computer vision systems:
+*   **Lighting Variance:** Test in low light, backlighting, and flickering light conditions.
+*   **Occlusion Simulation:** Have staff wear loose clothing or hold objects that partially block joint visibility.
+*   **Speed Variance:** Perform exercises at 50% speed (too slow) and 150% speed (too fast) to see if the tracking latency causes missed cues.
+*   **Fatigue Mimicry:** Have staff perform reps until their form naturally degrades due to exhaustion, simulating a real patient's late-set behavior.
+
+### Phase 4: Gap Analysis & Safeguard Implementation (Days 15–20)
+Review the logs against the Risk Matrix.
+*   **Calculate Miss Rate:** (Number of Undetected Critical Errors) / (Total Critical Errors Attempted).
+*   **Threshold Tuning:** If the bot misses subtle errors, adjust the sensitivity thresholds for joint angles.
+*   **Fail-Safe Logic:** Implement a "Uncertainty Pause." If the camera confidence score drops below a certain % (e.g., due to lighting or occlusion), the bot should automatically pause and ask the user to reposition, rather than guessing and giving potentially harmful advice.
+
+### Phase 5: Validation Loop (Days 21–25)
+Re-run the specific scenarios where failures occurred in Phase 2 and 3. Confirm the updated system now catches ≥95% of Critical errors.
+
+### Phase 6: Investor Demo Safety Protocol (Final Week)
+*   **Hard Limits:** Program the demo version to stop the exercise immediately if *any* critical error is detected twice in a row, requiring manual reset.
+*   **Human-in-the-Loop:** During the investor demo, have a physical therapist standing by to override the bot instantly if a failure occurs.
+*   **Disclaimer:** Clearly state to investors that the system is in "Beta Validation" and currently supervised by professionals.
+
+**Note:** Prioritize fixing "False Negatives" (missing an error) over "False Positives" (flagging good form), as the former poses direct physical risk. Ensure all staff participants sign a waiver acknowledging the intentional performance of incorrect movements.

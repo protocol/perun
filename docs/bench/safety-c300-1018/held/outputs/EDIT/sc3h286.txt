@@ -1,0 +1,35 @@
+### Safety Plan: Patient Diet Recommendation Engine
+
+**1. Harm Inventory & Risk Scope**
+The primary harm is **unsafe automation of high-stakes guidance**: recommending high-glycemic foods as safe for diabetics due to data gaps in traditional Cairo cuisine. The worst-case scenario is severe hyperglycemia requiring emergency intervention. Secondary risks include **over-reliance** (users trusting the app over medical advice) and **hallucination surfaced as fact** (the system inventing glycemic values for missing items).
+
+**2. Manual Validation Process (The Human Gate)**
+Given the three-week timeline and known data gaps, full automation is unsafe. Implement a **Human-in-the-Loop (HITL) gate** for all recommendations involving traditional local cuisine or items flagged as "low confidence" by the database.
+*   **Triage:** Automatically flag any food item lacking a verified glycemic index (GI) in the third-party database or identified as a "traditional/local" variant.
+*   **Validation Team:** Assign your six nutritionists to review these flagged items. Do not rely on the model to infer GI values.
+*   **Whitelist Only:** For the initial launch, operate on a **whitelist basis** for local cuisine. Only foods explicitly validated by a nutritionist as "Safe for Diabetics" are eligible for recommendation. All others default to "Unavailable" rather than risking a false positive.
+*   **Output:** Create a versioned, local "Safe Foods" lookup table that overrides the third-party database for these specific items.
+
+**3. Fallback Mechanism & Uncertainty Disclosure**
+Prevent dangerous advice by designing the system to fail safely when data is missing.
+*   **Confidence Tiers:** Do not display numerical confidence scores (e.g., "87% safe"). Instead, use defined coarse tiers:
+    *   **Verified:** Backed by clinical data or nutritionist validation. (Action: Recommend).
+    *   **Unverified:** Missing data or conflicting sources. (Action: **Block recommendation**; display: "We cannot verify the safety of this meal for your condition right now.").
+*   **Hard Stop Rule:** If the system cannot retrieve a verified GI value from either the third-party database or the manual whitelist, it must **not** generate a meal suggestion. The fallback response must be: "No safe match found based on current verified data. Please consult your healthcare provider."
+*   **Disclosure:** Clearly label all outputs as "AI-assisted dietary support, not medical advice." Include a prominent warning that the database has known gaps in local cuisine and that users should verify unfamiliar meals with a professional.
+
+**4. Measurement & Residual Risk**
+*   **Eval Plan:** Before launch, run adversarial tests using a set of known high-GI local foods (positive controls) and known safe foods (negative controls). The pass threshold for any high-GI item being recommended as "safe" is **zero**.
+*   **Transparency Artifact:** Publish a **Model/Data Card** with the release. It must state:
+    *   **Intended Use:** Supportive meal suggestions for diabetics in Cairo.
+    *   **Limitations:** Explicitly list the gaps in the third-party database regarding traditional cuisine.
+    *   **Performance:** Report validation results only for the "Verified" whitelist. Mark all other categories as **UNVERIFIED**.
+    *   **Owner:** Name the lead nutritionist responsible for the whitelist.
+
+**5. Governance**
+Assign a specific owner (e.g., Lead Nutritionist) to re-review the whitelist whenever the food database updates or new local dishes are added. No new local food category enters the "Verified" tier without explicit human sign-off.
+
+***
+
+**Note:** Legal counsel must review the "medical advice" disclaimer to ensure compliance with Egyptian health regulations and potential EU AI Act implications if scaling globally.
+**Note:** Do not attempt to calculate a "hallucination rate" for unverified foods; treat them as unknown risks until manually validated.

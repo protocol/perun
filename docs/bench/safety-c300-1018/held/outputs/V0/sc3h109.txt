@@ -1,0 +1,31 @@
+### Internal Simulation Framework for Sensor Drift Validation
+
+To validate your sensor calibration logic without triggering real orders or violating supply chain contracts, build a **Hardware-in-the-Loop (HIL) Simulation Sandbox**. This framework decouples the physical sensors from the ordering engine, allowing you to inject controlled "drift" scenarios safely.
+
+**1. The Virtual Sensor Injector (The "Fake" Fridge)**
+Create a software module that mimics your fridge's sensor output stream. Instead of reading real hardware, this module reads from a pre-defined **Drift Scenario Library**.
+*   **Scenario Design:** Populate the library with specific drift patterns observed in the field (e.g., "Linear Drift: Freshness score drops 5% per hour despite constant temperature," or "Step Jump: Sudden false positive for spoilage").
+*   **Ground Truth Tagging:** Every data point generated must have a hidden "Ground Truth" label (e.g., *Actual State: Fresh*, *Sensor Reading: Spoiled*). This allows you to calculate exactly when the bot makes a mistake.
+
+**2. The Order Interceptor (The Circuit Breaker)**
+Insert a middleware layer between your bot's decision engine and the actual supply chain API.
+*   **Function:** This layer captures any "Place Order" command.
+*   **Logic:** It compares the bot's decision against the "Ground Truth" from the Virtual Sensor Injector.
+    *   If the bot orders spoiled milk (False Positive based on drift), the interceptor **blocks** the API call, logs the incident as a "Prevented Harm Event," and returns a mock success response to the bot so the test continues.
+    *   If the bot fails to order when actually needed (False Negative), it logs a "Missed Restock Event."
+*   **Result:** You can run thousands of drift cycles with zero real orders placed and zero contract penalties.
+
+**3. The Calibration Feedback Loop**
+Run the simulation in batches to tune your calibration thresholds.
+*   **Metric:** Track the "Drift Tolerance Limit"—the maximum amount of sensor error your logic can withstand before incorrectly ordering spoiled goods.
+*   **Stop Condition:** Do not deploy to beta until your calibration logic maintains a 0% rate of "Prevented Harm Events" across all defined drift scenarios, even under extreme sensor noise.
+
+**4. Human-in-the-Loop Gate for Beta**
+Given the risk of irreversible harm (spoiled food) and the financial penalty for cancellations, implement a mandatory **Human Confirmation Gate** for the beta release.
+*   **Rule:** For the first month of beta, any order triggered by a freshness indicator (rather than a simple count-based low stock alert) must be pushed to a user's mobile app for explicit "Approve/Reject" confirmation before the API call is released from the Interceptor.
+*   **Rationale:** This prevents automation bias where users trust the bot's flawed sensor reading. It shifts the liability of the "spoiled milk" decision to a human review until the drift issue is statistically resolved.
+
+**Deliverable Summary:** Build the Virtual Sensor Injector to feed bad data, use the Order Interceptor to block real transactions while logging errors, and enforce a human approval step for all freshness-based orders during the beta phase.
+
+**Note:** This approach treats the sensor drift as a known failure mode that requires a governance gate, not just a code fix.
+**Note:** Ensure your "Ground Truth" labels in the simulation are rigorously defined to avoid validating against incorrect assumptions.

@@ -1,0 +1,39 @@
+### Pre-Launch Safety Protocol: MobilityFirst Cairo Pilot
+
+**1. Decision Logic Review Process**
+Before any patient assessment begins, the system must execute a "Safety Gate" logic sequence. This process acts as a hard stop; if any step fails, the test is automatically cancelled, and no exercise instructions are displayed.
+
+*   **Step A: Resource Verification (Manual Input)**
+    *   The clinic operator must manually confirm the presence of at least one human spotter within arm's reach of the patient.
+    *   *Logic Rule:* If `Spotter_Present == FALSE`, then `Test_Status = BLOCKED`. The system displays: "Safety Protocol Violation: A human spotter is required before proceeding."
+    *   *Logic Rule:* If `Harness_Available == FALSE` AND `Patient_Risk_Score == HIGH` (based on pre-screening age/mobility data), then `Test_Status = BLOCKED`.
+
+*   **Step B: Environmental Calibration (Automated)**
+    *   The computer vision (CV) system must scan the floor area for 10 seconds prior to patient entry.
+    *   *Logic Rule:* If `Floor_Obstacles_Detected == TRUE`, then `Test_Status = BLOCKED`.
+    *   *Logic Rule:* If `Lighting_Level < MINIMUM_THRESHOLD`, then `Test_Status = BLOCKED`. The CV cannot reliably detect instability in poor light, creating a false sense of security.
+
+*   **Step C: Real-Time Instability Thresholding**
+    *   During the test, the CV monitors sway velocity and base-of-support shifts.
+    *   *Logic Rule:* If `Sway_Velocity > SAFE_LIMIT` for >2 seconds, the system must immediately trigger a "Stop" audio command and freeze the exercise progression.
+    *   *Fail-Safe Logic:* In the event of a network lag or CV processing delay, the default state must be "Stop." The system proceeds only on positive confirmation of stability, not on the absence of detected falls.
+
+**2. User Instruction Set**
+
+**For Clinic Operators (Spotters):**
+*   **Positioning:** You must stand behind and slightly to the side of the patient, within arm's reach, throughout the entire duration of the test. Do not rely on the software to catch a fall.
+*   **Override Authority:** You have the authority to halt the test immediately if you feel the patient is fatigued or unsteady, regardless of what the screen indicates.
+*   **Pre-Test Check:** Verify the floor is dry and clear of bags, cables, or furniture. Ensure the camera has an unobstructed view of the patient's full body from head to feet.
+*   **Emergency Response:** If the system fails to trigger a stop during a loss of balance, physically support the patient immediately. Do not wait for the software.
+
+**For Patients:**
+*   **Honesty is Safety:** Inform your spotter immediately if you feel dizzy, weak, or painful during any movement.
+*   **Follow the Spotter, Not Just the Screen:** If your spotter asks you to stop, stop immediately. The human supervisor is your primary safety net.
+*   **Footwear:** Wear flat, non-slip shoes. Do not perform the test in socks or sandals.
+*   **Range of Motion:** Perform movements slowly. Do not try to "beat" the test speed; the goal is accurate measurement, not speed.
+
+**3. Compensation for Limited Equipment**
+Since safety harnesses are limited, the "Human-in-the-Loop" protocol is mandatory. No test may be administered to a patient categorized as "High Fall Risk" unless a dedicated spotter is assigned solely to that patient. If staffing levels drop such that a spotter cannot be dedicated to a single high-risk patient, the testing schedule for high-risk patients must be paused until resources are available. The software serves only as a measurement tool, not a physical restraint or catch mechanism.
+
+*Note: This protocol assumes the computer vision system has been validated for latency under local network conditions in Cairo clinics.*
+*Ensure all staff sign off on the "Human-in-the-Loop" mandate before the pilot begins.*

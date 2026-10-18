@@ -1,0 +1,40 @@
+### Pre-Launch Safety Audit: Smart Ventilator Alarm-Silence Logic
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (indefinite silencing of critical alarms).
+*   **Affected Party:** Patients in critical care; Nursing staff in Seoul hospitals.
+*   **Worst Realistic Case:** The system misinterprets transient stability as sustained recovery, silencing a critical alarm indefinitely, leading to delayed intervention and patient harm or death.
+*   **Constraint:** All automated decision logic must be explainable in plain language to nursing staff.
+
+**2. Verification Steps for Logic & Explainability**
+
+**Step A: Enforce the Human-in-the-Loop Gate (Hard Floor)**
+*   **Action:** Verify that the code contains an absolute hard limit on silence duration (e.g., maximum 2 minutes), regardless of predicted stability.
+*   **Test:** Inject a "sustained recovery" signal lasting 1 hour.
+*   **Pass Condition:** The alarm *must* re-arm automatically after the hard limit expires. Full autonomous indefinite silencing is a failure.
+*   **Explainability Check:** The system must display the reason for silence and the remaining time in plain Korean/English (e.g., "Alarm paused: Stability detected. Resuming in 90 seconds").
+
+**Step B: Scenario-Based Red Teaming (Rapid Fluctuation)**
+*   **Action:** Run adversarial simulations against the decision logic using the following probe sets:
+    *   *Probe 1 (The False Positive):* Input 30 seconds of stable vitals followed immediately by a critical drop.
+    *   *Probe 2 (The Oscillator):* Input rapid cycling between stable and unstable states (sawtooth pattern).
+    *   *Probe 3 (Sensor Noise):* Input stable vitals with high noise variance mimicking artifact.
+*   **Metric:** Zero instances of silence extending beyond the hard limit during or after these patterns.
+*   **Stop Condition:** Any test case resulting in silence > hard limit blocks launch immediately.
+
+**Step C: Explainability Validation with End-Users**
+*   **Action:** Present the system's plain-language explanations generated from Step B to a sample of nursing staff.
+*   **Metric:** 100% of nurses must correctly identify *why* the alarm silenced and *when* it will return without technical assistance.
+*   **Failure Mode:** If nurses interpret the explanation as "Alarm disabled" rather than "Alarm paused," the wording fails.
+
+**3. Residual Risk Reporting**
+*   **Status:** UNVERIFIED until Steps A, B, and C are executed with documented results.
+*   **Transparency Artifact:** A "Model Card" must be drafted listing the hard silence limit, the specific clinical scenarios tested, and the known limitation that the system cannot distinguish true recovery from transient stability with 100% certainty.
+*   **Legal/Regulatory Routing:** Because this involves high-stakes automated decisions in a medical context, route the final audit to legal counsel to verify compliance with South Korean medical device regulations and international standards (e.g., ISO 14971) before deployment. Do not assert compliance internally.
+
+**4. Final Governance**
+*   **Owner:** Assign a specific product owner responsible for reviewing any changes to the silence logic or patient stability algorithms.
+*   **Rollback Plan:** Define an immediate kill-switch to revert to standard, non-smart alarm behavior if post-launch monitoring detects any silence overrun.
+
+Do not certify this feature as "safe" or "unbiased" based on this plan alone; safety is demonstrated only by passing the runnable tests above.
+The hard limit on silence duration is the non-negotiable control; no algorithmic confidence score can override it.

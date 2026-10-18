@@ -1,0 +1,34 @@
+### Pre-Launch Review Strategy: Nile MedTech Nutrition Tracker
+
+**1. Harm Inventory & Measurement Plan (MAP & MEASURE)**
+Given the constraint of no new clinical trials, your review must rely on adversarial testing of existing data and synthetic stress scenarios.
+*   **Identified Harm:** Systematic overestimation of nutrient uptake in severe cases, leading to inadequate supplementation (Health Risk).
+*   **Stress-Testing Method (No New Data):**
+    *   **Synthetic Edge-Case Generation:** Programmatically perturb existing dietary logs and biomarker trends to simulate "rare syndrome combinations" and "severe progression" states that may be underrepresented in your current set. Inject known negative controls (e.g., logs with zero absorption markers) to verify the model does not output positive uptake.
+    *   **Subgroup Slicing:** Re-evaluate your existing dataset by slicing strictly for severity markers. Do not report aggregate accuracy; report performance specifically for the bottom quartile of absorption efficiency.
+    *   **Metric & Threshold:** Define a "Safety Stop" threshold. For example: "If the model overestimates uptake by >15% in any simulated severe case, the feature cannot auto-generate supplementation advice."
+    *   **Status:** Until these specific slices are run, the safety profile for severe cases is **UNVERIFIED**. Do not invent a safety rate.
+
+**2. Risk Management & Human Gate (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** Because incorrect outputs lead to health risks (inadequate supplementation), **fully automated supplementation recommendations are unsafe.**
+    *   *Control:* The system must flag any estimate for patients with "severe" biomarker trends for mandatory clinician review before the patient sees a recommendation.
+    *   *Fallback:* If the model's confidence is low or the case matches a "rare combination" profile, the system must default to a conservative, guideline-based baseline rather than an AI estimate.
+*   **Uncertainty Communication:** Do not display raw confidence percentages (e.g., "87% accurate") to patients, as this implies false precision. Instead, use defined coarse tiers:
+    *   *Confirmed:* Corroborated by multiple biomarkers.
+    *   *Estimated:* Based on typical patterns; requires monitoring.
+    *   *Unverified:* Rare syndrome combination; clinical review required.
+
+**3. Draft Risk Communication for Pilot Participants**
+*Subject: Important Information About Your Nutrition Estimates*
+
+"As part of this pilot, you will receive AI-generated estimates of your nutrient absorption. Please be aware:
+*   **These are estimates, not diagnoses.** The tool analyzes your logs to suggest trends, but it is not a medical device.
+*   **Potential for Error:** In complex or severe cases, the tool may overestimate how much nutrition your body absorbs. This could lead to suggestions for less supplementation than you actually need.
+*   **Your Safety:** If your data indicates a complex or severe pattern, your estimate will be flagged for review by a clinician before you see it. If you feel your symptoms do not match the advice, please contact your care team immediately.
+*   **Action:** Do not change your medication or supplementation regimen based solely on this tool without consulting your doctor."
+
+**4. Governance & Transparency**
+*   **Artifact Creation:** You must produce a **Model Card** before launch. This document must explicitly state the intended use (pilot tracking only), the known limitation (overestimation in severe cases), and the **UNVERIFIED** status of performance on rare syndrome combinations until stress tests are complete.
+*   **Ownership:** Assign a specific clinician and data scientist as co-owners of this risk. They must re-review the model if the patient population shifts or if new biomarker data is added.
+
+**Note:** Legal counsel must review the disclosure language to determine if specific regulatory warnings are required for your region and patient demographic. This strategy assumes the "strict budget" precludes new data collection but allows for computational stress-testing of existing assets.

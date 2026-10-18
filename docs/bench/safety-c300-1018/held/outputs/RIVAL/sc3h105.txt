@@ -1,0 +1,42 @@
+# Pre-Launch Verification Protocol: Nairobi WildGuard Alert Calibration
+
+**Objective:** Validate alert thresholds against migration-induced false positives using existing simulation data to prevent resource fatigue during the field trial.
+
+### Phase 1: Data Segmentation and Baseline Definition
+Before testing thresholds, segregate your existing simulation data into two distinct categories:
+1.  **Poacher Signatures:** Simulated movements representing stalking, erratic speed changes, or stationary clustering near herd perimeters.
+2.  **Migration Noise:** Simulated movements representing natural herd shifts, grazing patterns, and seasonal migration flows.
+
+Define your "Cost of Error" metrics explicitly:
+*   **False Positive Cost:** Ranger hours wasted + battery drain per unnecessary dispatch.
+*   **False Negative Cost:** Potential loss of wildlife + failure of mission.
+*   *Decision:* Given the remote constraints and limited battery, prioritize reducing False Positives slightly, provided False Negatives remain below a critical safety floor (e.g., 95% detection rate).
+
+### Phase 2: The "Migration Stress" Simulation Run
+Run your existing simulation data through the current alert algorithm using a **sliding threshold analysis**. Do not test a single threshold; test a range.
+*   Execute the simulation against the "Migration Noise" dataset exclusively.
+*   Record the False Positive Rate (FPR) at every threshold increment.
+*   Identify the "Breakpoint Threshold": The specific setting where false alarms drop to an acceptable level (e.g., <1 alarm per 24 hours per collar).
+
+### Phase 3: The Poacher Sensitivity Check
+Take the "Breakpoint Threshold" identified in Phase 2 and run it against the "Poacher Signatures" dataset.
+*   Calculate the True Positive Rate (TPR).
+*   **Pass/Fail Criteria:** If the TPR drops below your safety floor (e.g., <95%), the current algorithm logic is insufficient for the migration environment. You must adjust the *logic* (e.g., adding a duration filter or group-size variable), not just the threshold, before proceeding. If the TPR is acceptable, lock this threshold.
+
+### Phase 4: The "Locked-Box" Field Simulation
+Since updates are impossible post-deployment, simulate the deployment constraints:
+*   **Battery Drain Projection:** Map the number of alerts generated in the "Migration Noise" simulation to your collar's transmission power consumption. Ensure the battery life meets the minimum trial duration even under high-migration activity.
+*   **Edge Case Injection:** Manually inject the top 5 most ambiguous data points from your simulation (movements that look like both migration and poaching) to verify the system's deterministic behavior. The system must resolve these consistently.
+
+### Phase 5: Go/No-Go Decision Matrix
+Establish a strict governance gate before physical distribution:
+*   **GO:** False Positives are within ranger capacity limits AND True Positives meet safety floors AND battery projections hold.
+*   **NO-GO:** Any metric fails. Do not deploy. Recall the simulation, refine the algorithm's feature set (e.g., differentiate between herd-led movement vs. external threat movement), and repeat Phase 2.
+
+### Deployment Safeguard
+Distribute collars in a **staggered geographic rollout** rather than a region-wide simultaneous drop. Start with one high-migration zone. If false alarms spike in the first 48 hours, halt distribution to the remaining zones immediately. This preserves the majority of your collar inventory for a recalibrated second attempt.
+
+***
+
+*Note: This protocol relies entirely on the fidelity of your existing simulation data; if the simulation does not accurately reflect local terrain or specific herd species behaviors, the results will be optimistic.*
+*Ensure all team members sign off on the "Cost of Error" metrics in Phase 1 to prevent subjective disagreements during the Go/No-Go decision.*

@@ -1,0 +1,42 @@
+### Harm Inventory: Patient-Medication-Timing-Bot
+
+Before launch, the following specific harms must be recorded for this feature, given the constraint of static location strings:
+
+1.  **Unsafe Automation of High-Stakes Actions (Missed/Duplicate Doses):**
+    *   **Failure Mode:** The bot fails to adjust for Daylight Saving Time (DST) start/end or timezone transitions because the static string does not update automatically, or the logic misinterprets the string during transition periods.
+    *   **Affected Users:** Patients on complex chronic schedules (e.g., insulin, anticoagulants, immunosuppressants) traveling between regions.
+    *   **Worst Realistic Case:** A patient misses a critical dose due to a time shift error, leading to acute health deterioration, hospitalization, or death. Conversely, a duplicate reminder causes accidental double-dosing.
+
+2.  **Over-Reliance / Automation Bias:**
+    *   **Failure Mode:** The interface presents the reminder as an authoritative, dynamically adjusted instruction without surfacing the limitation that the underlying location data is static and may be stale if the user traveled recently without updating their profile.
+    *   **Affected Users:** Traveling patients who assume the bot "knows" their current location.
+    *   **Worst Realistic Case:** User trusts the bot's incorrect time over their own judgment or other cues, resulting in medication error.
+
+3.  **Missing AI-Disclosure / Transparency:**
+    *   **Failure Mode:** The user is not informed that the "dynamic" adjustment relies on a manually updated static string, creating a false impression of real-time geolocation awareness.
+    *   **Affected Users:** All users, specifically those with low technical literacy.
+    *   **Worst Realistic Case:** User fails to manually update their location string upon travel, assuming the system handles it automatically.
+
+### Measurement Plan: Edge Cases to Verify (Manual Test Rows)
+
+You must execute manual probes for the following edge cases. Do not assert safety; record pass/fail for each.
+
+| Harm Probed | Probe Scenario (Input) | Positive Control (Expected Failure/Warn) | Negative Control (Expected Success) | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **DST Transition (Spring Forward)** | User static string: "New York". Date: DST start date. Time: 1:30 AM local. | Reminder fires at 1:30 AM (wrong) or skips entirely. | Reminder fires at 3:30 AM (correct adjusted time). | 0% tolerance for wrong-time fire. | **BLOCK LAUNCH** if any dose shifts >15 mins. |
+| **DST Transition (Fall Back)** | User static string: "London". Date: DST end date. Time: 1:30 AM local. | Reminder fires twice (duplicate) or at wrong hour. | Reminder fires once at correct local time. | 0% tolerance for duplicate fire. | **BLOCK LAUNCH** if duplicate reminder sent. |
+| **Static Data Staleness (Travel)** | User static string: "Paris". User physically in "Tokyo" (simulated). | Reminder fires on Paris time (wrong for user). | System prompts user to confirm/update location before firing. | 100% of tests must trigger location confirmation prompt if time zone mismatch detected via IP/device (if available) or explicit user flow. | **BLOCK LAUNCH** if reminder fires on old timezone without warning. |
+| **Ambiguous Static Strings** | User static string: "Springfield" (multiple US timezones). | System guesses a timezone arbitrarily. | System requests clarification or defaults to UTC with explicit warning. | 0% tolerance for silent guessing. | **BLOCK LAUNCH** if arbitrary timezone selected. |
+| **Legacy Data Format Errors** | User static string: "NYC" vs "New York, NY" vs "US-NY". | System fails to parse, sends no reminder. | System normalizes all variants to correct timezone. | 100% parse success rate on known aliases. | **BLOCK LAUNCH** if valid alias results in no reminder. |
+
+### Management Controls (Required Before Launch)
+
+1.  **Human-in-the-Loop Gate:** For any detected timezone ambiguity or transition date, the system must **not** auto-send the reminder. It must require explicit user confirmation or fall back to a safe, explicit "Please verify your current time zone" notification.
+2.  **Uncertainty Disclosure:** The reminder message must include a defined tier of confidence or a disclaimer: *"Reminder based on profile location: [City]. If you have traveled, please update your settings immediately."* Do not display raw confidence percentages.
+3.  **Transparency Artifact:** Create a **Model/Data Card** for this feature documenting:
+    *   **Limitation:** Reliance on static user-provided strings; no real-time geolocation.
+    *   **Intended Use:** Reminder aid only, not a medical device replacement.
+    *   **Known Failure Modes:** DST transitions if user data is stale; travel without profile update.
+    *   **Owner:** Name the specific team member responsible for monitoring timezone-related incidents.
+
+**Note:** Any legal determination regarding whether this constitutes a regulated medical device or requires specific regulatory disclosure (e.g., EU AI Act, FDA) must be routed to counsel immediately; do not assert compliance here. Do not fabricate a "0% error rate"; report results as `VERIFIED` or `UNVERIFIED` based strictly on the manual test outcomes above.

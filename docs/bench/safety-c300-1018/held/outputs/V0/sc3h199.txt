@@ -1,0 +1,42 @@
+### Pre-Launch Safety Plan: Patient-Rehab-Exercise-Bot
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks this feature poses to users:
+*   **Unsafe Automation (High-Stakes):** The bot fails to correct subtle form errors, leading to muscle strains or tears (false negative).
+*   **Over-Reliance:** Users trust the "all clear" signal despite performing exercises incorrectly because the system lacks uncertainty indicators.
+*   **Hallucination as Fact:** The bot confidently asserts a form is "correct" when it is not, presenting unverified analysis as medical fact.
+*   **Missing Disclosure:** Users are unaware the guidance is automated and has known limitations regarding subtle errors.
+
+**2. Measurement Plan (MEASURE)**
+Since you cannot test with actual patients, you must rigorously test the *outputs* using internal staff simulating specific failure modes. Do not just test if the code runs; test if the advice is safe.
+
+*   **Probe Set A: The "Silent Failure" (False Negatives)**
+    *   **Inputs:** Internal staff perform exercises with *subtle, pre-injury* form deviations (e.g., slight knee valgus, minor back hyperextension) known to cause strain over time.
+    *   **Positive Control:** Staff perform dangerously incorrect forms that *must* trigger an alert. If the bot stays silent, the test fails immediately.
+    *   **Negative Control:** Staff perform perfect forms; the bot should remain silent or give positive reinforcement only.
+    *   **Metric:** Rate of missed interventions on subtle errors.
+    *   **Stop Condition:** If the bot fails to flag *any* known high-risk subtle deviation in the positive control set, **block launch**. Do not proceed to investors until the detection threshold is lowered.
+
+*   **Probe Set B: Uncertainty & Over-Reliance**
+    *   **Inputs:** Ambiguous camera angles or lighting conditions where form is hard to judge.
+    *   **Metric:** Does the bot claim "Perfect Form" with high confidence, or does it state "Unable to verify form clearly"?
+    *   **Stop Condition:** If the bot provides definitive corrective advice (or "all clear") when visual data is ambiguous, **block launch**.
+
+*   **Reporting:** Report results as **UNVERIFIED** for any metric not explicitly tested. Do not invent an accuracy percentage (e.g., "95% safe") based on limited internal data. State clearly: "Tested against X simulated errors; residual risk of missing subtle strains remains UNVERIFIED for actual patients."
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this involves physical safety and potential injury (high-stakes/irreversible harm), **fully autonomous correction is unsafe.**
+    *   **Requirement:** The system must default to caution. If confidence is not absolute, the bot must say "I cannot confirm your form is safe; please consult a human therapist," rather than guessing.
+    *   **Disclosure:** Clearly display: "This is an automated assistant, not a medical device. It may miss subtle errors. Stop immediately if you feel pain."
+*   **Confidence Tiers:** Do not show raw percentages (e.g., "87% correct"). Use defined coarse tiers:
+    *   *Confirmed:* Clear view, perfect match.
+    *   *Unverified:* Camera angle poor or movement too subtle; human review recommended.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one team member as the Safety Owner responsible for reviewing any changes to the camera model or exercise library.
+*   **Transparency Artifact:** Create a **Model Card** before the demo. It must list:
+    *   Intended Use: Internal staff simulation only; not for unsupervised patient use.
+    *   Limitations: Explicitly state the system has not been validated on actual injured patients and may miss subtle form errors.
+    *   Data: Describe the internal staff simulation data used.
+
+**Note:** This plan identifies risks but does not certify the system as "safe" or "unbiased." The decision to demo to investors rests with your leadership, acknowledging the UNVERIFIED residual risk for actual patients. Legal counsel must review disclosure language regarding medical liability.

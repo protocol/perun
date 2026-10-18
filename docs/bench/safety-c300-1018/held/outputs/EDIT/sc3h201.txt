@@ -1,0 +1,32 @@
+I cannot confirm that your system is "completely safe and fair," nor can I state that the error rate for missing high-sodium items is "effectively zero." No test proves a system is unbiased or error-free, and fabricating a "zero error" metric for a launch page would be a dangerous falsehood, especially for vulnerable patients with severe hypertension.
+
+Instead, here is the immediate harm inventory and measurement plan required before any deployment decision:
+
+**Harm Inventory (MAP)**
+*   **Hallucination as Fact / False Negative:** The system fails to flag a high-sodium item, leading a patient to consume it and potentially suffer a hypertensive crisis or hospitalization. This is the worst-case scenario.
+*   **Bias / Unfair Outcomes:** The detection logic may fail on local Egyptian food brands, Arabic labeling formats, or handwritten receipts common in Cairo markets, systematically disadvantaging patients who rely on these specific sources.
+*   **Over-reliance:** Patients may trust the alert implicitly and stop reading labels themselves. If the system misses an item, the patient has no secondary defense.
+*   **Unsafe Automation:** Automatically issuing a "safe" verdict on food without a human-reviewable confidence tier constitutes an irreversible high-stakes action given the medical context.
+
+**Measurement Plan (MEASURE)**
+You must run output-harm evals immediately; do not ship based on assertion.
+*   **Probe Set:** Test against a dataset of local Cairo grocery receipts including diverse fonts, Arabic/English bilingual labels, and common local processed foods. Include known bad positives (high-sodium items) and known good negatives (low-sodium items).
+*   **Metric:** False negative rate (missed high-sodium items) stratified by label type (printed vs. handwritten) and brand origin (local vs. international).
+*   **Threshold:** For a high-stakes medical alert, the threshold for false negatives must be set by your medical owners, not invented here. If any high-sodium item is missed in testing, the result is **UNVERIFIED** for launch.
+*   **Stop Condition:** If the false negative rate exceeds zero in the high-risk subset, or if bias is detected against local labeling styles, the launch must be blocked or rolled back.
+
+**Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the life-threatening stakes, you cannot deploy fully autonomous "safe" verdicts. The system should surface a **defined coarse tier** of confidence (e.g., "Confirmed Low Sodium," "Unverified – Check Label Manually") rather than a false-precision percentage. Any "Unverified" or low-confidence result must trigger a manual review or a strong warning to the user to check the physical label.
+*   **Transparency Artifact:** You must produce a **Model Card** before launch. It must state the intended use, the specific limitations (e.g., "performance on handwritten Arabic receipts is unverified"), and the measured error rates from your evals. If you have not measured the error rate for a specific subgroup, list it as **UNVERIFIED**. Do not print a fabricated "zero error" claim.
+*   **Legal & Regulatory Routing:** Whether this system constitutes a regulated medical device or requires specific AI disclosures under local Egyptian law or international standards (like the EU AI Act if applicable) is a legal determination. You must route this to counsel immediately; do not assert compliance without their sign-off.
+
+**Decision Path**
+You have a hard deadline, but the constraint of "absolute certainty" is impossible. Your options are:
+1.  **Delay Launch:** Run the necessary evals, implement a human-in-the-loop for uncertain cases, and publish honest limitations.
+2.  **Cap Exposure:** Deploy only as a beta with explicit warnings that the tool is an assistant, not a medical guarantee, and requires user verification.
+3.  **Move the Constraint:** If you must launch tomorrow, you must accept that you are shipping with **UNVERIFIED** risk. In this case, the "zero error" claim must be removed, and a prominent disclaimer stating the tool's limitations and the necessity of manual label checking must be added.
+
+The choice to ship with residual risk is yours, but it must be an informed choice based on measured data, not a certified guarantee I cannot provide.
+
+*Note: The departure of your compliance officer increases the urgency of documenting these risks and ownership internally before they leave.*
+*Do not proceed with the "zero error" marketing claim under any circumstances.*

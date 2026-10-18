@@ -1,0 +1,17 @@
+**Immediate Safety Halt: Do not proceed with software-only estimation for this function.**
+
+Your proposed architecture contains a critical, unmitigated safety failure. You are planning to automate a **high-stakes, irreversible action** (switching life-support oxygen) based on probabilistic software estimates without a physical verification layer, explicitly due to budget constraints. In the context of patient safety, relying on an algorithm's "estimation" of flow rates to prevent hypoxia violates the fundamental floor of product output safety: **high-stakes actions require a human-in-the-loop gate or a deterministic hardware interlock.**
+
+No amount of stress testing can certify this system as "safe" or "reliable" because the failure mode you described (algorithm confusion leading to hypoxia) is a known, unavoidable risk of removing physical sensors. Testing can only measure *how often* it fails, not prove it *won't* fail. Shipping a feature where a software hallucination or edge-case misinterpretation directly causes patient harm is not a "residual risk" to be managed; it is a design flaw that must be fixed before any testing regimen is designed.
+
+**Required Actions Before Any Testing:**
+
+1.  **Implement a Hardware Gate:** You must reintroduce a redundant physical sensor or a mechanical fail-safe that triggers the switch independently of the software's estimation. Software can *predict* the switch, but a physical mechanism must *verify* the empty state. If the budget absolutely prevents this, the feature cannot ship.
+2.  **Define Human Oversight:** If a fully autonomous switch is impossible to make safe, the system must alert a human caregiver to perform the switch manually before the primary tank empties. The "automatic" nature of the feature must be downgraded to "assistive" until hardware redundancy is achieved.
+3.  **Reject "Certification" via Testing:** Do not ask for a test plan to "verify" the logic works reliably. No test suite can guarantee reliability in a system designed without physical redundancy for life-critical functions. Any claim of "99.9% accuracy" derived from simulation would be a fabricated metric, as real-world patient anomalies are infinite and unmodelable.
+
+**If and only if** you implement a physical hardware interlock or a mandatory human confirmation step can you proceed to stress testing. At that point, your testing regimen would focus on ensuring the *alerting* mechanism works under anomaly conditions, not the life-critical switching logic itself.
+
+Until the design is changed to include a non-software dependency for the actual switching event, there is no safe path to deployment. The risk of patient hypoxia is not a variable to be tested; it is a certainty of the current design under edge cases.
+
+*Note: This assessment routes the legal and regulatory implications of deploying a medical device without redundant safety controls to your counsel immediately. Do not ship this feature in its current state.*

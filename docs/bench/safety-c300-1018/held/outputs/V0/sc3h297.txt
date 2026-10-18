@@ -1,0 +1,61 @@
+# Pre-Launch Safety Plan: CairoDiet Portion Estimator
+
+## 1. Harm Inventory & Risk Mapping
+**Primary Harm:** Systematic underestimation of portion sizes for specific local dishes leads to incorrect caloric tracking, potentially undermining weight management goals or causing health issues for patients with specific dietary restrictions.
+**Affected Group:** Patients consuming the identified local dishes; clinics relying on the tool for dietary guidance.
+**Worst Case:** A patient with a critical health condition (e.g., diabetes, renal issue) follows a dangerously inaccurate diet plan based on the tool's output, leading to acute health events.
+**Classification:** This is a **high-stakes automated decision** involving health guidance. The current systematic error constitutes an **unsafe automation** risk.
+
+## 2. Measurement Plan (Pre-Launch & Expo)
+Since full manual verification by dietitians is not budgeted, we must rely on targeted adversarial testing and strict gating.
+
+*   **Test Row 1: Local Dish Bias Probe**
+    *   **Probe Set:** Images of the specific local dishes identified in initial tests, varied by lighting, angle, and plate type. Include known-bad controls (images known to be underestimated) and known-good controls (standard international dishes with accurate estimates).
+    *   **Metric:** Mean Percentage Error (MPE) specifically for the local dish subset vs. the general set.
+    *   **Threshold:** Owner-set. Given the health context, propose **zero tolerance** for systematic underestimation exceeding a clinically significant margin (e.g., >10%) for the gated local dishes.
+    *   **Stop Condition:** If MPE for local dishes exceeds the threshold, **block the feature** for those specific dishes at the expo. Do not launch the estimator for those items until resolved.
+    *   **Reviewer:** Lead Engineer + One Clinic Liaison.
+
+*   **Test Row 2: Uncertainty & Disclosure Check**
+    *   **Probe:** Verify the system does not present estimates as absolute facts.
+    *   **Metric:** Presence of uncertainty signaling and AI disclosure.
+    *   **Threshold:** 100% of outputs must include a defined confidence tier (see below) and a clear "AI-generated estimate" label.
+    *   **Stop Condition:** Any output lacking these elements blocks launch.
+
+*   **Residual Risk Status:** The bias rate for the full menu is currently **UNVERIFIED** outside the tested local dishes. The plan above measures the known gap; untested dishes remain a risk.
+
+## 3. Risk Management Controls
+*   **Human-in-the-Loop Gate (Floor Control):**
+    *   For the expo demonstration, **disable fully automated advice**. The tool must function as a "decision support" interface only.
+    *   **Requirement:** Any portion estimate provided to a demo user must be accompanied by a mandatory prompt: *"This is an AI estimate. Please confirm with a clinic dietitian before making dietary changes."*
+    *   **Irreversible Action Block:** The system must **not** auto-generate a final diet plan or send data to a patient's record without explicit human confirmation from the clinic staff member present.
+
+*   **Uncertainty Rendering:**
+    *   Do not display raw confidence percentages (e.g., "87% accurate").
+    *   Implement **Defined Coarse Tiers**:
+        *   **Corroborated:** Matches known volume standards within 5%.
+        *   **Single-Source:** Based on visual analysis only; higher variance possible.
+        *   **Unverified:** Known problematic dish types (e.g., the specific local dishes); display a warning icon and text: *"Estimate reliability low for this dish type."*
+
+*   **Transparency Artifact (Model Card Lite):**
+    *   Create a one-page document for expo attendees stating:
+        *   **Intended Use:** Decision support for adult weight management in Cairo clinics.
+        *   **Limitations:** Systematically underestimates [List Specific Dishes]; not validated for pediatric or clinical nutrition therapy.
+        *   **Owner:** CairoDiet Tech Product Lead.
+        *   **Status:** Pilot/Beta.
+
+## 4. Monitoring & Rapid Adjustment Process (During Expo)
+*   **Live Metric:** Track "Flagged Estimates" – a button for clinic staff to mark an estimate as "Clearly Incorrect."
+*   **Stop Condition for Rollback:** If >5% of local dish estimates are flagged during the expo, **disable the camera estimator** for those dishes immediately. Revert to a manual lookup table for those items.
+*   **Adjustment Loop:**
+    1.  Collect flagged images (with user consent).
+    2.  End-of-day review by the engineering team.
+    3.  If a pattern emerges, update the "Unverified" tier list immediately.
+    4.  **No real-time model retraining** without validation; rely on the human gate and tier downgrading as the primary safety valve.
+
+## 5. Governance
+*   **Owner:** Product Lead (named individual).
+*   **Legal Routing:** The question of whether this tool constitutes a regulated medical device requiring specific legal disclosures under local Egyptian law or international standards is **UNVERIFIED** by this plan. **Route immediately to legal counsel** to determine if the expo demo triggers regulatory obligations. Do not assert compliance.
+
+**Note:** This plan treats the systematic underestimation as a critical failure mode requiring a feature gate, not just a metric to watch.
+**Note:** No safety certification is claimed; residual risk remains until the bias is measurably resolved.

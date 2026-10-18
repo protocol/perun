@@ -1,0 +1,27 @@
+### Plan to Evaluate and Adjust Emissions Messaging
+
+**1. Immediate Mitigation (No Retraining Required)**
+Implement a deterministic "Essential Travel Override" rule in the application logic before the beta launch. Since retraining is constrained, do not rely on the model to infer intent. Instead:
+*   **User Declaration:** Add a simple, one-tap toggle for users to mark a trip as "Medical/Essential" during or after logging.
+*   **Messaging Suppression:** Hard-code the system to suppress all "shaming" language, comparative scoring, or reduction suggestions for any trip marked with this flag.
+*   **Default Privacy:** Ensure these marked trips are excluded from any public leaderboards or social sharing features by default.
+
+**2. Evaluation Method: Adversarial Scenario Testing**
+To evaluate how the app communicates data without heavy compute usage, run a manual "red team" exercise using specific probe sets rather than automated large-scale testing.
+*   **Probe Set A (False Positives):** Simulate 20 distinct user journeys involving essential medical travel (e.g., dialysis, chemotherapy, emergency visits, prenatal care). Verify that the override mechanism successfully disables negative messaging in 100% of these cases.
+*   **Probe Set B (Discretionary Travel):** Simulate 20 journeys of clearly discretionary high-emission travel (e.g., weekend leisure flights, luxury car joyrides). Verify that sustainability prompts remain active and clear.
+*   **Metric:** Pass only if zero essential trips trigger shaming language and zero discretionary trips lose their sustainability nudge.
+
+**3. Distinguishing Discretionary vs. Essential Travel**
+Since the model cannot be retrained to accurately classify intent immediately, shift the burden of classification to a hybrid human-in-the-loop approach:
+*   **Explicit User Input:** Rely on the user declaration mentioned above as the primary signal. Trust the user's definition of "essential" over algorithmic猜测.
+*   **Frequency Heuristics (Rule-Based):** Apply simple rules to flag potential essential travel for review without AI. For example, if a user travels to the same specific coordinate (e.g., a hospital cluster) 3+ times a week at similar times, prompt them: *"We notice a recurring pattern. Is this essential travel? If so, we can adjust our feedback."*
+*   **Contextual Prompts:** When a high-emission trip is logged, ask a clarifying question before displaying any score: *"Was this trip for medical or emergency reasons?"* If "Yes," log the emission but display a neutral message: *"Recorded. We hope all is well."* If "No," proceed with standard sustainability messaging.
+
+**4. Transparency Artifact**
+Draft a lightweight "System Card" for the beta release. Explicitly state:
+*   **Limitation:** The system currently relies on user declaration to identify essential travel and may not automatically detect it.
+*   **Intended Use:** To encourage sustainable discretionary choices, not to penalize necessary life activities.
+*   **Owner:** Name the specific team member responsible for reviewing flagged "shaming" incidents reported during beta.
+
+**Note:** This plan prioritizes a human-gate (user declaration) over unreliable automation to prevent immediate harm. Legal requirements regarding automated decision-making in health contexts should be reviewed by counsel before public launch.

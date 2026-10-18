@@ -14,12 +14,9 @@ metadata:
 # Product output safety
 
 Govern the harm the product's **own outputs and automated decisions** do to the
-people who use it. A feature that generates content, recommends, ranks, scores,
-or acts on a user's behalf can mislead, exclude, or damage that user even when the
-code is correct and secure. That harm is not covered by code review (which reads
-the code artifact) or by the money/compliance lanes (which route legal and
-financial questions) — it is a distinct axis: what the shipped behavior does to
-its users.
+people who use it: a feature that generates, recommends, ranks, scores, or acts on
+a user's behalf can mislead, exclude, or damage them even when the code is correct
+and secure. Code review and the money/compliance lanes do not cover this axis.
 
 The failure this skill exists to prevent is **shipping an output-facing feature
 with no harm inventory and no human gate on its high-stakes actions**, and — its
@@ -85,6 +82,11 @@ empty inventory is not a pass — it is an unfilled inventory.
   `deep-code-review` reviews in the agent's code — its security-ai-agents reference
   covers Excessive Agency (high-impact / irreversible actions require human
   confirmation) — and it mirrors `agentic-delivery`'s human approval on push/deploy.
+- **Answer inside the stated constraint.** Treat deadline, budget and goal as fixed
+  inputs: lead with a plan meeting them (rules and fallbacks needing no retraining, a
+  staged rollout capping exposure, a kill switch, steps dated within the deadline, an
+  owner each) and state its cost to the goal. A bare "do not ship" never answers the ask;
+  if no gate fits, name the constraint that must move. Floors never relax.
 - **Show uncertainty as a defined tier, not a false-precision number — and offer an
   override.** Surface confidence/limits and make the output correctable and
   reversible where the stakes warrant. Render confidence as a **defined coarse
@@ -166,14 +168,10 @@ asserted. **Model Cards** (Mitchell et al.), **Datasheets for Datasets** (Gebru 
 **Data Cards** (Pushkarna et al.) — AI transparency artifacts, by name only.
 **EU AI Act** and **ISO/IEC 42001** (AI-management-system standard) — AI-governance
 regimes, **named and routed to counsel only**, no dates or version numbers (both
-revise). Human-in-the-loop / human oversight of high-stakes automation. Sherman Kent,
-*Words of Estimative Probability* (undefined verbal-probability terms are read
-inconsistently across readers; the case for a few consistently-defined estimative
-terms) and the Admiralty Code / NATO reliability × credibility scale (source
-reliability and information credibility rated as independent axes) — both logged in
-`docs/standards-index.md`. Named
-leads only — fetch and log a source before citing a specific figure or control
-(repo convention). Boundary cross-references: `deep-code-review` — the code's security, including the
+revise). Sherman Kent, *Words of Estimative Probability* and the Admiralty Code /
+NATO reliability × credibility scale (both in the MANAGE confidence bullet, both
+logged in `docs/standards-index.md`). Named leads only: fetch and log a source
+before citing a specific figure or control. Boundary cross-references: `deep-code-review` — the code's security, including the
 shared Excessive-Agency / HITL and hallucination-grounding controls in its
 security-ai-agents reference (this skill governs those harms at the
 product-behaviour level, not in the code) — and `business-ops` (legal /

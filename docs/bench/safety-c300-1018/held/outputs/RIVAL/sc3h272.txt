@@ -1,0 +1,31 @@
+**Smart-Insulin-Site-Rotation Audit Plan**
+
+Given the 50% budget reduction, this plan prioritizes high-impact, low-cost validation methods leveraging your internal team of eight engineers and clinicians. The goal is to audit the visual recognition component for bias across skin tones and scar patterns without expensive external vendors.
+
+**1. Construct a Synthetic "Edge-Case" Dataset (Internal Resource: Clinicians)**
+Since collecting new real-world patient data is costly and time-consuming, utilize your clinical staff to curate a focused "challenge set."
+*   **Action:** Clinicians should manually select or annotate 50–100 existing de-identified images from your archives that represent the highest risk categories: Fitzpatrick skin types IV–VI (darker skin tones where lipohypertrophy is harder to visualize), images with surgical scars, burn marks, or moles near potential injection sites.
+*   **Goal:** Create a ground-truth dataset where the correct "avoid" or "proceed" decision is medically indisputable. This replaces the need for a large, statistically broad external dataset for the initial audit.
+
+**2. Perform "Adversarial" Manual Simulation (Internal Resource: Engineers)**
+Without automated fuzzing tools, engineers will manually simulate diverse user inputs against the current model.
+*   **Action:** Run the challenge set through the assistant. Specifically, test images where scar tissue mimics the texture of lipohypertrophy or where dark skin pigmentation might be misinterpreted as bruising or inflammation.
+*   **Metric:** Calculate the False Negative Rate (FNR) specifically for these subgroups. If the system recommends an injection site on a scar or fails to identify lipohypertrophy on darker skin, flag it as a critical failure.
+*   **Cost:** Zero financial cost; requires approximately 20 engineering hours.
+
+**3. Implement a "Human-in-the-Loop" Confidence Threshold**
+To mitigate risk during beta testing while the model is being refined, adjust the application logic rather than retraining the model immediately.
+*   **Action:** Lower the confidence threshold for recommending a site. If the model's confidence score for "healthy tissue" falls below a strict cutoff (e.g., 85%) when analyzing darker skin tones or scarred areas, the system must default to a safe fallback: "Unable to verify site safety. Please consult your clinician or choose an alternative standard site (e.g., opposite quadrant)."
+*   **Goal:** Prevent the system from actively guiding users toward damaged tissue when uncertain. This acts as an immediate safety guardrail.
+
+**4. Structured Beta-Test Feedback Loop**
+Leverage the beta users as sensors for edge cases you missed.
+*   **Action:** Instruct the beta cohort to explicitly report any instance where the app recommended a site that felt painful, hard, or looked unusual post-injection. Include a mandatory "skin tone" and "scar presence" field in the bug report form.
+*   **Analysis:** Weekly review of these reports by the clinical lead to identify patterns of failure correlated with specific demographics.
+
+**5. Documentation of Limitations**
+*   **Action:** Clearly document in the beta release notes that the visual analysis is less validated for specific skin tones and scar types. This manages liability and sets user expectations while you gather more data.
+
+By shifting the burden from expensive external validation to rigorous internal clinical review and conservative software guardrails, you can effectively audit the safety logic within your constrained budget.
+
+*Note: Ensure all internal image handling complies with Korean PIIPA regulations even during testing. Prioritize fixing False Negatives (recommending bad sites) over False Positives (rejecting good sites).*

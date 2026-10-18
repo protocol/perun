@@ -1,0 +1,38 @@
+### Step-by-Step Safety Review Process for Exercise Prescription Feature
+
+**1. Construct the Harm Inventory (Day 1)**
+Before testing, explicitly document the specific risks for stroke survivors. Do not proceed without listing:
+*   **Over-reliance/Automation Bias:** Patients trusting the app's resistance recommendation beyond its proven reliability, leading to muscle strain or falls.
+*   **Hallucination as Fact:** The computer vision system fabricating a "strong" score when the patient is actually fatigued or compensating with unsafe posture.
+*   **Missing Disclosure:** Users unaware that resistance levels are machine-generated estimates, not clinical diagnoses.
+*   **Unsafe High-Stakes Automation:** The app automatically increasing resistance without human verification, risking injury to recovering motor functions.
+*   **Bias:** Systematic under-estimation of strength for specific demographics (e.g., darker skin tones affecting CV accuracy, or specific disability presentations not in training data).
+*   **Worst Case:** A patient suffers a fall or re-injury due to an incorrectly high resistance recommendation.
+
+**2. Design Targeted Output Evaluations (Days 2–3)**
+With only 20 participants, you cannot rely on aggregate statistics. You must test the *outputs* aggressively:
+*   **Adversarial Probes:** Simulate edge cases where the camera angle is poor, lighting is low, or the patient uses compensatory movements (common in stroke recovery). Feed these into the model to see if it incorrectly rates strength as "high."
+*   **Positive/Negative Controls:**
+    *   *Known Bad:* Input video of a patient clearly struggling or using unsafe form. The system must *not* recommend increased resistance.
+    *   *Known Good:* Input video of a patient performing the exercise perfectly. The system should recommend maintenance or slight progression.
+*   **Subgroup Slicing:** Analyze results by age, severity of stroke, and skin tone. If the model fails for any subgroup, flag it immediately.
+*   **Metric & Threshold:** Define a "Stop Condition." Example: "If the system recommends increased resistance for any 'Known Bad' input, launch is blocked." Do not invent a "99% accuracy" claim; if a metric isn't measured, label it **UNVERIFIED**.
+
+**3. Implement the Human-in-the-Loop Gate (Day 4)**
+*   **Irreversible Action Control:** Because increasing resistance carries physical risk, **fully autonomous execution is prohibited.**
+*   **The Gate:** The app must present the recommended resistance level as a *suggestion* requiring explicit confirmation from the patient or, ideally, remote review by a clinician before the difficulty changes.
+*   **Uncertainty Display:** Do not show raw confidence scores (e.g., "87% confident"). Instead, use defined coarse tiers:
+    *   *Confirmed:* High-quality video, consistent form.
+    *   *Unverified:* Poor lighting, ambiguous movement (System defaults to "Maintain Current Level" and flags for review).
+
+**4. Create Transparency Artifacts (Day 5)**
+*   **Model Card:** Draft a document stating the intended use (home rehab support, not medical diagnosis), limitations (fails in low light, unverified on severe spasticity), and the results of your 20-patient evals (including failures).
+*   **Data Card:** Document the composition of your training and test data, noting the small sample size and recruitment delays as a known limitation.
+
+**5. Final Governance & Go/No-Go Decision (Day 6)**
+*   Review the harm inventory against the test results.
+*   Verify the human gate is active for all resistance increases.
+*   **Decision:** The product owner must decide to ship based on the residual risk report. No one can certify the system as "safe" or "unbiased." If the "Stop Condition" was triggered during testing, the feature cannot launch until fixed.
+
+**Note:** Legal counsel must review whether this feature constitutes a regulated medical device or requires specific AI disclosures under local laws; do not assume compliance based on this technical review.
+**Note:** As you scale beyond the pilot, the evaluation dataset must expand; the current 20-patient limit means many bias risks remain **UNVERIFIED**.

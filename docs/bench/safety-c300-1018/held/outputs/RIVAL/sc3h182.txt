@@ -1,0 +1,38 @@
+BerlinBreath Technologies Team,
+
+Given your critical 48-hour certification window and the life-safety nature of your smart-oxygen-sensor, you must shift from broad functional testing to a targeted "failure-mode" strategy. Since you cannot test everything, prioritize scenarios where the system fails silently or delivers delayed alerts, as these pose the highest risk to patients.
+
+Here is your prioritized list of edge cases to simulate, ranked by immediate patient safety impact:
+
+**1. The "Blackout Gap" (Power Loss During Transmission)**
+*   **Scenario:** The device detects a critical low level and initiates an alert sequence, but loses battery power *mid-transmission* before the caregiver receives confirmation.
+*   **Why Prioritize:** If the device dies while trying to send an alert, the family receives nothing. You must verify that the device either completes the transmission before shutting down or has a non-volatile memory flag that forces an immediate "missed alert" re-broadcast the second power is restored or a backup kicks in.
+*   **Simulation:** Cut power physically at 10%, 50%, and 90% of the transmission cycle.
+
+**2. The "Silent Reboot" Loop (Brownout Conditions)**
+*   **Scenario:** Battery voltage drops just below the operational threshold but above the "dead" threshold, causing the device to repeatedly reboot without ever reaching the network stack.
+*   **Why Prioritize:** The device appears "on" (LEDs might flicker), but it never connects to send the alarm. This creates a false sense of security.
+*   **Simulation:** Use a variable power supply to hover the voltage at the reset threshold for extended periods while tank levels are critical.
+
+**3. The "Store-and-Forward" Delay (Extended Outage)**
+*   **Scenario:** Network connectivity is lost for 2 hours while the tank is critical. Connectivity returns briefly for 30 seconds, then drops again.
+*   **Why Prioritize:** Does the device send the alert immediately upon the brief return? Or does it wait for a "stable" connection that never comes? In home care, a 30-second window must be sufficient to push the critical alert.
+*   **Simulation:** Introduce intermittent network availability (e.g., 30s on, 5m off) during a critical event.
+
+**4. The "Time-Drift" Failure (RTC Loss on Battery Death)**
+*   **Scenario:** The device loses power completely, then restores. When it finally sends the delayed alert, the timestamp is incorrect or missing.
+*   **Why Prioritize:** Caregivers may ignore an alert if the timestamp suggests it is old or erroneous. Accurate timing is crucial for triage.
+*   **Simulation:** Drain the battery fully, wait 24 hours, restore power, and check the metadata of the resulting alert.
+
+**5. The "Full Buffer" Deadlock**
+*   **Scenario:** The device logs extensive diagnostic data during a network outage. When the network returns, the attempt to upload this large log block prevents the high-priority alarm from being sent first.
+*   **Why Prioritize:** Low-priority data should never block high-priority safety alerts.
+*   **Simulation:** Fill the local storage with dummy logs, trigger an outage, then restore network and monitor transmission queue order.
+
+**Execution Strategy for 48 Hours:**
+Do not run these sequentially. With eight developers, split into four pairs. Each pair takes one scenario above and runs it against three different network conditions (Wi-Fi, Cellular, and Edge/2G) simultaneously. Document only the pass/fail status and the exact time-to-alert. If any scenario results in a missed alert, stop and fix that specific race condition immediately before moving to the next iteration.
+
+Focus strictly on the path from "Critical Level Detected" to "Caregiver Phone Rings." Everything else is secondary for this certification.
+
+*Ensure your test logs capture exact timestamps synchronized to an external clock to prove latency metrics to the certifiers.*
+*Have a "go/no-go" criteria defined before hour 1; if the "Blackout Gap" fails, the launch risk may be too high regardless of other tests.*

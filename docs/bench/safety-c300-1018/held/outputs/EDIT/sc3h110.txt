@@ -1,0 +1,43 @@
+# Safety Review: Manual Verification & Feedback Loop for ReliefMatch
+
+## 1. Harm Inventory (MAP)
+Before automating dispatch, we acknowledge the specific risks identified in the recent incident:
+*   **Unsafe Automation of High-Stakes Actions:** Automated shipments executed without verified ground truth caused logistics clogging and resource starvation elsewhere.
+*   **Over-reliance / Automation Bias:** The system's recommendation was treated as fact despite known data gaps (non-standardized formats, lack of real-time imagery).
+*   **Bias / Unfair Outcomes:** Allocation algorithms favored regions with digital data presence over those with urgent but undocumented needs.
+
+**Worst Realistic Case:** Critical supplies fail to reach starving populations due to blocked channels, resulting in preventable morbidity or mortality.
+
+## 2. Measurement & Verification Plan (MEASURE)
+Given bandwidth constraints and non-standardized data, we cannot rely on automated image processing. We will implement a **Human-in-the-Loop (HITL) Gate** for all dispatches.
+
+**Verification Protocol (Pre-Dispatch):**
+No automated shipment executes without a "Green Light" from a human operator based on the following tiered evidence:
+*   **Tier 1 (Confirmed):** Direct voice/SMS confirmation from a trusted local partner on the ground stating specific needs and access routes.
+*   **Tier 2 (Corroborated):** Two independent sources (e.g., partner report + satellite visual check by human analyst) aligning on need status.
+*   **Tier 3 (Unverified):** Single source or conflicting data. **Action:** Hold dispatch. Do not guess.
+
+**Feedback Loop (Post-Dispatch):**
+*   **Trigger:** Any report of "supply received but not needed" or "critical need unmet."
+*   **Response Time:** < 4 hours during active response.
+*   **Mechanism:** A dedicated "Error Channel" (simple SMS/WhatsApp group) where local partners flag mismatches.
+*   **Correction:** Immediate manual override to halt pending shipments to the flagged zone and reroute to verified starvation zones.
+
+## 3. Risk Management Controls (MANAGE)
+*   **The Gate:** The software will technically enforce a "Pending Human Approval" state for all shipments. The "Send" button is disabled until a logistician selects a verification tier (Tier 1 or 2) and inputs the source contact.
+*   **Uncertainty Disclosure:** Internal dashboards will label data sources clearly (e.g., "Unverified Partner Report" vs. "Satellite Confirmed"). We will not present algorithmic confidence scores (e.g., "87% match") as facts; we will use the defined tiers above.
+*   **Reversibility:** All dispatched shipments must have a pre-identified diversion point (a regional hub) where trucks can be held or rerouted if a Tier 3 error is caught mid-transit.
+
+## 4. Governance (GOVERN)
+*   **Owner:** Lead Logistician on duty holds final authority for overriding the system.
+*   **Review Cycle:** After every major deployment wave, the team reviews all "Tier 3" holds and any errors that slipped through to refine the verification questions.
+*   **Transparency Artifact:** A one-page "System Limitations Card" will be shared with all local partners, explicitly stating: "This system requires your confirmation to send aid. If you do not reply, we do not send."
+
+## 5. Legal & Ethical Routing
+*   **Disclosure:** Partners are informed that allocation decisions are assisted by an automated matcher but finalized by humans.
+*   **Regulatory Duty:** Given the cross-border nature and potential impact on life/safety, this protocol notes that specific liability frameworks (e.g., humanitarian law implications of automated failure) should be reviewed by legal counsel as the pilot scales, though immediate focus remains on the operational HITL gate.
+
+***
+
+**Note:** This plan treats the recent failure as a lack of a mandatory human gate, not a code bug.
+**Note:** "Unverified" is a valid operational status; do not fabricate certainty to meet speed goals.

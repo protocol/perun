@@ -1,0 +1,31 @@
+### Validation Workflow for Synthetic Pain-Assessment Algorithm
+
+**1. Harm Inventory & Risk Definition**
+Before generating data, define the specific failure mode: **systematic underestimation of pain** in specific demographic subgroups (e.g., darker skin tones, specific age ranges within pediatrics, or atypical facial structures). The worst-case scenario is inadequate pain management leading to prolonged suffering or physiological stress. Since this influences dosage decisions, treat this as a **high-stakes automated recommendation**. No fully autonomous dosage adjustment should occur without a **human-in-the-loop gate** where a nurse explicitly confirms the algorithm's suggestion.
+
+**2. Synthetic Data Strategy: Adversarial & Subgroup Probing**
+Since real patient footage is unavailable, your synthetic generator must be configured to create **adversarial test cases** rather than just "average" scenarios. Structure your test rows as follows:
+
+*   **Demographic Slicing:** Generate distinct datasets varying skin pigmentation (using Fitzpatrick scales), age (infant vs. toddler), and facial morphology. Do not rely on aggregate accuracy; measure performance **per subgroup**.
+*   **Edge-Case "Hard Negatives":** Create synthetic inputs where non-pain expressions (e.g., crying due to hunger, fear, or surprise) mimic pain micro-expressions. The model must correctly identify these as *non-pain* to avoid false positives, but more critically, ensure it does not dismiss subtle pain cues in quiet children as "no pain."
+*   **Subtle Indicator Stress-Test:** Specifically generate sequences with low-intensity pain markers (e.g., slight brow lowering, minor nose wrinkling) across all demographic slices. If the model consistently scores these lower for specific groups, you have identified bias.
+*   **Controls:** Include "known-good" (clear pain) and "known-bad" (clear no-pain) synthetic controls in every batch to verify the generator itself isn't drifting.
+
+**3. Measurement & Thresholds**
+Do not assert the model is "unbiased." Instead, report **residual risk** using these metrics:
+*   **Metric:** False Negative Rate (FNR) for pain detection, sliced by demographic group.
+*   **Threshold:** Set a **zero-tolerance policy** for significant FNR disparities between groups. If Group A has a 5% FNR and Group B has 15%, the model fails the fairness gate regardless of overall accuracy.
+*   **Stop Condition:** If any subgroup shows a statistically significant underestimation trend compared to the baseline, **block progression** to clinical trials.
+
+**4. Transparency & Governance**
+*   **Data Card:** Publish a **Data Card** for your synthetic dataset detailing the generator's limitations, the distribution of demographics, and known gaps (e.g., "synthetic data may not capture complex cultural variations in pain expression").
+*   **Model Card:** Draft a **Model Card** stating the intended use (aiding nurses, not replacing them), the reliance on synthetic data, and the **UNVERIFIED** status of real-world performance until clinical trials begin.
+*   **Disclosure:** Clearly label outputs as "AI-estimated" to nurses. Never present the pain score as a definitive fact.
+
+**5. Legal & Regulatory Routing**
+Because this involves medical decision-making for minors, **route immediately to legal counsel** to determine obligations under local Japanese regulations and international standards (e.g., ISO/IEC 42001, EU AI Act implications if deploying globally). Do not assume synthetic data exempts you from medical device validation requirements.
+
+**Plan Summary:** Generate adversarial, demographically sliced synthetic data → Measure False Negative Rates per group → Enforce zero-tolerance for disparity → Gate all dosage suggestions behind nurse confirmation → Document limitations in Model/Data Cards → Consult counsel on regulatory duties.
+
+*Note: Synthetic data cannot fully replicate the complexity of real human physiology; clinical trials remain essential before deployment.*
+*Ensure your synthetic generator itself is audited for bias, as it may inherit biases from its own training data.*

@@ -1,0 +1,35 @@
+### Simulation-Based Validation Plan for Traffic-Light Optimizer
+
+**1. Construct a High-Fidelity Conflict Simulation Environment**
+Since live network access is restricted, immediately stand up a local simulation mirroring Jakarta's specific intersection topology. Ingest historical traffic flow data and emergency vehicle dispatch logs to recreate "high-traffic" baseline conditions. The simulation must explicitly model perpendicular approach vectors. Hard-code the known bug scenario: Force simultaneous emergency requests from orthogonal directions to verify if the current logic creates a deadlock or blocks the second responder.
+
+**2. Define and Execute Adversarial Test Scenarios**
+Do not test only "happy paths." Run a suite of adversarial scenarios focused on conflict:
+*   **The Perpendicular Clash:** Two emergency vehicles arriving at an intersection within a 10-second window from perpendicular directions.
+*   **The Convoy Trap:** A second emergency vehicle arriving while the first is still clearing the intersection.
+*   **Gridlock Induction:** High civilian traffic density combined with multiple emergency requests to test if the optimizer creates city-wide bottlenecks while trying to clear a single path.
+*   **Sensor Failure Mode:** Simulate missing or delayed data inputs to ensure the system fails safely (e.g., reverts to standard timing) rather than making erratic changes.
+
+**3. Implement a "Human-in-the-Loop" Gate for High-Stakes Actions**
+Given the risk of blocking ambulances, **do not deploy fully autonomous control** for the initial launch. Implement a hard gate:
+*   **Irreversible Action Block:** Any signal change that extends a green light beyond a safe threshold or overrides a conflicting emergency request must require explicit human confirmation from the traffic control center before execution.
+*   **Uncertainty Visualization:** If the optimizer's confidence in a safe path is low, the system must present this as "Unverified/Requires Review" to the operator, not as a precise percentage. Operators must see the recommended action and the potential conflict before approving.
+
+**4. Measurement and Stop Conditions**
+Define clear metrics for success and failure before running simulations:
+*   **Metric:** Time added to emergency vehicle transit vs. delay imposed on conflicting emergency vehicles.
+*   **Pass Threshold:** Zero instances where an emergency vehicle is stopped by the optimizer for more than 15 seconds due to another emergency priority.
+*   **Stop Condition:** If *any* simulation run results in a perpendicular ambulance being blocked while the cross-street light is green for a non-emergency vehicle, the deployment is halted immediately.
+
+**5. Transparency and Documentation Artifact**
+Create a "System Card" for the traffic control team. This document must list:
+*   **Intended Use:** Prioritizing emergency vehicles in moderate-to-high traffic.
+*   **Known Limitations:** Specific scenarios where the system defers to human operators (e.g., simultaneous multi-vector emergencies).
+*   **Residual Risk:** Explicitly state that while simulations reduce risk, real-world unpredictability remains; therefore, the human gate is mandatory.
+*   **Owner:** Name the specific engineer responsible for monitoring the system's first 48 hours.
+
+**6. Final Recommendation**
+Proceed with the simulation runs immediately. If the adversarial tests reveal that the optimizer cannot reliably resolve perpendicular conflicts without human intervention, **delay full automation**. Launch instead in "Advisory Mode," where the system suggests timing changes to human operators who retain final authority. This maintains the 48-hour deadline for integration while ensuring the safety gate remains intact.
+
+*Note: This plan identifies risks and structures validation; it does not certify the system as safe or unbiased. The final decision to deploy rests with Jakarta SmartCity leadership.*
+*Legal or regulatory obligations regarding automated traffic control decisions should be verified by counsel.*

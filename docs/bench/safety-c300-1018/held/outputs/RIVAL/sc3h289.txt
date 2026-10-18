@@ -1,0 +1,34 @@
+### Pre-Launch Safety Assessment Plan: Glucose Data Continuity
+
+**1. Testing Framework: State-Transition & Latency Matrix**
+Since background processing is restricted on older OS versions, the assessment must verify behavior at the exact moment the OS suspends the app. Do not rely on standard functional testing. Implement a "State-Transition Matrix" covering:
+*   **Screen States:** Active, Dimmed, Locked, Sleep Mode.
+*   **Network States:** Wi-Fi only, Cellular, Airplane Mode (recovery), Low Signal.
+*   **Battery States:** Normal, Low Power Mode (critical for background restrictions).
+*   **App States:** Foreground, Background (suspended), Terminated.
+
+**Execution Protocol:**
+*   **Simulated Sensor Feed:** Use a hardware-in-the-loop simulator to inject a rapid hypoglycemic drop (e.g., 4.0 mmol/L to 2.5 mmol/L over 15 minutes) while cycling the device through the matrix states.
+*   **Latency Measurement:** Log the timestamp of the sensor event vs. the timestamp of the user-visible alert. On restricted devices, define a "Critical Failure" as any delay exceeding 2 minutes or total data loss during sleep.
+*   **Wake-Up Verification:** Test if the app can successfully wake the device or trigger a high-priority notification when the threshold is breached while the app is suspended. If the OS blocks this, it is a confirmed gap.
+
+**2. Risk Mitigation: Warnings and Fallbacks**
+Given the three-week timeline and hard OS constraints, you cannot engineer a workaround for kernel-level sleep restrictions on unsupported hardware. You must manage user expectation and liability.
+
+**A. Dynamic Hardware Compatibility Warning (Onboarding & Settings)**
+*   **Detection:** On app launch, detect the device model and OS version.
+*   **Action:** If the device is on the "Restricted List" (older models with aggressive sleep policies), display a mandatory, non-dismissible warning before data viewing begins.
+*   **Wording:** "Warning: Your device model restricts background data to save battery. Critical glucose alerts may be delayed or missed when the screen is off. For safety, keep this screen active or use a dedicated receiver."
+*   **Visual Cue:** Use a persistent amber banner in the app header whenever the app detects it is running in a background-restricted state.
+
+**B. Operational Fallbacks**
+*   **"Keep Awake" Mode:** Implement a user-toggled option that prevents the screen from sleeping while the app is open. This bypasses the sleep-state data gap but increases battery drain. Clearly label this: "Enables continuous monitoring; battery usage will increase significantly."
+*   **Manual Polling Prompt:** If the app detects it has been suspended for >5 minutes, force a full-screen overlay upon reopening: "Monitoring was paused by the system. Please verify your current status with a finger-stick test if you feel symptoms."
+*   **Fallback Communication:** Explicitly advise users on unsupported hardware to rely on the physical receiver (if available) or set redundant external alarms, rather than trusting the app solely for hypoglycemia detection during sleep.
+
+**3. Go/No-Go Criteria**
+*   **Go:** All supported devices show <60-second latency in all states; unsupported devices display mandatory warnings and "Keep Awake" options function correctly.
+*   **No-Go:** Any supported device fails to alert within 2 minutes; warnings on unsupported devices can be bypassed or are unclear.
+
+*Note: This plan assumes no code changes to the OS-level background services are possible within three weeks. Legal review of the warning wording is required immediately.*
+*Ensure the "Restricted List" of device models is documented in the release notes for transparency.*

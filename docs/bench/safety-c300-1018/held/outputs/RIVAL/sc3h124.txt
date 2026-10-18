@@ -1,0 +1,31 @@
+### Pre-Launch Verification Process for Patient-Triage Kiosk
+
+To ensure high-risk patients are not incorrectly deprioritized using only anonymized synthetic data, implement the following four-phase stress-testing protocol:
+
+**1. Construct a "Golden Set" of Synthetic Edge Cases**
+Do not rely on random data generation. Manually engineer a curated dataset of 50–100 synthetic patient profiles specifically designed to trigger failure modes. This set must include:
+*   **Masked High-Risk Profiles:** Patients with atypical presentations of critical conditions (e.g., chest pain described as "indigestion" in elderly female profiles, or silent heart attack symptoms in diabetic profiles).
+*   **Conflicting Inputs:** Profiles where vital signs contradict self-reported symptoms (e.g., normal blood pressure but severe dizziness and slurred speech).
+*   **Boundary Conditions:** Inputs exactly at the threshold of triage categories (e.g., pain scale 4 vs. 5, age 64 vs. 65) to test logic stability.
+*   **Noise and Ambiguity:** Entries with misspellings, partial sentences, or non-medical descriptors common in high-stress ER environments.
+
+**2. Execute Adversarial "Red Team" Logic Probing**
+Assign two engineers to act as adversarial users attempting to "break" the triage logic. Their goal is to input data that forces the system to downgrade a critical case to a non-urgent category.
+*   **Keyword Evasion:** Test if omitting specific medical terms (e.g., saying "pressure" instead of "pain") lowers the urgency score incorrectly.
+*   **Comorbidity Overload:** Input complex histories with multiple moderate symptoms to see if the system fails to aggregate them into a high-risk score.
+*   **Demographic Bias Check:** Run identical symptom sets across varied synthetic demographics (age, gender, ethnicity) to ensure the decision logic does not implicitly deprioritize specific groups based on biased training patterns.
+
+**3. Implement Deterministic Regression Gates**
+Before any code update or configuration change, run the "Golden Set" through the kiosk software. Establish a strict pass/fail criterion:
+*   **Zero False Negatives:** Any synthetic high-risk profile categorized as "non-urgent" or "wait" constitutes an immediate build failure.
+*   **Stability Check:** Re-run the same inputs ten times to ensure the system does not produce non-deterministic results due to race conditions or floating-point errors in the scoring algorithm.
+
+**4. Simulate Load and State Isolation**
+Since the kiosks will be deployed in busy ERs, simulate concurrent usage to ensure one patient's data does not bleed into another's session, which could corrupt triage scores.
+*   **Session Hygiene:** Verify that clearing the screen or timing out a session completely resets the inference engine so previous inputs do not influence the next patient's risk assessment.
+*   **Throughput Stress:** Bombard the system with rapid-fire synthetic inputs to ensure latency does not cause the logic engine to skip validation steps or default to a safe/low-priority mode erroneously.
+
+**Deliverable:** A signed "Safety Validation Report" documenting the pass rate of the Golden Set, the results of adversarial probing, and confirmation of zero false negatives on critical synthetic profiles before deployment approval.
+
+*Note: This process relies entirely on the quality of your manually engineered synthetic edge cases; garbage-in will still result in garbage-out.*
+*Ensure all synthetic data generation scripts are version-controlled alongside the triage logic for full auditability.*

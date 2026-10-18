@@ -1,0 +1,41 @@
+### Pre-Deployment Safety Strategy for Mumbai CareFlow Dispenser
+
+**Immediate Halt on Full Automation:** Given the risk of swapping morning and evening doses for similar-looking tablets, you cannot launch with fully autonomous execution for this specific failure mode. This is a high-stakes, irreversible action (potential overdose/underdose) that requires a **human-in-the-loop gate** or explicit user confirmation before the device dispenses when similarity scores are high. Do not ship a feature that auto-executes this action without a safeguard.
+
+**1. Harm Inventory (MAP)**
+Before testing, document the specific harm: **Unsafe automation of high-stakes actions**.
+*   **Affected:** Elderly patients with complex chronic conditions.
+*   **Worst Case:** Fatal overdose or therapeutic failure due to swapped doses.
+*   **Secondary Harm:** Over-reliance (users trusting the device despite visual ambiguity).
+
+**2. Measurement Plan (MEASURE)**
+Since you cannot use external partners or new hardware, you must rigorously test the *logic* and *interface* using your existing lab.
+*   **Adversarial Probe Set:** Create a "worst-case" library using your existing inventory. Pair medications with identical shapes/colors but different dosing times. If physical pills are limited, use high-fidelity 3D printed proxies or colored resin casts that match the optical properties of the real pills.
+*   **Test Rows:**
+    *   *Positive Control:* Intentionally load swapped pills into the hopper. The system **must** flag the discrepancy or refuse to dispense, not proceed.
+    *   *Negative Control:* Load distinct pills; system should dispense normally.
+    *   *Metric:* Zero tolerance for silent failures (swapping without alert).
+    *   *Stop Condition:* If the device dispenses the wrong dose without a hard stop or alarm in any probe, the launch is blocked.
+*   **Uncertainty Display:** If the camera/sensor confidence is below a strict threshold, the device must not guess. It must display a clear, coarse-tier status (e.g., "UNVERIFIED – Please Check Manually") rather than a false-precision percentage.
+
+**3. Risk Management (MANAGE)**
+*   **Human Gate:** For any regimen where pills are visually similar, the device must require a manual confirmation step (e.g., "Scan barcode on blister pack" or "Press confirm after visual check") before releasing the dose. This breaks the automation bias.
+*   **Transparency Artifact:** Draft a **Model/Data Card** for internal and user use. It must state:
+    *   *Intended Use:* Dispensing distinct pills; limited capability on similar-looking tablets.
+    *   *Limitations:* Explicitly list the pill pairs that triggered alerts during testing.
+    *   *Owner:* Name the specific developer/pharmacist pair responsible for this logic.
+    *   *Status:* Mark any untested pill combinations as **UNVERIFIED**. Do not invent a "99% accuracy" claim.
+
+**4. Governance (GOVERN)**
+*   Assign a single owner for the "swap risk" who must sign off on the test results.
+*   Route the question of legal disclosure requirements (e.g., informing patients of the limitation) to legal counsel immediately; do not assert compliance internally.
+
+**Definition of Done for Pilot:**
+1.  Harm inventory recorded with worst-case scenarios.
+2.  High-risk swaps trigger a mandatory human confirmation step (no full auto).
+3.  Adversarial tests run with zero silent failures.
+4.  Transparency card published listing known limitations and UNVERIFIED cases.
+5.  No fabricated safety metrics; residual risks clearly stated.
+
+*Note: This strategy prioritizes patient safety over launch speed; if the human gate cannot be implemented in three weeks, the pilot for affected regimens must be delayed.*
+*Legal duties regarding automated medical decisions must be verified by counsel, not assumed by the engineering team.*

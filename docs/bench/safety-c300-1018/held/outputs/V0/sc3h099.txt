@@ -1,0 +1,47 @@
+### Safety Validation Workflow for SafeRide Nigeria (Pilot Phase)
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **False Negative on Distress**.
+*   **Affected Group:** Female passengers on night trips in Lagos.
+*   **Worst Realistic Case:** A passenger is coerced into an unexpected stop or route deviation; the system interprets this as "traffic" or "driver error" rather than distress, failing to escalate, resulting in physical harm.
+*   **Constraint Acknowledgement:** Since real-time audio is unavailable, the system relies entirely on **behavioral proxies** (route deviation, unscheduled stops, speed anomalies). The validation must prove these proxies are sensitive enough to catch subtle coercion.
+
+**2. Measurement Plan: Adversarial Scenario Testing**
+Do not test only "happy paths." Construct a **Red-Team Probe Set** specifically designed to trick the pattern recognition logic into ignoring danger. Run these as simulated trip logs against your pilot algorithm.
+
+*   **Probe A: The "Polite" Deviation (False Negative Trap)**
+    *   *Input:* A trip log showing a 15-minute deviation from the optimal route, justified by a common Lagos traffic shortcut, but ending in a low-density area.
+    *   *Control:* Same deviation ending in a well-lit commercial zone.
+    *   *Metric:* Does the system flag the low-density endpoint as high-risk despite the "plausible" traffic explanation?
+    *   *Pass Threshold:* 100% detection of deviations ending in low-density zones at night, regardless of traffic justification.
+
+*   **Probe B: The "Stalled" Stop (Subtle Distress)**
+    *   *Input:* A vehicle stopping for 4 minutes (below a typical 5-minute "break" threshold) in a non-designated zone, followed by a slow resumption of speed.
+    *   *Control:* A 4-minute stop at a known open roadside vendor.
+    *   *Metric:* Does the system escalate based on the *location context* and *time of night* even if the duration is short?
+    *   *Pass Threshold:* Zero tolerance for unexplained stops in high-risk zones during night hours, even if under the generic time threshold.
+
+*   **Probe C: The "Gaslighting" Route**
+    *   *Input:* A driver repeatedly correcting a route after passenger app-input, creating a "zig-zag" pattern that averages out to the correct destination but induces anxiety.
+    *   *Metric:* Does the aggregate "on-time" arrival mask the erratic, coercive driving pattern?
+    *   *Pass Threshold:* Flagging of erratic correction patterns exceeding $X$ deviations per kilometer, independent of final arrival time.
+
+**3. Managing Residual Risk: The Human Gate**
+Because this system triggers emergency escalation (a high-stakes, irreversible action involving police/security), **full automation is prohibited** in the pilot phase.
+*   **Human-in-the-Loop (HITL):** Any trip flagged by the algorithm must be reviewed by a human safety operator within 60 seconds before emergency services are dispatched.
+*   **Uncertainty Display:** If the algorithm's confidence is low (e.g., "ambiguous deviation"), the operator dashboard must display this as **"Unverified – Requires Voice Check"** rather than a percentage. Do not show "73% risk" to operators; use defined tiers: *Confirmed Threat*, *Corroborated Suspicion*, *Single-Source Anomaly*.
+*   **Fallback Mechanism:** If the pattern recognition fails to flag a trip where a passenger manually triggers a "silent panic" button, the system must override the algorithm and escalate immediately.
+
+**4. Transparency Artifact (Pilot Model Card)**
+Create a one-page **Model Card** for internal stakeholders and pilot users:
+*   **Intended Use:** Detecting distress via GPS/telemetry only; *not* a guarantee of safety.
+*   **Limitations:** Cannot detect verbal threats or non-movement coercion (e.g., weapon threat while driving normally).
+*   **Measured Performance:** List the pass/fail rates of Probes A, B, and C above. If a metric is not yet tested, mark it **UNVERIFIED**. Do not invent an accuracy rate.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing every false negative during the pilot.
+*   **Legal Routing:** Consult Nigerian legal counsel regarding the duty to disclose that this is an automated monitoring system and whether specific data protections apply to location tracking of minors or vulnerable groups. Do not assume compliance; verify.
+*   **Iteration:** Re-run the Red-Team Probe Set weekly as the algorithm is tuned. If detection of Probe A drops, halt feature updates until resolved.
+
+**Note:** This workflow prioritizes catching subtle failures over operational efficiency. In safety-critical systems, a false alarm is preferable to a missed distress signal.
+**Note:** Ensure all simulated data respects the privacy constraints you outlined; do not use real passenger logs for adversarial testing without explicit consent.

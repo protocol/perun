@@ -1,0 +1,35 @@
+**Pre-Deployment Safety Strategy for Mumbai CareFlow**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, formally record the specific failure: "Swapped morning/evening doses due to similar pill shape/color."
+*   **Affected Group:** Elderly patients with complex chronic conditions (high vulnerability to dosage errors).
+*   **Worst Realistic Case:** Acute toxicity from double-dosing or therapeutic failure from missed doses, leading to hospitalization or death.
+*   **Classification:** This is a **high-stakes, irreversible automated action**. The device acts on the user's behalf with direct physical consequences.
+
+**2. Measurement Plan: Internal Adversarial Stress-Testing**
+Since external validation is unavailable, you must simulate failure modes aggressively within your existing lab using a "one test row per harm" approach:
+*   **Probe Set Construction:** Do not only test "happy paths." Create a physical library of "adversarial pairs": pills with identical shapes but different colors, identical colors but different shapes, and high-similarity pairs (e.g., same shape, slightly different shade).
+*   **Positive Controls:** Intentionally load the device with known swapped pairs to verify the system *detects* the error or fails safely (e.g., refuses to dispense) rather than dispensing incorrectly.
+*   **Negative Controls:** Load distinct pills to ensure the system does not generate false positives (refusing to dispense correct meds).
+*   **Metric & Threshold:** The pass threshold for any high-similarity pair must be **zero incorrect dispenses**. Any single swap is a stop condition.
+*   **Injection Testing:** Simulate user error by placing pills in wrong slots manually to see if the logic catches the mismatch before dispensing.
+
+**3. Risk Management: The Human Gate**
+Because this involves irreversible physical harm, **full autonomous execution without a human gate is the failure mode you must prevent.**
+*   **Mandatory Confirmation:** For any regimen containing high-similarity pills, the device must require a human confirmation step (e.g., a caregiver app notification or a physical button hold) before releasing the dose. Do not rely on the algorithm alone to distinguish them.
+*   **Uncertainty Display:** If the device uses cameras/sensors, do not display raw confidence scores (e.g., "92% sure"). Instead, use defined coarse tiers: **"Verified Match"** (green) vs. **"Unverified – Check Manually"** (amber/red). If the system cannot definitively distinguish the pill, it must default to "Unverified" and halt.
+*   **Reversibility:** Ensure the physical design allows the user to easily retrieve and inspect pills *before* ingestion, and that the device logs every dispense event for audit.
+
+**4. Transparency Artifact (Model/Data Card)**
+Draft a one-page "Device Limitations Card" for the pilot users and caregivers:
+*   **Intended Use:** Dispensing for specific chronic regimens.
+*   **Known Limitations:** Explicitly list that pills with [Specific Shape/Color combinations] require manual verification.
+*   **Owner:** Name the specific developer/pharmacist pair responsible for this logic.
+*   **Status:** Mark performance on high-similarity pairs as **"UNVERIFIED"** until your internal stress tests pass. Do not claim "0% error rate" without data.
+
+**5. Governance & Go/No-Go**
+*   **Owner Assignment:** Assign one pharmacist and one developer as joint owners of this specific harm. They must sign off on the test results.
+*   **Stop Condition:** If the adversarial stress test yields even one swapped dose, the pilot launch must be delayed or restricted to regimens without similar-looking pills.
+*   **Legal Routing:** Whether this device triggers specific medical device regulations or mandatory AI disclosures in your jurisdiction is a legal determination. Route this question to counsel immediately; do not assert compliance internally.
+
+**Note:** A "tight budget" does not justify skipping the human gate for high-stakes actions; it only limits the *scale* of testing, not the *safety floor*. If the internal tests cannot prove safety for similar pills, restrict the pilot to distinct pills only.

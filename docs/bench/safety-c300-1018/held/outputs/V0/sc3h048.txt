@@ -1,0 +1,38 @@
+### Pre-Launch Bias Audit Plan: Discipline Predictor
+
+**1. Harm Inventory & Stakeholder Mapping**
+Before testing, formally document the specific risk: **Systematic disadvantage based on socioeconomic status.**
+*   **Affected Group:** Students from low-income households (proxied by family income data).
+*   **Worst Realistic Case:** The tool falsely flags low-income students for suspension at higher rates than peers with identical behavioral records, leading to unnecessary disciplinary action, stigmatization, and the "criminalization of poverty."
+*   **Constraint Acknowledgement:** Note that outdated software preventing variable isolation is a critical failure point. If income cannot be technically isolated from other factors during analysis, the model's logic is opaque and un-auditable.
+
+**2. Measurement Strategy (The Eval)**
+Do not assert fairness; measure it. Construct a test set with the following rows:
+*   **Positive Control (Known Bias):** Create synthetic profiles where *only* the income variable differs (Low vs. High), keeping attendance and behavioral history identical.
+    *   *Pass Condition:* The flagging rate must be statistically identical across income levels. Any divergence indicates direct bias.
+*   **Negative Control (Known Fairness):** Profiles with high-risk behavioral markers but varying incomes.
+    *   *Pass Condition:* Flags should trigger based on behavior, not income.
+*   **Subgroup Slice:** Run the model on historical data sliced by school zone or demographic clusters known to correlate with lower income.
+    *   *Metric:* False Positive Rate (FPR) disparity. If low-income students are flagged as "high risk" but do not subsequently exhibit the predicted behavior at the same rate as higher-income peers, the model is biased.
+*   **Stop Condition:** If the FPR for low-income students exceeds that of higher-income students by any margin (zero tolerance for gated irreversible actions like suspension), **block launch**.
+
+**3. Managing Residual Risk**
+*   **Human-in-the-Loop Gate:** Because suspension is a high-stakes, potentially irreversible action with severe life impacts, **no automated flag should result in immediate disciplinary action.** Every output must be reviewed by a human administrator who is explicitly trained to understand the model's potential socioeconomic bias. The tool should serve as a *support* for review, not a *decision-maker*.
+*   **Transparency & Disclosure:**
+    *   **Model Card:** Publish a document detailing the intended use, the specific limitation regarding the inability to isolate income variables due to software constraints, and the results of the bias evals above.
+    *   **Uncertainty Rendering:** Do not present a "risk score" (e.g., "87% likely to suspend") as precise fact. Use defined coarse tiers (e.g., "Review Recommended" vs. "No Action") and clearly state that the underlying data has known confounding variables.
+*   **Addressing the Software Constraint:** If the software cannot isolate income variables, you cannot verify that the model isn't simply proxying poverty through attendance. **Recommendation:** Delay deployment until the technical debt is resolved. Launching with known unisolated variables is an unmanaged high-stakes risk.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Assign a specific individual responsible for reviewing every flagged case and re-evaluating the model quarterly.
+*   **Legal Duty:** The use of automated decision-making in education, particularly involving minors and socioeconomic data, may trigger regulatory scrutiny (e.g., civil rights laws, emerging AI regulations). **Route immediately to legal counsel** to determine if this tool constitutes a regulated automated decision requiring specific disclosures or prohibitions. Do not assume compliance.
+
+**Definition of Done for this Audit:**
+1.  Harm inventory documented with "criminalization of poverty" as the primary risk.
+2.  Bias evals run with positive/negative controls; results reported as `UNVERIFIED` if software constraints prevent clean isolation.
+3.  Human-in-the-loop gate enforced for all flags.
+4.  Model Card published acknowledging data limitations.
+5.  Legal counsel consulted on regulatory duties.
+
+**Note:** If the software constraint prevents isolating income, you cannot prove the tool is unbiased; you can only prove it is unverified. Launching under these conditions carries significant ethical and legal liability.
+**Note:** Never certify this tool as "fair" or "unbiased." Report the residual risk and let the district leadership make the final ship decision.

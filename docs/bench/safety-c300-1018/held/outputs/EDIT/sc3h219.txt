@@ -1,0 +1,24 @@
+**Pre-Launch Verification Strategy & Fail-Safe Mechanisms**
+
+Given the critical nature of automated mode switching and the inability to patch implanted firmware, your verification plan must prioritize exhaustive simulation and hardware-enforced safety floors over statistical confidence claims. No test suite can certify the system as "safe" or "unbiased"; instead, you must document residual risks and enforce strict human gates.
+
+**1. Simulation and Verification Plan**
+Construct a "Harm Inventory" specifically for mode-switch failures, detailing worst-case scenarios (e.g., failure to switch during sustained atrial tachyarrhythmia leading to stroke). For each identified harm, execute a runnable test row containing:
+*   **Probe Sets:** Use adversarial inputs including noisy signals, overlapping arrhythmias, and edge-case heart rates. Include known-bad positive controls (clear arrhythmia that must trigger a switch) and known-good negative controls (sinus rhythm that must not trigger).
+*   **Subgroup Analysis:** Test performance across varied signal qualities and patient physiologies, not just aggregate accuracy.
+*   **Stop Conditions:** Define explicit failure thresholds that block launch. For irreversible or high-stakes actions like this, propose zero tolerance for false negatives in gated scenarios.
+*   **Red-Teaming:** Specifically probe for logic errors where the algorithm might "hallucinate" an arrhythmia from noise or miss one due to signal artifact.
+
+Report all results as residual risk. If a metric (e.g., false negative rate) has not been measured against a specific subgroup, label it `UNVERIFIED` rather than extrapolating a number.
+
+**2. Fail-Safe Mechanisms**
+Because this feature executes a high-stakes, potentially irreversible medical action, full autonomous execution without safeguards is the primary failure mode to prevent. Embed the following:
+*   **Human-in-the-Loop Gate:** While real-time switching is automatic, the *activation* of this specific algorithmic mode for a patient should require explicit clinician confirmation based on the model card's limitations.
+*   **Defined Confidence Tiers:** Do not surface raw probability scores (e.g., "87% chance of AT") to clinicians or logs as fact. Instead, map internal scores to defined coarse tiers (e.g., "Confirmed," "Corroborated," "Unverified") with clear textual definitions. This prevents automation bias where a clinician trusts a precise-looking number that lacks calibration.
+*   **Reversibility and Override:** Ensure the device allows immediate, easy manual override by the patient or clinician to revert to a baseline pacing mode if the automated switch appears erroneous.
+*   **Transparency Artifact:** Produce a versioned Model Card and Data Card before launch. These must state the intended use, data provenance, measured performance by subgroup, and known failure modes. The absence of these cards is a critical transparency finding.
+
+**3. Governance and Compliance**
+This feature likely falls under high-risk regulatory regimes (e.g., EU AI Act, medical device regulations). Do not assert legal compliance internally. Immediately route the determination of legal disclosure duties and regulatory binding status to legal counsel and your business operations team. Name the relevant regimes but encode no dates or version numbers, as these change. Assign a specific owner to re-review these harms whenever the detection logic or training data changes.
+
+**Note:** This plan identifies controls and measurement strategies; it does not certify the device as safe for implantation. The final ship decision rests with the product owner based on the reported residual risks.

@@ -1,0 +1,41 @@
+**BLUF: Do not ship the automatic switch without a human-in-the-loop gate or an immediate, non-software fail-safe.**
+
+Your current plan contains a critical safety failure: relying solely on software estimation for a high-stakes, irreversible action (switching life-support oxygen) where the worst-case scenario is patient hypoxia or death. Because you cannot add redundant physical sensors due to budget constraints, you must treat the software's estimation as **unverified** for safety-critical decisions until proven otherwise under extreme conditions. A "rigorous stress-test" alone is insufficient to certify safety; it only measures residual risk.
+
+**Immediate Action Plan (Before Any Testing):**
+1.  **Implement a Human/Physical Gate:** Since the action is irreversible and high-stakes, the system must either alert a human caregiver to confirm the switch *before* execution or trigger a purely mechanical/hardware-based backup switch that does not rely on the algorithm's estimation of breathing patterns. Fully autonomous execution based on unproven software logic is the failure mode you must prevent.
+2.  **Define Confidence Tiers, Not Percentages:** Do not display raw confidence scores (e.g., "87% sure tank is empty") to users or logs. Define coarse, clear tiers (e.g., "Confirmed Empty," "Likely Empty," "Uncertain") with explicit definitions for each. If the system enters the "Uncertain" tier, it must default to a safe state (e.g., alarm) rather than guessing.
+3.  **Create a Harm Inventory:** Document the specific harm: "Algorithm fails to detect tank empty during rapid breathing anomaly, causing oxygen interruption." The affected party is the patient; the worst case is severe injury or death.
+
+**Stress-Testing Regimen (To Measure Residual Risk, Not Certify Safety):**
+Once the gate above is in place, execute the following evaluation plan. Do not claim the system is "safe" based on these results; report the residual risk.
+
+*   **Probe Set A: Rapid Breathing Anomalies**
+    *   *Inputs:* Simulated flow/pressure data mimicking hyperventilation, gasping, and irregular apnea.
+    *   *Positive Control:* Known tank-empty signal mixed with anomaly (system must switch/alarms).
+    *   *Negative Control:* Normal breathing with full tank (system must not switch).
+    *   *Metric:* False negative rate (failure to switch when empty).
+    *   *Threshold:* Owner-set (recommend zero tolerance for false negatives in gated actions).
+    *   *Stop Condition:* Any failure to switch/alarms in a positive control scenario blocks launch.
+
+*   **Probe Set B: Sensor Noise & Drift**
+    *   *Inputs:* Degraded sensor data simulating hardware aging or interference.
+    *   *Metric:* Rate of incorrect estimation leading to premature or delayed switching.
+    *   *Stop Condition:* Any instance where noise causes a missed switch.
+
+*   **Probe Set C: Edge Case Transitions**
+    *   *Inputs:* Sudden patient movement, coughing fits, or equipment disconnection.
+    *   *Metric:* System stability and correct classification of "empty tank" vs. "temporary flow drop."
+
+**Reporting Requirement:**
+Produce a **Model Card** for this feature before shipping. It must state:
+*   **Intended Use:** Home care oxygen monitoring.
+*   **Limitations:** Explicitly list the breathing patterns where performance is `UNVERIFIED` or known to be weak.
+*   **Measured Performance:** Report results by subgroup (e.g., patients with COPD vs. healthy simulators), not just aggregate accuracy.
+*   **Owner:** Name the specific engineer accountable for this output harm.
+
+**Legal & Compliance Note:**
+Whether this automated decision falls under specific medical device regulations (e.g., EU MDR, FDA guidelines) or requires specific AI disclosures is a legal determination. Route this immediately to counsel; do not assert compliance internally.
+
+**Note:** No metric invented here proves the system is "safe." If the stress tests reveal any false negatives, the system must not ship in autonomous mode.
+**Note:** Budget constraints do not override the requirement for a human gate on life-critical actions.

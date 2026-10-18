@@ -1,0 +1,28 @@
+### Safety Validation Strategy for Medical Alert Suppression
+
+**1. Harm Inventory (MAP)**
+Before simulation, explicitly record the specific risks of this feature:
+*   **Unsafe Automation:** The system suppresses a warning that is actually critical for a rare blood type, leading to a missed intervention.
+*   **Bias/Exclusion:** Synthetic data fails to represent the full physiological variance of rare conditions, causing the model to perform well in testing but fail on real edge cases.
+*   **Over-reliance:** Nurses trust the silence of the system, assuming "no alert" equals "no issue," despite the known suppression logic.
+
+**2. Simulation & Measurement Plan (MEASURE)**
+Since real patient records are inaccessible, your synthetic data generation must be adversarial, not just representative.
+
+*   **Construct "Known-Bad" Positive Controls:** Do not only generate typical rare-blood-type scenarios. Deliberately synthesize edge-case physiological states where a non-critical warning *would* normally trigger but, in this specific rare context, indicates an imminent critical event. If your suppression rule silences these specific synthetic inputs, the test fails immediately.
+*   **Construct "Known-Good" Negative Controls:** Generate scenarios where alerts are genuinely non-critical for these patients. The system must suppress these without error.
+*   **Define Stop Conditions:** Establish a zero-tolerance threshold for "missed critical events" in the simulation. If the suppression logic fails to flag a single synthesized critical event for a rare blood type, the feature cannot ship.
+*   **Stress Test the Synthetic Data:** Treat the data generator itself as a risk. Have a separate team attempt to break the synthetic data coverage by proposing rare physiological combinations the generator might miss. If the generator cannot create them, you cannot verify safety for them.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the high-stakes and irreversible nature of missed medical events, fully autonomous suppression is unsafe. Implement a "soft suppression" or "tiered alert" where the alarm is visually de-emphasized but still present, or requires a rapid human confirmation before being silenced, rather than disappearing entirely.
+*   **Defined Uncertainty Tiers:** Do not present the suppression decision as a binary "safe/unsafe" fact. If the system is unsure due to data sparsity in rare conditions, it must default to "Alert" or "Unverified" rather than suppressing.
+*   **Transparency Artifact:** Create a model card documenting the limitations of the synthetic data, the specific rare conditions covered, and the explicit admission that real-world validation is pending. This must be visible to the clinical staff using the system.
+
+**4. Governance (GOVERN)**
+*   **Owner Assignment:** Name a specific clinician and engineer jointly responsible for the suppression logic.
+*   **Legal Routing:** Because this involves automated decisions affecting health outcomes, route the question of regulatory compliance (e.g., EU AI Act, medical device regulations) to legal counsel immediately. Do not assert compliance internally.
+*   **Re-review Trigger:** Mandate an immediate re-evaluation if the synthetic data model changes or if any real-world near-miss is reported post-deployment.
+
+**Note:** Never certify this system as "safe" or "unbiased" based on simulation alone; report residual risk as "UNVERIFIED" for scenarios where synthetic data coverage is uncertain.
+**Note:** Ensure the "silence" of the device is disclosed to nurses as an automated decision, not an absence of data.

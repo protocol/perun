@@ -1,0 +1,34 @@
+### Harm Inventory & Testing Strategy for Emergency Translation
+
+**1. Harm Inventory (MAP)**
+Before deployment, explicitly record these specific risks for Kuala Lumpur emergency contexts:
+*   **Hallucination as Fact:** The API generates plausible-sounding but incorrect instructions (e.g., wrong evacuation routes or shelter locations) presented with authority.
+*   **Bias/Exclusion:** Dialects or specific local terms used in Malaysian emergency contexts are mistranslated or ignored, disadvantaging specific communities.
+*   **Unsafe Automation:** Critical warnings are sent automatically without human verification, leading to irreversible panic or misdirection during a disaster.
+*   **Over-reliance:** Users trust the translation implicitly because it lacks uncertainty indicators, despite the known error rate.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure it. Since you lack native speakers, you must construct adversarial tests using available resources:
+*   **Probe Set Construction:** Create a "Golden Set" of 50–100 critical safety phrases (e.g., "Flash flood warning," "Evacuate immediately," "Do not drink tap water").
+    *   *Positive Controls:* Include known difficult cases (idioms, local place names) where you manually verify the ground truth using official government bilingual documents available online.
+    *   *Negative Controls:* Include nonsense inputs to ensure the system doesn't hallucinate safety advice from garbage data.
+*   **Back-Translation Loop:** Automate a test where English → Target Language → English. Flag any message where the round-trip meaning shifts significantly (e.g., "Evacuate" becomes "Stay indoors").
+*   **Metric & Threshold:** Define a "Critical Failure" as any mistranslation altering the action verb, location, or urgency level.
+    *   *Stop Condition:* **Zero tolerance** for critical failures in the Golden Set. If even one critical safety warning fails the back-translation check or contradicts the official source, the feature must not launch autonomously.
+*   **Injection & Leakage:** Test if user-supplied context (e.g., a citizen report) can inject malicious instructions into the system's output.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the high stakes (life safety) and current inability to verify with native speakers, **fully autonomous deployment is unsafe.** Implement a mandatory human review step for all outgoing emergency alerts before they reach the public. If staffing is short, limit the system to drafting translations for a single on-call supervisor to approve, rather than auto-sending.
+*   **Uncertainty Disclosure:** Do not display raw confidence scores (e.g., "98% accurate"). Instead, if the system detects low confidence or a complex sentence structure, flag the output visually as "Unverified – Requires Human Check" for the operator.
+*   **Transparency Artifact:** Draft a **Model Card** for this feature. It must state:
+    *   *Intended Use:* Drafting emergency translations for operator review.
+    *   *Limitations:* "Not verified by native speakers; known risk of dialect errors; do not use for fully automated public alerts."
+    *   *Owner:* Name the specific engineer responsible for monitoring failure logs.
+
+**4. Governance (GOVERN)**
+Assign one engineer as the owner of this harm inventory. Re-evaluate the system immediately if the API model version changes or if new local dialect data becomes available. Do not fabricate a "0% error rate" to meet the monsoon deadline; report the residual risk as **UNVERIFIED** for any segment not covered by your Golden Set.
+
+***
+
+**Note:** Legal requirements for automated emergency disclosures in Malaysia must be routed to counsel; this strategy recommends human oversight as a safety control, not a legal verdict.
+**Note:** If the "Zero Tolerance" stop condition is met, the only safe path is to delay automation, not lower the threshold.

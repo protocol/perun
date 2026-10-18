@@ -1,0 +1,42 @@
+**Pre-Launch Safety Synthesis Plan: Smart Insulin Pump Lock**
+
+**1. Immediate Harm Inventory (High-Stakes Automation)**
+Given the device controls irreversible biological inputs (insulin dosage), the primary harm is **unsafe automation of high-stakes actions**. Specifically, the locking mechanism creating a "denial of service" against the patient during a hypoglycemic event.
+*   **Affected Group:** Diabetic patients experiencing urgent medical events.
+*   **Worst Realistic Case:** The lock delays or prevents a dosage correction, leading to severe hypoglycemia, loss of consciousness, or death.
+*   **Status:** This is a **gated irreversible action**. Full autonomous locking without an immediate, hard-wired physical or software override is a critical failure.
+
+**2. Verification & Measurement Plan (4-Day Sprint)**
+Do not assert "safe" or "0% failure." Instead, execute these specific tests to measure residual risk:
+
+*   **Test Row A: Urgent Override Latency**
+    *   **Probe:** Simulate keypad input immediately after lock engagement under stress conditions (low battery, high CPU load from simulations).
+    *   **Controls:** Known-good (unlocked state response time) vs. Known-bad (intentional delay injection).
+    *   **Metric:** Time-to-unlock (milliseconds).
+    *   **Stop Condition:** Any latency exceeding the clinical window for emergency correction (define this threshold with your safety officers immediately; do not guess). If exceeded, launch is blocked.
+    *   **Owner:** Lead Safety Officer.
+
+*   **Test Row B: Failure Mode Analysis**
+    *   **Probe:** Force system crashes or power interruptions while the lock is active.
+    *   **Metric:** Does the device default to a safe state (unlocked or last known safe dose) or a hazardous state (locked with no access)?
+    *   **Stop Condition:** Any scenario where the user cannot access the pump without external tools or factory reset.
+
+*   **Test Row C: Human-in-the-Loop Validation**
+    *   **Action:** Since this is a high-stakes medical device, the "lock" logic must include a **human-in-the-loop gate** for any non-routine change, or an immediate physical bypass for emergencies. Verify this bypass exists and functions independently of the main software stack.
+
+**3. Transparency Artifact (Model/Data Card Equivalent)**
+For the regulatory submission, compile a **Device Safety Card** containing:
+*   **Intended Use:** Preventing accidental changes, *not* preventing intentional emergency overrides.
+*   **Measured Performance:** Report the *maximum* observed latency from Test Row A, not an average.
+*   **Known Limitations:** Explicitly state conditions where the lock might engage and the exact steps a user must take to override it.
+*   **Residual Risk:** If any test row yields results near the threshold, label the risk as **UNVERIFIED** for those specific edge cases until further data is gathered. Do not fabricate a "100% reliable" claim.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a single named individual responsible for the "Override Reliability" metric.
+*   **Regulatory Routing:** The question of whether this locking mechanism classifies as a "regulated automated decision" requiring specific legal disclosures under South Korean health law or international standards (e.g., ISO 14971) must be **routed immediately to legal counsel**. Do not assert compliance; provide the test data above for their review.
+*   **Confidence Reporting:** In your documentation, describe the reliability of the override as a defined tier (e.g., "Confirmed via stress testing" vs. "Single-source simulation") rather than a precise percentage (e.g., "99.9%"), as the latter implies a calibration you cannot verify in four days.
+
+**Deliverable Summary:** Execute Test Rows A-C immediately. If any stop condition is met, the feature must be gated or rolled back. Compile the raw results into the Device Safety Card. Route legal classification to counsel.
+
+*Note: This plan addresses product-output safety; it does not replace formal clinical trials or legal certification.*
+*Ensure all "pass" thresholds are set by your clinical safety officers, not engineering estimates.*

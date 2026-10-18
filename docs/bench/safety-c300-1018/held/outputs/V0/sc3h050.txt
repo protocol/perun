@@ -1,0 +1,29 @@
+### Rapid Testing Protocol for Voting Registration Assistant
+
+**1. Immediate Harm Inventory & Triage**
+Define the worst-case harm: systematic disenfranchisement of specific demographics due to incorrect polling locations. Given your reliance on crowd-sourced data, the primary risks are **bias/unfair outcomes** (specific neighborhoods receiving lower-quality data) and **hallucination surfaced as fact** (presenting unverified addresses as official). Stop all fully automated updates to polling locations immediately. Any change to a location address must now trigger a **human-in-the-loop gate** where a volunteer verifies the address against at least one official source (even if manual lookup) before it goes live.
+
+**2. Targeted Output Evaluation (The "One Row Per Harm" Test)**
+Do not test random inputs. Construct a specific evaluation set designed to break your pipeline:
+*   **Probe Set:** Create 50 test cases representing diverse Austin demographics (e.g., specific ZIP codes, historically marginalized neighborhoods, rural vs. urban splits).
+*   **Controls:** Include "known-good" cases (verified official addresses) and "known-bad" positive controls (intentionally inject a wrong crowd-sourced address for a specific demographic to see if your system catches it).
+*   **Metric:** Accuracy rate *by subgroup*, not just overall. If the system is 99% accurate overall but 40% inaccurate for a specific ZIP code, the launch must be blocked for that segment.
+*   **Stop Condition:** If any subgroup shows an error rate >0% on known-good controls, or if the system fails to flag the known-bad positive controls, halt deployment for that segment.
+
+**3. Transparency & Uncertainty Rendering**
+Since your data source is crowd-sourced and varies in quality, you cannot guarantee 100% accuracy. Therefore:
+*   **Never display raw confidence scores** (e.g., "87% sure"). This implies a calibration you do not have.
+*   **Use Defined Coarse Tiers:** Label outputs clearly as **"Officially Verified"** (matched to government DB) or **"Community Reported – Unverified"** (crowd-sourced only).
+*   **Actionable Override:** For "Unverified" results, provide a prominent link/button: "Report an Error" or "Confirm this Location," allowing users to correct the record immediately.
+
+**4. Data Card Artifact**
+Before launch, publish a simple **Data Card** on your site. It must state:
+*   **Intended Use:** Assistance only; not an official government record.
+*   **Data Provenance:** Mix of official databases (where accessible) and crowd-sourced updates.
+*   **Known Limitations:** Explicitly state that some locations are unverified and may be incorrect.
+*   **Owner:** List the volunteer team lead responsible for data integrity.
+
+**5. Legal & Regulatory Routing**
+Because this tool impacts a fundamental right (voting) and involves potential automated decision-making affecting specific groups, **you must route the question of legal disclosure requirements to legal counsel immediately.** Do not assert internally whether you are compliant with election laws or the EU AI Act (if applicable); let counsel determine if specific disclaimers are legally mandatory.
+
+**Note:** An empty harm inventory is not a pass; document the specific demographics tested. Never invent a "0% bias" metric; if a subgroup wasn't tested, mark it **UNVERIFIED**.

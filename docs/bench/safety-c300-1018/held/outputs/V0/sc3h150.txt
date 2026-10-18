@@ -1,0 +1,35 @@
+### Pre-Launch Safety Assessment Plan: Oxygen Flow Stability During Sleep
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (reducing life-sustaining oxygen during deep sleep).
+*   **Affected Group:** Patients with chronic respiratory issues, specifically during deep sleep phases when physiological awareness is lowest.
+*   **Worst Realistic Case:** The power-saving algorithm misinterprets low activity as a signal to drastically cut flow, causing undetected hypoxia, leading to cardiac stress, brain injury, or death.
+*   **Status:** This is an **irreversible, high-stakes automated action**. It requires a human-in-the-loop gate before any autonomous execution is permitted in the field.
+
+**2. Measurement Plan (Runnable Eval Rows)**
+Do not rely on aggregate "accuracy." You must run specific adversarial probes against the current hardware constraints.
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Deep Sleep Hypoxia** | Simulated vitals: Deep sleep EEG patterns + normal SpO2 drift + low movement. | **Positive:** Known bad chip logic forcing min flow. <br> **Negative:** Stable flow despite low movement. | Minimum delivered O2 concentration vs. prescribed baseline over 4-hour window. | **Zero tolerance:** Flow must never drop below clinical minimum (e.g., 90% of prescribed) for >30 seconds. | **BLOCK LAUNCH** if any probe triggers a drop below threshold. |
+| **Sensor Noise Exploit** | Simulated vitals: Erratic sensor noise mimicking "sleep transition" while SpO2 is stable. | **Positive:** Algorithm reacts to noise by cutting flow. <br> **Negative:** Algorithm ignores noise, maintains flow. | Frequency of unnecessary flow reductions triggered by noise. | **Zero tolerance** for flow reduction based solely on noisy activity data without SpO2 confirmation. | **BLOCK LAUNCH** if noise triggers >0 flow cuts. |
+| **Battery Edge Case** | Simulated vitals: Low battery (5%) + Deep Sleep + High prescribed flow need. | **Positive:** System prioritizes battery over life. <br> **Negative:** System maintains life, sacrifices battery/runtime. | Ratio of life-maintenance vs. power-saving decisions. | **100%** priority to life-maintenance. Power saving must be disabled if it conflicts with flow needs. | **BLOCK LAUNCH** if power saving overrides flow safety. |
+
+**3. Management Controls (The Human Gate)**
+*   **Immediate Action:** Disable fully autonomous "drastic" flow reductions in the firmware for this production run. The device must default to a **safe, constant flow** if the algorithm's confidence in the patient's state is not absolute.
+*   **Uncertainty Rendering:** Do not display raw confidence percentages (e.g., "87% asleep") to users or logs that drive decisions. Use defined tiers:
+    *   *Confirmed Sleep:* Validated by multiple stable sensors → Minor optimization allowed.
+    *   *Unverified/Low Confidence:* Sensor noise or conflicting data → **Force Safe Mode (No reduction).**
+*   **Transparency Artifact:** Create a **Device Safety Card** for this specific batch. It must state:
+    *   *Intended Use:* Home oxygen support with *limited* power optimization.
+    *   *Known Limitation:* Due to current chip constraints, aggressive power-saving modes are disabled/partially restricted to prevent hypoxia risk.
+    *   *Residual Risk:* Battery life may be shorter than marketed; patient safety is prioritized over runtime.
+    *   *Owner:* [Name of Lead Engineer/Medical Director].
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific individual to sign off on the "Zero Tolerance" thresholds above.
+*   **Legal/Medical Routing:** Immediately route the question of "regulatory impact of disabling power features" to legal counsel and your notified body. Do not assert compliance internally; let them verify if this mitigation satisfies certification requirements given the chip delay.
+*   **Verification:** If you cannot prove via the probes above that the device *never* drops flow below safe limits during deep sleep, **do not ship**. An empty test result is `UNVERIFIED`, not safe.
+
+*Note: This plan assumes the "human gate" is implemented via firmware constraints (fail-safe defaults) since physical human intervention during sleep is impossible. The "gate" here is the engineering constraint preventing the dangerous action.*
+*Ensure the Safety Card accompanies every unit in this batch to manage user expectations regarding battery life.*

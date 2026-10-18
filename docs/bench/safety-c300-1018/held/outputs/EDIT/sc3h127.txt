@@ -1,0 +1,40 @@
+**Validation Plan: Mumbai FoodSafe Allergy Scanner**
+
+**1. Harm Inventory & Risk Definition**
+Before testing, explicitly record the worst-case scenarios for your specific constraints:
+*   **False Negative (Missed Danger):** The device marks an allergen as "Safe." *Worst Case:* Anaphylaxis or death. This is the primary failure mode to eliminate.
+*   **False Positive (Unnecessary Starvation):** The device marks safe food as "Dangerous." *Worst Case:* User skips meals, leading to malnutrition or loss of trust.
+*   **Over-Reliance:** Users treat the device as infallible without checking labels.
+
+**2. Measurement Strategy (Maximizing Confidence with Limited Samples)**
+Since you cannot access diverse physical samples due to supply chain issues, you must shift from purely physical testing to **adversarial simulation and synthetic stress testing**:
+
+*   **Synthetic Data Augmentation:** Do not rely solely on your limited physical library. Generate synthetic spectral data representing known allergen signatures mixed with complex food matrices (sauces, spices, cooked states) to test the model's decision boundaries without needing new physical shipments.
+*   **Adversarial "Red Team" Probes:** Construct a test set designed to break the classifier:
+    *   *Look-alikes:* Non-allergenic ingredients that spectrally resemble allergens.
+    *   *Trace Contamination Simulations:* Inputs mimicking low-level cross-contamination.
+    *   *Environmental Noise:* Test under varying lighting, temperature, and lens-obstruction conditions typical in Mumbai street food contexts.
+*   **Metric Definition:**
+    *   **Primary Metric:** False Negative Rate (FNR). Target: **Zero tolerance** in validation. Any false negative in testing blocks launch.
+    *   **Secondary Metric:** False Positive Rate (FPR). Measure this to quantify the "starvation risk," but do not optimize it at the expense of FNR.
+    *   **Confidence Reporting:** Do not output raw probabilities (e.g., "92% safe"). Implement a **Coarse Confidence Tier** system:
+        *   *Verified Safe:* High correlation, multiple corroborating signals.
+        *   *Uncertain/Unverified:* Low signal quality or conflicting data. **Action:** Device defaults to "Do Not Eat" or prompts manual label check.
+        *   *Danger Detected:* Clear allergen signature.
+
+**3. Management Controls (The Human Gate)**
+Given the life-threatening stakes and limited calibration data, full automation is unsafe.
+*   **Mandatory Human-in-the-Loop for Uncertainty:** If the device confidence falls into the "Uncertain" tier, it must **not** auto-classify. It must prompt the user: "Cannot verify safety. Please check ingredient label or consult staff."
+*   **Irreversible Action Gate:** The device should never auto-consume or auto-order food. It is an advisory tool. The final decision to eat rests with the human, supported by clear uncertainty disclosures.
+*   **Transparency Artifact (Model Card):** Draft a one-page "Safety & Limitations" card included in the box and app. It must state:
+    *   *Intended Use:* Screening tool, not a medical device replacement.
+    *   *Known Limitations:* Explicitly list food types or conditions where the current sample library is thin (e.g., "Limited testing on fermented regional dishes").
+    *   *Owner:* Name the specific product lead responsible for safety updates.
+
+**4. Governance & Launch Criteria**
+*   **Stop Condition:** If *any* false negative occurs in the adversarial test set, the launch is halted regardless of the two-week deadline.
+*   **Residual Risk Statement:** Do not claim the device is "100% accurate" or "bias-free." Publish the residual risk: "While tested against X scenarios, untested food variations exist. Always verify with staff."
+*   **Legal Routing:** Immediately route the question of "medical device classification" and "liability disclosure requirements" in India to legal counsel. Do not assert compliance internally.
+
+**Note:** This plan prioritizes preventing death (false negatives) over convenience. The "Uncertain" default protects users when your data is insufficient.
+**Note:** Do not fabricate accuracy metrics; if a food type wasn't tested, mark it "UNVERIFIED" in your documentation.

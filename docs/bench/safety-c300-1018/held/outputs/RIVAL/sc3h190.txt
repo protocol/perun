@@ -1,0 +1,28 @@
+### Safety Check Plan for Patient-Mobility-Tracker
+
+To validate the detection logic under intermittent connectivity, your testing approach must shift from verifying continuous data streams to verifying state resilience and gap-tolerant algorithms. The following safety checks address the risk of missing slow deteriorations due to local storage limits and sync delays.
+
+**1. Synthetic Data Gap Injection**
+Do not rely on real-world field trials alone to encounter network failures. Create a synthetic test suite that explicitly simulates specific connectivity patterns:
+*   **The "Silent Week" Scenario:** Simulate 7–10 days of zero connectivity. Verify that the local buffer does not overwrite older data prematurely and that the algorithm, upon re-sync, correctly reconstructs the trend line rather than treating the post-sync data as a sudden anomaly.
+*   **The "Chunked Sync" Stress Test:** Simulate frequent, short bursts of connectivity where only partial datasets transfer. Ensure the server-side logic can ingest out-of-order batches without resetting the user's baseline mobility score.
+
+**2. Local Storage Boundary Verification**
+Since data is stored locally, you must test the device's behavior when storage limits are approached during long offline periods.
+*   **Compression vs. Deletion Logic:** Define and test the eviction policy. If the device must delete old data to save new readings, verify that it prioritizes retaining "trend-significant" data points (e.g., days with notable gait changes) over routine normal days.
+*   **Clock Drift Handling:** Devices offline for weeks may suffer clock drift. Test that timestamps generated locally are correctly normalized upon sync to prevent the algorithm from misaligning the timeline of decline.
+
+**3. Algorithmic Robustness to Sparse Data**
+Your detection logic must distinguish between "no data" and "normal mobility."
+*   **The "Missing Data" Baseline:** Run tests where 40–60% of daily data points are missing. Confirm the system does not flag this sparsity itself as a mobility decline (false positive) nor smooth over a genuine decline hidden within the gaps (false negative).
+*   **Hysteresis Checks:** Ensure that a single day of poor data after a long gap does not trigger an immediate high-severity alert. The system should require a confirmed trend over multiple available data points before escalating to family members, preventing alarm fatigue.
+
+**4. End-to-End Alert Latency Measurement**
+Measure the time delta between a simulated fall/decline event occurring offline and the family member receiving the alert after the next sync.
+*   **Threshold Validation:** Define a maximum acceptable delay (e.g., "Alerts for critical declines must propagate within 1 hour of the first available sync"). Test scenarios where the sync happens just before and just after a threshold crossing to ensure the alert triggers correctly in both cases.
+
+**5. Field Trial Protocol Adjustment**
+For your current five-user trial, implement a "Shadow Mode" logging feature.
+*   Have the device log exactly what it *would* have sent if connectivity were perfect, alongside what it *actually* sent. This allows you to retrospectively calculate the "detection fidelity" lost due to network gaps without compromising user safety.
+
+**Note:** Prioritize testing the "eviction policy" immediately, as data loss on the device is irreversible once overwritten. Ensure all synthetic tests use anonymized patient profiles to maintain privacy compliance during development.

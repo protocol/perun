@@ -1,0 +1,31 @@
+### Incremental Safety Validation Protocol
+
+**Phase 1: Static Mechanical Limits (Bench Testing)**
+Before introducing dynamic feedback loops, validate hard mechanical stops and software torque limits using rigid fixtures.
+*   **Action:** Program the robot to attempt maximum force application against an immovable object.
+*   **Success Criteria:** The robot must cease motion immediately upon reaching the pre-defined torque threshold (e.g., 5 Nm below injury risk levels) without exceeding it, regardless of sensor input.
+*   **Verification:** Use external, calibrated load cells independent of the robot's internal sensors to confirm force output never breaches the safety ceiling.
+
+**Phase 2: Simulated Spasticity Profiles (Hardware-in-the-Loop)**
+Since human variability cannot be fully simulated, use a programmable robotic arm or variable-stiffness dummy to mimic specific, worst-case spasticity events (e.g., sudden high-resistance clonus).
+*   **Action:** Introduce abrupt resistance spikes (0 to 100% resistance in <100ms) while the robot attempts its standard assistance algorithm.
+*   **Success Criteria:** The control loop must detect the resistance anomaly and transition to a "compliant mode" (zero force or back-driving) within 50 milliseconds.
+*   **Verification:** Measure the impulse (force × time) delivered during the spike; it must remain below the threshold for soft tissue damage.
+
+**Phase 3: Controlled Human Pilot (Therapist-Supervised)**
+Conduct trials with healthy volunteers first, followed by a single low-risk patient under strict supervision.
+*   **Action:** Execute standard therapy routines with the safety limits set to 50% of the final target.
+*   **Success Criteria:** No reported pain, discomfort, or unexpected joint deviation. The system must log all resistance feedback and force output for post-session audit.
+*   **Progression:** Only increase force limits by 10% increments after three consecutive successful sessions with no safety interventions triggered.
+
+### Mandatory Manual Override Mechanisms
+
+For the initial deployment to clinics, the following physical and logical overrides must be accessible to the therapist at all times:
+
+1.  **Hardware Emergency Stop (E-Stop):** A large, red, latching physical button wired directly to the motor drivers (hardwired, not software-dependent) that cuts power to all actuators instantly upon activation.
+2.  **Deadman Switch:** A foot pedal or hand-held switch that the therapist must actively press to enable robot motion. If the therapist releases the switch, the robot immediately freezes or enters a gravity-compensation mode.
+3.  **Force-Limit Dial:** A physical potentiometer or keyed software slider allowing the therapist to cap the maximum allowable force output for the current session (e.g., limiting output to "Pediatric" or "Acute" levels) regardless of the software's calculated need.
+4.  **Instant "Go Limp" Command:** A dedicated button on the user interface that commands the robot to zero out all applied forces immediately, allowing the therapist to manually move the patient's limb without resistance.
+
+Note: All override activations must trigger an audible alarm and log the event timestamp, sensor data, and force output for immediate review.
+Do not deploy to patients until Phase 2 demonstrates consistent failure containment under simulated worst-case spasticity.

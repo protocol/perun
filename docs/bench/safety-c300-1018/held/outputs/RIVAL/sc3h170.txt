@@ -1,0 +1,31 @@
+### Pre-Deployment Testing Plan: Smart Insulin Pen Logic
+
+Given the constraint of non-updatable firmware, the testing plan must prioritize "fail-safe" logic verification and redundant manual checks to prevent insulin stacking (administering a corrective dose before the previous dose has finished acting).
+
+#### 1. Critical Failure Scenarios to Simulate
+Test the device logic against these specific edge cases where calculation errors are most likely to occur:
+
+*   **The "Double-Tap" Hardware Glitch:** Simulate a single physical button press that registers as two distinct inputs within milliseconds.
+    *   *Risk:* The device records double the actual dose delivered, causing the "remaining insulin" calculation to drop too low. The patient may then manually inject extra insulin based on the false low reading, leading to hypoglycemia.
+*   **The Boundary Crossing (Midnight Roll-over):** Administer a dose at 23:55 and a corrective dose at 00:15.
+    *   *Risk:* If the device calculates "time since last dose" by subtracting dates rather than tracking a continuous timeline, it might miscalculate the active insulin window, incorrectly clearing the stack too early.
+*   **The "Active Insulin" Decay Error:** Simulate a dose given 2 hours ago (when insulin activity is peaking) followed by a new calculation request.
+    *   *Risk:* If the decay curve algorithm is flawed, the device might overestimate how much insulin has left the system, recommending a new dose that stacks with the active peak.
+*   **Battery Volatility During Write:** Simulate a battery failure or removal immediately after a dose is administered but before the data is permanently saved to non-volatile memory.
+    *   *Risk:* Upon reboot, the device shows no record of the last dose. The patient sees "0 units active" and administers a full corrective dose, causing immediate stacking.
+*   **Maximum Dose Cap Bypass:** Attempt to input a dose exceeding the safety limit (e.g., 50 units) via rapid sequential inputs or specific timing patterns.
+    *   *Risk:* If the cap logic only checks the final state and not the accumulation rate, a user could inadvertently program a lethal dose.
+
+#### 2. Manual Verification Protocol for Patients
+Since the device cannot be patched, patients must act as the secondary verification layer. Distribute this "Safety Triad" card with every pilot unit:
+
+*   **Rule 1: The 3-Hour Hard Stop:** Regardless of what the device says about "remaining insulin," patients must wait a minimum of 3 hours between corrective doses unless directed otherwise by a clinician. This overrides any device calculation.
+*   **Rule 2: The Logbook Cross-Check:** Patients must manually write down the time and dose of every injection in a physical logbook immediately after administration. Before any new dose, they must compare the device screen against their written log. If the device shows "0 active" but the logbook shows a dose within the last 4 hours, **do not inject**; contact support.
+*   **Rule 3: The "Zero" Sanity Check:** If the device ever displays "0 units remaining" immediately after a confirmed dose, or if the "Time Since Last Dose" reads incorrectly (e.g., shows 10 hours when it has been 1), the device is considered compromised. The patient must revert to standard manual syringe/vial protocols and report the unit immediately.
+
+#### 3. Pre-Pilot Execution Steps
+*   **Destructive Testing:** Select 5% of the pilot batch (5 devices) to be intentionally "broken" via battery pulls and rapid-fire inputs to verify the failure modes above. Do not distribute these units.
+*   **Blind Data Entry:** Have team members who did not write the code attempt to confuse the device using the scenarios above. If they can force an incorrect calculation, the logic requires a hardware recall before the pilot begins.
+
+Note: This plan assumes the device has a physical display and input mechanism as described.
+Ensure the physical logbooks provided are waterproof and pocket-sized to encourage compliance.

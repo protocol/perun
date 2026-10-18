@@ -1,0 +1,34 @@
+### Manual Curation and Rapid Response Plan for Child-Safety Filter
+
+**Phase 1: Pre-Launch Whitelist Curation (Days 1–10)**
+Given the API constraints, do not attempt broad regression testing. Instead, execute a targeted "seed and verify" workflow:
+
+1.  **Seed Collection:** Aggregate a static list of high-authority mental health and suicide prevention resources (e.g., government health agencies, recognized non-profits like Crisis Text Line, established educational curricula). Limit this initial seed to the top 50–100 most critical URLs and 200 core keywords/phrases likely to trigger false positives (e.g., "suicide prevention," "self-harm coping," "depression symptoms").
+2.  **Manual Verification Loop:** Assign your six team members to manually review the filter's behavior *only* against this seed list.
+    *   Input each seed URL/term into the system.
+    *   If flagged, immediately add to the whitelist.
+    *   If not flagged, log as "passed."
+    *   *Constraint Check:* This limits API calls to a manageable ~250–300 total, well within fixed limits.
+3.  **Contextual Rule Adjustment:** For terms that cannot be fully whitelisted due to ambiguity (e.g., "cutting" could be art or self-harm), draft specific "allow" rules that require the presence of secondary positive context keywords (e.g., allow "cutting" only if paired with "art class" or "history," block if paired with "blood" or "pain").
+
+**Phase 2: Deployment & Rapid Update Workflow (Days 11–14 + Pilot)**
+Establish a human-in-the-loop protocol to handle false positives reported by teachers during the pilot. Do not automate these updates; every change requires human validation to prevent safety degradation.
+
+1.  **Reporting Channel:** Create a dedicated, simple form for teachers to report blocked resources. Required fields: URL, specific error message, and grade level/subject.
+2.  **Triage Squad:** Designate two team members as the "Rapid Response Pair" on rotating shifts during school hours.
+3.  **The 2-Hour SLA Protocol:**
+    *   **Receipt:** Triage squad receives alert.
+    *   **Verification (Manual):** A squad member manually visits the URL and attempts to reproduce the block.
+    *   **Decision:**
+        *   *False Positive:* Immediately add URL/term to the production whitelist. Log the incident.
+        *   *True Positive (Harmful):* Reply to the teacher explaining the block stands.
+        *   *Ambiguous:* Escalate to the full team for a 15-minute sync decision.
+    *   **Deployment:** Push the whitelist update. Given the small size of the whitelist, this should be a lightweight configuration push, not a full model retrain.
+4.  **Daily Retrospective:** At the end of each pilot day, review all added whitelist entries to ensure no adversarial patterns were exploited (e.g., harmful sites hiding behind mental health keywords).
+
+**Critical Safety Controls**
+*   **No Auto-Whitelisting:** Never allow user reports to automatically update the filter. This prevents bad actors from submitting harmful content disguised as educational resources to bypass the filter.
+*   **Transparency Log:** Maintain a versioned log of every whitelist addition (Who, What, When, Why). This is required for accountability and future auditing.
+*   **Scope Limit:** Explicitly communicate to the school district that this pilot covers *known* resources and reported incidents; it is not a guarantee of 100% coverage due to the manual nature of the curation.
+
+**Note:** This plan prioritizes human verification over automated scale to mitigate the risk of over-blocking critical safety information. Ensure legal counsel reviews the data privacy implications of logging teacher reports before deployment.

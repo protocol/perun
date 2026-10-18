@@ -1,0 +1,32 @@
+### Targeted Fairness Review Plan for Northwind Pets Matcher
+
+Given your constraints of a fixed budget, a five-person team, and an inability to retrain the model before launch, the following plan focuses on **post-hoc analysis and rule-based mitigation** using your existing data. This approach isolates the bias without altering the underlying model weights.
+
+#### Phase 1: Data Stratification and Baseline Audit (Days 1–3)
+Before testing, you must quantify the disparity using your historical application data.
+1.  **Segment by Neighborhood Tier:** Group your historical data into three tiers based on the crime statistics currently used by the model (Low, Medium, High). Do not use demographic labels directly; use the crime score as the proxy variable.
+2.  **Calculate Disparate Impact:** For each tier, calculate the approval rate for applicants who met all other "lifestyle compatibility" criteria (e.g., income stability, housing type, pet experience).
+    *   *Metric:* If the approval rate in the "High Crime" tier is less than 80% of the rate in the "Low Crime" tier, this indicates significant adverse impact under the "four-fifths rule" commonly used in fairness auditing.
+3.  **False Negative Sampling:** Manually review 50 rejected applications from the "High Crime" tier that had high lifestyle scores. Document specific cases where the rejection appears driven solely by the neighborhood score despite strong individual qualifications.
+
+#### Phase 2: Counterfactual Simulation Testing (Days 4–7)
+Since you cannot retrain, you will simulate how decisions *would* change if the neighborhood variable were neutralized. This requires no new code, only data manipulation in your existing environment (e.g., Excel, Python script, or SQL).
+1.  **Create a "Shadow" Dataset:** Duplicate your recent batch of pending applications.
+2.  **Neutralize the Variable:** In the shadow dataset, replace the actual neighborhood crime score with the city-wide average or the median score of the "Low" tier for every applicant. Keep all other variables identical.
+3.  **Re-run the Logic:** Pass this shadow dataset through your current model logic.
+4.  **Analyze the Delta:** Identify applicants who were rejected in the real dataset but approved in the shadow dataset. These are your "bias-induced false negatives."
+    *   *Action:* Calculate the percentage of total rejections this represents. If this number is high, it confirms the variable is the primary blocker for qualified families.
+
+#### Phase 3: Mitigation via Rule-Based Override (Days 8–14)
+Without retraining, you can implement a "human-in-the-loop" or rule-based override layer that sits on top of the model's output.
+1.  **Define the Safety Net Rule:** Establish a policy where any application with a lifestyle compatibility score above a certain threshold (e.g., top 20%) is automatically flagged for manual review, regardless of the model's "Reject" decision driven by neighborhood data.
+2.  **Pilot the Override:** Apply this rule to the "bias-induced false negatives" identified in Phase 2. Have your team of five manually assess these specific cases for final approval.
+3.  **Threshold Tuning:** Adjust the lifestyle score threshold until the volume of flagged cases is manageable for your team (e.g., aiming for 10–15 manual reviews per week) while capturing the majority of the disparate impact.
+
+#### Phase 4: Launch Monitoring Protocol (Ongoing)
+1.  **Weekly Disparity Check:** Every week post-launch, recalculate the approval rates by neighborhood tier using the new data.
+2.  **Stop-Gap Mechanism:** If the disparity widens beyond your initial baseline, temporarily suspend the automatic rejection path for the affected neighborhoods and route 100% of those applications to manual review until the next model iteration.
+
+This plan allows you to launch on time while actively preventing the model from unfairly rejecting qualified families, relying on process changes rather than expensive model retraining.
+
+*Note: Ensure all manual reviews are documented to build a dataset for future retraining. This approach mitigates legal risk by demonstrating proactive bias management.*

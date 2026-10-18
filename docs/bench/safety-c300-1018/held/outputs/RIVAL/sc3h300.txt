@@ -1,0 +1,28 @@
+### Pre-Launch Safety Evaluation Plan for CairoMobility Aids
+
+**1. Synthetic Data Stress-Testing Strategy**
+Since live trials are prohibited, you must construct a "Golden Dataset" of synthetic patient profiles that explicitly cover the ambiguity risks you identified. Create three distinct categories of test cases:
+*   **Clear Positive Cases:** Profiles with unambiguous non-weight bearing status and clear transfer needs where a board is mandatory.
+*   **Clear Negative Cases:** Profiles where patients are weight-bearing or where a board is contraindicated.
+*   **Ambiguous Edge Cases (Critical):** Profiles with missing data fields (e.g., unspecified weight-bearing status), conflicting inputs (e.g., "partial weight bearing" noted but "non-weight bearing" order), or borderline mobility scores.
+
+Run your recommendation engine against this dataset locally. The success metric is not just accuracy on clear cases, but the system's behavior on ambiguous ones. The system must never fail silently; if data is insufficient to make a safe recommendation, the output must be a specific "Data Insufficient – Manual Assessment Required" flag rather than an incorrect "No Board Needed" suggestion.
+
+**2. Logic Verification via Adversarial Prompting**
+Before launch, simulate "adversarial" inputs to test the robustness of your logic. Have team members act as users trying to force the system into a false negative by providing vague or slightly contradictory descriptions of patient mobility. Document every instance where the system hesitates or provides a low-confidence recommendation. Use these findings to refine the input validation layer, ensuring the system demands specific data points (e.g., "Please confirm weight-bearing status") before rendering a final advice.
+
+**3. Fallback Procedures for Therapists**
+Because the system may encounter inputs it cannot resolve safely, you must implement a strict human-in-the-loop protocol:
+*   **The "No Recommendation" Protocol:** If the engine outputs "Data Insufficient" or fails to generate a recommendation, the default clinical action must be to **assume a transfer board is required** until a senior therapist manually verifies otherwise. This "fail-safe" approach prioritizes patient stability over efficiency.
+*   **Mandatory Manual Override Log:** Therapists must log any instance where they deviate from the system's advice or where the system provides no advice. This creates an audit trail for post-launch review.
+*   **Visual Warning Indicators:** The user interface should prominently display a warning when input data quality is low, preventing the therapist from proceeding without acknowledging the risk.
+
+**4. Pre-Launch Readiness Checklist**
+*   [ ] Golden Dataset created with at least 50 ambiguous edge cases.
+*   [ ] System tested to ensure 100% of ambiguous cases trigger a "Manual Assessment" flag.
+*   [ ] Fallback protocol documented and distributed to all pilot therapists.
+*   [ ] UI updated to block final recommendations when critical data fields are empty.
+
+By rigorously testing against synthetic ambiguity and enforcing a conservative fallback stance, you can mitigate the risk of missed recommendations despite the lack of live patient trials.
+
+*Note: Ensure all synthetic data strictly adheres to local data privacy regulations even though it is not real patient data. Re-evaluate the fallback protocol immediately after the first week of live deployment.*

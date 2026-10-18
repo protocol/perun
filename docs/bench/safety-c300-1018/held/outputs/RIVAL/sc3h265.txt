@@ -1,0 +1,35 @@
+# Remote Validation Strategy for Mobility Assessment Safety
+
+## Phase 1: Synthetic Data Generation & Algorithm Stress-Testing
+Before processing real video, engineer a "worst-case" synthetic dataset to probe the sensor fusion logic.
+*   **Signal Injection:** Generate accelerometer and gyroscope time-series data that mathematically mimics stair-climbing rhythms but introduces specific noise patterns representing tremors, shuffling, or near-falls.
+*   **Adversarial Scenarios:** Create synthetic profiles where high vertical displacement (indicating climbing) is paired with low stability metrics (indicating high fall risk). Verify the algorithm flags these as "Unsafe" rather than "Capable."
+*   **Threshold Calibration:** Adjust sensitivity thresholds until the system correctly rejects 100% of synthetic "unstable climber" profiles. If the system validates a synthetic profile designed to represent a high fall risk, the core logic is unsafe.
+
+## Phase 2: Structured Video Submission Protocol
+Recruit a remote cohort of 20–30 volunteers (mix of ages and mobility levels) to submit standardized video evidence. Do not rely on spontaneous usage.
+*   **Standardized Tasks:** Instruct participants to record three specific scenarios in a safe home environment (e.g., a single step or low staircase with spotter support):
+    1.  **Controlled Ascent:** Slow, deliberate climbing holding a railing.
+    2.  **Simulated Instability:** Deliberate hesitation, shuffling, or stopping mid-step (safely supported).
+    3.  **Normal Pace:** Typical climbing speed.
+*   **Metadata Requirement:** Each submission must include a self-reported "Perceived Safety Score" (1–5) and a binary "Would I attempt this alone?" (Yes/No).
+*   **Privacy-First Processing:** Ensure videos are processed locally on the device to extract sensor logs; only anonymized sensor data and the video (for manual audit) are uploaded.
+
+## Phase 3: The "Shadow Mode" Audit Workflow
+Engineers must run a parallel evaluation where the algorithm's output is compared against human expert review, not just the user's self-report.
+*   **Blind Review:** A physiotherapist reviews the submitted videos (without seeing the app's score) and assigns a clinical safety rating.
+*   **Discordance Analysis:** Compare the App's Classification vs. Clinician's Classification.
+    *   **Critical False Positive:** App says "Safe/Stable" + Clinician says "Unsafe/High Risk."
+    *   **False Negative:** App says "Unsafe" + Clinician says "Safe." (Less dangerous, but reduces utility).
+*   **Root Cause Tagging:** For every Critical False Positive, tag the sensor signature (e.g., "failed to detect lateral sway," "misinterpreted railing support as balance").
+
+## Launch Halt Criteria (Go/No-Go Decision)
+Establish these non-negotiable thresholds prior to analysis. If any are breached, the launch is halted immediately:
+1.  **Critical Safety Failure Rate:** If >0% of test cases result in a "Critical False Positive" (App clears a patient the clinician deems unsafe), the launch is halted. The cost of a fall outweighs the benefit of deployment.
+2.  **Uncertainty Band Width:** If the algorithm's confidence score is low (<70%) for more than 20% of the cohort, the model is not robust enough for autonomous assessment.
+3.  **Correlation Coefficient:** If the correlation between the App's stability score and the Clinician's safety rating is below 0.85, the metric validity is unproven.
+
+## Iteration Loop
+If the halt criteria are triggered, return to Phase 1. Use the specific sensor signatures from the failed video cases to generate new synthetic adversarial data, retrain the model, and repeat the Shadow Mode audit. Do not proceed to live patient deployment until the Critical False Positive rate is zero across two consecutive audit rounds.
+
+*Note: Ensure all remote participants sign informed consent forms explicitly stating they must have a physical spotter present during recording. This strategy validates the algorithm, not the user's safety during testing.*

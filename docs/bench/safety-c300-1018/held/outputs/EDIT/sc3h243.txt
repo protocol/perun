@@ -1,0 +1,30 @@
+### Pre-Launch Safety Plan: Wound Care Prediction Model
+
+**1. Harm Inventory & Risk Statement**
+The primary risk is **systematic overestimation of healing rates** due to reliance on month-old static data, leading to **unsafe automation**: nurses may deprioritize visits for patients whose wounds are actually deteriorating. This constitutes a high-stakes failure where delayed care could result in infection, amputation, or severe pain for elderly patients. Because the model cannot be validated against real-time ground truth before launch, its accuracy metric for the current patient population is **UNVERIFIED**.
+
+**2. Measurement Strategy (Static Data Constraints)**
+Since real-time validation is impossible pre-launch, you must establish a **baseline error bound** using the available static snapshots:
+*   **Temporal Decay Simulation:** Artificially age your training data by withholding the most recent month of records within the snapshot. Train on older data and test against the "withheld" month to simulate the latency gap. Measure the delta in prediction error compared to a model trained on fresh data.
+*   **Adversarial Edge Cases:** Manually construct test cases representing rapid deterioration (e.g., sudden infection markers, missed dressing changes) that static monthly averages might smooth over. Verify if the model flags these as high-risk or incorrectly predicts steady healing.
+*   **Subgroup Analysis:** Explicitly measure performance gaps for the most vulnerable segments (e.g., patients with diabetes + compromised circulation) where static data is most likely to miss acute changes.
+
+**3. Deployment Controls: Human-in-the-Loop (HITL) Gate**
+Given the risk of irreversible harm from missed visits, **fully autonomous prioritization is prohibited** for this rollout.
+*   **Mandatory Nurse Review:** The model output must be presented as a **decision support suggestion**, not a directive. A qualified nurse must review and explicitly confirm every "low priority" classification before a visit is skipped or delayed.
+*   **Confidence Tiering:** Do not display raw probability scores (e.g., "87% healed"). Instead, use defined coarse tiers:
+    *   **Confirmed:** Strong agreement between model and recent manual notes.
+    *   **Corroborated:** Model aligns with general trends but lacks recent data.
+    *   **Unverified:** Prediction relies heavily on data >2 weeks old or conflicts with nurse intuition. *Action: Mandatory physical check required.*
+*   **Override Mechanism:** Ensure the interface allows nurses to easily override the model's timeline with a single click, logging the reason for the override without friction.
+
+**4. Monitoring Protocol for Systematic Overestimation**
+Implement a **rapid feedback loop** during the two-week rollout to detect drift:
+*   **Daily Discrepancy Log:** Nurses must record the actual wound status vs. the predicted status for every visit. Flag any instance where the model predicted "healing/improving" but the wound was "static/worsening."
+*   **Stop Condition:** If >5% of "low priority" visits result in a worsened condition, or if any single patient suffers severe adverse events linked to a delayed visit, **immediately suspend** the model's prioritization logic and revert to manual scheduling.
+*   **Transparency Artifact:** Publish a **Model Card** for the nursing team detailing the data latency limitation, the UNVERIFIED status of current accuracy, and the specific signs of failure they must watch for.
+
+**5. Governance**
+Assign a specific clinical lead as the **Owner** of this risk. They are responsible for reviewing the Daily Discrepancy Log every 24 hours and holding the authority to trigger the Stop Condition. Re-evaluate the model's validity immediately if the underlying patient demographics or treatment protocols change.
+
+*Note: Legal counsel must review whether this automated decision support triggers specific regulatory disclosures under local health laws or the EU AI Act if applicable to your operations. This plan manages product risk but does not certify legal compliance.*

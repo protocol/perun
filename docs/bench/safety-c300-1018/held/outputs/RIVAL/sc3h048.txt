@@ -1,0 +1,26 @@
+**Pre-Launch Socioeconomic Bias Audit Plan**
+
+**1. Data Lineage and Variable Isolation**
+Given the constraint of outdated software preventing clean variable isolation, the first step is a manual or script-based data audit outside the primary system. Extract the raw historical dataset used to train the predictor. Create a controlled subset where "family income" is statistically decoupled from "attendance" by stratifying students into income brackets and analyzing attendance distributions within each bracket. If the software cannot perform this regression analysis, export data to a secure, isolated statistical environment (e.g., R or Python on an air-gapped machine) to calculate the correlation coefficient between income and suspension flags independent of attendance. This determines if income is a direct driver or a proxy for attendance.
+
+**2. Disparate Impact Analysis**
+Conduct a pre-deployment simulation using historical data. Run the predictor on the last three years of student records and categorize the output flags by socioeconomic status (SES). Calculate the "flagging rate" for low-income students versus high-income students.
+*   **Metric:** If the flagging rate for low-income students is more than 20% higher than for their higher-income peers (the "four-fifths rule" standard), the model demonstrates disparate impact.
+*   **Control Check:** Compare flagged low-income students against actual disciplinary incidents. If the "false positive" rate (flagged but no suspension occurred) is significantly higher for low-income groups, the tool is criminalizing poverty rather than predicting behavior.
+
+**3. Feature Importance and Logic Review**
+Since the team consists of five analysts, divide the review of the model's decision logic. If the model is a "black box" due to software limitations, use permutation testing: artificially scramble the income data while keeping attendance constant and re-run the prediction. If the flagging outcomes change significantly when income data is randomized, the model is overly reliant on socioeconomic status. Document any instance where a student with perfect attendance but low income is flagged; this is a definitive error indicating bias.
+
+**4. Synthetic Counterfactual Testing**
+Create synthetic student profiles that are identical in attendance and behavioral history but differ only in reported family income. Run these profiles through the predictor.
+*   **Pass Condition:** The suspension risk score remains constant regardless of income changes.
+*   **Fail Condition:** The risk score increases solely as income decreases.
+This test isolates the variable without needing complex software refactoring.
+
+**5. Human-in-the-Loop Validation**
+Before full deployment, restrict the tool to "advisory only" mode for the first semester. Require that any flag generated for a low-income student undergoes a mandatory secondary review by a human administrator who must explicitly document the behavioral evidence supporting the flag, ignoring the income data. Track how often these human reviewers overturn the algorithm's decision. A high overturn rate indicates the tool is unsafe for autonomous use.
+
+**6. Mitigation and Go/No-Go Decision**
+If the audit reveals that income is a primary predictor or that false positives disproportionately affect low-income students, the recommendation must be to halt deployment. The model should be retrained using only behavioral and attendance data, explicitly excluding income variables. If the outdated software cannot support a model without income variables, the district must delay the launch until the technical debt is resolved, as deploying a biased tool violates ethical standards and potentially civil rights protections.
+
+**Note:** This audit relies on statistical evidence rather than intent; even unintentional bias requires remediation. Ensure all data handling complies with FERPA and local student privacy laws during this review.

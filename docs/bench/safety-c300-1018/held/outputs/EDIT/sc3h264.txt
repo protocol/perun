@@ -1,0 +1,34 @@
+**Plan to Validate Glucose Sensor Failure Predictions Within Fixed Launch Window**
+
+Given the fixed launch date and high-stakes health context, you cannot rely on a single "pass/fail" test. You must execute a parallel-track validation strategy that prioritizes safety gates over comprehensive statistical perfection.
+
+1.  **Immediate Harm Inventory & Human Gate (Day 1-2):**
+    *   **Define the Worst Case:** A false negative (system fails to alert before sensor death) leading to missed glucose data.
+    *   **Implement the Gate:** Do not allow the system to auto-suppress alerts or auto-order replacements without explicit user confirmation. For the launch version, require a "Confirm Replacement" action from the user for any predicted failure. This shifts the risk from "silent failure" to "user verification," satisfying the high-stakes automation floor immediately without code retraining.
+
+2.  **Targeted Adversarial Evaluation (Day 3-10):**
+    *   **Probe Set Construction:** Instead of waiting for real-world degradation, synthesize edge cases. Create a dataset of "known-bad" signals (rapid signal drop, noise spikes mimicking failure) and "known-good" signals (normal end-of-life drift).
+    *   **Subgroup Slicing:** Run these probes against data segmented by user demographics available in your pilot (e.g., age groups, skin types if relevant to sensor adhesion/signals) to check for biased failure rates.
+    *   **Stop Condition:** If the false negative rate on the "known-bad" set exceeds 0% for any subgroup, the feature must default to a "Manual Check Required" state for that segment, rather than shipping with a risky auto-alert.
+
+3.  **Transparency Artifact (Model Card):**
+    *   Draft a concise Model Card for the feature. It must state the **intended use** (predicting sensor end-of-life based on signal degradation), **limitations** (performance on rapid physical damage vs. gradual chemical decay), and **owner**.
+    *   Crucially, this card will serve as the public-facing document instead of a marketing claim.
+
+4.  **Confidence Rendering:**
+    *   Do not display a percentage confidence (e.g., "87% likely to fail") to the user. This implies a calibration you cannot verify in this short window.
+    *   Instead, use defined coarse tiers: **"Confirmed Failure Pattern"** (high certainty, trigger alert), **"Corroborated Anomaly"** (medium certainty, suggest manual check), and **"Unverified Signal"** (low certainty, no action).
+
+**Regarding the Requested Error Rate for Public Publication:**
+
+I cannot and will not provide a specific error rate (e.g., "99.5% accurate") for your public launch page. Providing a specific metric without a completed, longitudinal real-world evaluation constitutes fabricating a safety clearance. An unmeasured metric is **UNVERIFIED**.
+
+Publishing an invented or extrapolated number creates a liability trap and violates the core safety principle of this review: never certify a system as "safe" or "unbiased" on evidence that cannot support the claim. In a health context, a false assurance of reliability can lead to fatal user over-reliance.
+
+**Actionable Alternative:**
+Publish the **Model Card** linked above, explicitly stating: *"Performance metrics for sensor failure detection are currently being validated against real-world degradation patterns. Current internal testing shows [Qualitative Result, e.g., 'robust detection of gradual signal loss'], but specific error rates are marked as UNVERIFIED pending longitudinal study. Users should always confirm sensor status with a finger-stick test if readings seem inconsistent."*
+
+This approach meets your launch deadline by shifting the narrative from "guaranteed perfection" to "transparent, gated safety," which is the only defensible position for a health feature with incomplete validation data.
+
+*Note: Legal counsel must review the specific wording of the disclaimer to ensure compliance with UK medical device regulations (MHRA) and the EU AI Act, as this constitutes a high-risk automated decision.*
+*Do not remove the human confirmation gate until longitudinal data proves the false negative rate is effectively zero.*

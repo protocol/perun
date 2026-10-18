@@ -1,0 +1,36 @@
+### Internal Review Framework: Housing Allocation Safety
+
+**1. Harm Inventory & Evaluation Criteria**
+Before expanding beyond beta, define the specific risks your compatibility scores pose. Do not assert the system is "fair"; instead, measure these specific failure modes:
+
+*   **Segregation Bias:** Does the model systematically group students by race, gender, socioeconomic status, or disability status more than random chance would?
+    *   *Evaluation:* Calculate the distribution of protected demographics within assigned clusters. Compare this against a baseline of random assignment. If specific groups are isolated >5% more often than the baseline, flag as **UNVERIFIED/RISK**.
+*   **Historical Bias Amplification:** Does "past behavioral data" encode previous discriminatory housing patterns (e.g., penalizing students from specific high schools or zip codes)?
+    *   *Evaluation:* Run adversarial probes where only demographic proxies change in a profile while keeping merit/behavior constant. If the score shifts, the model is relying on biased proxies.
+*   **Hallucination as Fact:** Does the system generate a narrative justification for a pairing (e.g., "matched due to shared interests") that is not supported by the actual data?
+    *   *Evaluation:* Sample 50 generated justifications and manually verify the underlying data points. Any fabricated reason is a critical failure.
+*   **Over-Reliance:** Does the interface present the "Compatibility Score" as an absolute truth without showing uncertainty or alternative options?
+    *   *Evaluation:* Review the UI. If the score is presented as a precise percentage (e.g., "94% Match") without a defined confidence tier (e.g., "High Confidence," "Estimate"), it invites unsafe automation bias.
+
+**2. Runnable Measurement Plan (One Test Per Harm)**
+For each harm above, execute this specific test row before full launch:
+*   **Probe Set:** 100 synthetic profiles varying only in one demographic attribute; 10 known "bad" pairings (positive controls) that should be rejected; 10 known "good" pairings (negative controls) that should be accepted.
+*   **Metric:** Disparity Impact Ratio (selection rate of protected group vs. highest-performing group).
+*   **Pass Threshold:** Owner-defined, but zero tolerance for systematic exclusion of any single demographic cluster.
+*   **Stop Condition:** If disparity exceeds the threshold or if any "bad" pairing is approved, **block launch** immediately.
+*   **Reviewer:** Assign one product manager to sign off on failures; do not aggregate results without human review.
+
+**3. Early Monitoring Checklist**
+During the beta phase, track these metrics weekly:
+*   [ ] **Demographic Distribution:** Are room assignments statistically representative of the applicant pool across all protected classes?
+*   [ ] **Override Rate:** How often do human administrators override the algorithm's suggestion? A high override rate indicates model distrust or error.
+*   [ ] **Complaint Segmentation:** Are complaints about room quality or roommate conflict coming disproportionately from a specific student subgroup?
+*   [ ] **Transparency Artifact:** Ensure a **Model Card** is drafted and versioned. It must list intended use, data sources, known limitations (e.g., "not validated for students with specific sensory needs"), and the owner of the model. Do not leave this blank.
+
+**4. Governance & High-Stakes Gate**
+*   **Human-in-the-Loop:** Because housing assignment is high-stakes and hard to reverse once the semester starts, **no allocation is final without human confirmation** for the first full cohort. Fully automated assignment is a failure of this framework.
+*   **Uncertainty Display:** If the model cannot determine compatibility with high confidence, display a defined tier (e.g., "Low Confidence – Manual Review Recommended") rather than a precise number.
+*   **Legal Routing:** Whether this automated decision triggers specific legal disclosure requirements under Massachusetts law or the EU AI Act (if applicable to international students) is a determination for **legal counsel**, not this technical review. Route this question immediately.
+
+**Note:** Never fabricate a "0% bias" metric; if data is insufficient, mark findings as `UNVERIFIED`.
+**Note:** This framework scales with your stage, but the requirement for human gates on irreversible actions never relaxes.

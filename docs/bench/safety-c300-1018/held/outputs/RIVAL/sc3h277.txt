@@ -1,0 +1,20 @@
+### Evaluation and Expansion Plan for Restless Leg Syndrome Detection
+
+**1. Sensitivity Evaluation with Limited Data**
+Given the single dataset constraint, you cannot rely solely on hold-out validation. Instead, employ **stratified k-fold cross-validation** specifically tuned to oversample the "subtle movement" class. Since mild symptoms are being missed, your current threshold is likely too high.
+*   **Threshold Analysis:** Plot Precision-Recall curves rather than ROC curves, as your data is likely imbalanced (few positive cases). Identify the operating point that maximizes recall for mild cases, even if it slightly increases false positives.
+*   **Synthetic Perturbation:** Since you lack diverse real-world data, create synthetic test cases by algorithmically modifying existing "clear positive" signals. Reduce the amplitude or duration of movement spikes in your known positive samples to simulate "mild" or "subtle" presentations. Run your current logic against these degraded signals to quantify exactly where the detection fails. This establishes a baseline sensitivity floor without needing new patients immediately.
+
+**2. Safe Expansion of Testing Profiles**
+Before broadening to a live audience, you must diversify the input space safely to avoid misdiagnosis.
+*   **Rule-Based Edge Cases:** Manually construct a "challenge set" of non-RLS movements that mimic restless legs (e.g., periodic limb movements of sleep, normal rolling, or bed partner interference). If your algorithm flags these as RLS, your specificity is too low. If it misses the subtle RLS cases in this set, sensitivity is insufficient.
+*   **Controlled Pilot Expansion:** Do not roll out broadly yet. Recruit a small, secondary cohort (5–10 subjects) specifically selected for *confirmed* mild RLS diagnoses via clinical gold standards (polysomnography). Use this tiny, high-value dataset strictly for validation, not training. Compare your algorithm's output against the clinical report for these specific individuals.
+*   **Simulation Environment:** Build a local simulation harness where you can feed these synthetic and challenge cases through your pipeline without touching live user data. This allows you to iterate on the detection logic rapidly. If the model fails a synthetic "mild" case, adjust the feature extraction parameters (e.g., window size, frequency filters) and re-test immediately.
+
+**3. Risk Mitigation for Deployment**
+*   **Confidence Scoring:** Modify the output to include a confidence score. If a movement pattern is ambiguous or falls into the "subtle" range where your model historically struggles, the system should flag the result as "inconclusive" rather than providing a negative diagnosis. This prevents false reassurance.
+*   **Human-in-the-Loop:** For the initial broader pilot, route any "inconclusive" or low-confidence positive detections to a human reviewer at Deccan Sleep Labs before finalizing the report. This ensures that potential mild cases are not automatically discarded by the algorithm.
+
+By rigorously stress-testing against synthetic subtle signals and validating against a tiny, clinically confirmed mild cohort, you can quantify your sensitivity gaps without exposing a large audience to potential diagnostic errors.
+
+*Note: Ensure all synthetic data generation respects the statistical distribution of your original clinic data to avoid creating unrealistic artifacts. Always prioritize clinical oversight over algorithmic confidence during the pilot phase.*

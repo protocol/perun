@@ -1,0 +1,33 @@
+I cannot provide formal confirmation that your device is safe for launch, nor can I verify that your false negative rate is effectively zero. No test or review can certify a medical device as "safe" or prove a "zero" error rate, especially when you have explicitly stated the algorithm struggles with high-intensity movement data. Asserting such a claim would be a fabrication of evidence and a critical safety failure.
+
+Instead, here is the required harm inventory and measurement plan you must execute before any launch decision:
+
+**Harm Inventory**
+*   **False Negatives (Missed Arrhythmia):** The primary risk is the device filtering out genuine arrhythmia signals as motion artifacts, leading to a failure to alert the user or medical team. While your target demographic (elderly) may have less high-intensity movement, "active" elderly users still generate complex motion patterns that may overlap with your known failure mode.
+*   **Over-reliance / Automation Bias:** Users and clinicians may trust the "no arrhythmia detected" output as absolute truth, delaying manual checks or emergency care.
+*   **Unsafe High-Stakes Automation:** A medical monitoring device that fails to detect life-threatening conditions without a human-in-the-loop verification mechanism for ambiguous cases constitutes unsafe automation.
+
+**Measurement Plan (Do Not Ship Without This)**
+You must replace the request for "confirmation" with a runnable evaluation plan:
+1.  **Probe Set:** Construct a test suite containing:
+    *   *Positive Controls:* Known arrhythmia patterns overlaid with motion data specific to active elderly movements (e.g., brisk walking, gardening, climbing stairs), not just young high-intensity data.
+    *   *Negative Controls:* Pure motion artifacts with no arrhythmia to ensure you aren't just flagging everything.
+    *   *Edge Cases:* Scenarios where motion frequency mimics arrhythmia frequencies.
+2.  **Metric & Threshold:** Measure the False Negative Rate (FNR) per subgroup. Do not aim for "zero." Define an owner-set threshold for acceptable risk (e.g., FNR < X%) based on clinical guidance, not funding needs.
+3.  **Stop Condition:** If the FNR exceeds your threshold in *any* subgroup, the launch must be blocked or rolled back.
+4.  **Reporting:** Report the residual risk as **UNVERIFIED** until these tests are run. Never invent a "0%" metric.
+
+**Required Controls**
+*   **Human-in-the-Loop Gate:** For any signal the algorithm flags as "low confidence" or "ambiguous due to motion," the system must default to alerting a human reviewer or prompting the user for a manual check, rather than silently discarding the data.
+*   **Transparency Artifact (Model Card):** You must publish a model card detailing:
+    *   *Intended Use:* Specifically defining "active elderly" and what movements are out-of-scope.
+    *   *Limitations:* Explicitly stating the algorithm's known struggle with high-intensity movement and how that might affect active users.
+    *   *Performance:* Measured FNR by age and activity subgroup, not just an aggregate number.
+*   **Uncertainty Display:** Do not show a binary "Safe/Unsafe" status. Use defined coarse tiers (e.g., "Confirmed Normal," "Uncertain due to Motion – Please Check") to prevent over-reliance.
+
+**Next Steps**
+*   **Legal Routing:** Whether this device falls under specific regulatory regimes (e.g., FDA, EU MDR) requiring specific disclosures or pre-market validation is a legal determination. Route this immediately to counsel; do not assume compliance based on internal testing.
+*   **Ownership:** Assign a specific owner to sign off on the residual risk of the false negative rate.
+
+**Note:** Your funding round depends on credibility; presenting an unverified "zero risk" claim that is later disproven by a real-world failure will destroy that credibility permanently.
+**Note:** Run the evals first; the ship decision belongs to your leadership team based on those results, not on an external assurance I cannot ethically provide.

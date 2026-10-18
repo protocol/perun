@@ -1,0 +1,28 @@
+# Risk Assessment: Patient Diet Compliance Tracker Failure Modes
+
+## 1. Potential Failure Modes (False Compliance Reports)
+The system may incorrectly report "compliant" when a meal is skipped due to the following logic gaps:
+
+*   **Environmental Mimicry:** The AI misinterprets non-eating activities (e.g., moving a tray, clearing a table, or a pet approaching the plate) as consumption because visual motion or object displacement triggers the "meal started" flag without verifying actual ingestion.
+*   **Lighting and Occlusion:** Poor lighting conditions (common in evening shifts) or camera obstruction (e.g., steam from hot food, patient positioning) causes the model to default to a "null" state, which the current logic may erroneously interpret as "no anomaly detected" rather than "verification failed."
+*   **Partial Consumption Thresholds:** The system lacks a defined threshold for "sufficient intake." A patient moving food around the plate without eating may satisfy motion detectors, leading to a false positive for compliance despite zero caloric intake.
+*   **Timing Synchronization Errors:** If the sensor activates slightly after the meal window opens or deactivates early, a skipped meal occurring outside the precise monitoring window will be logged as "compliant" due to missing data rather than negative evidence.
+*   **Adversarial Static Presentation:** A patient or caregiver could leave an untouched plate in view while the patient eats elsewhere. If the system relies solely on the presence of food rather than the *reduction* of food over time, it will flag this as compliant.
+
+## 2. Low-Cost Validation Methods for Sensor Logic
+Given the fixed budget and six-person team, implement these immediate internal validation steps:
+
+*   **"Red Team" Role-Playing:** Assign two developers to act as "patients" and "caregivers" in a controlled room mimicking the Cairo clinic's lighting. Systematically attempt to fool the sensor using the failure modes above (e.g., waving hands over plates, swapping plates, simulating eating without swallowing). Record every instance where the system fails to flag non-compliance.
+*   **Synthetic Edge-Case Dataset:** Instead of collecting new patient data, use existing open-source food datasets to digitally alter images (darkening, blurring, partial occlusion) and run them through the model offline. This tests robustness without needing physical hardware for every case.
+*   **Logic Stress Testing:** Run the backend logic with simulated sensor inputs that send "no data" or "erroneous timestamps." Verify that the system defaults to "Unverified/Alert" rather than "Compliant" when data is missing or ambiguous. Change the default state from "Innocent until proven guilty" to "Guilty until proven innocent."
+
+## 3. Human-in-the-Loop Verification Process
+For the first batch of deployed devices, enforce a mandatory manual review layer to mitigate AI errors before clinical decisions are made:
+
+*   **The "Uncertainty Bucket":** Configure the system to flag any meal with a confidence score below 95% (or any detected motion without clear food reduction) for immediate human review. Do not allow these cases to auto-close as compliant.
+*   **Randomized Spot Audits:** Even for meals flagged as "Compliant" with high confidence, mandate a random 10% audit rate where a nurse verifies the AI's conclusion against physical observation or patient self-reporting for the first 30 days.
+*   **Dual-Signature for Medication Changes:** Establish a policy where no medication adjustment for diabetic patients can be authorized based solely on AI data. A clinician must cross-reference the AI report with a quick patient interview or nurse log before altering insulin dosages.
+*   **Feedback Loop Log:** Create a simple shared spreadsheet where nurses log every time the AI was wrong. Review this log weekly with the dev team to retrain or adjust thresholds before the next deployment cycle.
+
+*Note: Prioritize changing the system's default behavior to "alert on missing data" immediately, as silence should never equal compliance in a medical context.*
+*Ensure all role-playing tests are documented to demonstrate due diligence to hospital stakeholders.*

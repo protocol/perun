@@ -1,0 +1,35 @@
+# Stress-Test Protocol: Breathing Pattern Detection (High-Noise Constraints)
+
+**Objective:** Validate the algorithm's ability to distinguish between benign snoring and dangerous hypopneas in high-BMI patients under high-background noise conditions, without relying on the engine's real-time noise cancellation during the test phase.
+
+### Phase 1: Synthetic Data Construction (Offline)
+Since the engine cannot handle live high-noise environments, we will bypass real-time capture limitations by constructing a controlled "Golden Dataset" offline.
+1.  **Base Signal Generation:** Synthesize raw audio tracks representing three distinct states for high-BMI profiles:
+    *   *Normal Snoring:* Regular, rhythmic vibrations with consistent amplitude.
+    *   *Hypopnea Event:* Reduced airflow volume (30–50% drop) lasting >10 seconds, accompanied by irregular effort sounds.
+    *   *Apnea Event:* Complete cessation of airflow (>90% drop) with continued thoracic effort sounds.
+2.  **Noise Injection:** Layer these base signals with recorded monsoon-specific background noises (heavy rain on tin roofs, ceiling fans at max speed, distant traffic, household chatter) at varying Signal-to-Noise Ratios (SNR): -5dB, 0dB, and +5dB.
+3.  **Labeling:** Manually tag the exact start/end timestamps of every breathing event in the mixed tracks to serve as the ground truth.
+
+### Phase 2: Batch Processing Evaluation
+Instead of live streaming, feed the constructed mixed-audio files into the engine in batch mode (if supported) or via a simulated file-upload loop. This isolates the detection logic from the real-time ingestion bottleneck.
+*   **Metric 1: Sensitivity (Recall):** Calculate the percentage of actual hypopnea/apnea events correctly identified by the system amidst the noise. Target: >90% detection of labeled events.
+*   **Metric 2: Specificity:** Measure the rate of false positives where the system mistakes loud snoring or rain spikes for breathing pauses. Target: <5% false alert rate.
+*   **Metric 3: Latency Stability:** Record processing time per minute of audio to ensure the noise layer does not cause computational timeouts or crashes, even if accuracy degrades.
+
+### Phase 3: Threshold Tuning & Logic Verification
+Analyze the failure cases from Phase 2 to adjust decision thresholds.
+*   **Frequency Filtering:** Verify if the algorithm correctly ignores low-frequency rumble (rain/wind) while focusing on the specific frequency band of human respiratory effort (typically 100Hz–1kHz).
+*   **Duration Gating:** Confirm that short noise-induced dropouts (<5 seconds) do not trigger false hypopnea alerts.
+*   **Amplitude Normalization:** Test if the system adapts to varying overall volume levels without misinterpreting quiet snoring as apnea.
+
+### Phase 4: Simulated User Alert Workflow
+For scenarios where the system successfully detects a critical event in the noisy dataset:
+*   Verify the end-to-end flow: Detection → Local Log Entry → User Notification Trigger.
+*   Ensure that "No Event" conclusions in noisy data do not generate spurious "System Error" messages, which could erode user trust.
+
+### Deliverable Format
+Produce a matrix report mapping SNR levels against Detection Accuracy and False Positive Rates. Highlight the specific noise types (e.g., "ceiling fan") that cause the highest degradation to prioritize future DSP (Digital Signal Processing) updates.
+
+*Note: This protocol relies entirely on offline synthetic data to circumvent the current hardware limitation; live field testing should only occur after the monsoon season or once the noise engine is patched.*
+*Ensure all synthetic patient data mimics the acoustic impedance characteristics of higher-BMI neck tissue for valid results.*

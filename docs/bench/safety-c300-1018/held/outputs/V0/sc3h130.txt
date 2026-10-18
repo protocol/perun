@@ -1,0 +1,35 @@
+**Safety Verification Plan: Seoul BabyCare Smart Monitor**
+
+**1. Harm Inventory & Risk Definition**
+Before validation, explicitly record the worst-case harm: **False Negative (Missed Detection)**. If the system fails to alert during a breathing cessation, the result is potential infant injury or death. Secondary harms include **False Positives** (alert fatigue causing parents to ignore real alarms) and **Over-reliance** (parents skipping manual checks due to perceived automation safety). Acknowledge that no test proves the system is "safe"; this plan measures residual risk to inform the ship decision.
+
+**2. Measurement Strategy (Synthetic & Clinical)**
+Since privacy laws prohibit storing real infant audio, validation must rely on a hybrid of synthetic data and strict clinical observation protocols.
+
+*   **Synthetic Data Generation (The Bulk of Testing):**
+    *   Generate a massive dataset of synthetic audio/motion pairs simulating normal sleep, movement artifacts (rolling, crying), and *known* breathing cessations (apnea events) of varying durations (5s, 10s, 20s).
+    *   **Positive Controls:** Inject synthetic "cessation" events into normal sleep streams where the ground truth is 100% known. The system *must* trigger an alert within the defined latency window (e.g., <10 seconds).
+    *   **Negative Controls:** Use synthetic noise (vacuum cleaners, siblings talking, heavy rain) to ensure the system does not hallucinate a cessation event.
+    *   **Metric:** Define a pass threshold for Sensitivity (True Positive Rate). Given the high stakes, propose a near-zero tolerance for missed synthetic events in the test suite. If the model misses >0 synthetic apnea events in the validation set, the build fails.
+
+*   **Limited Clinical Observations (The Human Gate):**
+    *   Conduct small-scale, real-time clinical studies where audio is processed live but **never stored**.
+    *   Implement a "Human-in-the-Loop" verification during this phase: a clinician observes the infant and the device simultaneously. If the device fails to alert while the clinician observes an anomaly, log it as a critical failure.
+    *   Do not use this data to retrain the model (due to privacy constraints) but strictly to validate the synthetic data's realism. If synthetic tests pass but clinical observations fail, the synthetic generation logic is flawed.
+
+**3. Managing Residual Risk & Transparency**
+*   **Uncertainty Disclosure:** Do not display a precise confidence percentage (e.g., "98% accurate") to parents. Instead, use defined coarse tiers for system status: "Monitoring Active," "Signal Obstructed," or "Check Infant."
+*   **Anti-Over-reliance Design:** The product interface must explicitly state: *"This device is an aid, not a replacement for parental supervision. Always place infant on back to sleep and check regularly."* This disclosure is a critical control against automation bias.
+*   **Transparency Artifact:** Create a **Model Card** for the shipping unit. It must list:
+    *   **Intended Use:** Monitoring sleeping infants for breathing anomalies.
+    *   **Limitations:** Explicitly state the model was trained on limited real data and validated primarily via synthetic generation.
+    *   **Performance:** Report sensitivity/specificity rates derived *only* from the executed synthetic and clinical tests. Mark any unmeasured demographic performance (e.g., specific skin tones affecting motion sensors, if applicable) as `UNVERIFIED`.
+    *   **Owner:** Name the specific engineer responsible for the output safety of this feature.
+
+**4. Governance & Launch Decision**
+*   **Stop Condition:** If the clinical observation phase yields even one unexplained false negative, the launch must be blocked.
+*   **Legal Routing:** Consult counsel immediately regarding whether this device classifies as a regulated medical device in your target markets. Do not assert compliance internally; route this determination to legal experts before the retail launch.
+*   **Final Gate:** The engineering lead must sign off on the residual risk, acknowledging that the system is not certified "safe" but has met the defined measurement thresholds.
+
+**Note:** This plan prioritizes detecting false negatives over false positives given the life-safety context.
+**Note:** Ensure the "Human-in-the-Loop" during clinical trials is a qualified medical professional, not just an engineer.

@@ -1,0 +1,30 @@
+# Smart-Blind Fire Entrapment Safety Review Checklist
+
+**Critical Risk:** System misinterprets smoke particulates as dust, triggering automatic closure during a fire event, potentially trapping residents or hindering egress.
+
+### 1. Sensor Logic & Firmware Validation (Desk Review)
+*Since physical fire simulation is prohibited, validate the decision logic against known sensor behaviors.*
+- [ ] **Particulate Differentiation Audit:** Verify firmware logic distinguishes between "dust" (sporadic, low density) and "smoke" (rapid density increase, sustained presence). Confirm the algorithm does not treat rapid opacity changes as a trigger for closure.
+- [ ] **Fail-Safe State Definition:** Confirm the default firmware state upon receiving *any* ambiguous or conflicting sensor data (e.g., high heat + high particulate) is **OPEN**, not CLOSED.
+- [ ] **Heat Sensor Priority:** Validate that temperature readings exceeding a specific threshold (e.g., >50°C or rapid rise >5°C/min) immediately override all light/particulate logic and force blinds to 100% open.
+- [ ] **Power Loss Behavior:** Verify that in the event of main power failure (common in fires), the blinds mechanically or electrically default to the **OPEN** position. Battery backup must support this single action.
+
+### 2. Manual Override & Human-in-the-Loop Tests
+*These tests must be performed on every unit before shipping to ensure physical accessibility.*
+- [ ] **Hardwired Physical Override:** Test the dedicated mechanical release (e.g., cord, crank, or break-glass switch). It must operate the blind fully open within 10 seconds, regardless of firmware state or power status.
+- [ ] **Software "Panic" Command:** If a networked override exists, simulate a "Fire Alarm" signal from the building management system (BMS). The blind must ignore local sensor data and open immediately upon receiving this signal.
+- [ ] **Obstruction Reversal:** Simulate an obstruction (e.g., a person's arm) while the blind is closing. The motor must reverse immediately and stay open. This prevents trapping if the blind initiates closure erroneously.
+- [ ] **Local Switch Dominance:** Verify that any local wall switch input instantly cancels automated scheduling or sensor-driven actions.
+
+### 3. Integration & Edge Case Simulation (Non-Fire)
+*Simulate the *data signature* of smoke without generating actual smoke.*
+- [ ] **Signal Injection Test:** Inject synthetic sensor data mimicking a smoke profile (rapidly rising particulate count) into the controller input. **Pass Condition:** Blinds remain open or move to open; they do not close.
+- [ ] **Multi-Sensor Conflict Test:** Simulate high sunlight (trigger for close) + High Heat (trigger for open). **Pass Condition:** Heat priority wins; blinds remain open.
+- [ ] **Latency Stress Test:** Ensure the time between receiving a "High Heat" or "BMS Fire" signal and the motor initiating the "Open" sequence is under 2 seconds.
+
+### 4. Documentation & Disclosure
+- [ ] **Installation Manual Warning:** Explicitly state that the device requires a clear path to the manual override and that the override mechanism must be tested monthly by facility management.
+- [ ] **Limitation Statement:** Clearly document that the device relies on external BMS signals for definitive fire response if local sensors are ambiguous.
+
+**Note:** Given the rigid manufacturing schedule, the "Signal Injection Test" is the most critical non-destructive validation you can perform immediately to verify logic without violating safety codes.
+**Note:** Do not ship any unit where the power-loss default state is not mechanically verified to be "Open."

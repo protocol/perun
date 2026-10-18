@@ -1,0 +1,32 @@
+### Targeted Pre-Launch Safety Review Framework: High-Fat Meal Scenarios
+
+**Objective:** Quantify the risk of hypoglycemia caused by high-fat meal miscalculations in the existing smart-insulin-calculator and define mandatory guardrails without altering the core engine.
+
+#### Phase 1: Retrospective Risk Quantification
+Leverage your historical dataset to isolate and measure the specific failure mode.
+1.  **Cohort Selection:** Filter historical entries for meals where fat content exceeded 30g or fat-to-carb ratios exceeded 1:1.
+2.  **Error Simulation:** Re-run these specific cases through the current algorithm. Compare the calculated bolus against the actual insulin required to maintain euglycemia (derived from subsequent CGM data 4–6 hours post-meal).
+3.  **Risk Metric Calculation:** Calculate the "Hypoglycemia Probability Index" (HPI). This is the percentage of high-fat cases where the algorithm's recommended dose resulted in blood glucose dropping below 70 mg/dL within 6 hours.
+    *   *Threshold for Action:* If HPI > 5%, the feature cannot launch without hard guardrails.
+
+#### Phase 2: Parameter Sensitivity Analysis (Within Constraints)
+Since rebuilding is impossible, identify the maximum safe adjustment to existing parameters.
+1.  **Variable Isolation:** Systematically tweak the "fat absorption delay" or "extended bolus ratio" parameters within their currently allowed software limits.
+2.  **Safety Envelope Mapping:** For each parameter set, re-simulate the high-fat cohort. Map the "Safe Zone"—the specific parameter combinations where the HPI drops to near zero without causing hyperglycemia in standard meals.
+3.  **Selection:** Choose the parameter set that minimizes late hypoglycemia while keeping early hyperglycemia within acceptable clinical limits.
+
+#### Phase 3: Definition of Mandatory Guardrails
+Based on the simulation results, implement the following non-negotiable safety layers:
+1.  **Hard Cap on Fat-Adjusted Dosing:** If the algorithm detects a fat content above a specific threshold (e.g., 40g), cap the additional insulin recommendation at the maximum safe value identified in Phase 2, regardless of the raw calculation.
+2.  **Mandatory User Warning:** Trigger a prominent, non-dismissible alert for high-fat meals: *"High fat detected. This may cause delayed glucose drops. Monitor levels closely 4–6 hours after eating. Consider a reduced initial dose."*
+3.  **CGM Integration Check:** If real-time CGM data is available, disable the high-fat adjustment feature entirely if the user's current trend arrow is pointing sharply down.
+
+#### Phase 4: Validation Protocol
+Before the regulatory filing:
+1.  **Blind Retrospective Test:** Run the finalized parameter set and guardrails against a held-out portion of the historical high-fat data (not used in tuning).
+2.  **Success Criteria:** The updated configuration must demonstrate a statistically significant reduction in predicted hypoglycemic events compared to the baseline, with no new instances of severe overdosing.
+
+**Deliverable for Regulatory Filing:** A report detailing the HPI baseline, the selected parameter adjustments, the specific logic of the hard caps/warnings, and the validation results proving risk mitigation.
+
+*Note: This framework relies entirely on retrospective simulation; clinical validation with human subjects is required post-filing before widespread deployment.*
+*Ensure all parameter tweaks remain within the bounds of your existing software validation documentation to avoid triggering a full re-certification.*

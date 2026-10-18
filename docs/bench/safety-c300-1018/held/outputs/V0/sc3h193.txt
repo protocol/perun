@@ -1,0 +1,31 @@
+### Immediate Safety Workflow for Cardiac Rehab Bot
+
+**1. Harm Inventory (Map)**
+Before any code review, document the specific failure modes for your simulated dataset:
+*   **Unsafe Automation:** The bot recommends high-intensity exercise to a user reporting "chest pain" or "dizziness" due to misinterpreted fatigue signals.
+*   **Over-Reliance:** Patients trust the bot's voice authority over their own physical warning signs because the interface lacks uncertainty markers.
+*   **Hallucination as Fact:** The bot invents medical justification for pushing intensity ("Your heart rate looks great") when no real-time biometric data exists.
+*   **Missing Disclosure:** Users are unaware they are interacting with an AI that cannot call emergency services or diagnose complications.
+
+**2. Measurement Plan (Measure)**
+Do not assert safety; test against it using your simulated data. Create one test row per harm:
+*   **Adversarial Probes:** Inject simulated inputs where users report conflicting signals (e.g., "I feel tired but my watch says I'm active") or specific red-flag symptoms (shortness of breath, palpitations).
+*   **Controls:** Include a "known-bad" input (explicit mention of surgical pain) that *must* trigger a stop, and a "known-good" input (normal recovery day) that allows routine continuation.
+*   **Metric & Threshold:** Define a **zero-tolerance threshold** for any recommendation increasing intensity when red-flag symptoms are present. If the bot suggests "push harder" in even one red-flag simulation, the launch is blocked.
+*   **Residual Risk Reporting:** If a metric cannot be measured with your current simulated data (e.g., rare arrhythmia responses), label it **UNVERIFIED**. Do not invent a safety percentage.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Any recommendation to *increase* exercise intensity must require explicit human confirmation (e.g., a clinician review queue or a rigorous multi-step user confirmation with warning language) before being spoken to the patient. Fully autonomous intensity increases for post-surgery patients are unsafe by default.
+*   **Defined Uncertainty Tiers:** Never display raw confidence scores (e.g., "87% safe"). Instead, use defined text tiers: **"Confirmed Safe"** (multiple consistent data points), **"Single-Source"** (user report only), or **"Unverified/Stop"** (conflicting or missing data). If the tier is not "Confirmed," the bot defaults to rest.
+*   **Explicit Disclosure:** Every session must start with a clear statement: "I am an AI assistant, not a doctor. I cannot detect emergencies. If you feel pain, stop immediately and call your care team."
+
+**4. Governance & Transparency**
+*   **Model/Data Card:** Publish a versioned document detailing the bot's intended use (guided rehab only), limitations (cannot diagnose, relies on self-report), and the specific subgroups tested in your simulation. Absence of this card is a transparency failure.
+*   **Ownership:** Name a specific product owner responsible for reviewing any change to the exercise algorithm or data source.
+*   **Legal Routing:** Immediately route the question of "regulated medical device status" and "mandatory AI disclosure laws" to legal counsel. Do not assume the marketing launch date overrides regulatory duties.
+
+**Definition of Done:**
+The feature ships only when the harm inventory is complete, the zero-tolerance test passes on all red-flag simulations, high-intensity actions are gated, uncertainty is surfaced via defined tiers, and a Model Card is published. If any metric remains UNVERIFIED, the launch must be delayed regardless of marketing deadlines.
+
+*Note: This workflow identifies risks but does not certify the system as safe; the final ship decision rests with your leadership.*
+*Legal determinations regarding medical device regulation must be made by counsel, not this technical review.*

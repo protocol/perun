@@ -1,5 +1,0 @@
-### Added
-- `docs/bench/wins-rep-1018/`: preregistered fresh replication (n=150 per skill, scenarios disjoint from every earlier bench set, same rivals and GLM-5.1 judge v2 in both orders as `confirm-v2-1017`, PCSS only, $0) of the three standing wins in `docs/perun-vs-rivals.md`. Rule fixed in advance: win-rate 95% CI lower bound above 0.5 keeps "Win". All three pass: agentic-ceo 0.637 [0.577, 0.697] (70 W / 51 T / 29 L), positioning 0.737 [0.680, 0.790] (90 / 41 / 19), product-discovery 0.690 [0.633, 0.747] (77 / 53 / 20); judge slot-1 rates 0.583, 0.507 and 0.563, all inside 0.4 to 0.6. The agentic-ceo estimate is below the first run's 0.733 and outside its interval. This is the second look at each claim; evidence is synthetic, single-generator and single-judge, not a claim about real users. Skill arms are the unedited shipped `SKILL.md` files (agentic-ceo differs from the first run's arm by one later wording-only commit).
-
-### Changed
-- `docs/perun-vs-rivals.md`: the agentic-ceo, positioning and product-discovery rows now show the replication beside the first run and keep "Win".

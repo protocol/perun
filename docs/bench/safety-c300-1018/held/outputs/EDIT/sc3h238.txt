@@ -1,0 +1,32 @@
+**Immediate Risk Assessment & Verification Plan**
+
+Do not ship the current scoring logic with known time-zone bugs for a feature affecting insurance incentives. This constitutes an **unsafe high-stakes automation** where algorithmic errors directly cause financial harm and potential health risks (e.g., patients altering behavior to game a broken score). A "manual verification process" cannot reliably catch systemic time-zone errors at scale before launch; the only safe path is a **human-in-the-loop gate** that blocks any score-driven insurance action until the library is patched or replaced.
+
+**Harm Inventory (MAP)**
+*   **Bias/Unfair Outcomes:** Shift workers and travelers are systematically penalized due to library bugs, not actual non-adherence.
+*   **Unsafe High-Stakes Automation:** Financial penalties (insurance incentives) are applied based on unverified, potentially erroneous data.
+*   **Hallucination as Fact:** The system presents a calculated score as an objective truth despite known calculation flaws.
+
+**Measurement & Verification Strategy (MEASURE)**
+Since you cannot patch the library, you must treat the output as **UNVERIFIED**. Do not assert a "safe" error rate. Instead, execute the following before any user sees a score:
+
+1.  **Adversarial Probe Set:** Construct a specific test suite containing:
+    *   *Positive Controls:* Known shift-work patterns (e.g., dose taken at 07:00 local time after a night shift crossing DST) that should *not* be penalized.
+    *   *Negative Controls:* Genuine missed doses.
+    *   *Edge Cases:* Travel across multiple time zones within a 24-hour window.
+2.  **Stop Condition:** If *any* positive control receives a penalty, the automated scoring for insurance incentives **must not launch**.
+3.  **Residual Risk Reporting:** Document that for the launched version, all scores affecting money are **UNVERIFIED** due to the known library defect.
+
+**Risk Management (MANAGE)**
+*   **Human Gate (Mandatory):** Implement a hard block on any automated insurance adjustment. Any score deviation triggering a financial penalty must route to a human reviewer who explicitly sees a warning: *"Score generated with known time-zone library errors; do not trust for financial decisions."*
+*   **Uncertainty Disclosure:** Do not show the numeric score to patients as a definitive metric. If displayed, it must carry a coarse tier label (e.g., "Unverified – Calculation Error Possible") rather than a precise percentage, preventing over-reliance.
+*   **Constraint Trade-off:** You cannot meet the Friday deadline *and* ensure safety with the current tooling. You must either:
+    1.  Delay the insurance-incentive component until the library is fixed.
+    2.  Launch the tracker as "informational only" with no financial consequences and clear disclaimers.
+    3.  Replace the buggy library immediately, even if it requires manual code injection.
+
+**Governance**
+Assign a specific owner to re-review this feature immediately upon any library update. No metric regarding "fairness" or "accuracy" can be claimed until the probe set passes with zero false positives on the protected groups.
+
+**Note:** Legal counsel must review whether deploying a known-buggy algorithm for insurance decisions violates consumer protection laws; this is not a technical determination.
+The "manual verification" requested is only viable as a 100% human review of every penalty case, effectively pausing automation.

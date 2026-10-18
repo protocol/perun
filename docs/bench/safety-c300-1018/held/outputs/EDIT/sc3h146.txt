@@ -1,0 +1,30 @@
+**Rigorous Review Plan for Battery Depletion Detection Algorithms**
+
+**1. Immediate Harm Inventory & Scope Definition**
+Before executing tests, formally document the specific failure mode: "Undetected rapid voltage drop under stress leading to total device failure without warning." Define the affected population as all cardiac patients relying on continuous pacing. Establish that the worst-case scenario is patient harm or death due to unexpected device shutdown. This inventory must be signed off by the lead engineer before night-shift testing begins.
+
+**2. Targeted Night-Shift Testing Protocol (Two-Week Window)**
+Given the limited lab access, prioritize high-risk scenarios over broad regression testing. Execute the following specific test rows:
+*   **Stress-Condition Probe Set:** Simulate rapid voltage drops mimicking extreme physiological stress (e.g., high heart rate variability, temperature spikes) that differ from standard depletion curves.
+    *   *Positive Control:* Inject known failure signatures where the model *must* alert.
+    *   *Negative Control:* Inject normal variance data where the model *must not* alert.
+*   **Metric & Threshold:** Measure "False Negative Rate" specifically for rapid-drop events. Set the pass threshold to **zero tolerance** for missed alerts in the positive control set. Any missed detection of a rapid drop is an immediate stop condition.
+*   **Adversarial Probes:** Introduce noise patterns similar to electrical interference to ensure the algorithm distinguishes signal artifacts from genuine voltage drops.
+
+**3. Human-in-the-Loop Gate for Critical Alerts**
+Do not rely solely on automated pass/fail metrics. Implement a mandatory human review gate for any edge-case prediction where the model's confidence is low or the voltage trajectory is ambiguous. For the final verification stage, no alert logic can be finalized without explicit clinician validation of the warning triggers. The system must default to "alert" rather than "silent" when uncertainty is detected.
+
+**4. Uncertainty Reporting & Transparency Artifact**
+Prepare a preliminary **Model Card** for the regulatory submission that explicitly states:
+*   **Intended Use:** Predicting battery depletion under standard and defined stress conditions.
+*   **Limitations:** Clearly list any stress conditions where testing was incomplete or where the model showed reduced sensitivity. Do not claim "100% reliability" if the test coverage was constrained by time; mark unverified scenarios as **UNVERIFIED**.
+*   **Performance by Subgroup:** If data exists, report performance across different patient demographics or device usage patterns, not just aggregate accuracy.
+
+**5. Governance & Ownership**
+Assign a specific owner (e.g., Lead Algorithm Engineer) responsible for the residual risk of undetected failures. This owner must sign off on the decision to proceed to clinical trials, acknowledging any remaining **UNVERIFIED** scenarios. If the night-shift testing reveals any false negatives in the rapid-drop scenarios, the launch must be halted regardless of the timeline pressure.
+
+**6. Regulatory Routing**
+Since this device involves high-stakes automated decisions affecting human life, immediately route the question of specific AI disclosure requirements and regulatory classification under national medical device laws to legal counsel. Do not assume compliance; let counsel define the binding obligations for the national approval submission.
+
+**Note:** This plan prioritizes safety gates over speed; do not fabricate success metrics if the two-week window prevents full coverage.
+**Note:** Any claim of "safety" or "bias-free" operation is prohibited; report only measured results and residual risks.

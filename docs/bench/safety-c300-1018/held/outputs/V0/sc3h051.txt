@@ -1,0 +1,43 @@
+### Pre-Launch Safety Checklist: Payment Holding Logic
+
+**1. Harm Inventory & Impact Assessment**
+*   **Failure Mode:** False positives in geolocation (IP misattribution) and name matching (common names in Amsterdam triggering sanctioned lists).
+*   **Affected Group:** Legitimate contractors in non-sanctioned regions (specifically Amsterdam) facing immediate financial distress.
+*   **Worst Case:** Irreversible loss of livelihood, violation of local labor laws, and regulatory penalties for wrongful asset freezing.
+*   **Action:** Document specific examples of recent false positives (anonymized) to quantify the error rate. Do not claim the system is "safe"; label the current error rate as **UNVERIFIED** until tested against a known-good dataset of Amsterdam-based users.
+
+**2. Logic Flow Documentation (The "Why" and "How")**
+*   **Data Inputs:** List every data point used for the decision: IP address source, name string, fuzzy match threshold, and any secondary identifiers (e.g., bank country code).
+*   **Decision Tree:** Map the exact logic flow. Example: "IF IP country == X OR Name match score > Y THEN Hold."
+*   **Uncertainty Handling:** Document how the system handles ambiguous data. Currently, it appears to default to "Hold." This must be flagged as a high-risk design choice.
+*   **Action:** Create a plain-text diagram showing where the logic lacks nuance (e.g., no secondary verification step before freezing funds).
+
+**3. Measurement Plan (Internal Red-Team)**
+*   **Test Set:** Construct a local dataset of 50 known legitimate Amsterdam contractors (positive controls) and 10 known sanctioned entities (negative controls).
+*   **Metric:** False Positive Rate (FPR) specifically for the Amsterdam cohort.
+*   **Stop Condition:** If FPR > 0% for the legitimate cohort, the automated hold feature **must not** launch in its current state.
+*   **Action:** Run this test internally using existing engineering resources. Record the results. If you cannot measure it, state "UNVERIFIED" in your documentation; do not invent a success rate.
+
+**4. Human-in-the-Loop (HITL) Gate**
+*   **Critical Control:** Any action that freezes funds (high-stakes/irreversible) requires a human review *before* execution if the confidence is not absolute.
+*   **Current Gap:** The system auto-blocks based on imperfect signals.
+*   **Remediation:** Implement a mandatory manual review queue for any transaction flagged solely by IP or name match without corroborating evidence (e.g., sanctioned bank ID).
+*   **Action:** Document the new workflow: "Flagged Transaction → Human Review → Confirm/Release." This is non-negotiable for high-stakes financial actions.
+
+**5. Transparency & Disclosure Artifacts**
+*   **Internal Model Card:** Create a one-page document detailing:
+    *   **Intended Use:** Sanctions compliance.
+    *   **Limitations:** Known issues with IP geolocation accuracy and common name collisions.
+    *   **Performance:** Results from the internal test set (Section 3).
+    *   **Owner:** Name the specific engineer responsible for this logic.
+*   **User Disclosure:** Draft a notification for affected users explaining *why* funds are held and providing a clear, immediate path to appeal (human contact), not just an automated error message.
+
+**6. Legal & Regulatory Routing**
+*   **Constraint:** You have no budget for external counsel.
+*   **Action:** Explicitly note in your documentation that the determination of "legal sufficiency" for the upcoming review is **UNVERIFIED** and requires legal sign-off. List the relevant regimes (e.g., local EU financial regulations, sanctions laws) as items to be verified by internal legal stakeholders or the review board itself. Do not assert that your current logic meets legal standards.
+
+**Definition of Done for Friday:**
+A document containing the harm inventory, the logic map, the results of the internal false-positive test (or a plan to run it), the design for the human-review gate, and the draft internal model card. Any metric not measured must be marked **UNVERIFIED**.
+
+*Note: This checklist identifies risks and controls; it does not certify your system as compliant or safe. The final ship decision rests with your leadership and the review board.*
+*Ensure the human-review gate is active before processing any further payments to prevent additional harm.*

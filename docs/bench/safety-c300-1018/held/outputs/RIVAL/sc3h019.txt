@@ -1,0 +1,33 @@
+### Pre-Launch Testing Plan: Elderly User False Positive Reduction
+
+**Objective:** Validate the fraud detector's threshold logic against diverse, non-fraudulent spending patterns typical of elderly users to prevent unnecessary account freezes before the five-day go-live.
+
+**1. Synthetic Data Generation Strategy**
+Create a dataset of 500–1,000 synthetic user profiles representing the specific demographic risks in Madrid. Do not rely on historical fraud data; instead, model "safe anomalies":
+*   **Profile Segmentation:** Divide profiles into sub-groups: rural vs. urban residents, pension-only income vs. those with savings, and varying health mobility levels.
+*   **Behavioral Scenarios:** Generate transaction sequences for specific high-risk triggers:
+    *   *Large One-Off Donations:* Simulate annual charitable giving or religious tithes (common in the demographic) that deviate sharply from monthly averages.
+    *   *Travel Spikes:* Model occasional family visits or pilgrimage trips (e.g., to Santiago or coastal regions) involving rapid succession of transport, lodging, and dining charges in a new location.
+    *   *Medical Emergencies:* Create clusters of pharmacy and clinic payments that appear as rapid-fire small transactions.
+    *   *Gift Giving:* Simulate holiday or birthday periods with elevated spending at toy stores, department stores, or online retailers.
+*   **Noise Injection:** Introduce minor data inconsistencies typical of this age group, such as transactions at slightly different merchant names for the same chain or occasional card-present vs. card-not-present variations.
+
+**2. Test Execution Approach**
+Run the synthetic dataset through the staging environment as a batch simulation before real-time activation.
+*   **Baseline Run:** Execute the detector against the synthetic data with current production thresholds. Record every account flagged for freezing.
+*   **False Positive Analysis:** Manually review every freeze decision. Since the data is known to be safe, *any* freeze is a false positive. Categorize failures by trigger type (e.g., "Travel," "Donation," "Medical").
+*   **Threshold Tuning:** Adjust the sensitivity rules specifically for the identified failure modes. For example, if "large donations" cause 40% of false positives, implement a secondary check (e.g., merchant category code verification) or raise the monetary threshold for that specific category before triggering a hard freeze.
+*   **Iterative Validation:** Re-run the tuned model against the same dataset. Repeat until the false positive rate for these specific scenarios drops to an acceptable near-zero level.
+
+**3. Safety Net Implementation**
+Given the limited historical data and tight timeline, implement a "Soft Freeze" protocol for the first two weeks post-launch for users over 65:
+*   Instead of a full lockout, trigger a step-up verification (e.g., a phone call from a human agent or a simplified SMS confirmation) for transactions that hit the fraud threshold but match the "safe anomaly" patterns identified in testing.
+*   Reserve hard freezes only for transactions matching confirmed fraud signatures (e.g., known compromised merchant IDs or impossible velocity).
+
+**4. Deliverable Checklist for Go-Live**
+*   [ ] Synthetic dataset file containing diverse elderly spending profiles.
+*   [ ] Report detailing false positive rates by scenario type before and after tuning.
+*   [ ] Updated configuration rules for the fraud engine reflecting tuned thresholds.
+*   [ ] Operational playbook for the support team handling "Soft Freeze" verifications.
+
+*Note: Ensure all synthetic data is strictly isolated from production databases to prevent contamination. Prioritize the "Soft Freeze" workflow training for support staff immediately, as human intervention will be the primary fallback during the initial live period.*

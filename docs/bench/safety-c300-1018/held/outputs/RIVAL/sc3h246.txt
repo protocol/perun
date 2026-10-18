@@ -1,0 +1,37 @@
+**Critical Edge-Case Scenarios for Defibrillator Motion Artifact Filtering**
+
+To ensure the signal processing logic distinguishes between patient movement and treatable arrhythmias without new hardware, simulate the following high-risk scenarios. These focus on complex kinematic patterns that mimic specific ECG morphologies or disrupt baseline stability.
+
+**1. Rhythmic Tremor Mimicking Ventricular Tachycardia (VT)**
+*   **Scenario:** Simulate a patient experiencing a rigid, rhythmic tremor (4–6 Hz) while standing or walking.
+*   **Risk:** Regular mechanical oscillation can create artifact waves that mimic the rate and regularity of monomorphic VT.
+*   **Test Condition:** Overlay tremor frequencies on a normal sinus rhythm background. Verify the algorithm does not lock onto the tremor frequency as a heart rate >150 bpm. The filter must identify the lack of physiological QRS evolution despite regular periodicity.
+
+**2. Sudden Impact Followed by Postural Collapse (Syncope vs. VF)**
+*   **Scenario:** A sharp, high-amplitude spike (simulating a fall or stumble) followed immediately by low-amplitude, chaotic motion (patient lying still but shivering or convulsing).
+*   **Risk:** The initial spike may saturate the amplifier, and the subsequent low-level noise may be misinterpreted as low-amplitude Ventricular Fibrillation (VF).
+*   **Test Condition:** Inject a transient saturation event followed by irregular, low-voltage noise. The system must recognize the signal quality degradation post-impact and withhold therapy until a clean, sustained arrhythmia is confirmed, rather than interpreting the "noise floor" as VF.
+
+**3. Asymmetric Arm Swing During Brisk Walking/Running**
+*   **Scenario:** Simulate the specific vector of one arm swinging vigorously while the other is immobilized (e.g., holding a rail or object), creating an asymmetric baseline wander.
+*   **Risk:** Asymmetric motion can cause baseline shifts that distort the T-wave, potentially creating "false" R-waves (T-wave oversensing) or masking true R-waves.
+*   **Test Condition:** Apply non-uniform baseline wander with varying slopes. Ensure the derivative-based filters do not count distorted T-waves as ventricular events, which could artificially inflate the calculated heart rate into the shock zone.
+
+**4. Respiratory Distress with Chest Heaving**
+*   **Scenario:** Simulate deep, labored breathing (gasping) combined with minor torso twisting, typical of a patient in respiratory distress but not cardiac arrest.
+*   **Risk:** Large excursions in chest impedance or electrode contact pressure can mimic the undulating baseline of coarse VF or create pseudo-QRS complexes.
+*   **Test Condition:** Combine low-frequency respiratory waves (0.2–0.5 Hz) with moderate amplitude variations. The logic must differentiate the slow, high-amplitude respiratory cycle from the rapid, fragmented activity of VF.
+
+**5. External Vibration Exposure (Vehicle or Machinery)**
+*   **Scenario:** The patient is seated in a moving vehicle or near operating machinery, exposing the device to continuous, multi-frequency vibration.
+*   **Risk:** Continuous broadband noise can obscure true fibrillation waves or create a "fuzzy" baseline that meets the variance thresholds for VF detection.
+*   **Test Condition:** Superimpose broadband random noise (10–50 Hz) on a true VF signal. The filter must not suppress the true VF signal into invisibility (under-sensing) nor interpret the noise alone as VF when the underlying rhythm is sinus.
+
+**6. Electrode Pop/Loose Contact During Movement**
+*   **Scenario:** Simulate intermittent loss of electrode contact (micro-arcs or "pops") occurring precisely during a movement artifact.
+*   **Risk:** Intermittent signal loss creates high-frequency spikes that can be counted as ventricular events, pushing a borderline heart rate over the therapy threshold.
+*   **Test Condition:** Insert random, high-slope discontinuities into the signal stream during motion. The system must flag these as signal integrity failures and inhibit charging rather than counting them as valid beats.
+
+**Validation Criterion:** For all scenarios, the device must either correctly classify the rhythm as "Unanalyzable/Noise" and inhibit shock, or maintain accurate rhythm classification without false positives. Any scenario resulting in an "Indeterminate" state must default to no therapy.
+
+*Ensure these simulations cover the full range of battery voltages and electrode impedances expected in the field, as low power can alter filter performance.*

@@ -1,0 +1,44 @@
+### Pre-Launch Validation Workflow for Parking Enforcement Bot
+
+**Step 1: Construct the Harm Inventory**
+Before testing, explicitly document the specific failure modes where the bot harms disabled drivers. Record:
+*   **Bias/Fairness:** Does the model fail more often on older vehicles, specific plate fonts, or in low-income neighborhoods with poorer street lighting?
+*   **Hallucination as Fact:** The bot marking a valid, albeit faded or obscured, placard as "missing."
+*   **Unsafe Automation:** Issuing a fine without human review when visual confidence is low or data is incomplete (e.g., obscured plate).
+*   **Worst Case:** A disabled driver receives a fine they cannot easily contest due to lack of real-time permit cross-referencing, causing financial distress and loss of trust.
+
+**Step 2: Build Adversarial Test Sets (Measure)**
+Create a dedicated evaluation dataset that does not rely on "average" cases. You must include:
+*   **Lighting Extremes:** Images taken at dawn, dusk, under heavy shadow, and in rain/fog.
+*   **Occlusion Scenarios:** Plates partially blocked by bike racks, foliage, or dirt; placards hanging at odd angles or behind windshields with reflections.
+*   **Edge Cases:** Temporary paper placards, expired but visually similar permits, and non-standard vehicle types (vans with lifts).
+*   **Controls:** Include "known-bad" images (clear violations) and "known-good" images (clearly valid permits) to baseline accuracy.
+
+**Step 3: Define Confidence Tiers, Not Percentages**
+Do not display raw model confidence scores (e.g., "87% sure") to operators or use them as sole decision criteria. Instead, define coarse, human-readable tiers:
+*   **Confirmed:** High clarity, perfect match on visual cues.
+*   **Corroborated:** Good clarity, minor ambiguity.
+*   **Unverified:** Low lighting, obscured plate, or ambiguous placard.
+*   **Rule:** Any image falling into "Unverified" must automatically trigger a human review. Never allow the bot to auto-issue fines in this tier.
+
+**Step 4: Implement the Human-in-the-Loop Gate**
+Because your pipeline cannot cross-reference real-time permits and errors result in irreversible financial harm, **fully automated fine issuance is prohibited for the pilot.**
+*   **Workflow:** The bot acts as a *recommender*, flagging potential violations.
+*   **Gate:** A human operator must review every flagged image, specifically checking the "Unverified" tier and any case involving obscured plates or temporary placards.
+*   **Override:** The human must have a one-click "Dismiss" button with a mandatory reason code (e.g., "Placard visible but faded") to retrain the model.
+
+**Step 5: Execute and Report Residual Risk**
+Run the test sets against the current model. Do not invent a "0% error rate." Report findings as:
+*   "False Positive Rate in Low Light: [Measured %]"
+*   "Failure Rate on Obscured Plates: [Measured %]"
+*   Mark any untested scenario as **UNVERIFIED**.
+If the false positive rate for disabled spots exceeds your owner-set threshold (recommend near-zero tolerance for this high-stakes action), halt the launch.
+
+**Step 6: Draft the Transparency Artifact**
+Create a brief "Model Card" for internal and city leadership use. It must state:
+*   **Intended Use:** Visual screening only; not a final legal determination.
+*   **Limitations:** Cannot verify real-time permit status; struggles with [list specific failures from Step 5].
+*   **Owner:** Name the specific engineer responsible for monitoring these metrics.
+
+**Note:** Legal counsel must determine if automated fines without real-time database checks violate local due process laws; this workflow manages technical risk, not legal liability.
+Never certify the system as "unbiased"; only present the measured error rates and the human safeguards in place.

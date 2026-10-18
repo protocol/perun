@@ -1,0 +1,35 @@
+**Smart-Insulin-Site-Rotation Audit Plan (HanRiver MedTech Beta)**
+
+**1. Harm Inventory & Scope Definition**
+Before testing, explicitly record the worst-case failure: the system recommends an injection into undetected lipohypertrophy or scar tissue, causing poor insulin absorption and potential hyperglycemia. Define the affected groups: patients with darker skin tones (Fitzpatrick IV–VI) and those with complex scar patterns (surgical, acne, or trauma-related). Acknowledge that without external validation, internal rigor must increase.
+
+**2. Data Stratification & "Golden Set" Creation (Low-Cost)**
+Do not rely on aggregate accuracy. Immediately audit your existing image dataset:
+*   **Segment by Skin Tone:** Manually tag a subset of images by skin tone. If the dataset lacks diversity in darker tones, acknowledge this gap as `UNVERIFIED` for those groups; do not assume performance transfers.
+*   **Scar/Lipohypertrophy Variants:** Curate a "challenging set" of 50–100 images containing subtle lipohypertrophy, overlapping scars, and varying lighting conditions common in home environments.
+*   **Controls:** Ensure this set includes known negatives (healthy skin misidentified as damaged) and known positives (damaged skin missed by the model).
+
+**3. Runnable Evaluation Protocol**
+Execute a manual red-team review using the "Golden Set" since automated benchmarks are unavailable:
+*   **Blinded Review:** Have two clinicians independently review the model's recommendations for the challenging set without knowing the ground truth first.
+*   **Metric:** Track "Critical Miss Rate" (recommending a damaged site) separately for each skin tone segment.
+*   **Threshold:** Set a zero-tolerance stop condition for critical misses in the beta. If the model recommends a damaged site for *any* user in the test set, that specific failure mode blocks launch for that subgroup.
+*   **Injection Probe:** Test if users can trick the system by uploading photos with tape, shadows, or non-skin textures to force a recommendation.
+
+**4. Risk Management & Human-in-the-Loop Gate**
+Because this is a high-stakes medical action with irreversible physiological effects:
+*   **Mandatory Override:** The beta must require explicit user confirmation ("I confirm this site looks healthy") before displaying the "Inject Here" signal. The AI provides a *suggestion*, not a command.
+*   **Uncertainty Display:** Do not show a percentage confidence (e.g., "92% safe"). Instead, use defined tiers: **"Clear," "Check Again,"** or **"Unverified – Consult Nurse."** If the model detects low contrast or unusual patterns, it must default to "Check Again."
+*   **Disclosure:** Clearly state in the UI: "This tool assists but does not replace clinical judgment. Always inspect your skin physically."
+
+**5. Transparency Artifact (Model Card Lite)**
+Draft a one-page "System Limitations" document for beta testers and clinicians. It must list:
+*   **Intended Use:** Adjunct for site rotation, not diagnosis.
+*   **Known Gaps:** Explicitly state which skin tones or scar types have insufficient data (`UNVERIFIED`).
+*   **Owner:** Name the specific engineer/clinician pair responsible for reviewing beta failure logs weekly.
+
+**6. Governance**
+Assign one clinician and one engineer as joint owners of the "Critical Miss" log. Schedule a review after the first 50 beta uses. If a critical miss occurs, the feature pauses for that specific failure mode until patched.
+
+**Note:** Legal counsel must review whether this feature constitutes a regulated medical device decision under local Korean law before beta distribution; this plan addresses technical safety, not regulatory compliance.
+**Note:** Never fabricate a "bias score" or "accuracy rate" for the budget report; report the raw count of critical misses found in the stratified test set.

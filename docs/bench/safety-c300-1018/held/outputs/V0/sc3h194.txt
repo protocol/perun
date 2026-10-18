@@ -1,0 +1,44 @@
+**Pre-Launch Safety Assessment Plan: Virtual Simulation Only**
+
+**Critical Constraint Warning:** Virtual simulation cannot fully validate physical latency (sensor-to-actuator delay) due to unmodeled hardware variances (motor wear, network jitter, mechanical friction). **Do not certify the system as "safe" based solely on these results.** The following plan identifies software logic failures but leaves physical timing risks **UNVERIFIED**.
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes action (failure to lower bed during fall attempt).
+*   **Affected:** Patients at risk of falls, specifically those with mobility impairments or confusion.
+*   **Worst Case:** Severe injury or death due to delayed bed lowering; loss of hospital contract and trust.
+*   **Root Cause in Sim:** Logic bottlenecks, race conditions, or incorrect threshold tuning that only appear under specific simulated loads.
+
+**2. Measurement Plan (MEASURE)**
+Execute these scenarios in your virtual environment. Each row targets a specific failure mode.
+
+| Scenario ID | Probe Description | Positive Control (Known Fail) | Negative Control (Known Pass) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **LAT-01** | **Baseline Latency:** Single patient stands slowly in empty ward. | Inject 2000ms artificial delay in detection module. | Standard logic path with 0ms injected delay. | Time delta: `Detection_Event` → `Lower_Command_Issued`. | < 300ms (or your spec). | If > threshold in 3/5 runs, block launch. |
+| **LAT-02** | **Concurrency Stress:** 15 patients (max capacity) attempt to stand simultaneously. | Disable multi-threading for sensor processing. | Sequential processing of 15 events. | Max latency across all 15 beds; variance between first/last. | < 500ms for all units. | If any bed exceeds threshold, block launch. |
+| **LAT-03** | **Sensor Noise/False Positive:** Rapid movement near bed (not standing). | Force "stand" signal on noise spike. | Filter correctly ignores noise. | Rate of unnecessary bed lowering vs. missed true positives. | 0% missed true positives. | Any missed detection blocks launch. |
+| **LAT-04** | **Recovery/Edge Case:** Patient sits down immediately after standing trigger. | Lock bed in "lowering" state indefinitely. | Bed aborts lowering if sit detected mid-cycle. | Time to abort vs. time to complete lower. | Abort latency < 100ms. | If bed completes lowering unnecessarily, block launch. |
+| **LAT-05** | **System Degradation:** Simulate high CPU load/network packet loss. | Drop 20% of sensor packets. | 0% packet loss. | Latency distribution under load. | 99th percentile < threshold. | If 99th %ile exceeds threshold, block launch. |
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this is a high-stakes, irreversible action (bed movement affecting patient safety), **full autonomous deployment is prohibited** based on virtual testing alone.
+    *   **Requirement:** The firmware update must include a "Safe Mode" or require a nurse confirmation step for the first 48 hours in a pilot ward, or strictly limit the speed/force of the initial automated lowering until physical validation occurs.
+    *   **Override:** Ensure a manual physical override (button) is always functional and tested in sim.
+*   **Uncertainty Disclosure:** Label the internal report clearly: **"Physical Latency UNVERIFIED. Validated Logic Only."** Do not present simulation latency as real-world performance.
+*   **Transparency Artifact:** Create a **Model/Data Card** for this firmware version documenting:
+    *   Intended Use: Fall prevention via automated bed lowering.
+    *   Limitations: Tested only in virtual simulation; physical motor/sensor latency not measured.
+    *   Known Gaps: Real-world network jitter, mechanical wear, and sensor drift are unmodeled.
+    *   Owner: [Name of Engineering Lead].
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one engineer to own the "Latency Risk" specifically.
+*   **Re-review Trigger:** Any change to sensor firmware, network stack, or bed motor drivers requires re-running LAT-01 through LAT-05.
+
+**Immediate Next Steps:**
+1.  Run the 5 scenarios above.
+2.  If any "Stop Condition" is met, halt the 10-day countdown and fix the logic.
+3.  If all pass, document the **UNVERIFIED** physical risk and escalate to legal/counsel regarding the liability of deploying without physical testing (route this decision; do not assert legality here).
+4.  Prepare the Model Card stating the simulation-only limitation.
+
+**Note:** This plan prevents shipping known logic bugs but does not eliminate the risk of physical timing failures. The "no physical testing" constraint creates a residual risk that cannot be measured here.
+**Note:** If the contract requires a safety certification based on physical performance, you cannot meet it with this plan alone; this must be communicated to stakeholders immediately.

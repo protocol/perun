@@ -1,0 +1,37 @@
+### Safety Audit Plan: Mumbai Triage AI Stroke Detection
+
+**1. Harm Inventory & Test Case Design (MAP & MEASURE)**
+Before launch, we must inventory the specific harm: **False Negative Triage** (stroke symptoms misclassified as non-emergency), leading to delayed care and potential fatality. Secondary harms include **False Positives** (overloading emergency services) and **Bias** (system failing on specific demographics due to training gaps).
+
+Design your test cases as runnable rows with the following structure. Do not rely on aggregate accuracy; test specifically for these failure modes:
+
+*   **Probe Set A: Atypical Stroke Presentations.**
+    *   *Inputs:* Symptoms describing posterior stroke (dizziness, double vision) or "silent" strokes, varying by age and gender.
+    *   *Positive Control:* Known stroke cases that must trigger Emergency Routing.
+    *   *Negative Control:* Non-stroke neurological events (e.g., migraine) that should not trigger Emergency Routing.
+    *   *Metric:* False Negative Rate (FNR) specifically for stroke class.
+    *   *Stop Condition:* **Zero tolerance** for false negatives in the positive control set. If *any* known stroke case is routed to general practice, launch is blocked.
+*   **Probe Set B: Demographic Slicing.**
+    *   *Inputs:* Identical symptom descriptions varied only by patient age, gender, and implied ethnicity.
+    *   *Metric:* Disparity in FNR across subgroups.
+    *   *Stop Condition:* FNR for any subgroup exceeds the aggregate FNR by >5%.
+*   **Probe Set C: Adversarial/Noisy Input.**
+    *   *Inputs:* Garbled speech-to-text, partial sentences, or users expressing anxiety rather than clinical symptoms.
+    *   *Metric:* Rate of "Unclassified" vs. "Incorrectly Classified."
+    *   *Requirement:* The system must default to "Human Review" or "Emergency" when confidence is low, never to "General Practice."
+
+**2. Monitoring Protocol (MANAGE)**
+Once active, you cannot rely on the model's internal confidence scores (e.g., "87% sure") as they are often uncalibrated. Implement the following:
+
+*   **Confidence Tiers:** Replace raw percentages with defined tiers shown to operators: **Confirmed** (multiple strong indicators), **Corroborated** (single strong indicator), **Unverified** (weak/conflicting data). Any "Unverified" stroke suspicion must route to a human clinician immediately.
+*   **Human-in-the-Loop Gate:** For the initial rollout, **all** recommendations for "General Practice" where stroke keywords were present (even if low confidence) must be reviewed by a human before finalizing the advice to the user. Do not automate irreversible "non-emergency" decisions for high-stakes symptoms.
+*   **Drift Detection:** Establish a daily review of all cases where the user bypassed the triage and went to ER anyway (if trackable) or where follow-up data indicates a missed stroke.
+*   **Transparency Artifact:** Publish a **Model Card** for the hospital networks detailing: intended use (triage only, not diagnosis), known limitations (e.g., "performance unverified for pediatric patients"), and the specific metrics from Probe Sets A-C. Mark any unmeasured metric as **UNVERIFIED**; do not invent a safety rate.
+
+**3. Governance & Legal Routing**
+*   **Owner:** Assign a specific clinical lead responsible for reviewing any "Unverified" or disputed cases daily.
+*   **Legal Duty:** Whether this system constitutes a regulated medical device requiring specific AI disclosures under local Indian law or international standards (like ISO/IEC 42001) is a legal determination. **Route this immediately to counsel.** Do not assert compliance without their sign-off.
+*   **Constraint Adherence:** Given your fixed budget and six-week deadline, prioritize the **False Negative** tests above. If the model cannot meet the zero-tolerance stop condition for stroke detection within these constraints, the only safe path is to narrow the scope (e.g., support fewer symptom types) rather than relax the safety gate.
+
+**Note:** This plan identifies risks and controls; it does not certify the system as "safe" or "unbiased." The final launch decision rests with your clinical and legal owners.
+**Note:** Ensure all test data is de-identified and compliant with patient privacy regulations before running probes.

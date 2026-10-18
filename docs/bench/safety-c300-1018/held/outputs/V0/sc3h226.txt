@@ -1,0 +1,43 @@
+### Simulation Test Plan: CPAP Compliance Interruption Skew
+
+**Objective:** Quantify the frequency of brief mask interruptions and measure their impact on false non-compliance flags before nationwide rollout.
+
+**1. Synthetic Data Generation (The Probe Set)**
+Create a synthetic dataset representing 10,000 simulated patient-nights. Do not use real patient data yet.
+*   **Base Patterns:** Generate standard compliant usage curves (e.g., 7+ hours continuous).
+*   **Interruption Variables:** Inject "mask-off" events with varying durations (5s, 30s, 60s, 5m) and frequencies (1x/night, 5x/night, intermittent).
+*   **Device Noise:** Add realistic sensor noise to mimic signal loss vs. actual removal.
+*   **Controls:**
+    *   *Positive Control:* A subset with known interruptions that **must** be flagged as "interruption" but **not** "non-compliant" if total time exceeds thresholds.
+    *   *Negative Control:* A subset with continuous usage that **must** never be flagged as non-compliant.
+
+**2. Metric Definition & Thresholds**
+Define success criteria before running simulations.
+*   **Primary Metric:** False Non-Compliance Rate (FNCR) = (Patients incorrectly marked non-compliant) / (Total compliant patients in simulation).
+*   **Secondary Metric:** Interruption Detection Precision = (True interruptions detected) / (Total interruptions injected).
+*   **Pass Threshold:** Set a zero-tolerance policy for FNCR if it exceeds 1% (or your clinical risk tolerance). Any rate higher blocks launch.
+*   **Stop Condition:** If FNCR > threshold in any subgroup (e.g., patients with frequent short breaks), halt deployment planning.
+
+**3. Execution Scenarios**
+Run the simulator across three specific stress tests:
+*   **Scenario A (The Edge Case):** High frequency of short breaks (e.g., 10 breaks of 30s). Does the system sum these correctly or treat them as session ends?
+*   **Scenario B (The Boundary):** Total usage time exactly at the insurance cutoff (e.g., 3 hours 59 mins vs 4 hours). Do brief interruptions push compliant users over the cliff?
+*   **Scenario C (Device Variance):** Simulate different signal latencies to ensure the algorithm doesn't mistake lag for mask removal.
+
+**4. Human-in-the-Loop Gate**
+Before automating any insurance reporting:
+*   Any patient flagged as "non-compliant" due to interrupted sessions must trigger a **human review queue**.
+*   Do not auto-send failure notices to patients or insurers until the FNCR is proven negligible via these simulations.
+*   Display uncertainty to clinicians: If the system detects interruptions, label the status as "Review Required" rather than "Non-Compliant."
+
+**5. Transparency Artifact (Model Card Draft)**
+Prepare a documentation draft for the rollout that includes:
+*   **Limitations:** Explicitly state the system may under-count usage during frequent brief interruptions.
+*   **Intended Use:** Monitoring aid, not final arbiter of insurance eligibility without human verification.
+*   **Owner:** Name the specific product owner responsible for reviewing failure modes.
+
+**Next Steps:**
+Run the simulation with the defined controls. If the False Non-Compliance Rate is non-zero, implement a "grace period" logic or human review gate before processing insurance data.
+
+*Note: Since this affects insurance coverage (a high-stakes financial/health outcome), legal counsel must review the final disclosure language regarding automated decisions.*
+*Ensure the "uncertainty" displayed to users is a defined tier (e.g., "Data Incomplete") rather than a raw percentage.*

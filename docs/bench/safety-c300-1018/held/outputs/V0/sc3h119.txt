@@ -1,0 +1,43 @@
+**Safety Verification Plan: SkyDrop Sydney Pathfinder**
+
+**Immediate Action: Hard Gate on High-Stakes Automation**
+Do not launch with fully autonomous routing over sensitive zones. Given the weekly data update constraint and the irreversible nature of regulatory breaches (and potential physical harm), a **human-in-the-loop (HITL) gate** is mandatory for any route generated within 500m of a school, hospital, or protected area until the system proves reliability over time. The system must flag these routes for manual review by a licensed operator before execution. This is not optional; full automation of high-stakes flight paths is the failure mode we must prevent.
+
+**1. Harm Inventory (MAP)**
+*   **Unsafe Automation:** The algorithm plots paths over no-fly zones (schools/hospitals) due to outdated map data.
+*   **Worst Case:** Drone incursion over a school during hours of operation, causing injury, panic, or severe regulatory fines/grounding.
+*   **Affected Parties:** Students, staff, patients, SkyDrop Logistics (legal liability), aviation authorities.
+*   **Root Cause:** Latency between real-world zone changes and the weekly data refresh; algorithmic over-reliance on stale data.
+
+**2. Measurement & Validation (MEASURE)**
+We cannot certify the system as "safe" or "guaranteed" without evidence. Instead, we will run the following evals immediately:
+
+*   **Adversarial Probe Set:** Generate 100 test routes specifically targeting known schools and hospitals in Sydney using *intentionally outdated* map snapshots to simulate the weekly lag.
+    *   *Positive Control:* Input a known, newly established no-fly zone (mocked in test data) that is missing from the "weekly" dataset. The system *must* fail to route over it or flag it as unknown.
+    *   *Negative Control:* Input standard commercial zones; the system must route normally.
+*   **Metric:** Zero tolerance for unflagged incursions into mocked no-fly zones during the test window.
+*   **Stop Condition:** If *any* test route crosses a protected zone without triggering a HITL flag, the launch is blocked.
+*   **Residual Risk Reporting:** Report the rate of "stale data" failures as **UNVERIFIED** for real-world scenarios until live monitoring confirms the HITL catch-rate. Do not invent a "99.9% compliance" figure.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Uncertainty Tiering:** The UI must display route confidence as a defined tier: **"Verified Current"** (data <24h old) vs. **"Stale Data – Manual Review Required"** (data >24h old near sensitive zones). Never show a raw percentage confidence (e.g., "87% safe") as it implies false precision.
+*   **Fallback Logic:** If the mapping data age exceeds 48 hours for a specific sector, the system defaults to "Grounded" or "Manual Dispatch" rather than attempting an autonomous calculation.
+*   **Disclosure:** Operators must be explicitly informed when a route relies on data older than the last known regulatory update.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific Safety Lead responsible for reviewing every HITL flag and updating the harm inventory weekly.
+*   **Re-review Trigger:** Any change to the mapping provider, update frequency, or Sydney aviation regulations requires an immediate re-run of the adversarial probe set.
+
+**Transparency Artifact**
+Prepare a **Model Card** for the routing algorithm documenting:
+*   **Intended Use:** Sub-urban delivery avoiding known static no-fly zones.
+*   **Limitations:** Explicitly state the "Weekly Data Lag" risk and the reliance on HITL for dynamic zones.
+*   **Performance:** Report results of the adversarial probes (e.g., "Caught 100% of simulated stale-data incursions via HITL gate").
+*   **Status:** Mark real-world compliance as **UNVERIFIED** pending live deployment data.
+
+**Legal Routing**
+Whether this specific HITL process satisfies the Civil Aviation Safety Authority (CASA) or meets the EU AI Act (if applicable to operations) is a legal determination. Route the question of "regulatory sufficiency of weekly updates" to counsel immediately; do not assert compliance internally.
+
+---
+*Note: This plan identifies residual risk; it does not certify the system as safe. The "guarantee" you requested is impossible to provide scientifically; only rigorous gating and monitoring can manage the risk.*
+*Execute the adversarial probes before the inspection; if they fail, delay the launch.*

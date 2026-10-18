@@ -1,0 +1,42 @@
+### Pre-Launch Regulatory Compliance Workflow for Rental Price Predictor
+
+Given the five-day constraint and incomplete legal database integration, implement this manual-in-the-loop validation workflow immediately. This process prioritizes high-risk stabilized units using static regulatory caps rather than real-time queries.
+
+**Step 1: Establish Static Regulatory Guardrails**
+Since real-time integration is unavailable, manually compile a "Golden Reference Table" for San Francisco rent control limits.
+*   Extract current base rent limits and allowable annual increase percentages (e.g., CPI-based caps) for stabilized units from the official San Francisco Rent Board guidelines.
+*   Create a local, version-controlled CSV or JSON file containing these hard caps categorized by unit type (e.g., single-family, multi-unit) and build year.
+*   Define the "Hard Stop" threshold: Any suggested price exceeding the base limit plus the maximum allowable cumulative increase is flagged as "Critical."
+
+**Step 2: Implement Pre-Output Filtering Logic**
+Integrate a lightweight validation script into your prediction pipeline that runs before any result is shown to the user.
+*   **Input Check:** Require the property manager to input the unit's build year, number of units, and current registered rent (if applicable) alongside the address.
+*   **Logic Gate:** Compare the model's suggested price against the "Golden Reference Table."
+    *   If `Suggested Price` ≤ `Regulatory Cap`: Allow the output but append a standard disclaimer.
+    *   If `Suggested Price` > `Regulatory Cap`: Suppress the specific dollar amount. Replace it with a warning message: *"Warning: This estimate exceeds current San Francisco rent stabilization limits. Manual legal review is required before listing."*
+*   **Confidence Scoring:** If the model cannot determine stabilization status due to missing data, default to the "Warning" state to prevent false negatives.
+
+**Step 3: Execute Targeted User Acceptance Testing (UAT)**
+With six team members, divide and conquer a manual stress test over the next 48 hours using synthetic data.
+*   **Team A (Data Generation):** Create 50 test cases representing known stabilized units with varying current rents and build years. Include edge cases where the legal rent is exactly at the cap.
+*   **Team B (Validation):** Run these cases through the new filtering logic. Verify that every case exceeding the cap triggers the warning and suppresses the illegal price.
+*   **Team C (False Positive Check):** Run 50 test cases for non-stabilized units (e.g., newer construction) to ensure legitimate market-rate suggestions are not incorrectly blocked.
+*   **Reconciliation:** Any discrepancy between expected and actual system behavior must be logged and fixed immediately. Do not proceed to launch until 100% of critical test cases pass.
+
+**Step 4: Define Operational Guardrails for Launch**
+Since the system cannot guarantee 100% accuracy without the full legal database, update the user interface and terms of use.
+*   **Mandatory Disclaimer:** Display a prominent notice on every result: *"This tool provides market estimates only. It does not constitute legal advice. Landlords are solely responsible for verifying compliance with San Francisco Rent Board regulations before setting rental rates."*
+*   **Audit Log:** Enable logging for every instance where a "Critical" warning is triggered. Record the input parameters, the suggested price, and the regulatory cap used. This creates an audit trail demonstrating due diligence.
+*   **Feedback Loop:** Add a "Report Issue" button for property managers to flag potential errors, allowing your team to patch the static reference table post-launch.
+
+**Step 5: Final Go/No-Go Decision**
+Convene a final review 24 hours before launch.
+*   Review the UAT pass/fail metrics.
+*   Confirm the static reference table is loaded and accessible in the production environment.
+*   Verify that the disclaimer and audit logging are active.
+*   If any critical bug remains where an illegal price could be displayed without a warning, delay the launch. Compliance failure poses a greater risk than a delayed release.
+
+This workflow shifts the burden of real-time legal verification to a static, conservative filter and human oversight, mitigating immediate liability while you complete the full database integration.
+
+*Note: This workflow relies on manual updates to the static cap table; assign one team member to monitor SF Rent Board announcements weekly post-launch.*
+*Ensure all test data used in UAT is synthetic to avoid privacy violations during the review.*

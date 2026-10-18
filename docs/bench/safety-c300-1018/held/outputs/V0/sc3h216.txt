@@ -1,0 +1,33 @@
+### Risk Assessment: Patient Diet Compliance Tracker (Desert Care)
+
+**Critical Failure Modes (Harm Inventory)**
+The highest-risk failure mode is **False Compliance (Hallucination as Fact)**: the AI incorrectly verifies a meal was eaten when it was skipped. In a diabetic care context, this leads to dangerous medication overdoses. Secondary risks include:
+*   **Bias/Unfair Outcomes:** The vision model may fail on specific skin tones, lighting conditions common in Cairo homes, or non-standard local dishes, systematically disadvantaging specific patient demographics.
+*   **Automation Bias:** Clinicians may trust the "Compliant" flag without question, ignoring subtle patient reports of missed meals.
+*   **Missing Disclosure:** Patients may not realize an AI is judging their intake, leading to anxiety or attempts to "trick" the sensor rather than communicating honestly.
+
+**Low-Cost Validation Methods (Measure)**
+Since third-party auditing is not an option, you must build internal adversarial tests immediately:
+1.  **"Red Team" the Edge Cases:** Do not just test with perfect data. Create a "negative control" set containing images of empty plates, plates with similar-colored non-food items, and meals partially obscured by hands or shadows. Run these through your system; if *any* are marked "Compliant," the threshold is unsafe.
+2.  **Subgroup Slicing:** Manually curate a small test set (50–100 images) representing diverse lighting (dim evening light vs. bright noon), plate types, and common Cairo dishes. Measure accuracy *per subgroup*, not just overall. If accuracy drops below 99% for any subgroup, that is a known limitation that must be documented.
+3.  **Confidence Tiering:** Never output a raw percentage (e.g., "87% sure") to clinicians. Instead, map scores to defined tiers: **Confirmed** (high confidence, clear view), **Unverified** (low light, obstruction), or **Review Required**. Any "Unverified" result must default to "Non-Compliant" or require human check, never "Compliant."
+
+**Human-in-the-Loop Gate (Manage)**
+Because this system triggers medication adjustments (a high-stakes, irreversible action), **full automation is unsafe.**
+*   **The Gate:** Implement a rule where *any* flag for "Non-Compliance" or any result marked "Unverified" by the AI triggers a mandatory human review by a nurse or dietitian before any medical record is updated or medication is adjusted.
+*   **Override Mechanism:** Clinicians must have a one-click way to override the AI's "Compliant" flag if patient self-reporting contradicts it. Log these overrides heavily; they are your primary signal for model drift.
+
+**Transparency Artifact (Model Card)**
+Before launch, produce a one-page "Model Card" for your clinical team. It must state:
+*   **Intended Use:** Monitoring standard meals in home settings; not for liquid-only diets or obscured views.
+*   **Known Limitations:** List the specific lighting or food types where testing showed lower accuracy.
+*   **Owner:** Name the specific developer responsible for monitoring error logs.
+*   **Status:** Clearly mark untested scenarios as "UNVERIFIED." Do not invent accuracy statistics for conditions you have not measured.
+
+**Governance**
+Assign one developer as the "Safety Owner" responsible for reviewing all "Unverified" cases and overrides weekly. If the rate of false compliance rises, the feature must be paused.
+
+***
+
+**Note:** Legal requirements for AI disclosure in Egyptian healthcare and whether this constitutes a regulated medical device decision must be routed to legal counsel; this assessment recommends disclosure as a safety control but does not assert legal duty.
+**Note:** Do not launch with the assumption that the system is "unbiased"; treat it as a decision-support tool that requires human verification for all high-stakes outcomes.

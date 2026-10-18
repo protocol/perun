@@ -1,0 +1,44 @@
+### Pre-Launch Safety Assessment Plan: Oxygen Flow Stability During Sleep Modes
+
+**Objective**
+Verify that the smart-oxygen-concentrator maintains therapeutic oxygen delivery thresholds during automatic power-saving transitions triggered by simulated deep sleep states, ensuring no hypoxic events occur despite supply chain-constrained power management hardware.
+
+**1. Test Environment & Simulation Setup**
+*   **Patient Simulators:** Utilize medical-grade lung simulators capable of replicating respiratory rates and tidal volumes for three distinct profiles:
+    *   *Profile A:* Stable chronic obstructive pulmonary disease (COPD) patient in deep sleep (low respiratory rate, shallow tidal volume).
+    *   *Profile B:* Patient with sleep apnea events interspersed with deep sleep.
+    *   *Profile C:* Restless sleeper with frequent position changes (activity spikes).
+*   **Activity/Sleep Signal Injection:** Since physical movement cannot be easily simulated on a bench, inject synthetic sensor data (accelerometer/gyroscope patterns) directly into the device's microcontroller input pins to force "Deep Sleep" state transitions without physical motion.
+*   **Measurement Instrumentation:** Connect high-frequency oxygen analyzers (response time <100ms) at the patient interface (cannula/mask) to log fractional inspired oxygen (FiO2) and flow rate (L/min) continuously.
+
+**2. Test Scenarios**
+Execute the following sequences for each patient profile, repeating each test 50 times to account for statistical variance:
+
+*   **Scenario 1: The "Deep Sleep" Transition Cliff**
+    *   *Action:* Transition device from "Active/Awake" mode to "Deep Sleep" power-saving mode instantly via signal injection.
+    *   *Critical Check:* Monitor for flow rate drops exceeding 15% within the first 30 seconds. Verify if the algorithm reduces flow below the prescribed minimum therapeutic threshold defined in the device specifications.
+    *   *Failure Condition:* FiO2 drops below 90% (or clinical spec) for >10 seconds during the transition.
+
+*   **Scenario 2: Sustained Deep Sleep Drain**
+    *   *Action:* Maintain "Deep Sleep" signal for 8 continuous hours while simulating a battery level dropping from 100% to 15%.
+    *   *Critical Check:* Observe if aggressive power-saving algorithms compound over time, causing a gradual "creep" in flow reduction that violates safety margins only after several hours.
+    *   *Failure Condition:* Any uncommanded flow reduction correlating with battery voltage thresholds rather than patient need.
+
+*   **Scenario 3: False Positive Recovery**
+    *   *Action:* Inject a "Deep Sleep" signal, wait for power-saving activation, then immediately inject a "Distress/Apnea" signal (simulated gasping or cessation of breath).
+    *   *Critical Check:* Measure latency between the distress signal and the restoration of full flow. The power-saving mode must not introduce a delay in emergency response.
+    *   *Failure Condition:* Recovery latency exceeds 2 seconds or flow fails to return to 100% of prescribed rate.
+
+**3. Data Analysis & Acceptance Criteria**
+*   **Primary Metric:** Minimum FiO2 and Flow Rate recorded during any power-saving state.
+*   **Safety Threshold:** The device must never deliver less than the prescribed minimum flow (e.g., if prescribed 2 L/min, it must never drop below 1.8 L/min regardless of battery status).
+*   **Statistical Pass Rate:** 100% of tests must maintain oxygen levels within the safe therapeutic window. Zero tolerance for hypoxic dips.
+
+**4. Mitigation Verification (If Failures Occur)**
+Given the chip swap constraint, if failures are detected, immediately test firmware-only mitigations:
+*   **Hard Floor Implementation:** Verify if a firmware patch can enforce an absolute "hard floor" on flow rate that overrides power-saving logic.
+*   **Transition Smoothing:** Test if ramping down flow over 60 seconds (instead of instant cuts) prevents the observed drastic drops.
+
+**Deliverable:** A validation report detailing the minimum oxygen delivery observed across all scenarios, highlighting any instance where power-saving logic compromised patient safety, accompanied by a recommendation on whether the current firmware logic is safe for release with the existing hardware.
+
+*Note: This assessment must be conducted in a controlled lab environment prior to any human trials. If the "hard floor" cannot be enforced via firmware, market release should be reconsidered regardless of certification status.*

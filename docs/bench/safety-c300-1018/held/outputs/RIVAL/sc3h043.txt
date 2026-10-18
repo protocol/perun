@@ -1,0 +1,31 @@
+### Pre-Launch Social Impact Testing Strategy
+
+**Objective:** Quantify and qualify the disparate impact of the high-risk geofencing feature on residents of stigmatized neighborhoods in Rio, ensuring compliance with local data regulations while identifying potential civil rights risks before deployment.
+
+**Phase 1: Synthetic Demographic Modeling (Week 1)**
+Since historical crime data usage is legally constrained, construct a synthetic test suite that decouples location from crime statistics.
+*   **Data Creation:** Generate a dataset of 10,000 synthetic ride requests distributed across Rio's ZIP codes. Ensure proportional representation of low-income and high-income areas, specifically oversampling neighborhoods known to be historically stigmatized (e.g., specific favelas) regardless of current crime stats.
+*   **Variable Isolation:** Create test pairs where the only variable is the pickup coordinate (stigmatized vs. non-stigmatized), keeping time of day, user rating, and destination constant.
+*   **Regulatory Check:** Verify that the synthetic coordinates do not require processing prohibited historical crime records, relying instead on the *current* internal flagging logic you intend to deploy.
+
+**Phase 2: Automated Disparity Audit (Week 2)**
+Run the synthetic dataset against the staging environment of the new feature.
+*   **Denial Rate Analysis:** Calculate the "Denial Disparity Ratio." Compare the percentage of automatic disablements in flagged neighborhoods versus demographically similar non-flagged areas.
+*   **False Positive Mapping:** Identify "edge case" coordinates where the geofence bleeds into safe, essential infrastructure (e.g., hospitals, schools, or transit hubs located just inside a flagged boundary).
+*   **Alternative Access Check:** For every denied request, log whether the system offers a viable alternative (e.g., "walk to a safer pickup spot"). Measure the distance required; if the alternative requires walking >200 meters through unsafe terrain, flag this as a critical failure.
+
+**Phase 3: Qualitative Impact Simulation (Week 3)**
+Translate quantitative denials into human impact scenarios for the product team.
+*   **Commute Disruption Scenarios:** Select 50 high-frequency denial patterns from Phase 2 and map them to real-world consequences (e.g., "User cannot reach shift work at 6 AM," "Parent cannot reach pediatric clinic").
+*   **Feedback Loop Stress Test:** Simulate user appeals. If a user is denied, does the system provide a clear, non-stigmatizing explanation? Test if the appeal process is accessible to users with low digital literacy or limited data plans.
+*   **Regulatory Alignment Review:** Present the Denial Disparity Ratio to legal counsel to ensure the disparate impact does not violate local anti-discrimination statutes, even if the input data was legally sourced.
+
+**Deliverable Metrics for Go/No-Go Decision:**
+1.  **Disparity Threshold:** If denial rates in stigmatized areas exceed non-stigmatized areas by >20% without a corresponding, verifiable, real-time safety incident rate, recommend a halt.
+2.  **Essential Service Blockade:** Count of denials occurring within 100 meters of essential services. Target must be zero.
+3.  **Alternative Viability:** Percentage of denied rides where the suggested alternative pickup is reachable within 3 minutes on foot. Target >90%.
+
+This strategy shifts the focus from "is the crime data accurate?" to "is the *consequence* of our decision equitable?" allowing you to deploy with evidence of social due diligence rather than just technical functionality.
+
+*Note: Ensure all synthetic data is scrubbed before sharing with the eight-member team to prevent accidental leakage of real user patterns.*
+*Recommend involving a local civil rights observer for the Phase 3 scenario review to validate cultural context.*

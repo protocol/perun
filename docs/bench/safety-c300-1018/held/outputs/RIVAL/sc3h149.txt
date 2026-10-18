@@ -1,0 +1,38 @@
+# Analysis Plan: Smoothing Algorithm Impact on Hypertensive Crisis Detection
+
+**Objective**
+Quantify the rate at which the current smoothing algorithm suppresses true hypertensive spikes (false negatives) without access to full historical reprocessing, ensuring patient safety prior to launch.
+
+**1. Synthetic Spike Injection (Targeted Stress Testing)**
+Since full reprocessing is impossible, generate a controlled "Golden Dataset" of synthetic blood pressure traces.
+*   **Base Signals:** Create realistic baseline variations for stable, pre-hypertensive, and hypertensive patients.
+*   **Injected Events:** Superimpose mathematically defined spike events representing impending crises (e.g., rapid systolic rise from 140 to 190 mmHg over 5 minutes).
+*   **Execution:** Run *only* this small synthetic dataset through the existing production pipeline.
+*   **Metric:** Calculate the "Spike Attenuation Ratio" (Recorded Peak / Actual Injected Peak). If the ratio drops below a safety threshold (e.g., 0.85), the algorithm is masking crises.
+
+**2. Residual Analysis on Recent Live Data**
+Analyze the most recent 48 hours of live incoming data without reprocessing the whole history.
+*   **Method:** Compare raw incoming cuff readings against the smoothed output currently being stored.
+*   **Focus:** Isolate instances where the raw input exceeded the crisis threshold (e.g., >180 mmHg) but the smoothed output did not trigger an alert.
+*   **Metric:** Count "Suppressed Alerts." If raw spikes are consistently flattened below the clinical alert threshold, the smoothing window or weighting factors are too aggressive.
+
+**3. Edge-Case Boundary Verification**
+Define the precise mathematical boundary where the algorithm transitions from "noise filtering" to "signal suppression."
+*   **Test:** Determine the minimum slope (rate of pressure rise) and minimum amplitude (height of spike) required for the system to record a valid high-pressure event.
+*   **Validation:** Have the lead cardiologist confirm if these minimum thresholds are clinically acceptable. If the system requires a spike to be unnaturally sharp or high to be recorded, it poses a safety risk.
+
+**4. Latency vs. Accuracy Trade-off Assessment**
+Evaluate if increasing the smoothing window to reduce noise is inadvertently introducing dangerous latency.
+*   **Test:** Measure the time delta between the raw spike occurrence and the smoothed peak registration.
+*   **Risk:** Excessive delay in reporting a crisis can be as harmful as under-reporting the magnitude. Ensure the "time-to-alert" remains within clinical guidelines for hypertensive emergencies.
+
+**5. Go/No-Go Recommendation Criteria**
+Establish clear pass/fail criteria based on the above tests:
+*   **Fail:** Any synthetic crisis spike >180 mmHg is recorded as <160 mmHg.
+*   **Fail:** More than 5% of recent live raw spikes are suppressed below alert thresholds.
+*   **Pass:** The system preserves the magnitude of rapid rises within ±10% of raw input while still filtering minor cuff noise.
+
+**Immediate Action**
+Execute the Synthetic Spike Injection immediately using a local script that mimics the server's input format. This requires minimal compute and no historical data migration. If the attenuation ratio is unsafe, the smoothing parameters must be relaxed or the alert logic must be decoupled to evaluate raw data directly for crisis detection, bypassing the smoother for high-magnitude events.
+
+*Note: This plan relies on mathematical injection and recent window analysis to bypass the server capacity constraint. Do not launch until the "Spike Attenuation Ratio" is verified as safe by the lead cardiologist.*

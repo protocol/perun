@@ -1,0 +1,16 @@
+**Critical Edge-Case Scenarios for Motion Artifact Simulation**
+
+To validate the signal processing logic against motion-induced false positives, simulate the following high-risk scenarios where kinetic energy mimics treatable arrhythmias (VF/VT):
+
+1.  **The "Slap-Thump" Sequence:** Rapid, high-amplitude chest impacts mimicking CPR compressions or a fall, immediately followed by sinus rhythm. *Risk:* Algorithm locks onto the impact transient as a QRS complex, calculating a rate >180 bpm and triggering shock during the recovery pause.
+2.  **Rhythmic Tremor Resonance:** Continuous, low-amplitude oscillations at 4–7 Hz (mimicking severe Parkinsonian tremor or shivering) sustained for >8 seconds. *Risk:* Spectral overlap with VF bandwidth causes the filter to pass the noise as a chaotic rhythm, bypassing morphology discrimination.
+3.  **Asymmetric Arm Swing vs. Torso Rotation:** Vigorous running or swimming motions where limb acceleration decouples from thoracic impedance changes. *Risk:* Accelerometer data suggests high activity (suppressing therapy), but the ECG lead movement creates a waveform that independently satisfies VT criteria, causing a logic conflict that defaults to shock.
+4.  **The "Roll-Over" Baseline Wander:** Slow, large-scale body rotation in bed creating massive baseline shifts that clip the signal amplifier. *Risk:* Clipping creates square-wave artifacts that the derivative-based QRS detector misinterprets as wide-complex tachycardia.
+5.  **Hiccup/Sneeze Spike Train:** Sudden, sharp diaphragmatic contractions occurring at irregular intervals (0.5–1.5 Hz). *Risk:* Sharp spikes are detected as premature ventricular contractions (PVCs); if clustered, they may satisfy "R-on-T" or couplet criteria for VT initiation.
+6.  **Lead Tug-and-Release:** Sudden tension on the lead system (e.g., catching a device on clothing) followed by immediate slack. *Risk:* Generates a biphasic artifact mimicking a monomorphic VT onset, potentially fooling onset-stability algorithms.
+
+**Execution Constraints:**
+*   **Human-in-the-Loop Gate:** Do not deploy this firmware to human subjects or live devices until these specific scenarios are passed in a hardware-in-the-loop simulation with a cardiologist reviewing every "shock advised" decision.
+*   **Transparency Artifact:** Document the failure rate for each scenario in a data card; if any scenario yields a false positive, the metric is "UNVERIFIED" for that condition, and the feature cannot be certified safe.
+
+Note: Route the final determination of regulatory compliance and legal disclosure duties to counsel immediately; this list is a technical red-team input, not a safety certification.

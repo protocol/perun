@@ -1,0 +1,53 @@
+### Manual Simulation Testing Plan for Renal Dosing Assistant
+
+**Objective:** Verify the dosing engine correctly reduces or holds medication when simulated kidney function declines rapidly, preventing toxicity.
+
+**Preparation**
+1.  **Select High-Risk Medications:** Focus tests on drugs with narrow therapeutic indices heavily dependent on renal clearance (e.g., Vancomycin, Gentamicin, Digoxin, or specific DOACs).
+2.  **Define Baseline Profiles:** Create three static patient personas on paper:
+    *   *Patient A:* Stable Stage 3 CKD (eGFR 45 mL/min).
+    *   *Patient B:* Elderly, borderline Stage 3/4 (eGFR 35 mL/min).
+    *   *Patient C:* Acute Kidney Injury (AKI) risk (baseline eGFR 60 mL/min).
+3.  **Establish "Golden Rules":** Before testing, document the expected dose adjustment for each drug at specific eGFR thresholds (e.g., "If eGFR drops <30, hold Drug X"). This is your oracle for pass/fail.
+
+**Test Scenarios: Rapid Deterioration Simulations**
+Execute these sequences by manually entering data points as if they were new lab results. Record the system's recommended dose immediately after each entry.
+
+*   **Scenario 1: The Acute Drop (AKI Simulation)**
+    *   *Input Sequence:* Enter baseline eGFR 60 → Wait (simulate 24h) → Enter eGFR 25 → Enter eGFR 15.
+    *   *Verification:* Does the system immediately flag "Critical Change"? Does the dose for Patient C drop to zero or the renal-failure minimum within the second entry?
+    *   *Failure Mode:* System averages the values or delays adjustment until a third confirmation.
+
+*   **Scenario 2: The Fluctuating Boundary**
+    *   *Input Sequence:* Enter eGFR 32 → Enter eGFR 28 → Enter eGFR 31 → Enter eGFR 29.
+    *   *Verification:* Does the dosing logic oscillate wildly, or does it apply a safety buffer? The system should prioritize the lower value (28/29) for safety rather than averaging back to a safer zone.
+    *   *Failure Mode:* System re-escalates dose prematurely when eGFR hits 31.
+
+*   **Scenario 3: Data Entry Latency & Backfilling**
+    *   *Input Sequence:* Enter today's date with eGFR 40. Then, manually enter a "delayed result" from yesterday with eGFR 20.
+    *   *Verification:* Does the system recalculate the *current* recommendation based on the worst recent value, even if entered out of order?
+    *   *Failure Mode:* System ignores the backfilled critical value because the "current" date already has a non-critical entry.
+
+*   **Scenario 4: The "Impossible" Value Handling**
+    *   *Input Sequence:* Enter eGFR 120 (improvement) followed immediately by eGFR 5 (catastrophic failure) for the same timestamp.
+    *   *Verification:* Does the system prompt for confirmation or flag a data error? It must not silently accept the 120 and ignore the 5, nor vice versa, without alerting the user.
+
+**Documentation Protocol for Safety Evidence**
+To prove safety without digital logs, create a "Manual Audit Trail" spreadsheet with the following columns for every test case:
+1.  **Test ID & Persona:** (e.g., T-01, Patient B).
+2.  **Input Stream:** List the exact sequence of values entered and the order.
+3.  **System Output:** The exact dose recommended after *each* entry.
+4.  **Expected Outcome:** The pre-defined "Golden Rule" result.
+5.  **Pass/Fail:** Binary result.
+6.  **Reviewer Signature:** A second team member must verify the calculation manually against the drug guideline and sign off.
+
+**Deployment Readiness Criteria**
+Do not deploy until:
+*   100% of "Acute Drop" scenarios result in immediate dose reduction/holding.
+*   Zero instances where the system suggests a higher dose following a lower eGFR entry.
+*   All "Fail" results have a documented workaround or code fix verified by a re-test.
+
+This manual stress test substitutes for real-time integration by forcing the logic engine to confront its most dangerous failure mode: missing a rapid decline in kidney function.
+
+*Note: Ensure all manual test data uses synthetic patient IDs to maintain privacy compliance during the QA phase.*
+*Retain these physical/digital logs as your primary safety validation artifact for regulatory review.*

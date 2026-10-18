@@ -1,0 +1,33 @@
+### Automated Adjudicator False-Denial Review Workflow
+
+To balance speed and accuracy for your beta release without external auditing, implement the following three-tiered internal review process. This workflow prioritizes claims most likely to be false negatives (valid claims flagged as fraud) while maintaining rapid payout for clear cases.
+
+**1. Pre-Processing Triage & Segmentation**
+Before human review, segment incoming decisions into three streams based on the system's confidence score and specific flag triggers:
+*   **Stream A (Auto-Approve):** High confidence "Valid" decisions. These bypass manual review to ensure speed.
+*   **Stream B (Targeted Review):** Low confidence "Valid" decisions OR "Fraud" decisions triggered specifically by "image quality," "lighting," or "glare" flags. This is your primary focus for catching false denials.
+*   **Stream C (Deep Dive):** "Fraud" decisions triggered by structural anomalies or known pattern matches unrelated to lighting. These proceed to standard fraud investigation protocols.
+
+**2. The "Lighting & Quality" Rapid Verification Squad**
+Assign two data scientists and two product managers to form a rotating "Rapid Verification Squad" dedicated solely to Stream B. Their workflow must be:
+*   **Blind Re-evaluation:** Reviewers see the original photo and the specific flag (e.g., "Lighting mismatch") but *not* the final "Deny" decision initially, to reduce anchoring bias.
+*   **The "Squint Test" Protocol:** If the reviewer determines within 45 seconds that the image quality alone explains the anomaly (e.g., shadow looks like a dent, glare looks like a crack), they override the decision to "Manual Approve."
+*   **Escalation Threshold:** If the reviewer cannot determine the cause within 45 seconds, the claim moves to a "Deep Dive" queue for senior review, preventing bottlenecks on ambiguous cases.
+
+**3. Dynamic Sampling for Stream A (Quality Assurance)**
+To ensure the auto-approve stream isn't drifting, implement a dynamic sampling rate:
+*   **Baseline:** Randomly select 5% of Stream A claims for post-decision review.
+*   **Trigger-Based Increase:** If the Rapid Verification Squad finds that >15% of Stream B cases were actually valid claims misidentified due to a specific new lighting condition (e.g., sunset glare), immediately increase the Stream A sampling rate to 20% and filter specifically for images taken during similar times/conditions.
+
+**4. Feedback Loop & Model Tuning**
+*   **Daily Standup:** The squad spends 15 minutes daily categorizing the *reason* for false denials (e.g., "Nighttime photos," "Rainy windshield").
+*   **Rule Patching:** Data scientists use these categories to create immediate, lightweight pre-filters (e.g., "If flag is 'lighting' and time is 'night', force human review") rather than waiting for full model retraining.
+*   **Policyholder Communication:** For any claim denied in Stream B that is later overturned, trigger an automated apology email with an expedited payout tracker to maintain trust.
+
+**Execution Metrics**
+Track two key metrics daily: **False Denial Rate** (percentage of reviewed denials overturned) and **Review Latency** (average time from upload to final decision). If latency exceeds 4 hours, reduce the Stream A sampling rate temporarily; if the False Denial Rate exceeds 10%, expand the Rapid Verification Squad's scope to include borderline Stream C cases.
+
+***
+
+*Note: Ensure all reviewers are calibrated using a shared set of 20 pre-selected "gold standard" images to maintain consistency in the "Squint Test."*
+*This workflow relies on your existing team's domain knowledge to act as a high-precision filter before considering costly model retraining.*

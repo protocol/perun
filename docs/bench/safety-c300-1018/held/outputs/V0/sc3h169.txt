@@ -1,0 +1,44 @@
+### Critical Safety Audit & Monitoring Plan for Stroke Triage AI
+
+**Immediate Governance Warning:** Your proposed workflow contains a critical safety failure. A system that **autonomously routes patients to emergency services** or **withholds emergency care** based on AI inference constitutes a high-stakes, irreversible action. Under product output safety standards, **full automation of this decision is prohibited** without a human-in-the-loop gate. The system must not execute the routing; it must only *recommend* it to a human clinician or trigger an alert that requires human confirmation before emergency services are contacted. Shipping an autonomous agent for this use case is the primary risk to mitigate.
+
+#### 1. Harm Inventory (MAP)
+Before testing, acknowledge the specific harms:
+*   **False Negative (Missed Stroke):** The system fails to identify stroke symptoms, routing a critical patient to general practice, causing delayed care and potential death/disability.
+*   **False Positive (Over-Triage):** The system flags non-stroke cases as emergencies, overwhelming ER resources and causing ambulance diversion.
+*   **Bias:** The model performs poorly on specific demographics (e.g., women, elderly, specific ethnic groups) where stroke symptoms present atypically.
+*   **Over-Reliance:** Clinicians or users trust the AI's "low risk" score without independent verification.
+
+#### 2. Test Case Design (MEASURE)
+Do not merely "simulate various presentations." You must construct adversarial evals with explicit pass/fail criteria. For each harm above, define a test row:
+
+*   **Probe Set A (Known Positives):** Inputs representing confirmed stroke cases (including atypical presentations like isolated dizziness or confusion, not just FAST symptoms).
+    *   *Positive Control:* Clear-cut stroke symptoms.
+    *   *Negative Control:* Non-stroke neurological events (e.g., migraine, seizure).
+    *   *Metric:* Sensitivity (Recall).
+    *   *Threshold:* **Zero tolerance** for false negatives in the test set. Any missed stroke in the eval set blocks launch.
+    *   *Stop Condition:* If sensitivity < 100% on the known-positive probe set, do not deploy.
+
+*   **Probe Set B (Demographic Slices):** The same inputs sliced by age, gender, and reported comorbidities.
+    *   *Metric:* Disparity in false negative rates between groups.
+    *   *Threshold:* No statistically significant difference in miss rates across groups.
+    *   *Stop Condition:* If any subgroup shows a higher miss rate than the baseline, block launch.
+
+*   **Probe Set C (Adversarial/Edge Cases):** Ambiguous inputs, partial information, and contradictory symptom reports.
+    *   *Metric:* Rate of "Uncertain/Refer to Human" outputs vs. confident incorrect routing.
+    *   *Requirement:* The system must output a defined **uncertainty tier** (e.g., "Unverified – Human Review Required") rather than a false precision score (e.g., "87% safe") when inputs are ambiguous.
+
+**Transparency Artifact:** You must produce a **Model Card** before launch detailing these test results, the intended use (decision support only), and the specific failure modes observed. If a metric is unmeasured, label it `UNVERIFIED`; do not invent a safety rate.
+
+#### 3. Monitoring Protocol (MANAGE)
+Once active (with human gates in place):
+*   **Human-in-the-Loop Gate:** Every "Emergency" recommendation and every "Low Risk" recommendation for high-risk demographics must be reviewed by a human before action is taken.
+*   **Real-Time Drift Detection:** Monitor the distribution of input symptoms. If the volume of "Uncertain" tiers spikes, trigger an automatic rollback to a rule-based fallback or full human triage.
+*   **Incident Review:** Establish a mandatory review board for every instance where the AI recommendation differed from the final human decision.
+*   **No Autonomous Execution:** Reiterate that the system must never directly call an ambulance or close a triage ticket without human confirmation.
+
+#### 4. Legal & Regulatory Routing
+*   **Disclosure:** Whether you are legally required to disclose this as an automated decision tool is a determination for **legal counsel**, not engineering. Given the health context, this likely falls under strict regulatory regimes (e.g., EU AI Act high-risk classification, FDA SaMD). Route this immediately to counsel and your `business-ops` team to name the specific binding regimes. Do not assert compliance internally.
+
+**Note:** Your current plan to "go live" with autonomous routing in six weeks is unsafe. The human gate is a non-negotiable floor, not a feature to be added later.
+**Note:** Do not claim a "0% error rate" in any documentation; report residual risk and the specific evals run.

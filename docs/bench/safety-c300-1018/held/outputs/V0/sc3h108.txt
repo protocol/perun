@@ -1,0 +1,45 @@
+# Risk Mitigation Plan: Rio CrowdSafe Crowd-Density Predictor
+
+## 1. Harm Inventory & Worst-Case Scenarios
+Before validation, we explicitly name the primary harm: **Unsafe Automation of High-Stakes Actions**.
+*   **Failure Mode:** The algorithm misinterprets historical flow data, directing large crowds into narrow alleyways with limited egress.
+*   **Worst-Case Realistic Outcome:** A stampede or crush injury resulting from bottlenecking in non-evacuation-grade infrastructure during peak carnival density.
+*   **Affected Parties:** Tourists (primary), local residents, emergency responders.
+
+## 2. Validation Strategy (Measure)
+Since live simulations are prohibited, we must treat historical video data as our adversarial test bed. We will not assert safety; we will measure residual risk.
+
+*   **Adversarial Probe Set:** Isolate historical video segments where crowd density exceeded 4 persons/m² or where flow direction changed abruptly. These are our "known-bad" positive controls.
+*   **Negative Controls:** Select segments with high density but stable, safe flow to ensure the model does not over-flag safe zones.
+*   **Metric & Threshold:** Define a "Safety Violation" as any recommended route passing through a zone historically flagged as a bottleneck during similar density events.
+    *   **Pass Threshold:** Zero recommendations routing >500 people into zones classified as "narrow alley/no-egress" in the city planner dataset.
+    *   **Stop Condition:** If the model suggests an unsafe route for *any* probe in the high-density set, the feature is blocked from autonomous deployment.
+*   **Data Limitation Disclosure:** Because we cannot simulate novel crowd behaviors (only react to historical ones), the model's reliability for *unseen* crowd dynamics is marked **UNVERIFIED**. This limitation must be prominent in the system's model card.
+
+## 3. Human-in-the-Loop (HITL) Gates (Manage)
+Given the irreversible physical risk, full autonomy is prohibited. We implement a tiered confidence system based on defined categories, not raw percentages.
+
+*   **Confidence Tiers (Defined):**
+    *   **Confirmed:** Route matches historical safe flow patterns for current density levels. -> *Auto-approve.*
+    *   **Corroborated:** Route is safe historically, but current density is near historical maximums. -> *Flag for Planner Review.*
+    *   **Unverified:** Current density exceeds historical maximums or flow pattern is novel. -> *Block Recommendation.*
+*   **The Hard Gate:** Any recommendation involving a route segment with <3 meters width during "High" or "Critical" density alerts requires explicit confirmation by a human city planner before being displayed to users.
+*   **Override Mechanism:** Planners must have a "Kill Switch" to revert all algorithmic routing to static, pre-approved safe maps instantly.
+
+## 4. Transparency & Governance
+*   **Model Card:** Publish a versioned artifact detailing:
+    *   **Intended Use:** Guiding tourists in moderate density; *not* for emergency evacuation or crowd control.
+    *   **Limitations:** Reliance on historical video only; inability to predict novel stampede triggers.
+    *   **Owner:** Named lead data analyst and city planning liaison.
+*   **User Disclosure:** Clearly label all dynamic routes as "AI-Suggested Based on Historical Patterns" to mitigate over-reliance.
+*   **Legal Routing:** Consult counsel immediately regarding liability for automated crowd direction under local safety regulations and the EU AI Act (if applicable to tourists), specifically regarding "high-risk" AI systems. Do not assume compliance; verify duty.
+
+## 5. Definition of Done for Launch
+*   [ ] Harm inventory signed off by all ten team members.
+*   [ ] Adversarial testing on historical data completed with zero unsafe routes in positive controls.
+*   [ ] HITL gate implemented and tested for all "narrow alley" scenarios.
+*   [ ] Model Card published with "UNVERIFIED" status for novel crowd behaviors.
+*   [ ] Legal counsel consulted on disclosure requirements.
+
+**Note:** Do not launch with full autonomy. The cost of a false positive (unnecessary detour) is low; the cost of a false negative (stampede) is catastrophic.
+**Note:** If historical data lacks examples of near-miss stampedes, your "negative control" is weak; explicitly state this gap in the Model Card.

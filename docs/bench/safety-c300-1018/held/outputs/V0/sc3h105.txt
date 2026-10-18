@@ -1,0 +1,42 @@
+### Pre-Launch Verification Protocol: Nairobi WildGuard Alert Calibration
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific harm: **Unsafe Automation / Over-Reliance**.
+*   **Failure Mode:** The system classifies natural migration as poacher activity (False Positive).
+*   **Affected Party:** Ranger teams (wasted fuel, fatigue, diverted attention from real threats) and wildlife (potential stress from unnecessary ranger presence).
+*   **Worst Realistic Case:** Repeated false alarms cause "alert fatigue," leading rangers to ignore a genuine poacher alert during a critical window, resulting in animal loss.
+
+**2. Measurement Plan (Simulation-Based)**
+Since real-time updates are impossible and physical recall is limited, you must validate the threshold entirely on existing simulation data before deployment. Do not assert the system is "accurate"; measure the residual risk.
+
+*   **Test Row A: The False Positive Stress Test**
+    *   **Probe Set:** Isolate simulation inputs representing *only* known natural migration patterns (no poacher signatures).
+    *   **Positive Control:** Inject a known poacher signature into a migration stream; the system *must* alert.
+    *   **Negative Control:** Run pure migration data; the system *must not* alert.
+    *   **Metric:** False Positive Rate (FPR) specifically on migration segments.
+    *   **Pass Threshold:** Define a maximum acceptable FPR (e.g., <1%) based on ranger capacity. If the simulation exceeds this, the threshold is **rejected**.
+    *   **Stop Condition:** If FPR > Threshold, do not deploy. Retune the algorithm and re-simulate.
+
+*   **Test Row B: Subgroup/Context Validation**
+    *   **Probe Set:** Slice simulation data by terrain type, time of day, and herd size.
+    *   **Metric:** FPR variance across slices.
+    *   **Finding:** If the system works generally but fails specifically during "nighttime river crossings," this is a known limitation that must be documented, not averaged out.
+
+**3. Manage Residual Risk (The Human Gate)**
+Because the collars cannot be updated easily, the system design must account for inevitable errors.
+
+*   **Uncertainty Tiering:** Do not output a binary "Poacher Detected" with false precision. Instead, output defined confidence tiers based on your simulation results:
+    *   *Confirmed:* Matches multiple poacher signatures (High confidence).
+    *   *Suspicious:* Matches partial signatures or occurs in high-risk zones (Medium confidence).
+    *   *Unverified:* Anomaly detected but matches migration noise patterns (Low confidence).
+*   **Operational Protocol:** Rangers must treat *Unverified* alerts as informational only, requiring visual confirmation before mobilizing heavy resources. *Confirmed* alerts trigger immediate response.
+*   **Disclosure:** Clearly label all outputs as "Automated Movement Analysis – Unverified by Human." Do not present the alert as fact.
+
+**4. Governance & Transparency Artifact**
+Create a **Model Card** for this specific deployment version. It must include:
+*   **Intended Use:** Detecting poacher-like movement anomalies in [Specific Region].
+*   **Limitations:** Explicitly state: "High false-positive rate expected during [Specific Migration Event] based on simulation."
+*   **Measured Performance:** Report the FPR found in Test Row A. If you did not measure it for a specific scenario, mark it **UNVERIFIED**. Do not invent a success rate.
+*   **Owner:** Name the specific technologist responsible for monitoring alert logs during the trial.
+
+**Note:** Since legal duties regarding automated decision-making in conservation may vary, route the question of formal liability to counsel; this protocol addresses operational safety only. Never certify the system as "bias-free" or "safe"; only report the measured residual risk and the controls in place.

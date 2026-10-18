@@ -1,0 +1,44 @@
+### Pre-Launch Safety Evaluation Plan: Patient-Seizure Detector
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Missed Detection (False Negative)**.
+*   **Affected Party:** The patient (risk of injury, SUDEP, prolonged seizure) and the caregiver (false sense of security).
+*   **Worst Realistic Case:** A tonic-clonic or subtle focal seizure occurs during deep sleep; the device fails to alert due to algorithmic limitations or hardware constraints; the patient suffers physical harm or death before human intervention occurs.
+*   **Secondary Harm:** **Over-Reliance.** Caregivers may ignore natural vigilance because they trust the "smart" monitor.
+
+**2. Measurement Strategy: Runnable Test Rows**
+Do not assert safety. Execute the following specific evaluations against your current hardware-limited algorithm. Each row must have a pass/fail threshold set by your medical lead, not engineering convenience.
+
+*   **Row A: Seizure Subtype Coverage**
+    *   **Probe Set:** Synthetic and historical data representing *only* the seizure types currently missed (e.g., subtle motor movements vs. major convulsions), sliced by patient weight and sleep stage.
+    *   **Controls:** Known seizure events (positive) vs. normal restless sleep/night terrors (negative).
+    *   **Metric:** Sensitivity (Recall) per subtype.
+    *   **Stop Condition:** If sensitivity for *any* high-risk subtype falls below the clinically agreed floor (e.g., <90% or whatever your counsel/medical board dictates), **block pilot launch** for that subgroup.
+    *   **Owner:** Clinical Lead.
+
+*   **Row B: Hardware Stress & Edge Cases**
+    *   **Probe Set:** Data streams simulating low battery, poor sensor contact, and high-motion noise (e.g., caregiver adjusting blankets) concurrent with seizure onset.
+    *   **Metric:** Alert latency and drop-out rate.
+    *   **Stop Condition:** Any instance where noise suppresses a valid alert triggers a rollback of that configuration.
+
+*   **Row C: Adversarial/Red-Team Probe**
+    *   **Probe Set:** Intentionally difficult cases where seizure patterns mimic normal sleep movements to test the algorithm's decision boundary.
+    *   **Metric:** False Negative Rate on these specific "hard" cases.
+    *   **Reporting:** Report this residual risk as `UNVERIFIED` for any subtype not covered by your training data. Do not invent a global accuracy percentage.
+
+**3. Risk Management Controls (The Human Gate)**
+Given the high-stakes, irreversible nature of missed medical alerts and your admitted detection gaps:
+*   **Mandatory Disclosure:** The pilot interface must explicitly state: *"This device is an aid, not a guarantee. It may miss certain seizure types. Do not rely on it as the sole monitoring method."* This is not just legal advice; it is a safety control to prevent automation bias.
+*   **Uncertainty Rendering:** If the algorithm has low confidence (even if it doesn't output a number), design the system to trigger a "Check Patient" nudge rather than silence. Define coarse tiers: **Confirmed Alert** vs. **Possible Event (Verify)**. Never display raw confidence percentages (e.g., "87% seizure") to caregivers, as this implies false precision.
+*   **Human-in-the-Loop:** For the pilot, mandate that the device supplements, not replaces, existing check protocols. If the device is silent, the caregiver must still perform manual checks at defined intervals.
+
+**4. Governance & Transparency Artifact**
+Create a **Model Card** for the pilot version before day one. It must include:
+*   **Intended Use:** Nocturnal monitoring aid for specific seizure types.
+*   **Out-of-Scope:** Seizure types known to be missed; daytime monitoring; use as a sole life-support system.
+*   **Measured Performance:** Sensitivity scores *by subtype* from the tests above.
+*   **Known Limitations:** Explicitly list the seizure manifestations the hardware cannot currently detect.
+*   **Owner:** Name the specific individual responsible for reviewing incident reports during the pilot.
+
+**Note:** Legal requirements for medical device disclosure in India and potential EU/US implications must be routed to qualified counsel immediately; this plan recommends disclosure as a safety control but does not assert legal duty.
+**Note:** If the "Stop Condition" in Row A is met, the only safe path is to delay launch or restrict the pilot to patients whose seizure profiles are fully covered by the current model.

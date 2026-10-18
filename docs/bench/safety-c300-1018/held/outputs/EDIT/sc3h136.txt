@@ -1,0 +1,32 @@
+**Pre-Launch Testing Plan: Smart-Stroller Automated Brake System**
+
+**1. Critical Safety Gate (Immediate Action)**
+Before any automated testing proceeds, you must implement a **human-in-the-loop gate** for the braking mechanism. Because this feature executes an irreversible, high-stakes action (locking wheels) where failure risks infant injury, **full autonomous execution is not permissible for launch**. The system must default to a "warn and wait" state or require explicit caregiver confirmation before engaging the lock on steep inclines until reliability is proven beyond current constraints. No deadline justifies bypassing this floor.
+
+**2. Harm Inventory & Failure Modes**
+We name the specific harms to target with your single prototype:
+*   **Unsafe Automation:** The brake engages falsely on flat ground (causing a tip-over) or fails to engage on a steep hill (runaway).
+*   **Bias/Unfair Outcome:** The system fails to detect steep slopes when the stroller load is below a certain weight (e.g., newborn vs. toddler) or in specific weather (rain/ice affecting sensor friction).
+*   **Over-reliance:** Parents trust the auto-brake without checking the slope, leading to catastrophe if the sensor drifts.
+
+**3. Maximizing the Single Prototype (Measure)**
+Do not waste the prototype on "happy path" verification. Use it strictly for **adversarial probing** of the decision logic.
+*   **Test Row A (False Negative - Runaway):** Simulate steep inclines with varying weights (min to max load). Introduce sensor noise (simulated electrical interference) and weather variables (wet sensors).
+    *   *Metric:* Brake engagement latency and success rate.
+    *   *Stop Condition:* **Zero tolerance.** One failure to engage on a defined steep slope blocks launch.
+*   **Test Row B (False Positive - Tip-over):** Simulate flat ground and gentle slopes with sudden weight shifts (parent leaning, child moving).
+    *   *Metric:* Frequency of unintended locking.
+    *   *Stop Condition:* Any unintended lock during motion blocks launch.
+*   **Test Row C (Edge Case - Transition):** Rapid transition from flat to steep (curb drop).
+    *   *Metric:* System reaction time vs. physical tipping point.
+
+**4. Managing Residual Risk**
+*   **Uncertainty Disclosure:** Do not display a precise "87% safe" metric to users. Instead, define coarse status tiers: **"Confirmed Hold"** (sensors agree, slope verified), **"Unverified Slope"** (sensor conflict or low visibility), and **"Manual Required."** If the system cannot verify the slope with high confidence, it must refuse to auto-lock and alert the parent.
+*   **Staged Rollout:** Given the two-month deadline and single prototype, you cannot claim statistical safety. Cap exposure: Release initially as a "Beta" feature requiring explicit opt-in and a mandatory double-check confirmation before the brake engages. Limit the maximum slope angle where auto-lock is permitted until more data is gathered.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one engineer as the sole owner of the "Brake Decision Logic" harm inventory.
+*   **Documentation:** Create a **Model/Data Card** immediately. It must state: "Intended Use: Assistive braking on moderate slopes." "Limitations: Performance unverified in heavy rain/ice; single prototype used." "Known Failure Modes: Sensor drift under low load."
+*   **Legal Route:** Because this involves physical safety and minors, route the question of "regulated device status" and mandatory disclosures to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** An empty harm inventory is not a pass; if you cannot test a specific weather condition, mark it `UNVERIFIED` in your card rather than assuming safety. The retail deadline does not lower the bar for high-stakes automation.

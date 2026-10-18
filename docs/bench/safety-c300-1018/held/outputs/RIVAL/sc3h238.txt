@@ -1,0 +1,38 @@
+### Manual Verification Process for Time-Zone Scoring Errors
+
+Given the inability to patch the time-zone library and the high stakes of insurance penalties, implement the following manual verification protocol immediately. This process focuses on edge cases where shift work and travel intersect with the known library bugs.
+
+**1. Construct a "Golden Dataset" of Edge Cases**
+Create a static spreadsheet containing 20–30 specific test scenarios that explicitly target the library's failure modes. Do not rely on random data. Include:
+*   **The "Shift Worker" Cluster:** Patients taking medication at 07:00 local time who cross a time zone boundary backward (e.g., EST to PST) on the same day. Verify if the system records this as two doses in one window or misses one entirely.
+*   **The "Traveler" Cluster:** Patients crossing the International Date Line. Ensure a dose taken on "Tuesday" locally does not register as "Monday" or "Wednesday" in the system logic, causing a false missed-dose penalty.
+*   **DST Transitions:** Specific timestamps for the hour lost or gained during Daylight Saving Time changes in major US regions.
+*   **Boundary Conditions:** Doses taken exactly at midnight local time versus UTC midnight.
+
+**2. Execute Parallel Manual Calculation**
+For each row in the Golden Dataset:
+*   **Input:** Feed the exact timestamp and patient location into the staging environment.
+*   **Manual Oracle:** Independently calculate the expected adherence score using a trusted external source (e.g., a verified world clock converter and a simple calculator) based on the business rules (e.g., "±2 hours is compliant").
+*   **Comparison:** Compare the system's output against your manual calculation.
+*   **Flagging:** Mark any discrepancy greater than 0% as a critical defect. Do not accept "close enough" scores, as these directly impact financial incentives.
+
+**3. The "Shadow Ledger" Review**
+Since the library cannot be fixed, create a manual override log for the launch week.
+*   Identify any patient profile flagged with a sudden, unexplained drop in adherence score.
+*   Manually audit their recent location data against their dosing timestamps.
+*   If the drop correlates with a time-zone change known to trigger the bug, manually adjust the score in the administrative dashboard before the data is transmitted to the pharmacy chain.
+*   Document every manual adjustment with the specific scenario ID from your Golden Dataset to justify the override during future audits.
+
+**4. Stakeholder Sign-off on Known Gaps**
+Before Friday's integration:
+*   Generate a report listing the specific time-zone scenarios where the system is known to fail.
+*   Obtain written confirmation from the product lead and legal/compliance that the "Shadow Ledger" manual review process is an acceptable interim control for these specific cases.
+*   Ensure the pharmacy chain integration team is aware that specific edge-case data may undergo a 24-hour manual validation delay before final submission.
+
+**5. Final Dry-Run**
+Run the full Golden Dataset through the system one last time 24 hours before the deadline. If any new discrepancies appear that were not present in earlier tests, freeze the deployment and escalate immediately, as this indicates the bug behavior is non-deterministic.
+
+***
+
+*Note: Prioritize patients with active insurance incentive reviews in your "Shadow Ledger" first, as these carry immediate financial liability.*
+*Ensure all manual overrides are timestamped and attributed to a specific verifier to maintain an audit trail.*

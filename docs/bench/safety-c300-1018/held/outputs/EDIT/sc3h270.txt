@@ -1,0 +1,29 @@
+### Pre-Launch Connectivity & Failure-Mode Checklist for CPAP Data Upload
+
+**1. Port & Protocol Inventory (Map Constraints)**
+*   [ ] **Identify Allowed Egress:** Confirm the exact list of allowed outbound ports (e.g., 443, 8443) and protocols (HTTPS/TLS 1.2+) permitted by the clinic's rigid security policy. Do not assume standard MQTT (1883) or unencrypted HTTP (80) will work.
+*   [ ] **Force Tunneling:** Configure the device to tunnel all therapy data strictly over the single allowed HTTPS port (443). Treat all other ports as permanently blocked in the test environment.
+*   [ ] **DNS Verification:** Verify the device can resolve the specific cloud endpoint domain names via the allowed DNS servers; hardcode IP addresses only if DNS is unreliable, but prefer domain names for certificate validation.
+
+**2. Transmission Reliability Testing (Measure Under Fire)**
+*   [ ] **Simulate Port Blocking:** In a staging network, explicitly block all non-allowed ports using a firewall rule. Attempt upload; verify the device *immediately* attempts the allowed port without hanging on blocked ones.
+*   [ ] **Packet Loss & Latency Injection:** Introduce 5–15% packet loss and high latency (500ms+) on the allowed port. Verify the TCP stack retries correctly and does not declare failure prematurely.
+*   [ ] **Intermittent Connectivity:** Simulate "flaky" Wi-Fi (connect/disconnect cycles every 30 seconds). Ensure the device pauses transmission gracefully and resumes exactly where it left off (byte-range requests or sequence IDs) without duplicating data.
+*   [ ] **Payload Size Limits:** Test with maximum expected daily therapy data bundles. Verify the allowed port does not truncate large POST requests due to hidden proxy buffer limits.
+
+**3. Local Fallback & Data Integrity (Manage Residual Risk)**
+*   [ ] **Local Buffer Verification:** Confirm data is written to non-volatile local storage *before* transmission is attempted. If power is lost during upload, data must persist.
+*   [ ] **Queue Management:** Verify the local queue has a "high water mark." If the buffer reaches 90% capacity due to prolonged network outage, trigger a local visual alert on the device (e.g., "Upload Pending") to warn the patient/staff.
+*   [ ] **No Silent Data Loss:** Assert that the device never deletes local data until it receives an explicit `200 OK` (or equivalent success code) from the server. A timeout or connection reset must *not* trigger deletion.
+*   [ ] **Retry Logic Limits:** Define a maximum retry interval (e.g., exponential backoff capping at 4 hours) to prevent battery drain or network flooding, but ensure retries continue indefinitely until success or manual intervention.
+
+**4. Clinician Visibility & Human Gate (Govern Outcome)**
+*   [ ] **Status Dashboard:** Ensure the clinician portal explicitly shows "Last Successful Upload" timestamp. If data is >24 hours old, flag the patient record as "Stale/Offline" rather than showing old data as current.
+*   [ ] **Manual Override Path:** Provide a documented, secure procedure for clinic IT to manually export the local SD card/flash storage if the network block is total and unresolvable before the next appointment.
+*   [ ] **Failure Alerting:** If the device fails to upload for >48 hours, configure it to send an SMS or trigger a local alarm (if capable) to notify the patient to contact the clinic.
+
+**5. Final Sign-off**
+*   [ ] **Zero-Loss Validation:** Run a 72-hour continuous test in the restricted network environment. Compare total therapy minutes generated vs. total minutes received in the cloud. The delta must be zero.
+*   [ ] **Rollback Plan:** Define the steps to revert to manual SD-card collection if the automated feature fails post-launch.
+
+**Note:** This analysis assumes the device firmware can be reconfigured for port usage; if the hardware is hardcoded to blocked ports, the feature cannot ship without hardware revision. Legal review is required to confirm if "stale data" flags meet clinical duty-of-care standards in the UK.

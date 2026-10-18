@@ -1,0 +1,46 @@
+**Pre-Launch Safety Review Plan: Patient-Rehab-Endurance-Test Module**
+
+**1. Harm Inventory (MAP)**
+Before adjusting sensitivity, we must explicitly name the risks. An empty inventory is not a pass.
+*   **Unsafe Automation (Premature Termination):** The system stops exercise too early, denying patients the therapeutic dose needed for recovery (efficacy harm).
+*   **Unsafe Automation (Delayed Termination):** The system fails to stop when true fatigue occurs, risking injury, falls, or cardiac events (safety harm).
+*   **Bias/Unfair Outcomes:** The algorithm performs poorly for specific subgroups (e.g., older adults, specific stroke severities, or varying mobility baselines), systematically under-training or over-risking them.
+*   **Over-Reliance:** Clinicians or patients trust the "Stop" signal as absolute truth without clinical context or override options.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk. Since you cannot hire new experts, your existing team must execute these adversarial probes using historical data or simulated scenarios.
+
+*   **Test Row A: Premature Termination (Efficacy)**
+    *   *Probe Set:* Inputs representing "high effort but safe" physiology (e.g., elevated heart rate due to exertion, not distress). Include a **positive control** (known safe high-endurance case) and a **negative control** (known fatigue case).
+    *   *Metric:* False Stop Rate (percentage of safe high-effort instances where the system terminated).
+    *   *Threshold:* Owner-defined. Propose near-zero tolerance for stopping a patient who is clinically safe.
+    *   *Stop Condition:* If False Stop Rate > threshold, block launch.
+
+*   **Test Row B: Delayed Termination (Safety)**
+    *   *Probe Set:* Inputs representing "unsafe fatigue" (e.g., form breakdown, erratic vitals). Include positive/negative controls.
+    *   *Metric:* Missed Detection Rate (percentage of unsafe instances where the system continued).
+    *   *Threshold:* Owner-defined. Propose zero tolerance for missing clear danger signals.
+    *   *Stop Condition:* If Missed Detection Rate > threshold, block launch.
+
+*   **Test Row C: Subgroup Bias**
+    *   *Probe Set:* Slice all above inputs by age, stroke severity, and baseline mobility.
+    *   *Metric:* Disparity in False Stop/Missed Detection rates between groups.
+    *   *Reporting:* If a metric is not measured for a group, label it **UNVERIFIED**. Do not invent a "99% accurate" claim.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (The Floor):** Because terminating or continuing a medical exercise is a high-stakes action with irreversible physical consequences, **full autonomous execution is the failure mode.**
+    *   *Requirement:* The system must not permanently terminate a test or lock a patient out without a human clinician review or an explicit, easy-to-reverse patient confirmation.
+    *   *Implementation:* If the algorithm detects fatigue, it should pause and flag for review, not auto-terminate the session permanently.
+*   **Uncertainty Disclosure:** Do not show raw confidence scores (e.g., "87% fatigued") to patients. This implies false precision.
+    *   *Action:* Display defined coarse tiers: **"Confirmed Fatigue," "Corroborated Signs,"** or **"Unverified – Continue with Caution."** Publish the definition of each tier.
+*   **Transparency Artifact:** Create a **Model Card** before launch. It must list: intended use (home stroke rehab), out-of-scope uses, measured performance by subgroup, known limitations, and the owner. If you have not measured a metric, the card must state **UNVERIFIED**.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Name one person on your five-person team responsible for the output harm of "Premature Termination."
+*   **Legal Duty:** Whether this automated decision falls under specific medical device regulations or requires mandatory AI disclosure is a legal determination. **Route immediately to counsel.** Do not assert compliance internally. Name the regimes (e.g., local health insurance rules, medical device laws) but let counsel decide binding applicability.
+
+**Definition of Done:**
+You are ready to review sensitivity only when: (1) The harm inventory is written; (2) Test rows A, B, and C are defined with pass/fail thresholds; (3) A human-gate is engineered for any termination action; (4) A Model Card draft exists with no fabricated metrics.
+
+*Note: This plan identifies risks and controls; it does not certify the system as safe. The ship decision remains with your team.*
+*Legal and regulatory binding status must be confirmed by counsel, not this review.*

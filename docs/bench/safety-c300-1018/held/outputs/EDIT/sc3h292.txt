@@ -1,0 +1,38 @@
+**Immediate Action Plan for Routing Safety (3-Week Timeline)**
+
+**1. Map the Specific Harm (Day 1)**
+Formalize the risk: The model's suggestion of shortcuts through industrial zones constitutes an **unsafe high-stakes automation** risk, potentially causing physical injury to couriers. The "worst realistic case" is a courier suffering an accident due to poor road conditions or heavy machinery traffic in these zones. This is not merely a data quality issue; it is a direct physical safety hazard.
+
+**2. Implement a Human-in-the-Loop Gate for High-Risk Routes (Days 2–5)**
+Since the model occasionally suggests dangerous paths, you cannot rely on fully autonomous routing for the launch.
+*   **Action:** Create a deterministic "blocklist" filter. Before any route is presented to a driver, check if the path intersects with known industrial zones or areas flagged in your historical incident data.
+*   **Mechanism:** If a suggested route triggers this filter, the system must **not** auto-assign it. Instead, flag the route for immediate manual review by a dispatcher or senior engineer, or force the algorithm to re-calculate using a "safety-priority" constraint that ignores time-saving shortcuts in those specific geofences.
+*   **Constraint Check:** This uses existing engineering resources (logic rules) and requires no new budget. It prevents the specific failure mode (dangerous shortcuts) without halting the entire launch.
+
+**3. Deploy "Coarse Tier" Safety Warnings (Days 6–10)**
+Do not display raw confidence scores (e.g., "87% optimal") to drivers, as this invites over-reliance.
+*   **Action:** Implement a visible warning tier for routes that rely on older data or pass near flagged zones.
+*   **Display:** Use clear, text-based labels such as **"Unverified Road Condition"** or **"Standard Route Recommended"** alongside the optimized path. Allow the driver to easily override the suggestion with a standard, non-optimized path.
+*   **Disclosure:** Clearly indicate that the route is "AI-suggested" so drivers understand it is a recommendation, not an absolute command.
+
+**4. Run Targeted Internal Red-Teaming (Days 11–17)**
+You cannot wait for third-party validation.
+*   **Action:** Your eight engineers must act as the red team. Construct a specific test set of inputs: known industrial zones, times of day with heavy factory traffic, and historical accident spots.
+*   **Metric:** The pass threshold is **zero** suggestions of blocked industrial shortcuts in this test set. If the model fails even once, the blocklist filter (Step 2) is insufficient and must be widened.
+*   **Output:** Document these results as `UNVERIFIED` for general safety but "Passed Internal Stress Test for Known Hazards." Do not claim the system is "safe" or "bias-free"; state clearly that it has been tested against known high-risk zones and passed the specific gate.
+
+**5. Final Governance and Ownership (Days 18–21)**
+*   **Owner:** Assign one engineer as the explicit owner of "Routing Safety Incidents."
+*   **Artifact:** Publish a one-page "Model Card" for internal and driver support use. It must list:
+    *   **Intended Use:** Traffic optimization for delivery.
+    *   **Limitations:** "May suggest unsafe shortcuts in industrial zones if not filtered; relies on data updated as of [Date]."
+    *   **Known Failure Mode:** Outdated training data regarding road safety in specific districts.
+*   **Legal Route:** Since this involves physical safety and gig-worker liability, immediately route the question of "duty to disclose risks to contractors" to legal counsel. Do not assert compliance yourself.
+
+**Summary of Deliverables:**
+1.  Hard-coded geofence blocklist for industrial zones.
+2.  Driver-facing "Unverified" warning tier with easy override.
+3.  Internal red-team report confirming zero blocked-zone leaks.
+4.  One-page Model Card stating limitations and data cutoff.
+
+**Note:** This plan mitigates the specific physical harm without delaying launch, adhering to the constraint that high-stakes safety risks require a human or deterministic gate. Never certify the system as "safe"; only confirm that the specific known hazard is gated.

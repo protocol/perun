@@ -1,0 +1,26 @@
+### Manual Verification Checklist: Patient Diet-Hydration Monitor (Late Beta)
+
+**1. Medication Regimen Reconciliation (Pre-Analysis)**
+*   [ ] **Verify Current Diuretic Status:** Before reviewing any flagged risk, manually confirm the patient's current diuretic dosage and type against the most recent *static* EHR export or pharmacy record. Do not rely on the system's cached profile if the last sync exceeds 48 hours.
+*   [ ] **Identify Recent Changes:** Check for any handwritten notes, discharge summaries, or patient self-reports indicating a medication change in the last 72 hours that the read-only EHR feed has not yet captured.
+*   [ ] **Flag "Unknown Regimen" Cases:** If the current medication status cannot be manually verified within 15 minutes, mark the case as "UNVERIFIED" and escalate to a clinician; do not process the hydration risk score.
+
+**2. Output Validation & Hallucination Check**
+*   [ ] **Cross-Reference Fluid Dynamics:** For every "High Dehydration Risk" alert, manually calculate the expected fluid loss based on the *verified* diuretic type (e.g., loop vs. thiazide) and compare it to the system's logic. Ensure the system isn't flagging normal drug-induced diuresis as pathological dehydration.
+*   [ ] **Detect Missing Context:** Review cases where the system reports "Normal Hydration" for patients on high-dose diuretics with low intake. Verify if the system is ignoring the drug's potency due to missing real-time data.
+*   [ ] **Confidence Tiering:** Ensure all risk flags display a defined confidence tier (e.g., "Confirmed via Manual Med Check" vs. "Estimated – Medication Status Unverified") rather than a precise percentage. Never present an output as fact if the medication data is stale.
+
+**3. High-Stakes Action Gate (Human-in-the-Loop)**
+*   [ ] **Mandatory Clinician Review:** No automated message regarding dosage adjustment or urgent hospitalization is to be sent to the patient without explicit sign-off from a licensed provider who has seen the manual reconciliation in Step 1.
+*   [ ] **Override Capability:** Verify that the clinician can easily override the system's recommendation and document the reason (e.g., "System missed recent dose increase") before any communication leaves the clinic.
+*   [ ] **Disclosure Confirmation:** Ensure every patient-facing report includes a clear statement: "This analysis assumes your medication regimen matches our last recorded data. Please confirm any recent changes with your care team."
+
+**4. Edge Case & Bias Probe**
+*   [ ] **Test Specific Drug Interactions:** Manually review a sample of patients on complex polypharmacy (diuretics + ACE inhibitors/NSAIDs) to ensure the system isn't underestimating risk due to simplified interaction models.
+*   [ ] **Demographic Slice:** Check if the manual verification process disproportionately flags or misses risks for specific age groups or comorbidities (e.g., renal impairment) where fluid dynamics differ significantly.
+
+**5. Final Go/No-Go Decision**
+*   [ ] **Residual Risk Log:** Document any cases where medication data remained ambiguous despite manual efforts. These constitute "UNVERIFIED" risks that must be monitored post-launch.
+*   [ ] **Owner Sign-off:** The lead clinician must sign off on the manual reconciliation for every high-risk alert generated during the beta period.
+
+*Note: This checklist treats the read-only limitation as a critical failure mode requiring human intervention, not a minor constraint. Do not automate any irreversible advice until real-time integration is achieved.*

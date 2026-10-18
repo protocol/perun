@@ -1,0 +1,30 @@
+### Pre-Launch Safety Review Plan: Artifact Rejection Validation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** False Positive Classification (Motion Artifact identified as Ventricular Tachycardia).
+*   **Consequence:** Inappropriate shock delivery to a conscious patient, causing severe pain, psychological trauma, and potential induction of actual arrhythmia.
+*   **Affected Group:** Patients with motion artifacts (e.g., CPR, transport vibration, patient agitation) but stable rhythms.
+*   **Worst Realistic Case:** A conscious patient undergoing transport receives multiple shocks due to vehicle vibration misidentified as VF/VT.
+
+**2. Measurement Strategy (Using Existing Data Only)**
+Since no new studies are possible, you must treat your existing database as a adversarial test set. Do not rely on aggregate accuracy; slice the data by risk.
+
+*   **Construct a "High-Risk Negative" Test Set:** Isolate every recording in your database labeled as "Noise/Artifact" or "Non-Shockable" that contains high-amplitude motion (CPR compressions, shivering, transport vibration). These are your **positive controls for failure**. If the system shocks on any of these, it is a critical failure.
+*   **Construct a "Borderline Positive" Test Set:** Isolate low-amplitude or noisy Ventricular Tachycardia/Fibrillation records. These are your **negative controls for sensitivity**. The system must shock here, but without triggering on the noise-only set.
+*   **Define the Metric & Threshold:**
+    *   **Metric:** False Shock Rate (FSR) on the "High-Risk Negative" set.
+    *   **Threshold:** For a life-critical irreversible action (shock), the threshold for false positives on known artifact must be **zero** in this validation set. Any single failure requires a logic rollback.
+    *   **Stop Condition:** If FSR > 0 on the high-risk negative set, **do not submit**. The risk of harming conscious patients outweighs the benefit of meeting the deadline.
+
+**3. Risk Management & Human Gate**
+*   **Uncertainty Tiering:** Do not output a binary "Shock/No Shock" with hidden confidence. The device logic must internally classify signals into tiers: *Confirmed Arrhythmia*, *Ambiguous/Noisy*, and *Clear Noise*.
+    *   **Rule:** If the signal falls into *Ambiguous/Noisy*, the default action must be **No Shock**. It is safer to miss a shockable rhythm (which responders can re-assess) than to shock a conscious patient.
+*   **Human-in-the-Loop Constraint:** While the device automates the analysis, the final deployment protocol for emergency responders must explicitly state: "If the patient is conscious or moving, override the device recommendation regardless of the screen display." This procedural gate is your final safety net against algorithmic error.
+*   **Transparency Artifact:** Create a one-page "Limitations Card" for the submission. Explicitly list the types of motion artifacts present in your test set and state: "Performance on motion artifacts not represented in this specific database is UNVERIFIED." Do not claim general immunity to all motion noise.
+
+**4. Governance**
+*   **Owner:** Assign one engineer to sign off on the "High-Risk Negative" test results.
+*   **Decision:** The engineering lead (you) must make the final ship/no-ship decision based strictly on the zero-tolerance result of the artifact test. No regulatory deadline justifies a known non-zero false shock rate on conscious patients.
+
+**Note:** This plan relies entirely on the quality and labeling accuracy of your existing database; if the "noise" labels are unreliable, the validation is invalid.
+**Note:** Regulatory counsel must review the "Limitations Card" language to ensure it meets submission requirements without admitting liability.

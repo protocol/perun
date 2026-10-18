@@ -1,0 +1,34 @@
+### Pre-Launch Safety Simulation Plan: Patient-Mobility Coach
+
+**Immediate Constraint:** Do not launch with fully autonomous advice for weight-bearing activities. The failure mode described (misreading healing fractures as fully healed) presents an irreversible, high-stakes risk of re-injury. A **human-in-the-loop gate** is required for all "fully healed" determinations until error rates are proven negligible under worst-case conditions.
+
+**Simulated Scenarios for Internal Testing**
+Run these scenarios on your internal infrastructure to map harm boundaries. Each test must include a "positive control" (known bad image that should trigger caution) and a "negative control" (known good image).
+
+1.  **The "Slow-Server" Degradation Test**
+    *   **Probe:** Feed high-resolution X-rays of *healing* fractures into the system while artificially throttling server throughput to mimic your current slow processing speeds.
+    *   **Goal:** Verify if processing delays cause the model to default to "fully healed" due to timeout errors or partial data ingestion.
+    *   **Safety Boundary:** If the system cannot process the full image within the time limit, it must output "Uncertain – Requires Human Review," never "Fully Healed."
+
+2.  **Low-Resolution & Noise Injection**
+    *   **Probe:** Take confirmed images of non-healed fractures and degrade them (downscale resolution, add digital noise/compression artifacts) to match the lowest quality images expected from field clinics.
+    *   **Goal:** Measure the rate at which image degradation causes the model to hallucinate bone continuity.
+    *   **Safety Boundary:** Define a minimum image quality threshold. Below this threshold, the system must refuse to give weight-bearing advice and flag for human inspection.
+
+3.  **Adversarial "Edge-Case" Healing Stages**
+    *   **Probe:** Curate a dataset of X-rays representing the exact transition point between "healing" and "healed" (the hardest cases for radiologists). Include cases with hardware (pins/screws) that often confuse computer vision.
+    *   **Goal:** Identify if the model systematically biases toward "healed" in ambiguous cases to appear more helpful.
+    *   **Safety Boundary:** In ambiguous cases, the default output must be "Not Yet Cleared for Full Weight-Bearing."
+
+4.  **Uncertainty Reporting Validation**
+    *   **Probe:** Run the above tests and capture the model's internal confidence scores.
+    *   **Goal:** Ensure the user interface does not display raw percentages (e.g., "87% healed").
+    *   **Safety Boundary:** Map confidence scores to coarse, defined tiers: **"Confirmed Healed"** (high confidence, human verified), **"Corroborated"** (multiple views agree), or **"Unverified – Do Not Walk"** (low confidence or single-source). Never show a number that implies false precision.
+
+**Measurement & Governance Requirements**
+*   **Harm Inventory:** Record every instance where the system advises walking on a fracture. The worst-case scenario is permanent disability; treat this as zero-tolerance.
+*   **Transparency Artifact:** Draft a **Model Card** before launch. It must explicitly state: "Intended for assistant use only; not a diagnostic device." List the specific failure modes found above (e.g., "Performance degrades significantly on low-resolution images of tibial fractures").
+*   **Stop Condition:** If the "Slow-Server" or "Low-Resolution" tests yield *any* false "fully healed" results on known fractures, the launch is blocked. Do not invent a "safe enough" percentage.
+
+**Note:** Legal counsel must review whether this tool constitutes a regulated medical device in Egypt before any patient exposure.
+**Note:** Route any questions about regulatory compliance or liability disclosures to legal counsel; do not assert compliance internally.

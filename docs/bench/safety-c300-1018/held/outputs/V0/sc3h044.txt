@@ -1,0 +1,46 @@
+### Rapid Evaluation Framework: Retail Proxy Bias Mitigation
+
+**1. Harm Inventory (MAP)**
+*   **Named Harm:** Bias/Unfair Outcomes.
+*   **Mechanism:** Using "discount store shopping" as a negative proxy for financial stability.
+*   **Affected Group:** Lower-income applicants who shop at discount stores out of necessity, not distress.
+*   **Worst Case:** Systematic denial of credit to financially stable, low-income individuals, creating a disparate impact based on socioeconomic status.
+
+**2. Measurement Plan (MEASURE)**
+Given the two-week constraint, execute one runnable test row per harm. Do not assert safety; measure residual risk.
+
+*   **Probe Set A (Synthetic Counterfactuals):**
+    *   *Inputs:* Generate paired synthetic applicant profiles identical in income, debt-to-income ratio, and payment history.
+    *   *Variable:* Pair 1 shops at premium retailers; Pair 2 shops exclusively at discount stores.
+    *   *Controls:* Include a "known-good" (high income, discount shopper) and "known-bad" (low income, premium shopper) to validate logic.
+    *   *Metric:* Approval rate delta between pairs.
+    *   *Threshold:* Owner-set. If the discount-store pair has a significantly lower approval rate than the premium pair despite identical financials, the proxy is biased.
+    *   *Stop Condition:* If the delta exceeds the threshold, block launch. The feature cannot go live with this logic active.
+
+*   **Probe Set B (Segmented Performance):**
+    *   *Inputs:* Historical or synthetic data sliced by estimated income bracket.
+    *   *Metric:* False Rejection Rate (FRR) for low-income vs. high-income segments.
+    *   *Threshold:* Zero tolerance for disparate FRR if financial fundamentals are equal.
+    *   *Stop Condition:* High FRR in the low-income segment triggers an immediate rollback of the retail-pattern factor.
+
+*   **Injection & Leakage Check:**
+    *   Verify that "shopping history" data does not inadvertently leak protected class information (e.g., specific store locations correlating to demographic zones).
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because credit denial is a high-stakes, hard-to-reverse action affecting livelihoods, **no fully automated denials** based primarily or significantly on retail patterns should occur during the initial launch. Any application flagged for denial due to shopping behavior must route to human review.
+*   **Uncertainty Disclosure:** Do not present a specific "credit score" or confidence percentage (e.g., "87% risk") to the user or internal teams if the model relies on unverified proxies. Use defined coarse tiers (e.g., "Requires Review" vs. "Pre-Approved") until the proxy is validated.
+*   **Transparency Artifact:** Draft a preliminary **Model Card** documenting:
+    *   *Intended Use:* Credit assessment.
+    *   *Known Limitation:* Explicitly state that the correlation between discount shopping and financial distress is **UNVERIFIED** and potentially biased.
+    *   *Data Provenance:* Source of shopping history.
+    *   *Owner:* Name the specific engineer responsible for this metric.
+
+**4. Governance (GOVERN)**
+*   **Owner Assignment:** Assign one engineer as the owner of the "Retail Proxy Bias" risk. They must sign off on the test results.
+*   **Legal Routing:** **Immediate escalation to counsel is required.** Determining whether this automated decision falls under regulated categories (e.g., Equal Credit Opportunity Act implications) is a legal duty, not an engineering one. Do not assert compliance; route the question of legal disclosure and regulatory binding to legal counsel immediately.
+
+**Definition of Done for Launch:**
+The harm inventory is recorded; the counterfactual test row is executed with a pass/fail result; high-stakes denials involving this proxy are gated behind human review; a Model Card exists marking the proxy as UNVERIFIED; and the legal question is formally routed. If any of these are missing, the system is not ready for launch.
+
+Note: Never fabricate a "0% bias" metric; if testing is incomplete, mark the risk as UNVERIFIED.
+The tight deadline increases the necessity of the human-in-the-loop gate, not the justification to remove it.

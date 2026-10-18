@@ -1,0 +1,28 @@
+**Rapid Age-Bias Assessment & Mitigation Plan (10-Day Window)**
+
+**1. Map the Harm (Days 1–2)**
+Define the specific failure: "Systematic exclusion of workers aged [X]+ from high-value or sufficient-volume shifts despite equal availability and performance scores."
+*   **Action:** Segment your recent simulation data into two groups: "Under [X]" and "[X] and Over."
+*   **Metric:** Calculate the *Shift Acceptance Rate* and *Average Earnings Potential* per group, normalized by hours marked "available."
+*   **Threshold:** If the older cohort receives <90% of the shift volume or earnings potential of the younger cohort (controlling for availability), flag as a critical failure.
+
+**2. Measure with Adversarial Probes (Days 3–5)**
+Do not rely on aggregate averages alone; test edge cases where bias often hides.
+*   **Probe Set A (Positive Control):** Create synthetic profiles identical in performance/availability but differing only in age. Run these through the allocator. Any divergence in assignment is direct evidence of bias.
+*   **Probe Set B (Negative Control):** Create profiles where the older worker has *higher* performance metrics than the younger counterpart. The system must assign the older worker equal or better shifts. If not, the bias is overriding performance.
+*   **Stop Condition:** If Probe Set A shows >5% disparity or Probe Set B fails to favor the higher-performing older worker, **do not launch** the automated gate.
+
+**3. Manage Residual Risk (Days 6–9)**
+Since the core algorithm cannot be retrained, you must implement a **Human-in-the-Loop (HITL) Gate** and **Transparency Controls**.
+*   **The Gate:** For any shift assignment involving workers in the flagged age bracket, or any instance where a high-performing older worker is skipped, route the decision to a human supervisor for manual review before confirmation. Do not auto-assign these cases.
+*   **Uncertainty Display:** If the system displays a "match score" to workers, do not show a precise percentage (e.g., "87% match"). Use coarse, defined tiers (e.g., "High Likelihood," "Possible," "Unverified") to prevent false precision and over-reliance.
+*   **Disclosure:** Clearly inform workers that shift allocation is assisted by an automated system and provide a one-click mechanism to request a manual review of their assignment logic.
+
+**4. Governance & Launch Decision (Day 10)**
+*   **Owner:** Assign one product lead as the accountable owner for this bias risk.
+*   **Artifact:** Publish a brief "System Card" internally and to worker advocates stating: intended use, known limitation (potential age bias under investigation), and the specific HITL mitigation active at launch.
+*   **Verdict:** If the measurement phase (Step 2) confirms systematic exclusion and the HITL gate (Step 3) cannot be staffed for launch, **delay the launch**. Automating irreversible income denial without a safety gate is the failure state, not the delay.
+
+**Notes**
+*   This plan treats the legal determination of "discrimination" as a matter for counsel; the steps above address product safety and harm reduction.
+*   All metrics derived from simulation data must be labeled "UNVERIFIED" until validated against live, monitored traffic with the HITL gate active.

@@ -1,0 +1,44 @@
+### Internal Review Plan: Fall Hazard Detection (Beta Phase)
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary risk: **False Negatives (Missed Hazards)**.
+*   **Affected Group:** Elderly patients with limited mobility and their caregivers.
+*   **Worst Realistic Case:** The system fails to detect a low-contrast rug or clutter; the patient trips during recovery, resulting in fracture, hospitalization, or loss of independence.
+*   **Secondary Risk:** **Over-reliance**. Caregivers may stop visually scanning rooms because they trust the app.
+*   **Action:** Define "Critical Miss" as any trip hazard (rug, cord, clutter) not flagged by the system in a test image.
+
+**2. Simulation Strategy (Low-Cost, High-Fidelity)**
+Since you cannot hire auditors or buy devices, use your team and existing spaces to create a "Red Team" dataset.
+*   **Environment Staging:** Use team members' homes or rearrange your office to simulate specific high-risk scenarios identified in your inventory:
+    *   *Lighting:* Dim light, heavy shadows, glare from windows.
+    *   *Contrast:* Beige rugs on beige carpet, clear cords on dark floors, patterned clutter.
+    *   *Angles:* Camera held at waist height vs. chest height; oblique angles.
+    *   *Occlusion:* Hazards partially hidden by furniture legs or pet toys.
+*   **Data Collection:** Capture 50–100 photos per scenario using mid-range smartphones (not just flagship dev phones) to mimic user hardware.
+*   **Ground Truth:** Have two team members independently label every photo with "Hazard Present: Yes/No" and "Hazard Type." Disagreements must be resolved before testing the model.
+
+**3. Measurement & Pass/Fail Criteria**
+Do not assert accuracy; measure it against your "Critical Miss" definition.
+*   **Metric:** False Negative Rate (FNR) specifically for *critical* hazards (rugs, cords).
+*   **Test Row:**
+    *   *Input:* 200 staged images (100 with hazards, 100 without).
+    *   *Positive Control:* 10 obvious, high-contrast rugs (System MUST detect these).
+    *   *Negative Control:* 10 empty rooms (System MUST NOT flag these).
+    *   *Threshold:* **Zero tolerance** for false negatives on high-contrast hazards in the beta. For low-contrast/difficult lighting, set a maximum allowable miss rate (e.g., <5%) based on your risk appetite, but document this as residual risk.
+    *   *Stop Condition:* If the system misses >0 obvious hazards or >5% of difficult hazards, **block the beta launch** until the model is retrained or the feature scope is reduced.
+
+**4. Managing Residual Risk (Human-in-the-Loop)**
+Because this is a high-stakes safety feature and perfection is unverified:
+*   **Uncertainty Display:** Do not show a percentage confidence (e.g., "87% safe"). Instead, use coarse tiers: **"Hazards Detected," "No Hazards Detected,"** or **"Unable to Verify (Check Manually)."** Trigger the third tier for low-light or blurry inputs.
+*   **Mandatory Disclosure:** The interface must state: *"This tool assists but does not replace a visual safety check. Always look for trip hazards yourself."*
+*   **Reversibility:** Ensure the app does not auto-submit a "Safe Environment" certificate to medical records without explicit caregiver confirmation.
+
+**5. Documentation (The Transparency Artifact)**
+Create a one-page **Model Card** for internal and beta-user review containing:
+*   **Intended Use:** Identifying obvious trip hazards in private homes pre-discharge.
+*   **Limitations:** Explicitly list conditions where the model fails (e.g., "Low light," "Low contrast patterns").
+*   **Measured Performance:** Report the False Negative Rate from your internal simulation. If a metric was not tested (e.g., performance on wheelchairs), mark it **UNVERIFIED**.
+*   **Owner:** Name the specific team member responsible for reviewing failure logs weekly.
+
+**Note:** This plan addresses product-output safety; legal requirements for medical device software in Japan or export markets must be routed to legal counsel.
+**Note:** Never certify the system as "safe" or "unbiased"; only report measured residual risks.

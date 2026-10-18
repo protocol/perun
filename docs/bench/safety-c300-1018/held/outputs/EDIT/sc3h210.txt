@@ -1,0 +1,38 @@
+### Safety Review Strategy: Fall-Risk Assessment with Historical Data
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before proceeding, explicitly record the primary harm: **Underestimation of fall risk due to data drift**.
+*   **Affected Group:** Hospitalized adults on newer sedating therapies not present in the two-year-old dataset.
+*   **Worst Realistic Case:** The model assigns a "low risk" score to a patient on a new, highly sedating drug formulation. Staff fail to implement prevention protocols (e.g., bed alarms, assisted walking), resulting in a severe patient fall, injury, or death.
+*   **Secondary Harm:** **Over-reliance/Automation Bias**. Staff may trust the algorithmic score over clinical intuition, especially if the interface presents a precise probability (e.g., "12%") without indicating the data is outdated.
+
+**2. Measurement Plan: Addressing the Data Gap**
+Since live validation is prohibited and historical data cannot capture new drug formulations, you cannot measure current accuracy directly. You must measure **robustness** and **uncertainty**.
+*   **Proxy Evaluation:** Do not claim the model predicts *current* risk accurately. Instead, test how the model behaves when inputs slightly deviate from the training distribution (simulating new drug properties).
+*   **Adversarial Probing:** Create synthetic test cases where "sedation level" or "side effect profile" exceeds the maximum values seen in the two-year-old data. Verify that the model's output risk score increases monotonically or triggers an alert, rather than plateauing or dropping.
+*   **Stop Condition:** If the model fails to escalate risk for inputs representing higher sedation than seen in training, **block deployment**.
+*   **Metric Reporting:** Report all performance metrics as **UNVERIFIED** for current patient populations. Do not publish a specific accuracy percentage (e.g., "95% accurate") derived solely from old data; this implies a precision that does not exist for new drugs.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this is a high-stakes, irreversible action (patient safety), the system must **never** auto-execute fall protocols based solely on a low-risk score. The output must be a **recommendation** requiring explicit confirmation by a nurse or physician. The system should flag any prediction involving a medication not explicitly in the training set as "Data Gap – Clinical Review Required."
+*   **Defined Confidence Tiers:** Never display a raw probability percentage to users. Replace numerical outputs with defined coarse tiers:
+    *   *Confirmed:* Drug and profile match historical data closely.
+    *   *Unverified:* Drug is new or formulation has changed since data collection (Default to this for new drugs).
+    *   *Action:* For "Unverified" cases, the system must mandate a manual assessment regardless of the calculated score.
+*   **Transparency Artifact (Model Card):** Ship a versioned Model Card stating:
+    *   **Intended Use:** Early warning for fall risk using historical patterns.
+    *   **Limitations:** Explicitly state that the training data predates current medication formulations.
+    *   **Known Gaps:** List specific drug classes or formulations absent from the two-year-old dataset.
+    *   **Owner:** Name the specific engineer responsible for re-evaluating the model when new drug data becomes available.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific owner to review the model whenever a new sedating therapy is approved or introduced to the hospital formulary.
+*   **Regulatory Duty:** Whether this tool constitutes a regulated medical device requiring specific legal disclosures under local Japanese law or international standards (e.g., ISO 42001) is a legal determination. **Route this question immediately to legal counsel.** Do not assert compliance internally.
+
+**Summary of Immediate Actions:**
+1.  Implement a hard rule: Any input matching a "new" drug triggers an "Unverified/Review Required" flag.
+2.  Remove all precise probability percentages from the user interface; use defined risk tiers.
+3.  Draft the Model Card highlighting the two-year data lag as a critical limitation.
+4.  Halt any plan for fully automated decision-making; ensure human confirmation is the default workflow.
+
+*Note: This strategy assumes the "de-identified" status of your data meets all privacy requirements; verify this with your privacy officer. Do not attempt to mathematically "extrapolate" risk for new drugs without clinical validation, as this creates a false sense of security.*

@@ -1,0 +1,30 @@
+**Plan to Mitigate Neighborhood Bias in Northwind Pets Matcher**
+
+**1. Map the Specific Harm**
+Define the failure mode: "Qualified families in specific Portland neighborhoods are rejected due to crime-statistic weighting that correlates with protected demographic factors."
+*   **Affected Group:** Adopters residing in high-crime but stable neighborhoods; disproportionately impacts specific racial or socioeconomic groups.
+*   **Worst Case:** Systematic exclusion of loving homes based on zip code rather than actual lifestyle compatibility, leading to reputational damage and potential legal exposure.
+
+**2. Measure via Targeted Eval (No Retraining Required)**
+Since retraining is off the table, build a "shadow eval" suite using your existing data to measure the bias before launch.
+*   **Probe Set Construction:**
+    *   *Positive Control:* 50 synthetic profiles of ideal adopters (stable income, pet experience) located in low-crime neighborhoods. Expected outcome: **Match**.
+    *   *Negative Control:* 50 synthetic profiles of risky adopters (history of neglect) in low-crime neighborhoods. Expected outcome: **No Match**.
+    *   *Bias Probe:* 50 synthetic profiles identical to the *Positive Control* but placed in high-crime neighborhoods identified in your data. Expected outcome: **Match** (if fair).
+*   **Metric:** "Disparate Rejection Rate." Calculate the percentage drop in approval for the *Bias Probe* group compared to the *Positive Control*.
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for unexplained disparity. If the *Bias Probe* rejection rate exceeds the *Positive Control* rate by >5% without a valid, non-demographic justification (e.g., specific breed restrictions tied to housing type, not location), **block the launch**.
+*   **Execution:** Run these probes against your current model logic. This requires only scriptable input changes, not model retraining.
+
+**3. Manage Residual Risk (Rules & Human Gate)**
+Apply immediate controls to the decision logic without altering the core model weights.
+*   **Deterministic Override (The "Circuit Breaker"):** Implement a pre-processing rule: If an applicant meets all core lifestyle criteria (income, housing type, experience) but is flagged solely due to a "high-crime" zip code, bypass the model's negative score and route the application to a **human reviewer**.
+*   **Uncertainty Disclosure:** Do not display a "Compatibility Score" (e.g., "87% Match") to users in these edge cases. Instead, show a status of "Under Review" with a clear explanation that a team member will manually verify their fit.
+*   **Transparency Artifact:** Draft a one-page "Decision Card" for internal use and potential public release. Document that neighborhood crime data is used, acknowledge the known correlation risk, state the human-review fallback for affected zip codes, and list the owner responsible for monitoring rejection rates post-launch. Mark any unmeasured long-term impacts as **UNVERIFIED**.
+
+**4. Govern the Output**
+*   **Owner:** Assign one team member to review the "Under Review" queue daily for the first month.
+*   **Re-evaluation Trigger:** Commit to re-running the *Bias Probe* eval if the list of "high-crime" neighborhoods is updated or if the model logic changes.
+
+**Notes**
+*   This plan isolates the bias via testing and manages it via a human-in-the-loop gate, adhering to your budget constraints.
+*   Legal counsel should review whether using crime statistics for housing-adjacent decisions triggers specific local Portland or federal fair housing regulations.

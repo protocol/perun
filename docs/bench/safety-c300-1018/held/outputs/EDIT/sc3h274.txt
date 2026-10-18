@@ -1,0 +1,30 @@
+**Review Strategy: Sensor Drift & Measurement Accuracy for Sakura Rehab Tech**
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks to stroke survivors and therapists:
+*   **Hallucination as Fact:** The system reports improved range of motion (ROM) due to sensor drift rather than actual patient progress, leading therapists to advance therapy prematurely or discharge patients incorrectly.
+*   **Bias/Unfair Outcomes:** Drift affects patients with higher tremors or involuntary movements disproportionately, systematically under-reporting their progress compared to stable patients.
+*   **Over-reliance:** Therapists trust the automated "progress" metric without verifying raw sensor data, missing the degradation caused by device shift.
+*   **Unsafe Automation:** If the system auto-generates insurance billing codes or home-exercise prescriptions based on flawed ROM data, it triggers irreversible financial or physical harm.
+
+**2. Measurement Plan (MEASURE)**
+Execute a targeted evaluation within the two-week window. Do not assert accuracy; measure residual risk.
+*   **Probe Set:** Simulate a 45-minute therapy session (typical duration) with controlled "device shift" events at minutes 10, 25, and 40.
+    *   *Positive Control:* Introduce known angular shifts (5°, 10°, 15°) to verify the algorithm detects drift vs. actual movement.
+    *   *Negative Control:* Stable device placement with identical movement patterns to establish baseline noise.
+    *   *Subgroup Slicing:* Test across varying tremor intensities (simulated) and arm circumferences to check for biased drift rates.
+*   **Metric:** "False Progress Rate" – the percentage of sessions where reported ROM improvement exceeds actual physical movement by >5% due to drift.
+*   **Threshold & Stop Condition:** Owner-set threshold required. Recommendation: **Zero tolerance** for false progress triggering insurance billing or exercise escalation. If *any* probe triggers a false high-stakes action, block launch.
+*   **Injection/Leakage Check:** Verify that user-calibration data from one patient does not leak into another's session (privacy) and that adversarial movements (e.g., shaking the device) do not crash the system or generate infinite scores (excess agency).
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Until drift is proven negligible, **block autonomous generation** of insurance reports or prescription changes. All progress reports must require explicit therapist confirmation before being finalized or transmitted.
+*   **Uncertainty Disclosure:** Do not display a precise percentage (e.g., "92% flexibility") if confidence is low. Instead, use defined coarse tiers: **"Verified"** (stable signal), **"Corroborated"** (minor fluctuation), or **"Unverified – Check Device"** (drift detected). Provide a one-tap override for therapists to flag data as suspicious.
+*   **Transparency Artifact:** Draft a preliminary **Model/Data Card** listing: intended use (clinic-supervised rehab), limitations (sensitive to device shift), and the results of the drift eval above. If drift metrics are not fully quantified by the deadline, mark them **UNVERIFIED** rather than inventing a reliability score.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific engineer or product lead to own the "Sensor Drift" harm.
+*   **Re-review Trigger:** Mandate a re-evaluation if the sensor hardware, placement mechanism, or target patient demographic changes.
+
+**Note:** Legal counsel must review whether automated progress reports constitute a "regulated automated decision" under Japanese health regulations or international standards before home deployment.
+**Note:** If the two-week deadline prevents completing the subgroup slicing, cap the deployment to a closed clinical pilot with mandatory human review; do not ship to unsupervised home use.

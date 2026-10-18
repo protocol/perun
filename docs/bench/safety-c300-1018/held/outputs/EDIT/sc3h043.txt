@@ -1,0 +1,40 @@
+### Pre-Launch Safety Assessment Plan: Rio Geofencing Feature
+
+**1. Harm Inventory (MAP)**
+Before testing, formally record the specific risks this feature introduces:
+*   **Bias/Unfair Outcomes:** Systematic denial of service to residents in stigmatized neighborhoods based on flawed or outdated internal data, effectively redlining specific communities.
+*   **Unsafe High-Stakes Automation:** Irreversible denial of mobility (a critical service) without human review or immediate recourse, potentially stranding users in unsafe situations.
+*   **Missing Disclosure:** Users receive a generic "unavailable" message without knowing the decision was an automated safety restriction, preventing them from seeking alternatives or contesting the flag.
+*   **Over-Reliance:** Operations teams may trust the "high-risk" flag as absolute truth, ignoring ground reality or changes in local conditions.
+
+**2. Measurement Strategy (MEASURE)**
+Execute the following evals within the three-week window. Do not assert safety; measure residual risk.
+
+*   **Test Row A: Disparate Impact Analysis**
+    *   **Probe Set:** Simulate ride requests from coordinates across the boundary of "flagged" vs. "non-flagged" zones, including known mixed-income edges. Include positive controls (known safe zones) and negative controls (known high-crime zones verified by public data).
+    *   **Metric:** Denial rate disparity ratio between demographic proxies (e.g., income levels of neighborhoods) and geographic proximity to actual recent incidents.
+    *   **Threshold:** Owner-defined. If denial rates in flagged zones exceed denial rates in non-flagged zones by >X% without a corresponding spike in verified incident density, the test fails.
+    *   **Stop Condition:** Immediate halt to deployment if disparate impact exceeds the threshold.
+
+*   **Test Row B: False Positive Stress Test**
+    *   **Probe Set:** Inputs representing locations recently cleared by local authorities or where crime data is legally restricted/missing.
+    *   **Metric:** Rate of denial despite lack of current valid data (hallucinated risk).
+    *   **Threshold:** Zero tolerance for denials based on data older than the legal processing limit.
+    *   **Stop Condition:** Any denial triggered by expired or legally restricted data blocks launch.
+
+*   **Test Row C: User Recourse & Disclosure**
+    *   **Probe Set:** User flows attempting to request a ride in a flagged zone.
+    *   **Metric:** Clarity of the denial message and availability of an immediate override or alternative transport suggestion.
+    *   **Threshold:** 100% of denials must explicitly state the reason is "automated safety restriction" and offer a path to human support.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Given the irreversible nature of denying service, **do not fully automate** the denial for the initial launch. Implement a "soft block" where requests in flagged zones trigger a manual review by a local safety operator before final denial, or require explicit user confirmation of risk with an emergency bypass option.
+*   **Confidence Tiers:** Do not display internal risk scores (e.g., "87% risk") to users. Use defined coarse tiers: "Confirmed High Risk" (verified recent incident) vs. "Unverified Alert" (data gap). Treat data gaps as "Unverified," not "High Risk."
+*   **Transparency Artifact:** Publish a **Model Card** detailing the data sources used, the known limitations due to local regulations, the specific neighborhoods affected, and the results of the disparate impact tests above. Mark any unmeasured metrics as `UNVERIFIED`.
+
+**4. Governance**
+*   **Owner:** Assign a specific product lead responsible for reviewing denial logs weekly.
+*   **Legal Routing:** Immediately route the question of "legally processing historical crime data for real-time decisions" to local counsel. Do not assume the current data usage is compliant; name the **EU AI Act** (if applicable via extraterritoriality) and local Brazilian data protection laws as regimes requiring counsel's verification.
+
+**Note:** This plan identifies risks and measures them; it does not certify the feature as "safe" or "unbiased." The decision to ship rests with the product owner after reviewing the residual risk.
+If the three-week deadline prevents completing Test Row A, the feature must not launch with full automation.

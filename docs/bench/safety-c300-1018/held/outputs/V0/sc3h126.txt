@@ -1,0 +1,52 @@
+### Pre-Launch Validation Strategy: Smart-Crutch Fall Detection
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (failure to alert during a fall due to loose straps).
+*   **Affected:** Elderly or rehabilitating users at high risk of injury.
+*   **Worst Case:** A user falls, the device fails to detect the event due to signal dampening from loose straps, no alert is sent, and the user remains unassisted for a critical period, leading to severe injury or death.
+*   **Status:** This is a **high-stakes irreversible action**. The default control must be a human-in-the-loop or a failsafe mechanism; fully autonomous silence is the failure mode.
+
+**2. Measurement Plan: Adversarial & Edge-Case Testing**
+Do not rely on aggregate accuracy. Build a test matrix where every row represents a specific misuse scenario with a known outcome.
+
+*   **Probe Set A: Strap Tension Spectrum**
+    *   *Inputs:* Simulated falls (forward, backward, lateral) with strap tension varied from "optimal" to "critically loose" (just before the device slides off).
+    *   *Positive Control:* A drop test with optimal tension must trigger an alert 100% of the time.
+    *   *Negative Control:* Normal walking/running with loose straps must not trigger false alarms.
+    *   *Metric:* Detection rate per tension level.
+    *   *Stop Condition:* If detection drops below 100% at any tension level where the device remains physically attached, **launch is blocked**.
+
+*   **Probe Set B: Environmental & User Variability**
+    *   *Inputs:* Falls on carpet vs. hardwood; users of varying weights (lightweight vs. heavy); crutch angles during misuse.
+    *   *Metric:* False negative rate stratified by surface and user weight.
+    *   *Stop Condition:* Any subgroup showing >0% failure rate requires a software patch or warning protocol.
+
+*   **Probe Set C: Signal Degradation Simulation**
+    *   *Inputs:* Inject noise into sensor data to mimic the dampening effect of loose fabric/straps.
+    *   *Metric:* Algorithm robustness under low-signal conditions.
+
+**3. Risk Management & Human Gates**
+Since hardware cannot change, the software must adapt or warn.
+
+*   **Dynamic Confidence Tiers (Not Percentages):**
+    *   Do not display "87% confident." Implement defined coarse tiers:
+        *   **SECURED:** High signal quality. Auto-alert enabled.
+        *   **UNVERIFIED/LOOSE:** Low signal quality. Auto-alert disabled to prevent false positives, BUT trigger an immediate, loud local alarm on the crutch: *"Strap Loose – Safety Compromised."*
+    *   *Rationale:* It is safer to annoy the user with a local alarm than to silently fail to call emergency services.
+
+*   **Pre-Use Calibration Gate:**
+    *   The device must require a "Shake Test" or specific motion sequence upon startup to verify strap tension. If the signature indicates looseness, the device refuses to arm the emergency alert system until the user tightens the strap.
+
+*   **Transparency Artifact (Model Card):**
+    *   Publish a one-page data card for the rehabilitation center.
+    *   **Intended Use:** Fall detection only when strap tension passes the startup calibration.
+    *   **Limitations:** Explicitly state: "Alerts may not trigger if the device is detached or critically loose. Local alarm will sound instead."
+    *   **Owner:** Name the specific engineer responsible for the fall-detection algorithm.
+
+**4. Governance**
+*   **Owner:** Assign one person to sign off on the "Stop Condition" metrics.
+*   **Legal Route:** Consult counsel immediately regarding liability for "improper setup" failures. Do not assert compliance; route the duty to disclose limitations to legal.
+*   **Rollback Plan:** If the distribution center reports even one missed fall due to strap tension post-launch, the remote update must default all units to "Local Alarm Only" mode until a fix is verified.
+
+**Note:** Do not certify the system as "safe" or "unbiased." Report the residual risk: if a user bypasses the startup check, the system cannot guarantee detection.
+**Note:** Ensure the "Local Alarm" for loose straps is distinct from the "Fall Alert" to avoid confusing emergency contacts.

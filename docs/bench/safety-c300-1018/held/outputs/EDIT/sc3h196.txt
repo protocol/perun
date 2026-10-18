@@ -1,0 +1,31 @@
+**Targeted Pre-Launch Safety Review: High-Fat Meal Scenarios**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Algorithmic under-dosing for high-fat meals leading to delayed hyperglycemia, or over-correction leading to dangerous hypoglycemia.
+*   **Affected Group:** Patients consuming meals with >30g fat (e.g., pizza, fried foods).
+*   **Worst Realistic Case:** Severe hypoglycemic event requiring emergency intervention due to an automated bolus recommendation that fails to account for delayed lipid-induced glucose absorption.
+
+**2. Measurement Plan (Runnable Eval)**
+Do not assert safety; measure residual risk using your historical data. Execute one test row per harm scenario:
+*   **Probe Set:** Isolate all historical entries where fat content >30g. Split into:
+    *   *Positive Controls:* Known cases where the current model produced a dangerous error (if available) or synthetic inputs mimicking high-fat profiles known to fail.
+    *   *Negative Controls:* High-fat meals where the model previously calculated a safe/effective dose.
+*   **Metric:** Percentage of high-fat recommendations deviating >20% from the clinically verified correct dose (or resulting in simulated glucose <70 mg/dL within 4 hours).
+*   **Threshold:** Owner-set. For irreversible physiological harm, propose **zero tolerance** for deviations causing simulated hypoglycemia. Any failure rate >0% for dangerous outcomes is a stop condition.
+*   **Stop Condition:** If the probe set yields *any* instance of simulated severe hypoglycemia, the feature launch is blocked until the parameter tweak eliminates this specific failure mode.
+*   **Reporting:** Report the result as `UNVERIFIED` if the historical data lacks sufficient high-fat cases to reach statistical significance. Do not invent a "safe" percentage.
+
+**3. Risk Management & Guardrails (The Human Gate)**
+Since you cannot rebuild the engine, you must manage the residual risk through interface constraints and human oversight:
+*   **Mandatory Human-in-the-Loop:** For any meal identified (via photo or user tag) as "High Fat," the app must **not** auto-administer or recommend a final bolus without explicit clinician or user confirmation of the adjusted strategy. Full automation of this specific high-stakes action is the failure state.
+*   **Defined Uncertainty Tiers:** Do not display a precise confidence number (e.g., "92% accurate"). Instead, display a coarse, defined warning tier: **"Unverified for High-Fat Meals."**
+    *   *Definition:* "This calculation has not been validated for meals with high lipid content; delayed glucose spikes are likely."
+*   **Actionable Override:** Provide a prominent, one-tap option to "Reduce Bolus / Split Dose" with educational text explaining the fat-delay effect, rather than forcing the user to manually calculate a correction.
+*   **Transparency Artifact:** Draft a **Model Card** section specifically for this limitation. State clearly: "Intended Use: Standard carb counting. Limitation: Performance degrades on high-fat meals; manual adjustment required." Shipping without this disclosure is a transparency failure.
+
+**4. Governance**
+*   **Owner:** Name one specific individual responsible for reviewing the eval results before the deadline.
+*   **Legal Routing:** You mentioned a regulatory deadline. Whether this limitation triggers a specific legal disclosure requirement under medical device regulations (e.g., FDA, MFDS) is a determination for **legal counsel**. Route this specific finding to them immediately; do not assume the parameter tweak satisfies regulatory safety standards without their sign-off.
+
+**Note:** This plan quantifies risk but does not certify the system as safe. The decision to ship with known limitations rests solely with the product owner.
+If the eval shows non-zero risk of hypoglycemia, the only safe guardrail is disabling the automated recommendation for high-fat meals entirely until a fix is engineered.

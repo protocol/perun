@@ -1,0 +1,34 @@
+### Safety Review Plan: Patient-Mobility Tracker
+
+**1. Harm Inventory (MAP)**
+Before proceeding, explicitly record these specific risks for your field trial:
+*   **Missed Deterioration (False Negative):** Intermittent sync causes data gaps, leading the AI to smooth over or miss a gradual decline. *Worst case:* A fall or medical emergency occurs because no alert was sent.
+*   **Alarm Fatigue (False Positive):** Sync bursts create artificial "spikes" in activity data, triggering unnecessary alerts to families. *Worst case:* Families ignore future alerts or users disable the device.
+*   **Over-reliance:** Families assume the device guarantees safety. *Worst case:* Reduced human check-ins based on a "no alert" status that is actually a data gap.
+*   **Missing Disclosure:** Users may not understand that offline periods limit detection capabilities.
+
+**2. Measurement Strategy (MEASURE)**
+Do not certify the system as "safe." Instead, execute these specific evaluations:
+*   **Simulated Connectivity Red-Team:** Create a test harness that injects realistic Cairo-network outage patterns (e.g., 12–48 hour gaps) into historical mobility datasets.
+    *   *Positive Control:* Inject a known decline pattern *during* a simulated outage. Verify if the system flags it upon sync or misses it entirely.
+    *   *Negative Control:* Inject stable mobility data with outages. Verify the system does *not* generate false alarms due to data stitching errors.
+*   **Metric & Threshold:** Define a "Maximum Undetected Decline Window." If the system fails to detect a clinically significant drop after a sync following a gap >X hours, this is a **stop condition** for launch.
+*   **Residual Risk Reporting:** Report the detection failure rate specifically *during* and *immediately after* connectivity gaps. Label any untested outage scenario as `UNVERIFIED`.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** For any alert generated after a long data gap, the system must append a clear uncertainty marker (e.g., "Alert based on limited recent data") rather than presenting it as a confirmed trend. Do not auto-contact emergency services; route to family verification first.
+*   **Defined Uncertainty Tiers:** Replace raw confidence percentages (e.g., "87% risk") with coarse, defined tiers for the family dashboard:
+    *   *Confirmed:* Continuous data support.
+    *   *Corroborated:* Data exists but has minor gaps.
+    *   *Uncertain:* Significant data gaps; trend is indicative only.
+*   **Transparency Artifact:** Draft a **Model Card** for the field trial. It must state: "Intended for monitoring gradual trends, not real-time fall detection. Performance degrades during internet outages >24 hours." Include the specific connectivity conditions tested.
+*   **Disclosure:** Clearly inform users during onboarding that the device requires periodic syncing to maintain accuracy and that offline periods create blind spots.
+
+**4. Governance (GOVERN)**
+*   Name a specific owner (e.g., Lead Clinician or Product Lead) responsible for reviewing every "missed detection" incident during the trial.
+*   Schedule a re-review of the harm inventory if the sync algorithm or the definition of "decline" changes.
+
+**5. Regulatory Routing**
+*   Because this involves health monitoring and elderly users, this likely constitutes a regulated medical device or a high-risk AI system. **Route immediately to legal counsel** to determine obligations under local health regulations and frameworks like the EU AI Act (if applicable to your market strategy). Do not assume "field trial" exempts you from disclosure duties.
+
+**Note:** An empty harm inventory is not a pass; it is an unfilled requirement. Never invent a "0% miss rate" for offline scenarios; if you haven't tested a specific outage duration, mark it `UNVERIFIED`.

@@ -1,0 +1,46 @@
+# Review Framework for Lightweight Pain-Catastrophizing Detector
+
+## 1. Test Data Curation Strategy
+Construct a "Golden Set" of 50–100 anonymized journal entries stratified by complexity:
+*   **Explicit Cases (20%):** Direct statements of hopelessness or magnification (e.g., "This pain will never end; it ruins everything").
+*   **Subtle/Implicit Cases (40%):** Entries using metaphor, minimization, or somatic focus without explicit emotional labeling (e.g., "The weight is just too heavy today," or "I guess I'm just broken").
+*   **Neutral/Negative Controls (40%):** Entries describing pain factually or expressing normal frustration without catastrophizing logic.
+
+*Source:* Have your five team members write 10 entries each based on real patient archetypes, then blind-label them against the standard Pain Catastrophizing Scale (PCS) criteria.
+
+## 2. Evaluation Metrics
+Move beyond simple accuracy. Prioritize metrics that expose your specific risk of "false reassurance":
+*   **False Negative Rate (FNR):** The percentage of actual catastrophizing entries the model misses. This is your critical failure mode. Aim for <5%.
+*   **Recall (Sensitivity):** The ability to correctly identify all positive cases. For a safety-critical health tool, high recall is more important than high precision.
+*   **Confidence Calibration:** Analyze the model's confidence scores on the "Subtle" subset. If the model is highly confident when it is wrong, it creates dangerous false reassurance.
+
+## 3. The "Silent Struggle" Stress Test
+Run a specific adversarial evaluation focused on linguistic masking:
+*   **Minimization Test:** Feed entries where the user downplays pain ("It's fine, really") but context suggests severe coping issues.
+*   **Somatic Displacement Test:** Feed entries focusing entirely on physical symptoms ("My chest is tight") without emotional words.
+*   **Metaphor Test:** Feed entries using non-literal language ("I'm drowning," "Walking through mud").
+
+*Pass Criteria:* The lightweight model must flag at least 80% of these masked entries for human review, even if it cannot definitively classify them as "catastrophizing."
+
+## 4. Human-in-the-Loop Verification Protocol
+Since on-device processing limits complexity, implement a tiered output strategy:
+*   **Tier 1 (High Confidence Positive):** Immediate intervention resource suggestion.
+*   **Tier 2 (Low Confidence/Ambiguous):** "We noticed some difficult language. Would you like to talk to a human?" (Triggers a flag for later human review if connectivity allows, or stores locally for user reflection).
+*   **Tier 3 (Negative):** Standard supportive messaging.
+
+*Validation:* Have a clinical psychologist review all Tier 2 and False Negative cases weekly to refine the model's threshold settings.
+
+## 5. Iterative Threshold Tuning
+Do not use a fixed probability cutoff (e.g., >0.5).
+*   Lower the decision threshold to increase sensitivity until the False Negative Rate on your "Subtle" test set is acceptable.
+*   Accept that this will increase False Positives (flagging normal pain as catastrophizing), which is the safer error profile for patient safety.
+
+## 6. Documentation of Limitations
+Explicitly document in your soft launch materials:
+*   Which linguistic patterns the model struggles with (e.g., irony, heavy metaphor).
+*   That the tool is a screening aid, not a diagnostic device.
+*   The protocol for users who feel the tool "missed" their distress (e.g., a direct feedback button).
+
+Execute this framework before soft launch. If the False Negative Rate on subtle cases exceeds 10%, delay launch and simplify the feature set rather than the model, or explore quantization techniques to allow a slightly larger model on-device.
+
+*Note: This framework assumes you have access to clinical expertise for the blind-labeling process. Ensure all test data remains on-device to maintain your privacy compliance during testing.*

@@ -1,0 +1,36 @@
+### Immediate Safety Gate: Do Not Ship Without Human Review
+Your medication-interaction checker performs a **high-stakes, irreversible action** (flagging or clearing drug safety) where errors can cause direct physical harm. Under product output safety standards, **fully automated execution of this check is a failure mode**. You must implement a **human-in-the-loop gate** for any "clear" decision on complex polypharmacy cases or where confidence is not "Confirmed." Do not allow the system to autonomously assure a user that a combination is safe without a defined override path for a pharmacist.
+
+### Harm Inventory & Measurement Plan
+You cannot certify your system as "safe" or "unbiased" based on internal curation alone. Instead, execute the following **MAP, MEASURE, MANAGE** protocol:
+
+**1. Map the Specific Harms**
+*   **Hallucination as Fact:** The system asserts "No Interaction" for an herbal/cardiac pair that actually exists in medical literature but is missing from your graph.
+*   **Bias/Exclusion:** Systematic failure to detect interactions prevalent in the local Mumbai population (specific herbal supplements) compared to standard Western pharmaceuticals.
+*   **Over-reliance:** Pharmacists trusting a "Safe" status without verifying the underlying data source, leading to missed manual checks.
+
+**2. Measure with Adversarial Eval (No New Data Licensing Required)**
+Since you cannot buy new databases, you must **red-team your existing graph** using known positives and negatives:
+*   **Construct a "Known-Bad" Probe Set:** Manually curate a small list (20–30 cases) of *verified* dangerous interactions between local herbal supplements and cardiac drugs using free, public medical literature (e.g., PubMed, government health advisories). These are your **positive controls**.
+*   **Construct a "Known-Good" Probe Set:** Identify pairs with no known interaction to serve as **negative controls**.
+*   **Run the Test:** Feed these specific pairs into your beta system.
+    *   *Pass Condition:* The system **must** flag every item in the "Known-Bad" set.
+    *   *Stop Condition:* If the system misses **even one** known dangerous interaction in the probe set, **block the launch**. A single false negative in this domain is unacceptable.
+*   **Metric:** Report the **False Negative Rate** on this specific probe set. If unmeasured, label coverage as `UNVERIFIED`. Do not invent a "99% accuracy" claim.
+
+**3. Manage Residual Risk**
+*   **Transparency Artifact (Model Card):** Publish a versioned document stating:
+    *   *Intended Use:* Screening for known interactions in the curated graph.
+    *   *Limitations:* Explicitly list that coverage of herbal supplements is limited to the internally curated list and has **not** been validated against a comprehensive commercial database.
+    *   *Data Provenance:* Cite the sources of your internal graph.
+*   **Uncertainty Display:** Never show a raw confidence percentage (e.g., "92% safe"). Instead, use defined coarse tiers:
+    *   **Confirmed:** Interaction found in graph.
+    *   **Unverified:** No interaction found in graph; **requires manual pharmacist review**.
+*   **Disclosure:** Clearly disclose to the end-user that this is an AI-assisted tool relying on a limited internal dataset and is not a substitute for professional clinical judgment.
+
+### Governance
+Name a specific owner (e.g., Lead Pharmacist or Product Lead) responsible for reviewing any "Unverified" outputs and re-evaluating the harm inventory whenever the knowledge graph is updated. Route the question of legal liability for missed interactions to counsel immediately; do not assert compliance internally.
+
+---
+*Note: This plan relies on free public literature for validation probes to respect your budget constraint while enforcing a zero-tolerance stop condition for known failures.*
+*Legal determination of regulatory duties (e.g., medical device classification) must be routed to counsel; this review does not certify compliance.*

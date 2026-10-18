@@ -1,0 +1,35 @@
+### Pre-Launch Safety Review: Agricultural Loan Fairness Strategy
+
+Given the constraints of no ground-truth budget and a reliance on potentially outdated historical data, your safety review must shift from "verification against reality" to "stress-testing against known data gaps." The goal is to identify systematic failure modes in the imagery analysis before capital is denied.
+
+**1. Construct Synthetic "Counterfactual" Profiles**
+Since you cannot survey new farms, create digital avatars of smallholder farms that *should* qualify but likely trigger false rejections based on your description.
+*   **Action:** Manually curate a dataset of 50–100 satellite image patches representing known smallholder patterns (e.g., irregular plot shapes, intercropping, seasonal fallow periods) that differ from the large-scale commercial patterns in your training data.
+*   **Source:** Use open-source satellite repositories (like Sentinel-2 via Google Earth Engine) where land use is visually verifiable by your team without field visits. Select areas known to be active smallholder zones based on public agricultural census maps.
+*   **Test:** Run these images through your model. If the model rejects these visually viable farms, you have confirmed a bias against smallholder signatures without needing to visit the site.
+
+**2. Temporal Stress Testing (The "Outdated Data" Check)**
+Your model relies on historical data that may miss recent changes. You need to prove the model cannot distinguish between "abandoned land" and "recently cultivated land."
+*   **Action:** Select specific coordinates where public records or news indicate recent agricultural expansion (e.g., government irrigation projects launched in the last 12 months).
+*   **Test:** Feed the model imagery from *before* the expansion (historical) and *after* (current).
+*   **Expected Failure:** If the model rejects the "after" image because its internal logic weights historical barrenness too heavily, you have identified a temporal bias. This simulates the rejection of a dynamic smallholder farm due to static training data.
+
+**3. Adversarial "Look-Alike" Testing**
+Small farms often look like non-farm land to models trained on industrial agriculture (e.g., confused with wild vegetation due to lack of straight rows).
+*   **Action:** Generate pairs of images: one of a viable small farm and one of unused overgrown land that looks visually similar at low resolution.
+*   **Test:** Verify if the model's confidence score drops significantly for the small farm compared to large, clear-cut commercial plots. A high variance in confidence for similar-looking viable land indicates the model is relying on texture/shape biases rather than actual viability markers.
+
+**4. The "Shadow Mode" Audit**
+Before full launch, run the model in "shadow mode" on a batch of historical loan applications where the outcome is already known (even if the historical decision was manual).
+*   **Action:** Compare the model's automated rejection rate against the historical manual approval rate for smallholder segments.
+*   **Analysis:** If the model rejects 40% more smallholders than the historical manual baseline for similar regions, flag this delta as a high-risk bias indicator. This uses your existing internal data as the proxy for ground truth.
+
+**5. Implement a "Human-in-the-Loop" Triage for Edge Cases**
+Do not automate the final "No" decision for low-confidence scores.
+*   **Policy:** Configure the system to automatically flag any application where the satellite confidence score falls between 40%–70% (or your determined threshold) for manual review by your nine-person team.
+*   **Rationale:** This creates a safety net specifically for the ambiguous cases where bias is most likely to occur, allowing your team to gather qualitative data on *why* the model struggled, which informs future retraining.
+
+**Deliverable Summary:**
+Execute the synthetic counterfactual and temporal stress tests immediately using open-source imagery. If the model fails these digital proxies, pause the rollout. Use the "shadow mode" comparison to quantify the disparity impact. Finally, mandate manual review for all low-confidence scores to prevent automated harm while you collect long-term evidence.
+
+*Note: This strategy relies entirely on remote sensing data and internal historical logs, requiring zero field budget. Prioritize the "Shadow Mode" audit as it provides the fastest statistical evidence of disparate impact.*

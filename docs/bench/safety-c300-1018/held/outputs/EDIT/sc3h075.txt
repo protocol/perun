@@ -1,0 +1,50 @@
+### Pre-Launch Evaluation Protocol: Disparate Impact on Freelancers
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Bias/Unfair Outcomes. The model's "income stability" metric may systematically disadvantage freelancers with variable but legitimate earnings, leading to automatic rejections (high-stakes irreversible action).
+*   **Affected Group:** Freelancers and gig workers in Dubai with non-traditional income patterns.
+*   **Worst Case:** Legitimate borrowers are denied credit solely due to income structure, creating regulatory liability and reputational damage.
+
+**2. Sampling Strategy & Test Rows**
+Construct a test set where the *only* variable is employment type, holding creditworthiness constant. You must run one test row per harm scenario:
+
+*   **Row A (The Positive Control - Known Bad):**
+    *   **Input:** Synthetic profiles of freelancers with high total annual income but variable monthly cash flow, matched 1:1 with traditional employees of identical total income and debt-to-income ratios.
+    *   **Probe:** Inject known "gig economy" keywords (e.g., "Upwork," "contractor," "variable commission") into the income source field.
+    *   **Metric:** Disparity in rejection rates between the freelancer cohort and the employee cohort.
+    *   **Threshold:** Owner-set. If the rejection rate for freelancers exceeds that of employees by >5% (or your defined tolerance) despite identical financial health, the test fails.
+    *   **Stop Condition:** **Block Launch.** Do not deploy if this disparity exists without a human review gate.
+
+*   **Row B (The Negative Control - Known Good):**
+    *   **Input:** Traditional employees with stable salaries but low total income (genuine risk).
+    *   **Probe:** Verify the model correctly rejects these based on *ability to pay*, not employment type.
+    *   **Metric:** False acceptance rate.
+    *   **Threshold:** Must align with overall risk appetite.
+    *   **Purpose:** Ensures the model isn't simply "accepting everyone" to fix bias, but actually distinguishing risk.
+
+*   **Row C (Edge Case - Variable but Stable):**
+    *   **Input:** Freelancers with 2+ years of consistent *average* income, despite monthly fluctuations.
+    *   **Probe:** Test if the model recognizes long-term stability over short-term variance.
+    *   **Metric:** Rejection rate for this specific subgroup.
+    *   **Stop Condition:** If rejected, the "stability" definition is too narrow for the Dubai market context.
+
+**3. Measurement & Reporting**
+*   **Execute Adversarial Probes:** Run these synthetic profiles through the current model version.
+*   **Report Residual Risk:** Do not claim "0% bias." Report the measured disparity rate. If the metric was not measured on a specific subgroup (e.g., specific gig platforms), label it **UNVERIFIED**.
+*   **Transparency Artifact:** Draft a **Model Card** section detailing:
+    *   *Intended Use:* Income stability assessment.
+    *   *Limitations:* Performance on variable income streams is [Measured Rate/UNVERIFIED].
+    *   *Data Gaps:* Acknowledge regulatory limits on alternative data ingestion.
+
+**4. Risk Management (The Human Gate)**
+*   **Mandatory Human-in-the-Loop:** Because mortgage rejection is a high-stakes, irreversible financial decision, **automatic rejection for any applicant flagged as "freelancer" or "variable income" must be gated behind human analyst review.** Full automation of this specific decision path is unsafe until the disparity metric is within acceptable bounds.
+*   **Uncertainty Display:** If the model outputs a confidence score, do not show raw percentages (e.g., "87% stable") to analysts. Use defined tiers: *Confirmed Stability*, *Corroborated*, or *Unverified/Variable*.
+*   **Legal Routing:** Dubai financial regulations regarding automated lending and data usage are strict. Route the question of "legal sufficiency of this testing protocol" and "mandatory disclosure of AI use to applicants" to local counsel immediately. Do not assert compliance here.
+
+**5. Ownership**
+Assign a specific product owner to sign off on the residual risk and the human-review workflow before Q3 launch.
+
+***
+
+*Note: This protocol measures disparity; it does not certify fairness. The final ship decision rests with the product owner.*
+*Ensure all synthetic data respects local privacy laws even in testing.*

@@ -1,0 +1,37 @@
+### Simulation Test Plan for CPAP Compliance Interruptions
+
+To evaluate the impact of brief mask interruptions on compliance reporting without using real patient data, you should construct a deterministic metadata simulation framework. This approach generates synthetic usage logs that mimic device-derived metadata, allowing you to stress-test your aggregation logic against specific interruption patterns.
+
+**1. Define Synthetic Patient Archetypes**
+Create five distinct user profiles representing common usage behaviors to serve as your baseline controls:
+*   **The Ideal Complier:** 8 hours continuous use, zero interruptions.
+*   **The Restless Sleeper:** 8 hours total time, but with 15 brief interruptions (30–90 seconds) distributed randomly.
+*   **The Early Remover:** Uses the device for 3.5 hours, then removes the mask for the remainder of the night.
+*   **The Mid-Night Adjuster:** One significant interruption (10 minutes) in the middle of a 7-hour session.
+*   **The Fragmented User:** 6 hours total use split into four distinct 90-minute sessions with long gaps.
+
+**2. Model Interruption Variables**
+Since you rely on derived metadata, your simulation must manipulate the specific data points your devices emit. Define the following variables for injection into your test logs:
+*   **Pressure Drop Events:** Simulate the timestamped drop to zero or ambient pressure indicating mask removal.
+*   **Flow Rate Anomalies:** Generate patterns corresponding to "leak" states versus "off" states.
+*   **Session Boundary Flags:** Manipulate the start/stop triggers to see if the system treats a 45-second removal as a session end or a pause.
+
+**3. Execute Pattern Injection Scenarios**
+Run your compliance algorithm against datasets where you systematically vary the duration and frequency of interruptions. Focus on the "gray zone" thresholds that likely cause your current failures:
+*   **Duration Sweep:** Test interruptions lasting 10s, 30s, 45s, 59s, 60s, and 90s. Determine the exact second where your system flips from "compliant" to "non-compliant."
+*   **Frequency Sweep:** For a fixed 7-hour night, test 1, 3, 5, 10, and 20 interruptions of 30 seconds each.
+*   **Timing Sensitivity:** Place identical interruptions at the start of the night, middle, and end to check if your logic weights early usage differently than late usage.
+
+**4. Validate Aggregation Logic**
+Compare the simulation output against expected insurance standards (e.g., ≥4 hours/night for 70% of nights). Specifically verify:
+*   Does the system sum fragmented sessions correctly, or does it discard short segments?
+*   Are "mask off" events incorrectly logged as "device off," resetting the daily counter?
+*   Does the system fail to round up partial hours, causing a 3h 59m user to fail a 4h threshold unfairly?
+
+**5. Establish Tolerance Recommendations**
+Based on the simulation results, define a "grace period" parameter. If the data shows that interruptions under 45 seconds do not significantly impact therapeutic efficacy, recommend hardening the code to ignore gaps shorter than this threshold before marking a session as terminated.
+
+***
+
+*Ensure all synthetic data generation scripts are version-controlled so the exact interruption patterns can be reproduced for regression testing after code fixes.*
+*Do not use real patient timestamps even in testing; generate entirely fictional date ranges to maintain privacy compliance during development.*

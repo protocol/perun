@@ -1,0 +1,33 @@
+### Product Output Safety Plan: Diabetic Diet Recommendation Engine
+
+**1. Harm Inventory & Scope**
+The primary identified harm is **unsafe automation of high-stakes actions**: recommending high-glycemic foods as safe, leading to potential health crises for diabetic users. Secondary harms include **hallucination surfaced as fact** (due to database gaps) and **over-reliance** (users trusting algorithmic advice over medical judgment). The affected group is diabetic patients in Cairo; the worst-case scenario is severe hyperglycemia requiring emergency intervention.
+
+**2. Measurement & Validation Process (Pre-Launch)**
+Do not rely on aggregate accuracy metrics. Instead, execute a targeted validation protocol for the identified data gaps:
+*   **Probe Set Construction:** Isolate all traditional Cairo cuisine items in the third-party database. Create a "known-bad" positive control set (foods known to be high-glycemic but potentially mislabeled) and a "known-good" negative control set (verified safe foods).
+*   **Manual Validation Gate:** Before any food item enters the recommendation pool, it must pass human verification by your team of six nutritionists.
+    *   *Action:* Cross-reference every local dish against authoritative, local clinical nutrition guides, not just the third-party API.
+    *   *Stop Condition:* If a food item's glycemic index cannot be verified by a human expert against a trusted local source, it is marked `UNVERIFIED` and **excluded** from the recommendation engine entirely. Do not guess or impute values.
+*   **Adversarial Testing:** Run red-team probes where the system is forced to recommend meals using only the "gap" categories. The test fails if *any* unverified or high-risk food is suggested as "safe."
+
+**3. Management Controls & Fallback Mechanisms**
+*   **Human-in-the-Loop (HITL) Gate:** For the initial public release, **no dietary plan is delivered directly to the patient without human review.** The system should generate a *draft* recommendation, which a licensed nutritionist must explicitly approve before it reaches the user. Fully autonomous execution of dietary advice is too high-risk given the known data gaps.
+*   **Uncertainty Disclosure:** Never display a precise confidence percentage (e.g., "87% safe"). Instead, use defined coarse tiers for data reliability:
+    *   *Verified:* Confirmed by local expert against primary sources.
+    *   *Estimated:* Based on similar ingredients but not locally verified (Do not recommend these initially).
+    *   *Unverified:* Data missing or conflicting (Automatically blocked).
+*   **Fallback Mechanism:** If the system cannot construct a full day's menu using only *Verified* items, it must trigger a fallback response: "We cannot currently generate a safe, fully verified meal plan for your specific preferences. Please consult your nutritionist directly for today's menu." Do not fill gaps with potentially unsafe data.
+
+**4. Transparency Artifact (Model/Data Card)**
+Publish a versioned **Data Card** with the launch. It must explicitly state:
+*   **Intended Use:** Supporting nutritionists in planning diabetic meals in Cairo; not a replacement for medical advice.
+*   **Limitations:** Explicitly list the traditional cuisine categories where data was insufficient and therefore excluded.
+*   **Provenance:** Name the third-party database and detail the manual validation steps taken by your nutritionists.
+*   **Residual Risk:** Clearly mark any remaining uncertainties as `UNVERIFIED` rather than fabricating a safety metric.
+
+**5. Governance**
+Assign a specific owner (e.g., Lead Nutritionist) responsible for re-validating any new food items added to the database. Any change in the third-party data source or the recommendation logic triggers an immediate re-review of the harm inventory and a pause on automated suggestions until re-validated.
+
+**Note:** Legal requirements for automated health decisions in Egypt must be routed to local counsel; this plan addresses product safety controls only.
+Do not launch without the Human-in-the-Loop gate active; removing it before closing data gaps constitutes a critical safety failure.

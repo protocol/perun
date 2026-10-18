@@ -1,0 +1,27 @@
+### Pre-Launch Safety Plan: On-Device Chronic Pain Assessment
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific risks for your feature:
+*   **Bias/Unfair Outcomes:** The algorithm systematically under-scores pain impact for specific demographics (e.g., elderly, non-native speakers) due to training data gaps.
+*   **Hallucination as Fact:** The tool assigns a high-confidence "Low Impact" score to a patient exhibiting subtle, non-linear signs of severe crisis, presenting this as a definitive clinical fact.
+*   **Over-reliance:** Clinicians trust the automated "Intervention Level" suggestion without independent verification, ignoring conflicting patient verbal cues.
+*   **Unsafe Automation:** The system automatically flags a patient for "Standard Care" when they actually require immediate crisis intervention, with no human review step before the recommendation is finalized in the chart.
+
+**2. Measurement Strategy (MEASURE)**
+Since you cannot rely on cloud updates, you must build a robust, static evaluation suite to run locally. Create one test row per harm identified above:
+*   **Probe Sets:** Construct a local dataset of "adversarial" patient profiles. Include edge cases where pain impact is non-linear (e.g., high functional ability but severe psychological distress; low self-report but high physiological markers).
+*   **Controls:** For each edge case, define a **Positive Control** (a known failure where the model *should* flag high risk) and a **Negative Control** (a clear low-risk case).
+*   **Metrics & Thresholds:** Define a pass threshold for sensitivity on high-risk edge cases. Given the stakes, propose **zero tolerance** for failures where a high-need patient is categorized as low-need.
+*   **Stop Condition:** If the model misclassifies even one "critical need" edge case as "low need," the launch is blocked until the logic is revised.
+*   **Transparency Artifact:** Draft a **Model Card** versioned with your code. It must list: intended use (support tool, not diagnostic), known limitations (specific populations or pain types not covered), and the results of your local edge-case testing. Do not claim an accuracy percentage unless you have measured it against a validated ground truth; otherwise, mark metrics as `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** This is mandatory. The tool must **never** auto-commit an intervention level to a patient record. It must output a *suggestion* that requires explicit clinician confirmation. The "failure" state is the system acting autonomously on high-stakes care decisions.
+*   **Display Uncertainty:** Do not show a precise percentage (e.g., "87% severe"). Instead, use defined coarse tiers (e.g., "Confirmed High Impact," "Corroborated," "Single-Source Indicator," "Unverified"). Publish the definition of these tiers for your clinical staff.
+*   **Override Mechanism:** Ensure the interface makes it trivial for a clinician to override the suggestion and document why, without friction.
+
+**4. Governance (GOVERN)**
+*   Name a specific owner (e.g., Lead Researcher) responsible for re-reviewing the harm inventory and test results whenever the underlying logic or data weights change.
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device requiring specific legal disclosures or regulatory approval (e.g., FDA, PMDA) is a legal determination. Route this question immediately to counsel; do not assert compliance internally.
+
+**Note:** An empty harm inventory is not a pass; it is an unfilled requirement. Never fabricate safety metrics; if a risk cannot be measured locally, label it `UNVERIFIED` and restrict the feature's scope accordingly.

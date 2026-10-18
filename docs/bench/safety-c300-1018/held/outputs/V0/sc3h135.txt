@@ -1,0 +1,27 @@
+### Safety Review Strategy for Drug-Herb Interaction Checker
+
+**1. Harm Inventory & Scope Definition**
+Before proceeding, explicitly document the worst-case scenarios: a false negative (missing a conflict) leading to patient harm, and a false positive (flagging a safe combination) causing treatment delays. Given the high stakes of health outcomes, this feature classifies as high-risk. Acknowledge that text-only input is a known limitation that excludes image-based prescriptions; this constraint must be disclosed to users as a boundary of the system's capability.
+
+**2. Validation Strategy with Limited Data**
+Since comprehensive local data is missing, adopt a "Measure, Don't Assert" approach:
+*   **Adversarial Probe Sets:** Construct a test suite using known dangerous interactions between common Cairo herbal remedies (e.g., hibiscus, fenugreek, senna) and standard medications. Include "positive controls" (known conflicts) and "negative controls" (known safe pairs).
+*   **Gap Analysis:** Run the system against international databases (e.g., WHO, NIH) where available, then manually cross-reference gaps with local medical literature. Any interaction not verified by at least two independent, reputable sources must be marked `UNVERIFIED` in your internal logs, not assumed safe.
+*   **Simulation of Missing Inputs:** Since image input is unsupported, create a protocol where pharmacists must manually transcribe image-based prescriptions. Test this human-in-the-loop transcription process for error rates, as transcription errors are now part of your system's risk profile.
+
+**3. Manual Checks & Human-in-the-Loop Gates**
+Automated flagging cannot be the sole decision-maker for high-stakes health actions. Implement the following mandatory gates before deployment:
+*   **Pharmacist Confirmation Gate:** The system must present flags as "potential conflicts requiring review," not definitive bans. The pharmacist must explicitly acknowledge and override or accept the flag before dispensing. No irreversible action (dispensing medication) should occur without this human confirmation.
+*   **Uncertainty Disclosure:** If the system's confidence in an interaction is low or based on limited data, display a clear, non-numeric indicator (e.g., "Limited Evidence – Verify with Senior Pharmacist") rather than a precise percentage. Define what "Limited Evidence" means in your documentation.
+*   **Local Expert Review Panel:** Before launch, convene a panel of local pharmacists and herbalists to review the top 50 most common herb-drug pairs in your database. Their sign-off on these specific cases is a required launch criterion.
+
+**4. Transparency Artifacts**
+Prepare a "Model Card" for this feature detailing:
+*   **Intended Use:** Text-based prescription analysis only; image inputs require manual transcription.
+*   **Limitations:** Explicitly list herbs or drug classes where data is sparse or `UNVERIFIED`.
+*   **Performance Metrics:** Report accuracy only on the tested probe sets, broken down by herb type if possible. Do not claim overall system accuracy without broad validation.
+
+**5. Governance & Legal Routing**
+Assign a specific owner responsible for reviewing any reported missed interactions post-launch. Immediately route the question of legal liability for automated health advice and required AI disclosures in Egypt to legal counsel. Do not assert compliance with health regulations internally; let counsel define the regulatory regime (e.g., local health ministry rules, ISO standards) and necessary disclosures.
+
+**Note:** Do not fabricate safety metrics; if an interaction rate is unmeasured, label it `UNVERIFIED`. The launch decision rests with the product owner after reviewing these residual risks, not on a certification of safety.

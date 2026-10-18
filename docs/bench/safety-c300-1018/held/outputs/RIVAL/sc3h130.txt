@@ -1,0 +1,32 @@
+# Safety Verification Plan: Seoul BabyCare Smart Monitor
+
+Given the constraints of privacy laws prohibiting the storage of infant audio and the imminent retail launch, this plan prioritizes **synthetic data validation** and **controlled clinical observation** to verify sensitivity and minimize false negatives without compromising user privacy.
+
+### 1. Synthetic Audio Generation Strategy
+Since real infant audio cannot be stored or used for extensive training, we will generate a high-fidelity synthetic dataset to stress-test the detection algorithms.
+
+*   **Physiological Modeling:** Collaborate with a pediatric respiratory specialist to define parameter ranges for normal infant breathing (30–60 breaths/min) and anomaly patterns (apnea, periodic breathing, gasping). Use these parameters to drive a signal synthesis engine that creates audio waveforms mimicking the acoustic signature of breathing through a monitor's specific microphone hardware.
+*   **Noise Injection:** Generate thousands of variations overlaying breathing signals with realistic nursery noise profiles (white noise machines, parental movement, HVAC hum, sibling crying) at varying signal-to-noise ratios. This ensures the model does not fail when background noise masks subtle breathing sounds.
+*   **Edge Case Synthesis:** Specifically generate "hard negative" cases where breathing is extremely shallow or irregular, and "hard positive" cases where non-breathing sounds (e.g., rustling blankets) mimic respiratory rhythms. This targets the reduction of false negatives.
+
+### 2. Controlled Clinical Observation Protocol
+To ground-truth the synthetic data, we will conduct a limited, compliant observational study.
+
+*   **Real-Time Processing Only:** Deploy prototype units in a controlled clinical setting (e.g., a partnership with a local nursery or hospital wing) under strict ethical review. Configure devices to process audio **strictly in real-time on the edge**. No raw audio files will be written to disk or transmitted; only metadata timestamps and binary alert triggers (Alert/No Alert) will be logged.
+*   **Reference Standard:** Use a certified medical-grade respiratory belt or pulse oximeter as the ground truth reference for the infants (with parental consent).
+*   **Blinded Validation:** Engineers analyzing the logs will be blinded to the reference data until the final comparison to prevent bias. The primary metric is the system's ability to flag an event within 10 seconds of the reference device detecting a cessation.
+
+### 3. Sensitivity and False Negative Validation
+*   **Threshold Tuning:** Using the synthetic dataset, adjust detection thresholds to maximize sensitivity (recall). In this safety-critical context, a higher rate of false positives (nuisance alarms) is acceptable if it guarantees the minimization of false negatives (missed events).
+*   **The "Zero-Miss" Target:** Define the release criterion as 0% false negatives on the synthetic apnea dataset and <5% false negatives on the limited clinical observation set. If any true apnea event is missed in testing, the firmware must be patched and re-validated before launch.
+*   **Latency Testing:** Measure the time delta between the onset of simulated apnea and the alert generation. Ensure this latency remains under the safety threshold (e.g., <15 seconds) across all noise conditions.
+
+### 4. Pre-Launch Go/No-Go Criteria
+*   **Pass:** System detects 100% of synthetic apnea events and >95% of clinically observed events with no raw data retention.
+*   **Fail:** Any false negative occurs in the clinical reference set, or the system fails to distinguish breathing from high-level background noise in synthetic tests.
+*   **Contingency:** If the system fails these criteria, the launch must be delayed, or the device must be shipped with a prominent disclaimer that it is a "wellness monitor" and not a medical alarm, pending further validation.
+
+This approach ensures rigorous safety verification using privacy-preserving synthetic data and minimal, compliant clinical observation, protecting both the infants and the company's legal standing.
+
+*Note: Ensure all synthetic data generation code is version-controlled and auditable for future regulatory inquiries.*
+*Legal counsel should review the "wellness monitor" disclaimer language immediately as a backup strategy.*

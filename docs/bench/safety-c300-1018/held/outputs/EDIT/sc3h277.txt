@@ -1,0 +1,38 @@
+### Approach to Evaluate Sensitivity and Safely Expand Testing
+
+**1. Harm Inventory & Worst-Case Definition**
+Before expanding testing, formally record the specific risk: **Bias/Unfair Outcomes** due to a single-source dataset.
+*   **Affected Group:** Patients with mild Restless Leg Syndrome (RLS), diverse body types, or movement patterns distinct from the local clinic's demographic.
+*   **Worst Realistic Case:** The system fails to detect mild symptoms (false negative), leading to delayed diagnosis and prolonged patient suffering.
+*   **Status:** Mark sensitivity metrics for mild cases as **UNVERIFIED** until diverse data is tested. Do not claim a specific accuracy rate based on the current narrow dataset.
+
+**2. Measurement Plan: Adversarial & Synthetic Probing**
+Since you cannot yet access diverse real-world patients, you must construct a "probe set" to stress-test the algorithm:
+*   **Synthetic Edge Cases:** Generate or manually annotate synthetic movement profiles that mimic "subtle leg movements" known to be missed. Include variations in speed, amplitude, and duration that fall just below your current detection threshold.
+*   **Positive/Negative Controls:**
+    *   *Positive Control:* Inject known mild RLS patterns into the test stream; the system *must* flag them for review.
+    *   *Negative Control:* Inject normal sleep shifts that resemble mild RLS; the system should not over-flag these (to prevent alarm fatigue).
+*   **Metric & Threshold:** Define sensitivity specifically for the "mild" subgroup. Set a **stop condition**: If the system misses more than 0% of the injected mild positive controls in simulation, it cannot proceed to live pilot expansion without a human-in-the-loop gate.
+
+**3. Managing Residual Risk: The Human Gate**
+Because this is a health-related tool with potential for delayed diagnosis (a high-stakes outcome):
+*   **Mandatory Human Review:** Do not allow the algorithm to autonomously clear a patient as "RLS-free" if their movement data falls into a low-confidence or "subtle" tier. Any case where the signal is weak must be routed to a clinician for manual review.
+*   **Uncertainty Disclosure:** When presenting results to clinicians during the pilot, do not show a precise percentage (e.g., "87% confident"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Strong movement pattern detected.
+    *   *Corroborated:* Pattern matches known moderate/severe profiles.
+    *   *Unverified/Subtle:* Pattern is ambiguous; **requires human review**.
+*   **Rollout Strategy:** Expand testing in stages. Start with a "shadow mode" where the algorithm runs alongside standard care without influencing decisions, comparing its flags against clinician diagnoses. Only move to assisted decision-making once the "Unverified" tier is consistently caught by human review.
+
+**4. Transparency Artifact (Model Card)**
+Draft a preliminary Model Card for internal and pilot-partner use. It must state:
+*   **Intended Use:** Screening for RLS symptoms via movement patterns.
+*   **Limitations:** Trained on a single local dataset; sensitivity for mild cases is unverified across diverse populations.
+*   **Data Provenance:** Explicitly name the single clinic source and acknowledge the lack of demographic diversity.
+*   **Owner:** Name the specific team member responsible for re-evaluating the model when new data sources are added.
+
+**5. Governance & Next Steps**
+*   **Owner Assignment:** Assign one team member to own the "Bias/Missed Diagnosis" risk.
+*   **Legal Routing:** Before broadening the pilot, route the question of "regulated medical device status" and "mandatory disclosure duties" to legal counsel. Do not assume the current pilot exemptions apply once you expand.
+*   **Re-evaluation Trigger:** Commit to re-running the sensitivity evals immediately upon acquiring any new dataset from a different demographic or clinic.
+
+**Note:** This plan treats the current sensitivity as unverified rather than certifying safety. The human-in-the-loop gate for ambiguous cases is non-negotiable given the risk of delayed diagnosis.

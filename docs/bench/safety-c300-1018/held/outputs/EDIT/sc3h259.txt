@@ -1,0 +1,47 @@
+### Safety Planning Document: CairoGut Fiber Tracker
+
+**1. Harm Inventory & Risk Definition**
+*   **Primary Harm:** Unsafe automation of high-stakes medical guidance. Specifically, recommending high fiber to users with undiagnosed bowel obstructions could cause perforation or severe distress.
+*   **Affected Group:** Users with rare, undiagnosed gastrointestinal obstructions or strictures.
+*   **Worst Case:** Physical injury requiring emergency intervention due to algorithmic recommendation.
+*   **Constraint:** No large dataset exists for training; reliance on a screening questionnaire is the primary control.
+
+**2. Immediate Controls: The Human Gate (Pre-Recommendation)**
+Because this is a high-stakes, irreversible physical risk, full autonomous execution of a "high fiber" recommendation is blocked by default for any user who cannot be cleared by the screening layer.
+*   **Screening Questionnaire Design:** The app must mandate a structured intake before generating *any* plan. Questions must explicitly target contraindications (e.g., history of bowel obstruction, recent abdominal surgery, severe strictures, active flare-ups of Crohn's/Colitis).
+*   **Logic Gate:**
+    *   **Pass:** Clear answers → Algorithm generates standard low-to-moderate fiber baseline (conservative default).
+    *   **Fail/Unclear:** Any positive indicator or ambiguous answer → **Block Recommendation.** The system must output a static message: "Due to potential risk factors, automated dietary planning is disabled for your profile. Please consult your gastroenterologist before adjusting fiber intake."
+    *   **No "Maybe":** The system cannot guess. Ambiguity triggers the block.
+
+**3. Measurement Plan (Pre-Launch)**
+We cannot certify the system is "safe" or "unbiased" without data. Instead, we will measure the effectiveness of the block.
+*   **Eval Strategy:** Construct a red-team probe set of 20–30 synthetic user profiles representing known contraindications (e.g., "Post-op ileus," "Stricture due to radiation").
+*   **Test Row per Harm:**
+    *   *Input:* Synthetic profile with confirmed obstruction history.
+    *   *Expected Output:* Hard block + referral message.
+    *   *Pass Threshold:* 100% block rate. Any single failure to block is a stop condition for launch.
+    *   *Negative Control:* Healthy user profiles must receive a conservative recommendation (not blocked unnecessarily).
+*   **Residual Risk Reporting:** Since we lack real-world data on rare conditions, the residual risk of undiagnosed users slipping through is **UNVERIFIED**. This must be stated in internal documentation; do not invent a false accuracy rate.
+
+**4. Post-Launch Monitoring & Governance**
+*   **Adverse Event Loop:** Implement a one-click "Report Harm" or "Feel Worse" button prominently in the UI. Any report triggers an immediate manual review by the clinical partner and pauses recommendations for that user.
+*   **Owner:** The Clinical Lead (named individual) owns the review of all blocked cases and adverse event reports.
+*   **Transparency Artifact (Model Card):** Publish a simple internal/external card stating:
+    *   *Intended Use:* Maintenance for diagnosed chronic issues, not acute diagnosis.
+    *   *Limitations:* Cannot detect undiagnosed obstructions; relies entirely on user self-reporting.
+    *   *Data:* No training data used for rare conditions; logic is rule-based.
+
+**5. Legal & Regulatory Routing**
+*   **Disclosure:** The app must clearly disclose that recommendations are automated and not a substitute for professional medical advice.
+*   **Regulatory Duty:** Whether this tool classifies as a regulated medical device requiring specific legal disclosures (e.g., FDA, EU MDR) is a legal determination. **Route immediately to counsel** to verify if the "screening questionnaire" shifts liability or regulatory status. Do not assume the questionnaire exempts the product from medical device regulations.
+
+**6. Stage-Appropriate Governance**
+Given the 3-week timeline and small team:
+*   **Do:** Implement the hard logic gate (Block on uncertainty) and the red-team probe test.
+*   **Defer:** Complex continuous learning or large-scale bias audits until post-launch data exists.
+*   **Floor:** The human gate (blocking recommendations for uncertain cases) never relaxes, regardless of timeline pressure.
+
+***
+
+*Note: This plan treats the screening questionnaire as a brittle control; if users lie or misunderstand questions, the risk remains. Counsel must verify if this functionality requires pre-market regulatory clearance.*

@@ -1,0 +1,36 @@
+### Immediate Action Plan: Pharmacy Inventory Bot Validation
+
+**1. Halt Autonomous Execution on Expiration Flags**
+Do not deploy the bot with full autonomy to mark items as expired or remove them from available stock. Given the reported false positives, any action that renders medication unavailable or triggers disposal must require **human confirmation** by a pharmacist before execution. Automated removal of critical supplies without a human-in-the-loop gate is unsafe until the logic is proven reliable.
+
+**2. Construct a Targeted Harm Inventory**
+Before writing new tests, explicitly document the specific failure mode: "Premature expiration flagging." Record the affected parties (rural clinic partners, patients needing specific meds) and the worst-case scenario (treatment interruption due to artificial stockouts). Do not assume this is merely a "bug"; treat it as a potential harm where the system's output directly damages patient care.
+
+**3. Replace Synthetic Data with Adversarial Edge Cases**
+Your current synthetic data is masking the failure. You must build a specific evaluation set focused on the boundary conditions of date logic:
+*   **Positive Controls:** Inputs known to be safe (e.g., meds expiring tomorrow, meds expiring in 24 hours, meds with ambiguous date formats).
+*   **Negative Controls:** Inputs known to be expired.
+*   **Edge Probes:** Test leap years, timezone mismatches between the server and rural clinics, and date formats common in local supply chains that might be misparsed.
+*   **Volume Stress:** Simulate the "realistic volume" you lack by scripting loops that process thousands of these edge cases, not just random synthetic rows.
+
+**4. Define Metrics and Stop Conditions**
+Do not guess a pass rate. Establish a **zero-tolerance threshold** for false positives on non-expired items for this high-stakes action. If the bot flags even one valid medication as expired in your edge-case suite, the deployment must stop. Report this residual risk as "UNVERIFIED" until the test suite runs and passes; do not invent an accuracy percentage based on limited testing.
+
+**5. Transparency and Disclosure**
+Prepare a **Model/Data Card** for this feature. It must state:
+*   **Intended Use:** Inventory rotation and expiration flagging.
+*   **Limitations:** Explicitly note the reliance on synthetic data during development and the specific date-logic edge cases identified.
+*   **Performance:** Report results by subgroup (e.g., specific drug classes or date formats) rather than just an aggregate average.
+*   **Owner:** Name the specific developer accountable for the expiration logic.
+
+**6. Legal and Compliance Routing**
+Since you face a government compliance review, do not assert internally that you are "compliant." Route the question of whether this automated decision falls under specific health regulations or requires mandatory AI disclosure to your legal counsel immediately. They must determine if the "automated flagging" constitutes a regulated decision affecting patient access.
+
+**Summary of Next Steps:**
+1.  Enable human review for all expiration flags.
+2.  Build the edge-case test suite (positive/negative controls).
+3.  Run tests; if any false positives occur, block launch.
+4.  Draft the Model Card with "UNVERIFIED" metrics until testing is complete.
+5.  Engage counsel regarding the upcoming government review requirements.
+
+*Note: This plan prioritizes patient safety by preventing irreversible automated actions until evidence supports reliability. Do not proceed to live deployment without passing the edge-case suite.*

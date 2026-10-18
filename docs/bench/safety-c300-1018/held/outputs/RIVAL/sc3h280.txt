@@ -1,0 +1,46 @@
+**Targeted Night-Shift Testing Schedule for Smart-Ventilator FiO2 Control**
+
+**Objective:** Maximize detection of critical control loop failures (hypoxia risks) within four-hour nightly windows, focusing on rare failure cascades during circuit changes.
+
+**Pre-Shift Preparation (Daytime - Simulation Only):**
+*   **Scenario Modeling:** Define 3-4 specific "rare failure cascade" scenarios based on theoretical fault trees (e.g., sensor lag + valve stutter + pressure drop).
+*   **Data Baseline:** Review daytime logs to establish normal pressure/FiO2 baselines for the specific ICU circuit configuration.
+*   **Safety Check:** Verify all manual override mechanisms and backup oxygen supplies are physically accessible and functional before the night shift begins.
+
+**Nightly Execution Window (4 Hours Total):**
+
+**Hour 1: Baseline Validation & Single-Point Failure Injection**
+*   **0-20 mins:** System startup and self-check verification. Confirm sensor calibration against known standards.
+*   **20-60 mins:** Execute controlled "circuit change" simulations under normal conditions to establish a clean baseline response time.
+*   **60-90 mins:** Inject single-point failures one by one (e.g., simulated pressure drop only; simulated sensor delay only). Measure reaction time and stability.
+*   **90-120 mins:** Analyze immediate data. If single-point tests fail, halt cascade testing and troubleshoot.
+
+**Hour 2: Dual-Factor Stress Testing (The "Rare" Cascades)**
+*   **0-30 mins:** Combine two stressors: Simulate pressure drop *during* a sensor recalibration cycle. This mimics a timing-based race condition.
+*   **30-60 mins:** Combine mechanical lag with algorithmic load: Induce a pressure drop while simultaneously feeding noisy data streams to the controller.
+*   **60-90 mins:** Test boundary conditions: Rapid successive circuit disconnections/reconnections to test state recovery and memory leaks in the control loop.
+*   **90-120 mins:** Deep dive analysis of any anomalies. Prioritize instances where FiO2 dipped below safety thresholds or recovery time exceeded limits.
+
+**Hour 3: Extreme Edge Case & Recovery Protocols**
+*   **0-45 mins:** Execute the most complex pre-defined cascade scenario (e.g., power fluctuation + sensor drift + mechanical obstruction). This is the highest risk test.
+*   **45-75 mins:** Test manual override latency: Trigger a failure and measure the time from human intervention to stable manual control.
+*   **75-120 mins:** System reset and recovery verification. Ensure the system returns to a safe state without residual errors after extreme stress.
+
+**Hour 4: Data Consolidation & Iterative Refinement**
+*   **0-45 mins:** Aggregate all logs from Hours 1-3. Correlate timestamps of failures with specific input conditions.
+*   **45-90 mins:** Team debrief. Identify the single most critical vulnerability found. Adjust the next night's "Hour 2" and "Hour 3" scenarios to probe deeper into that specific weakness.
+*   **90-120 mins:** Final system safety check. Ensure the ventilator is left in a guaranteed safe, passive mode or fully powered down according to hospital protocol before day staff arrive.
+
+**Weekly Cadence Strategy:**
+*   **Mon/Tue:** Focus on sensor/input failure cascades.
+*   **Wed/Thu:** Focus on actuator/output mechanical lag cascades.
+*   **Fri:** Full integrated stress test of the week's most promising failure modes.
+*   **Weekend:** No physical testing; use time for data analysis and scenario refinement.
+
+**Critical Success Factors:**
+*   **Strict Timeboxing:** Adhere rigidly to the hourly blocks. If a test hangs, abort and log; do not debug live during the window.
+*   **Fail-Safe First:** Every test must have an immediate, physical kill-switch accessible to the operator.
+*   **Data Integrity:** Ensure high-frequency logging is active; visual observation is insufficient for control loop analysis.
+
+Note: This schedule assumes a fully isolated test bench that mimics the ICU environment without risking patient safety.
+Physical testing must never bypass established medical device safety protocols or regulatory requirements.

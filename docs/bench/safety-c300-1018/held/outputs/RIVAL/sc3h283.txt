@@ -1,0 +1,34 @@
+# Pre-Launch Safety Validation Plan: CPAP Ramp Time Optimizer
+
+**Objective:** Verify that the ramp time optimizer never delays therapeutic pressure to a degree that compromises patient oxygenation, specifically addressing the risk of excessive ramp duration in severe apnea cases despite simulation limitations.
+
+### 1. Structured Simulation Strategy (Boundary Testing)
+Since full replication of complex severe events is impossible, shift focus from "realistic variety" to "worst-case boundaries."
+
+*   **Define the "Hard Stop" Threshold:** Establish a rigid upper limit for ramp duration (e.g., 20 minutes) based on clinical guidelines. Configure the simulation to fail immediately if the algorithm proposes a ramp exceeding this limit, regardless of input breathing patterns.
+*   **Synthetic "Severe Onset" Profiles:** Create three specific, simplified input profiles representing the worst plausible scenarios your simulator *can* generate:
+    1.  **Immediate Obstruction:** Simulated breathing stops completely at T+30 seconds.
+    2.  **Rapid Desaturation Trend:** A linear drop in simulated SpO2 mimicking a severe event.
+    3.  **High AHI Burst:** A cluster of apnea events occurring within the first 2 minutes.
+*   **Pass/Fail Criteria:** For each profile, the algorithm must either:
+    *   Abort the ramp and jump to therapeutic pressure within a pre-defined safety window (e.g., <45 seconds from event detection).
+    *   Never initiate a ramp longer than the "Hard Stop" threshold.
+*   **Execution:** Run these three profiles 50 times each with varying noise levels to ensure the safety trigger is deterministic and not probabilistic.
+
+### 2. Targeted Clinical Spot-Checks
+Use human expertise to validate the logic where simulation fails, focusing on the "unknown unknowns" of severe cases.
+
+*   **Expert Review of Edge Cases:** Present the algorithm's decision logic (flowcharts or pseudocode) to two senior sleep clinicians. Ask specifically: "In what real-world severe scenario would this logic allow a ramp to continue when it should abort?" Document their hypothetical scenarios.
+*   **Retrospective Data "Dry Run":** Take 10 anonymized historical datasets from severe apnea patients (where therapeutic pressure was manually set). Feed the breathing pattern data from the *first 5 minutes* of these records into the algorithm offline.
+    *   **Verification:** Compare the algorithm's proposed ramp time against the actual clinical outcome. If the algorithm suggests a long ramp for a patient who historically desaturated quickly, flag this as a critical failure.
+*   **Safety Override Verification:** Have clinicians physically test the device (or high-fidelity bench test) to confirm that a manual "Abort Ramp" button or clinician override instantly supersedes the algorithm, regardless of its current state.
+
+### 3. Go/No-Go Decision Matrix
+Define clear conditions for the two-week release:
+
+*   **GO:** Simulation passes 150/150 boundary tests with zero instances of delayed therapeutic pressure beyond the safety window. Retrospective data shows no conflict with historical severe cases. Clinicians sign off on the override mechanism.
+*   **NO-GO:** Any single instance where the algorithm prioritizes "comfort" (longer ramp) over "safety" (therapeutic pressure) in the severe onset profiles. Any clinician identifies a plausible severe scenario not covered by the safety override.
+
+**Deployment Safeguard:** For the initial London rollout, restrict the feature to patients with mild-to-moderate apnea only. Exclude severe cases until post-market data confirms safety performance in a controlled live environment.
+
+*Note: This plan prioritizes falsification of the safety hypothesis over general performance validation. Ensure all retrospective data usage complies with UK GDPR and local ethics board requirements.*

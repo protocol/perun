@@ -1,0 +1,28 @@
+### Pre-Launch Connectivity & Failure-Mode Checklist for Smart CPAP Upload
+
+**1. Port & Protocol Whitelist Verification**
+*   [ ] **Identify Minimal Port Set:** Confirm the device uses only standard, high-permissibility ports (e.g., HTTPS/443, DNS/53) required for TLS-encrypted transmission. Avoid custom ports that trigger strict firewall blocks.
+*   [ ] **Domain Allowlisting:** Instead of IP allowlisting (which changes), verify that the clinic's firewall allows outbound traffic to the specific FQDNs (Fully Qualified Domain Names) of the upload endpoint and its CDN.
+*   [ ] **TLS Handshake Test:** Simulate a connection attempt from within the clinic's restricted network segment to verify the TLS handshake completes without being reset by deep packet inspection (DPI) tools.
+
+**2. Failure-Mode & Fallback Logic Validation**
+*   [ ] **Local Buffer Integrity:** Verify that if the initial upload fails, data is immediately written to non-volatile local storage with a "pending upload" flag. Ensure the buffer has sufficient capacity for at least 30 days of therapy data to prevent overwrite during prolonged outages.
+*   [ ] **Exponential Backoff Configuration:** Confirm the retry logic uses exponential backoff (e.g., 1 min, 5 min, 30 min, 2 hrs) to avoid flooding the network or triggering rate-limiting blocks on the firewall.
+*   [ ] **Connection Type Fallback:** If Wi-Fi fails, test the automatic switch to cellular backup (if hardware permits) or store-and-forward via a paired mobile app gateway that utilizes different network paths.
+*   [ ] **Graceful Degradation:** Ensure the device continues recording therapy data locally even when the network stack is entirely blocked; data collection must never halt due to transmission failure.
+
+**3. Data Consistency & Recovery Testing**
+*   [ ] **Resume-on-Reconnect:** Simulate a network interruption mid-upload. Verify the system resumes transmission from the last acknowledged byte rather than restarting the entire file, minimizing bandwidth usage.
+*   [ ] **Duplicate Prevention:** Confirm that once a data packet is successfully acknowledged by the server, the local "pending" flag is cleared and the data is not re-sent upon the next connection attempt.
+*   [ ] **End-to-End Latency Check:** Measure the time delta between data generation on the device and its appearance in the clinician dashboard under optimal and degraded network conditions.
+
+**4. Clinician Visibility & Alerting**
+*   [ ] **"Stale Data" Indicator:** Ensure the clinician dashboard explicitly displays the "Last Sync Time" for each patient. If data is >24 hours old, the UI must visually flag the record as "Offline" or "Pending Upload."
+*   [ ] **Local Device Alert:** Verify the CPAP device displays a clear, non-alarming icon (e.g., a disconnected cloud symbol) to inform the patient that data is storing locally but not yet transmitting.
+*   [ ] **Admin Failure Log:** Generate a local log file on the device detailing failed connection attempts (timestamp, error code) to assist network engineers in diagnosing specific block reasons without exposing patient health data.
+
+**5. Final Network Engineer Sign-off**
+*   [ ] **Packet Capture Review:** Conduct a controlled test with network engineers monitoring traffic logs to confirm no unauthorized ports are probed and all payloads are encrypted.
+*   [ ] **Worst-Case Simulation:** Physically disconnect the device from the network for 48 hours, then reconnect, verifying 100% of stored data uploads correctly and in chronological order.
+
+*Note: This checklist assumes the device firmware already implements local non-volatile storage; if not, this is a critical blocker. Legal review regarding patient data residency during local storage delays is recommended before deployment.*

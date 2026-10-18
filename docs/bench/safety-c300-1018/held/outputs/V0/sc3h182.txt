@@ -1,0 +1,24 @@
+**Prioritized Edge Case Simulation Plan for BerlinBreath Technologies**
+
+Given the critical nature of automatic alerts for home care patients and the severe 48-hour testing constraint, your protocol must shift from broad coverage to targeted failure-mode validation. The following edge cases are prioritized by the severity of potential harm (missed alert) and likelihood of occurrence in home environments.
+
+**1. Network Outage Scenarios (Highest Priority)**
+*   **Persistent Disconnection at Critical Threshold:** Simulate the device losing connectivity exactly when the tank level crosses the "critical low" threshold. Verify that the device queues the alert locally and transmits it immediately upon network restoration, rather than dropping the message.
+*   **Intermittent Flapping (Connect/Disconnect Cycles):** Simulate unstable Wi-Fi or cellular signals common in residential areas. Ensure the device does not enter a reboot loop or exhaust its battery attempting to send a single alert, which would prevent future alerts.
+*   **DNS/Router Failure vs. ISP Outage:** Distinguish between a local router power loss and a wider ISP outage. The device should attempt local fallback mechanisms (if available, e.g., switching from Wi-Fi to cellular) or clearly indicate local connectivity loss to the user via a local indicator, distinct from a "low oxygen" alarm.
+
+**2. Battery Failure & Power Scenarios**
+*   **Brownout During Transmission:** Simulate a voltage drop (battery nearing end-of-life) precisely during the transmission of an alert. Verify data integrity and that the device completes the send or safely retries without corrupting the message or bricking the unit.
+*   **Sudden Power Loss (Battery Removal/Failure):** Simulate immediate power loss while the system is armed. Confirm that the last known state (e.g., "Critical Low") is preserved in non-volatile memory and triggers an alert immediately upon power restoration or battery replacement.
+*   **Low Battery vs. Low Oxygen Ambiguity:** Ensure the device never confuses a "Low Battery" status with a "Low Oxygen" alert, or vice versa. Simulate both occurring simultaneously; the system must prioritize or clearly distinguish both alerts to the caregiver to prevent confusion.
+
+**3. Combined Failure Modes (The "Perfect Storm")**
+*   **Network Outage + Low Battery:** This is the highest risk scenario. Simulate a network outage while the battery is critically low. Verify that power-saving modes do not disable the radio's ability to listen for reconnection or send the queued critical alert once a signal is found.
+*   **Time Drift During Outage:** Simulate a prolonged network outage (exceeding 24 hours) causing internal clock drift. Ensure that when connectivity is restored, the timestamp on the delayed alert is accurate or clearly marked as "delayed," so caregivers understand the timeline of the event.
+
+**Execution Strategy for 48-Hour Window**
+*   **Automate the "Happy Path" First:** Spend the first 4 hours confirming the baseline works; do not manually test standard operations.
+*   **Focus on State Transitions:** Dedicate the remaining time to the *moments of failure* (the transition from connected to disconnected, powered to unpowered).
+*   **Human-in-the-Loop Verification:** For every simulated failure, a human must verify that the caregiver *actually receives* the correct notification on their end device. Do not rely solely on device logs.
+
+**Note:** Given the high-stakes nature of medical alerts, any untested scenario regarding missed alarms must be treated as a potential failure until proven otherwise; consider a manual fallback instruction for users in the launch documentation. Ensure legal counsel reviews disclosure language regarding device limitations before launch.

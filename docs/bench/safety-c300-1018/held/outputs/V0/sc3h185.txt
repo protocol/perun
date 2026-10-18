@@ -1,0 +1,31 @@
+### Pre-Launch Safety Verification Plan: Occlusion Alarm Stress Testing
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the specific risks for pediatric patients on legacy hardware:
+*   **Unsafe Automation:** The model predicts a false occlusion and stops flow unnecessarily (under-dosing critical meds) or misses a real occlusion (over-dosing/tissue damage).
+*   **Over-Reliance:** Nurses trust the predictive alarm over physical signs because the system claims "high confidence."
+*   **Legacy Failure:** The predictive model consumes too much memory on old pumps, causing system lag or crash during an actual alarm event.
+*   **Worst Realistic Case:** A critically ill child receives a lethal dose or suffers tissue necrosis because the system suppressed a real alarm to "optimize" flow, or the device froze during a repeated alarm sequence.
+
+**2. Measurement Plan (Runnable Test Rows)**
+Execute these specific tests on the actual legacy hardware models installed in target hospitals. Do not test only on modern simulators.
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Repeated False Positives** | Simulate 50 rapid, non-critical pressure spikes mimicking patient movement. | **Negative:** Normal flow; **Positive:** Known hard blockage. | % of unnecessary flow stops; Nurse override time. | 0% unnecessary stops for critical meds; Override < 5s. | **HALT LAUNCH** if >1 unnecessary stop occurs for high-risk drugs. |
+| **Missed Occlusion (Latency)** | Introduce gradual blockages while running background predictive tasks. | **Negative:** Clear line; **Positive:** Immediate hard clamp. | Time-to-alarm vs. standard pump baseline. | Latency increase < 2 seconds vs. baseline. | **HALT LAUNCH** if latency exceeds 2s or alarm is suppressed. |
+| **Legacy Resource Exhaustion** | Trigger 100 consecutive alarm/reset cycles without reboot. | **Negative:** 10 cycles; **Positive:** Memory leak injection. | CPU/Memory usage; System responsiveness post-cycle. | No crash; UI response < 1s after 100th cycle. | **HALT LAUNCH** if device requires reboot to clear state. |
+| **Automation Bias** | Usability study: Nurses manage simulated crisis with system active. | **Control:** Standard pump alarms only. | Rate of nurses ignoring physical checks when system says "Clear." | 100% of nurses verify physically despite "Clear" status. | **HALT LAUNCH** if >1 nurse fails to verify physical line. |
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate:** For any flow rate adjustment >10% or any occlusion prediction, the system must require explicit nurse confirmation on the legacy interface before acting. Fully autonomous adjustment of critical pediatric doses is prohibited.
+*   **Uncertainty Display:** Do not show raw probabilities (e.g., "92% clear"). Use defined coarse tiers: **"Confirmed Blockage," "Check Line,"** or **"Monitoring."** Define these terms clearly in training materials.
+*   **Transparency Artifact:** Create a **Model Card** for the infusion controller. It must list: intended use (pediatric wards), limitations (specific legacy pump models tested), subgroup performance (if applicable), and the owner of the safety case. Mark any untested pump models as `UNVERIFIED`.
+
+**4. Governance**
+*   Name a specific Safety Owner responsible for reviewing test results.
+*   Route legal questions regarding automated medical decisions and required disclosures to counsel immediately; do not assert compliance internally.
+*   If any test row hits its stop condition, the feature cannot ship until the residual risk is eliminated or accepted by the Safety Owner with documented justification.
+
+*Note: This plan identifies risks and measurement methods; it does not certify the system as safe. All metrics marked `UNVERIFIED` must be measured before launch.*
+*Legal duties regarding AI disclosure in medical devices must be confirmed by counsel.*

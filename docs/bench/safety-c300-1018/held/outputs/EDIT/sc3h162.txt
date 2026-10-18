@@ -1,0 +1,29 @@
+**Safety Review Plan: Smart-Ventilator Cough-Response Logic**
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks specific to automatic mode-switching during irregular coughing:
+*   **Unsafe Automation of High-Stakes Actions:** The device executes irreversible physiological changes (mode switch) without human confirmation. The worst case is ventilator asynchrony causing hypoxia or barotrauma during a complex coughing fit.
+*   **Over-Reliance/Automation Bias:** Clinicians may trust the auto-switch over manual observation, delaying intervention if the algorithm misclassifies a seizure or agitation as coughing.
+*   **Hallucination as Fact:** The sensor fusion logic might "detect" a cough pattern from noise or artifact and present this as a confirmed event to trigger a switch.
+*   **Bias/Unfair Outcomes:** The detection model may fail on specific demographics (e.g., pediatric vs. adult lung compliance, varying body mass) if training data was narrow.
+
+**2. Measurement Strategy Under Budget Constraints (MEASURE)**
+With physical simulation reduced by 40%, we cannot rely solely on hardware-in-the-loop testing. We must shift to rigorous software-based adversarial evaluation before touching hardware:
+*   **Adversarial Signal Injection:** Generate synthetic respiratory waveforms that mimic "rapid, irregular coughing" mixed with noise, artifacts, and non-cough events (e.g., hiccups, circuit disconnection). Run these against the detection algorithm in a pure software environment (zero hardware cost).
+*   **Positive/Negative Controls:**
+    *   *Positive:* Known cough sequences that *must* trigger a switch.
+    *   *Negative:* Agitation, bucking, or secretions that must *not* trigger a switch.
+*   **Metric & Threshold:** Define a "Stop Condition" for launch. Example: If the false-positive rate (switching when not coughing) exceeds 0% in simulation, the feature is blocked. Do not invent a "safe" error rate; propose zero tolerance for erroneous high-stakes automation until proven otherwise.
+*   **Residual Risk Reporting:** Clearly label any scenario not physically tested as `UNVERIFIED`. Do not claim "99% accuracy" based on limited runs. Report exactly what was simulated and what remains unknown.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Critical):** Given the high stakes and budget cuts, **full autonomous execution is the failure mode.** The plan must mandate that the "automatic switch" defaults to a **clinician confirmation alert** rather than an immediate action, or requires a secondary independent sensor verification before acting. If the device must act instantly due to physiological speed, the system must default to the safest pre-set mode (fail-safe) rather than an optimized but unverified mode.
+*   **Uncertainty Display:** The interface must not show "Cough Detected: 87%." It must show a defined tier: "Event: Confirmed" vs. "Event: Unverified/Noisy," preventing clinicians from over-trusting marginal signals.
+*   **Staged Rollout:** Propose a limited deployment plan (e.g., single ICU bed monitoring only, no auto-actuation) to gather real-world data before full activation.
+
+**4. Governance & Transparency (GOVERN)**
+*   **Owner Assignment:** Name one engineer responsible for the cough-detection logic safety case.
+*   **Transparency Artifact:** Prepare a "Device Card" for the hospital board detailing: intended use (severe distress only), known limitations (unverified on pediatric weights), and the specific gaps caused by the budget cut (which physical scenarios were skipped).
+*   **Regulatory Routing:** Do not assert compliance with medical device regulations (e.g., FDA, MFDS, EU MDR) internally. Explicitly route the question of "Is this automated decision legally permissible without human confirmation?" to legal counsel immediately.
+
+**Note:** This plan prioritizes a human gate and software-based adversarial testing to mitigate the physical testing budget cut. No safety certification is claimed; residual risks are marked `UNVERIFIED`.

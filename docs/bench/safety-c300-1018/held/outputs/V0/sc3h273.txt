@@ -1,0 +1,35 @@
+### Critical Failure Modes and Testing Protocol for Wound-Exudate Estimator
+
+**1. Identified Critical Failure Modes**
+Based on the constraint of varying lighting conditions in rural centers, the highest-risk failure modes are:
+*   **False Negative Exudate Estimation:** Low light causes the algorithm to interpret moist, shiny wound beds as dry. This leads to selecting absorbent dressings when none are needed, or worse, selecting non-absorbent dressings for highly exuding wounds, causing maceration and infection risk.
+*   **Lighting-Induced Bias:** The model may perform systematically worse on darker skin tones under low-light conditions if the training data lacked diverse representation in poor lighting, leading to unequal care outcomes.
+*   **Automation Bias:** Nurses may trust the automated recommendation over clinical intuition, especially if the interface presents the result with high confidence despite the poor image quality.
+
+**2. Targeted Testing Protocol (Low-Light Simulation)**
+Do not rely on aggregate accuracy. Execute the following specific test rows before pilot launch:
+
+*   **Test Row A: The "Dry vs. Wet" Edge Case**
+    *   **Probe Set:** 50 wound images (25 truly dry, 25 truly wet) artificially degraded to simulate rural low-light (low lux, high noise, yellow/green color casts).
+    *   **Positive Control:** Known wet wounds in low light must *never* be classified as "Dry/Low Exudate."
+    *   **Metric:** False Negative Rate for high-exudate detection.
+    *   **Stop Condition:** If >0% of high-exudate wounds are misclassified as low-exudate in low-light simulations, the feature cannot auto-recommend dressings.
+    *   **Action:** Block autonomous dressing selection; force human review.
+
+*   **Test Row B: Skin Tone Stratification**
+    *   **Probe Set:** The same low-light images sliced by skin tone (Fitzpatrick scales I-VI).
+    *   **Metric:** Disparity in error rates between light and dark skin tones.
+    *   **Stop Condition:** If error rates for darker skin tones exceed those for lighter tones by >5%, the model is unsafe for general deployment.
+
+*   **Test Row C: Confidence Calibration Check**
+    *   **Probe Set:** Low-quality images where the model historically struggles.
+    *   **Metric:** Correlation between model confidence score and actual correctness.
+    *   **Finding:** If the model outputs high confidence (>80%) on low-light inputs where it is frequently wrong, the confidence score must be hidden or replaced with a "Low Quality Image – Verify Manually" warning.
+
+**3. Mandatory Risk Controls (Pre-Pilot)**
+*   **Human-in-the-Loop Gate:** Given the risk of infection from incorrect dressing selection, **no fully automated decision-making is permitted** for this pilot. The system must output a *suggestion* only, requiring explicit nurse confirmation.
+*   **Uncertainty Disclosure:** Do not display raw confidence percentages (e.g., "87% confident"). Instead, use defined coarse tiers: **"Verified"** (good lighting, high agreement), **"Estimate"** (moderate lighting), or **"Unverified – Manual Check Required"** (low lighting/poor quality).
+*   **Transparency Artifact:** Draft a preliminary Model Card documenting that performance in low-light rural settings is **UNVERIFIED** until the above tests are run. Do not claim the system is "accurate" for these conditions yet.
+
+**Note:** Legal requirements for automated medical decisions in India must be routed to counsel; this protocol addresses product safety only.
+Do not fabricate a pass rate; if the "Stop Conditions" are met, the feature must remain gated.

@@ -1,0 +1,45 @@
+### Risk Assessment Plan: Valve Confusion & Non-Potable Water Access
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Cross-contamination of potable garden soil/plants with non-potable water due to valve logic errors or sensor spoofing.
+*   **Affected:** Urban residents (ingestion risk), local water infrastructure (backflow risk).
+*   **Worst Case:** Systematic poisoning of edible crops across multiple rooftops leading to public health incidents and regulatory shutdown.
+
+**2. Measurement Strategy with Limited Prototypes (MEASURE)**
+Given only three prototypes and a 10-day window, do not attempt statistical significance. Focus on **adversarial edge-case validation** of the specific failure mode (valve confusion).
+
+*   **Test Row A: Sensor Spoofing & Signal Noise**
+    *   *Probe:* Inject simulated sensor data indicating extreme drought while physically blocking the non-potable inlet valve mechanically.
+    *   *Control (Bad):* System opens non-potable valve despite mechanical block signal or conflicting logic.
+    *   *Control (Good):* System triggers a "Safe Fail" state (no water flow) and alerts the user.
+    *   *Metric:* Zero instances of non-potable valve actuation during spoofed drought signals.
+    *   *Stop Condition:* Any single instance of incorrect valve selection halts launch.
+
+*   **Test Row B: Power Loss & State Recovery**
+    *   *Probe:* Cut power mid-cycle during a switch from potable to non-potable sources. Restore power immediately.
+    *   *Control (Bad):* Valve remains in an intermediate state or defaults to non-potable source.
+    *   *Control (Good):* Valves default to a closed or verified potable-only state upon reboot.
+    *   *Metric:* 100% return to safe state after 50 interruption cycles per prototype.
+
+*   **Test Row C: Logic Injection via Weather API**
+    *   *Probe:* Feed malformed or contradictory weather forecast data (e.g., "heavy rain" + "extreme heat") to confuse the decision engine.
+    *   *Control (Bad):* System bypasses safety checks to satisfy conflicting goals, accessing non-potable sources.
+    *   *Control (Good):* System prioritizes safety constraints over optimization goals.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** For the initial launch cohort, disable fully autonomous switching to non-potable sources. Require explicit user confirmation via the mobile app before any non-potable valve actuation. This converts an irreversible automated action into a supervised one.
+*   **Physical Interlocks:** Verify that hardware design includes physical check valves or distinct connector types that make cross-connection physically difficult, independent of software.
+*   **Uncertainty Disclosure:** The app must explicitly state: "Automated non-potable watering is currently in beta and requires manual approval." Do not present the system as fully autonomous for this function.
+*   **Kill Switch:** Implement a remote command to disable all non-potable valve functions immediately if a contamination pattern is detected in the field.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific engineer as the "Water Safety Owner" responsible for reviewing any failure logs daily post-launch.
+*   **Transparency Artifact:** Publish a simplified "Safety & Limitations" note in the app onboarding, clearly stating that non-potable water features require user verification.
+*   **Legal Routing:** Consult counsel immediately regarding local Rome/EU regulations on automated water systems and potable water protection. Do not assert compliance internally; obtain external validation.
+
+**Residual Risk Status:** UNVERIFIED for mass-scale concurrency until field data from the controlled launch is analyzed.
+
+***
+
+*Note: This plan prioritizes preventing irreversible harm over feature completeness given the hardware constraints.
+Do not proceed with mass production automation of non-potable sources until the "Safe Fail" state is proven across all three prototypes.*

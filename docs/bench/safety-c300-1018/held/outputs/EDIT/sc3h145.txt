@@ -1,0 +1,28 @@
+### Pre-Launch Testing Protocol: Patient-Vehicle Matching Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (assigning non-ambulatory patients to inaccessible vehicles).
+*   **Affected:** Patients with mobility impairments; risk of missed care, physical injury during transfer, or dignity violation.
+*   **Worst Realistic Case:** A wheelchair-bound patient is dispatched in a standard sedan, arrives at the clinic unable to exit, and misses a critical time-sensitive appointment.
+
+**2. Runnable Evaluation Plan (One Row Per Harm)**
+Since you cannot modify the source data, your testing must simulate the "incomplete data" conditions found in the legacy read-only database.
+
+| Test ID | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **EVAL-01** | **Synthetic Patient Profiles** injected into the staging environment mimicking legacy gaps: <br>1. `mobility_status`: NULL/Empty<br>2. `equipment_needed`: "Wheelchair" (but flagged low priority)<br>3. Conflicting fields (e.g., `ambulatory`=Yes, `notes`="requires ramp") | Profile with `mobility_status`=NULL but `notes`="wheelchair only". **Expected:** System flags for human review or defaults to accessible vehicle. | Profile with `mobility_status`="Ambulatory". **Expected:** Standard vehicle assignment. | **False Negative Rate** (Non-ambulatory patients assigned to standard vehicles). | **0%** tolerance for false negatives on high-risk keywords. | **Immediate Launch Block** if any single non-ambulatory profile is matched to a standard vehicle. |
+| **EVAL-02** | **Adversarial Edge Cases**: <br>1. Typographical errors in legacy fields ("whlchr", "wheel chair").<br>2. Abbreviations used in hospital notes ("WC req", "NR" for non-ambulatory). | Profile containing "NR" in notes but `ambulatory`=True in structured field. | Profile with clean, standard data matching accessible needs. | **Coverage Gap Rate** (Failures due to unnormalized text). | < 1% failure on varied syntax; 0% on clear intent. | **Rollback** if system fails to catch >99% of varied syntax indicating wheelchair need. |
+
+**3. Management Controls & Human Gate**
+*   **Default-to-Safe Logic:** Given the read-only constraint and data inconsistency risk, reconfigure the matching logic immediately: If `mobility_status` is NULL, empty, or conflicting, the system must **default to assigning an accessible vehicle** or trigger a **manual dispatch review**. Never default to a standard vehicle when data is missing.
+*   **Uncertainty Display:** Dispatch coordinators must see a visible "Data Confidence: Low" flag on any record derived from incomplete legacy fields, requiring explicit confirmation before finalizing the ride.
+*   **Human-in-the-Loop:** For the pilot phase, **no assignment involving a potential mobility aid is fully automated.** All matches for patients with any history of mobility issues must be reviewed by a logistics coordinator before the driver is notified.
+
+**4. Transparency Artifact (Model/Data Card)**
+Create a one-page "Matching Limitations Card" for hospital partners and internal staff:
+*   **Intended Use:** Coordinating transport for medical appointments.
+*   **Known Limitations:** Relies on legacy read-only data; may misinterpret non-standard abbreviations or missing fields.
+*   **Measured Performance:** Report results from EVAL-01 and EVAL-02 here. If untested on a specific abbreviation, mark as `UNVERIFIED`.
+*   **Owner:** Name the specific developer/logistics lead responsible for monitoring matching errors.
+
+**Note:** Do not assert the system is "safe" or "unbiased"; report the residual risk of data gaps. If legal requirements for automated decision-making in healthcare apply in your jurisdiction, route this protocol to counsel immediately.

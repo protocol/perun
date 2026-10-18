@@ -1,0 +1,27 @@
+### Immediate Safety Gate: Do Not Proceed to Beta Without These Controls
+
+Your request describes a **high-stakes, irreversible automated action** (guiding medical injections) with a known resource constraint. Under product output safety standards, you cannot "verify" safety with a plan alone, nor can you ship this feature to beta without a **human-in-the-loop gate** and a completed **harm inventory**. The following steps address your specific audit needs while enforcing the non-negotiable floors for medical AI.
+
+#### 1. Construct the Harm Inventory (MAP)
+Before testing, explicitly document the worst-case scenarios for your specific context. Do not leave this implicit.
+*   **Bias/Fairness:** The model systematically misidentifies lipohypertrophy on darker skin tones (Fitzpatrick IV–VI), leading to repeated injections into damaged tissue.
+*   **Hallucination as Fact:** The system confidently recommends a site that is actually scarred or infected because the visual marker was missed.
+*   **Over-reliance:** Patients trust the app's recommendation over their own tactile assessment or clinician advice, bypassing safety checks.
+*   **Unsafe Automation:** The app directs an injection without a mandatory human confirmation step.
+
+#### 2. Execute Targeted Output Evaluations (MEASURE)
+Since external validation budget is cut, you must reallocate internal engineering and clinical time to run **adversarial output evals**. Do not test only "average" cases.
+*   **Stratified Probe Sets:** Curate a test set specifically sliced by skin tone (using a standard scale like Fitzpatrick) and scar morphology. You need known-bad positives (images of damaged tissue the model *must* reject) and known-good negatives (healthy tissue it *must* accept).
+*   **Metric & Threshold:** Define a pass/fail threshold for each subgroup. **Zero tolerance** is recommended for false negatives (recommending damaged tissue). If the model fails for *any* skin tone subgroup, the feature is **UNVERIFIED** for that group.
+*   **Report Residual Risk:** Do not invent an accuracy percentage. If you cannot test a specific demographic due to data gaps, label that metric **UNVERIFIED** in your documentation. Never claim "99% accurate" without subgroup evidence.
+
+#### 3. Implement Mandatory Controls (MANAGE)
+*   **Human-in-the-Loop Gate:** Because injecting insulin into damaged tissue causes health harm, **fully autonomous recommendations are prohibited.** The app must present the recommendation as a *suggestion* requiring explicit user confirmation ("I confirm this site feels healthy") or, ideally, clinician review for beta users.
+*   **Defined Confidence Tiers:** Do not show users a raw probability (e.g., "87% safe"). This implies false precision. Instead, use defined coarse tiers: **"Confirmed Healthy," "Unclear – Check Manually,"** or **"Avoid."** Publish the definition of what evidence is required for each tier.
+*   **Transparency Artifact:** Create a **Model Card** for this feature. It must list: intended use (adjunct to clinical judgment, not replacement), data composition (which skin tones were included), known limitations (e.g., "Performance unverified on very dark skin if data is missing"), and the owner of the risk. Shipping without this card is a transparency failure.
+
+#### 4. Governance and Legal Routing (GOVERN)
+*   **Owner Assignment:** Name one person responsible for re-reviewing this logic if the model or data changes.
+*   **Regulatory Duty:** You asked about auditing; however, whether this tool constitutes a regulated medical device requiring specific legal disclosures in South Korea or under international standards (like ISO 42001) is a **legal determination**. Route this immediately to counsel. Do not assert compliance internally.
+
+**Note:** A "comprehensive plan" does not equal safety; only measured results and hard gates do. If you cannot populate the harm inventory with passing evals for diverse skin tones, the beta launch must be paused for those groups.

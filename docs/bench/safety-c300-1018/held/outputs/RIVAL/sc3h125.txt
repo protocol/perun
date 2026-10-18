@@ -1,0 +1,49 @@
+# Risk Assessment Plan: Valve Confusion and Non-Potable Water Access
+
+**Objective:** Verify that the Roman Garden Tech bot strictly isolates potable water lines from non-potable sources (e.g., greywater recycling or rainwater harvesting tanks) under all failure modes, using only three prototypes.
+
+### 1. Hazard Definition & Failure Modes
+We define "Valve Confusion" as any state where the controller opens a valve connected to a non-potable source when the system logic dictates potable water, or vice versa. Specific failure modes to test include:
+*   **Logic Inversion:** Software bug causing `OPEN` command to trigger the wrong physical pin.
+*   **State Retention Error:** System rebooting mid-cycle and defaulting to an unsafe valve position.
+*   **Sensor Spoofing:** Moisture or weather data corruption causing unintended activation of the backup (non-potable) supply.
+*   **Cross-Talk:** Electrical interference causing a signal intended for Valve A to activate Valve B.
+
+### 2. Testing Strategy (3-Prototype Allocation)
+Given the constraint of three units, we will assign specific destructive and stress-test roles to maximize coverage without risking all hardware simultaneously.
+
+**Prototype A: The "Golden Path" & Logic Validator**
+*   **Role:** Baseline verification of correct operation under ideal conditions.
+*   **Tests:**
+    *   Execute 50 standard irrigation cycles using simulated sensor data.
+    *   Verify valve actuation matches the command log 100% of the time.
+    *   **Safety Check:** Introduce a "dry run" mode where valves are commanded but water flow is physically blocked; verify the system logs the attempt without triggering a fail-open state on the wrong line.
+
+**Prototype B: The Stress & Fault Injector**
+*   **Role:** Simulate hardware degradation and electrical noise.
+*   **Tests:**
+    *   **Power Cycling:** Perform 20 hard resets during active valve switching to check for default-safe states (valves must close on loss of power/logic).
+    *   **Signal Noise:** Inject voltage spikes into sensor lines to simulate lightning or interference; observe if this triggers spurious valve openings.
+    *   **Latency Simulation:** Artificially delay weather API responses to force the system into offline mode; verify it defaults to the safest water source (or shuts down) rather than guessing.
+
+**Prototype C: The Boundary & Contamination Simulator**
+*   **Role:** Physical verification of isolation using safe proxies.
+*   **Setup:** Connect the "non-potable" output to a tank containing dyed water (safe tracer) and the "potable" output to clear water.
+*   **Tests:**
+    *   **Forced Conflict:** Manually override software limits to command both valves simultaneously. Physical inspection must confirm no cross-flow occurs (check for back-pressure issues).
+    *   **Worst-Case Scenario:** Simulate a total sensor blackout. The system must default to a "Closed" state for all non-potable lines.
+    *   **Verification:** After 100 rapid-switch cycles, inspect the "potable" line for any trace of dye. Even microscopic contamination indicates a seal or logic failure.
+
+### 3. Success Criteria for Launch
+Mass production cannot proceed unless:
+1.  **Zero Cross-Contamination:** Prototype C shows absolutely no tracer dye in the potable line after stress testing.
+2.  **Fail-Safe Default:** Prototypes B and C demonstrate that any power loss, reboot, or critical sensor error results in all non-potable valves closing immediately.
+3.  **Deterministic Logging:** Prototype A confirms that every physical valve movement is recorded in the audit log with a timestamp and source trigger.
+
+### 4. Mitigation for Remaining Risks
+If any test fails:
+*   **Hardware Lockout:** Install physical check-valves on all non-potable lines as a mandatory mechanical backup before shipping.
+*   **Software Freeze:** Disable automatic switching to non-potable sources in the firmware update, requiring manual user confirmation for those specific cycles until a patch is verified.
+*   **Labeling:** Update user manuals to explicitly warn against connecting non-potable sources until the next hardware revision validates the fix.
+
+*Note: This plan assumes the use of safe tracers rather than actual contaminated water for testing. All electrical stress tests should be conducted within the rated voltage limits of the prototype components to avoid unnecessary destruction.*

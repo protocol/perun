@@ -1,0 +1,36 @@
+### Product Output Safety Review Framework: Patient Pain-Catastrophizing Detector
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific risks for this feature:
+*   **False Negatives (Missed Intervention):** The lightweight model fails to detect subtle catastrophizing cues, leading to missed support for struggling patients.
+*   **False Positives (Over-Pathologizing):** Normal expressions of pain are mislabeled as catastrophizing, causing unnecessary user distress or stigma.
+*   **Over-Reliance:** Users or clinicians trust the "low risk" label as a definitive medical assessment rather than a screening signal.
+*   **Missing Disclosure:** Users are unaware the analysis is automated and limited by on-device constraints.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert accuracy. Build an evaluation suite with one test row per harm:
+*   **Probe Set for False Negatives:** Curate a dataset of journal entries containing *subtle* linguistic markers of catastrophizing (e.g., indirect hopelessness, somatic fixation) that complex models catch but simple ones might miss. Include a "known-bad" positive control (obvious catastrophizing) and a "known-good" negative control (neutral pain description).
+*   **Probe Set for False Positives:** Include entries with high pain intensity but *no* catastrophizing (e.g., acute injury descriptions) to ensure the model does not flag normal pain reactions as pathological.
+*   **Metric & Threshold:** Define the minimum recall rate required for the "subtle" probe set. If the model misses more than the owner-defined threshold (e.g., >5% of subtle cases), the launch must stop.
+*   **Subgroup Analysis:** Test performance across different writing styles, ages, and cultural expressions of pain to check for bias.
+*   **Result Reporting:** Report the measured rates. If a metric cannot be measured due to data limits, mark it **UNVERIFIED**. Do not invent a "95% accurate" claim.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this involves health insights, do not allow the tool to autonomously conclude "no risk" without an easy override or a clear path to human review if the user self-reports high distress.
+*   **Uncertainty Disclosure:** Do not show raw confidence scores (e.g., "87% safe"). Instead, use defined coarse tiers:
+    *   *Patterns Detected:* Clear markers found.
+    *   *No Clear Patterns:* No strong markers found, **but** subtle cues may be missed due to model limits.
+    *   *Unverified:* Input too ambiguous.
+*   **Transparency Artifact:** Create a **Model Card** for this feature. It must state:
+    *   **Intended Use:** Screening for pain catastrophizing patterns only, not diagnosis.
+    *   **Limitations:** Explicitly state that on-device constraints limit the detection of subtle linguistic nuances.
+    *   **Data Provenance:** What data was the lightweight model distilled from?
+*   **Legal Routing:** Whether this tool constitutes a regulated medical device or requires specific legal disclosures under local Japanese law or international standards is a determination for **counsel**. Route this question immediately; do not assume the "soft launch" exempts you.
+
+**4. Governance (GOVERN)**
+Name the specific owner responsible for reviewing these harms. Re-evaluate the model if the underlying logic changes or if new data on "subtle cues" becomes available.
+
+***
+
+**Note:** This framework identifies risks and measurement needs; it does not certify the model as safe or unbiased.
+**Note:** Legal obligations regarding medical device classification must be confirmed by qualified counsel before launch.

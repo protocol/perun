@@ -1,0 +1,29 @@
+### Safety Evaluation Plan for Patient-Vital Monitor
+
+**1. Harm Inventory & Risk Mapping**
+Before testing, explicitly record the worst-case failure: the system classifies a cardiac arrest as "normal" and suppresses the alert, delaying intervention. This risk is heightened for demographic groups absent from your current testing data. Acknowledge that without diverse data, performance metrics for those groups are **UNVERIFIED**. Do not invent accuracy rates; state clearly that the model's behavior on unrepresented populations is unknown.
+
+**2. Measurement Strategy (Stress-Testing)**
+Since your environment lacks diverse data, you cannot fully validate performance across all demographic groups internally. Your evaluation plan must include:
+*   **Adversarial Probes:** Synthesize or source edge-case vital sign patterns that mimic cardiac arrest but contain noise typically flagged as artifacts. Test if the suppression logic incorrectly silences these critical events.
+*   **Subgroup Simulation:** If real diverse data is unavailable, use literature-based physiological variations (e.g., skin tone effects on optical sensors, age-related rhythm variations) to create proxy test cases. Mark results from these proxies as **simulated**, not empirical.
+*   **Stop Conditions:** Define a strict threshold: if *any* known cardiac arrest pattern is suppressed or misclassified as normal during testing, the feature fails the gate. There is zero tolerance for false negatives in life-threatening scenarios.
+
+**3. Fallback Mechanisms & Human-in-the-Loop Gate**
+Given the high-stakes nature of this automation and the unverified performance on diverse groups, full autonomous suppression of alerts is unsafe. Implement the following controls before deployment:
+*   **Human Confirmation for Suppression:** The system should never automatically silence an alert without a nurse's explicit confirmation if the signal quality is ambiguous or if the patient's history suggests high risk. The default state must be "alert on"; suppression is the exception requiring verification.
+*   **Uncertainty Signaling:** Do not display raw confidence percentages (e.g., "92% normal"). Instead, use defined coarse tiers such as **"Confirmed Normal," "Corroborated,"** or **"Unverified – Check Patient."** If the model encounters input patterns outside its training distribution (likely for missing demographics), it must trigger an "Unverified" status and sound an alert rather than suppressing it.
+*   **Fail-Safe Default:** If the classification model cannot reach a high-certainty "Confirmed Normal" state, the system must default to triggering the alarm. It is safer to have false positives (noise) than a false negative (missed arrest).
+
+**4. Transparency Artifact (Model Card)**
+Create a versioned Model Card for the clinical team. It must state:
+*   **Intended Use:** Real-time rhythm classification for adult patients in monitored settings.
+*   **Limitations:** Explicitly list which demographic groups are **UNVERIFIED** due to missing training data.
+*   **Owner & Version:** Name the team lead responsible and the model version.
+*   **Warning:** Clearly state that the system is an aid, not a replacement for clinical judgment, and that alert suppression should be treated with skepticism for unrepresented patient profiles.
+
+**5. Governance & Legal Routing**
+Assign an owner to re-review the system if the model, data, or patient population changes. Because this involves life-critical automated decisions and potential regulatory requirements (e.g., medical device regulations in South Korea or international standards), you must route the question of legal disclosure duties and compliance regimes to legal counsel immediately. Do not assert compliance yourself.
+
+**Note:** Launching in five weeks with unverified demographic performance requires capping exposure (e.g., pilot only with verified demographics) or extending the timeline to gather necessary data.
+**Note:** Never certify the system as "safe" or "unbiased"; the final deployment decision rests with the clinical and product owners based on this residual risk report.

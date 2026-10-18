@@ -1,0 +1,31 @@
+### Immediate Action Plan for LagosPay Credit-Limit Augmenter
+
+**1. Build a "Harm Inventory" (Day 1)**
+Before testing, explicitly write down the specific failure you fear: "The model systematically denies limit increases to reliable low-income users because their cash flows are irregular, mistaking volatility for risk." Define the worst-case impact: A responsible user is stuck with a limit too low to handle an emergency, forcing them toward predatory lenders. This document is your baseline; an empty inventory is not a pass.
+
+**2. Create Manual "Probe Sets" from Existing Data (Days 2–3)**
+You do not need new tools. Use your existing transaction database to manually construct three specific test groups (probe sets):
+*   **The "Irregular but Reliable" Group (Positive Control):** Select 20–30 known good users who have irregular income dates or amounts but have never missed a payment. If the system flags these as "high risk," your logic is flawed.
+*   **The "Regular but Risky" Group (Negative Control):** Select users with very consistent income patterns who have recently defaulted. The system should *not* automatically grant them higher limits.
+*   **The Edge Cases:** Users with sudden drops in income due to known life events (if data exists) or those who pay exactly on the due date every time but have low balances.
+
+**3. Define Pass/Fail Thresholds and Stop Conditions (Day 4)**
+Do not aim for perfection; aim for safety. Set a strict rule: "If more than 10% of the 'Irregular but Reliable' group is denied an increase, we do not launch." This is your stop condition. If the system fails this check, the launch is blocked until the logic is adjusted. Do not invent a "safe" percentage if you haven't run the test; if the test isn't run, the status is **UNVERIFIED**.
+
+**4. Execute the "Human-in-the-Loop" Gate (Days 5–7)**
+Since this is a high-stakes financial decision that is hard to reverse (denying capital to those who need it), you cannot fully automate the final decision at launch.
+*   **The Control:** For the first month, any decision to *deny* an increase to a user who otherwise meets the basic tenure requirements must be flagged for manual review by a human team member.
+*   **The Override:** Ensure your operations team can easily override a "high-risk" flag if they see context the algorithm missed. Full autonomous execution of denials is the failure mode you must prevent.
+
+**5. Draft a One-Page "Decision Card" (Day 8)**
+Create a simple internal document (a lightweight model card) that states:
+*   **Intended Use:** Increasing limits for consistent repayers.
+*   **Known Limitation:** May struggle with highly irregular cash flows common in informal economies.
+*   **Measured Results:** Summarize the pass/fail rate from your manual probe sets above.
+*   **Owner:** Name the specific person on your 12-person team responsible for reviewing flagged denials.
+This ensures downstream teams know the system's limits and prevents over-reliance.
+
+**6. Final Go/No-Go Review**
+Gather the team. Review the harm inventory, the results of your manual probe sets, and the human gate protocol. If the "Irregular but Reliable" group was unfairly flagged and you cannot fix the logic or enforce the human review, you do not launch. The decision to ship rests with you, not the code.
+
+**Note:** Do not claim the system is "unbiased" or "fair"; simply report the residual risk found in your manual tests. If legal questions arise regarding automated financial decisions in Nigeria, route those specifically to legal counsel rather than assuming compliance.

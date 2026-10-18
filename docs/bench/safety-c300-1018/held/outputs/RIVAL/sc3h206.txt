@@ -1,0 +1,29 @@
+### Safety Protocol Review Process for Glucose Trend Predictor
+
+**Objective:** Validate the timeliness and accuracy of hypoglycemia alerts during high-intensity intervals using retrospective data, ensuring user safety before public beta.
+
+#### Phase 1: Data Segmentation and Scenario Selection
+1.  **Isolate High-Intensity Events:** Filter existing logs to identify sessions marked as "high-intensity" or those exhibiting rapid heart rate spikes correlated with subsequent glucose drops.
+2.  **Define "Extreme" Thresholds:** Select the top 10% of cases with the steepest glucose descent rates (e.g., >3 mg/dL/min) and the lowest recorded nadirs (e.g., <55 mg/dL).
+3.  **Control Group Selection:** Identify matched sessions with similar baseline glucose and activity levels where no rapid decline occurred, to test for false positives.
+
+#### Phase 2: Retrospective Simulation (Time-Shift Analysis)
+Since real-time hardware is unavailable, simulate the live environment by artificially delaying the data feed provided to your model:
+1.  **Introduce Artificial Latency:** Re-process the selected extreme logs by feeding data into the model with incremental delays (e.g., +30s, +60s, +90s) to mimic real-world transmission or processing lags.
+2.  **Blind Run Execution:** Run the prediction model on these delayed streams without access to the known future outcome (the actual low event) to prevent bias.
+3.  **Alert Timestamping:** Record the exact simulated time the model triggers a "Warning" versus the actual time the glucose crossed the critical threshold in the historical record.
+
+#### Phase 3: Gap Analysis Metrics
+Evaluate the simulation results against these safety criteria:
+*   **Lead Time Deficit:** Calculate the difference between the alert time and the actual hypoglycemic event. If the lead time is less than 15 minutes (or your defined safety buffer) in more than 5% of extreme cases, the model is unsafe for live deployment.
+*   **False Negative Rate:** Count instances where the glucose dropped rapidly in the log, but the model failed to trigger an alert within the safety buffer. Even one missed alert in the "extreme" subset requires model retraining.
+*   **False Positive Stress:** Ensure that during the control group runs, the model does not trigger alarms due to noise often present in high-motion data.
+
+#### Phase 4: Decision Gate
+*   **Pass:** Model provides ≥15 minutes lead time in 95% of extreme retrospective cases with no false negatives.
+*   **Fail/Iterate:** If the model fails, isolate the specific physiological patterns (e.g., rapid onset after anaerobic bursts) where it lagged. Retrain using these specific failure cases as weighted examples before re-running Phase 2.
+
+**Deliverable:** A "Safety Validation Report" summarizing the Lead Time Deficit distribution and a binary Go/No-Go recommendation for the beta launch.
+
+*Note: This protocol relies entirely on the fidelity of your retrospective logs; ensure timestamp synchronization between activity trackers and glucose readings is verified before simulation.*
+*Do not enable live alerts until the "Fail/Iterate" loop yields zero missed events in the extreme test set.*

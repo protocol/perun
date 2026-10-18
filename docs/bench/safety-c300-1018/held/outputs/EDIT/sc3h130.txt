@@ -1,0 +1,40 @@
+**BLUF: Do not ship the anomaly alerting feature in two weeks without a human-in-the-loop gate or verified clinical validation; the current plan relies on unverified synthetic data for a high-stakes, irreversible harm scenario.**
+
+Your request describes a **high-stakes automated decision** (alerting on infant breathing cessation) where a false negative could result in severe physical harm or death. Under product output safety standards, fully autonomous execution of such an action without verified reliability is a critical failure mode. The following plan addresses your constraints while enforcing the necessary safety floor.
+
+### 1. Harm Inventory (MAP)
+Before proceeding, explicitly record these risks:
+*   **False Negatives (Missed Detection):** The system fails to alert during actual breathing cessation. *Worst case:* Infant injury or death; parent reliance leads to delayed manual checks.
+*   **Hallucination as Fact:** The system presents a "Normal" status based on synthetic-pattern matching that does not reflect real-world physiological variance.
+*   **Over-reliance:** Parents may reduce manual checks because they trust the "smart" monitor, amplifying the impact of any system error.
+*   **Bias:** The model, trained on a small initial dataset and synthetic audio, may fail on infants with different cry patterns, room acoustics, or movement styles not represented in the training data.
+
+### 2. Measurement Plan (MEASURE)
+You cannot certify safety with synthetic data alone. You must treat all metrics derived from synthetic generation as **UNVERIFIED** until proven against real-world edge cases.
+
+*   **Eval Design:** Construct a test suite with three distinct probe sets:
+    1.  **Positive Controls:** Recorded clinical instances of breathing cessation (apnea) from your limited clinical observations.
+    2.  **Negative Controls:** Normal sleep audio with high background noise (fans, traffic) to test false positives.
+    3.  **Adversarial/Synthetic Probes:** Synthetic audio simulating rare edge cases (e.g., very shallow breathing, specific frequency interference).
+*   **Metric & Threshold:** Define sensitivity (recall) specifically for the *cessation* class.
+    *   **Stop Condition:** If the false negative rate on *clinical* (real) data exceeds 0%, the automated alert must be disabled. Do not set a "tolerable" error rate for life-safety alerts without legal and ethical review.
+    *   **Subgroup Analysis:** Measure performance across different noise levels and infant ages if data permits. If data is too sparse to slice, the metric is **UNVERIFIED** for those subgroups.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state:
+    *   *Intended Use:* Supplemental monitoring only; not a medical device.
+    *   *Data Provenance:* Explicitly note the reliance on synthetic audio and the size of the real clinical dataset.
+    *   *Limitations:* List known gaps (e.g., "Performance unverified for infants under X weeks" or "Unverified in rooms with >Y dB noise").
+    *   *Owner:* Name the specific engineer accountable for this model version.
+
+### 3. Risk Management (MANAGE)
+*   **Human-in-the-Loop Gate (Mandatory):** Because this is an irreversible, high-stakes action, you cannot ship with full autonomous alerting based on unverified synthetic data.
+    *   **Immediate Control:** Modify the feature to require **explicit parental confirmation** or pair the automated alert with a mandatory "check baby" prompt that does not claim certainty (e.g., "Motion unclear, please check infant" vs. "Breathing stopped").
+    *   **Uncertainty Display:** Do not show a confidence percentage (e.g., "98% safe"). Use defined coarse tiers: **Confirmed Normal**, **Unclear/Check Needed**, or **Alert**.
+*   **Legal Routing:** You mentioned privacy laws prohibiting data storage. However, determining whether this device constitutes a regulated medical device or requires specific AI disclosures under local law is a **legal determination**. Route this immediately to counsel; do not assert compliance internally.
+*   **Timeline Reality:** A two-week launch is incompatible with gathering sufficient clinical data to verify safety for life-critical alerts.
+    *   **Plan A:** Delay the alerting feature until sufficient clinical validation is achieved.
+    *   **Plan B:** Ship the monitor as a passive recorder/viewer only, disabling the automated breathing analysis until validated.
+
+**Residual Risk:** Shipping now with synthetic-only validation leaves a high probability of undetected failure modes in real-world scenarios. The only safe path is to degrade the system's agency (remove auto-alerts) or delay the launch.
+
+**Note:** No metric here certifies the system "safe"; only real-world clinical validation can reduce the "UNVERIFIED" status of your synthetic tests.
+**Note:** The "human-in-the-loop" requirement is a non-negotiable floor for high-stakes automation, regardless of team size or deadline.

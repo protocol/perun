@@ -1,0 +1,43 @@
+### Pre-Launch Safety Audit: Smart Ventilator Alarm-Silence Logic
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (indefinite silencing of critical alarms).
+*   **Affected Party:** Patients in critical care; Nursing staff in Seoul hospitals.
+*   **Worst Realistic Case:** The system misinterprets transient stability as sustained recovery, silencing a critical alarm indefinitely while the patient deteriorates, leading to delayed intervention and potential fatality.
+*   **Status:** This is a high-stakes, irreversible action. Full autonomous execution without a human gate is a failure condition.
+
+**2. Verification Steps for Logic & Explainability**
+
+**Step A: Enforce the Human-in-the-Loop Gate (The Floor)**
+*   **Action:** Verify that the code contains a hard limit on silence duration. No automated logic may silence a critical alarm indefinitely.
+*   **Test:** Attempt to trigger the "sustained recovery" flag with synthetic data showing 24 hours of stability.
+*   **Pass Condition:** The system *must* re-activate the alarm or require explicit nurse re-confirmation after a defined, short maximum window (e.g., 5–15 minutes), regardless of the stability score.
+*   **Fail Condition:** The alarm remains silenced without human interaction beyond the maximum window.
+
+**Step B: Adversarial Scenario Testing (Rapid Fluctuation)**
+*   **Action:** Run probe sets simulating rapid clinical oscillation to test for "automation bias" and logic errors.
+*   **Probe Set:**
+    *   *Positive Control:* Input data showing genuine, sustained stability → Alarm silences temporarily, then requests renewal.
+    *   *Negative Control:* Input data showing transient stability followed by immediate decline (the "false recovery" trap).
+    *   *Edge Case:* Noisy sensor data mimicking stability trends.
+*   **Metric:** False Negative Rate (instances where decline occurred but alarm remained silenced).
+*   **Threshold:** Zero tolerance for indefinite silencing during decline. Any instance where the alarm fails to re-engage within the safety window is a block-on-launch.
+*   **Stop Condition:** If any probe results in >0 seconds of unsafe silence during a decline event, halt launch.
+
+**Step C: Explainability Validation (Plain Language)**
+*   **Action:** Audit the user-facing explanation generated when an alarm is silenced or when silence is extended.
+*   **Requirement:** The output must be in plain language understandable by nursing staff, explicitly stating *why* the system believes the patient is stable and *when* the alarm will reactivate.
+*   **Test:** Present the system's explanation logs to a sample of non-engineer clinical staff.
+*   **Pass Condition:** 100% of testers can correctly identify: (1) the specific trend triggering the silence, (2) the exact time until the next check, and (3) how to manually override.
+*   **Fail Condition:** Explanations use internal model confidence scores (e.g., "87% stable") or jargon without clear definitions. Confidence must be shown as a defined tier (e.g., "Corroborated Stability") with a clear source, not a raw percentage.
+
+**3. Residual Risk Reporting**
+*   **Transparency Artifact:** A Model Card must be drafted listing the intended use (temporary alarm management), the known limitation (cannot detect rapid fluctuation below sensor sampling rates), and the owner of the logic.
+*   **Unverified Metrics:** Do not claim a "0% error rate." Report the specific test scenarios run and the maximum observed silence duration during failure modes.
+*   **Regulatory Routing:** The requirement for "explainable automated decision logic" may trigger specific duties under local health regulations or emerging AI governance frameworks. This audit verifies the *mechanism* of explainability; legal counsel must confirm if the current plain-language output satisfies the specific statutory definition in the relevant jurisdiction.
+
+**4. Final Gate**
+Launch is prohibited until the "indefinite silence" failure mode is technically impossible (hard-coded limit) and the explainability test passes with clinical staff.
+
+*Note: This audit maps and measures risk; it does not certify the system as safe. The final ship decision rests with the product owner.*
+*Legal counsel must validate if the plain-language explanations meet specific regulatory definitions for automated medical decisions.*

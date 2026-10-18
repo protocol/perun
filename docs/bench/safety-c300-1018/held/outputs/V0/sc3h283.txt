@@ -1,0 +1,36 @@
+**Pre-Launch Safety Validation Plan: CPAP Ramp Time Optimizer**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (delayed therapeutic pressure).
+*   **Affected Group:** Patients with severe sleep apnea; specifically those prone to rapid desaturation during sleep onset.
+*   **Worst Realistic Case:** The algorithm extends ramp time during a complex apnea event, delaying full pressure, causing significant oxygen desaturation (hypoxia) before the machine corrects.
+
+**2. Measurement Strategy (Simulations & Spot-Checks)**
+Given the simulation constraint (inability to fully replicate severe complex events), we cannot claim the system is "safe" for all severe cases based on simulation alone. We must measure residual risk and enforce a human gate.
+
+*   **Simulation Runs (Adversarial Probes):**
+    *   **Probe Set:** Construct input sequences representing the *boundary* of your simulation's capability: moderate apnea events with slightly irregular breathing patterns that mimic the onset of complexity.
+    *   **Positive Control:** Inject a known "bad" input sequence where a naive optimizer would extend ramp time dangerously. Verify the system detects uncertainty or defaults to a safe state.
+    *   **Negative Control:** Use standard, stable breathing patterns to ensure the optimizer does not unnecessarily shorten ramp times (maintaining comfort).
+    *   **Metric:** Maximum delay (seconds) to therapeutic pressure under probe conditions.
+    *   **Stop Condition:** If *any* probe results in a delay exceeding [Owner-Defined Threshold, e.g., 15 seconds] without triggering a fallback, launch is blocked.
+    *   **Limitation Declaration:** Explicitly label results for "Severe/Complex Events" as **UNVERIFIED** due to simulation fidelity limits. Do not fabricate a success rate for this subgroup.
+
+*   **Clinical Spot-Checks (Human-in-the-Loop Gate):**
+    *   **Protocol:** Because full automation for severe cases is unverified, implement a mandatory human review for any patient flagged as "Severe" or where the algorithm proposes a ramp time > [Safe Limit, e.g., 20 mins].
+    *   **Action:** The device must default to a conservative, standard ramp profile for severe patients until a clinician explicitly approves the optimized setting.
+    *   **Verification:** Review logs of the first 50 severe patients post-launch (or during a limited pilot) to confirm no desaturation events correlated with extended ramp times.
+
+**3. Risk Management & Transparency**
+*   **Uncertainty Display:** The clinician interface must not show a precise confidence percentage (e.g., "92% optimal"). Instead, use defined coarse tiers: **"Confirmed Safe," "Corroborated,"** or **"Unverified – Manual Review Required."**
+*   **Fallback Mechanism:** Hard-code a deterministic safety override: if SpO2 drops below a critical threshold (if sensor available) or if apnea severity indices spike, the system must immediately abort the ramp and deliver full pressure, regardless of the algorithm's suggestion.
+*   **Transparency Artifact:** Draft a "Model Card" for this feature stating:
+    *   **Intended Use:** Optimizing comfort for mild-to-moderate apnea.
+    *   **Limitations:** Performance on severe/complex events is **UNVERIFIED** due to simulation constraints; human oversight is required for this group.
+    *   **Owner:** Name the specific product owner responsible for re-evaluating when better simulation data becomes available.
+
+**4. Governance**
+*   **Owner:** Assign one person to own the "Severe Case" residual risk.
+*   **Re-review Trigger:** Any update to the algorithm, simulation environment, or inclusion of new patient data types requires re-running the adversarial probes.
+
+**Note:** This plan identifies a critical gap (unverified severe cases) and mandates a human gate rather than certifying safety. Legal counsel must review whether this limitation requires specific patient disclosure under UK medical device regulations.

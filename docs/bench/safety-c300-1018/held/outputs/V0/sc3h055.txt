@@ -1,0 +1,36 @@
+### Immediate Harm Inventory & Audit Plan for UrbanDrive
+
+**1. Named Harm: Geographic Bias / Unfair Outcomes**
+*   **Affected Parties:** Local parking lot operators in low-income areas; drivers seeking those spots; the broader community relying on local business revenue.
+*   **Worst Realistic Case:** The app systematically starves specific neighborhoods of traffic, causing business closures and reinforcing economic segregation under the guise of "optimization." This is not a bug; it is a deployed discriminatory outcome.
+
+**2. Measurement Plan (Runnable Tests)**
+Given your strict API budget, do not attempt to simulate "all scenarios." Instead, execute these targeted probes before launch:
+
+*   **Probe Set A (Positive Control):** Generate routes from 5 distinct high-income origin points to 3 known safe/expensive lots in the identified low-income areas.
+    *   *Metric:* Does the algorithm recommend these lots as viable options within a reasonable time/distance threshold compared to alternatives?
+    *   *Stop Condition:* If the recommendation rate for these lots is <80% of the rate for comparable lots in other zones, **block launch**.
+*   **Probe Set B (Negative Control):** Generate routes to lots in non-low-income areas with similar price/safety profiles.
+    *   *Metric:* Compare recommendation frequency against Probe Set A.
+    *   *Stop Condition:* A statistically significant disparity (e.g., low-income lots recommended <50% as often) indicates bias.
+*   **Probe Set C (Adversarial/Input Sweep):** Test if user prompts mentioning specific neighborhood names trigger different routing logic than generic coordinate inputs.
+    *   *Metric:* Consistency of output regardless of input phrasing.
+
+**3. Management Controls (The Human Gate)**
+*   **Override Mechanism:** You cannot fully automate this routing yet. Implement a "Human-in-the-Loop" gate for the final weighting parameters. No code change affecting geographic weighting ships without manual review against the bias metrics above.
+*   **Uncertainty Disclosure:** If the algorithm cannot confidently verify lot availability or safety without bias, it must surface a coarse tier (e.g., "Availability Unverified") rather than hiding the option entirely. Do not present a calculated "0% chance" if that number is derived from biased historical data.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for internal and city-partner use. It must state:
+    *   *Intended Use:* Reducing congestion via spot direction.
+    *   *Known Limitation:* Current training data may under-represent low-income lot viability; active mitigation is in progress.
+    *   *Owner:* Name the specific team member accountable for bias monitoring.
+    *   *Status:* Mark bias metrics as **UNVERIFIED** until the probes above are run. Do not invent a "99% fair" statistic.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one person to own the "Geographic Bias" risk. Re-review is mandatory if the routing algorithm or data sources change.
+*   **Legal Routing:** Whether this bias triggers regulatory scrutiny under fair housing or consumer protection laws is a legal determination. Route this specific finding to counsel immediately; do not assert compliance internally.
+
+**Definition of Done for Launch:**
+You have run Probe Sets A and B. You have a human gate on routing weights. You have a Model Card admitting the risk is currently UNVERIFIED. If you cannot run these tests due to API limits, you must delay the launch or disable the automated routing feature for the affected zones until manual validation occurs. Launching with a known, unmeasured systematic exclusion is the failure this plan prevents.
+
+**Note:** Do not claim the system is "unbiased" in any marketing material; state that you are actively measuring and mitigating geographic disparities.
+**Note:** If the city partnership requires a safety certification, provide the raw test results from the probes, not a summary claim.

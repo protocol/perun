@@ -1,0 +1,37 @@
+### Pre-Launch Safety Audit: Ventilator Alarm-Silence Logic
+
+**Objective:** Verify that alarm suppression durations are strictly bounded, explainable to nursing staff, and immune to indefinite silencing caused by misinterpreted transient stability.
+
+#### Phase 1: Logic Transparency & Explainability Verification
+*Goal: Ensure every automated decision can be articulated in plain language.*
+
+1.  **Plain-Language Mapping:** For every code path leading to "Alarm Silenced," extract the logical condition and translate it into a single sentence readable by a nurse (e.g., "Alarm silenced because SpO2 remained above 92% for 120 seconds").
+2.  **Traceability Check:** Verify that each plain-language explanation maps directly to a specific, auditable line of code or logic block. Reject any decision logic that requires complex statistical inference without a simplified textual summary.
+3.  **Display Validation:** Confirm the user interface displays the *reason* and the *remaining duration* of the silence immediately upon activation. The text must update in real-time if the logic re-evaluates.
+
+#### Phase 2: Boundary & Duration Stress Testing
+*Goal: Prove that no sequence of fluctuating vitals can reset the silence timer indefinitely.*
+
+4.  **The "Hard Cap" Test:** Execute a test where patient stability metrics remain perfect for 2x the maximum allowed silence duration. Verify the system forcibly re-activates the alarm regardless of current stability. This confirms a hard time-limit exists independent of clinical data.
+5.  **The "Sawtooth" Fluctuation Scenario:** Simulate a patient status that oscillates rapidly between "stable" and "unstable" (e.g., stable for 50 seconds, unstable for 5 seconds, repeat).
+    *   *Pass Criteria:* The system must not accumulate "stable time" across the unstable interruptions. The silence timer must reset or expire, preventing indefinite suppression via rapid cycling.
+6.  **The "Transient Spike" Injection:** Introduce a brief, artificial stability spike (e.g., 10 seconds of perfect vitals) within a long period of instability.
+    *   *Pass Criteria:* Verify this transient spike does not trigger a new full-duration silence window. The logic must distinguish between sustained recovery and noise.
+7.  **Critical Override Verification:** Trigger a "Critical" level alarm while a "Warning" level alarm is currently silenced.
+    *   *Pass Criteria:* The critical alarm must bypass all silence logic immediately. Silence applies only to the specific alert class, not the patient's global status.
+
+#### Phase 3: Failure Mode & Recovery Analysis
+*Goal: Ensure safe defaults if the logic engine fails.*
+
+8.  **Logic Timeout Simulation:** Simulate a scenario where the decision engine hangs or fails to return a verdict within 500ms.
+    *   *Pass Criteria:* The system must default to "Alarm Active." Silence is an opt-in state; any uncertainty must result in sound.
+9.  **Sensor Dropout Handling:** Simulate a loss of signal (flatline or null data) during an active silence period.
+    *   *Pass Criteria:* The silence must terminate immediately. Lack of data cannot be interpreted as "stability."
+
+#### Phase 4: Regulatory Documentation Review
+10. **Audit Trail Completeness:** Generate a log for a test run involving multiple silence events. Verify the log contains: Timestamp, Triggering Metric, Calculated Stability Duration, Applied Silence Duration, and Expiration Time.
+11. **Nurse Comprehension Walkthrough:** Present the generated logs and UI explanations to three senior nursing staff members. They must correctly identify *why* an alarm was silent and *when* it was scheduled to return without engineering assistance.
+
+**Deliverable:** A signed report confirming the "Hard Cap" and "Sawtooth" tests passed, alongside the approved plain-language logic map for the nursing team.
+
+*Note: All tests must be performed in a simulated environment before any clinical trial. Do not deploy without a manual "force-alarm" hardware override verification.*

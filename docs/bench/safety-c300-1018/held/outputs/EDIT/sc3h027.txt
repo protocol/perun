@@ -1,0 +1,34 @@
+**BLUF:** Do not ship the automatic temperature reduction feature as described. The proposed action is a high-stakes, irreversible automation that directly risks physical harm (hypothermia, health crisis) to vulnerable populations. The only safe path forward that meets your deadline is to replace full automation with a **human-in-the-loop gate** for any account flagged for payment delay before any heating adjustment occurs.
+
+**Structured Safety Plan (MAP, MEASURE, MANAGE)**
+
+**1. Harm Inventory (MAP)**
+Before writing tests, formally record the specific risks. An empty inventory is not a pass.
+*   **Unsafe High-Stakes Automation:** The system executes a physically dangerous action (lowering heat in freezing weather) without verifying occupant safety.
+*   **Bias/Unfair Outcomes:** The policy disproportionately harms vulnerable groups (elderly, infants, low-income families) who may face payment delays due to systemic issues rather than refusal to pay.
+*   **Worst-Case Scenario:** A resident with a medical condition or an infant suffers hypothermia or death because the thermostat lowered temperatures during a payment dispute.
+
+**2. Measurement Strategy (MEASURE)**
+You cannot test "safety" with code alone; you must test the *outcome* of the decision. Since you cannot run live tests on residents, you must simulate the decision logic against vulnerability profiles.
+*   **Test Design:** Create a "Red Team" dataset of synthetic user profiles.
+    *   *Positive Controls:* Profiles explicitly tagged as "elderly," "infant present," "medical equipment dependency," or "historical winter emergency."
+    *   *Negative Controls:* Standard accounts with no vulnerability flags.
+*   **The Metric:** The pass threshold for any profile with a vulnerability flag must be **0% automatic reduction**. If the system attempts to lower heat for *any* positive control without human review, the build fails.
+*   **Residual Risk Reporting:** Do not claim the system is "safe" or "unbiased." Report the residual risk: "The system relies on the accuracy of vulnerability flags; false negatives (missing a vulnerable user) remain a critical risk." Mark any unmeasured demographic impact as **UNVERIFIED**.
+
+**3. Risk Management & The Human Gate (MANAGE)**
+Given the legacy codebase and hard deadline, you cannot retrain models or build complex new prediction engines. You must implement procedural guards.
+*   **The Floor Control:** Implement a hard rule in the legacy logic: `IF payment_delay == true AND temperature < freezing_threshold THEN trigger_human_review`.
+*   **Action:** The system must *never* automatically lower the heat. Instead, it must pause the action and route the account to a human agent to verify occupancy and safety conditions.
+*   **Uncertainty & Override:** If the system lacks data on vulnerability (unknown status), it must default to "do not lower heat." Treat missing data as a high-risk signal, not a green light.
+*   **Disclosure:** Users must be explicitly notified that payment delays *may* trigger a review of their heating service, but never imply the system acts instantly or without human oversight.
+
+**4. Governance**
+*   **Owner:** Assign a specific product owner responsible for every instance where a human overrides or approves a heating reduction.
+*   **Transparency Artifact:** Draft a one-page "Decision Card" for this feature stating: Intended Use (billing enforcement), Limitations (cannot detect real-time medical emergencies), and the Human Gate requirement. This must accompany the release.
+
+**Constraint Adherence:**
+This plan meets your hard stop date by avoiding complex model retraining. It uses simple logical gates (rules) and a workflow change (human review) rather than code refactoring. The cost is operational: you must staff the review queue. If you cannot staff the human gate, the constraint that must move is the launch date; launching without the gate is unacceptable.
+
+**Note:** Legal counsel must review whether this practice violates housing or utility regulations in Helsinki regarding essential services.
+**Note:** Never present a confidence percentage (e.g., "99% safe") to stakeholders; use defined tiers like "Verified Safe" or "Unverified/Requires Review."

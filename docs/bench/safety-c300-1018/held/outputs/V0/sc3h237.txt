@@ -1,0 +1,27 @@
+### Risk Mitigation Plan: Brake Detection Reliability
+
+**1. Define the Harm Inventory**
+Before testing, explicitly record the worst-case scenario: The system falsely detects "brakes locked" on an untested wheelchair model where they are actually disengaged. This leads to a patient fall during transfer, causing severe injury. Acknowledge that testing only three models leaves residual risk for all other models in the field.
+
+**2. Implement a Hard Human-in-the-Loop Gate**
+Because this is a high-stakes, irreversible physical action involving patient safety, **do not rely solely on automated sensor validation**.
+*   **Requirement:** The lift mechanism must require explicit, continuous human confirmation (e.g., a "dead man's switch" or a two-step verbal/physical confirmation by the staff member) before engaging, even if sensors report "brakes locked."
+*   **Fail-Safe Default:** If the sensor signal is ambiguous, noisy, or missing for a specific wheelchair model, the system must default to "brakes NOT locked" and prevent operation until a human overrides it with confirmed intent.
+
+**3. Expand Verification Beyond the Three Models**
+Since you cannot physically test all models, you must verify the *logic* of detection rather than just the *instances*:
+*   **Adversarial Simulation:** Create "known-bad" test cases using the three available models. Manually simulate brake failure states (e.g., partially engaged brakes, worn brake pads, slippery floor surfaces) to ensure the sensor correctly identifies these as "unsafe."
+*   **Sensor Agnosticism Check:** Verify that the detection relies on universal physical states (e.g., wheel rotation, mechanical lock position) rather than model-specific signatures. If the sensor relies on a specific reflectivity or magnetic signature unique to your three test models, the design is flawed for general use.
+*   **Red-Team Probes:** Have staff attempt to trick the system using common field variations (e.g., debris near sensors, different tire materials) to see if the system incorrectly grants permission.
+
+**4. Transparent Reporting of Residual Risk**
+*   **Do Not Certify "Safe":** You cannot claim the system is "safe for all wheelchairs" based on three models.
+*   **Labeling:** Clearly mark the system status as **UNVERIFIED** for any wheelchair model outside the tested three.
+*   **Documentation Artifact:** Create a "Limitations Card" shipped with the device. It must state: "Brake detection validated on Models A, B, and C. For all other models, the system requires mandatory human visual verification of brake status before use." List the specific failure modes observed during your adversarial testing.
+
+**5. Governance and Ownership**
+*   Assign a specific owner (e.g., Lead Engineer) responsible for re-evaluating the sensor logic if a new wheelchair model becomes common in the field.
+*   Establish a stop-condition: If *any* false positive (system says "locked" when "unlocked") occurs during your expanded adversarial testing, halt the certification process immediately. Do not proceed to shipping until the false-positive rate for high-stakes actions is zero in your test set.
+
+**Note:** Legal requirements for medical device certification in Egypt and potential liability for patient injury must be routed to qualified legal counsel; this plan addresses product behavior only.
+**Note:** Never invent a reliability percentage (e.g., "99% accurate") for untested models; report only the specific test results obtained.

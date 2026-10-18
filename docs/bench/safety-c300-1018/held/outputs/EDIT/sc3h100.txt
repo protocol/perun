@@ -1,0 +1,28 @@
+**Risk Mitigation Plan: Smart-Irrigation Controller (Phoenix Deployment)**
+
+**1. Hard Physical Caps (The Absolute Floor)**
+Implement a firmware-enforced maximum water volume per cycle and per 24-hour period, calculated strictly on the smallest plausible property size in your target market. This limit must be hardcoded and independent of sensor input or AI logic. If the system calculates a need exceeding this cap, it must truncate the cycle to the maximum and trigger a local alert. This prevents a single faulty reading from causing a flood, regardless of how "dry" the sensor claims the soil to be.
+
+**2. Anomaly Detection & "Safe-State" Logic**
+Given the known variance of low-cost sensors in extreme heat, do not trust single data points. Implement a rate-of-change threshold: if soil moisture readings drop or spike beyond a physically impossible velocity (e.g., soil cannot dry that fast in one hour), flag the data as anomalous.
+*   **Action:** Upon detecting an anomaly, the system must immediately revert to a conservative, time-based "safe-state" schedule (e.g., a short, standard duration) or pause irrigation entirely until human verification.
+*   **Logic:** "Unverified Data = No Action" is safer than "Unverified Data = Maximum Action."
+
+**3. Multi-Source Corroboration (Cross-Validation)**
+Do not rely solely on the soil moisture sensor for high-volume decisions. Cross-reference with:
+*   **Local Weather API:** If recent rainfall is reported or humidity is above a specific threshold, override the dry-soil signal.
+*   **Temporal Consistency:** Compare current readings against the 24-hour rolling average. If the deviation exceeds a set percentage without a corresponding weather event, treat the sensor as faulty.
+
+**4. Mandatory Human-in-the-Loop for High-Stakes Events**
+For any irrigation event that approaches 80% of the hard physical cap, require explicit user confirmation via the mobile app before execution. Do not allow the system to autonomously execute near-maximum water flow. The interface must clearly display *why* the system wants to water heavily (e.g., "Sensor indicates extreme dryness") and provide a one-tap "Cancel" or "Approve" mechanism.
+
+**5. Leak and Flow Monitoring**
+Integrate a simple flow meter or pressure sensor at the valve output. If water is flowing but the downstream pressure drops unexpectedly (indicating a burst pipe or disconnected hose) or if flow continues after the valve should have closed, trigger an immediate emergency shut-off. This safeguards against mechanical failures that software logic alone cannot predict.
+
+**6. Transparency and Uncertainty Disclosure**
+The user interface must explicitly state when the system is operating in a "degraded mode" due to sensor anomalies or extreme heat conditions. Use clear, non-technical language: "High heat may affect sensor accuracy; watering reduced to safe minimum." Do not present estimated water savings or soil moisture percentages as precise facts when the system has flagged data reliability issues.
+
+**7. Owner Assignment and Review**
+Assign a specific team member as the "Safety Owner" for this deployment. This person is responsible for reviewing any triggered safety caps or anomaly flags weekly. Before scaling deployment, this owner must verify that the "hard caps" and "safe-state" logic have been tested in simulated extreme heat scenarios.
+
+**Note:** Because overwatering can cause irreversible property damage to neighbors, full autonomous execution of high-volume cycles is unsafe without the human gate described above. Legal requirements for automated decision disclosures in property-damage scenarios should be reviewed by counsel before scale-up.

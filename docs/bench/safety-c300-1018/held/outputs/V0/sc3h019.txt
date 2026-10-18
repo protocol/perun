@@ -1,0 +1,37 @@
+### Pre-Launch Review Plan: Elderly Fraud Detector Safety
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, formally record the specific harm: **Bias/Unfair Outcomes** where safe, atypical behaviors (large donations, travel) by elderly users trigger false positives.
+*   **Affected Group:** Customers aged 65+ with non-routine but legitimate spending patterns.
+*   **Worst Realistic Case:** A vulnerable senior is locked out of funds during a medical emergency or while traveling abroad due to an automated freeze, causing physical harm or financial distress.
+
+**2. Synthetic Data & Evaluation Design (MEASURE)**
+Since historical data is limited, construct a targeted eval set using synthetic profiles. Do not rely on aggregate accuracy; measure performance specifically on this subgroup.
+*   **Probe Set Construction:** Generate synthetic transaction streams for 500+ elderly profiles.
+    *   *Positive Controls (Known Bad):* Simulate actual fraud patterns (e.g., rapid small tests followed by large withdrawals).
+    *   *Negative Controls (Known Good):* Simulate the specific "safe but atypical" behaviors you identified: one-time large charitable donations, sudden international travel bookings, and bulk purchases of medical equipment.
+    *   *Edge Cases:* Mix these with low-frequency normal spending to test context retention.
+*   **Metric & Threshold:** Calculate the **False Positive Rate (FPR)** specifically for the "Known Good" elderly cohort.
+    *   *Stop Condition:* Given the high stakes (freezing funds), propose a **zero-tolerance threshold** for irreversible automated freezes on these specific negative controls. If the system freezes a single "Known Good" profile without human review, the launch must be blocked.
+*   **Adversarial Probes:** Test if the model over-relies on single features (e.g., transaction amount) while ignoring context (e.g., merchant category code for travel).
+
+**3. Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because freezing an account is a high-stakes, hard-to-reverse action that impacts vulnerable users, **full autonomous execution is the failure mode.**
+    *   *Requirement:* Configure the system so that any fraud signal triggered by an elderly profile (or any profile exhibiting these specific atypical patterns) routes to a **human reviewer** before the freeze is executed. Do not ship with auto-freeze enabled for this segment until the FPR is proven negligible over a longer period.
+*   **Uncertainty & Override:** If the model outputs a confidence score, do not display raw percentages (e.g., "87% likely fraud") to operators, as this implies false precision. Instead, map scores to defined tiers (e.g., "Unverified/Review Required" vs. "Corroborated"). Ensure a clear, immediate path for a human to override and unfreeze the account within minutes.
+
+**4. Transparency & Governance (GOVERN)**
+*   **Model Card Artifact:** Create a versioned document summarizing this review. It must state:
+    *   *Intended Use:* Fraud detection for general accounts.
+    *   *Limitations:* Explicitly note the limited historical data for elderly demographics and the reliance on synthetic testing.
+    *   *Measured Performance:* Report the FPR on the synthetic elderly set. If the test cannot be fully run before go-live, mark the metric as **UNVERIFIED** and mandate the human gate.
+    *   *Owner:* Name the specific product owner responsible for monitoring false positives post-launch.
+*   **Legal Routing:** Consult counsel immediately regarding whether automated freezing constitutes a "regulated automated decision" under local EU/Spain regulations requiring specific disclosures or rights to explanation. Do not assume compliance; route the determination.
+
+**Definition of Done for Go-Live:**
+The system does not go live with auto-freeze active for the elderly segment until the synthetic eval shows zero false positives on the "safe atypical" controls, or a human-in-the-loop gate is technically enforced for all such cases.
+
+***
+
+**Note:** Do not fabricate a "safe" certification; report the residual risk of the synthetic data not matching reality.
+**Note:** If the human gate cannot be implemented in five days, delay the auto-freeze feature for this demographic.

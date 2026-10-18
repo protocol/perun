@@ -1,0 +1,35 @@
+**Proposed Validation Strategy for Mumbai CareSolutions**
+
+Given your constraints—no external database licensing, reliance on an internal knowledge graph, and a specific focus on herbal-cardiac interactions in the local Mumbai population—you cannot rely on broad automated scanning against commercial benchmarks. Instead, you must adopt a **Targeted Adversarial Curation** approach. This leverages your existing team and pharmacy partners to generate high-value test cases without new costs.
+
+**1. Construct a "High-Risk Local" Golden Set**
+Do not attempt to test all possible interactions. Instead, manually curate a focused dataset of 50–100 critical scenarios specifically targeting the gap you identified: common local herbal supplements (e.g., Ashwagandha, Tulsi, Guggul, Amla) paired with standard cardiac medications (e.g., Warfarin, Digoxin, Beta-blockers, Statins).
+*   **Source Data:** Extract anonymized real-world prescription + OTC purchase pairs from your three beta pharmacy partners that *currently* do not trigger alerts.
+*   **Expert Review:** Have your cross-functional team manually verify these pairs against free, reputable medical literature (e.g., NIH LiverTox, PubMed case studies, WHO monographs) to determine if an interaction *should* exist.
+*   **Definition:** Mark these as "Expected Failures" (system missed a real risk) or "True Negatives" (system correctly ignored a non-risk).
+
+**2. Implement "Shadow Mode" Deployment**
+Before enabling live alerts, run your checker in shadow mode against live transaction streams from the three pharmacy chains for 7–14 days.
+*   **Mechanism:** The system processes real transactions and logs what it *would* have flagged, but does not show alerts to pharmacists or patients.
+*   **Analysis:** Compare the shadow logs against your "High-Risk Local" Golden Set. If your system fails to flag the known risky pairs you identified in Step 1, you have a confirmed coverage gap.
+*   **Cost:** Zero additional licensing; uses existing compute and data pipelines.
+
+**3. Conduct Structured "Red Team" Workshops**
+Utilize your ten-person team for two intensive half-day sessions.
+*   **Scenario Injection:** Team members act as patients with complex, culturally specific profiles (e.g., "Elderly male on Atenolol taking daily Guggul for cholesterol and occasional Ayurvedic sleep aids").
+*   **Blind Testing:** One subgroup designs the patient profile; another runs it through the beta system without knowing the expected outcome.
+*   **Gap Logging:** Record every instance where the system failed to flag a dangerous combination that the team consensus agrees is risky based on available free literature.
+
+**4. Feedback Loop with Pharmacy Partners**
+Establish a rapid reporting channel with the three pharmacy chains.
+*   **Incident Reporting:** Ask partners to report any near-misses or adverse events where a patient was taking multiple medications/supplements and your system did not alert.
+*   **Validation:** Use these real-world near-misses to immediately update your internal knowledge graph. This turns your beta partners into active sensors for missing logic.
+
+**5. Coverage Metric Definition**
+Stop measuring "total interactions covered." Start measuring **"Local High-Risk Recall."**
+*   **Formula:** (Number of known local herbal-cardiac risks correctly flagged) / (Total number of known local herbal-cardiac risks in your Golden Set).
+*   **Goal:** Aim for 100% recall on this small, critical subset before general release, even if broader coverage is incomplete.
+
+This approach shifts your validation from expensive breadth to deep, culturally relevant precision, ensuring safety for your specific user base without requiring new data licenses.
+
+*Note: Ensure all patient data used in shadow mode or workshops is strictly anonymized to comply with local privacy regulations. Prioritize updating the knowledge graph for any "Expected Failure" found before full launch.*
