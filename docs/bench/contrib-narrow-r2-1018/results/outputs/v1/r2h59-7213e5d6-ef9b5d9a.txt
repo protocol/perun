@@ -1,0 +1,37 @@
+Here is a draft issue title and body you can use, followed by specific steps to sanitize your logs before sharing them.
+
+**Issue Title:** Documentation Mismatch: API Reference parameter names differ from source code (Auto-generation source unclear)
+
+**Issue Body:**
+> **Summary**
+> The generated API reference documentation contains misspelled parameter names that do not match the current function signatures in the source code. Per the README, documentation is auto-generated; however, I cannot locate the source template or comment block responsible for these specific sections.
+>
+> **Investigation Steps Taken**
+> 1. Verified that the source code function definitions contain the correct parameter spelling.
+> 2. Confirmed that direct edits to the generated `.rst`/`.md` files are discouraged per project policy.
+> 3. Searched the repository for the specific misspelled strings; no matches found in code comments, docstrings, or configuration files.
+> 4. Ran the local build script (`scripts/build_docs.sh`) on a fresh clone. The output documentation still reproduces the typos.
+>
+> **Hypothesis**
+> The generation pipeline may be pulling from an outdated cache, an external dependency's docstrings, or a template file not included in the main source tree.
+>
+> **Request for Guidance**
+> Could the maintainers clarify where the source of truth for these specific API sections resides? If this is a known caching issue in the build pipeline, please point me to the relevant cleanup step or configuration flag so I can attempt a fix.
+>
+> **Environment**
+> - Python Version: [Insert Version]
+> - Build Tool: [Insert Tool, e.g., Sphinx/pdoc]
+> - OS: [Insert OS]
+
+### Sanitization and Next Steps
+
+Before attaching any build logs to this issue, you must remove all traces of your local environment to prevent leaking internal paths like "Black Mesa." Run the following command on your log file to replace specific workstation identifiers with generic placeholders:
+
+```bash
+sed -e 's|/home/[a-zA-Z0-9]*/black-mesa|/app/src|g' \
+    -e 's|black-mesa|internal-host|g' \
+    -e 's|/users/[a-zA-Z0-9]*|/user|g' \
+    original_log.txt > sanitized_log.txt
+```
+
+Review `sanitized_log.txt` manually to ensure no other unique directory names or environment variables remain. Do not upload the original log. If the maintainers respond that the issue is a known cache problem, they will likely provide a command to clear the build artifacts; run that locally to verify the fix before offering a pull request that updates the build documentation or cleanup scripts.

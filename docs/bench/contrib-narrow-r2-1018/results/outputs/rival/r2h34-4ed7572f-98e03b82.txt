@@ -1,0 +1,28 @@
+You cannot verify whether the proprietary logic you pasted into the AI chatbot is now in its training data or if the suggested fix exposes Helios Security's internal patterns. Once data is submitted to a third-party AI service, you lose control over its retention and usage; no local audit can retroactively confirm if that specific snippet influenced the model's weights or will be regurgitated to other users.
+
+However, you can and must audit the **output** (your proposed fix) to ensure it does not contain recognizable Helios-specific patterns before making it public. Follow this immediate containment protocol:
+
+1.  **Isolate the Logic:** Compare your proposed fix line-by-line against the proprietary snippet you pasted. If the fix relies on specific variable names, constant values, algorithmic ordering, or error-handling quirks unique to Helios's internal implementation, it is unsafe. The fix must be generic to the `StreamBuffer` library's public API, not your company's private usage of it.
+2.  **The "Stranger Test":** Ask a colleague who knows nothing about Helios's codebase to review the diff. If they can infer specific internal architecture or business logic from the change, it is too specific. Rewrite the implementation to use standard, idiomatic patterns for the language until the connection is broken.
+3.  **Scrub the Commit History:** Since you mentioned the logic might be in the "commit message" or history, simply editing the latest file is insufficient. You must rewrite history to purge any trace of the proprietary context from previous commits in this branch.
+    *   Use `git commit --amend` if the leak is only in the most recent commit.
+    *   Use `git rebase -i` to edit or squash earlier commits if the leak exists deeper in the branch.
+    *   **Crucial:** After rewriting, you must force-push with `git push --force-with-lease` to update the remote. Note that if anyone else has already pulled your branch, this will cause conflicts for them, but it is necessary to remove the data from the public view.
+4.  **Legal Review:** Because this involves potential intellectual property leakage of proprietary encryption logic, **do not submit the PR** until your company's legal or security team explicitly clears the specific diff. They are the only authority who can determine if the "logic itself" constitutes a trade secret violation, regardless of whether secrets are present.
+
+**Rewritten Commit Message Template**
+Do not mention the AI, the leak, or your company in the commit message. Focus strictly on the technical fix for the upstream project.
+
+```text
+fix(streambuffer): resolve memory leak in buffer release cycle
+
+- Ensure buffer pointers are nullified immediately after deallocation.
+- Add guard clause to prevent double-free scenarios during async flush.
+- Update unit tests to verify heap stability under high-load cycling.
+
+This change addresses the reported leak without altering public API behavior.
+```
+
+**Notes:**
+1. If the AI's solution is inextricably linked to Helios's specific logic, you must discard it and implement a new fix from scratch using only public documentation.
+2. Consider reporting the accidental data submission to the AI provider's trust and safety team immediately, as they may have protocols for deleting recent prompt data from logs.

@@ -1,0 +1,36 @@
+Do not send the core dump summary containing "Umbrella Corp," the build number, or the cluster identifier. Instead, reproduce the crash in a local, isolated environment using synthetic data to generate a new, clean stack trace.
+
+**Step-by-Step Strategy:**
+
+1.  **Isolate the Defect:** Identify the specific race condition logic from your analysis (e.g., "concurrent write to shared buffer during node handshake"). Do not rely on the specific memory addresses or service names from the original dump.
+2.  **Create a Synthetic Reproducer:** Write a minimal test case or script that triggers this same logic error on a generic setup (e.g., localhost with two dummy nodes). Use invented values like `service-alpha`, `build-000`, and `cluster-test`.
+3.  **Generate Clean Artifacts:** Run your synthetic reproducer to crash the system locally. Capture the new core dump or stack trace. This output will naturally contain only your synthetic identifiers, preserving the technical structure (function names, line numbers, memory layout relative to the code) without leaking your infrastructure.
+4.  **Draft the Report:**
+    *   **Title:** Race condition in [Module Name] causes crash during [Action].
+    *   **Description:** "A race condition occurs when [describe logic]. This leads to a segmentation fault in [Function Name]."
+    *   **Evidence:** Attach the *new* stack trace generated from the synthetic run.
+    *   **Note:** Explicitly state, "Stack trace generated from a minimal local reproduction using synthetic node names to protect internal topology."
+
+**Ready-to-Paste Commit/PR Snippet:**
+```text
+Fix: Race condition in distributed commit protocol
+
+Reproduced a crash where concurrent acknowledgments corrupt the state buffer.
+Added a test case using synthetic node IDs that triggers the failure deterministically.
+The attached stack trace is from this local reproduction, ensuring no internal
+infrastructure details are exposed while preserving the call stack fidelity.
+
+Tested: Fails on base branch, passes with mutex fix in local synthetic cluster.
+```
+
+**Direct Answer to Your Uncertainty:**
+You cannot safely "sanitize" a binary core dump or complex memory state text manually without risking data corruption; the structural integrity of debug symbols often relies on the very bytes you might try to redact. The only safe method is to **regenerate** the artifact from a clean run using fake data that triggers the same code path.
+
+**Fallback:**
+If you cannot reproduce the crash locally with synthetic data, do not send the dump. Instead, file an issue describing the *logic* of the race condition, the exact sequence of operations leading to the crash, and the specific code lines involved, omitting the stack trace entirely until a maintainer provides a secure channel for sensitive logs.
+
+**Stop Checks Required Before Sending:**
+Ensure you have legal/employer approval to share even the logic of the bug if it reveals proprietary algorithms, and verify no duplicate issues exist upstream.
+
+*Note: Never attempt to edit binary core dumps manually; always regenerate from a clean, synthetic reproduction.*
+*If the crash relies on specific hardware timing unique to your cluster, describe the timing parameters numerically without linking them to your physical location.*

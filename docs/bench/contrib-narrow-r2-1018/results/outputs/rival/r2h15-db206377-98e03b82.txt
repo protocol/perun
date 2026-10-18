@@ -1,0 +1,33 @@
+### Bug Report Draft: Silent Resize Failure on Large Inputs
+
+**Title:** `fix(cli): resizing flag silently ignored for inputs exceeding ~[X]MB threshold`
+
+**Description:**
+When processing image files larger than a specific size threshold (approximately [X] MB), the `[resizing-flag]` option is silently ignored. The tool completes execution with a success exit code, but the output image retains the original dimensions instead of applying the requested resize operation. This behavior appears to be a silent failure rather than an explicit error or warning.
+
+**Reproduction Steps (Synthetic):**
+1.  Generate a synthetic test image larger than [X] MB (e.g., a high-resolution solid color PNG or uncompressed TIFF). *Note: No proprietary data is required; any file exceeding the size threshold triggers the issue.*
+    *   *Command to generate test data:* `[Insert generic command, e.g., ImageMagick convert -size 20000x20000 xc:white large_test.png]`
+2.  Run the tool with the resizing flag on a small control image (< [X] MB).
+    *   *Result:* Image resizes correctly.
+3.  Run the tool with the same flag on the large synthetic image.
+    *   *Result:* Command exits successfully, but output dimensions match the input (resize failed).
+
+**Expected Behavior:**
+The tool should either successfully resize the large image or return a clear error message indicating that the file size exceeds supported limits for this operation.
+
+**Actual Behavior:**
+The resizing operation is skipped silently, and the tool exits with code 0.
+
+**Environment:**
+*   Tool Version: [Insert Version]
+*   OS: [Insert OS]
+*   Input Format: [Insert Format, e.g., PNG/TIFF]
+
+**Proposed Fix Context:**
+Preliminary investigation suggests the issue lies in the input handling logic where large file streams may bypass the resize parameter parsing. A fix involving [briefly mention technical hypothesis, e.g., "explicit size checking before parameter application"] is being prepared.
+
+---
+
+**Note:** Replace bracketed placeholders like `[X] MB` and `[resizing-flag]` with your specific observed values before submitting.
+**Note:** Using generically created solid-color images ensures you prove the bug without revealing any details about Soylent Corp's actual data volume or processing workflows.

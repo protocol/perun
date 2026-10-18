@@ -1,0 +1,3 @@
+# Addendum 1 (2026-10-18), before scenario freeze and before any arm generation or judge call
+
+The first `bench.py write` stopped at batch 30 (seeds 31-40): the writer answered in its plain "NN then text" form instead of JSON for 12 draws in a row, and the script as hashed in SHA256-frozen.txt had dropped the plain-form fallback that `../bizops-call-1017/bench.py` has. `bench.py` was amended to restore that same fallback parser (no change to seeds, brief, models, temperatures, arms or rules). The hash of the amended script is in SHA256-amend.txt and the ledger event `bench_amended`. The seeds were already drawn and are unchanged. The first, failed write produced no scenario file.

@@ -1,0 +1,56 @@
+### Step 1: Prepare Your Local Branch
+Ensure you are on your feature branch and have fetched the latest upstream `main` to avoid conflicts later.
+```bash
+git fetch origin
+git switch <your-branch-name>
+```
+
+### Step 2: Start Interactive Rebase
+Launch the interactive rebase against the base branch (usually `origin/main`). Since you have 14 commits, you can specify the count or the specific base hash.
+```bash
+git rebase -i origin/main
+```
+*(If your branch diverged earlier, replace `origin/main` with the hash of the commit just before your first change.)*
+
+### Step 3: Edit Commit Messages
+Your editor will open with a list of 14 commits.
+1.  **Keep** the action as `pick` for all commits (unless you specifically intend to squash them locally *before* the maintainer asks, but the request says "squash... and rewrite", which often implies the maintainer wants a clean single commit. If they want **one** single commit, change `pick` to `reword` for the first commit and `fixup` for the remaining 13. If they want **cleaned history** but preserved logical steps, keep `pick` and only change the messages as described below).
+2.  To remove "Umbrella Corp" while keeping context: Change `pick` to `reword` for any commit containing the sensitive name.
+3.  Save and close the file.
+
+The editor will pause at each `reword` commit. Replace the message.
+*   **Bad:** `fix: Resolve timeout issue for Umbrella Corp integration`
+*   **Good:** `fix: Resolve timeout issue in third-party provider integration`
+*   **Bad:** `test: Add fixtures for Umbrella Corp data`
+*   **Good:** `test: Add fixtures for external provider data`
+
+*Technical Substance:* Do not change the code diffs in this step, only the commit messages. The logic remains intact.
+
+### Step 4: Squash (If a Single Commit is Required)
+If the maintainer explicitly demanded **one single commit**:
+1.  In the initial interactive rebase list, keep `reword` for the **first** commit.
+2.  Change `pick` to `fixup` (or `f`) for the subsequent 13 commits.
+3.  Save. You will be prompted to write the **one** final commit message.
+4.  Write a comprehensive message following their conventional format (e.g., `feat(scope): add provider integration handling`) ensuring no client names appear.
+
+### Step 5: Verify and Force Push
+Check your history to confirm no references remain:
+```bash
+git log --oneline
+git log -p | grep -i "umbrella" # Should return nothing
+```
+Once verified, push the rewritten history to your fork. You **must** use `--force-with-lease` to safely overwrite the remote branch without destroying it if someone else pushed unexpectedly.
+```bash
+git push fork <your-branch-name> --force-with-lease
+```
+
+### Pull Request Description Advice
+Do not explicitly state "I removed confidential client names," as this draws attention to the secrecy. Instead, frame the rewrite as a compliance cleanup.
+
+**Add this note to your PR description or a comment on the PR:**
+> "Per project contribution guidelines, I have rebased this branch to squash commits into a single logical change and sanitized commit metadata to remove internal debugging identifiers and ensure no external project names are retained in the history. The technical diff remains unchanged."
+
+This satisfies the maintainer's requirement for a clean history and policy compliance without highlighting the specific sensitive entity you protected.
+
+*Note: Always verify your remote URL (`git remote -v`) before force-pushing to ensure you are pushing to your fork, not the upstream repo.*
+*If the rebase conflicts, resolve them file-by-file, `git add`, then `git rebase --continue`.*

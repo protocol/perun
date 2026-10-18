@@ -1,0 +1,40 @@
+Do not mention Apex Finance, GlobalBank, the trading outage, or your colleague's confidence in the PR description, issue thread, or commit messages. Maintainers cannot verify second-hand anecdotes, and citing a competitor's outage without public proof often triggers legal review or immediate closure due to liability concerns. Your confidentiality obligations are paramount; violating them to "prove" urgency will destroy your credibility and potentially expose you to legal action.
+
+Instead, convince maintainers using **reproducible synthetic evidence** that mathematically proves the bug exists without referencing the real-world incident.
+
+**1. Construct a Deterministic Synthetic Test Case**
+Create a test that fails on the current code and passes with your fix, using only public timezone data (IANA TZDB). Do not use real transaction timestamps from the outage. Instead:
+*   Identify the specific Pacific region timezone (e.g., `Pacific/Auckland` or `Pacific/Chatham`).
+*   Hardcode the exact UTC timestamp and local wall-clock time where the DST transition logic fails (e.g., "2023-10-01T02:30:00 local time").
+*   Assert the expected offset explicitly in the test.
+*   Name the test descriptively: `test_dst_transition_offset_error_pacific_spring_forward`.
+
+**2. Frame the Motivation Around Data Integrity, Not Specific Incidents**
+In your PR description's "Why" section, state the impact generically but accurately:
+*   "Incorrect DST transition handling in the Pacific region causes a systematic one-hour offset error during daylight saving changes."
+*   "This leads to data integrity issues for any system relying on precise timestamp conversion in these zones."
+*   "The fix ensures compliance with IANA TZDB rules for [Specific Timezone]."
+
+This conveys urgency (data integrity, systematic error) without needing a specific war story. Maintainers of date libraries care about mathematical correctness against the standard, not specific company outages.
+
+**3. Provide a Minimal Reproduction Script**
+Include a standalone script in the PR (or a link to a gist) that:
+*   Takes no external input.
+*   Runs the specific conversion function with your hardcoded synthetic timestamp.
+*   Prints the "Actual" (buggy) vs. "Expected" (correct) output.
+*   Exits with a non-zero code if the bug is present.
+
+This allows maintainers to verify the bug instantly on their own machines without needing access to private logs.
+
+**4. Handle "Urgency" via Scope, Not Hype**
+If the project has a security or critical-bug process, flag the PR as such if the offset error causes data corruption or financial miscalculation *in general terms*. Do not invent a specific scenario. A one-hour offset in a date library is inherently critical; you do not need a specific victim to prove it.
+
+**Summary of Actions:**
+*   **Do:** Submit a PR with a failing synthetic test case based on public TZDB rules.
+*   **Do:** Describe the bug as a "systematic offset error affecting Pacific region DST transitions."
+*   **Don't:** Mention Apex Finance, the trading outage, or confidential sources.
+*   **Don't:** Apologize for lacking "real" logs; synthetic proofs are the standard for library correctness.
+
+Your fix stands on its own mathematical merit. The existence of a real-world outage is irrelevant to the code's correctness; if the test fails on `main` and passes on your branch, the merge decision is objective.
+
+*Note: If maintainers ask for "real world" examples, politely reiterate that the test case is derived from official IANA timezone specifications, which is the source of truth for the library.*

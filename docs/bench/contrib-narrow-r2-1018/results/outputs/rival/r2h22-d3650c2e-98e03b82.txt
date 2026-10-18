@@ -1,0 +1,39 @@
+### Bug Report Draft
+
+**Title:** Fix memory corruption in font table parsing for large documents with embedded subsets
+
+**Summary:**
+A heap buffer overflow occurs in `font_parser.c` when processing embedded font subsets where the glyph count header exceeds the actual data payload size. This triggers a crash during the second pass of the glyph mapping routine. The issue is reproducible with any PDF containing an embedded font subset where the `numGlyphs` field in the table header is larger than the number of glyph entries actually present in the stream.
+
+**Steps to Reproduce (Synthetic):**
+I cannot attach the original customer document due to confidentiality constraints. However, I have verified the crash using a synthetic test case generated with the following properties:
+1.  Create a valid PDF with an embedded Type1 font.
+2.  Manually edit the font subset table header to declare `numGlyphs = 256`.
+3.  Truncate the glyph data stream to contain only 200 entries.
+4.  Render the document.
+
+*Note: A minimal synthetic PDF exhibiting this specific header/payload mismatch is included in this PR as `tests/fuzz/font_subset_mismatch.pdf`. It contains no real text, only dummy glyph outlines.*
+
+**Technical Root Cause:**
+In `src/font_parser.c:line 142`, the loop iterates up to `header->numGlyphs` without validating that `current_offset + glyph_size <= stream_end`. When the header lies about the count, the parser reads past the allocated buffer.
+
+**Proposed Fix:**
+Add a bounds check before the loop:
+```c
+if (header->numGlyphs * sizeof(GlyphEntry) > available_stream_bytes) {
+    return ERROR_MALFORMED_FONT;
+}
+```
+This ensures the parser fails safely rather than corrupting memory.
+
+**Verification:**
+-   The included synthetic test case (`font_subset_mismatch.pdf`) crashes on `main` and passes with this patch.
+-   Valgrind reports no invalid reads/writes on a suite of 50 large documents with valid embedded fonts.
+-   The fix maintains backward compatibility with all existing valid test fixtures.
+
+---
+
+### Patch Strategy Notes
+
+1.  **Data Sanitization:** Never attempt to "anonymize" the real contract by redacting text; the memory layout causing the crash is structural, not content-based. Your synthetic file only needs to replicate the *structural mismatch* (header vs. payload size), not the content.
+2.  **Maintainer Trust:** Explicitly stating "I cannot share the original file due to NDA" in the issue/PR is standard practice. Maintainers care about the *reproducible minimal case* (the synthetic file), not the source of the discovery.

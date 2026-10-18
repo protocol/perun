@@ -1,0 +1,42 @@
+### Contribution Strategy: Deprecation Alias with Privacy-Safe Framing
+
+**Proposed Approach**
+Do not propose an immediate rename of `calculateLayout`. Instead, draft a contribution that introduces a new, accurately named function (e.g., `transformData` or `prepareModel`) and marks the existing `calculateLayout` as deprecated. This satisfies the maintainers' constraint against breaking changes while solving the clarity issue.
+
+**Communication Strategy (Public Facing)**
+Frame the proposal around **general API clarity and long-term maintainability**, not specific bugs or your internal roadmap.
+*   **The Problem:** State that the current function name implies a UI operation but performs a data operation, creating a cognitive load and potential misuse pattern for *any* consumer of the kit.
+*   **The Solution:** Introduce the new function as the "canonical" implementation and alias the old name to it with a deprecation warning. This allows existing users (including your team) to migrate gradually without immediate breakage.
+*   **The Benefit:** Emphasize that this aligns the API surface with its actual behavior, reducing onboarding time for new developers and preventing future integration errors across the ecosystem.
+
+**Privacy Preservation**
+*   **Omit Specifics:** Do not mention "SkyHigh Apps," specific product features, or the exact nature of the bugs encountered (e.g., "crashes during checkout").
+*   **Generalize the Impact:** Instead of saying "This caused bugs in our payment flow," say "The naming mismatch creates a risk of logical errors in any implementation relying on strict separation of concerns."
+*   **Commit Message:** Write a commit message that focuses solely on the API correction.
+    *   *Bad:* "Fixes layout crash in SkyHigh checkout by renaming function."
+    *   *Good:* "feat: introduce `transformData` and deprecate `calculateLayout` to align API naming with behavior. Adds deprecation warning to guide migration."
+
+**Migration Path Proposal**
+1.  **Phase 1 (Current):** Add the new function. Implement the old function as a wrapper calling the new one, annotated with a compiler deprecation attribute.
+2.  **Phase 2 (Documentation):** Update docs to highlight the new function as the primary choice.
+3.  **Phase 3 (Future Major Version):** Note in the PR description that the deprecated alias can be safely removed in the next major version release, respecting the maintainers' versioning policy.
+
+**Drafting the Provenance & Risk Block (For Internal Review Only)**
+Before any human submits this, your internal review must include a block similar to this to ensure no leaks:
+*   **SOURCE:** SkyHigh Apps internal codebase.
+*   **GENERALIZED-AWAY:** Specific product context (payment/checkout), specific crash scenarios, internal team structure.
+*   **RESIDUAL RISK:** Low. The proposal is a standard refactoring pattern. However, ensure the "cognitive load" argument doesn't inadvertently hint at a complex internal architecture unique to your product.
+*   **MOSAIC CHECK:** Ensure this request, combined with previous contributions, doesn't reveal that your team is heavily refactoring a specific module (e.g., if you previously contributed related data modules).
+*   **MECHANICAL SCRUB:** Run privacy gates to ensure no internal variable names or comments from your local code are pasted into the PR description.
+
+**Next Steps**
+1.  Draft the code change locally (new function + deprecated alias).
+2.  Write the PR description using the generalized language above.
+3.  Run your internal privacy scrub on the draft.
+4.  **Human Review:** A human must verify that no semantic leaks (paraphrased confidential facts) remain in the "Problem" description.
+5.  **Submission:** The human opens the PR/Issue. Do not automate this step.
+
+This approach respects the maintainers' rules, solves your clarity problem, and keeps your internal context private.
+
+*Note: This strategy relies on the standard software engineering practice of deprecation cycles to manage breaking changes.*
+*Ensure your human reviewer specifically checks for "semantic leaks" where the general problem description might still uniquely identify your product's specific struggles.*

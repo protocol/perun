@@ -1,0 +1,27 @@
+You cannot submit the three parts as independent pull requests because they violate the project's fundamental rule: every commit must pass all tests. Since the changes are deeply intertwined and intermediate states are broken, splitting them into separate PRs is technically impossible without violating the "green CI" constraint.
+
+Your strategy should not be to argue for an exception to the rule, but to propose a **staged refactoring within a single Pull Request** or a **sequence of atomic, compiling PRs that do not yet solve the full problem**.
+
+Here are two viable approaches to present to Ravi:
+
+**Option 1: The Single PR with Atomic Commits (Recommended)**
+Explain that while the *logical* fix requires three conceptual steps, the *technical* implementation requires them to land together to maintain compilability. Offer to keep the work as **one Pull Request** but rewrite the history so that the nine-hundred-line change is split into three **atomic commits** within that single PR.
+*   **Commit 1:** Refactors the locking mechanism but includes temporary shims or no-ops so the timeout logic still compiles and tests pass (even if the timeout bug isn't fixed yet).
+*   **Commit 2:** Implements the timeout logic, relying on Commit 1's new locking.
+*   **Commit 3:** Updates metrics.
+*   **Crucial Detail:** You must ensure *each commit* compiles and passes tests. This often requires "forward-fixing" in earlier commits (e.g., adding the new lock interface in Commit 1 but keeping the old implementation active alongside it, or adding dummy implementations) so the build never breaks. Tell Ravi: "I will rebase this into three atomic commits where each one is green, but they must be reviewed and merged as a single unit to avoid broken intermediate states in the main branch."
+
+**Option 2: The Sequence of Functional PRs**
+If Ravi strictly demands separate PRs, you must decouple the dependencies by introducing **abstraction layers** or **feature flags**.
+*   **PR 1:** Introduce the new locking interface *alongside* the old one. The code uses the old lock by default. No behavior changes, no broken tests.
+*   **PR 2:** Switch the timeout logic to use the new lock interface (which now exists). This might require a feature flag or a configuration toggle to enable the new path only in tests initially, ensuring the main path remains stable.
+*   **PR 3:** Remove the old locking code and finalize metrics.
+This approach requires significant extra work to create "strangler fig" style increments where the system is functional at every step, effectively compiling the "temporary broken states" into "temporary dual-running states."
+
+**Draft Message to Ravi:**
+"Ravi, I agree that splitting this improves reviewability. However, the current dependencies mean that separating them into distinct PRs would result in non-compiling intermediate states, violating the 'all tests pass' rule. I propose two alternatives:
+1. I will rebase the work into a **single PR** containing three **atomic, green commits**. Each commit will pass CI (using temporary shims where necessary), but they must be merged together to maintain functionality.
+2. I can refactor the changes into a sequence of **three independent PRs** that introduce the new locking, then the timeout logic, then the cleanup, ensuring each PR leaves the system fully functional (likely by running old and new logic in parallel temporarily).
+Which approach do you prefer? Option 1 is faster; Option 2 adheres strictly to one-PR-per-feature but requires more refactoring overhead."
+
+Do not ask to merge broken code; instead, offer to do the extra work to make the steps atomic or independent while preserving the green build.

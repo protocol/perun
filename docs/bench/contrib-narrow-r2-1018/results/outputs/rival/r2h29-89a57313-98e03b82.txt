@@ -1,0 +1,43 @@
+### Strategy: Deprecation Alias with Privacy-Preserving Justification
+
+**1. The Technical Proposal: "Soft Rename" via Alias**
+Do not propose renaming the existing function. Instead, propose adding a new, correctly named function and marking the old one as deprecated. This adheres to the maintainers' "no breaking changes" rule while solving your clarity issue.
+
+*   **Action:** Introduce `transformData` (or similar accurate name) containing the current logic.
+*   **Action:** Modify `calculateLayout` to simply call `transformData` internally.
+*   **Action:** Add a `@available(*, deprecated, message: "...")` attribute to `calculateLayout` directing users to the new name.
+*   **Result:** Existing code continues to work (no breaking change), but new code uses the clear name, and IDEs will warn users to migrate.
+
+**2. The Communication Strategy: Generic & Community-Focused**
+To protect SkyHigh Apps' roadmap and specific bug history, frame the justification around **general developer experience** and **semantic correctness**, not your specific incidents.
+
+*   **Do Not Say:** "This caused bugs in our mobile product" or "Our team keeps misusing this for data tasks."
+*   **Do Say:** "The current name `calculateLayout` implies UI geometry operations, leading to frequent conceptual misunderstandings for new contributors integrating data logic. Renaming clarifies the API contract for the entire community."
+*   **Narrative:** Position this as "Documentation via Code." Argue that accurate naming reduces onboarding friction and prevents future misuse by *any* downstream user, not just your team.
+
+**3. The Commit Message Template**
+Use this template to ensure no sensitive details leak while satisfying conventional commit standards:
+
+```text
+feat(api): introduce transformData and deprecate calculateLayout
+
+- Adds `transformData` to accurately reflect the function's data processing behavior.
+- Marks `calculateLayout` as deprecated with a migration message pointing to the new name.
+- Maintains full backward compatibility; no existing integrations will break.
+
+Rationale: The previous name suggested UI layout operations, creating a semantic mismatch
+that risks confusion for downstream developers. This change aligns the API surface with
+its actual behavior, improving long-term maintainability and clarity for the community.
+
+Ref: [Link to general discussion issue if one exists, otherwise omit]
+```
+
+**4. Execution Steps**
+1.  **Open a Discussion Issue First:** Before coding, open an issue titled "Proposal: Clarify `calculateLayout` semantics via deprecation." Ask if maintainers accept a non-breaking alias approach. This respects their governance and gauges temperature without exposing code.
+2.  **Implement the Alias:** If they agree, implement the strategy above.
+3.  **Submit the PR:** Use the commit message provided. In the PR description, explicitly state: "This is a non-breaking change designed to improve API clarity without disrupting current users."
+
+By offering a backward-compatible path and framing the problem as a universal semantic issue rather than a specific internal failure, you align with the maintainers' constraints while securing the clarity your team needs.
+
+*Note: Ensure your local tests verify that the deprecated function still returns identical results to the new alias to prevent regression flags.*
+*Note: If the maintainers reject even a deprecation, defer the change until the next major version cycle as they requested.*

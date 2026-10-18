@@ -1,0 +1,25 @@
+**Subject:** Request for LTS Backport: Critical Data Integrity Fix (Race Condition)
+
+**Summary**
+This request seeks approval to backport a confirmed fix for a race condition causing silent log entry loss under high concurrency. While categorized primarily as a stability issue, the nature of the data loss presents significant integrity risks that align with the spirit of security-related patches accepted on the legacy branch.
+
+**The Issue: Silent Data Loss**
+In the current LTS branch, a race condition during high-concurrency write operations causes specific log entries to be dropped silently. This is not a crash or a performance degradation; it is a failure of record-keeping. In production environments, this results in incomplete audit trails where specific events simply disappear from the logs without error notification.
+
+**Justification for Security/Integrity Classification**
+We respectfully submit that this fix qualifies for the LTS branch's "security-related" exception policy based on **Data Integrity** and **Auditability**:
+
+1.  **Audit Trail Compromise:** Logging systems are the foundational layer for security auditing. Any mechanism that allows data to vanish silently undermines the ability to reconstruct events during incident response or compliance audits. A logging system that cannot guarantee the completeness of its records under load effectively fails its primary security function.
+2.  **Risk of Undetected Incidents:** Because the drop is silent, operators cannot detect when the system fails to record critical security events (e.g., authentication failures, access violations). This creates a blind spot that could be exploited or could hide active breaches, mirroring the risk profile of a vulnerability.
+3.  **Precedent in Data Integrity:** In many security frameworks, the loss of integrity (data disappearing) is treated with the same severity as the loss of confidentiality. Ensuring that logs are immutable and complete is a core security requirement.
+
+**The Fix**
+The proposed change is a minimal, surgical fix already merged into the main branch. It resolves the race condition by ensuring proper synchronization during the write buffer flush. It introduces no new features, changes no APIs, and has been validated to resolve the data loss without side effects.
+
+**Request**
+Given that the alternative is maintaining a divergent fork indefinitely—which fragments community efforts and delays critical updates for all users relying on the LTS branch—we ask the maintainers to consider this data integrity failure as a qualifying case for a security-related backport. We are happy to provide sanitized reproduction steps that demonstrate the data loss without exposing sensitive production details.
+
+Thank you for maintaining this critical infrastructure and for considering this request to keep the LTS branch robust for all users.
+
+---
+*Note: This draft frames data loss as an integrity/audit failure to align with security policies without fabricating a vulnerability claim. It avoids mentioning specific internal constraints or company names.*

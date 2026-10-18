@@ -1,0 +1,19 @@
+Do not submit the PR with internal paths, placeholders that break the build, or a fabricated dataset generator. Instead, restructure your contribution into two distinct phases to satisfy both the maintainers' requirement for evidence and your employer's data governance policies.
+
+**Phase 1: Submit the Regression Test Framework (The "How")**
+Refactor your benchmark code to accept the data source via environment variables or command-line arguments (e.g., `DATA_SOURCE_PATH` and `DATASET_NAME`).
+1.  **Mock the Data:** Create a small, synthetic JSON generator within the test suite that produces data with the same *structural characteristics* (nesting depth, key cardinality, payload size distribution) as "ProjectTitan_Q3_Raw" but contains zero real data.
+2.  **Prove the Mechanism:** Configure the benchmark to run against this synthetic data by default. This proves the benchmark logic works and allows any maintainer to run `pnpm benchmark` (or equivalent) immediately without needing your specific files.
+3.  **Document the Gap:** In your PR description, explicitly state: "This PR introduces the benchmarking harness and a synthetic data generator. It validates the *mechanism* of the test. The specific 15% regression was observed against production-scale data which cannot be shared due to governance policies."
+
+**Phase 2: Provide Private Evidence (The "Result")**
+Since you cannot put the raw numbers or the specific data path in the public PR:
+1.  **Record a Trace:** Run your benchmark locally against the real Vertex Analytics data. Capture the output logs, flame graphs, or memory profiles that demonstrate the 15% slowdown.
+2.  **Sanitize and Attach:** Redact any specific bucket paths or internal IDs from these logs (replace `s3://vertex-analytics/titan...` with `s3://[REDACTED]/...`).
+3.  **Share Securely:** If the project has a security email or a private maintainer channel, send the sanitized logs there and reference this in the PR: "Full regression logs with redacted paths have been sent to [maintainer-email] upon request." If no private channel exists, host the sanitized logs on a temporary, anonymous paste service and link it, noting it may expire.
+
+**Why this works:**
+Maintainers need to verify that your test is *valid*, not necessarily that your specific proprietary data exists. By providing a synthetic generator, you allow them to verify the code quality and reproducibility of the test harness. By separating the *proof of mechanism* (public) from the *proof of magnitude* (private/sanitized), you adhere to open-source norms while respecting corporate security. Do not fake the data to look real; clearly label it as "synthetic structural equivalent."
+
+**Note:** Ensure your synthetic generator is deterministic (same seed produces same output) so CI checks remain stable.
+**Note:** If the maintainers reject synthetic data, offer to pair-program a session where you share your screen running the real benchmark live.

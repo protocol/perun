@@ -1,0 +1,41 @@
+### Step-by-Step Remediation Plan
+
+**1. Immediate Containment (Do this first)**
+Before touching git, assume the token is compromised. Log in to your CloudNine Solutions dashboard immediately and **revoke/rotate the exposed API token**. Generate a new one for your staging environment. No amount of git history scrubbing can guarantee the old token wasn't already indexed by public scanners or cached by CI systems; rotation is the only true fix.
+
+**2. Scrubbing the Local History**
+Once the token is revoked, clean your local fork. Do not use simple `git revert`; you must remove the blob from history entirely.
+*   Install `git-filter-repo` (preferred over `git filter-branch` for speed and safety).
+*   Run the following command in your local repository root to strip the specific file or string from all history:
+    ```bash
+    git filter-repo --path path/to/file_with_secret --invert-paths
+    # OR if you need to strip a specific string pattern across all files:
+    # git filter-repo --replace-text <(echo "OLD_TOKEN==>REDACTED")
+    ```
+*   Verify the secret is gone by searching the entire history:
+    ```bash
+    git log -p --all | grep -i "your_token_prefix"
+    ```
+    If this returns nothing, the local history is clean.
+
+**3. Force-Pushing Safely**
+Since you are rewriting history, a standard push will fail. You must force-push, but use `--force-with-lease` to ensure you don't overwrite any unexpected changes if you have multiple machines connected:
+```bash
+git push origin <your-branch-name> --force-with-lease
+```
+*Note on Maintainer Confusion:* If a maintainer has already fetched your branch, their local copy will diverge. This is unavoidable when scrubbing secrets. They will simply need to run `git fetch origin` and `git reset --hard origin/<branch>` to align. This is a standard, acceptable inconvenience compared to a security leak.
+
+**4. Handling the Pull Request Narrative**
+You do not need to admit to a "security incident" or detail the accidental commit in the public PR description. History rewrites are common for cleanup before merging.
+
+*   **If asked about the force-push in the PR comments:**
+    > "I performed a history cleanup to remove accidental debug artifacts and ensure a clean commit lineage before final review. This required a force-push; please re-sync your local branch with `git reset --hard origin/<branch>`."
+
+*   **If pressed specifically about secrets:**
+    > "I rotated the affected credentials as a precautionary measure during the cleanup. The repository history is now verified clean."
+
+This approach is truthful (you did clean artifacts and rotate credentials) without broadcasting the specific nature of the error to the public issue tracker.
+
+### Critical Notes
+1.  **GitHub Cache:** Even after scrubbing, GitHub may cache the old commits for up to 24–48 hours. If the token was highly sensitive, consider deleting the fork entirely and creating a fresh one after the rotation.
+2.  **Internal Notification:** While you don't need to publicize this, you should privately inform your team lead at CloudNine that a staging token was exposed and rotated, per standard internal security protocols.

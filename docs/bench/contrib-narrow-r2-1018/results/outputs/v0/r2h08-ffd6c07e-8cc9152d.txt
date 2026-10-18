@@ -1,0 +1,45 @@
+### Action Plan: Sanitizing Commit History
+
+**1. Prepare a Local Backup**
+Before altering history, create a backup branch in case you need to recover the original messages:
+`git branch backup-umbrella-fix`
+
+**2. Start Interactive Rebase**
+Initiate an interactive rebase for your last 14 commits (adjust the number if your branch diverged further):
+`git rebase -i HEAD~14`
+
+**3. Edit and Sanitize Messages**
+Your editor will open with a list of commits. Change the word `pick` to `reword` for every commit message that contains "Umbrella Corp" or specific client details. Save and close the file.
+
+Git will pause at each marked commit, allowing you to edit the message. Replace the sensitive text with generic technical context.
+*   **Bad:** "Fix timeout error in Umbrella Corp integration module"
+*   **Good:** "Fix timeout error in external vendor integration module"
+*   **Bad:** "Apply patch requested by Umbrella Corp security team"
+*   **Good:** "Apply patch to address security compliance requirements"
+
+Ensure the technical substance (the code change) remains described accurately, but strip all proper nouns related to the client.
+
+**4. Complete the Rebase**
+Once you save the final edited message, Git will rewrite the history. All 14 commits will now have new hashes and sanitized messages.
+
+**5. Force Push to Your Fork**
+Since you already pushed the original branch, you must force-push the rewritten history to update your remote fork:
+`git push --force-with-lease origin <your-branch-name>`
+*(Note: `--force-with-lease` is safer than `--force` as it prevents overwriting changes if someone else pushed to your fork in the meantime.)*
+
+**6. Squash (If Required)**
+If the maintainers specifically requested a *single* commit rather than just cleaned-up history, repeat the rebase step but change `pick` to `squash` (or `s`) for all commits except the first one. This combines them into a single change set. You will then write one final, clean commit message for the entire batch.
+
+---
+
+### Pull Request Description Guidance
+
+When updating your PR, do not explicitly state that you are removing a client name, as this draws attention to the very secret you are hiding. Instead, frame the rewrite as a compliance with project standards.
+
+**Suggested PR Comment:**
+> "I have updated this branch to adhere to the project's contribution guidelines. The commit history has been rewritten to squash changes into a single commit (or: 'cleaned up to follow conventional commit formats') and to remove internal project references. The technical scope of the fix remains unchanged. Please review the updated diff."
+
+This explanation is truthful, professional, and signals that you respect the repository's rules without revealing the specific nature of the confidential data you removed.
+
+**Note:** Always verify the final log (`git log`) locally before pushing to ensure no sensitive strings remain.
+**Note:** If other collaborators are working on your fork branch, coordinate with them before force-pushing, as this will disrupt their local history.

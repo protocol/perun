@@ -1,0 +1,37 @@
+You cannot and should not attempt to sanitize or generalize the specific Globex Corporation schema yourself for an upstream contribution. Doing so risks leaking proprietary structural information (a "mosaic leak") even if field names are changed, as the nesting depth and specific combination of rules may reveal internal business logic. Furthermore, treating your specific bug fix as a direct upstream contribution violates the "generality gate": a fix driven by a single, complex, private contract is likely project-specific until proven otherwise.
+
+Instead, follow this procedure to satisfy the maintainers without risking IP leakage:
+
+1.  **Construct a Synthetic Reproduction Case:** Do not use any part of the Globex schema. Create a entirely new, fictional schema from scratch that mimics *only* the structural property triggering the bug: deep nesting of arrays leading to an off-by-one error in index calculation.
+    *   Use generic names (e.g., `items`, `records`, `level_1`, `level_2`).
+    *   Ensure the nesting depth matches the failure point (e.g., if the error happens at index 5 in a 6-level deep array, create a 6-level deep array of integers or simple objects).
+    *   Verify that your synthetic case fails with the current code (reporting index 4) and passes with your patch (reporting index 5).
+
+2.  **Draft the Contribution Locally:**
+    *   Write the code fix for the traversal logic.
+    *   Add the synthetic test case to the project's test suite.
+    *   Update the CHANGELOG with a generic description (e.g., "Fix off-by-one error in error path reporting for deeply nested arrays").
+    *   **Do not** mention Globex, the private API, or the specific business rules in any commit message, PR body, or code comment.
+
+3.  **Prepare the Provenance & Risk Block (For Human Review Only):**
+    Before handing this to a human to open the PR, draft the following internal block. This is **not** for the public PR, but for your internal safety check and the human reviewer who will authorize the send:
+
+    ```
+    SOURCE (internal only): Internal bug fix regarding JSON schema validator.
+    GENERALIZED-AWAY: All specific field names, business rules, and structural unique to Globex Corporation's private API contract. Replaced with a synthetic, generic nested array structure.
+    RESIDUAL RISK I COULD NOT RULE OUT: The specific depth and combination of nested arrays might still hint at internal processing pipelines if combined with other public contributions. However, the synthetic schema uses common patterns found in many JSON validation scenarios.
+    MOSAIC CHECK: This is the first contribution regarding this specific validator module from this source. No aggregation risk identified yet.
+    MECHANICAL SCRUB: [To be run by human: bash scripts/ci-gates.sh privacy --banlist .banlist.txt .]
+    DRAFTED BY: Assistant (simulated)
+    ```
+
+4.  **Human Gate:** Hand the draft (code fix, synthetic test, CHANGELOG entry) and the Provenance & Risk Block to a human reviewer. The human must:
+    *   Verify the synthetic schema contains no traces of the Globex contract.
+    *   Run the privacy gate (`scripts/ci-gates.sh`).
+    *   Confirm the test case reproduces the bug and the fix resolves it.
+    *   Open the PR to the upstream repository.
+
+By using a purely synthetic schema, you satisfy the maintainers' requirement for a failing test case while adhering to the prime constraint: never sending private information upstream. The bug is fixed based on a generalizable principle (off-by-one in nested traversal), not the specific private data.
+
+Note: Never attempt to "clean" real private data; always replace it with fictional data that isolates the technical defect.
+The human reviewer is the final authority on whether the synthetic case is sufficiently decoupled from the original private context.

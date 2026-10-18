@@ -162,6 +162,26 @@ else
   record 1 "privacy: load optional sibling .banlist.local.txt alongside primary .banlist.txt"
 fi
 
+# A tree too large for one argv (ARG_MAX) must still be scanned, and a hit in
+# the last file must still block: the scan runs in chunks.
+bigdir="$WORK/scan-big"
+mkdir -p "$bigdir"
+( cd "$bigdir" && seq -f "f%06g-padding-to-make-every-path-long-enough-to-overflow-one-argv-on-any-host.txt" 1 30000 | xargs touch )
+printf 'aws_key = %s\n' "$planted" >"$bigdir/zz-last.txt"
+gate "$GATES" privacy --banlist "$WORK/banlist.valid" "$bigdir"
+if [ "$GATE_RC" -ne 0 ] && grep -q 'zz-last.txt' "$WORK/last.log"; then
+  record 0 "privacy: a tree larger than ARG_MAX is scanned in chunks and the hit is found"
+else
+  record 1 "privacy: a tree larger than ARG_MAX is scanned in chunks and the hit is found"
+fi
+rm -f "$bigdir/zz-last.txt"
+gate "$GATES" privacy --banlist "$WORK/banlist.valid" "$bigdir"
+if [ "$GATE_RC" -eq 0 ]; then
+  record 0 "privacy: a clean tree larger than ARG_MAX passes"
+else
+  record 1 "privacy: a clean tree larger than ARG_MAX passes"
+fi
+
 # A named pipe in the scanned tree must not hang the scan (stray fixture).
 fifodir="$WORK/scan-fifo"
 mkdir -p "$fifodir" && printf 'clean\n' >"$fifodir/ok.txt" && mkfifo "$fifodir/pipe"

@@ -1,0 +1,59 @@
+### Immediate Action Plan
+
+**1. Do not include "Oscorp" in the commit message.**
+Violating the project's explicit style guide will likely cause your Pull Request (PR) to be rejected immediately or create friction with maintainers, negating any potential credit. The commit message must remain technical and impersonal.
+
+**2. Generalize and Sanitize the Data.**
+Before drafting anything, you must strip all third-party identifiers.
+*   **Stack Traces:** Do not paste the original trace. Re-run the crash scenario in a local environment using synthetic input (e.g., a generated string of the same length/characteristics that caused the OOM) to produce a clean trace.
+*   **Hostnames:** Replace `osc-corp-server-01` or similar with `host.example`.
+*   **Client Data:** Remove any specific query strings from the customer; replace them with a minimal, invented reproduction case.
+
+**3. The Diplomatic Solution for Recognition.**
+To satisfy your manager without violating project rules, use the **PR Description** and **Internal Reporting**, not the commit history.
+*   **Commit Message:** Strictly technical.
+*   **PR Body:** You may politely mention the context in the "Context" or "Background" section, provided it doesn't sound like marketing. However, the safest route for corporate credit is often internal: save the link to the merged PR. Most open-source impact reports count the *merged contribution link*, not the text inside the commit message.
+
+---
+
+### Drafted Artifacts
+
+#### A. Commit Message (Copy/Paste Ready)
+*Subject:* Fix OutOfMemoryError in text search query parser
+
+*Body:*
+Resolve a memory leak where unbounded buffer allocation during specific regex patterns caused the server to exhaust heap space.
+
+- Replace dynamic buffer growth with a capped limit based on input length.
+- Add unit test `SearchParserTest#testLargeInputHandling` using synthetic data to verify stability.
+- Update error handling to return a 400 Bad Request instead of crashing when limits are exceeded.
+
+Fixes issue #1234.
+
+#### B. Pull Request Description (Draft)
+**Problem**
+Specific complex queries triggered an `OutOfMemoryError` due to unbounded buffer allocation in the search parser.
+
+**Solution**
+Implemented a hard cap on buffer size relative to input length. If the limit is exceeded, the system now gracefully rejects the query with a 400 status code.
+
+**Testing**
+- Verified fix against a synthetic reproduction case mimicking the original crash pattern.
+- Added regression test `testLargeInputHandling`.
+- Confirmed no memory spike under load using [Tool Name, e.g., JVisualVM] with generated data.
+
+**Context**
+This fix addresses a critical stability issue identified during high-priority production support. *(Note: This acknowledges the severity without explicitly naming the company in a promotional way, adhering to the "impersonal" rule while hinting at real-world impact.)*
+
+---
+
+### Addressing Your Specific Concerns
+
+**Q: How do I explain this to my manager?**
+Tell your manager: "The project maintainers have an automated policy to reject any commit containing corporate branding. Including 'Oscorp' would guarantee rejection and damage our relationship with the community. Instead, I will submit the fix under our company GitHub account (if applicable) and provide you with the merged PR link, which is the standard metric for open-source impact reports."
+
+**Q: What about the stack trace?**
+Never paste the original trace. It likely contains internal hostnames, file paths (e.g., `/home/oscorp-user/...`), or customer data. Generate a new trace locally using a fake input that triggers the same bug. This proves the bug exists without leaking secrets.
+
+**Fallback if Maintainers Push Back:**
+If maintainers still object to the "Context" line, remove it. The code itself is the contribution. Your internal report can state: "Fixed critical OOM in Oscorp Text Search library (PR #Link)," which satisfies the impact report requirement without needing the text in the public repo.

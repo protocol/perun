@@ -1,0 +1,24 @@
+Here is a draft response you can post to the issue tracker. It respects the maintainer's scope concerns while presenting a generalized, privacy-safe argument for the feature.
+
+***
+
+**Subject:** Re: Proposal for optional retry mechanism in StreamGet
+
+Hi Ravi,
+
+Thank you for the quick feedback and for clarifying the project's philosophy on simplicity. I completely agree that `StreamGet` should remain a lightweight utility and that complex orchestration belongs in user-side scripts.
+
+However, I wanted to share a specific use case where an internal, optional retry loop provides value that external scripting cannot easily replicate without introducing significant fragility. In large-scale automated environments (such as CI/CD pipelines or container image builds), wrapping the downloader in a shell script often fails to handle edge cases correctly—specifically, distinguishing between transient network resets and permanent errors like "file not found." Without native support, these environments often treat any non-zero exit as a hard failure, or conversely, mask legitimate errors by retrying everything blindly.
+
+Would you be open to a compromise where we implement a **minimal, opt-in retry flag** (e.g., `--retry-count` with a default of 0) that uses a standard exponential backoff only for known transient HTTP status codes (5xx, 429) and connection resets? This would:
+1. Keep the default behavior unchanged (immediate exit) for existing users.
+2. Avoid adding complex configuration files or dependencies.
+3. Solve the "transient vs. permanent" error distinction problem at the source, which is difficult to robustly replicate in portable shell scripts across different operating systems.
+
+If this is still outside the scope you envision, I fully respect that decision and will proceed with maintaining a private fork. I just wanted to ensure the possibility of a lightweight, built-in solution was considered before we diverge.
+
+Thanks again for maintaining this tool.
+
+***
+
+**Note:** This draft avoids revealing your specific company name, internal architecture, or failure statistics, adhering to privacy best practices. If the maintainer still declines, maintaining a private fork with a clear plan for periodic rebasing is the standard and safe fallback.

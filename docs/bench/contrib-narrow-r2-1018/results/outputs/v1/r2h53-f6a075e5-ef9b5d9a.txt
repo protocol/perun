@@ -1,0 +1,54 @@
+### Strategy and Initial Issue Draft
+
+Do not open 60 tiny pull requests, nor one massive 60-file change immediately. The optimal path is to **file a single design issue first** to secure maintainer buy-in, then execute the work in **logical batches** (e.g., by subsystem) once approved. This respects the project's history of small merges while acknowledging the necessity of bulk cleanup.
+
+**Step 1: Sanitization Protocol**
+Before drafting any code or patches, you must strip all "Umbrella Inc" references. Since you cannot run automated gates here, manually audit every file you touched.
+*   **Action:** Search for "Umbrella", internal codenames, and specific internal ticket IDs.
+*   **Replacement:** Replace specific codenames with generic functional descriptions (e.g., change `// Umbrella-Opt-Flag` to `// Deprecated optimization flag`).
+*   **Verification:** Ensure no stack traces, file paths containing your username, or internal IP addresses remain in comments or test fixtures.
+
+**Step 2: The Proposal Issue**
+Copy and paste the following template into the Stark Compiler issue tracker. This frames the work as a maintenance necessity rather than a risky refactor.
+
+***
+
+**Title:** Proposal: Batched removal of deprecated code (3+ versions old) in optimization backend
+
+**Problem**
+Approximately 60 files in the optimization backend contain code blocks marked as deprecated for over three release versions. Leaving this dead code increases cognitive load for new contributors and complicates future refactoring.
+
+**Proposed Solution**
+Remove these deprecated blocks entirely. Local verification against the full test suite (5,000+ cases) shows zero regressions.
+
+**Execution Strategy**
+To respect review bandwidth and adhere to the project's preference for small changes, I propose splitting this work into **4–6 focused Pull Requests**, grouped by logical subsystem (e.g., "Constant Folding," "Dead Code Elimination," etc.), rather than 60 tiny PRs or one monolithic change.
+*   **Batch 1:** [Subsystem A] (~10 files)
+*   **Batch 2:** [Subsystem B] (~12 files)
+*   ...
+
+**Risk Mitigation**
+*   Each batch will include a note confirming local test passage.
+*   Changes are strictly deletions of unreachable code; no logic is modified.
+*   All comments have been audited to ensure no internal project identifiers remain.
+
+**Request**
+Does this batched approach align with current maintenance priorities? If approved, I will begin submitting Batch 1 immediately.
+
+***
+
+**Step 3: Execution**
+Once a maintainer comments "Yes" or "Go ahead":
+1.  Create a branch for **Batch 1 only**.
+2.  Ensure the diff contains *only* the files for that subsystem.
+3.  Submit the PR referencing the design issue above.
+4.  Repeat for subsequent batches.
+
+**Direct Answer to Your Uncertainty**
+You should neither split this into 60 PRs nor bundle it into one. The "60 tiny PRs" approach will fatigue reviewers and likely get closed as spam; the "one massive change" will likely be ignored due to review cost. The **batched approach via a pre-approval issue** is the industry standard for large-scale cleanups in mature projects.
+
+**Fallback Plan**
+If the maintainers do not respond to the issue within two weeks, post a polite, single-sentence follow-up asking if they would prefer the work be done incrementally as you encounter the dead code during other contributions, rather than as a dedicated cleanup effort.
+
+**Note:** Never include your employer's name or internal codenames in the public issue or PR comments; the template above assumes you have already scrubbed these from the code itself.
+**Note:** If any deleted comment contained a security workaround specific to your employer, do not delete it without replacing it with a generic comment explaining the technical necessity.

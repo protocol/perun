@@ -1,0 +1,28 @@
+### Bug Report Draft for Upstream Maintainers
+
+**Title:** Memory corruption crash when parsing large PDFs with specific embedded font structures
+
+**Description:**
+We have identified a critical memory corruption issue in the PDF rendering engine that triggers a crash during the processing of large documents containing complex embedded fonts. The fault appears to occur during the font metric calculation or glyph mapping phase when the document exceeds a certain size threshold and contains a specific sequence of font descriptor entries.
+
+**Conditions to Reproduce (Generalized):**
+The crash is reproducible under the following structural conditions, which can be synthesized without using proprietary data:
+1.  **Document Size:** The PDF must exceed approximately [Insert Size, e.g., 50MB] or contain more than [Insert Count, e.g., 200] pages.
+2.  **Font Embedding:** The document must include embedded Type 1 or TrueType fonts with specific descriptor flags (likely related to `ForceBold` or custom encoding maps).
+3.  **Data Pattern:** The corruption seems linked to a buffer overflow or use-after-free scenario when the parser encounters a malformed or unexpectedly large font dictionary entry followed immediately by a specific stream filter sequence.
+
+**Observed Behavior:**
+The application crashes with a segmentation fault (or access violation) at [Insert Function Name if known, e.g., `pdf_font_resolve`] when processing the font table. Debugging indicates invalid memory access at an offset that correlates with the size of the embedded font data.
+
+**Proposed Synthetic Test Case Strategy:**
+To respect data privacy and licensing constraints, we cannot share the original document. However, the maintainers can reproduce this issue by generating a synthetic PDF with the following characteristics:
+*   Create a large document by repeating a simple page template until the size threshold is met.
+*   Embed a standard open-source font (e.g., DejaVu Sans) but manually manipulate the font descriptor dictionary in the PDF source to include an unusually large or malformed entry (e.g., an excessively long `FontName` or a corrupted `Encoding` array).
+*   Verify if the crash occurs when the parser attempts to resolve this specific malformed entry within the context of a large document.
+
+**Potential Patch Strategy:**
+The fix likely requires adding bounds checking to the font descriptor parsing logic, specifically around the buffer allocation for font metrics. Ensure that the parser validates the length of font dictionary entries against the remaining buffer space before copying data. Additionally, implement a sanity check on the number of glyphs or metrics being loaded to prevent integer overflows during memory allocation.
+
+---
+
+**Note:** This draft strips all specific customer data, legal terms, and unique document structures, leaving only the technical fault class. You must fill in the bracketed technical details (sizes, function names) based on your local debugging session before sharing.

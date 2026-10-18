@@ -1,0 +1,42 @@
+### Strategy: Deprecation Alias with Privacy-Safe Communication
+
+**1. The Technical Proposal (Non-Breaking)**
+Propose introducing a new, accurately named function (e.g., `transformData`) that contains the actual logic. Mark the existing `calculateLayout` function as `@available(*, deprecated, message: "Renamed to transformData for clarity; this function performs data transformation, not layout calculation.")`. Inside the deprecated function, simply call the new one. This satisfies the maintainers' "no breaking changes" rule while allowing new code to use the correct name and guiding existing users toward it over time.
+
+**2. Privacy-Safe Communication Script**
+When drafting the issue or PR, strictly avoid mentioning "SkyHigh Apps," specific bugs, or your product roadmap. Use this template:
+
+*   **Title:** `feat: Introduce 'transformData' alias and deprecate misleading 'calculateLayout' name`
+*   **Problem:** "The function `calculateLayout` performs data transformation, not layout calculation. This semantic mismatch causes confusion for developers integrating the kit, leading to misuse and logical errors unrelated to UI rendering."
+*   **Solution:** "Introduce `transformData` as the primary implementation. Retain `calculateLayout` as a deprecated wrapper to ensure backward compatibility. This allows a gradual migration without breaking existing integrations."
+*   **Testing:** "Verified that existing calls to `calculateLayout` continue to function identically. New calls to `transformData` produce the same output. No changes to public API behavior, only naming clarity."
+
+**3. Commit Message Template**
+```text
+feat: add transformData and deprecate calculateLayout
+
+The function previously named 'calculateLayout' performs data transformation,
+not layout calculation. This misnomer has led to developer confusion and
+incorrect usage patterns in downstream projects.
+
+This change:
+- Introduces 'transformData' as the semantically correct entry point.
+- Marks 'calculateLayout' as deprecated, forwarding calls to 'transformData'.
+- Preserves binary compatibility for all existing users.
+
+Migration path:
+- New code should use 'transformData'.
+- Existing code will receive compiler warnings encouraging migration.
+```
+
+**4. Addressing Your Uncertainty**
+You asked if a rename is possible without violating rules. **Yes**, by using the **alias pattern** described above. You are not *removing* the old name (which would be a breaking change); you are *adding* a correct name and *marking* the old one as obsolete. This is standard practice in library maintenance and respects the "no breaking changes" constraint while solving the confusion.
+
+**5. Fallback if Maintainers Remain Silent**
+If the maintainers do not respond after two weeks, send one polite follow-up: "Just checking if there are any concerns regarding the backward-compatible approach proposed here. We believe this clarifies the API intent without disrupting current users." If they still decline or ignore, **stop**. Do not push further. Instead, create a local extension in your private codebase that wraps their library with your own correctly named functions, isolating your team from the confusion without requiring upstream approval.
+
+**Critical Privacy Reminder:** Before submitting, ensure no internal logs, specific error messages from your product, or references to "SkyHigh Apps" appear in the diff, commit history, or discussion threads. The justification must remain purely about general API clarity, not your specific internal incidents.
+
+---
+*Note: This approach isolates your internal bugs as "general developer confusion" to protect your roadmap.*
+*Always run a local privacy check on your diff before sharing any external artifacts.*

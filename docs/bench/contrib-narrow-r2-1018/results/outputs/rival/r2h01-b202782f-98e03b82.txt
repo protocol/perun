@@ -1,0 +1,69 @@
+### Sanitized Test Data (TypeScript)
+
+Replace your real patient data with this synthetic dataset. It mimics the structure required to trigger the month-boundary off-by-one error without using any real names or timestamps.
+
+```typescript
+// test/data/synthetic-appointment-edge-cases.ts
+
+export const syntheticPatients = [
+  {
+    id: "patient_synthetic_001",
+    name: "Jane Doe (Synthetic)", // Explicitly marked as synthetic
+    timezone: "America/New_York"
+  },
+  {
+    id: "patient_synthetic_002",
+    name: "Ravi Singh (Synthetic)",
+    timezone: "Asia/Kolkata"
+  }
+];
+
+// Edge case: Range spanning month boundary (e.g., Jan 31 to Feb 01)
+// This specific structure triggers the "Range end exceeds boundary by 24 hours" error
+export const edgeCaseAppointments = [
+  {
+    patientId: "patient_synthetic_001",
+    // Start: Last millisecond of January
+    startIso: "2024-01-31T23:59:59.999Z",
+    // End: First millisecond of February (The boundary crossing)
+    endIso: "2024-02-01T00:00:00.000Z",
+    expectedDurationMs: 1,
+    description: "Crosses Jan-Feb boundary at midnight UTC"
+  },
+  {
+    patientId: "patient_synthetic_002",
+    // Start: Last day of March (31st)
+    startIso: "2024-03-31T12:00:00.000Z",
+    // End: First day of April
+    endIso: "2024-04-01T12:00:00.000Z",
+    expectedDurationMs: 86400000, // 24 hours
+    description: "Crosses Mar-Apr boundary, exactly 24h"
+  }
+];
+```
+
+### Commit Message Advice
+
+Use the Conventional Commits format. Since this fixes a logic error causing a crash or incorrect behavior, use `fix`. Be specific about the "month boundary" in the subject line so maintainers immediately understand the scope.
+
+```text
+fix(date-range): correct off-by-one error when spanning month boundaries
+
+Previously, the date-range helper incorrectly calculated durations when
+the start and end timestamps crossed a month boundary (e.g., Jan 31 to Feb 1),
+throwing "Range end exceeds boundary by 24 hours."
+
+This change adjusts the loop condition in `calculateRange` to correctly
+handle month rollovers without exceeding the boundary limit.
+
+Added synthetic test cases covering:
+- Midnight UTC transitions between months.
+- Exact 24-hour spans crossing month lines.
+
+All test data is fully anonymized and synthetic per CONTRIBUTING.md.
+
+Fixes #[Insert Issue Number If Exists]
+```
+
+**Note:** Ensure you run the project's specific linting and test commands (e.g., `pnpm test`) locally before pushing to verify the synthetic data triggers the fix as expected.
+**Note:** If no issue exists yet, open a minimal bug report issue first if the project's `CONTRIBUTING.md` requires "issue-first" workflows for fixes.

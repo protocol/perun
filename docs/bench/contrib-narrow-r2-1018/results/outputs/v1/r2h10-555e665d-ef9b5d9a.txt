@@ -1,0 +1,30 @@
+You cannot and must not use your employer's data, even to analyze its statistical properties for replication. The specific column distribution and string patterns that trigger the bottleneck in the "Cyberdyne Systems" export are themselves confidential structural tells. Attempting to mimic them risks leaking proprietary information about your employer's business logic, data volume, and transaction types.
+
+To contribute this safely, you must generalize the performance defect to a class of input that any user might encounter, rather than replicating your specific dataset. Follow these steps:
+
+1.  **Identify the Abstract Trigger:** Determine the generic characteristics causing the slowdown without referencing your specific data. Is it extremely long lines? A high ratio of escaped quotes? Specific Unicode characters? A particular alignment of column counts? Define the bottleneck as "parsing files with [Generic Characteristic X]" rather than "parsing sales exports."
+2.  **Generate Purely Synthetic Data:** Write a small, separate script (not part of the PR) that generates a CSV file filled with random noise or repetitive dummy strings (e.g., "lorem ipsum", "test_value_123") that strictly exhibits the *abstract trigger* identified in step 1.
+    *   *Example:* If the bottleneck is long lines, generate a file with millions of rows of 5KB random strings.
+    *   *Example:* If the bottleneck is escape character handling, generate a file with dense sequences of `""` or `\n` within fields.
+    *   **Crucial:** Do not calibrate this generator against the real data. If the synthetic file does not show the 30% improvement, the optimization may be too specific to your employer's unique data shape and is likely not generalizable upstream. In that case, keep the change local.
+3.  **Run Benchmarks on Synthetic Data:** Execute your performance tests using only this generated file. Record the "before" and "after" times.
+4.  **Draft the Pull Request:**
+    *   **Title:** "Improve memory buffering for [Generic Characteristic] to reduce parsing time"
+    *   **Description:** Explain the algorithmic change. State: "Benchmarks show a ~30% improvement on files exhibiting [Generic Characteristic]. A synthetic test file (`bench_large_[characteristic].csv`) is included in the `tests/benchmarks` directory, generated via `scripts/generate_bench_data.cs`."
+    *   **Attachments:** Include only the generator script and the resulting synthetic CSV. Do not mention "Cyberdyne," "sales data," or "transaction records."
+
+**Direct Answer to Your Uncertainty:**
+You cannot create a synthetic dataset that "mimics" the real data's specific patterns without potentially leaking confidential information about those patterns. Instead, you must isolate the *single technical feature* causing the slowness and generate a dumb, artificial file that maximizes only that one feature. If the speedup disappears with artificial data, the fix is likely not suitable for the general-purpose library.
+
+**Fallback:**
+If maintainers reject the synthetic benchmark as insufficient, thank them for the review, explain that the real-world data triggering the issue is proprietary and cannot be shared, and ask if they would accept the code change with a detailed explanation of the algorithmic improvement alone, leaving the performance claim as "observed internally" rather than "benchmarked in PR."
+
+**Provenance and Risk Block (For your internal review only; do not include in PR):**
+```
+SOURCE: Internal optimization at Cyberdyne Systems
+GENERALIZED-AWAY: All specific column structures, transaction types, customer ID formats, and financial figures. The specific statistical distribution of the real sales export was not analyzed or replicated.
+RESIDUAL RISK I COULD NOT RULE OUT: The mere existence of a 30% gain on "large files" might hint at the scale of internal operations. However, this is a generic claim applicable to many industries.
+MOSAIC CHECK: None. This is a standalone algorithmic contribution.
+MECHANICAL SCRUB: Verified no filenames, paths, or comments reference "Cyberdyne" or "sales".
+DRAFTED BY: Assistant
+```

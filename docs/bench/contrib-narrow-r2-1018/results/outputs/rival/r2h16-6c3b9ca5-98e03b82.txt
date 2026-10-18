@@ -1,0 +1,31 @@
+Do not share the core dump summary in its current form. The risk of exposing internal topology, build numbers, and service names outweighs the immediate benefit of a faster diagnosis. Instead, use the following three-step strategy to sanitize the data while preserving the technical fidelity required to debug the race condition.
+
+**1. Structural Redaction via Text Transformation**
+Since you cannot manually edit the binary-safe debug structure without corruption, treat the *summary text* as a log file rather than a binary blob. Use a script (e.g., `sed`, `awk`, or a simple Python script) to perform consistent, reversible token replacement on the text output before sharing.
+*   **Service Names:** Replace "Umbrella Corp" and the specific internal service name with a generic placeholder like `<INTERNAL_SERVICE_A>`. Ensure you replace *every* instance to prevent correlation attacks.
+*   **Identifiers:** Replace the cluster identifier and build number with `<CLUSTER_ID>` and `<BUILD_NUM>`.
+*   **Consistency:** If the stack trace shows memory addresses or hashes derived from these names, you may need to hash the replacements (e.g., `sha256("<INTERNAL_SERVICE_A>")`) to maintain format length if the parser is strict, though most maintainers only need the logical flow.
+
+**2. Extract and Sanitize the Logical Stack Trace**
+Maintainers primarily need the **call stack** and the **state of the threads** involved in the race condition, not the raw memory heap which often contains sensitive strings.
+*   Extract the stack trace frames. These usually contain function names and line numbers, which are safe if the code is open source.
+*   If the stack trace includes arguments that contain your internal IDs, redact just those argument values using the method in Step 1.
+*   Provide the **register state** (RIP, RSP, etc.) at the crash site. This is mathematical data and rarely leaks topology unless a register explicitly holds a pointer to a named string (which you would redact).
+
+**3. Provide a "Reproduction Recipe" Instead of Raw Dumps**
+Often, a race condition can be diagnosed more effectively by describing the *conditions* than by analyzing a single crash dump. Construct a narrative report that includes:
+*   **Concurrency Model:** How many nodes were involved? What was the replication factor?
+*   **Timing Window:** What operations were happening simultaneously? (e.g., "Node A was committing a transaction while Node B received a network partition signal").
+*   **Sanitized Log Snippets:** Provide timestamps and log levels from the moments leading up to the crash, with all IDs redacted.
+*   **Hypothesis:** Explicitly state where you suspect the race exists (e.g., "It appears the lock release happens before the state flag is updated").
+
+**Deliverable Package**
+Submit a single issue comment containing:
+1.  The **Sanitized Stack Trace** (text block).
+2.  The **Reproduction Recipe** (bullet points of the scenario).
+3.  A statement confirming: "Raw core dump contains proprietary infrastructure identifiers and has been withheld. The provided stack trace and scenario description have been verified to reproduce the logical failure mode without exposing internal topology."
+
+If the maintainers insist they need the raw memory to proceed, ask if they have a secure, private channel (like a direct email to a senior maintainer or a private security advisory queue) where you can share the unredacted dump under a temporary NDA or confidence agreement, rather than posting it publicly.
+
+Note: Never guess at what to redact; if a field looks like an ID, treat it as sensitive.
+Maintainers generally prefer a clear logical reproduction over a noisy, partially redacted binary dump.

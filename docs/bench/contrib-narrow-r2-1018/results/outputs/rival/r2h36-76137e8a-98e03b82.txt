@@ -1,0 +1,19 @@
+Do not attempt to submit the three PRs as currently planned; they will fail CI and violate the project's "green main" rule, likely causing Ravi to close them immediately. Instead, reply to Ravi with a proposal to re-scope the work into three **independent, compilable units** that solve the problem incrementally without breaking the build.
+
+Your response should acknowledge the dependency but pivot to a refactoring strategy:
+
+1.  **PR 1: Infrastructure & Observability (No Logic Change).**
+    Propose extracting the metrics collection logic first, but implement it as a *no-op* or passive observer that doesn't yet rely on the new locking mechanism. Alternatively, introduce the new locking primitives as *unused* or *optional* features guarded by feature flags or dead-code elimination, ensuring the existing logic still compiles and passes tests using the old path. The goal is to land the new structural code without altering runtime behavior yet.
+
+2.  **PR 2: The Core Fix (Atomic Swap).**
+    Once PR 1 lands, the second PR can switch the active implementation to use the new locking mechanism. Since the infrastructure is already in place (from PR 1), this change can be a direct swap that remains compilable. If the timeout logic strictly requires the new lock, combine the timeout fix into this single atomic commit. This PR should be small enough to review but large enough to be functional.
+
+3.  **PR 3: Cleanup & Optimization.**
+    Move any remaining refactoring, removal of the old locking code, or fine-tuning of metrics to this final step.
+
+If true independence is impossible without breaking the build, explicitly ask Ravi: *"Given the tight coupling between the locking primitive and the timeout logic, would you prefer I: (A) Combine the locking and timeout fixes into a single slightly larger PR, keeping metrics separate? or (B) Land the new locking mechanism as a dormant, unused module first, then activate it in a second PR?"*
+
+This shows you respect the "green CI" constraint while offering concrete technical paths forward, rather than arguing that the rules are impossible to follow.
+
+**Note:** Never argue that "intermediate broken states" are acceptable in a shared repository; maintainers prioritize stability over contributor convenience.
+**Note:** If Ravi insists on strict separation, you must refactor your code to introduce shims or interfaces that allow the old and new systems to coexist temporarily.

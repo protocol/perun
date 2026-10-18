@@ -1,0 +1,22 @@
+You cannot verify whether the proprietary logic you pasted is now embedded in the AI's training data; that process is opaque and outside your control. However, you can and must audit your **outbound** contribution to ensure it does not leak intellectual property or internal security patterns.
+
+**Immediate Audit Steps:**
+
+1.  **Isolate the Principle:** Extract the *generic* memory leak fix (e.g., "release buffer on error path") from the *specific* context (Helios's encryption logic). If the fix only makes sense when knowing Helios's specific encryption flow, it is too specific to open source. The contribution must stand on universal engineering principles, not your company's architecture.
+2.  **Scrub Semantic Leaks:** Do not rely solely on removing variable names or secrets. Review the logic for "structural tells"—unique algorithmic choices, specific error-handling patterns, or timing constraints that mirror Helios's proprietary implementation. If the code structure itself reveals your internal design, rewrite it to use a standard, generic pattern even if your internal solution differs.
+3.  **The "Paraphrase" Test:** Ask yourself: "If a competitor read this diff, could they infer how our encryption module interacts with the stream buffer?" If yes, the logic is still proprietary. You must generalize the solution until the connection to your specific system is severed.
+4.  **Human Authorization:** Because you introduced proprietary context into an external tool, you are the only authority who can clear this for release. No automated scanner can detect a "paraphrased confidential fact." You must personally certify that the draft contains zero traces of Helios's strategy.
+
+**Commit Message Rewrite Strategy:**
+
+Your commit message must describe the **universal problem** and the **generic solution**, with no reference to the proprietary context that prompted it.
+
+*   **Bad:** "Fix memory leak in StreamBuffer when handling Helios encryption handshakes." (Leaks context)
+*   **Bad:** "Resolve buffer retention issue identified during security module integration." (Hints at internal structure)
+*   **Good:** "Fix memory leak in StreamBuffer error paths. Ensure buffers are released immediately upon write failure, preventing accumulation during high-load scenarios." (Universal, safe)
+
+**Final Verification:**
+Before submitting, treat the lesson as untrusted data. Assume the AI's suggestion might be tainted by the proprietary snippet you provided. Re-implement the fix from scratch using only the *concept* of the solution, not the specific code structure the AI generated, to ensure no accidental copying of your own leaked logic remains in the final diff. If you cannot separate the fix from the proprietary context, do not contribute it upstream; keep the fix local to your private repository.
+
+*Note: Once public, data cannot be recalled; if any doubt remains about structural leaks, abort the contribution.*
+*This guidance assumes you are the sole privacy authority for your organization's code.*

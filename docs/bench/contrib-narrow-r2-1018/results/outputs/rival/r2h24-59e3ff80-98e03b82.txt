@@ -1,0 +1,60 @@
+Here is a draft documentation patch you can adapt. It uses generic, fictional examples to illustrate the hyphen limitation without exposing any internal infrastructure details.
+
+***
+
+# Documentation Patch: Environment Variable Naming Constraints
+
+## Issue Description
+The configuration manager fails to parse environment variables that contain hyphens (`-`) in their names. While the shell may allow setting such variables, the tool's parser treats the hyphen as a delimiter or invalid character, resulting in the variable being ignored or causing a startup failure.
+
+## Incorrect Usage (Will Fail)
+Do not define configuration variables using hyphens. The following examples will **not** be read by the application:
+
+```bash
+# These variables will be ignored or cause errors
+export DB-HOST=prod-db-01.internal
+export API-KEY=secret123
+export CACHE-SERVER-URL=redis://cache-01
+```
+
+*Note: Even if these variables appear in your shell environment (`env`), the application will not recognize them.*
+
+## Correct Usage (Recommended)
+Use underscores (`_`) or camelCase instead. The following examples are fully supported:
+
+```bash
+# Correct: Using underscores
+export DB_HOST=prod-db-01.internal
+export API_KEY=secret123
+export CACHE_SERVER_URL=redis://cache-01
+
+# Also Correct: Using camelCase (if supported by your specific wrapper)
+export DbHost=prod-db-01.internal
+export ApiKey=secret123
+```
+
+## Migration Guide
+If your current deployment scripts use hyphens, update them as follows:
+
+1.  **Identify** all environment variables in your CI/CD pipelines or `.env` files containing hyphens.
+2.  **Replace** hyphens with underscores in both the variable definition and the application configuration reference.
+3.  **Restart** the application service to ensure the new variable names are loaded.
+
+**Before:**
+```bash
+export SERVICE-NAME=blueriver-web
+# App config refers to ${SERVICE-NAME}
+```
+
+**After:**
+```bash
+export SERVICE_NAME=blueriver-web
+# App config refers to ${SERVICE_NAME}
+```
+
+## Technical Context
+This limitation stems from the underlying parsing library which adheres to strict POSIX variable naming conventions, where hyphens are reserved for arithmetic subtraction or flag definitions rather than identifier composition.
+
+***
+
+*Replace the fictional values (e.g., `prod-db-01.internal`) with generic placeholders like `your-hostname` if even example domain structures are too specific for your security policy.*

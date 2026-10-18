@@ -1,0 +1,39 @@
+You cannot submit the real customer data, and you do not need the exact real-world strings to validate the fix. The bug is triggered by specific Unicode sequences and buffer limits, not by the semantic meaning of "Vertex Logistics" or actual street names. To resolve this, you must synthesize data that replicates the *structural properties* of the failure (character class, sequence length, and encoding) without containing any real personal information.
+
+Here is the step-by-step method to create a compliant, deterministic test case:
+
+1.  **Analyze the Failure Pattern:** Identify the exact Unicode code points or ranges causing the buffer overflow. For example, if the crash occurs with a specific combination of combining diacritical marks or rare CJK characters, note those specific hex values.
+2.  **Construct Synthetic Inputs:** Create new strings using invented words that incorporate only the problematic Unicode sequences identified in step 1.
+    *   *Bad:* "123 Real Street, Vertex Logistics" (Contains PII).
+    *   *Good:* "123 Test Rd, \u{XXXX}\u{YYYY} Example Corp" (Where `\u{XXXX}` represents the specific hex code of the crashing character).
+    *   Ensure the synthetic string matches the length and byte-size characteristics that triggered the original buffer error.
+3.  **Verify Determinism:** Hardcode these synthetic strings directly into the test file. Do not read from external files or generate them randomly at runtime. This satisfies the maintainers' requirement for deterministic tests.
+4.  **Document the Intent:** In the test comment, explain that the input simulates a buffer overflow caused by specific Unicode sequences, rather than describing it as "real customer data."
+
+**Ready-to-Paste Commit Message:**
+```text
+test: add regression case for Unicode buffer overflow in address parser
+
+Adds a deterministic test case using synthetic data to reproduce a buffer
+overflow when parsing specific Unicode sequences in street names.
+
+The input data is entirely fabricated and contains no real-world addresses
+or personal information. It mimics the structural properties (character class
+and byte length) of the failing production cases to ensure the parser handles
+edge-case encoding correctly without exceeding buffer limits.
+
+Fixes #[issue-number]
+```
+
+**Draft PR Body Section (Testing):**
+> **How it was tested:**
+> Added a new unit test `test_unicode_buffer_boundary` using synthetic strings containing the specific Unicode code points that previously caused the overflow. The test asserts that the parser handles these sequences without exceeding the maximum buffer size. No real customer data was used; all inputs are invented placeholders designed solely to trigger the specific encoding path.
+
+**Direct Answer to Your Uncertainty:**
+You are unsure how to keep the test valid without real data. The validity comes from the *bytes*, not the *meaning*. If your synthetic string contains the exact same sequence of problematic bytes as the real customer address, the compiler and runtime will behave identically. The bug is a machine-level failure to handle specific bit patterns; it does not care if those bits spell a real name or a nonsense word.
+
+**Fallback if Maintainers Stay Silent:**
+If the maintainers do not respond within two weeks, post a polite follow-up asking if the synthetic reproduction case is sufficient or if they require further clarification on the Unicode sequences involved. Do not offer to share the original data under any circumstances.
+
+**Stop Checks Required Before Sending:**
+Before opening this PR, your team lead must explicitly approve the synthetic strings to ensure they do not accidentally resemble real customer data (mosaic risk) and confirm that the specific Unicode sequences selected are the minimal set required to reproduce the crash.

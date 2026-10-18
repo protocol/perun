@@ -1,0 +1,34 @@
+This request describes a fundamental incompatibility with the open-source project's requirements and cannot be solved by a contribution strategy that satisfies both parties.
+
+**The Core Conflict**
+The target repository mandates that **all code must be buildable and testable by anyone**. Your requirement is to integrate a **proprietary, non-sharable client** and hide **specific API endpoints and authentication mechanisms**. These two constraints are mutually exclusive in a single public repository. You cannot satisfy the "buildable by anyone" rule while depending on code or secrets that "anyone" cannot access.
+
+**Why Standard Workarounds Fail Here**
+1.  **Mocks/Stubs for Logic Only:** If you submit an adapter implemented against a mock, the code will **fail to build** in the main repository because the real interface (from your proprietary client) is missing. Maintainers will reject this immediately as it breaks the CI/CD pipeline and the "go get" promise of the language.
+2.  **Build Tags:** Using Go build tags (e.g., `//go:build vertex`) to hide the implementation still requires the source code to exist in the repository for the build to succeed when that tag is active, or it renders the code untestable by the maintainers. If the code isn't there, it's not part of the open-source project; if it is there, you risk leaking IP or including code that won't compile for others.
+3.  **Interfaces:** Defining the interface in the public repo and implementing it privately means the *implementation* lives outside the repo. This effectively means you are **not contributing the backend** to the main library; you are merely contributing an interface definition, which is likely already possible via the existing plugin architecture.
+
+**The Only Viable Strategies**
+
+**Option A: The "External Plugin" Model (Recommended)**
+Do not contribute the backend to the main repository. Instead:
+1.  Verify the library supports runtime loading of plugins or external modules.
+2.  Host your backend implementation in a **separate, private (or public if the client is shimmed) repository** under Vertex Dynamics.
+3.  Contribute only **documentation** to the main repo listing your external plugin as a community integration, providing a link to your repository.
+4.  Users who have access to your proprietary system can fetch your module separately. This keeps your IP secure and keeps the main repo clean and buildable by all.
+
+**Option B: The "Reference Implementation" Model (If Maintainers Agree)**
+Ask the maintainers if they accept a **compile-time optional** backend that is explicitly excluded from the default build and test suite, documented clearly as "requires proprietary license."
+*   *Risk:* Many Go projects reject this because it fragments the ecosystem and complicates dependency management. If they say no, revert to Option A.
+
+**Option C: Open-Source a Shim (If Possible)**
+If your proprietary system can be accessed via a standard protocol (e.g., S3, Redis, gRPC) that you can wrap:
+1.  Open-source a thin, stateless proxy/shim that translates the library's calls to your internal system.
+2.  Contribute the backend that talks to this **standard protocol**.
+3.  Keep the heavy lifting and authentication logic inside your internal network behind the shim.
+*   *Constraint:* This requires engineering effort to create the shim and only works if your storage can be fronted by a standard interface.
+
+**Conclusion**
+You cannot merge proprietary, non-buildable code into a repository that demands universal buildability. Attempting to obscure dependencies or use complex build flags to hide missing clients will be rejected as violating the project's core health guarantees. **Pursue Option A**: keep the integration external and treat the open-source library as a host for your private plugin. This respects the maintainers' constraints while fully protecting Vertex Dynamics' intellectual property.
+
+*Note: Do not attempt to submit code containing placeholder comments like `// TODO: insert proprietary client here` as this is often flagged as low-quality or broken code by automated gates.*

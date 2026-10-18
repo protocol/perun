@@ -1,0 +1,25 @@
+**Immediate Action Plan**
+
+1.  **Stop and Do Not Port Code:** Do not copy, port, or adapt any code, comments, variable names, or specific structural logic from FastRoute into OpenMap. Even "clean room" re-implementation based on a competitor's specific solution carries significant legal risk if the underlying algorithm is patented or if the license (e.g., GPL) imposes viral constraints on derivative works. Your manager's concern is valid; introducing incompatible code can force your entire project to adopt the stricter license or face litigation.
+
+2.  **Isolate the Defect Class:** Instead of looking at FastRoute, analyze the crash in OpenMap using only your internal data. Create a minimal, synthetic reproduction case (invented coordinates, dummy graph nodes) that triggers the race condition without using any GlobalSoft production data or revealing your specific load patterns. Define the problem strictly as: "A race condition in [Specific Function] causes memory corruption when multiple threads access [Shared Resource] simultaneously."
+
+3.  **Develop an Independent Solution:** Design a fix based on standard concurrency patterns (e.g., mutexes, atomic operations, lock-free queues) documented in general C++ literature or the C++ standard, not based on how FastRoute solved it. The logic must be your own derivation from first principles of thread safety, not a translation of their code.
+
+4.  **Verify License Compatibility Separately:** Before contributing anything, have your legal team or an open-source compliance officer review the specific licenses. Do not rely on your own interpretation. If the licenses are incompatible, you cannot contribute a fix derived from the competitor's approach, regardless of how much you rewrite it.
+
+5.  **Draft the Contribution (If Cleared):** If legal clears the path and you have an independent fix:
+    *   **Commit Message:** "Fix race condition in pathfinding under concurrent access. Adds mutex protection to shared node state. Includes synthetic regression test."
+    *   **PR Body:**
+        *   **Problem:** Occasional crash in `Pathfinder::Find` during high-concurrency scenarios due to unsynchronized access to shared node metrics.
+        *   **Solution:** Introduces a scoped lock around the critical section updating node costs.
+        *   **Testing:** Verified with a new unit test simulating 50 concurrent threads using synthetic graph data. No customer data used.
+        *   **License:** Confirmed compatible with OpenMap license by internal review.
+
+**Addressing Your Specific Uncertainty**
+You asked whether to re-implement from scratch or verify compatibility first. You must **verify compatibility first** with legal counsel. If the licenses are incompatible, you cannot legally port the logic even if you rewrite every line, as the "concept" itself might be protected or the license terms might forbid the derivative work entirely. If they are compatible, you still must re-implement from scratch using only general knowledge, ensuring no "structural tell" or specific algorithmic fingerprint from FastRoute remains.
+
+**Fallback Strategy**
+If legal advises against using any insight from FastRoute, or if the licenses are incompatible, proceed solely with fixing the OpenMap bug using standard concurrency primitives without reference to the competitor's solution. Submit the PR focusing only on the bug fix and the synthetic test. If the maintainers ask about the approach, explain it as a standard thread-safety pattern without mentioning FastRoute. If they remain silent for two weeks, send one polite follow-up asking if the approach aligns with project standards.
+
+**Note:** Never mention GlobalSoft, FastRoute, or your specific production environment in the public PR or issues. All artifacts must be stripped of third-party identifiers.

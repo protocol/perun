@@ -1,0 +1,40 @@
+### Synthetic Test Case Strategy: Pattern Preservation via Character Class Mapping
+
+To satisfy both the GeoFind maintainers (deterministic, self-contained tests) and Vertex Logistics' security policies (zero PII leakage), you must decouple the **structural trigger** from the **semantic content**. The bug is caused by specific Unicode sequences and buffer mechanics, not the meaning of the street names.
+
+Follow this three-step sanitization protocol:
+
+#### 1. Identify the Structural Trigger
+Analyze the failing real-world addresses to isolate the exact technical properties causing the buffer overflow. Do not look at the words; look at the bytes. Identify:
+*   **Unicode Categories:** Are they combining diacritics (e.g., `e` + `́`), zero-width joiners, or specific CJK punctuation?
+*   **Sequence Length:** Does the error trigger at exactly 255 bytes, or only when a multi-byte character splits a buffer boundary?
+*   **Nesting Depth:** Is it related to nested parentheses or brackets within the address string?
+
+*Action:* Create a technical spec of the bug, e.g., "Triggers on strings >128 bytes containing consecutive Unicode normalization form D (NFD) characters."
+
+#### 2. Generate Deterministic Synthetic Data
+Construct a new test case using **algorithmic placeholders** that replicate the structural spec but contain no real-world semantics.
+
+*   **Replace Entities:** Swap "Vertex Logistics" and customer names with deterministic placeholders like `CUST_ALPHA_01` or `ORG_TEST_BETA`.
+*   **Recreate the Unicode Pattern:** Instead of copying the real street name "Rue de l'Église," construct a fake string that mimics the byte pattern.
+    *   *Real:* `Müllerstraße` (Specific umlaut sequence)
+    *   *Synthetic:* `Teststräßêêêê` (Repeated artificial diacritics that force the same normalization path).
+*   **Use "Lorem Ipsum" Logic for Addresses:** Generate addresses like `1234 Fake_Street_Ñoño` where the special characters are placed mathematically to hit the same buffer index as the real data.
+
+**Example Transformation:**
+*   *Real Input (Confidential):* `"Hauptstraße 45, München"` (Triggers bug at byte 20 due to `ü`)
+*   *Synthetic Input (Safe):* `"AAAAAstraße 45, BBBBBn"` (Preserves the `ü` byte sequence and string length, but removes geographic and entity identity).
+
+#### 3. Validate and Document
+Before submitting the PR, perform two verification checks:
+1.  **Regression Check:** Run the synthetic test against the current buggy version of GeoFind. It **must** fail with the exact same "maximum buffer size" error. If it passes, your synthetic pattern is insufficient.
+2.  **Privacy Audit:** Ensure no substring of the synthetic data matches any real customer record. A simple grep of your synthetic strings against your internal database should return zero results.
+
+**PR Description Note:**
+Explicitly state in your PR description: *"Test data is synthetically generated to reproduce Unicode buffer edge cases. No real-world PII or geographic data is included. The pattern mimics the byte-level structure of reported failures without retaining semantic content."*
+
+This approach provides the maintainers with a minimal, reproducible, deterministic test case while guaranteeing that even if the test file is leaked, it reveals nothing about Vertex Logistics' customers.
+
+---
+*Note: If the bug relies on a specific, rare Unicode code point found only in your data, use the official Unicode character name in comments rather than the character itself if policy allows, or construct it via escape sequences (e.g., `\uXXXX`) to maintain clarity without visual ambiguity.*
+*Ensure your synthetic generator script is included in the repo so others can regenerate the test data if needed, further proving determinism.*

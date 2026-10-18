@@ -1,0 +1,33 @@
+### Synthetic Test Data Strategy for Confidential Financial Rounding Bugs
+
+To satisfy the maintainers' requirement for comprehensive test coverage without leaking LedgerLine's confidential data, you must construct a **property-based test** using synthetic values that mathematically replicate the failure mode rather than the specific business context. The goal is to prove the *mechanism* of the bug, not the *magnitude* of its impact on your specific reports.
+
+**1. Isolate the Mathematical Trigger**
+Identify the exact conditions causing the rounding error. In financial libraries, this usually involves:
+*   Specific decimal scales (e.g., values with exactly 4 or 6 decimal places).
+*   Boundary values near rounding thresholds (e.g., `X.XXXX5`).
+*   Large magnitudes where floating-point precision loss occurs (e.g., values > $10^9$).
+*   Specific operation sequences (e.g., repeated addition vs. single multiplication).
+
+**2. Generate Synthetic "Twin" Data**
+Create a new test case using fabricated numbers that share the *mathematical properties* of your real data but have no relation to LedgerLine's actual finances.
+*   **Magnitude Matching:** If your real data failed at `$14,592,301.455`, generate a synthetic value like `$99,123,456.785`. The specific digits do not matter; the scale and the trailing `.785` (the trigger) do.
+*   **Pattern Replication:** If the bug only appears when summing 10,000 rows, generate 10,000 random rows that sum to a arbitrary synthetic total, ensuring the individual row precision matches your real scenario.
+*   **Sanitization Check:** Ensure no sequence of digits in your synthetic data matches any unique identifier or specific figure from the confidential report.
+
+**3. Construct the Test Case**
+Write the test to assert the *behavior*, not the *business result*.
+*   **Input:** Use the synthetic large decimal values.
+*   **Operation:** Perform the exact calculation chain that triggered the bug.
+*   **Assertion:** Assert that the result matches the mathematically correct rounded value (using `BigDecimal` with explicit `RoundingMode` as the oracle), rather than asserting against a "expected financial report total."
+
+**4. Documentation for Maintainers**
+In your PR description, explicitly state:
+*   "This test uses synthetic data constructed to reproduce the precision loss boundary condition identified in large-scale financial calculations."
+*   "Values are fabricated to match the magnitude and decimal scale of the failure mode while ensuring no proprietary data is included."
+*   Include a comment in the test code explaining the *mathematical* reason the specific synthetic numbers were chosen (e.g., `// Triggers half-even rounding failure at scale 10^9`).
+
+This approach provides the maintainers with a reproducible, deterministic failure case that validates your fix, satisfies the coverage requirement, and strictly adheres to confidentiality policies by decoupling the *bug* from the *business data*.
+
+*Note: Ensure your synthetic data generation script is included in the repo so maintainers can regenerate variations if needed.*
+*Note: Do not mention "LedgerLine" or "quarterly reports" anywhere in the code comments or PR body.*

@@ -1,0 +1,34 @@
+### Strategy: Sanitized Visuals + Raw Data Table
+
+Do not upload the raw screenshot. Instead, use a two-part evidence approach that maintains credibility while strictly protecting your internal infrastructure details.
+
+**1. The Sanitized Screenshot (Visual Proof)**
+Use an image editor to apply **solid, opaque black boxes** over the sensitive fields (hostnames, usernames, IP addresses). Do not use "blur" or "pixelate" effects, as these can sometimes be reversed or look unprofessional. A solid redaction clearly signals intentional privacy protection.
+*   **Context:** Ensure the graph axes, legend, and the memory curve itself remain fully visible.
+*   **Caption:** In the PR description, label this image: *"Fig 1: Memory profile comparison (sensitive host/user details redacted per internal security policy). Shows stabilization after fix."*
+*   **Credibility:** Maintainers understand corporate security policies. A clean redaction looks professional; a blurred mess looks suspicious.
+
+**2. The Raw Data Table (Verifiable Proof)**
+Extract the specific numerical data points from your profiler run and present them in a Markdown table within the PR description. This allows maintainers to verify the magnitude of the improvement without needing to see your server names.
+
+Include the following columns:
+*   **Time (min)**
+*   **Heap Usage Before Fix (MB)**
+*   **Heap Usage After Fix (MB)**
+*   **GC Pause Time (ms)** (if available)
+
+Example format:
+| Time (min) | Heap Before (MB) | Heap After (MB) | Trend |
+| :--- | :--- | :--- | :--- |
+| 0 | 512 | 512 | Baseline |
+| 15 | 1,240 | 540 | Divergence starts |
+| 30 | 2,890 | 535 | Critical vs Stable |
+| 60 | OOM Crash | 542 | Failure vs Stability |
+
+**3. Narrative Context**
+In the "Test Plan" section of your PR, explicitly state:
+> "Testing was performed on an internal staging environment replicating Vertex Analytics' production load patterns. Due to security policies, hostnames and user identities in the attached profiler screenshot have been redacted. The accompanying data table provides the raw numerical evidence of memory stabilization."
+
+This approach gives the maintainers the best of both worlds: the visual intuition of the graph and the hard numbers for verification, without compromising your team's security.
+
+*Note: If the project has a strict "no screenshots" policy, rely solely on the data table and offer to share the full raw profiler dump (`.hprof` or equivalent) via a private channel if requested.*

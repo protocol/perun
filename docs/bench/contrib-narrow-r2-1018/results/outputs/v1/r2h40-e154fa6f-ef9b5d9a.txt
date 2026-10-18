@@ -1,0 +1,38 @@
+### Immediate Action Plan: Secret Removal and Disclosure
+
+**1. Rotate the Secret Immediately (Do this first)**
+Before touching the git history, assume the token is compromised. Log in to your CloudNine Solutions staging environment console and revoke/rotate the exposed API token immediately. Generate a new one for your local testing. This neutralizes the threat regardless of git history status.
+
+**2. Scrub the Git History Locally**
+Since the secret exists in a past commit, a simple revert is insufficient; the data remains in the object database. You must rewrite history.
+*   **Tool:** Use `git filter-repo` (preferred) or `git filter-branch`.
+*   **Command:** Run a command to replace the specific token string with a placeholder (e.g., `REDACTED_TOKEN`) across all commits.
+    *   *Example logic:* `git filter-repo --replace-text <(echo "OLD_TOKEN==>REDACTED_TOKEN") --force`
+*   **Verification:** Run `git log -p | grep "OLD_TOKEN"` to ensure zero matches remain in the entire history.
+
+**3. Force Push with Caution**
+You are correct that rewriting history changes commit hashes, which disrupts anyone who has fetched your branch.
+*   **Action:** Execute `git push --force-with-lease origin <branch-name>`.
+*   **Mitigation:** Since this is your fork and the branch is likely new for this PR, the risk of disrupting maintainers is low *if* you have not yet opened the PR. If you already opened a PR, close it, scrub locally, push the cleaned branch, and open a *new* PR with a fresh link. Do not force-push to an active PR branch that others might be tracking.
+
+**4. Communication Strategy for the Pull Request**
+Do not admit to a specific security incident or mention "CloudNine" or "API tokens" in the public PR comments. This draws unnecessary attention to a now-resolved issue.
+*   **If asked about the history rewrite:** State plainly, "I performed a history cleanup to remove accidental inclusion of local configuration secrets and ensure a clean commit history before review."
+*   **If pressed for details:** "Sensitive local environment variables were inadvertently committed during early development. They have been fully purged from the history and rotated. The current diff contains only the intended type coercion fix."
+*   **Internal Reporting:** Follow your employer's protocol to report the accidental exposure to CloudNine security internally. Do not do this in the GitHub thread.
+
+### Draft Commit Message for the Fix
+```text
+fix: resolve type coercion error in validation logic
+
+Corrects edge case where string inputs were not properly coerced
+before type checking. Adds regression test using synthetic data.
+
+Note: Branch history was sanitized to remove local configuration artifacts
+prior to this submission.
+```
+
+### Critical Reminders
+*   **Never** commit real secrets again; use environment variables or mock files added to `.gitignore`.
+*   If `git filter-repo` is unavailable, `BFG Repo-Cleaner` is a valid alternative for removing specific strings.
+*   Once the token is rotated and history scrubbed, the risk is mitigated; public scanners indexing the old hash are no longer a threat because the credential itself is invalid.

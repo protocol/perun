@@ -1,0 +1,99 @@
+Here is the generalized reproduction case and the specific steps to proceed without leaking proprietary information.
+
+### 1. The Synthetic Schema (Replace Globex Data)
+Create a file named `test_nested_array_index.py` with this minimal, fictional schema. It replicates the structural depth required to trigger the off-by-one error without using any real business logic or field names.
+
+```python
+import json
+
+# Synthetic schema mimicking the depth of the private Globex contract
+# Structure: root -> list -> object -> list -> object (where the error occurs)
+synthetic_schema = {
+    "type": "object",
+    "properties": {
+        "level_1": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "level_2": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "target_field": {"type": "integer"}
+                            },
+                            "required": ["target_field"]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Synthetic data triggering the bug at index 5 (0-based) in the nested array
+# The validator incorrectly reports index 4
+synthetic_data = {
+    "level_1": [
+        {
+            "level_2": [
+                {"target_field": 1},
+                {"target_field": 2},
+                {"target_field": 3},
+                {"target_field": 4},
+                {"target_field": 5},
+                {"target_field": "should_be_int"}  # Error here: index 5
+            ]
+        }
+    ]
+}
+
+def test_error_path_index():
+    from jsonschema import validate, ValidationError
+
+    try:
+        validate(instance=synthetic_data, schema=synthetic_schema)
+    except ValidationError as e:
+        # Assert the path correctly identifies index 5
+        # Current bug: path returns [..., 4] instead of [..., 5]
+        assert e.path[-2] == 5, f"Expected index 5, got {e.path[-2]}"
+        print("Test passed: Error path correctly identifies index 5")
+        return
+
+    raise AssertionError("Validation failed to trigger on invalid data")
+
+if __name__ == "__main__":
+    test_error_path_index()
+```
+
+### 2. Execution Steps
+1.  **Verify Locally:** Run the script above against your current (buggy) codebase. It should fail with an assertion error showing index 4.
+2.  **Apply Patch:** Apply your fix to the traversal logic.
+3.  **Confirm Fix:** Run the script again. It should now pass, confirming the path reports index 5.
+4.  **Commit:** Add only the synthetic test file and your fix. Do not include any references to "Globex," "partner," or "private API" in the commit message or code comments.
+
+### 3. Draft Commit Message
+```text
+fix: correct off-by-one error in nested array error paths
+
+The validator incorrectly reported the index of the failing element
+in deeply nested arrays (e.g., reporting index 4 instead of 5).
+This was caused by an accumulation error in the traversal logic
+when descending multiple levels of arrays.
+
+Adds a regression test using a synthetic nested structure to verify
+the error path now correctly identifies the failing index.
+
+Fixes #[issue-number-if-existent]
+```
+
+### 4. Draft PR Body Section (Testing)
+**Testing:**
+Added `test_nested_array_index.py` which constructs a synthetic schema with two levels of nested arrays. The test asserts that when validation fails at the 6th element (index 5) of the inner array, the error path explicitly contains `5`. Before this fix, the path incorrectly contained `4`.
+
+### Direct Answer to Your Uncertainty
+You do not need the specific field names or business rules from the Globex schema to reproduce this bug; you only need the **structural depth** (array inside object inside array). The synthetic schema above provides exactly that structure using generic names (`level_1`, `target_field`), satisfying the maintainers' requirement for a failing test while completely isolating your partner's intellectual property.
+
+### Fallback
+If maintainers request more complexity, increase the nesting depth in the synthetic schema by adding another layer of `level_3` arrays, but never reintroduce real field names or data patterns.

@@ -1,0 +1,33 @@
+### Proposal: Replacing Fixed-Delay Assumptions with Event-Driven Assertions
+
+**Root Cause Analysis**
+The flaky test failure stems from a brittle dependency on wall-clock time. The current test implementation assumes a fixed network latency (e.g., `sleep(500ms)`) to guarantee message delivery before asserting state. In reality, network latency in distributed systems is non-deterministic. When the actual latency exceeds the hardcoded window—due to normal infrastructure variance or load—the test asserts against a state that has not yet been updated, causing a false negative. This is a classic "timing assumption" anti-pattern, unrelated to specific cluster configurations or proprietary load profiles.
+
+**Proposed Solution**
+Replace time-based polling with event-driven synchronization. Instead of sleeping for a fixed duration, the test should block until a specific domain event occurs or a timeout is reached. This decouples test stability from environmental latency.
+
+**Implementation Strategy (Public Information Only)**
+1.  **Introduce a Test Hook:** Modify the test harness (not production logic) to expose a synchronization primitive, such as a `std::promise` or a condition variable, that signals when the message handler has successfully processed a payload.
+2.  **Refactor the Assertion:**
+    *   *Current:* `sleep(delay); assert(state == expected);`
+    *   *Proposed:* `wait_for_signal(signal, max_timeout); assert(state == expected);`
+3.  **Fallback Polling (If Hooks Are Impossible):** If injecting hooks violates architectural constraints, replace the single `sleep` with a tight retry loop that checks the state frequently up to a generous maximum timeout. This ensures the test passes as soon as the condition is met, rather than waiting for a worst-case estimate.
+
+**Draft Code Concept (C++)**
+```cpp
+// BEFORE (Flaky)
+std::this_thread::sleep_for(std::chrono::milliseconds(500));
+EXPECT_EQ(queue.size(), 1);
+
+// AFTER (Robust)
+// Wait up to 2 seconds for the condition to become true
+bool success = wait_until([&]() { return queue.size() == 1; }, std::chrono::seconds(2));
+EXPECT_TRUE(success) << "Message not processed within timeout";
+```
+
+**Compliance Statement**
+This proposal addresses the flakiness using standard software engineering principles for distributed system testing. It relies solely on the public behavior of the message queue (eventual consistency) and standard C++ concurrency primitives. No data regarding Acme's internal cluster topology, Northwind's specific load patterns, or proprietary benchmark results is required to implement or validate this fix. The solution improves test determinism regardless of the underlying infrastructure.
+
+---
+*Note: Ensure the `wait_until` helper is added to the test utilities, not the core library, to maintain separation of concerns.*
+*This approach aligns with common open-source guidelines that forbid submitting internal performance data.*

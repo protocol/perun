@@ -1,0 +1,32 @@
+**Do not classify a stability fix as a security issue.** Misrepresenting the nature of a bug to bypass project policies violates contributor ethics, damages your credibility with maintainers, and risks future contributions being rejected outright. Instead, frame the request around **data integrity**, which often sits at the intersection of stability and security without requiring a false vulnerability claim.
+
+Here is a drafted justification you can adapt for your backport request, followed by the necessary steps to prepare the patch:
+
+### Drafted Backport Justification
+
+**Subject:** Request to backport critical data-loss fix to LTS branch
+
+**Summary:**
+This request seeks to backport a fix for a race condition in the main branch that causes silent log entry drops under high concurrency. While this manifests as a stability issue, the consequence is **unrecoverable data loss**, which compromises audit trails and system observability.
+
+**Why this belongs in LTS:**
+Although the legacy branch policy prioritizes security patches, the distinction between "security" and "critical stability" blurs when the outcome is the silent disappearance of recorded events. In many compliance frameworks, the inability to guarantee log completeness is treated with the same severity as a vulnerability because it prevents forensic analysis and masks other potential incidents. This fix restores the fundamental guarantee that "written logs are persisted," a prerequisite for any secure or compliant system operation.
+
+**Evidence (Sanitized):**
+*   **Defect:** Race condition in `[Component Name]` during concurrent writes.
+*   **Impact:** Silent drop of log entries; no error is raised, making detection impossible without external monitoring.
+*   **Reproduction:** A synthetic test case (included in the patch) demonstrates data loss when `[X]` threads attempt to write simultaneously. No production data or identifiers are used.
+*   **Risk of Non-Action:** Continuing on the current LTS version leaves systems vulnerable to undetected data gaps, rendering audit logs unreliable.
+
+**Proposal:**
+We request an exception to the security-only policy based on the **data integrity** impact. If a full backport is not feasible, we propose a minimal cherry-pick of the specific race-condition fix, isolated from other main-branch changes.
+
+---
+
+### Next Steps & Fallback
+
+1.  **Generalize the Patch:** Ensure your patch contains **only** the fix and a new test case using synthetic data (e.g., generic thread IDs, fake timestamps). Remove all references to "Northwind," internal hostnames, or specific transaction formats.
+2.  **Run a Privacy Check:** Before submitting, manually scan your commit message and diff for any accidental leaks of your internal architecture.
+3.  **Submit as an Issue First:** Given the strict policy, open an issue titled "Discussion: Data-loss scenario in LTS" with the justification above. Ask the maintainers if they would accept a backport under these specific data-integrity grounds before sending a Pull Request.
+
+**Fallback:** If the maintainers explicitly reject the data-integrity argument, you must maintain the fork indefinitely for this branch. Do not attempt to re-submit the same patch under a different pretext; respect their governance model.

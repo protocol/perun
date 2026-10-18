@@ -1,0 +1,62 @@
+### Sanitized Test Data and Fix Description
+
+To satisfy the requirement for synthetic data while reproducing the month-boundary off-by-one error, replace your real patient records with the following minimal, invented dataset. This data mimics the structural edge case (spanning a month boundary) without using any real names, dates, or internal identifiers.
+
+**Synthetic Test Case (TypeScript):**
+
+```typescript
+// Minimal reproduction for month-boundary off-by-one error
+// Uses entirely synthetic values; no real patient data included.
+
+const syntheticAppointments = [
+  {
+    id: "synth-001",
+    patientName: "Patient A", // Generic placeholder
+    startTime: new Date("2023-01-31T23:00:00Z"), // Last hour of January
+    endTime: new Date("2023-02-01T01:00:00Z")   // First hour of February
+  },
+  {
+    id: "synth-002",
+    patientName: "Patient B",
+    startTime: new Date("2023-05-31T22:30:00Z"), // May 31st
+    endTime: new Date("2023-06-01T00:30:00Z")    // June 1st
+  }
+];
+
+// Expected behavior: Range calculation should include both start and end dates
+// Actual bug: Loop condition excludes the final day, causing "Range end exceeds boundary by 24 hours"
+```
+
+**Commit Message Draft:**
+
+```text
+fix(date-range): correct off-by-one error at month boundaries
+
+The date-range helper incorrectly excluded the final day when a range
+spanned a month boundary, causing a "Range end exceeds boundary by 24 hours"
+error for appointments crossing into a new month.
+
+- Adjusted loop condition to include the end date inclusive
+- Added synthetic test cases covering month-end transitions (Jan-Feb, May-Jun)
+- Verified fix against edge cases with varying month lengths
+
+Test data is entirely synthetic and contains no real user information.
+```
+
+**PR Body Section (Problem & Solution):**
+
+> **Problem:** When calculating date ranges that span month boundaries (e.g., Jan 31 to Feb 1), the helper function throws "Range end exceeds boundary by 24 hours" due to an exclusive upper bound in the loop condition.
+>
+> **Solution:** Changed the loop condition from `<` to `<=` for the end date comparison, ensuring the final day is included. Added two synthetic test cases verifying correct behavior across different month lengths.
+>
+> **Testing:** All tests pass with synthetic data; no real patient information was used or exposed.
+
+**Direct Answer to Your Uncertainty:**
+You do not need to mimic the *exact* structure of your real data beyond the specific fields required to trigger the bug (start time, end time, and the month-boundary condition). The error is logical, not data-dependent; therefore, generic placeholders like "Patient A" and arbitrary dates that simply cross a month boundary are sufficient to reproduce and prove the fix.
+
+**Fallback if Maintainers Are Silent:**
+If there is no response after two weeks, post a polite follow-up comment asking if additional test scenarios (e.g., leap year boundaries) would be helpful, then wait. Do not submit duplicate PRs.
+
+---
+*Note: Before submitting, ensure you run the project's privacy gate script if available, and verify that your local branch contains no remnants of real logs or names in git history.*
+*Remember: You must personally attest to the generalization and privacy compliance; I cannot sign off on your behalf.*

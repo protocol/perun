@@ -1,0 +1,28 @@
+Do not submit this patch as a single pull request. A 40-file diff containing proprietary logic and internal constants will almost certainly be rejected immediately, validating the maintainers' skepticism of corporate forks. Instead, execute a "Strategic Upstreaming" plan focused on decomposition and sanitization.
+
+**Phase 1: Sanitization and Extraction**
+Before contacting anyone, create a clean room environment.
+1.  **Strip Proprietary Logic:** Identify every line tied to Prometheus Systems' specific workload characteristics. If the indexing strategy relies on internal constants or logging formats unique to your infrastructure, these cannot be upstreamed as-is. You must either generalize them into configurable parameters accepted by the main project or remove them entirely.
+2.  **Isolate the Core Value:** Separate the "generic performance improvement" from the "Prometheus-specific implementation." The upstream project only wants the former. If the 30% speed gain relies on hardware or network topologies specific to your internal infrastructure, it may not be mergeable without significant architectural changes.
+3.  **Atomic Commits:** Break your two-year history into logical, independent units. A single commit per file is insufficient; you need commits that represent single functional changes (e.g., "refactor lock acquisition," "add write-path hook," "implement skip-list index").
+
+**Phase 2: The Conversation Strategy**
+Do not open a PR yet. Open a GitHub Issue titled "Proposal: Upstreaming high-volume write optimizations from downstream fork."
+1.  **Acknowledge the Debt:** Start by admitting the fork has drifted for two years. State clearly: "We recognize this is a large delta and intend to upstream this incrementally, not as a monolithic dump."
+2.  **Propose the Roadmap:** Present a numbered list of the specific sub-components you intend to upstream, ordered by dependency.
+    *   *Example:* "Step 1: Generalize logging hooks (5 files). Step 2: Introduce pluggable indexing interface (10 files). Step 3: Implement optimized skip-list (15 files)."
+3.  **Request Design Review:** Ask, "Does the architecture for Step 1 align with the project's direction?" This invites collaboration before code is written, reducing the risk of rejection.
+
+**Phase 3: Protecting Competitive Advantage**
+You asked what to omit. The rule is simple: **Upstream only what makes the core engine better for everyone.**
+*   **Omit:** Configuration defaults tuned for your specific cluster size, logging formats that reveal your transaction volume patterns, and any logic that optimizes specifically for your proprietary hardware or network stack.
+*   **Keep Private:** If your "secret sauce" is the specific combination of these tweaks, keep the orchestration layer in your private fork. Upstream the *capabilities* (e.g., "allow custom backpressure algorithms"), but keep your specific *implementation* of those algorithms private if they reveal workload characteristics.
+*   **The Trade-off:** If a change provides 30% speedup but reveals your data model, you must decide if the maintenance savings of upstreaming are worth losing that secrecy. Often, the solution is to upstream the *mechanism* (making the DB faster for everyone) while keeping the *policy* (how your specific data uses that mechanism) private.
+
+**Immediate Next Steps**
+1.  Run a `git diff` against the current upstream main and filter out any line containing internal IP addresses, hostnames, or non-generic constant values.
+2.  Draft the GitHub Issue proposal focusing on the *first* small step only.
+3.  Wait for maintainer feedback on the design before submitting code.
+
+Note: Maintainers trust small, reviewable PRs that solve general problems; they distrust large dumps of corporate-specific logic.
+Note: If the indexing strategy is entirely dependent on your private infrastructure, it may not be upstreamable at all.

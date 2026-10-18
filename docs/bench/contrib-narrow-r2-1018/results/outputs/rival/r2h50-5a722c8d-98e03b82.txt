@@ -1,0 +1,43 @@
+Create a **domain-agnostic abstraction** that isolates the *structural pattern* causing the inefficiency, not the business meaning. Follow this three-step process to generate your reproducible example:
+
+### 1. Identify the Structural Trigger
+Analyze your slow query to find the specific ORM configuration causing the subquery bloat. Is it:
+*   A specific depth of nesting (e.g., 3+ levels)?
+*   A many-to-many relationship chained with a one-to-many?
+*   A self-referential join combined with a filter?
+*   A specific combination of `include` and `where` clauses?
+
+Ignore *what* the tables represent (Inventory, Orders) and focus entirely on *how* they are connected (Cardinality and Depth).
+
+### 2. Construct the "Alphabet Schema"
+Replace your proprietary entities with generic placeholders that preserve only the necessary topology. Use single letters or generic nouns.
+
+**Instead of:**
+*   `Warehouse` → `Region` → `ProductCategory` → `SKU`
+
+**Use:**
+*   `EntityA` (1) → `EntityB` (N) → `EntityC` (N) → `EntityD` (1)
+
+Define these in a standalone `schema.ts` file within your PR's test suite. Use generic column names like `id`, `parentId`, `value`, and `timestamp`. This completely decouples the logic from Northwind Retail's business domain while maintaining the exact graph structure that confuses the ORM.
+
+### 3. Demonstrate the SQL Diff
+Your test case must assert the *output*, not just the runtime behavior.
+1.  **Write a test** using the Alphabet Schema that triggers the problematic join.
+2.  **Capture the generated SQL** from the "before" version (inefficient subqueries).
+3.  **Capture the generated SQL** from your "after" version (optimized flat joins).
+4.  **Assert the difference:** Write an assertion that explicitly checks for the absence of the unnecessary subquery pattern (e.g., `expect(sql).not.toContain('SELECT ... FROM (SELECT ...)')`) or verifies the presence of the optimized join syntax.
+
+**Example PR Description Snippet:**
+> "The inefficiency arises when chaining three nested relations with a filter on the deepest level.
+>
+> **Repro Schema:** `A (1:m) B (1:m) C (1:m) D`
+> **Trigger:** `findMany({ include: { B: { include: { C: { include: { D: true } } } } }, where: { D: { status: 'active' } } })`
+>
+> **Evidence:**
+> *   ❌ Before: Generates 3 nested subqueries.
+> *   ✅ After: Generates single flattened JOIN chain.
+> *   [Link to test file showing SQL snapshot diff]"
+
+This approach proves the bug is inherent to the library's handling of that specific graph topology, making your real-world schema irrelevant to the verification process.
+
+*Note: Ensure your test file is named clearly (e.g., `nested-join-subquery-regression.test.ts`) so maintainers can run it in isolation without needing any external database setup if the ORM supports in-memory SQL mocking.*

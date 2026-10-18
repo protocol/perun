@@ -1,0 +1,38 @@
+Do not include the LexCorp staging IP address in the contribution. Hardcoding a specific employer-owned IP, even if publicly accessible, violates the principle of self-contained tests and risks exposing internal infrastructure topology. Instead, restructure the test to simulate the "network unreachable" condition without relying on a specific real-world endpoint.
+
+**Steps to Generalize and Fix:**
+
+1.  **Replace the Real IP with a Synthetic Trigger:**
+    Modify the test to use a reserved documentation IP (e.g., `192.0.2.1` per RFC 5737) or `localhost` combined with a mock network layer. Since the bug is about *timing* and *unreachability*, the specific IP value is likely irrelevant; the behavior stems from the kernel's response to a dead route or a blocked port.
+    *   *Action:* If the language allows, inject a mock socket or network interface that artificially induces the specific latency or `EHOSTUNREACH` error code the test expects.
+    *   *Action:* If mocking is difficult, bind a local test server to `127.0.0.1` on a high port, then have the test attempt connection to a *different* non-listening port on `127.0.0.1` to trigger a "connection refused" or use `iptables` (in a CI script) to drop packets to `192.0.2.1` to simulate a timeout.
+
+2.  **Isolate the Timing Logic:**
+    If the bug relies on a specific round-trip time (RTT) that only the LexCorp server provided, decouple the *network delay* from the *destination*.
+    *   *Rewrite:* Create a local mock server that accepts the connection but sleeps for the exact duration required to trigger the timeout before responding (or never responding). This replicates the timing behavior deterministically on any machine without external dependencies.
+
+3.  **Draft the Commit Message:**
+    ```text
+    test: replace external IP dependency with local mock for timeout scenario
+
+    Previous test relied on a specific external staging IP to reproduce
+    a connection timeout edge case, violating self-contained test principles.
+    Refactored to use a local mock server that simulates the exact latency
+    and unreachability conditions required to trigger the bug.
+
+    - Removed hardcoded external IP address.
+    - Added local mock service to induce specific timeout behavior.
+    - Ensured test runs reliably in isolated CI environments.
+    ```
+
+4.  **Draft the PR Body Section (Problem & Solution):**
+    *   **Problem:** The existing test for connection timeouts depended on an external, non-guaranteed IP address to reproduce a specific race condition, making the test flaky and non-portable.
+    *   **Solution:** Replaced the external dependency with a deterministic local mock that injects the necessary network delay/packet loss. This preserves the test's ability to verify the fix while ensuring it remains self-contained and safe for all contributors to run.
+
+**Direct Answer to Your Uncertainty:**
+Do not obscure the IP (which breaks reproducibility) nor ask for permission to include it (which will likely be denied due to project guidelines). The correct path is to **refactor the test** to remove the dependency entirely. The "specific IP" is a implementation detail of your environment, not a requirement of the bug itself; the bug is about how the library handles *any* unreachable host under specific timing conditions.
+
+**Fallback if Maintainers Push Back:**
+If maintainers claim the mock doesn't replicate the "exact" behavior, offer to pair on adjusting the mock's timing parameters or provide a detailed description of the network conditions (e.g., "packet drop after 200ms") without revealing the target IP, allowing them to verify the logic without needing your specific server.
+
+**Stop Checks:** Ensure your employer's legal team approves open-sourcing the *fix logic* itself, even if the IP is removed. Do not sign any Contributor License Agreement (CLA) on behalf of your employer without explicit authorization.

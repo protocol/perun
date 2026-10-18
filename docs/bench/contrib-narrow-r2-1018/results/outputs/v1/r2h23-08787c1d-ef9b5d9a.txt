@@ -1,0 +1,55 @@
+### Stop Checks and Strategy
+Before drafting, note two critical constraints:
+1.  **Project Rule:** The maintainers require a formal design document *before* any code submission. Do not attach your prototype code yet.
+2.  **Confidentiality:** You must generalize the solution. Specific internal metrics from "Starlight Systems" or proprietary scheduling heuristics tied to your internal infrastructure must be abstracted into general computer science concepts (e.g., "work-stealing scheduler" instead of "Starlight-Optimized-Queue").
+
+### Step-by-Step Guide to Structuring the Design Document
+
+**1. Define the Problem Statement (Generalized)**
+Describe the bottleneck without referencing your specific environment.
+*   *Drafting Tip:* Instead of "Starlight's monorepo takes 40 minutes," write "Current sequential resolution algorithms exhibit $O(n)$ latency growth in large dependency graphs, creating a bottleneck for projects with >10k nodes."
+*   *Action:* Quantify the problem using theoretical complexity or generic benchmarks, not internal logs.
+
+**2. Propose the High-Level Architecture**
+Focus on the *shape* of the solution, not the secret sauce.
+*   *Structure:* Describe the new scheduling algorithm as a conceptual model (e.g., "A directed acyclic graph (DAG) traversal using a priority-based worker pool").
+*   *Abstraction:* If your prototype uses a proprietary technique (e.g., a specific cache warming strategy unique to Starlight), replace it with the standard equivalent (e.g., "predictive fetching based on graph depth") or omit it if it's not core to the parallelism itself. The goal is to show *why* it works, not *how* your company tuned it.
+
+**3. Analyze Trade-offs and Correctness**
+Maintainers value architectural reasoning. Dedicate a section to what you lose to gain speed.
+*   *Content:* Discuss memory overhead of parallel workers, potential race conditions in state management, and complexity in error reporting.
+*   *Confidentiality Check:* Ensure no trade-off analysis reveals internal infrastructure limits (e.g., "optimized for our 500-core cluster" → "scales horizontally with available CPU cores").
+
+**4. Define the Verification Plan**
+Since you cannot submit code yet, propose how the solution will be tested.
+*   *Action:* Suggest a benchmarking suite using synthetic, open-source dependency graphs (like a snapshot of crates.io or npm) rather than your company's private repository. This proves the concept without leaking data.
+
+### Draft Template for the Design Document
+
+**Title:** RFC: Parallel Dependency Resolution via [Generic Algorithm Name]
+
+**Problem**
+Current implementations resolve dependencies sequentially, leading to suboptimal utilization of multi-core systems during large-scale installs. As dependency graphs grow, install times increase linearly, hindering developer productivity.
+
+**Proposed Solution**
+Introduce a parallel resolution engine that constructs the dependency DAG and schedules independent nodes concurrently.
+*   **Core Mechanism:** A work-stealing scheduler that dynamically balances load across available threads.
+*   **State Management:** Immutable snapshots of the resolution state to prevent race conditions without heavy locking.
+*   **Generalization:** This approach relies on standard graph theory principles and does not depend on specific project structures.
+
+**Trade-offs**
+*   **Memory:** Increased RAM usage to maintain parallel worker states.
+*   **Complexity:** Error propagation becomes non-deterministic; requires a unified error aggregation layer.
+*   **Overhead:** Thread spawning costs may outweigh benefits for small projects; a threshold heuristic will disable parallelism below $N$ dependencies.
+
+**Verification Strategy**
+Correctness will be validated against existing test suites. Performance will be benchmarked using synthetic graphs of varying density and depth to demonstrate scalability without relying on proprietary datasets.
+
+### Direct Answer to Your Uncertainty
+You translate your prototype into a design document by **mapping implementation details to abstract algorithms**. Your "proprietary optimization" is likely a specific tuning of a known pattern (like thread pooling or graph traversal); describe the pattern, not the tuning parameters. If a technique is truly unique and confidential, ask yourself: *Is this specific trick required for the feature to work generally?* If no, leave it out of the upstream design and keep it as a local patch later. If yes, you may need to rethink if this specific contribution can be open-sourced without revealing trade secrets.
+
+### Fallback
+If the maintainers reject the design as too vague, ask for a specific example of a previously accepted RFC to calibrate the required depth, rather than revealing your internal constraints.
+
+*Note: Ensure your final document contains zero file paths, hostnames, or internal ticket IDs from Starlight Systems.*
+*Do not attempt to submit code until this design is explicitly approved by the maintainers.*

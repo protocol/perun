@@ -1,0 +1,29 @@
+### Recommended Action Plan
+
+**1. Do not request an IT exception yet.**
+Given the strict security policies, managed device restrictions, and the potential weeks-long delay, seeking an exception is a low-probability, high-cost path. It should be your last resort, not your first step.
+
+**2. Perform a "Code-Only" Verification Strategy.**
+Since you cannot execute the binary on macOS, shift your verification burden from *runtime execution* to *static analysis* and *logic proof*.
+*   **Audit the Abstraction Layer:** Identify the specific C functions handling kerning. If TypeRender uses a platform abstraction layer (e.g., `font_mac.c` vs. `font_linux.c`), prove that your fix resides in the shared logic or that the macOS-specific implementation follows the exact same control flow as the Linux version you tested.
+*   **Static Analysis:** Run `clang` (if available on your Linux server) with macOS-specific target flags (e.g., `--target=x86_64-apple-darwin`) to ensure the code compiles without warnings under macOS constraints.
+*   **Logic Trace:** Create a text-based trace showing that the input data (kerning pairs) produces the identical mathematical output in your fix, regardless of the OS syscall used to render the glyph.
+
+**3. Communicate Transparently with Maintainers.**
+Draft a comment on your PR or a new issue immediately. Honesty about constraints is professional; silence or fabrication is not. Use the following template:
+
+> **Subject:** Constraint on macOS Runtime Verification – Request for Guidance
+>
+> "I have implemented the kerning fix and verified it extensively on Linux (logs attached). However, I am currently unable to perform runtime verification on macOS due to corporate IT restrictions on my managed device (no admin rights, no external build envs, no screenshot sharing allowed).
+>
+> To avoid delaying this fix, I have performed the following instead:
+> 1. **Static Compilation:** Verified the code compiles cleanly targeting `x86_64-apple-darwin` using cross-compilation flags on our Linux CI.
+> 2. **Logic Audit:** Confirmed that the modified logic in `[file.c]` is platform-agnostic and relies only on standard C libraries available on both OSs.
+> 3. **Diff Analysis:** The change touches only `[specific function]`, which does not interact with macOS-specific UI frameworks.
+>
+> Given these constraints, would the maintainers accept this PR conditioned on a maintainer performing the final macOS smoke test? Alternatively, is there a specific headless CI command or log output I can generate on Linux that would mathematically prove the kerning calculation is correct without needing the visual renderer?"
+
+**4. Propose a "Merge-Conditional" Workflow.**
+Ask if they can merge the PR into a staging branch where their own CI (which likely has macOS runners) can validate it. Many projects have macOS runners in GitHub Actions or GitLab CI that you can trigger simply by pushing code, even if you don't have a physical Mac. Check the repo's `.github/workflows` or `.gitlab-ci.yml` to see if a `macos-latest` job exists. If it does, push your branch and point the maintainers to the passing green checkmark on the macOS job as your "verification."
+
+**Note:** If the project strictly requires a human to physically look at the rendered font on a Mac and no CI exists, you must pause the PR until you can find a volunteer (perhaps another contributor) to run the test, rather than bypassing the requirement.

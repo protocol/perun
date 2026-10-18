@@ -1,0 +1,17 @@
+**Do not contribute this change upstream yet.** You cannot safely create the evidence required by the maintainers without violating the privacy of your employer, Cyberdyne Systems.
+
+The core issue is that you identified a performance bottleneck triggered by "specific column distribution and string patterns" found only in your proprietary sales data. To prove the 30% improvement, you must demonstrate that your synthetic data triggers the *exact same* bottleneck. If you analyze the real data closely enough to replicate those specific statistical triggers, you are engaging in a deep inspection of confidential transaction records. Even if you strip names and numbers, the resulting synthetic file may retain a "structural fingerprint" (e.g., specific sequence lengths, entropy patterns, or column correlations) that allows the original data to be reconstructed or identified. This is a **semantic leak** that no automated scrubber can catch.
+
+Furthermore, the fact that the bottleneck only appears on this specific dataset suggests the optimization might be **project-specific** (tuned to Cyberdyne's unique data shape) rather than a **generalizable** improvement for the open-source `CSVParser` library. If the fix relies on patterns unique to your employer's exports, it does not belong upstream; it belongs in a local fork or an internal patch.
+
+**Recommended Path Forward:**
+
+1.  **Imprint Locally:** Apply the optimization to your internal fork of `CSVParser`. Use the real Cyberdyne data internally to verify the 30% gain. This solves your business problem without risking a leak.
+2.  **Abstract the Principle:** Ask yourself: *Why* does the new buffering strategy work? Is it handling long lines better? Specific escape characters? If you can identify the *general* computer science principle (e.g., "reducing reallocations for lines > 4KB"), you may have a valid upstream contribution.
+3.  **Create Truly Generic Evidence:** If the principle is general, create a synthetic benchmark that demonstrates the *principle*, not the *specific data*. For example, if the win comes from handling long lines, generate a file with random content but artificially inflated line lengths. The maintainers care that the algorithm handles the *class* of problem efficiently, not that it matches Cyberdyne's specific sales columns.
+4.  **Human Review:** Before drafting any Pull Request, have a human (who knows the sensitivity of the data) review your synthetic generator and the resulting sample file to ensure no structural fingerprints remain. Never automate this decision.
+
+If you cannot separate the performance gain from the specific structure of Cyberdyne's data, the contribution must remain private.
+
+**Note:** The "contribution" skill requires lessons to be generalizable and privacy-safe; this request currently fails both gates.
+**Note:** Never upload real proprietary data, even partially scrubbed, to a public repository.

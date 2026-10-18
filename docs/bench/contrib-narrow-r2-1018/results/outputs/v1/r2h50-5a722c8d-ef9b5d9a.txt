@@ -1,0 +1,60 @@
+To contribute this fix without leaking proprietary information, you must replace your real schema with a **synthetic, domain-agnostic abstraction** that isolates the structural pattern causing the inefficient SQL, not the business context.
+
+**Step 1: Isolate the Structural Pattern**
+Identify the specific relationship topology triggering the subqueries. In your case, it is likely a specific depth of nesting (e.g., A has-many B, B has-many C) or a specific combination of filters and joins. Strip away all business meaning:
+*   `Inventory` → `TableA`
+*   `ProductSKU` → `TableB`
+*   `WarehouseLocation` → `TableC`
+*   Proprietary columns like `reorder_threshold_usd` → `metric_value_int`
+
+**Step 2: Construct the Synthetic Repro**
+Create a minimal TypeScript script using generic names that forces EntityMap into the same decision path. The goal is to reproduce the *query shape*, not the *data volume* or *business logic*.
+
+*Draft Code Snippet:*
+```typescript
+// Generic reproduction of the nested join pattern
+// Entities: Parent, Child, Grandchild (no business semantics)
+const schema = {
+  Parent: { id: 'uuid', children: 'Child[]' },
+  Child: { id: 'uuid', parentId: 'uuid', grandchildren: 'Grandchild[]' },
+  Grandchild: { id: 'uuid', childId: 'uuid', value: 'number' }
+};
+
+// Query that triggers the unnecessary subquery
+const query = orm.from('Parent')
+  .include('children', q => q.include('grandchildren'))
+  .where('children.grandchildren.value', '>', 100);
+// Expected bad output: SELECT ... WHERE ... IN (SELECT ... FROM Grandchild ...)
+// Expected good output: SELECT ... JOIN Grandchild ...
+```
+
+**Step 3: Verify the Leak is Gone**
+Ensure the new schema contains no references to "Northwind," "Retail," "Inventory," or specific column names unique to your domain. The table names should be indistinguishable from any other software project.
+
+**Step 4: Draft the Contribution Artifacts**
+
+*Commit Message:*
+```text
+fix: optimize nested join generation to avoid unnecessary subqueries
+
+Previously, deeply nested includes with filters on the deepest level
+generated inefficient correlated subqueries. This change modifies the
+query planner to flatten these into standard JOINs when safe.
+
+Includes a synthetic regression test using generic entities (Parent/Child/Grandchild)
+to verify the SQL shape without relying on domain-specific schemas.
+```
+
+*PR Body Section (Problem & Solution):*
+> **Problem:** When filtering on a grandchild entity within a nested include, EntityMap generates a correlated subquery instead of a flat JOIN, causing performance degradation on large datasets.
+> **Reproduction:** A minimal test case is added in `test/perf/nested-join-regression.test.ts` using abstract entities. No proprietary schema is required to observe the behavior.
+> **Fix:** Updated the `QueryCompiler` to detect this pattern and emit a JOIN.
+
+**Addressing Your Uncertainty**
+You are unsure if a generic example can capture the nuance. **It can**, because SQL inefficiency in ORMs is almost always a result of *graph topology* (how tables connect) and *predicate placement* (where filters apply), not the semantic meaning of the columns. If the generic `Parent/Child/Grandchild` structure triggers the same bad SQL plan, the nuance is preserved. If it does not, you have not yet fully isolated the structural trigger; iterate on the generic relationships (e.g., add a many-to-many link) until the bad SQL appears.
+
+**Fallback Plan**
+If maintainers claim they cannot reproduce it with the generic schema, offer to run the query builder locally against their debug branch using your synthetic script and share only the resulting *SQL string* (which contains no schema secrets, only the generated query structure) to prove the difference.
+
+**Stop Checks Before Sending**
+Before opening the PR, ensure you have explicit approval from your employer to contribute this specific optimization, as it derives from internal performance tuning. Do not sign the commit on behalf of your company; use your personal email and attest only to your own authorship of the generalized code.

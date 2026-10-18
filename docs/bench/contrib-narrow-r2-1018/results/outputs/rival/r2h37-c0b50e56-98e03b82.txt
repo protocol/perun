@@ -1,0 +1,14 @@
+You should build a **minimal mock webhook server** that reproduces the specific header behavior without revealing any OmniCloud infrastructure details. This is the standard, accepted practice for contributing fixes involving proprietary systems.
+
+Here is exactly how to construct it:
+
+1.  **Isolate the Trigger:** Identify the exact HTTP headers and status codes your proprietary webhook sends that cause the crash. Strip away everything else (authentication logic, internal endpoints, payload structure) until you have the smallest possible set of headers that triggers the bug.
+2.  **Build a Stateless Mock:** Write a tiny server (e.g., in Go, Python, or Node.js) that listens on a local port and returns *only* those specific headers and a generic admission response. It does not need to connect to Kubernetes, validate requests, or know about OmniCloud. It simply needs to echo the "poisonous" headers back to the client.
+3.  **Containerize or Script It:** Provide this mock as a single Dockerfile or a standalone script in your PR's `test/` or `examples/` directory. Include a `README` explaining: "This mock server simulates the specific header combination that triggers the parsing bug. It contains no proprietary logic."
+4.  **Update Your Test Suite:** Write an integration test in the library's existing test framework that spins up this mock server, points the K8s-Client at it, and asserts that the client no longer crashes. This gives maintainers a deterministic, one-command reproduction (`go test ./...` or equivalent) that requires no external cluster access.
+
+**Why this works:**
+Maintainers care about **reproducibility**, not your architecture. By reducing the problem to "Client + Specific Headers = Crash," you prove the bug exists in *their* code, not your configuration. This approach respects your confidentiality obligations while providing the exact evidence needed to merge the fix. Do not share sanitized YAMLs of your real webhook; they often accidentally leak context or fail to reproduce the bug consistently. A purpose-built mock is cleaner, safer, and more professional.
+
+**Note:** Ensure your mock returns standard admission review responses so the client doesn't fail on JSON schema validation before hitting the header parsing bug.
+**Note:** Mention in your PR description that the mock was derived from observed behavior but contains no proprietary OmniCloud code.

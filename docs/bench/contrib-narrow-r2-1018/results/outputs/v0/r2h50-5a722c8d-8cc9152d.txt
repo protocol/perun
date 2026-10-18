@@ -1,0 +1,21 @@
+You cannot and should not attempt to abstract your specific Northwind Retail schema into a generic example yourself if doing so risks retaining structural fingerprints of your proprietary logic. Instead, you must follow a strict "contribution without contamination" protocol that separates the *mechanism* of the bug from the *data* of your business.
+
+**The Deliverable: A Three-Step Sanitization Strategy**
+
+1.  **Isolate the Structural Trigger, Not the Domain:**
+    Do not try to map your `Inventory`, `Suppliers`, or `RegionalSales` tables to generic names like `TableA` or `EntityB`. This often fails because the *relationships* (e.g., a specific three-way join with a self-referential foreign key) remain unique to your domain. Instead, analyze the EntityMap ORM code to identify the exact *abstract syntax tree (AST)* pattern or configuration flag that triggers the inefficient subquery. Is it a specific combination of `.include()`, `.where()`, and `.orderBy()` calls? Is it a circular dependency in the entity definition? Your goal is to define the bug as a **logic error in the library**, not a **data pattern in your schema**.
+
+2.  **Construct a "Hostile Minimal" Synthetic Schema:**
+    Create a completely synthetic schema that has **zero semantic relationship** to retail. Use abstract entities like `Node`, `Edge`, `Group`, and `Item`. Deliberately design this schema to be *more* complex than necessary regarding relationship depth, but *simpler* regarding column names. The only requirement is that this synthetic setup forces the ORM to generate the exact same inefficient SQL structure (the unnecessary subquery) that you observed. If your synthetic `Node`/`Edge` setup reproduces the bad SQL, the domain (retail) is irrelevant. The maintainers only need to see that *Configuration X* yields *Bad SQL Y*.
+
+3.  **Submit a "Mechanism-Only" Pull Request:**
+    Draft your contribution containing **only** the fix to the ORM's query generator and a new test case using your synthetic `Node`/`Edge` schema.
+    *   **Do not** include your real schema, even partially.
+    *   **Do not** describe your business logic in the PR description.
+    *   **Do** explicitly state: "This fix resolves a subquery generation inefficiency triggered by nested join patterns. The included test case uses a synthetic schema to reproduce the SQL structure without relying on domain-specific data models."
+    *   **Provenance Block:** Attach a private note to yourself (not for the PR) confirming: "SOURCE: Northwind Retail internal; GENERALIZED-AWAY: All table names, column semantics, and inventory logic replaced by abstract Node/Edge entities; RESIDUAL RISK: NONE (synthetic schema shares no structural topology with proprietary model)."
+
+If you cannot construct a synthetic schema that reproduces the bug, **do not contribute the fix upstream yet**. This indicates the bug might be tied to a specific interaction with your unique data topology rather than a general library defect. In that case, keep the optimization as a local patch (an "imprint") in your project's `AGENTS.md` or internal forks, and only file an issue with the maintainers describing the *symptoms* (the SQL output) without providing a reproducible case, asking if they have seen similar patterns. Never compromise your data model to force a contribution.
+
+**Note:** The safety of this approach relies on the synthetic schema being topologically distinct from your real one, ensuring no "mosaic leak" occurs if combined with other public information about your stack.
+**Note:** If the maintainers request your real schema to verify, decline politely and reiterate that the synthetic test case proves the library's logic error, which is their scope of responsibility.

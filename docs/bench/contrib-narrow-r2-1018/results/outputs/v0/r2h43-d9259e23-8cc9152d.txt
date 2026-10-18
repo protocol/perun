@@ -1,0 +1,19 @@
+### Synthetic Test Case Strategy for GeoFind Library
+
+To resolve the conflict between reproducing the specific Unicode bug and protecting customer privacy, you must decouple the **structural trigger** (the character sequence) from the **semantic content** (the actual names and addresses). The bug is caused by how the parser handles specific byte sequences or Unicode code points, not by the meaning of the words themselves.
+
+Follow this procedure to create a compliant, deterministic test case:
+
+1.  **Isolate the Trigger Pattern**: Analyze the failing real-world addresses to identify the exact Unicode sequence causing the buffer overflow. Is it a specific combining diacritical mark? A rare script character (e.g., Georgian, Armenian) adjacent to a Latin character? A zero-width joiner? Extract *only* the problematic character string (e.g., `"ñ\u200d🚀"` or a specific 4-byte UTF-8 sequence).
+2.  **Construct a Synthetic Payload**: Create a new test string that embeds this exact byte sequence into completely fictional data.
+    *   **Replace Names**: Swap "John Doe" or real customer names with generic placeholders like "User Alpha" or "Test Subject."
+    *   **Replace Addresses**: Swap real street names with fictional ones (e.g., "123 Fake Street") but insert the isolated Unicode trigger at the precise location where the crash occurred.
+    *   **Example**: If the real input `"Calle O'Donnell ñ"` caused the crash, your synthetic input becomes `"Calle FauxStreet ñ"`. The parser sees the same bytes at the same relative position, triggering the same buffer logic, but the data maps to no real person.
+3.  **Validate Determinism**: Ensure the synthetic string is hardcoded in the test file. Do not use random generators or external fetches. The test must produce the exact same byte sequence on every run to satisfy the project's determinism requirement.
+4.  **Verify the Failure Mode**: Run this synthetic case against the current buggy version of GeoFind. It must reproduce the "maximum buffer size" error. Then, apply your fix (or the proposed fix) and confirm the test passes. This proves the synthetic data is a valid proxy for the real-world bug.
+5.  **Document the Abstraction**: In the test file's comments, explicitly state: *"This test uses synthetic data to reproduce a buffer overflow triggered by Unicode sequence [INSERT SEQUENCE HERE]. No real customer data is included."* This assures reviewers that privacy was prioritized without sacrificing test validity.
+
+By reducing the real-world data to its mathematical essence—the specific byte pattern—you retain the bug's reproducibility while eliminating all privacy risk. The parser cannot distinguish between a real name and a fake name if the underlying bytes are identical; therefore, the synthetic test is legally and technically sufficient.
+
+**Note**: Never include even a fragment of the original customer dataset in the commit history; once pushed, it cannot be fully erased.
+**Note**: If the bug relies on the *length* of the real address combined with the Unicode chars, ensure your synthetic string matches that total byte length exactly.

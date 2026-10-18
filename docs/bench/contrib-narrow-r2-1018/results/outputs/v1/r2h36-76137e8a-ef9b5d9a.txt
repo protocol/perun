@@ -1,0 +1,37 @@
+You cannot submit the pull request as a single massive change if the project rules explicitly require every commit to pass tests, nor can you submit three broken pull requests. The standard industry strategy for this specific deadlock is **Feature Flags (or Kill Switches)** combined with **Incremental Refactoring**.
+
+Here is the strategy to explain to Ravi and the method to restructure your work:
+
+**1. The Explanation to Ravi**
+Do not argue that the dependencies make splitting impossible. Instead, propose a plan where you split the logic but keep the *behavior* unchanged until the final step using feature flags. Tell him: "I will break this into three PRs. Each PR will introduce the new code paths guarded by a disabled feature flag. The active code path remains the old, stable logic until the final PR enables the new behavior. This ensures every commit compiles, passes all tests, and maintains binary compatibility."
+
+**2. The Restructuring Method**
+You must rewrite your nine-hundred-line change into three distinct phases:
+
+*   **PR 1: The Infrastructure (Locking Mechanism)**
+    *   Implement the new core locking mechanism.
+    *   **Crucial Step:** Do not switch the connection pool to use it yet. Wrap the new locking logic in a conditional block (e.g., `if (USE_NEW_LOCKING)`).
+    *   Ensure the default path still uses the *old* locking mechanism.
+    *   Add tests that verify the new locking logic works *in isolation* when the flag is manually enabled in the test suite, while the main suite passes using the old logic.
+    *   *Result:* Code is merged, CI passes, no behavior change in production.
+
+*   **PR 2: The Logic (Timeout Handling)**
+    *   Implement the new timeout logic utilizing the new locking mechanism from PR 1.
+    *   **Crucial Step:** Again, guard this new timeout logic with a feature flag (e.g., `if (USE_NEW_TIMEOUT)`).
+    *   The active production path still uses the old timeout logic (which relies on the old locking mechanism, which is still present but unused).
+    *   Write tests that enable both flags to verify the interaction between the new lock and new timeout.
+    *   *Result:* Code is merged, CI passes, no behavior change in production.
+
+*   **PR 3: The Activation (Metrics & Switch-over)**
+    *   Implement the metrics updates.
+    *   Remove the feature flags and switch the production code to use the new locking and timeout logic.
+    *   Clean up the old, now-unused locking and timeout code.
+    *   *Result:* The fix goes live.
+
+**Why this works:**
+This approach decouples *code presence* from *code execution*. You are satisfying the rule "every commit must pass tests" because the tests for the *active* code path never break. The "broken states" you feared only exist if you try to activate the new logic prematurely. By keeping the new logic dormant behind flags, the intermediate states are technically complete, compilable, and functional (albeit not yet utilizing the new features).
+
+**Fallback if Maintainers Reject Feature Flags:**
+If Ravi refuses feature flags, your only remaining option is to create a **long-lived feature branch** where you merge the three dependent PRs sequentially. However, most strict CI policies apply to the `main` branch only. If CI runs on every branch, you must ask Ravi for a temporary exemption to merge "build-breaking" PRs into a specific integration branch, with the strict agreement that `main` will only receive the final, squashed, working commit. Do not attempt to bypass CI or force-push broken commits to `main`.
+
+The key is shifting the narrative from "I can't split this" to "I will split the deployment of the fix, not the code itself."

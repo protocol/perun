@@ -1,0 +1,33 @@
+### Draft Issue: Documentation Generation Source Mismatch
+
+**Title:** Docs: API reference parameter typos persist despite code comments being correct (Generation source mismatch?)
+
+**Summary**
+I identified several parameter name typos in the auto-generated API reference for the Aperture Science Converter. While the `README` states docs are generated from code comments, the live documentation contains errors (e.g., `recepticle_id` vs `receptacle_id`) that do not exist in the current source comments. I suspect the generation script is pulling from a cached file, an outdated template, or a disconnected metadata source, but I cannot locate the specific template responsible after a full codebase search.
+
+**Investigation Steps Taken**
+1.  **Verified Source Truth:** Confirmed that all docstrings and inline comments in the Python source files correctly spell the parameter names.
+2.  **Searched Generation Logic:** Grep-searched the entire repository for the misspelled terms and the generation script configuration; no matches found in current templates or config files.
+3.  **Local Build Attempt:** Ran the local documentation build script to reproduce the error.
+    *   *Result:* The build completed, but I am unsure if my local environment influenced the output (see "Environment Note" below).
+4.  **Hypothesis:** The CI pipeline may be using a pinned, outdated version of a documentation dependency, or there is a hidden cache/file in the build process not included in the source tree that contains these legacy typos.
+
+**Request for Guidance**
+Before opening a PR or digging deeper into the build pipeline:
+*   Is there a specific hidden template, external metadata file, or legacy cache location known to drive the API reference generation?
+*   Should this be treated as a bug in the build pipeline configuration (e.g., outdated dependency lockfile) rather than a source code fix?
+*   What is the preferred method to verify the generation source without potentially polluting the build with local environment artifacts?
+
+**Environment Note & Log Sanitization**
+During my local reproduction attempt, my build logs included paths referencing my local workstation environment (Black Mesa internal variables). I have **not** attached these raw logs to this issue to avoid leaking internal paths. If helpful, I can manually sanitize the logs to show only the generation warnings/errors, or run a clean build in a neutral container if you can point me to the correct base image used by your CI.
+
+**Proposed Next Steps**
+If you can identify the likely source of the generation data, I am happy to:
+1.  Verify the discrepancy in a clean environment.
+2.  Open a PR fixing the root cause (template, dependency, or cache invalidation).
+3.  Update the `CONTRIBUTING.md` to document this specific generation quirk for future contributors.
+
+---
+
+*Note: Do not attach your raw build logs until you have scrubbed them with a text editor to remove any `/home/black-mesa/` or similar internal paths.*
+*Wait for maintainer confirmation on the generation source before attempting to fix the build script itself.*

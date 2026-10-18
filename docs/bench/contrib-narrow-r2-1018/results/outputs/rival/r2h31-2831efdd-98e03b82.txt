@@ -1,0 +1,37 @@
+## Summary
+Fixes a `NullPointerException` in the HTML parser when encountering dynamic class names in modern tracking page layouts. This update replaces a fragile static selector with a robust attribute-based strategy to ensure stability against upstream site structure changes.
+
+## What
+- Refactored the selector logic in `src/parser/TrackingPage.java` (around line 402) to target stable DOM attributes instead of volatile class names.
+- Added a regression test case simulating dynamic class name injection to prevent future breakage.
+- Updated internal documentation to reflect the new selector strategy.
+
+## Why
+Recent updates to several major carrier tracking pages have introduced randomized or dynamic CSS class names, causing the previous rigid selector to fail and resulting in null pointer exceptions during data extraction. This change ensures the library remains resilient to such structural variations without requiring constant maintenance for every minor site update.
+
+## Test Plan
+- Run `mvn test` to verify all existing unit tests pass.
+- Specifically verify `TrackingPageParserTest.handleDynamicClasses()` which asserts correct parsing despite randomized class names.
+- Manual verification against a local mock server serving varied HTML structures confirms no regressions.
+
+## Backward Compatibility
+Fully backward compatible. The change is internal to the parsing logic; public APIs and return data structures remain unchanged.
+
+## Security Considerations
+No security implications. This is a pure bug fix for parsing logic.
+
+## Related Issue
+Fixes #1234 (or "Addresses community reports of parsing failures on updated carrier sites").
+
+## Checklist
+- [x] Code follows project style guidelines.
+- [x] All tests pass locally.
+- [x] Commit messages follow Conventional Commits.
+- [x] No sensitive data or specific third-party URLs included in code or tests.
+
+## AI-Assisted Disclosure
+This contribution was developed with the assistance of AI tools for code refactoring suggestions. All logic has been manually reviewed, tested, and verified by the author to ensure correctness and compliance with project standards.
+
+---
+*Note: The PR description intentionally generalizes the trigger as "major carrier tracking pages" to protect your privacy while remaining technically accurate.*
+*Ensure your test fixtures use generic, synthetic HTML rather than real scraped content from any specific company.*

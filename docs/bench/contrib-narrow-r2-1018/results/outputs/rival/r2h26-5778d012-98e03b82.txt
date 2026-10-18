@@ -1,0 +1,32 @@
+### Strategy: The "Interface-Only" Contribution with External Implementation
+
+To contribute this backend without leaking intellectual property or breaking the project's build requirements, you must decouple the **interface adaptation logic** from the **proprietary client implementation**. The core strategy is to submit the structural code (the adapter) to the main repository while hosting the proprietary dependency in a separate, private module that you maintain.
+
+**1. Define a Generic Internal Interface**
+Instead of importing your proprietary client directly in the main repository, define a minimal, generic Go interface within your contribution that mirrors only the specific methods your backend needs (e.g., `Get`, `Put`, `Delete`, `Exists`). This interface should rely solely on standard Go types (like `[]byte`, `context.Context`, `error`) and must not reference any proprietary structs or authentication tokens.
+
+**2. Implement the Adapter Against the Interface**
+Write the storage backend adapter in the main repository using *only* this new generic interface. The adapter contains the logic to translate the caching library's calls into your interface's methods. Since the interface uses standard types, this code is clean, readable, and contains no secrets.
+
+**3. Provide a Mock Implementation for CI/CD**
+To satisfy the maintainer's requirement that the code be buildable and testable by anyone, include a robust **mock implementation** of your generic interface in the `_test.go` files or a `internal/mocks` directory.
+*   This mock should simulate success, failure, and latency scenarios.
+*   Write comprehensive unit tests for your adapter using this mock.
+*   When the maintainers run `go test` or `go build`, they will use this mock, ensuring the pipeline passes without needing your proprietary client.
+
+**4. Host the Proprietary Bridge Separately**
+Create a separate private repository (or a private module within your organization's namespace) that contains:
+*   The actual proprietary client import.
+*   A concrete implementation of the generic interface you defined in step 1, which wraps the proprietary client.
+*   A `main.go` or example file showing how to inject this concrete implementation into the adapter.
+
+**5. Documentation and Integration Guide**
+In your PR description and a `README.md` within the adapter's folder, explicitly state:
+*   "This adapter implements the `VertexStorage` interface."
+*   "The default test suite uses an in-memory mock."
+*   "To use this backend with the actual Vertex Dynamics storage, users must import our private module `vertex-dynamics/storage-bridge` and inject the concrete client as shown in the example below."
+
+**Result:** The main repository remains 100% open-source, buildable, and testable by the public. Your proprietary logic, API endpoints, and auth mechanisms remain entirely within your private module. The maintainers get a verified, working architectural integration, and your team retains full control over the proprietary dependency.
+
+*Note: Ensure your generic interface names do not inadvertently reveal sensitive internal architecture details of your storage system.*
+*Note: You may need to update the project's `CONTRIBUTING.md` to acknowledge that some optional backends rely on external private modules for full execution.*

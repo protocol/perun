@@ -1,0 +1,40 @@
+### Immediate Action Plan
+
+**1. Revoke the Credential Immediately**
+Before touching the code, log in to your CloudNine Solutions dashboard and revoke/rotate the exposed staging token. Assume the token is compromised the moment it was committed, regardless of whether you believe it was "indexed." This neutralizes the risk instantly.
+
+**2. Scrub the Git History Locally**
+You must remove the secret from every commit in your branch's history. Since you are on a feature branch for the PyValidate fix, use `git filter-branch` or the recommended modern tool `git-filter-repo`.
+*   Install `git-filter-repo` (preferred over `filter-branch` for safety and speed).
+*   Run a command to strip the specific file containing the token or replace the token string across all history.
+*   Example logic: `git filter-repo --replace-text <(echo "OLD_TOKEN==>REDACTED") --force`
+*   Verify locally that `git log -p` no longer shows the token in any historical commit.
+
+**3. Force-Push with Lease**
+Once the history is clean locally, you must update the remote branch. Because this rewrites history, a standard push will fail.
+*   Run: `git push --force-with-lease origin <your-branch-name>`
+*   The `--force-with-lease` flag ensures you do not overwrite work if someone else pushed to your branch while you were cleaning it.
+
+**4. Notify Maintainers Proactively**
+Since history rewriting changes commit hashes, anyone who previously fetched your branch will encounter errors if they try to pull again.
+*   Post a comment on your existing Pull Request (or the issue tracker if no PR exists yet) stating: *"I have force-pushed to this branch to clean up some accidental sensitive data inclusion in the history. Please discard your local branch and re-fetch."*
+*   Do not wait for them to ask. This is standard professional courtesy when rewriting shared history.
+
+### Addressing Your Concerns
+
+**Regarding Public Scanners:**
+If the token was in a public fork for three months, it is highly probable that automated bots have already scraped it. Revoking the token (Step 1) is the only defense against this. Cleaning the git history prevents *future* accidental exposure and keeps the repository clean, but it does not "un-scrape" data already harvested by third parties. This is why rotation is non-negotiable.
+
+**Regarding the Pull Request Narrative:**
+You do not need to hide the incident, nor do you need to broadcast a "security breach" alarm that causes panic. The standard, professional approach is transparency without oversharing.
+
+*   **What to say:** "I discovered that a staging credential was accidentally included in the initial commit history. I have rotated the credential and scrubbed the repository history to ensure no secrets remain. The code logic for the type coercion fix remains unchanged."
+*   **Why this works:** It admits the mistake (which builds trust), confirms the mitigation (rotation), and reassures them that the actual code review (the type coercion bug) is unaffected. Maintainers appreciate this level of hygiene; it is not viewed as a scandal, but as responsible stewardship.
+
+**Summary Checklist:**
+1.  Rotate/Revoke token at CloudNine.
+2.  Run `git-filter-repo` to cleanse history.
+3.  Verify clean history locally.
+4.  `git push --force-with-lease`.
+5.  Comment on PR explaining the force-push due to secret removal.
+6.  Submit PR with the note provided above.

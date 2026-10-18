@@ -1,0 +1,33 @@
+### Documentation Patch Draft: Environment Variable Hyphen Handling
+
+**Issue:** The configuration parser fails to correctly read environment variables containing hyphens (`-`) in their names, silently returning empty values or defaulting to fallback configurations. This behavior is not currently documented.
+
+**Proposed Documentation Addition:**
+
+> **Known Limitation: Hyphens in Environment Variable Names**
+>
+> The configuration loader does not support hyphens (`-`) within environment variable names. While many shells allow setting such variables (e.g., `export MY-VAR=value`), the underlying parsing library treats the hyphen as a delimiter or invalid character, resulting in the variable being ignored.
+>
+> **Incorrect Usage (Will Fail):**
+> ```bash
+> # These variables will NOT be read by the application
+> export DB-HOST=postgres.internal.local
+> export API-KEY=secret123
+> export CACHE-SERVER=redis-node-01
+> ```
+>
+> **Correct Usage (Recommended):**
+> Replace hyphens with underscores (`_`) to ensure compatibility:
+> ```bash
+> # These variables will be read correctly
+> export DB_HOST=postgres.internal.local
+> export API_KEY=secret123
+> export CACHE_SERVER=redis-node-01
+> ```
+>
+> **Impact:** If hyphenated variables are used, the application may fail to connect to services or revert to default settings without throwing an explicit error. Always validate that environment variable names use only alphanumeric characters and underscores.
+
+---
+
+**Note:** This draft uses generic fictional examples (`postgres.internal.local`, `secret123`) to illustrate the technical constraint without revealing BlueRiver Corp's actual infrastructure or internal naming conventions.
+**Action Required:** A human must review this draft to ensure no residual context from the production incident remains before submitting it to the upstream maintainers.

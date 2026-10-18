@@ -1,0 +1,45 @@
+### Stop Checks and Immediate Action
+Before proceeding, you must clear two mandatory stop checks:
+1.  **Employer IP/Legal Approval:** Confirm with your legal or compliance team that contributing a fix to an external library is permitted under your employment agreement and that the specific abstraction of the bug does not violate confidentiality regarding LedgerLine's internal systems.
+2.  **Data Confidentiality:** Absolutely do not include the real quarterly numbers, logs, or any data derived directly from them in the patch, commit message, or PR description.
+
+### Step-by-Step Guide to Generalize and Sanitize
+
+**1. Generalize the Defect Class**
+Identify the mathematical boundary where the error occurs (e.g., "rounding half-up fails when the fractional part is exactly 0.5 and the integer part exceeds $10^{15}$"). The fix must apply to *any* number meeting these criteria, not just LedgerLine's specific values.
+
+**2. Create Synthetic Repro Data**
+Generate invented values that trigger the exact same logic path without reflecting real financial performance.
+*   *Bad:* Using `$14,203,592.50` (real revenue).
+*   *Good:* Using `$1,000,000,000,000,000.50` or `BigDecimal("1E15").add(new BigDecimal("0.5"))`.
+*   *Action:* Write a JUnit test using `BigDecimal` constants that are clearly arbitrary (e.g., powers of 10 plus specific fractions) but mathematically identical in structure to your failing case.
+
+**3. Strip Identifiers and Rewrite Artifacts**
+*   **Code:** Ensure no package names, comments, or variable names reference "LedgerLine," "quarterly," "report," or specific dates.
+*   **Commit Message:**
+    ```text
+    Fix rounding error in BigDecimal handling for large magnitudes
+
+    When processing values exceeding 10^15 with specific fractional parts,
+    the current logic incorrectly rounds half-up cases. This adds a test
+    case using synthetic large-decimal values to verify the correction.
+
+    Fixes: [Link to issue if exists]
+    ```
+*   **PR Body:** Describe the mathematical condition, not the business context. State: "Verified with synthetic inputs mimicking high-magnitude decimal structures." Do not mention "financial reports" or "earnings."
+
+**4. Run the Privacy Gate (Mental Check)**
+Ask: "If a competitor read this test case, could they deduce LedgerLine's revenue, growth rate, or specific client exposure?" If the answer is yes, the synthetic data is too close to reality. Regenerate using completely different magnitudes or signs (negative values) that still trigger the bug.
+
+**5. Draft the Contribution**
+Prepare the patch containing only the library fix and the new synthetic test. Do not include your internal build scripts or paths (e.g., `/home/jsmith/ledgerline/...` becomes `/app/src/...`).
+
+### Direct Answer to Your Uncertainty
+You do not need real figures to prove a mathematical bug. Maintainers of numerical libraries care about the **boundary conditions** (magnitude, precision, rounding mode), not the semantic meaning of the numbers. A test case using `123456789012345.50` is mathematically equivalent to your real data for the purpose of verifying the rounding algorithm and is fully safe to share.
+
+### Fallback Plan
+If maintainers request more coverage, ask them specifically which *mathematical* edge cases they need (e.g., "Do you need tests for negative zero or specific locale rounding?"). If they remain silent for two weeks, send one polite follow-up asking if the synthetic test case sufficiently demonstrates the regression.
+
+---
+*Note: This draft assumes you have verified the fix locally with your real data; the public artifact contains only the synthetic proof.*
+*Remember: The human must open the PR; never automate the push of code containing potential residual risks.*

@@ -1,0 +1,41 @@
+**Deliverable: Strategy for Sharing Performance Evidence**
+
+Do not share the original screenshot. Even with manual redaction, residual metadata, font inconsistencies, or surrounding UI elements risk leaking your internal infrastructure. Instead, replace the visual proof with a **synthetic reproduction and tabulated data**. This approach is standard in open-source contributions and often carries *more* weight than a single opaque screenshot because it allows maintainers to verify the claim independently.
+
+**Step 1: Extract Raw Metrics, Discard the Image**
+Open your profiler results locally and extract the numerical data series (e.g., heap usage over time, GC frequency). Create a simple CSV or text table showing:
+*   Time elapsed (e.g., 0m, 5m, 10m)
+*   Memory usage before fix (MB)
+*   Memory usage after fix (MB)
+*   Key events (e.g., "GC triggered")
+
+**Step 2: Generate a Synthetic Reproduction Graph**
+Use a local script or spreadsheet to plot these *numbers* into a new graph.
+*   **Axes:** Label them generically ("Heap Size (MB)", "Time (min)").
+*   **Data:** Plot the extracted trends. The curve shape (diverging vs. stable) is the evidence, not the specific server load.
+*   **Style:** Use a standard, clean theme. Do not try to mimic the look of your internal tool; a generic plot looks professional and neutral.
+
+**Step 3: Draft the Commit Message and PR Body**
+*   **Title:** `fix: resolve memory leak in DataFlow stream processing`
+*   **Problem:** "Unbounded memory growth observed during long-running stream processing tasks."
+*   **Solution:** "Corrected reference retention in [Specific Class/Method] preventing garbage collection."
+*   **Evidence:** "Attached is a plot generated from synthetic data replicating the leak pattern. Before fix: memory grows linearly without bound. After fix: memory stabilizes at [X] MB under sustained load."
+*   **Testing:** "Verified locally with a reproduced test case using invented payload sizes. [Paste the raw data table here]."
+
+**Step 4: Address Your Specific Constraints**
+*   **"Hard to replicate externally":** You do not need to replicate your *exact* production load. You only need to replicate the *defect class*. Create a minimal unit test or integration test within the PR that generates enough traffic to trigger the leak in the old code and shows stability in the new code. Use generic values (e.g., "process 10,000 dummy records").
+*   **"Redacting looks suspicious":** Agreed. A partially redacted image invites scrutiny about what is hidden. A fresh, generic chart invites scrutiny only of the *bug*, which is what you want.
+
+**Direct Answer to Your Uncertainty**
+You are unsure how to maintain credibility without the original image. Credibility in open source comes from **reproducibility**, not from showing your specific environment. A maintainer cannot run your screenshot; they *can* run your synthetic test case. Therefore, the synthetic test + data table is the stronger, safer, and more professional argument.
+
+**Fallback Plan**
+If maintainers request more detail later, offer to walk them through the logic of the leak via a code comment or a text-based explanation of the object lifecycle. Never revert to sharing infrastructure-specific logs or images.
+
+**Stop Checks Before Sending**
+Before drafting the PR, confirm:
+1.  **Employer IP Policy:** Ensure your company allows contributing this specific fix upstream (some internal optimizations are considered trade secrets).
+2.  **No Internal Identifiers:** Verify the new chart and test code contain zero references to "Vertex Analytics," internal hostnames, or user names like "Jane."
+
+**Note:** The goal is to prove the *class* of bug is fixed, not to prove your specific server configuration works.
+**Note:** If the leak relies on a proprietary data format unique to your team, the fix may not be generalizable and should remain a local patch.

@@ -1,0 +1,44 @@
+Do not commit the real IP address. Hardcoding a specific, employer-owned staging IP in a public open-source repository violates the project's self-contained test requirement and exposes your internal infrastructure topology, regardless of the server's public accessibility.
+
+To resolve this while satisfying both the project's contribution guidelines and your security policies, restructure the test using one of the following approaches:
+
+**1. Inject the Target via Environment Variable (Recommended)**
+Modify the test to read the target IP from an environment variable (e.g., `LEXCORP_TEST_TIMEOUT_IP`). In the public code, set this variable to a non-routable placeholder (like `192.0.2.1`, reserved for documentation) or skip the test if the variable is missing.
+*   **Public Repo:** The test exists but skips or uses a safe dummy value by default.
+*   **Internal/Verification:** You or the maintainers can run the test with the real IP locally or in a private CI environment by exporting the variable before execution.
+*   **Code Example:**
+    ```python
+    import os
+    import pytest
+
+    def test_connection_timeout():
+        target_ip = os.getenv("LEXCORP_TEST_TIMEOUT_IP", "192.0.2.1") # RFC 5737 Documentation IP
+        if target_ip == "192.0.2.1":
+            pytest.skip("Real timeout IP not provided via LEXCORP_TEST_TIMEOUT_IP")
+
+        # Proceed with test using target_ip
+    ```
+
+**2. Mock the Network Layer at the Socket Level**
+Since the issue is about *timing* and *unreachable* states, you likely do not need the specific remote server, but rather a socket that hangs or refuses connection with specific latency. Use the language's standard mocking tools to patch the socket creation or connection method.
+*   Force the mock to sleep for the exact duration required to trigger the timeout.
+*   This makes the test 100% self-contained, faster, and immune to external network flakiness, which is often preferred by maintainers over real network calls.
+
+**3. Extract to a Manual Integration Suite**
+If the timing behavior is impossible to mock accurately, move this specific test out of the standard automated suite (`npm test` / `pytest`) and into a separate `tests/integration_manual` directory.
+*   Add a comment in the main test file referencing the manual test.
+*   Document in the PR that this specific edge case requires manual verification steps provided in the description, rather than an automated green checkmark.
+
+**How to Explain This to Maintainers**
+In your PR description, under the "Test Plan" section, be transparent about the constraint. Do not ask for permission to leak the IP; instead, present the solution:
+
+> "The original reproduction required a specific network latency profile found on a private staging server. To comply with the 'self-contained tests' rule and internal security policies, I have refactored the test to:
+> 1. Use socket-level mocking to simulate the exact timeout threshold deterministically (preferred), OR
+> 2. Accept the target IP via an environment variable, defaulting to a skip if not provided.
+>
+> This ensures the CI remains stable and secure while allowing maintainers to reproduce the specific scenario locally if they choose to inject the variable."
+
+This approach demonstrates respect for the project's rules, protects your employer's assets, and provides a robust, deterministic test that is often higher quality than one relying on external network conditions.
+
+Note: Avoid using "placeholder" IPs that actually route to real services; always use RFC 5737 documentation ranges (192.0.2.0/24) for safety.
+If mocking fails to replicate the bug, the environment variable skip pattern is the industry-standard compromise for hardware-dependent or topology-specific tests.

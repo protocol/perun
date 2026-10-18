@@ -1,0 +1,36 @@
+Do not open a pull request with your current implementation. Ravi has explicitly stated that retry logic is out of scope for this project's philosophy. Submitting code that contradicts a core maintainer's stated architectural boundary is the fastest way to have your PR closed without review and damage your standing with the project.
+
+Instead, reply to Ravi's comment with a focused inquiry about **configurability** rather than functionality. Your goal is to determine if the project would accept a *mechanism* that allows users to opt-in to retries, keeping the default behavior unchanged.
+
+Here is a draft response you can adapt:
+
+***
+
+"Hi Ravi,
+
+Thank you for the clear feedback regarding the scope of the StreamGet tool. I completely respect the design philosophy of keeping the binary simple and leaving orchestration (like retries) to the caller.
+
+At Northwind Systems, we integrate StreamGet into automated pipelines where transient network errors cause entire deployment stages to fail. While we can wrap the tool in scripts, doing so uniformly across our diverse environments introduces significant maintenance overhead and drift.
+
+Before we resign ourselves to maintaining a private fork—which we are keen to avoid to stay aligned with upstream security fixes—I wanted to ask one clarifying question:
+
+Would the project be open to accepting a **disabled-by-default** retry mechanism controlled strictly by an environment variable (e.g., `STREAMGET_RETRY_COUNT`)?
+
+This approach would:
+1. Preserve the current default behavior (immediate exit) for all existing users.
+2. Avoid adding new flags to the CLI surface area.
+3. Allow operations teams with specific reliability needs to opt-in without modifying the source code.
+
+If even this opt-in, zero-config-change approach falls outside the project's goals, please let me know. We will fully respect that decision and proceed with maintaining our internal patch set without further burden on the maintainers.
+
+Thanks again for your time and for maintaining this tool."
+
+***
+
+**Why this approach works:**
+1.  **It respects the boundary:** You acknowledge his "simple tool" argument immediately.
+2.  **It hides sensitive data:** You mention "transient errors" and "maintenance overhead" without revealing frequency, architecture, or specific failure rates.
+3.  **It offers an exit ramp:** By stating you will fork if he says no, you remove the pressure. Maintainers are often more willing to compromise when they realize the alternative is losing a user to a fork forever.
+
+**Note:** If Ravi rejects even the environment-variable approach, accept it gracefully and fork. Arguing further will be perceived as harassment.
+**Note:** Do not mention "exponential backoff" or specific algorithms in this reply; keep the discussion purely on scope and configuration.

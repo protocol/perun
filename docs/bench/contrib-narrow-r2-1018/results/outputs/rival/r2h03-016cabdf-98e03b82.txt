@@ -1,0 +1,63 @@
+Here is a minimal, fictional JSON schema and corresponding data payload that replicates the structural conditions for your off-by-one error in nested arrays without using any proprietary information. This setup creates a depth sufficient to trigger traversal logic errors while remaining completely generic.
+
+**Fictional Schema (`test_schema.json`)**
+This schema defines a structure with three levels of nested arrays, matching the depth where your bug manifests.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "level_one": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level_two": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level_three": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 10
+                  }
+                }
+              },
+              "required": ["level_three"]
+            }
+          }
+        },
+        "required": ["level_two"]
+      }
+    }
+  },
+  "required": ["level_one"]
+}
+```
+
+**Failing Test Data (`test_data.json`)**
+This payload targets index 5 in the deepest array (`level_three`). The value `5` violates the `minimum: 10` rule, triggering the validation error. Your fix should ensure the error path reports `level_one[0].level_two[0].level_three[5]` rather than the incorrect index 4.
+
+```json
+{
+  "level_one": [
+    {
+      "level_two": [
+        {
+          "level_three": [
+            10, 10, 10, 10, 10, 5
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Implementation Note for Your PR**
+In your pull request, name the test `test_nested_array_index_off_by_one` and assert that the validation error path string explicitly contains `[5]` as the final index. This demonstrates the fix works on the specific traversal depth required without exposing any partner IP.
+
+You can now include these two snippets directly in your PR's test suite to satisfy the maintainer's requirement for a reproducible failing case.

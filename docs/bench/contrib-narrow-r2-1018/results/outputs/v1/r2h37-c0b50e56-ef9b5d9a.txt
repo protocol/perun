@@ -1,0 +1,50 @@
+You must build a mock webhook server that mimics the behavior without revealing OmniCloud's secrets. Do not share your actual configuration YAML, as it contains internal endpoints and authentication logic that constitute a privacy leak.
+
+Here are the concrete steps to generalize this fix and prepare it for upstream contribution:
+
+1.  **Stop and Verify Constraints**: Before proceeding, confirm your employer's IP policy allows contributing generic bug fixes. Ensure you have not signed any agreement prohibiting open-source contributions for this specific library. Since this is a code fix, you cannot auto-file an issue; a human must review and open the PR.
+2.  **Generalize the Defect**: Isolate the root cause: the client library crashes when parsing specific custom headers, regardless of the webhook's business logic. The "OmniCloud" context is irrelevant to the library maintainers. The defect class is "improper header parsing leading to a crash," not "OmniCloud webhook incompatibility."
+3.  **Create Synthetic Reproduction**:
+    *   Write a minimal Go/Python/Node (matching the library's language) mock server.
+    *   Hardcode the mock server to return the specific error code and inject the exact custom header structure that triggers the crash.
+    *   Use invented values: replace `omni-cloud-internal.auth` with `mock-admission.local`, and replace real tokens with `fake-token-123`.
+    *   Verify the crash occurs against this mock server using the unpatched library.
+    *   Verify the fix resolves the crash against the same mock server.
+4.  **Strip Identifiers**: Ensure your patch, test code, and commit messages contain zero references to "OmniCloud," your team name, internal hostnames, or real ticket numbers.
+    *   *Bad*: `Fix crash with OmniCloud admission headers (OC-4412)`
+    *   *Good*: `Handle unexpected custom headers in admission response gracefully`
+5.  **Draft the Artifacts**:
+    *   **Commit Message**:
+        ```text
+        Fix panic when parsing custom admission webhook headers
+
+        The client previously crashed when encountering unexpected header
+        formats in admission webhook responses. This adds a defensive check
+        to handle malformed or unknown headers gracefully.
+
+        Includes a synthetic mock server test case reproducing the panic.
+        ```
+    *   **PR Body**:
+        ```text
+        ## Problem
+        Client crashes with a panic when processing specific custom headers from admission webhooks.
+
+        ## Solution
+        Adds nil checks and safe parsing logic for header values.
+
+        ## Testing
+        - Added `TestAdmissionHeaderParsing` using a local mock server.
+        - Verified panic occurs on main, passes on this branch.
+        - No external dependencies required.
+
+        ## Risk
+        Low. Changes only affect error handling paths.
+        ```
+6.  **Privacy Gate Check**: Manually review your diff. If you see any real IPs, domain names, or proprietary logic, remove them. Acknowledge that while the code is clean, the *fact* that you encountered this might reveal you run custom webhooks; this is usually acceptable residual risk, but you must decide.
+7.  **Hand Off**: Save the patch and the mock server code. Do not push yet. Present the drafted PR content and the mock server to your legal/tech lead for final approval. Once approved, you (the human) open the PR.
+
+**Direct Answer to Your Uncertainty**:
+Yes, building a mock server is the standard and required approach. Maintainers cannot accept proprietary configs, and they do not need your specific business logic to verify a parsing bug. A minimal, synthetic reproduction is actually *more* valuable to them than a complex real-world dump.
+
+**Fallback**:
+If the maintainers claim the mock is insufficient, ask specifically which header attribute is missing. Add only that synthetic attribute to your mock. If they insist on real logs, politely decline and offer to reproduce the issue live in a screen-share session where you control the data visibility.

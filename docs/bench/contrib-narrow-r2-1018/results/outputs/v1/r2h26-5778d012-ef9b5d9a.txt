@@ -1,0 +1,46 @@
+**Strategy: Upstream Interface + Downstream Implementation**
+
+Do not contribute the proprietary backend to the upstream repository. Instead, contribute a **generic, abstract interface extension** or a **reference implementation using a public mock** that proves the library's architecture supports your use case.
+
+**Step 1: Generalize the Change**
+Identify the specific methods in the library's backend interface that your storage system requires (e.g., `Put`, `Get`, `Delete`, `List`). If the current interface is insufficient, draft a PR that extends the interface with these generic methods. Do not mention "Vertex Dynamics" or your specific storage system. Frame the change as: "Extend backend interface to support distributed storage primitives like atomic listing and range reads."
+
+**Step 2: Create a Synthetic Reference Implementation**
+Implement a new backend driver in the upstream repo that satisfies the extended interface but uses **in-memory storage** or a **publicly available dummy service** (e.g., a local file system wrapper or a mock HTTP server).
+*   **Code:** Write the adapter logic using only standard Go libraries and the library's own types.
+*   **Tests:** Write tests that verify the interface contract using this mock backend. Ensure tests run without external dependencies.
+*   **Naming:** Use generic names like `GenericDistributedBackend` or `MockPersistentBackend`. Avoid any naming that hints at your proprietary system.
+
+**Step 3: Draft the PR**
+*   **Title:** "feat: extend backend interface for distributed storage patterns"
+*   **Body:** Explain the architectural gap this fills (e.g., "Some distributed systems require atomic list operations not previously supported"). Describe the changes to the interface and the new mock implementation. Explicitly state: "This PR provides a reference implementation and test suite. Specific vendor implementations can be built externally against this extended interface."
+*   **Claims:** Only claim that the tests pass on the mock backend. Do not claim validation against real distributed storage unless you can reproduce it with public tools.
+
+**Step 4: Externalize the Proprietary Logic**
+Keep the actual Vertex Dynamics adapter in a **private, separate repository**.
+*   Import the upstream library (with your merged interface changes).
+*   Implement the `Backend` interface using your proprietary client.
+*   Distribute this binary or library internally or to customers under your own license.
+
+**Addressing Your Uncertainty**
+You asked how to implement the adapter without leaking IP. **You do not implement the real adapter upstream.** You implement a *stub* that proves the interface works. The maintainers get a buildable, testable feature; you keep the proprietary client and connection logic private. The "integration logic" you contribute is purely the *shape* of the data exchange, not the *mechanism* of the exchange.
+
+**Fallback**
+If maintainers reject the interface extension as too specific, ask if they accept a "plugin example" in a separate `examples/` directory that is excluded from the main build but demonstrates the pattern. If they refuse, the architecture may not be as pluggable as assumed, and you should fork the library for your internal use.
+
+**Stop Checks Required Before Sending**
+1.  **Legal/IP Review:** Confirm with Vertex Dynamics legal counsel that contributing the *interface definition* (method signatures) does not violate any NDAs or IP policies regarding your storage system's design.
+2.  **Contributor Agreement:** Ensure you are authorized to sign the project's CLA attesting that the contributed code is your original work and not bound by third-party restrictions.
+
+**Provenance and Risk Block (For Internal Review Only)**
+```
+SOURCE: Vertex Dynamics internal integration project
+GENERALIZED-AWAY: Proprietary client library, API endpoints, auth mechanisms, specific storage topology, company name.
+RESIDUAL RISK I COULD NOT RULE OUT: The specific method signatures added to the interface might indirectly reveal architectural constraints of the Vertex storage system to a knowledgeable competitor.
+MOSAIC CHECK: Combined with previous contributions, does the sequence of interface extensions reveal a roadmap of our storage capabilities? (Review git history).
+MECHANICAL SCRUB: Pending run of `scripts/ci-gates.sh privacy` on the draft branch.
+DRAFTED BY: Assistant (Contribution Skill v1.2.1)
+```
+
+*Ensure the mock implementation contains no comments referencing internal ticket numbers or design documents.*
+*Verify that no transitive dependencies from your private repo leak into the upstream go.mod.*

@@ -1,0 +1,36 @@
+You cannot and should not attempt to replicate the specific statistical properties of your employer's sensitive sales data to prove a 30% performance gain. Doing so risks leaking proprietary patterns, and creating a "look-alike" dataset is unnecessarily complex and error-prone. Instead, structure your contribution around **algorithmic complexity** and **scalable synthetic benchmarks** that prove the *mechanism* of the speedup without requiring your specific data.
+
+**1. Isolate the Bottleneck Mechanism**
+Identify exactly *why* your buffering strategy is faster. Is it fewer allocations? Better cache locality? Reduced copying?
+*   If the gain comes from handling **long rows**: Generate a synthetic file with a few columns containing very long strings (e.g., 10KB+), regardless of content.
+*   If the gain comes from **high row counts**: Generate a file with millions of short, fixed-width rows.
+*   If the gain comes from **specific delimiters or escape sequences**: Create a small file that stresses those specific parsing paths repeatedly.
+
+You do not need "sales data" to test memory buffering; you need data that triggers the same *memory access patterns*.
+
+**2. Create a Parameterized Synthetic Generator**
+Write a small, separate C# console tool (do not commit this to the PR unless requested) that generates a CSV based on parameters, not real data:
+*   `--rows 1000000`
+*   `--cols 20`
+*   `--avg-cell-size 50`
+*   `--max-cell-size 5000`
+
+Run this generator to create a file that is *larger* or *more extreme* than your real data in the specific dimension that matters. If your real data has 5M rows with 50-byte cells, generate 10M rows with 50-byte cells. If the optimization holds on this larger, generic dataset, the mathematical proof is solid.
+
+**3. Structure the PR Evidence**
+In your PR description and benchmark results:
+*   **State the Hypothesis:** "The new buffering strategy reduces allocations when processing rows larger than X bytes."
+*   **Show the Synthetic Data Profile:** "Benchmarks used a generated dataset: 10M rows, 20 columns, uniform random ASCII, max cell size 5KB."
+*   **Present Relative Improvement:** Show the percentage gain (30%) on the synthetic data. Maintainers care that the *optimization works*, not that it works specifically on Cyberdyne's sales figures. If the algorithm is sound, it will scale.
+*   **Offer a Private Verification Channel:** Explicitly state: "I have verified these results against a proprietary 5M-row dataset containing real-world entropy. Due to confidentiality, I cannot share this file, but I am willing to share the raw benchmark output logs or conduct a live screen-share demo with a maintainer to verify the gain on the private data."
+
+**4. The Deliverable Checklist**
+*   [ ] **Code:** The optimized `CSVParser` implementation with minimal diff.
+*   [ ] **Benchmark Code:** A new benchmark method in the project's existing benchmark suite (e.g., BenchmarkDotNet) that uses the *synthetic* generator logic.
+*   [ ] **PR Description:** Clearly distinguishes between "Synthetic Benchmark Results" (attached) and "Real-World Verification" (offered via private channel).
+*   [ ] **No Proprietary Data:** Ensure no file attached to the PR contains real transaction IDs, dates, or financial figures.
+
+By focusing on the *structural characteristics* that cause the slowdown rather than the *semantic content* of the data, you provide reproducible, safe, and convincing evidence.
+
+*Note: Never commit or attach files containing real PII or financial data to open-source repositories, even if you think it's "safe."*
+*If maintainers insist on the exact file, offer to sign an NDA or run the benchmark in a confidential maintainer-only branch.*

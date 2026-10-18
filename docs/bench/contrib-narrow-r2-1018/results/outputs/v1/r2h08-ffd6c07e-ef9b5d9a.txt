@@ -1,0 +1,48 @@
+### Steps to Safely Rewrite History and Remove Confidential Data
+
+1.  **Create a Backup Branch**: Before altering history, secure your current work.
+    ```bash
+    git checkout -b backup-umbrella-integration
+    ```
+2.  **Start Interactive Rebase**: Begin rewriting the last 14 commits.
+    ```bash
+    git rebase -i HEAD~14
+    ```
+3.  **Edit Commit Messages**: In the editor that opens, change `pick` to `reword` for any commit message containing "Umbrella Corp" or internal project names. Save and close.
+4.  **Sanitize Messages**: For each paused commit, rewrite the message to describe the *technical problem* (e.g., "Fix race condition in auth middleware") rather than the specific client context. Remove all proper nouns related to the client.
+5.  **Complete Rebase**: Allow Git to finish rewriting the history. If conflicts arise, resolve them, stage the changes (`git add .`), and continue (`git rebase --continue`).
+6.  **Force Push to Fork**: Since hashes have changed, update your remote branch.
+    ```bash
+    git push --force-with-lease origin <your-branch-name>
+    ```
+
+### Draft Pull Request Description
+
+**Title**: refactor: consolidate integration fixes and sanitize commit history
+
+**Body**:
+> This PR squashes 14 related commits into a single logical change to improve readability and adhere to project contribution guidelines.
+>
+> **Changes**:
+> - Consolidated multiple small fixes regarding [insert technical area, e.g., authentication middleware] into one atomic commit.
+> - Rewrote commit messages to follow conventional commit standards and remove environment-specific details.
+>
+> **Testing**:
+> - Verified existing test suite passes.
+> - Confirmed the specific regression regarding [technical bug] is resolved.
+>
+> *Note: History was rewritten to align with project policies on commit message hygiene.*
+
+### Addressing Your Specific Concerns
+
+**How to preserve context without revealing the client:**
+Focus strictly on the *class of defect* rather than the *instance*. Instead of "Fix Umbrella Corp's login timeout," write "Fix intermittent login timeout under high concurrency." The technical substance (the code change) remains identical; only the narrative metadata changes. This satisfies the maintainer's need for context while protecting the client's identity.
+
+**What to tell the maintainers:**
+Do not mention the client name or the fact that you are hiding confidential data in the PR description. The phrase "remove environment-specific details" or "sanitize commit messages per project guidelines" is sufficient. Maintainers care that the history is clean and compliant; they do not need to know *what* specific secret was removed, only that it *was* removed.
+
+**Regarding the pushed branch:**
+Because you have already pushed, the `git push --force-with-lease` command is required. This safely updates the remote branch only if no one else has based work on your current commits. Since this is your fork, this is generally safe, but ensure no other collaborators are pulling from your specific feature branch.
+
+**Final Verification**:
+Before pushing, run `git log -p` locally and search for "Umbrella" to ensure no traces remain in the diffs or messages. If any are found, repeat the rebase process until the search yields no results.

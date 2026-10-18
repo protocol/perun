@@ -1,0 +1,47 @@
+### Upstream Contribution Plan for Hydra Database
+
+**1. Immediate Stop Checks**
+Before drafting any code, you must clear three specific hurdles:
+*   **Employer IP Approval:** Obtain written legal clearance from Prometheus Systems to release the indexing strategy. Once public, this cannot be recalled.
+*   **Contributor Agreement:** Ensure you have signed the Hydra project's CLA. Do not sign on behalf of your employer unless explicitly authorized.
+*   **Scope Strategy:** Given the maintainers' skepticism of large corporate patches, **do not** propose the full 40-file diff immediately. A monolithic patch from a private fork is often rejected as "unreviewable" or "too coupled to internal needs."
+
+**2. Generalization and Sanitization Strategy**
+You cannot simply "scrub" secrets; you must reconstruct the logic to be generic.
+*   **Replace Infrastructure Specifics:** Rewrite all configuration constants and logging formats. Change `prometheus_tx_limit` to `hydra_max_transaction_batch`. Replace paths like `/opt/prometheus/hydra/logs` with standard relative paths or environment-variable-driven defaults.
+*   **Synthetic Reproduction:** Do not use your real workload logs to test the patch. Create a synthetic benchmark script using invented data values that demonstrate the *class* of problem (high-volume writes) without revealing your specific data shape or volume thresholds.
+*   **Logic Decoupling:** If your indexing strategy relies on assumptions specific to Prometheus's traffic patterns (e.g., "writes always arrive in bursts of 50ms"), generalize the code to accept these as tunable parameters rather than hardcoded logic. If the logic *only* makes sense for your specific workload, it is not upstreamable; keep it local.
+
+**3. Proposed Engagement Strategy**
+Do not open a Pull Request (PR) yet. Follow this sequence:
+*   **Step A: The "Problem Statement" Issue.** Open an issue titled "Proposal: Optimizing write throughput for high-volume transactional workloads." Describe the *performance problem* generally (e.g., "lock contention during bulk inserts") without mentioning Prometheus Systems or your specific 30% metric. Ask if the maintainers are interested in this direction.
+*   **Step B: The Modular Breakdown.** If they respond positively, propose breaking the 40-file change into 3-4 smaller, logical PRs (e.g., "Refactor lock manager," "Add configurable write buffer," "Implement new index backend").
+*   **Step C: The First PR.** Submit only the first, smallest, least controversial piece. This builds trust.
+
+**4. What to Omit**
+*   **Competitive Advantages:** Do not reveal the exact tuning parameters that give you the 30% speedup if those parameters are derived from proprietary customer data. Instead, expose them as configurable flags with safe defaults.
+*   **Internal Architecture:** Never mention "Prometheus Systems," internal hostnames, or specific client names in code comments, commit messages, or issue text.
+*   **Roadmap/Timing:** Do not discuss *why* this is being contributed now (e.g., "we are migrating away from this fork"). Keep the narrative focused solely on technical merit.
+
+**5. Draft Commit Message Template**
+```text
+feat(indexing): introduce configurable write-optimized index backend
+
+This change adds a pluggable indexing strategy designed to reduce lock
+contention during high-frequency write operations.
+
+- Refactors the lock manager to support batched updates.
+- Adds `hydra_write_batch_size` configuration option.
+- Includes synthetic benchmarks demonstrating throughput improvements
+  under simulated high-load conditions.
+
+Fixes #<issue-number-to-be-created>
+```
+
+**6. Fallback Plan**
+If the maintainers remain silent after two weeks, send one polite follow-up asking if the proposed direction aligns with the project roadmap. If they reject the approach or request changes that would reveal proprietary logic, stop the upstreaming attempt and maintain the fork privately.
+
+***
+
+**Note:** You must run a mechanical privacy gate (e.g., a script scanning for banned strings/patterns) on your final diff before any human reviews it.
+**Note:** Never attempt to automate the opening of the PR; a human must verify the sanitized output and click the button.

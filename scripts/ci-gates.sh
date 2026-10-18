@@ -164,7 +164,7 @@ cmd_privacy() {
   for t in "${targets[@]}"; do
     while IFS= read -r -d '' f; do
       skip=0
-      for b in "${skip_bases[@]}"; do [ "$(basename "$f")" = "$b" ] && skip=1; done
+      for b in "${skip_bases[@]}"; do [ "${f##*/}" = "$b" ] && skip=1; done
       [ "$skip" -eq 1 ] || scan+=("$f")
     done < <(scan_files "$t")
   done
@@ -176,8 +176,19 @@ cmd_privacy() {
     # target paths from being read as options. Capture grep's exit status
     # explicitly: 0 = matches, 1 = clean, anything else = gate error (no
     # always-success fallback, so a broken scan fails closed).
-    files="$(grep -IlE -D skip -e "$pat" -- "${scan[@]}" 2>/dev/null)" \
-      && status=0 || status=$?
+    # Chunked: one argv holding every path overflows ARG_MAX on large trees
+    # (macOS fails at ~15K files with exit 126). Merge per-chunk statuses so a
+    # match anywhere wins over clean and any error still fails closed.
+    files="" status=1
+    local i out cs
+    for ((i = 0; i < ${#scan[@]}; i += 1000)); do
+      out="$(grep -IlE -D skip -e "$pat" -- "${scan[@]:i:1000}" 2>/dev/null)" && cs=0 || cs=$?
+      case "$cs" in
+        0) files+="${files:+$'\n'}$out"; [ "$status" -gt 1 ] || status=0 ;;
+        1) : ;;
+        *) status=$cs; break ;;
+      esac
+    done
     case "$status" in
       0)
         printf 'BLOCK: a banned pattern matched (content withheld); files:\n' >&2

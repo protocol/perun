@@ -1,0 +1,46 @@
+### Stop Checks: Legal and Policy Clearance Required
+Before drafting any public text, you must clear the following internally. **Do not proceed** until these are resolved by a human authority:
+1.  **Employer IP/Legal Approval:** Your employment agreement likely governs code written during work hours or using company resources. You need explicit written permission from Acme Logistics' legal or management team to contribute this specific fix to an open-source project.
+2.  **Conflict of Interest:** Confirm with your employer that contributing a fix derived from analyzing a competitor (FastShip Co) does not violate non-compete clauses or trade secret policies.
+3.  **Project Venue Policy:** Check if the OpenScrape project has a specific channel for security-sensitive parser fixes or if they require issues to be filed before PRs.
+
+### Generalized Pull Request Draft
+*Note: This draft strips all references to "Acme," "FastShip Co," "competitor," and specific business contexts. It frames the issue as a generic robustness improvement.*
+
+**Title:** fix(parser): handle dynamic class names in tracking page selectors to prevent NPE
+
+**Description:**
+**Problem**
+The current parser logic assumes static class names for specific elements on tracking pages. Recent changes in target site structures (specifically dynamic class generation) cause a `NullPointerException` at line 402 when the expected selector fails to match. This breaks parsing for valid tracking pages that utilize modern, obfuscated, or dynamic CSS classes.
+
+**Solution**
+This PR replaces the brittle static class selector with a more robust attribute-based selector (e.g., matching `data-*` attributes or structural hierarchy) that remains stable even when presentation classes change dynamically.
+
+**Testing**
+- Verified fix against a local reproduction case simulating dynamic class name rotation.
+- Confirmed existing tests pass; new test case added covering the dynamic class scenario.
+- **Before:** `NullPointerException` thrown when dynamic classes are present.
+- **After:** Parser successfully extracts tracking data regardless of class name volatility.
+
+**Risk**
+Low. The change is scoped strictly to the selector logic for tracking pages. It does not alter data extraction logic or network handling.
+
+---
+
+### Residual Risk & Human Sign-off Block
+*(Keep this section private; do not include in the public PR)*
+
+```
+SOURCE (internal only): Acme Logistics internal tooling / Competitor analysis context
+GENERALIZED-AWAY: Removed all references to "Acme," "FastShip Co," "competitor," specific URLs, and business strategy. Framed as a generic library robustness issue.
+RESIDUAL RISK I COULD NOT RULE OUT: The timing of this contribution immediately following internal competitor analysis could be inferred by observers. The specific "dynamic class" pattern might be unique enough to fingerprint the target site if cross-referenced with public site updates.
+MOSAIC CHECK: If you have previously contributed Acme-specific fixes, this adds to a pattern of supply-chain monitoring tooling improvements.
+MECHANICAL SCRUB: [Run scripts/ci-gates.sh privacy manually before committing]
+DRAFTED BY: Assistant (Contribution Skill v1.2.1)
+```
+
+**Direct Answer to Your Concern:**
+You cannot safely mention the specific site or your employer's strategy in the PR. The standard practice is to generalize the technical trigger (dynamic classes) without naming the source. However, **generalizing the text does not absolve you of IP obligations**; the code itself may still be considered work-for-hire belonging to Acme. You must obtain internal authorization before opening this PR.
+
+**Fallback:**
+If legal approval is denied or delayed, do not open the PR. Instead, consider discussing the *abstract* technical problem (without code or company context) in the project's discussion forum to see if maintainers are already aware, or keep the patch strictly internal.

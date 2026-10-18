@@ -1,0 +1,50 @@
+Here is a fictional, domain-agnostic Go snippet that reproduces the `interface conversion: interface {} is nil, not types.Generic` panic pattern without exposing any proprietary logic. This example uses a generic "Calculator" pattern that mimics the structural composition of type parameters and interface assertions likely causing the crash, while stripping all financial context.
+
+```go
+package main
+
+import "go/types"
+
+// Fictional generic container mimicking the structural pattern of the proprietary module
+type Container[T any] struct {
+	value T
+}
+
+// Interface that the linter fails to handle when T is inferred as nil in specific contexts
+type Processable interface {
+	Process() string
+}
+
+// A generic function that triggers the linter's panic path via interface assertion
+func handle[T any](c Container[T]) {
+	// The crash occurs when the linter attempts to resolve 'T' against 'Processable'
+	// in a context where type information is temporarily nil during inference.
+	var _ interface{} = c.value
+
+	// This specific pattern of assertion on a generic type parameter often triggers
+	// the "interface {} is nil, not types.Generic" panic in the linter's AST walker.
+	if _, ok := interface{}(c.value).(Processable); ok {
+		// Logic irrelevant to the crash, kept minimal
+	}
+}
+
+// Concrete type to satisfy the interface, ensuring the code compiles but still crashes the linter
+type DummyImpl struct{}
+
+func (d DummyImpl) Process() string {
+	return "dummy"
+}
+
+func main() {
+	// Instantiation that forces the linter to traverse the generic assertion path
+	c := Container[DummyImpl]{value: DummyImpl{}}
+	handle(c)
+}
+```
+
+**Usage Instructions:**
+1. Save this as `repro.go` in a fresh module (`go mod init repro`).
+2. Run the specific linter version that crashes against this file.
+3. If the panic persists, the issue is confirmed as a linter bug unrelated to your business logic.
+
+This snippet isolates the compiler/linter interaction with generics and interface assertions, removing all domain-specific variables while preserving the structural trigger.

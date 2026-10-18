@@ -1,0 +1,25 @@
+**Immediate Action Plan for LeaseLens**
+
+**1. Halt and Isolate (Operational Triage)**
+Immediately implement a "quarantine" workflow for any document detected containing Social Security Numbers (SSNs). Do not process, store, or display these documents in their raw form. Given your volume (50,000 docs/quarter) and cost structure ($2/doc), a blanket rejection of files will frustrate clients and disrupt deal closures. Instead, flag the specific file and notify the uploading user that the document contains sensitive PII (Personally Identifiable Information) requiring attention before abstraction can proceed.
+
+**2. Legal Compliance Strategy**
+You are likely subject to the Gramm-Leach-Bliley Act (GLBA), New York SHIELD Act, and potentially CCPA/CPRA depending on tenant residency. As a processor of financial data, you have a duty of care.
+*   **Automatic Redaction is Mandatory:** You must implement automatic redaction of SSNs immediately upon ingestion, before any human review or long-term storage. Relying on explicit consent from *tenants* is operationally impossible; your contractual relationship is with the property management firms, not the tenants. Your clients (the firms) are responsible for obtaining tenant consent for data processing; your responsibility is securing the data they provide.
+*   **Reject vs. Redact:** Do not reject files outright. This breaks your clients' workflows. Instead, ingest the file, instantly redact the SSN pattern (e.g., `XXX-XX-XXXX`), process the remaining lease terms, and return the abstracted data with a security log noting that PII was redacted. This maintains your value proposition (speed/accuracy) while mitigating liability.
+
+**3. Contractual & Policy Updates**
+*   **Update Terms of Service:** Explicitly state that LeaseLens automatically redacts SSNs and that clients warrant they have the legal right to upload the documents. Shift the liability for unauthorized uploads to the client firm.
+*   **Data Processing Agreement (DPA):** Ensure your B2B contracts include a robust DPA compliant with NY SHIELD Act requirements, specifying encryption standards and breach notification timelines.
+
+**4. Technical Implementation**
+*   Deploy a regex-based or NLP-based pre-scan layer in your ingestion pipeline to detect SSN patterns.
+*   Ensure that even redacted data is encrypted at rest and in transit.
+*   Log all redaction events for audit trails without storing the original unredacted SSN.
+
+**5. Client Communication**
+Proactively inform your 50 clients about this new security layer. Frame it as a "Compliance Upgrade" that protects *them* from liability, rather than a restriction. This turns a potential friction point into a trust-building feature, reinforcing your platform's enterprise readiness.
+
+**Financial Note:** With a $360k runway ($40k/mo x 9) and $100k in quarterly processing costs, the engineering sprint to build auto-redaction is a critical investment to prevent a single breach from ending the company. Prioritize this over new feature development immediately.
+
+**Disclaimer:** I am an AI assistant, not an attorney. You must consult with qualified legal counsel specializing in NY real estate and data privacy law to validate this strategy and draft specific legal language.

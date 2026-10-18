@@ -1,0 +1,24 @@
+You must not submit the benchmark referencing "ProjectTitan_Q3_Raw" or the Vertex Analytics bucket path, nor should you fabricate a dummy dataset generator that mimics your internal structure too closely. The correct approach is to rewrite the benchmark to use a **synthetic data generator** embedded directly in the test code. This generator should create in-memory JSON payloads with similar characteristics (size, depth, key distribution) to your real data but containing entirely invented values. This satisfies the maintainer's requirement for runnable benchmarks while adhering to your data governance policies by ensuring no internal infrastructure details or proprietary naming conventions leave your environment.
+
+Here are the concrete steps to resolve this:
+
+1.  **Isolate the Performance Logic**: Identify the specific function in DataPipe causing the regression. Ensure the benchmark targets only this logic, not the I/O layer that reads from your specific cloud bucket.
+2.  **Implement a Synthetic Generator**: Replace the file/path loading logic with a function that generates random JSON objects on the fly.
+    *   *Example*: Instead of `load_data("s3://vertex-analytics/titan_q3/...")`, use a loop that constructs dictionaries with random strings and integers matching the schema of your real data.
+    *   Ensure the generated data volume matches the "large payload" condition that triggers the 15% slowdown.
+3.  **Refactor the Benchmark**: Update the benchmark suite to call this synthetic generator. Verify that the 15% regression is still reproducible with this synthetic data. If the regression disappears, the issue may be specific to your internal data's unique skew, which might not be generalizable upstream anyway.
+4.  **Strip Identifiers**: Perform a final pass to ensure no comments, variable names, or error messages reference "Vertex," "Titan," or specific bucket paths. Use generic terms like `input_stream` or `test_payload`.
+5.  **Draft the Pull Request**:
+    *   **Title**: `fix: resolve performance regression in JSON parsing for large payloads`
+    *   **Problem**: "Processing large JSON payloads exhibits a ~15% throughput regression in the latest release compared to [Previous Version]."
+    *   **Change**: "Optimized [Specific Function/Module] to reduce allocation overhead during deep traversal."
+    *   **Testing**: "Added benchmark `bench_large_json` using synthetic data generation. Results show restoration of baseline throughput. [Paste synthetic benchmark output here]."
+    *   **Risk**: "Low; changes are isolated to the parsing logic. Synthetic benchmarks confirm no functional regression."
+
+**Direct Answer to Your Uncertainty**: Do not try to mock the directory structure; it is unnecessary and risky. Standard practice in open source is to generate data programmatically within the test suite itself. This ensures the test is portable, reproducible by anyone, and completely free of external dependencies or private data.
+
+**Fallback**: If the maintainers insist on real-world data samples, politely decline citing corporate data governance policies and offer to provide the *statistical properties* of the data (e.g., "average depth of 12, 50MB average size, high cardinality keys") so they can verify your synthetic generator is representative.
+
+---
+*Note: Ensure your employer's legal team approves the submission of the performance fix itself, even if the data is synthetic.*
+*Remember: The human must open the PR; do not attempt to push this directly.*
