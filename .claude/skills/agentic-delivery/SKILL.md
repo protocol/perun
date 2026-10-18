@@ -27,7 +27,7 @@ chat may be terse.
 
 **No files/tools (plain chat)?** Say so once; never claim a reference loaded or a command run. Write `would run: <cmd>`, mark skipped depth `unverified-depth`, answer first, reasoning short.
 
-**Task to entry** — a match skips `INDEX.md`; otherwise read it (every reference/script trigger) and open only matching rows.
+**Task to entry** — a match skips `INDEX.md`; else read it and open only matching rows.
 
 | Task | Open |
 |---|---|
@@ -35,7 +35,7 @@ chat may be terse.
 | Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md`; repeat flake: `scripts/flake_ledger.py` |
 | Start a lane | `templates/lane-preamble.md` |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
-| Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first |
+| Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first; claims: `scripts/outcome_claim_guard.py` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
 | Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |

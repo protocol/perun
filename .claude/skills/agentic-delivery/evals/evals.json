@@ -2907,6 +2907,18 @@
         "Allows a re-push for review feedback or a conflict and names the pre-push warning as the only mechanical part, the rest being a lane rule",
         "Explains auto: github_actions off means local-first, otherwise the cost advisor decides (public or inside free minutes stays cloud), and an advisor failure means cloud"
       ]
+    },
+    {
+      "id": "outcome-claim-measured-before-after",
+      "prompt": "A coordinator agent opened a PR that adds a shared merge lock to the merge train and two more PRs that trim the CI gate. It is about to end its turn with: \"Pipeline fixed: the merge lock ends the risk once it lands, and we merged 9 PRs and spawned 4 lanes today.\" The operating layer is installed. What happens, and what should the reply say instead?",
+      "expected_output": "outcome_claim_guard.py runs on Stop and flags the reply: \"fixed\" and \"ends the risk\" are outcome claims about the pipeline with no before and after, and 9 PRs merged and 4 lanes spawned are output counts, not outcome. In the default warn mode the owner sees a system message; with policy outcome_guard block (or PERUN_OUTCOME_GUARD=block) the stop is blocked once and the model is told to measure or restate, and stop_hook_active keeps it from looping. A compliant reply either says the lock and gate PRs are opened and unmeasured, or gives a before and after on an outcome metric (gate minutes, lead time, landed per hour, failure rate) after the code merged, naming the merged sha or PR. Measuring means pipeline_profile.py compare on before and after profiles; when a PR touches pipeline paths, gh pr create and gh pr merge also want its verdict line in the PR body or a commit, and only KEEP passes.",
+      "expectations": [
+        "Says the Stop hook flags the reply because fixed and ends the risk are unmeasured outcome claims",
+        "Says PR, lane, test and file counts are output, not evidence of outcome",
+        "Names the compliant forms: an honest opened, unmeasured, or a before and after on an outcome metric tied to a merged sha or PR",
+        "States the default is warn, block mode blocks once, and stop_hook_active prevents a loop",
+        "Points to pipeline_profile.py compare for the measurement and says only a KEEP verdict passes the PR check on pipeline paths"
+      ]
     }
   ]
 }

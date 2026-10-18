@@ -14,6 +14,9 @@ whether perun_auto_update.py may re-apply a newer release tag in the background.
 up (never auto-merged); `auto_update_pr_base` (default empty = `origin/HEAD`) names the branch that PR targets and
 that the committed-version WARN compares against (a base missing on origin skips the PR). `review_gate` takes
 `warn|enforce|off` (default `warn`): whether review_gate.py blocks a merge with no independent review receipt.
+`outcome_guard` takes `off|warn|block` (default `warn`): whether outcome_claim_guard.py flags or blocks an unmeasured "fixed/faster"
+claim and a pipeline PR with no KEEP verdict; env `PERUN_OUTCOME_GUARD` overrides it. `outcome_guard_paths` (a JSON list of fnmatch
+globs, edit the file; default `[]` = the script's built-in workflow/hook/train/gate/CI globs) names the pipeline paths.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
 (`off` skips it; a value the user already set is never overridden either way). `release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
 `role` takes `off|ceo|ceo-strict` (default `off`; `ceo strict` is read as `ceo-strict`): whether ceo_altitude_guard.py warns (`ceo`) or
@@ -92,10 +95,14 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "role": "off", "ci": "auto"}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": []}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
+        elif k == "outcome_guard":
+            ok = v in ("off", "warn", "block")
+        elif k == "outcome_guard_paths":
+            ok = isinstance(v, list) and all(isinstance(g, str) and g.strip() for g in v)
         elif k == "role":  # canonicalised below: pol[k] stores the normalised spelling
             v = norm_role(v)
             ok = v in ROLES

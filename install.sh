@@ -107,6 +107,7 @@ on re-install). Overlay skills are opt-in.
                        Write .claude/settings.operating-layer.json.new: the
                        heavy_gate.py PreToolUse and session_brief.py SessionStart hooks, the
                        ceo_altitude_guard.py hook (counts always, warns/blocks only once policy role is set), the
+                       outcome_claim_guard.py Stop + PreToolUse hook (unmeasured "fixed/faster" claims; policy outcome_guard), the
                        SubagentStart house-default injector, the two-tier
                        SubagentStop handback_cap, and the subagent model pin
                        (agentic-delivery/references/operating-discipline.md).
@@ -687,7 +688,7 @@ if [[ "${WITH_OPERATING_LAYER}" -eq 1 && "${APPLY_OPLAYER}" -eq 1 ]]; then
 
 What changed in ${TARGET_DIR}:
   1. Skills copied to .claude/skills (+ .cursor, .agents); any existing copy moved to <host>/skill-backups/.
-  2. .claude/settings.local.json: operating-layer hooks (PreToolUse incl. heavy_gate.py + lane_resume_nudge.py + ceo_altitude_guard.py, PostToolUse lane_cap.py, SessionStart session_brief.py + handoff_inject.py + auto-update, UserPromptSubmit context_nudge.py + auto-update + ceo_altitude_guard.py, SubagentStart, SubagentStop), env (incl. LANE_TOOL_CAP=250), the model pin ${OPLAYER_MODEL_NOTE} and autoCompactWindow=200000 (only if no settings file sets it; policy auto_compact=off skips) merged in; previous file saved as .bak.<timestamp>.
+  2. .claude/settings.local.json: operating-layer hooks (PreToolUse incl. heavy_gate.py + lane_resume_nudge.py + ceo_altitude_guard.py + outcome_claim_guard.py, PostToolUse lane_cap.py, Stop outcome_claim_guard.py, SessionStart session_brief.py + handoff_inject.py + auto-update, UserPromptSubmit context_nudge.py + auto-update + ceo_altitude_guard.py, SubagentStart, SubagentStop), env (incl. LANE_TOOL_CAP=250), the model pin ${OPLAYER_MODEL_NOTE} and autoCompactWindow=200000 (only if no settings file sets it; policy auto_compact=off skips) merged in; previous file saved as .bak.<timestamp>.
      Skills and permissions apply to open sessions without a restart; a hook change (new entries, or old relative paths upgraded to "\$CLAUDE_PROJECT_DIR" paths) and a model change reach already-running sessions only after a restart.
      Auto-update: that hook runs release code from the Perun remote in the background (newest vX.Y.Z tag, at most every 6h).
      Opt out: re-run install.sh with --no-auto-update, or set "auto_update": "off" in .perun/policy.json.
