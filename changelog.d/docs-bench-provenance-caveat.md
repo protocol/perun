@@ -1,0 +1,2 @@
+### Changed
+- `docs/perun-vs-rivals.md`: ten bench dirs (`bizops-e-confirm-1018`, `bizops-sup-1018`, `comms-quality-1016`, `comms-r4-1017`, `delivery-r1-1017`, `delivery-sup-1018`, `idea-critic-rep-1018`, `idea-critic-v2-1016`, `pos-1016`, `safety-c300-1018`) have an in-dir file that fails its `SHA256-frozen.txt` check, so their preregistration cannot be verified. Rows, claims and headings that cite them are marked `(provenance unverified)`, with a new "Provenance caveat" section. No verdict or number changed.

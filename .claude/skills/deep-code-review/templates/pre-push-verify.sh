@@ -363,18 +363,46 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         fg_fail=1
       fi
     }
+    in_tree() { (cd "${fg_tree}" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && "$@"); }
+    # Removes this gate's throwaway worktree and mktemp dir. Runs on every exit path (EXIT, INT, TERM, failed
+    # worktree add, normal end). Guarded: deletes only a non-empty fg_tmp under ${TMPDIR:-/tmp} with the dcr-prepush. prefix.
+    fg_cleanup() {
+      case "${fg_tmp:-}" in "${TMPDIR:-/tmp}"/dcr-prepush.*) git worktree remove --force "${fg_tmp}/t" >/dev/null 2>&1 || :; rm -rf "${fg_tmp}" ;; esac
+      fg_tmp=""; fg_tree="${PWD}"
+    }
+    # Derived files (INDEX.md, SHA256SUMS) are not committed by lane PRs: they are rebuilt at land time
+    # (VERSION moved vs the base) and checked there. Unlanded, CI rebuilds them, so skip the stale checks.
+    derived=1; [ -f scripts/regen-unlanded.sh ] && bash scripts/regen-unlanded.sh --check "${fg_base}" && derived=0
+    # Unlanded, CI regenerates derived files (INDEX.md, size rows) BEFORE size-ratchet and bench-check, so run
+    # both on a throwaway checkout of the pushed commit after the same regen: the user's tree is never touched.
+    fg_tree="${PWD}"; fg_tmp=""
+    if [ "${derived}" -eq 0 ] && { [ -f scripts/size-budgets.tsv ] || [ -f scripts/bench_check.py ]; }; then
+      fg_tmp="$(mktemp -d "${TMPDIR:-/tmp}/dcr-prepush.XXXXXX")"
+      trap fg_cleanup EXIT
+      trap 'fg_cleanup; exit 130' INT TERM
+      if git worktree add -q --detach "${fg_tmp}/t" "${local_sha}" >/dev/null 2>&1; then
+        fg_tree="${fg_tmp}/t"
+        fg "regen-unlanded.sh (CI runs it before the ratchet)" "run 'bash scripts/regen-unlanded.sh ${fg_base}' on a clean checkout and fix what it prints" \
+          in_tree bash scripts/regen-unlanded.sh "${fg_base}"
+      else
+        printf 'pre-push-verify: FAIL -- cannot create a throwaway checkout of %s. Fix: free disk or TMPDIR, then push again.\n' "${local_sha}" >&2
+        fg_fail=1
+        fg_cleanup
+      fi
+    fi
     [ -f scripts/size-budgets.tsv ] && fg "size-ratchet vs ${fg_base}" \
-      "run 'bash scripts/land-release.sh --regen' if the raise is real, then add the marker line quoted in the RATCHET FAIL above ('size-budget-raise: <path> <old>→<new> <reason>') to a commit message in this range" \
-      bash scripts/ci-gates.sh size-ratchet --base "${fg_base}" --config scripts/size-budgets.tsv .
+      "add the marker line quoted in the RATCHET FAIL above ('size-budget-raise: <path> <old>→<new> <reason>') to a commit message in this range; CI rebuilds derived files first, so growth of INDEX.md or any skill file counts" \
+      in_tree bash scripts/ci-gates.sh size-ratchet --base "${fg_base}" --config scripts/size-budgets.tsv .
+    [ -f scripts/bench_check.py ] && fg "bench_check --changed ${fg_base}" \
+      "fix the bench dir named above (checks: header of scripts/bench_check.py)" \
+      in_tree python3 scripts/bench_check.py --changed "${fg_base}"
+    fg_cleanup
     [ -f scripts/mustload-budgets.tsv ] && fg "mustload floor/ceiling pin" \
       "shrink the must-load read set, or update the pin in scripts/mustload-budgets.tsv in the same commit with the reason" \
       bash scripts/ci-gates.sh mustload --config scripts/mustload-budgets.tsv .
     [ -f scripts/run-evals.py ] && fg "run-evals --selftest" \
       "tag any chat-unanswerable expectation (e.g. an untagged 'Loads ...') with [needs_files] in the skill's evals/evals.json" \
       python3 scripts/run-evals.py --selftest
-    # Derived files (INDEX.md, SHA256SUMS) are not committed by lane PRs: they are rebuilt at land time
-    # (VERSION moved vs the base) and checked there. Unlanded, CI rebuilds them, so skip the stale checks.
-    derived=1; [ -f scripts/regen-unlanded.sh ] && bash scripts/regen-unlanded.sh --check "${fg_base}" && derived=0
     [ "${derived}" -eq 1 ] && [ -f scripts/skill_index.py ] && fg "INDEX.md stale" \
       "run 'bash scripts/land-release.sh --regen' and commit the result (land commits only)" \
       python3 scripts/skill_index.py --check
