@@ -176,7 +176,7 @@ def check(repo, home):
         for line in sandbox_probe.probe(sandbox_probe.checks(repo))[0][:-1]:
             st, _, rest = line.partition(" ")
             name, _, detail = rest.strip().partition(": ")
-            add("OK" if st == "OK" else "WARN", f"sandbox {name}", detail or "works")
+            add({"OK": "OK", "SKIP": "INFO"}.get(st, "WARN"), f"sandbox {name}", detail or "works")
     return rows
 
 
