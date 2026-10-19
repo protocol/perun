@@ -17,8 +17,11 @@
 # (train_flake.sh --base: FLAKE_REAL_AT (default FLAKE_RUNS) of FLAKE_RUNS failures, each printing `FAIL <id>` so a test absent on the base is NOT excused); those are pre-existing ("BASE RED: <n> pre-existing: ids") and never block, only new failures do.
 # A FLAKE-only red lands only when every flaked id also fails >= 1 of FLAKE_RUNS solo runs on the base; one that passes N of N there is CANT (exit 3).
 # FLAKE_LEDGER_DIR=<dir> (flake_ledger.py): an id on its active quarantine list that re-runs as a flake is reported `quarantined-flake`, does not block, and skips the base check.
-# Flake triage (see train_flake.sh; BROWSER_CMD must print `FAIL <id>` per failure and `FAILURES <n>`): RERUN_CMD (TEST=<id>), BASELINE_FAILS (ids failing on the base); LOCK_TIMEOUT_MIN (30), PUSH_WAIT_SECS (600).
-# Exit: 0 landed, 1 base/browser red or lock held, 2 usage/refused, 3 no GREEN union or CANT (nothing landed; CANT = a real browser failure
+# Flake triage (see train_flake.sh; BROWSER_CMD must print `FAIL <id>` per failure and `FAILURES <n>`): RERUN_CMD (TEST=<id>), BASELINE_FAILS (ids failing on the base); LOCK_TIMEOUT_MIN (30), PUSH_WAIT_SECS and LEASE_WAIT_SECS (both default LOCK_TIMEOUT_MIN*60).
+# Waiting, not refusing: a gate that finds the exclusive heavy lease held waits up to LEASE_WAIT_SECS, then DEFERs (exit 4, nothing built, retry later). A landing train's
+# push lock is waited out BEFORE the fetch and compose, so the union is built on the base that landing leaves and a held or stale lock fails before any gate work.
+# The lease is released once the push lock is held (landing is not heavy). Composing during another train's landing is deliberately not done: that union is stale at its own land.
+# Exit: 0 landed, 1 base/browser red or lock held, 4 DEFER (lease still held after LEASE_WAIT_SECS; nothing built), 2 usage/refused, 3 no GREEN union or CANT (nothing landed; CANT = a real browser failure
 # not attributed: not re-failing alone, pre-existing on the base, or not pinned to a culprit PR; flaky-only bisects print FLAKY, never blame).
 # Optional: CLEAN_ROOT (your own worktree tree: runs reap_own.sh and clean_finished.sh on it first), BASE_AUDIT_CMD (run via bash -c on the bare fresh base before verifying; non-zero prints
 # "BASE RED" and exits 1, so a red base is never blamed on a PR; a PASS is cached by the base tree through gate_cache.py, shared with
@@ -55,13 +58,21 @@ PERUN_GITHUB_ACTIONS=$(python3 "$HERE/perun_policy.py" get github_actions) && PE
 export PERUN_GITHUB_ACTIONS PERUN_JOBS
 . "$HERE/_lock.sh"
 LOCK=$(git rev-parse --git-dir)/train-land.lock
-lock_take "$LOCK" 0 "${LOCK_TIMEOUT_MIN:-30}" || exit 1
+LT=${LOCK_TIMEOUT_MIN:-30} lw=${LEASE_WAIT_SECS:-$((${LOCK_TIMEOUT_MIN:-30} * 60))}
+lock_take "$LOCK" 0 "$LT" || exit 1
 # Exclusive machine-wide heavy lease while the gate runs: heavy_gate.py denies other heavy commands ("gate running: wait").
-xrc=0; python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
-[ "$xrc" -ne 1 ] || { echo "train_land: another gate holds the exclusive heavy lease" >&2; lock_drop "$LOCK"; exit 1; }
+# Held by another gate: wait for it (up to LEASE_WAIT_SECS), then DEFER with nothing built.
+while :; do
+  xrc=0; python3 "$HERE/perun_policy.py" heavy-exclusive >/dev/null 2>&1 || xrc=$?
+  [ "$xrc" -eq 1 ] && [ "$lw" -gt 0 ] || break
+  lw=$((lw - 1)); sleep 1
+done
+[ "$xrc" -ne 1 ] || { echo "DEFER: another gate holds the exclusive heavy lease; nothing built, retry later" >&2; lock_drop "$LOCK"; exit 4; }
 [ "$xrc" -eq 0 ] || echo "WARN: exclusive heavy lease unavailable (rc=$xrc); gate runs without it" >&2
-PQ=$(git rev-parse --git-common-dir)/train-push.lock
+PQ=$(git rev-parse --git-common-dir)/train-push.lock PW=${PUSH_WAIT_SECS:-$((LT * 60))}
 trap 'clean_union_dirs; lock_drop "$PQ"; python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true; lock_drop "$LOCK"' EXIT
+# A landing train holds the push lock and is moving the base: wait it out before any gate work (a union composed mid-land is stale at its own land).
+lock_take "$PQ" "$PW" "$LT" || exit 1; lock_drop "$PQ"
 if [ -n "${CLEAN_ROOT:-}" ]; then  # start-of-train cleanup of your own finished work; never blocks the train
   ROOT=$CLEAN_ROOT bash "$HERE/reap_own.sh" || true; ROOT=$CLEAN_ROOT bash "$HERE/clean_finished.sh" || true
 fi
@@ -184,6 +195,7 @@ grep -vxFf "$LOG.pinned" "$LOG.real" | grep -q . && cant "real failure(s) not pi
 PRS=("${keep[@]}")
 done
 # Pushes go through one serial queue across worktrees (mkdir lock under the git common dir).
-lock_take "$PQ" "${PUSH_WAIT_SECS:-600}" "${LOCK_TIMEOUT_MIN:-30}" || exit 1
+lock_take "$PQ" "$PW" "$LT" || exit 1
+python3 "$HERE/perun_policy.py" heavy-exclusive-release >/dev/null 2>&1 || true  # push lock held first, so the next gate's wait for it cannot miss this landing
 bash "$HERE/land_train.sh" "$B" "$U"; lrc=$?  # not exec: the EXIT trap must still fire
 lock_drop "$PQ"; exit $lrc
