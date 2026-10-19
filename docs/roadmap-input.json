@@ -512,11 +512,13 @@
   },
   {
    "id": "review-cost-per-recall",
-   "title": "Cut review cost per unit of recall: ratchet the review path's tokens, then re-bench once",
+   "title": "Cut review cost per recalled bug: shrink the review path's loaded tokens, then re-bench once",
    "role": "CFO",
    "lever": "cost",
    "evidence": [
     "docs/perun-vs-rivals.md#h7b-review-patch-only-the-real-skill-against-anthropic-toolkit-2026-10-16",
+    "docs/bench/review-cost-parity-1017/DEVIATIONS.md",
+    "docs/bench/review-real-skill-1016/results.json",
     "README.md",
     "scripts/mustload-budgets.tsv",
     "https://github.com/obra/superpowers/releases/tag/v6.4.1"
@@ -529,10 +531,10 @@
    "effort_src": "assumed: static budget rows, a reference-split pass, then a paid re-bench",
    "vision": "aligned",
    "vision_reason": "Token optimisation and code review: review ties the cheapest rival on recall at about 3.5 times the cost, so cost is the measured gap to close. In the README run a review costs about $0.25 per unit of recall against $0.16 for a plain prompt (derived: cost per case divided by verifier-judged recall, 39 cases), and a rival's v6.4.1 added a cheaper execution mode (Native execution).",
-   "metric": "Review cost per case at equal F1 vs the Anthropic toolkit: 3.5x ($0.0537 vs $0.0153, n=22, H7b) to 2x or less; web-archetype must-load ceiling 20,049 estimated tokens, ratcheted down.",
-   "risks": "Cheaper review that loses recall is not a win: F1 must hold within the H7b interval. The compact-card route failed on held-out cases (H7), so cut loaded tokens, not instructions.",
+   "metric": "Cost per recalled bug on the H7b case set (n=22, patch-only): Perun $0.093 (95% CI 0.066 to 0.150; $0.0537 per review, 13 of 22 bugs) vs the Anthropic toolkit $0.030 (0.017 to 0.056; $0.0153, 12 of 22). Target: Perun's cost per recalled bug falls toward the toolkit's, at recall at or above 0.591 and false alarms at or below the current 0.50. Diagnosis from the committed ledger: 71% of Perun's per-review cost is its gap over the toolkit's, and the gap is flat across turn counts ($0.0545 at 3 turns, $0.0556 at 4), which fits a fixed load (a 23,764-byte SKILL.md read against a 1,933-byte toolkit prompt) rather than output (622 vs 568 finding characters per review). Web-archetype must-load ceiling 20,049 estimated tokens, ratcheted down.",
+   "risks": "Guardrail: a cheaper review that loses recall or adds false alarms is not a win. Recall must stay at or above 0.591 and false alarms at or below 0.50 on the same case set; if either regresses the cut is reverted, even when cost per recalled bug falls. The compact-card route failed on held-out cases (H7) and the lean stub lost F1 (review-cost-parity-1017), so cut loaded tokens, not recall-bearing instructions. The first cut (SKILL.md 23,848 to 21,894 bytes, projected about 8% fewer SKILL.md-sourced tokens (about 490 of the ~6,000 SKILL.md tokens), not measured) is unverified until the paid re-bench.",
    "where": "scripts/mustload-budgets.tsv and the deep-code-review load map; the re-bench follows the H7b method.",
-   "done_when": "The review path's must-load tokens have a ratchet row per archetype that only moves down; the low-context index has landed; one re-bench on the H7b case set reports cost and F1 with intervals.",
+   "done_when": "The review path's must-load tokens have a ratchet row per archetype that only moves down; the low-context index has landed; one re-bench on the H7b case set reports cost per recalled bug, recall and false alarms with intervals, with recall and false alarms no worse than the current values.",
    "verify": "bash scripts/ci-gates.sh mustload . stays green and the ceilings fall; the re-bench ledger is committed in docs/bench/ before the page is edited.",
    "gate": "owner: the paid re-bench",
    "merged_from": [

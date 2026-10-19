@@ -170,7 +170,7 @@ review after the first-response block.
 | 2 Domain audits | Walk applicable A–W with `file:line`; fan-out under `parallel-audit.md` | `domain-checklists.md` → `domain-<letter>.md` per applicable domain + per-domain refs |
 | 3 Adversarial | Hostile user **and** hostile upstream; networked openers: anon GET, two-principal swap, dual-surface, then injection/SSRF | `security-appsec.md`, `security-ai-agents.md`, `security-agent-skills.md` |
 | 4 Synthesize | Dedup, compounds, snippet-or-drop at `START_SHA`, fail-open vs fail-closed, **anti-slop** | `method.md` |
-| 5 Report | Chat BLUF ≤30 lines + full table out-of-tree; in-repo `code-review/` only on confirmation | `method-report.md`, `report-format.md`, `example-review-report.md` |
+| 5 Report | Chat BLUF ≤30 lines + full table out-of-tree; in-repo `code-review/` only on confirmation | `method-report.md`, `report-format.md`, `example-review-report.md`, `review-closeout.md` |
 | 6 Imprint | Opt-in `AGENTS.md` + gates; detect-and-stop if present; pair each standard with a gate | `docs-and-dx.md` |
 
 Phase 6 imprints **this project's review bar**, never delivery (an overlay
@@ -254,27 +254,14 @@ first-response block; it shapes the going-forward roadmap (`report-format.md`).
 | `growth` | Real users, scaling up | little — this is where CI, tests, observability, perf get hardened |
 | `mature` | Stable / maintenance | net-new scope; focus shifts to stability, tech-debt, supply chain |
 
-**Guardrails — a stage is a lens, never an excuse:**
-1. **Declared or evidenced, never guessed.** Stage is owner-stated, or the review
-   **names the signals** it read (tests/CI present, deploy config, users/traffic,
-   version ≥ 1.0, changelog depth) and marks it `UNVERIFIED` when it cannot.
-   **Unstated → default to the stricter (later-stage) reading.** A review that
-   assumed `prototype` and waved a Critical is a worse failure than one that
-   over-asked for CI on a spike.
+**A stage is a lens, never an excuse:** unstated → the stricter reading.
 2. **Security, secret-exposure, and data-loss/integrity findings never relax** (nor safety) — a
-   `prototype` with an exposed credential is still Critical. These have no "relax"
-   entry at any stage; that is why the third column omits them on purpose.
-3. **Stage moves urgency, not intrinsic severity.** Every finding keeps its true
-   severity — reuse the latent-findings rule (intrinsic severity stays; stage
-   changes only what *blocks now*). The going-forward roadmap sequences findings
-   by stage-urgency; it does not downgrade them.
+   `prototype` with an exposed credential is still Critical; these have no "relax"
+   entry at any stage.
 
-**Stage-evolution lenses (when to add, not how to secure).** When the going-forward
-roadmap must say how infrastructure/architecture or documentation should *evolve*
-for its stage, **read** `infra-evolution-by-stage.md` (each step gated on an observable
-trigger; the security/backup floor never relaxes) and `docs-evolution-by-stage.md`
-(trigger-not-calendar); both feed the roadmap in
-`report-format.md`. How-to-secure: `infra-iac-containers.md` (L), `docs-and-dx.md` (O).
+Remaining guardrails (1, 3) and the stage-evolution lenses (`infra-evolution-by-stage.md`,
+`docs-evolution-by-stage.md`): `review-closeout.md` — **read it when** STAGE is unstated or
+contested, or the report needs a going-forward roadmap.
 
 ---
 
@@ -295,29 +282,10 @@ reports are ID + severity + area only.
 
 ## Definition of done
 
-Two checklists; they fail independently.
-
-**(a) Review method complete**
-- First-response block printed (`SCOPE`, `START_SHA`, `TREE_STATE`,
-  `VERIFY_SURFACE` on a web / port / restyle / parity task, `HISTORY_DEPTH`,
-  `REVERTS_CHECKED`, `BANNED_REMEDIES`, `ARCHETYPE`, `STAGE`,
-  `COVERAGE_LEDGER`); citations re-verified at that ref with a verbatim
-  snippet.
-- On a FULL review, `STAGE` is stated (or `UNVERIFIED`, defaulting stricter) and a
-  stage-calibrated going-forward roadmap is produced (`report-format.md`); stage
-  never downgraded a security, secret, or data-loss finding.
-- Every status meets the status rule (evidence surface + strongest reading; a
-  UI/parity claim names the URL/branch/sha of the tree under review or is
-  **invalid**) in `report-format.md`, screened by
-  `scripts/validate_status_claims.py`.
-- Gate self-test claimed only when run.
-- Coverage ledger reconciled; fan-out units attributed (finder + lead-read);
-  incomplete finder = `unverified`.
-- Affirmative "Invariants verified to hold" on a fan-out or hardened target.
-- Identity Arrival Map printed whenever a gate/middleware change is proposed;
-  security/authz changes on their own PR.
-- Standards not claimed unless walked.
-- `mechanism-unproven` fixes keep the finding open.
+Two checklists; they fail independently. **(a) Review method complete:**
+`review-closeout.md` — **read it before declaring a FULL review done**. A DIFF review is
+done when the first-response block was printed and every finding is re-verified at
+`START_SHA` with a verbatim snippet.
 
 **(b) Target ship-ready**
 - Builds and runs with the documented one-command setup.
