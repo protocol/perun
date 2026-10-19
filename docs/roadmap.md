@@ -10,7 +10,7 @@ To regenerate, edit [`roadmap-input.json`](roadmap-input.json) and run
 `scripts/test_roadmap_rank.py` fails when this page and its input drift apart.
 
 <!-- roadmap:begin -->
-**BLUF.** Stage `mvp` (assumed). 22 items ranked (15 open, 7 in flight), 6 rejected. Top: `sandbox-preflight` 3.75 (in flight), `gate-cache-tree-sha` 3.75 (in flight), `autonomy-advisor` 3.33. Start now (highest-ranked open item with no gate): `autonomy-advisor`. 12 of 22 reach inputs are assumed; equal scores rank fewer assumed inputs first.
+**BLUF.** Stage `mvp` (assumed). 22 items ranked (14 open, 8 in flight), 6 rejected. Top: `sandbox-preflight` 3.75 (in flight), `gate-cache-tree-sha` 3.75 (in flight), `autonomy-advisor` 3.33. Start now (highest-ranked open item with no gate): `autonomy-advisor`. 12 of 22 reach inputs are assumed; equal scores rank fewer assumed inputs first.
 
 ## 1. Strategy context
 
@@ -76,7 +76,7 @@ Score = reach × impact × confidence ÷ effort × stage weight × vision factor
 | 2 | `gate-cache-tree-sha` Shared tree-SHA gate cache with gate_map and light-lane weighting | in flight | -, velocity | 3.75 | Hook cycle 47 minutes to 30 seconds and gate runs per tree 3 to 1 (field report F1; survey P1, P2); report the numbers when it lands. | survey:2026-10-16#P1; survey:2026-10-16#P2; [pre-push-verify.sh](../.claude/skills/deep-code-review/templates/pre-push-verify.sh); [preflight.py](../.claude/skills/agentic-delivery/scripts/preflight.py) | - |
 | 3 | `autonomy-advisor` Autonomy advisor: read the sandbox and permission settings and print the narrow rules that stop sandbox retries, never writing settings | open | COO, reliability | 3.33 | Sandbox-blocked retries per session: about 5 (field report F2) to 1 or fewer; one printed rule per probed failure, 0 settings files written. | [peer-survey-2026-10-16.md#f2](../docs/peer-survey-2026-10-16.md#f2); [peer-survey-2026-10-16.md#p3](../docs/peer-survey-2026-10-16.md#p3); [sandbox_probe.py](../.claude/skills/agentic-delivery/scripts/sandbox_probe.py); [host-safety.md](../docs/host-safety.md) | - |
 | 4 | `pr-state-one-shot` pr_state: one command for a PR's checks, mergeability and review state | in flight | -, velocity | 1.88 | Commands needed to learn a PR's state from several gh calls (survey P6) to 1; state after a compaction read in 1 call (survey P10). | survey:2026-10-16#P6; survey:2026-10-16#P10; [gh_rest.py](../.claude/skills/agentic-delivery/scripts/gh_rest.py) | - |
-| 5 | `handback-automator` Lane-handback automator: gates, required-check names, base-branch fast-forward and tracker post; cleanup printed, never run | open | COO, velocity | 1.25 | Manual steps per handback: 6 (lane-preamble.md: wait, handback, clean_finished.sh, reap_own.sh, changelog fragment, git diff --check) to 1; handbacks needing a second pass: unmeasured, count for 2 weeks. | survey:2026-10-16#P7; [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530; issue:#1531 | - |
+| 5 | `handback-automator` Lane-handback automator: gates, required-check names, base-branch fast-forward and tracker post; cleanup printed, never run | in flight | COO, velocity | 1.25 | Manual steps per handback: 6 (lane-preamble.md: wait, handback, clean_finished.sh, reap_own.sh, changelog fragment, git diff --check) to 1; handbacks needing a second pass: unmeasured, count for 2 weeks. | survey:2026-10-16#P7; [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530; issue:#1531 | - |
 | 6 | `low-context-skill-index` Low-context skill index | in flight | -, cost | 1.25 | Always-loaded tokens, full install 921 and review-only install 75 (section 2), and review cost per case $0.0537 (H7b): report all three after it lands; the routing eval stays at 24 of 30 (H3). | [perun-vs-rivals.md#2-always-loaded-toke…](../docs/perun-vs-rivals.md#2-always-loaded-token-overhead-static-count-2026-10-15); [perun-vs-rivals.md#h7b-review-patch-onl…](../docs/perun-vs-rivals.md#h7b-review-patch-only-the-real-skill-against-anthropic-toolkit-2026-10-16); [INDEX.md](../.claude/skills/INDEX.md) | - |
 | 7 | `background-work-guard` Block a handback while any background test or build from the worktree is still running | open | COO, reliability | 0.94 | Lanes handing back with a live background process: unmeasured now (survey P4), target 0; the guard blocks the planted fixture 1 of 1. | survey:2026-10-16#P4; [handback_cap.py](../.claude/skills/agentic-delivery/scripts/handback_cap.py); [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530 | - |
 | 8 | `janitor-teardown-land` Land the worktree janitor (PR 1382, open since 2026-10-07) and the teardown standard (issue 1531) | open | COO, reliability | 0.94 | Finished worktrees and leftover dev servers at session start: 130 or more in the field report behind session_brief.py, target 0 after a train; PR 1382 age 9 days to merged or closed. | pr:#1382; issue:#1531; [session_brief.py](../.claude/skills/agentic-delivery/scripts/session_brief.py); https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md | - |
@@ -125,8 +125,8 @@ Score inputs:
 ### Top 3 open items attacked by idea-critic
 
 - 1. `autonomy-advisor`: **PASS_TO_USER** (inline). Strongest attack survived: It may duplicate the in-flight sandbox preflight, and sandbox_probe.py already prints a fix per failure. It survives as a separate item only because it targets the permission rules for the 4 named tools (gh, Chromium, Postgres, tsx IPC) that sandbox_probe.py does not probe, and the first kill criterion closes it if the preflight lane covers them. Kill criteria: The preflight lane already prints fix rules: close as a duplicate; A printed rule widens access beyond the failing tool in any test: stop Remaining risk: Overlap with the in-flight preflight is unverified because that lane has no open PR.
-- 2. `handback-automator`: **PASS_TO_USER** (inline). Strongest attack survived: Fast-forwarding the base branch and posting to a tracker are shared-state actions, so automating them could remove the human gate. It survives because the default is dry run, push and merge still need the owner's grant as today, and cleanup is printed, never run. Kill criteria: The composer has to reimplement any gate logic: stop and call the existing scripts only; A fast-forward runs without a human push grant in any test: stop and ship dry-run only Remaining risk: A second entry point to keep in step with lane-preamble.md.
-- 3. `background-work-guard`: **PASS_TO_USER** (inline). Strongest attack survived: A guard that blocks on any cwd process will hold lanes behind long-lived dev servers the user owns. It survives because the existing wait bound releases the hold, the check fails open when it cannot see, and the kill criterion drops it to advisory after 1 false block per 20. Kill criteria: More than 1 false block per 20 handbacks in the first 2 weeks: ship advisory only; ps or lsof unavailable on a host: fail open with COULD_NOT_CHECK, never block Remaining risk: A second class of processes the cwd check cannot see.
+- 2. `background-work-guard`: **PASS_TO_USER** (inline). Strongest attack survived: A guard that blocks on any cwd process will hold lanes behind long-lived dev servers the user owns. It survives because the existing wait bound releases the hold, the check fails open when it cannot see, and the kill criterion drops it to advisory after 1 false block per 20. Kill criteria: More than 1 false block per 20 handbacks in the first 2 weeks: ship advisory only; ps or lsof unavailable on a host: fail open with COULD_NOT_CHECK, never block Remaining risk: A second class of processes the cwd check cannot see.
+- 3. `janitor-teardown-land`: **PASS_TO_USER** (inline). Strongest attack survived: A janitor that deletes is the host-safety risk it claims to remove, and a nine-day-old pull request may be stale. It survives because the item requires report-and-print before any removal, owned-only deletion proven by the fixture, and the first kill criterion collapses it to the written standard if the teardown scripts already cover the case. Kill criteria: The existing teardown scripts already pass the owned-versus-foreign fixture: close the janitor pull request as a duplicate and keep only the written standard; The janitor removes or signals anything it did not create in the fixture: stop and ship report-only Remaining risk: The pull request has been open since 2026-10-07 and may have drifted; the platform's own worktree guard may overlap.
 
 Dedup check: 28 items, near-duplicate titles (similarity 0.85 or more): none.
 
@@ -184,20 +184,7 @@ Open items only (in-flight work already has its issue). Priority is rank-derived
 - Evidence: [peer-survey-2026-10-16.md#f2](../docs/peer-survey-2026-10-16.md#f2); [peer-survey-2026-10-16.md#p3](../docs/peer-survey-2026-10-16.md#p3); [sandbox_probe.py](../.claude/skills/agentic-delivery/scripts/sandbox_probe.py); [host-safety.md](../docs/host-safety.md)
 - Risks: Advice for a tool that was not probed is a guess: print rules only for probed failures, never write settings (the owner adds the rule), and keep each rule as narrow as the failing tool.
 - Merged from: COO lens: field report F2; CISO lens: narrow rules, not blanket allows
-- Score: 3.33 = 4 × 2 × 1 ÷ 3 × 1.25 × 1 (open rank 1 of 15); assumed: effort
-
-### P1: Lane-handback automator: gates, required-check names, base-branch fast-forward and tracker post; cleanup printed, never run
-
-- Labels: `velocity`, `COO`, `stage:mvp`
-- Where: .claude/skills/agentic-delivery/scripts/lane_guard.py (handback), clean_finished.sh, reap_own.sh and templates/lane-preamble.md.
-- Done when: One command runs the gates, prints the required check names for the sha, fast-forwards the base branch only under a human push grant (default: dry run), posts the tracker update, and prints, never runs, the worktree cleanup; a red gate exits non-zero and names the gate.
-- Verify: A fixture lane in the style of scripts/test-delivery-friction.sh with a green run and a red run; a grep proves the script contains no 'git worktree remove'; lane_guard.py handback still passes unchanged.
-- Why: Delivery: the handback is the last mile of every lane and the survey (P7) asks for it to be automated. (vision: aligned)
-- Success metric: Manual steps per handback: 6 (lane-preamble.md: wait, handback, clean_finished.sh, reap_own.sh, changelog fragment, git diff --check) to 1; handbacks needing a second pass: unmeasured, count for 2 weeks.
-- Evidence: survey:2026-10-16#P7; [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530; issue:#1531
-- Risks: Fast-forwarding the base branch and posting to a tracker are shared-state actions: dry-run by default, the human push grant stays, and cleanup is printed, never run.
-- Merged from: COO lens: survey P7; CTO lens: teardown standard (issue 1531) is the handback's tail; CISO lens: shared-state actions keep the human gate
-- Score: 1.25 = 3 × 2 × 0.5 ÷ 3 × 1.25 × 1 (open rank 2 of 15); assumed: impact effort
+- Score: 3.33 = 4 × 2 × 1 ÷ 3 × 1.25 × 1 (open rank 1 of 14); assumed: effort
 
 ### P1: Block a handback while any background test or build from the worktree is still running
 
@@ -210,9 +197,9 @@ Open items only (in-flight work already has its issue). Priority is rank-derived
 - Evidence: survey:2026-10-16#P4; [handback_cap.py](../.claude/skills/agentic-delivery/scripts/handback_cap.py); [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md); issue:#1530
 - Risks: False blocks on long-lived dev servers the user owns: scope the check to the worktree and keep the release valve.
 - Merged from: COO lens: survey P4; CTO lens: handback_cap.py matches git push only (PUSH_RE)
-- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (open rank 3 of 15); assumed: impact effort
+- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (open rank 2 of 14); assumed: impact effort
 
-### P2: Land the worktree janitor (PR 1382, open since 2026-10-07) and the teardown standard (issue 1531)
+### P1: Land the worktree janitor (PR 1382, open since 2026-10-07) and the teardown standard (issue 1531)
 
 - Labels: `reliability`, `COO`, `stage:mvp`
 - Where: PR 1382 (janitor), the teardown standard in issue 1531, .claude/skills/agentic-delivery/scripts/clean_finished.sh and reap_own.sh.
@@ -223,7 +210,7 @@ Open items only (in-flight work already has its issue). Priority is rank-derived
 - Evidence: pr:#1382; issue:#1531; [session_brief.py](../.claude/skills/agentic-delivery/scripts/session_brief.py); https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
 - Risks: A janitor that deletes is itself a host-safety risk: report and print before it removes, and never act on a path it did not create.
 - Merged from: COO lens: stale worktrees (session_brief.py); CISO lens: a deleting janitor is a host-safety risk
-- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (open rank 4 of 15); assumed: impact effort
+- Score: 0.94 = 3 × 1 × 0.5 ÷ 2 × 1.25 × 1 (open rank 3 of 14); assumed: impact effort
 
 ### P2: Per-test flake ledger with quarantine, so flaky tests stop dropping PRs from trains
 
@@ -236,7 +223,7 @@ Open items only (in-flight work already has its issue). Priority is rank-derived
 - Evidence: survey:2026-10-16#P5; [perun-vs-rivals.md#h11-merge-train-15840](../docs/perun-vs-rivals.md#h11-merge-train-15840); [train_flake.sh](../.claude/skills/agentic-delivery/scripts/train_flake.sh)
 - Risks: Quarantine can hide a real regression: keep the base-baseline rule and expire entries.
 - Merged from: COO lens: survey P5; CTO lens: the residual cost in H11
-- Score: 0.83 = 2 × 2 × 0.5 ÷ 3 × 1.25 × 1 (open rank 5 of 15); assumed: impact effort
+- Score: 0.83 = 2 × 2 × 0.5 ÷ 3 × 1.25 × 1 (open rank 4 of 14); assumed: impact effort
 
 ### P2: Zero-chat lanes: a lane's chat is one status line, everything else goes to files
 
@@ -249,9 +236,23 @@ Open items only (in-flight work already has its issue). Priority is rank-derived
 - Evidence: [peer-survey-2026-10-16.md#f3](../docs/peer-survey-2026-10-16.md#f3); [handback_cap.py](../.claude/skills/agentic-delivery/scripts/handback_cap.py); [lane-preamble.md](../.claude/skills/agentic-delivery/templates/lane-preamble.md)
 - Risks: Suppressing mid-run notes can hide a stuck lane: keep the progress file that lane_guard.py wait writes.
 - Merged from: CFO lens: token spend; COO lens: lane hygiene
-- Score: 0.75 = 4 × 1 × 0.5 ÷ 2 × 0.75 × 1 (open rank 6 of 15); assumed: reach impact effort
+- Score: 0.75 = 4 × 1 × 0.5 ÷ 2 × 0.75 × 1 (open rank 5 of 14); assumed: reach impact effort
 
-P3, no issue drafted until promoted: `differentiator-bench`, `review-cost-per-recall`, `derived-numbers-gate`, `loop-before-after-measure`, `judge-independence-rerun`, `distribution-listing`, `real-host-smoke-tests`, `peer-survey-v2`, `product-skill-runnable-checks`.
+### P2: Benchmark the claimed differentiator (refusing to fabricate) with deterministic predicates, not a rubric judge
+
+- Labels: `learning`, `CPO`, `stage:mvp`
+- Where: scripts/eval_predicates.py (bindings), the product skills' evals, docs/bench/ (a preregistration for the run).
+- Done when: 5 golden refusals and 5 golden fabrications taken from rival runs separate under the predicates; the decision rule is committed before scoring; then at least 20 bait prompts run through Perun's product skills, one rival skill and a plain prompt, graded by the predicates, with a 95% interval per pair.
+- Verify: python3 scripts/eval_predicates.py --selftest stays green; the preregistration commit precedes the run in git log; the report states each pair's interval and says tie when it contains 0.
+- Why: Product skills: tests the axis Perun says it wins on, the 'superior to rivals in each' goal, with a grader that cannot be rubric-biased. (vision: aligned)
+- Success metric: Bait-prompt pass rate, Perun vs the best rival, graded without a model: unmeasured now; n of 20 or more with a 95% interval; claim superiority only if the interval excludes 0.
+- Evidence: [roadmap.md](../docs/roadmap.md); [self-improvement.md](../docs/self-improvement.md); [eval_predicates.py](../scripts/eval_predicates.py); [perun-vs-rivals.md#h1d-idea-critic-prod…](../docs/perun-vs-rivals.md#h1d-idea-critic-product-discovery-and-growth-analytics-re-tests-rubric-free-blind-judge-2026-10-16-425-of-a-6-cap-preregistered-in-docsbenchskill-rubricfree-1016)
+- Risks: The predicates are heuristics tuned on Perun's own fixtures and could favour Perun; calibrate them on rival outputs first. A tie is a valid result and would retire honesty as the stated differentiator in positioning.
+- Gate: owner: a small paid run under a cap, and a rival skill installed
+- Merged from: CPO lens: no rubric-free win (H1c, H1d); CMO lens: the stated differentiator is honesty (docs/roadmap.md)
+- Score: 0.75 = 2 × 2 × 0.5 ÷ 4 × 1.5 × 1 (open rank 6 of 14); assumed: reach impact effort
+
+P3, no issue drafted until promoted: `review-cost-per-recall`, `derived-numbers-gate`, `loop-before-after-measure`, `judge-independence-rerun`, `distribution-listing`, `real-host-smoke-tests`, `peer-survey-v2`, `product-skill-runnable-checks`.
 
 _Generated by `roadmap_rank.py` from the input JSON: edit the input and re-run, never this text._
 <!-- roadmap:end -->
