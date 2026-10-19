@@ -4,7 +4,7 @@ This page replaces the earlier 30-case numbers and the 64-case interim numbers. 
 
 ## Bottom line
 
-- **Reviewing with repo access is the big win.** Run as an agent in a checkout at the pre-fix commit with Read, Grep and Glob, a review reached recall 0.644 and precision 0.820 at $0.073 per review. A prompt-only review (diff only) reached recall 0.367 and precision 0.611 at $0.082. The difference is +0.278 recall (interval +0.189 to +0.378) and about +0.2 precision. Perun makes repo access the default.
+- **Reviewing with repo access is the big win.** Run as an agent in a checkout at the pre-fix commit with Read, Grep and Glob, a review reached recall 0.644 and precision 0.820. A prompt-only review (diff only) reached recall 0.367 and precision 0.611. The difference is +0.278 recall (interval +0.189 to +0.378) and about +0.2 precision. Perun makes repo access the default.
 - Adding the full deep-code-review skill text on top of agent access gave no further gain (-0.044 recall, interval -0.122 to +0.033) at 1.5 times the cost. A compact prompt asking the agent to trace callers on top of repo access lowered precision by 0.137 (interval -0.203 to -0.071) with recall not significantly different. The default is therefore repo access with a minimal prompt.
 
 - On this prompt-only benchmark, Perun's review is not measurably better than a plain "review this" prompt, and it costs about 2 times as much per review.
@@ -24,10 +24,12 @@ Cost including the verifier pass: plain $0.082, single $0.119, two-pass $0.240. 
 
 ## Agentic run (90 held-out cases, Sonnet, one replicate)
 
-| Setup | Recall | Precision | Cost per review (including verifier) |
+| Setup | Recall | Precision | Cost per review (basis not recorded) |
 |---|---|---|---|
 | Prompt only (diff only) | 0.367 | 0.611 | $0.082 |
 | Agent with repo access (Read, Grep, Glob) | 0.644 | 0.820 | $0.073 |
+
+Cost basis: this table was first labelled "including verifier", while the high-stakes table below shows the same $0.073 as a bare "cost per review". The raw per-call costs are not committed, so the basis of $0.073 cannot be confirmed; the $0.082 matches the verifier-inclusive plain figure of the 89-case table above, which is a different run. Do not compare the two rows' costs or use them as cost per review.
 
 Agent minus prompt-only: +0.278 recall [+0.189, +0.378], about +0.2 precision. Agent plus the full skill minus agent alone: -0.044 recall [-0.122, +0.033], at 1.5 times the cost. Agent plus compact caller-tracing prompt minus agent alone: precision -0.137 [-0.203, -0.071], recall not significant. This is a separate run from the prompt-only table above.
 
@@ -52,7 +54,7 @@ Agent minus prompt-only: +0.278 recall [+0.189, +0.378], about +0.2 precision. A
 
 A second benchmark used agentic review (a checkout plus Read, Grep and Glob tools, minimal prompt) on 90 held-out bugs, one replicate. It led Perun to replace "two independent passes plus union" with one Opus pass for explicitly high-stakes changes; the normal default stays one Sonnet pass.
 
-| Setup | Recall | Recall vs Sonnet single [95% CI] | Precision | Cost per review |
+| Setup | Recall | Recall vs Sonnet single [95% CI] | Precision | Cost per review (basis not recorded, see above) |
 |---|---|---|---|---|
 | Sonnet, one pass | 0.644 | - | 0.828 | $0.073 |
 | Sonnet, two passes, union | 0.667 | +0.022 [0.000, +0.056] | 0.808 | $0.144 |
