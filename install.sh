@@ -573,16 +573,20 @@ HOUSE
     # autoCompactWindow 200000: only when no user/project/local settings file sets it (local would shadow a user's value) and policy auto_compact is not off.
     OPLAYER_AC=200000
     [[ ",${POLICY}," == *,auto_compact=off,* ]] || grep -qs '"auto_compact"[[:space:]]*:[[:space:]]*"off"' "${TARGET_DIR}/.perun/policy.json" && OPLAYER_AC=""
+    # statusLine (cost, context and cache-health line from cost_statusline.py): same rule, a user's own statusLine always wins.
+    OPLAYER_SL=1
     for _f in "${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/settings.json" "${TARGET_DIR}/.claude/settings.json" "${OPLAYER_LOCAL}"; do
       [[ -f "${_f}" ]] || continue
       if ! jq -e 'type == "object"' "${_f}" >/dev/null 2>&1; then  # invalid JSON/JSONC: cannot tell whether the user set it, so fail closed
         [[ -n "${OPLAYER_AC}" ]] && echo "note: ${_f} is not plain JSON; autoCompactWindow not written (set it there yourself)" >&2
-        OPLAYER_AC=""
-      elif jq -e 'has("autoCompactWindow")' "${_f}" >/dev/null 2>&1; then
-        OPLAYER_AC=""
+        [[ -n "${OPLAYER_SL}" ]] && echo "note: ${_f} is not plain JSON; statusLine not written (set it there yourself)" >&2
+        OPLAYER_AC=""; OPLAYER_SL=""
+      else
+        jq -e 'has("autoCompactWindow")' "${_f}" >/dev/null 2>&1 && OPLAYER_AC=""
+        jq -e 'has("statusLine")' "${_f}" >/dev/null 2>&1 && OPLAYER_SL=""
       fi
     done
-    jq --argjson t "${OPLAYER_JSON}" --arg ac "${OPLAYER_AC}" '
+    jq --argjson t "${OPLAYER_JSON}" --arg ac "${OPLAYER_AC}" --arg sl "${OPLAYER_SL}" '
       def dm($a; $b): if ($a|type) == "object" and ($b|type) == "object"
           then reduce ($a + $b | keys_unsorted[]) as $k ({}; .[$k] = (if ($a|has($k)) and ($b|has($k)) then dm($a[$k]; $b[$k]) elif ($b|has($k)) then $b[$k] else $a[$k] end))
         elif ($a|type) == "array" and ($b|type) == "array" then $b + ($a - $b) else $b end;
@@ -597,7 +601,8 @@ HOUSE
       | (if $t.sandbox then .sandbox = dm($t.sandbox; .sandbox // {}) else . end)
       | (if $t.permissions then .permissions = dm($t.permissions; .permissions // {}) else . end)
       | .model //= "sonnet"
-      | (if $ac != "" then .autoCompactWindow = ($ac | tonumber) else . end)' "${OPLAYER_LOCAL}" > "${OPLAYER_LOCAL}.tmp"
+      | (if $ac != "" then .autoCompactWindow = ($ac | tonumber) else . end)
+      | (if $sl != "" and $t.statusLine then .statusLine = $t.statusLine else . end)' "${OPLAYER_LOCAL}" > "${OPLAYER_LOCAL}.tmp"
     if cmp -s "${OPLAYER_LOCAL}" "${OPLAYER_LOCAL}.tmp"; then
       rm -f "${OPLAYER_LOCAL}.tmp"
     else
@@ -689,7 +694,7 @@ if [[ "${WITH_OPERATING_LAYER}" -eq 1 && "${APPLY_OPLAYER}" -eq 1 ]]; then
 
 What changed in ${TARGET_DIR}:
   1. Skills copied to .claude/skills (+ .cursor, .agents); any existing copy moved to <host>/skill-backups/.
-  2. .claude/settings.local.json: operating-layer hooks (PreToolUse incl. heavy_gate.py + lane_resume_nudge.py + landing_watchdog.py + ceo_altitude_guard.py + outcome_claim_guard.py, PostToolUse lane_cap.py, Stop outcome_claim_guard.py, SessionStart session_brief.py + handoff_inject.py + auto-update, UserPromptSubmit context_nudge.py + auto-update + ceo_altitude_guard.py + outcome_claim_guard.py + landing_watchdog.py, SubagentStart, SubagentStop), env (incl. LANE_TOOL_CAP=250), the model pin ${OPLAYER_MODEL_NOTE} and autoCompactWindow=200000 (only if no settings file sets it; policy auto_compact=off skips) merged in; previous file saved as .bak.<timestamp>.
+  2. .claude/settings.local.json: operating-layer hooks (PreToolUse incl. heavy_gate.py + lane_resume_nudge.py + landing_watchdog.py + ceo_altitude_guard.py + outcome_claim_guard.py, PostToolUse lane_cap.py, Stop outcome_claim_guard.py, SessionStart session_brief.py + handoff_inject.py + auto-update, UserPromptSubmit context_nudge.py + auto-update + ceo_altitude_guard.py + outcome_claim_guard.py + landing_watchdog.py, SubagentStart, SubagentStop), env (incl. LANE_TOOL_CAP=250), the model pin ${OPLAYER_MODEL_NOTE}, autoCompactWindow=200000 (only if no settings file sets it; policy auto_compact=off skips) and a cost statusLine (cost_statusline.py; only if no settings file sets one) merged in; previous file saved as .bak.<timestamp>.
      Skills and permissions apply to open sessions without a restart; a hook change (new entries, or old relative paths upgraded to "\$CLAUDE_PROJECT_DIR" paths) and a model change reach already-running sessions only after a restart.
      Auto-update: that hook runs release code from the Perun remote in the background (newest vX.Y.Z tag, at most every 6h).
      Opt out: re-run install.sh with --no-auto-update, or set "auto_update": "off" in .perun/policy.json.

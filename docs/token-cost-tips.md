@@ -28,9 +28,18 @@ measured in this repository; adapt the settings to your own fleet and re-measure
    resume a worktree instead of spawning short lanes. See `model-tiering.md`, same section as tip 3.
 9. **Measure per session, then per project.** `agentic-ceo/scripts/token_report.py --session
    <transcript> --budget` reports main versus subagent tokens and flags lanes over their caps;
-   `/perun:cost-retro` turns that into "what would have been cheaper".
+   `/perun:cost-retro` turns that into "what would have been cheaper". Add `--advise` for rule-based
+   advice (each rule is one measured signal, one lever, one link back here); a lever you already set is never recommended.
 10. **Attribute spend before capping it.** Name keys `<tracker-project-id>-<handle>`, prefer one key
     per project, set alerts first, caps last, and total an export with
     `agentic-delivery/scripts/spend_report.py`. See [`operating-discipline.md`](../.claude/skills/agentic-delivery/references/operating-discipline.md), item 9.
+11. **Compact on your schedule, not mid-task.** `/clear` between unrelated tasks, `/compact` at
+    natural breaks, and set the auto-compact window (`/autocompact 200k`, or `autoCompactWindow` in settings; valid range
+    100K to 1M) so a long session compacts before it gets expensive. Every compaction rewrites the cached prefix, and `/context`
+    shows what fills the window. Docs: [Manage costs](https://code.claude.com/docs/en/costs), [Commands](https://code.claude.com/docs/en/commands), [Settings reference](https://code.claude.com/docs/en/settings-reference).
+12. **Keep MCP tool definitions out of every turn.** Tool search defers MCP tool definitions by default, so leave
+    `ENABLE_TOOL_SEARCH` unset (`false` loads them all upfront), disable servers this project never calls (`/mcp`), and
+    prefer a CLI such as `gh` where one exists. Claude Code warns at 10,000 tokens of MCP output (`MAX_MCP_OUTPUT_TOKENS`,
+    default 25,000). Docs: [MCP](https://code.claude.com/docs/en/mcp), [Manage costs](https://code.claude.com/docs/en/costs).
 
 An estimate is not a billed total: mark anything you cannot price `UNPRICED`, never zero.

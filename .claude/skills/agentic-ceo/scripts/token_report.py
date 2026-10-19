@@ -154,6 +154,16 @@ COULD_NOT_CHECK: zero usable main turns, or a subagent file with no usable
 line (report mode warns about such a file on stderr instead of dropping it). A lane's tool calls are its unique `tool_use` block ids (the
 same id on two streamed lines counts once), windowed by `--since`.
 
+ADVISE (--advise [--project DIR])
+---------------------------------
+Appends usage-optimization advice. Each rule in ADVICE_RULES is one measured signal, one recommendation and
+one link into docs/token-cost-tips.md or model-tiering.md. Signals come only from usage fields, model ids,
+tool NAMES, timestamps and settings keys (user, project and local settings plus the project's .mcp.json);
+no message or tool-result text is read. A rule stays silent when its setting is already set, and every
+setting is assumed set when a settings file is unreadable (fail closed). The dollar figure is the PRICED
+spend of the flagged items under the dated default rates (or --rates), not a promised saving; no rate is
+UNPRICED. Thresholds are starting values (ADV), tune from --json. `--json` adds an "advice" object.
+
 OUTPUT
 ------
 Default text report is at most 20 lines (for up to a few models). `--json` prints the full computed
@@ -173,6 +183,7 @@ USAGE
 -----
   token_report.py --session <path/to/session.jsonl> [--since ISO] [--json] [--top N] [--rates TSV]
   token_report.py --session <path/to/session.jsonl> [--since ISO] --budget [budget.tsv]
+  token_report.py --session <path/to/session.jsonl> [--since ISO] --advise [--project DIR]
   token_report.py --selftest
 """
 from __future__ import annotations
@@ -566,6 +577,8 @@ def build_subagent_report(jsonl_path: str, since) -> dict:
         "models": models,
         "by_model": by_model,
         "effort": meta.get("effort"),
+        "consults": sum(1 for t in turns if t.get("iter")),
+        "consult_by_model": model_stats([t for t in turns if t.get("iter")])[2],
         "in_flight": not called and last_stop != "end_turn",
         **totals,
     }
@@ -796,6 +809,224 @@ def render_text(report: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Advise (--advise): measurable signal -> one recommendation -> doc link.
+# ---------------------------------------------------------------------------
+
+TIPS = "docs/token-cost-tips.md"
+TOP_TIER = ("opus", "fable")
+# Starting values, not claims about what a session should cost: tune from --json. Rules read only usage fields,
+# model ids, tool NAMES, timestamps and settings keys; never message or tool-result text.
+ADV = {"drops": 2, "drop_floor": 100_000, "jump": 30_000, "jumps": 3, "cache_turns": 5, "switches": 2,
+       "mech_out_per_call": 100, "short_calls": 3, "short_lanes": 5, "mcp_unused": 2}
+
+
+def load_settings(project: str):
+    """(settings, env, MCP server names, unreadable files). Read only; never written.
+
+    Layers: user (`$CLAUDE_CONFIG_DIR` or `~/.claude`) then the project's `.claude/settings.json` and
+    `settings.local.json` (later wins), env block merged, plus the project's `.mcp.json` `mcpServers` keys.
+    An unreadable or non-object file is reported, and `advise` then treats every setting as already set.
+    """
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    cfg: dict = {}
+    env: dict = {}
+    mcp: set = set()
+    bad: list = []
+    for path in (os.path.join(home, "settings.json"), os.path.join(project, ".claude", "settings.json"),
+                 os.path.join(project, ".claude", "settings.local.json"), os.path.join(project, ".mcp.json")):
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                obj = json.load(fh)
+        except (OSError, ValueError):
+            obj = None
+        if not isinstance(obj, dict):
+            bad.append(os.path.basename(path))
+        elif path.endswith(".mcp.json"):
+            mcp |= set(obj.get("mcpServers") or {})
+        else:
+            cfg.update({k: v for k, v in obj.items() if k != "env"})
+            env.update(obj.get("env") if isinstance(obj.get("env"), dict) else {})
+    return cfg, {**env, **os.environ}, mcp, bad
+
+
+def _mcp_servers_used(session_path: str) -> set:
+    """Raw `mcp__<server>__` prefixes of tool_use names in the main transcript and every lane (names only)."""
+    used: set = set()
+    sub = (session_path[:-6] if session_path.endswith(".jsonl") else session_path) + os.sep + "subagents"
+    files = [session_path] + ([os.path.join(sub, n) for n in sorted(os.listdir(sub)) if n.endswith(".jsonl")]
+                              if os.path.isdir(sub) else [])
+    for path in files:
+        for e in read_jsonl(path):
+            for b in (e.get("message") or {}).get("content") or []:
+                name = b.get("name") if isinstance(b, dict) and b.get("type") == "tool_use" else None
+                if isinstance(name, str) and name.startswith("mcp__") and name.count("__") >= 2:
+                    used.add(name.split("__")[1])
+    return used
+
+
+def _stake(by_model: dict, rates):
+    """(USD, [unpriced models]) of a {model: totals} map; (None, []) = UNPRICED."""
+    return price(by_model, rates) if by_model else (None, [])
+
+
+def _r_ctx_drops(f):
+    n = sum(1 for a, b in zip(f["ctx"], f["ctx"][1:]) if a >= ADV["drop_floor"] and b < a / 2)
+    if n >= ADV["drops"]:
+        return f"{n} main-context drops of over 50% from at least {ADV['drop_floor']} tokens (compaction or clear)", (None, [])
+
+
+def _r_ctx_window(f):
+    peak = max(f["ctx"], default=0)
+    if peak > CONTEXT_HANDOFF_THRESHOLD and not f["isset"]("autoCompactWindow", "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+                                                           "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"):
+        return f"peak main context {peak} tokens and no auto-compact window set", (None, [])
+
+
+def _cache(f):
+    t = f["turns"]
+    writes = sum(x["cache_write_5m"] + x["cache_write_1h"] for x in t)
+    reads = sum(x["cache_read"] for x in t)
+    models = [x["model"] for x in t if x.get("model")]
+    sw = sum(1 for a, b in zip(models, models[1:]) if a != b)
+    if len(t) < ADV["cache_turns"] or writes <= reads:
+        return None
+    by = {}
+    for x in t:
+        by.setdefault(x.get("model") or "unknown", dict(ZERO_USAGE))
+        for k in ("cache_write_5m", "cache_write_1h"):
+            by[x.get("model") or "unknown"][k] += x[k]
+    return f"cache writes {writes} exceed cache reads {reads} over {len(t)} turns, {sw} model switches", _stake(by, f["rates"]), sw
+
+
+def _r_cache_switch(f):
+    c = _cache(f)
+    if c and c[2] >= ADV["switches"]:
+        return c[0], c[1]
+
+
+def _r_cache_churn(f):
+    c = _cache(f)
+    if c and c[2] < ADV["switches"]:
+        return c[0], c[1]
+
+
+def _tool_out_rec(f):
+    levers = [] if f["isset"]("bashOutputMaxChars", "BASH_MAX_OUTPUT_LENGTH") else ["cap Bash output with bashOutputMaxChars"]
+    return "; ".join(levers + ["read line ranges, not whole files", "delegate verbose operations to a subagent"])
+
+
+def _r_tool_out(f):
+    n = sum(1 for a, b in zip(f["ctx"], f["ctx"][1:]) if b - a >= ADV["jump"])
+    if n >= ADV["jumps"]:
+        return f"{n} main turns grew the context by at least {ADV['jump']} tokens (large tool output or file read)", (None, [])
+
+
+def _r_mcp_unused(f):
+    if f["bad"]:
+        return None
+    norm = {s: re.sub(r"[^A-Za-z0-9_-]", "_", s) for s in f["mcp"]}
+    idle = sorted(s for s, n in norm.items() if n not in f["used"])
+    if len(idle) >= ADV["mcp_unused"]:
+        return f"{len(idle)} of {len(norm)} configured MCP servers never called this session: {', '.join(idle)}", (None, [])
+
+
+def _r_mcp_search_off(f):
+    if str(f["env"].get("ENABLE_TOOL_SEARCH", "")).lower() == "false" and f["mcp"]:
+        return f"ENABLE_TOOL_SEARCH=false with {len(f['mcp'])} configured MCP server(s): every tool definition loads upfront", (None, [])
+
+
+def _r_tier(f):
+    if f["isset"]("CLAUDE_CODE_SUBAGENT_MODEL"):
+        return None
+    hit = [s for s in f["lanes"] if any(k in (s["model"] or "") for k in TOP_TIER) and s["tool_calls"] >= 1
+           and s["output_tokens"] / s["tool_calls"] <= ADV["mech_out_per_call"]]
+    if hit:
+        return (f"{len(hit)} lane(s) on a top tier wrote at most {ADV['mech_out_per_call']} output tokens per tool call "
+                f"(mostly mechanical): {', '.join(s['label'] for s in hit)}"), _stake(merge_by_model([s["by_model"] for s in hit]), f["rates"])
+
+
+def _r_short_lanes(f):
+    hit = [s for s in f["lanes"] if s["tool_calls"] <= ADV["short_calls"]]
+    if len(hit) >= ADV["short_lanes"]:
+        return (f"{len(hit)} lanes made {ADV['short_calls']} or fewer tool calls and paid "
+                f"{sum(s['startup_tokens'] for s in hit)} startup tokens"), _stake(merge_by_model([s["by_model"] for s in hit]), f["rates"])
+
+
+def _r_consults(f):
+    n = sum(s.get("consults", 0) for s in f["lanes"])
+    if n:
+        return f"{n} lane consult(s) to another model", _stake(merge_by_model([s["consult_by_model"] for s in f["lanes"]]), f["rates"])
+
+
+# (id, check -> None | (evidence, (usd, unpriced)), recommendation text or fn(f), doc anchor). Order = tie-break.
+ADVICE_RULES = [
+    ("tier", _r_tier, "Route mechanical lanes to the cheapest tier at low effort; keep top tier for verify and judge stages. Quality check: the lane's own gate must still pass.",
+     "model-tiering.md, 'Route delivery lanes by work type and stage'; " + TIPS + " tip 3"),
+    ("consults", _r_consults, "Omit the consult tool from lane toolsets; let the main agent consult once.",
+     TIPS + " tip 5"),
+    ("cache-switch", _r_cache_switch, "Pick the model and effort at the start of a task and keep it: each model has its own prompt cache, so a mid-task /model re-reads the whole context uncached.",
+     TIPS + " tip 6"),
+    ("cache-churn", _r_cache_churn, "Run /usage and read the 'Prompt cache (main)' line: it names the likely cause of the last cache miss.",
+     TIPS + " tip 6"),
+    ("short-lanes", _r_short_lanes, "Batch related tasks into fewer, longer-lived lanes; every lane start pays the project's instruction files again.",
+     TIPS + " tip 8"),
+    ("ctx-drops", _r_ctx_drops, "Run /clear between unrelated tasks and /compact at natural breaks, not mid-task; a compaction re-reads the whole context.",
+     TIPS + " tip 11"),
+    ("ctx-window", _r_ctx_window, "Run /autocompact 200k (or set autoCompactWindow) so a long session compacts before it gets expensive; /context shows what fills it.",
+     TIPS + " tip 11"),
+    ("tool-output", _r_tool_out, _tool_out_rec, TIPS + " tips 2 and 12"),
+    ("mcp-unused", _r_mcp_unused, "Run /mcp and disable servers this project does not use, between sessions rather than mid-task; prefer CLI tools such as gh.",
+     TIPS + " tip 12"),
+    ("mcp-no-toolsearch", _r_mcp_search_off, "Unset ENABLE_TOOL_SEARCH (tool search defers MCP tool definitions by default).",
+     TIPS + " tip 12"),
+]
+
+
+def advise(report: dict, since, rates, project: str = ".") -> dict:
+    """Run ADVICE_RULES over a build_report() result plus its transcript and settings.
+
+    Returns {"advice": [fired rules, highest priced first], "notes": [...]}. Every rule fires from a measured
+    signal; a rule whose lever the settings already set stays silent. If any settings file is unreadable the
+    settings are assumed set (fail closed). At-stake dollars are the PRICED spend of the flagged items under
+    `rates` (default table dated RATES_DATE), not a promised saving; None means UNPRICED.
+    """
+    turns = [t for t in filter_since(extract_turns(list(read_jsonl(report["session"]))), since)
+             if not t.get("iter") and t.get("model") != "<synthetic>"]
+    cfg, env, mcp, bad = load_settings(project)
+    f = {"turns": turns, "rates": rates, "cfg": cfg, "env": env, "mcp": mcp, "bad": bad,
+         "ctx": [t["input_tokens"] + t["cache_write_5m"] + t["cache_write_1h"] + t["cache_read"] for t in turns],
+         "lanes": report["all_subagents"], "used": _mcp_servers_used(report["session"]),
+         "isset": lambda *names: bool(bad) or any(n in cfg or n in env for n in names)}
+    fired = []
+    for i, (rid, check, rec, doc) in enumerate(ADVICE_RULES):
+        hit = check(f)
+        if hit:
+            (usd, unpriced) = hit[1]
+            fired.append({"id": rid, "evidence": hit[0], "recommendation": rec(f) if callable(rec) else rec,
+                          "doc": doc, "at_stake_usd": usd, "unpriced_models": unpriced, "_i": i})
+    fired.sort(key=lambda a: (a["at_stake_usd"] is None, -(a["at_stake_usd"] or 0), a["_i"]))
+    for a in fired:
+        del a["_i"]
+    notes = [f"settings file(s) unreadable ({', '.join(bad)}): settings-dependent rules assume the setting is set"] if bad else []
+    return {"advice": fired, "notes": notes}
+
+
+def render_advice(a: dict) -> str:
+    rows = a["advice"]
+    head = (f"ADVICE ({len(rows)} of {len(ADVICE_RULES)} rules fired, highest priced first; at stake = priced spend of the "
+            f"flagged items under the rates above, not a promised saving):")
+    lines = [head] + [f"  note: {n}" for n in a["notes"]]
+    for i, r in enumerate(rows, 1):
+        lines.append(f"  {i}. [{r['id']}] {r['evidence']}\n     -> {r['recommendation']}\n"
+                     f"     at stake: {_usd(r['at_stake_usd'], r['unpriced_models'])}; see {r['doc']}")
+    if not rows:
+        lines.append("  none: no rule fired on this session")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -809,6 +1040,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="gate mode: exit 1 with one line per breached cap (optional TSV overrides defaults)")
     p.add_argument("--top", type=int, default=5, metavar="N", help="lanes to list (default 5, 0 = all)")
     p.add_argument("--rates", metavar="TSV", help="USD-per-1M rates TSV; overrides the built-in default rate table")
+    p.add_argument("--advise", action="store_true", help="add usage-optimization advice (rule table in the ADVISE section)")
+    p.add_argument("--project", default=".", metavar="DIR",
+                   help="project whose .claude settings and .mcp.json --advise reads (default .)")
     p.add_argument("--selftest", action="store_true")
     return p
 
@@ -863,10 +1097,14 @@ def main(argv=None) -> int:
         return BREACH
     for stem in report["unusable_subagents"]:
         print(f"token_report.py: warning: subagent file {stem}.jsonl has no usable turns", file=sys.stderr)
+    if args.advise:
+        report["advice"] = advise(report, since, rates, args.project)
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
         print(render_text(report))
+        if args.advise:
+            print(render_advice(report["advice"]))
     return OK
 
 
