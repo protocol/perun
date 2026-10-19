@@ -19,9 +19,11 @@ Three items are **host-settable**, read from a `.claude/settings.json`-shaped
 file (`--settings`, default `.claude/settings.json`):
 - `subagent-start-injector` — a `SubagentStart` hook command containing
   `subagent_start_inject.py`.
-- `handback-cap-two-tier` — two or more `SubagentStop` hook entries whose
-  command contains `handback_cap.py` (one entry is the default cap only, not
-  the second, `matcher`-scoped tier `host-enforcement.md` documents).
+- `handback-cap-two-tier` (name kept for compatibility) — a `SubagentStop` hook
+  entry with no matcher (or `*` / `.*`) whose command contains `handback_cap.py`
+  (the default cap). The second, `matcher`-scoped tier for a
+  read-only review type is opt-in (`host-enforcement.md`): it needs the
+  project's real agent type, so the template ships none and one entry is PRESENT.
 - `subagent-model-pin` — `CLAUDE_CODE_SUBAGENT_MODEL` in the settings file's
   `env` block (`WARN:` when `_FORCE=1` pins a haiku-class model).
 A settings file that does not exist at all reports all three `MISSING` (a
@@ -151,15 +153,12 @@ def check_settings(settings_path: str) -> dict:
              for ev in ("PreToolUse", "UserPromptSubmit")]
     start_cmds = _flatten_commands(hooks.get("SubagentStart", []))
     stop_cmds = _flatten_commands(hooks.get("SubagentStop", []))
-    handback_hits = sum(1 for c in stop_cmds if "handback_cap.py" in c)
-    if any("<" in str(e.get("matcher", "")) for e in hooks.get("SubagentStop", []) if isinstance(e, dict)):
-        handback_hits = min(handback_hits, 1)  # placeholder matcher never fires
-    if handback_hits >= 2:
-        handback_status = "PRESENT"
-    elif handback_hits == 1:
-        handback_status = "MISSING (one tier only -- no real matcher-scoped second SubagentStop entry)"
-    else:
-        handback_status = "MISSING"
+    default_tier = any(isinstance(e, dict) and str(e.get("matcher", "")) in ("", "*", ".*")
+                       and any("handback_cap.py" in c for c in _flatten_commands([e]))
+                       for e in hooks.get("SubagentStop", []))
+    handback_status = "PRESENT" if default_tier else (
+        "MISSING (handback_cap.py only under a scoped matcher -- no default entry)"
+        if any("handback_cap.py" in c for c in stop_cmds) else "MISSING")
     env = data.get("env", {}) if isinstance(data, dict) else {}
     sb = data.get("sandbox", {}) if isinstance(data, dict) else {}
     sb = sb if isinstance(sb, dict) else {}
@@ -371,7 +370,12 @@ def _selftest() -> int:
             json.dump({"hooks": {"SubagentStop": [
                 {"hooks": [{"type": "command", "command": "python3 .../handback_cap.py"}]}]}}, fh)
         one_tier = check_settings(one_tier_path)
-        case("one-tier-handback-not-present", one_tier["handback-cap-two-tier"].startswith("MISSING"), True)
+        case("one-entry-handback-present", one_tier["handback-cap-two-tier"], "PRESENT")
+        scoped_path = os.path.join(tmp, "scoped.json")
+        with open(scoped_path, "w") as fh:
+            json.dump({"hooks": {"SubagentStop": [{"matcher": "reviewer",
+                "hooks": [{"type": "command", "command": "python3 .../handback_cap.py"}]}]}}, fh)
+        case("scoped-only-handback-missing", check_settings(scoped_path)["handback-cap-two-tier"].startswith("MISSING"), True)
 
         case("before-merge-sandbox-red", before["sandbox-on"].startswith("MISSING RED"), True)
         half_path = os.path.join(tmp, "half.json")

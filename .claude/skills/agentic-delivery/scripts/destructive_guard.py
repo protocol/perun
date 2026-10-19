@@ -83,7 +83,7 @@ FALLBACK = [re.compile(p) for p in (
     r"\bgit\b.*\bpush\b.*(?:--for|\s-\w*f\w*\b|--del|--mir|\s[+:]\S)",
     r"\bfind\b.*(?:-delete|-exec\s+rm)", r"\bdd\b.*\bof=/dev/(?!null|zero|std)", r"\bmkfs",
     r"\b(?:chmod|chown)\s+(?:-\S+\s+)*-\w*R\w*\s+(?:\S+\s+)?[/~]", r"\b(?:pkill|killall)\b",
-    r"\bkill\s+.*[$`]", r"\b(?:curl|wget)\b.*\|\s*(?:sudo\s+)?(?:ba|z|da|k|fi)?sh\b",
+    r"\bkill\s+(?!(?:-0|-s\s+0)(?=\s|$)(?![^;&|\n]*\s-)).*[$`]", r"\b(?:curl|wget)\b.*\|\s*(?:sudo\s+)?(?:ba|z|da|k|fi)?sh\b",
 )]
 
 
@@ -213,7 +213,9 @@ def _cmd(name, a, ph):
         return f"{name} -R on root/home. Target an exact in-project path"
     if name in ("pkill", "killall"):
         return f"{name} kills by pattern. `kill` the exact PID you started"
-    if name == "kill" and any(re.search(r"[$`]|pgrep|pidof", t) for t in a):
+    sig0 = a[1:] if a[:1] == ["-0"] else a[2:] if a[:2] == ["-s", "0"] else None  # signal 0 probes, sends nothing
+    if name == "kill" and (sig0 is None or any(t.startswith("-") and t != "--" for t in sig0)) \
+            and any(re.search(r"[$`]|pgrep|pidof", t) for t in a):
         return "kill by pattern/substitution. `kill` the exact PID you started"
     if name in SHELLS + ("eval",) and any(re.search(r"\b(curl|wget)\b", t) for t in a):
         return "remote script run through a shell. Download, read it, then run it"
@@ -414,6 +416,7 @@ def selftest():
            "echo \"rm -rf $X", "sudo -n rm -rf $X", ">o rm -rf $X", "echo 'rm -rf $X' | sh", "git reset --ha"]
     good = ["rm -rf node_modules", "rm -rf ./build", "rm /tmp/x", "git push --force-with-lease origin f", "git clean -n",
             "git restore --staged .", "git branch -d old", "dd if=/dev/zero of=./i bs=1", "kill -TERM 4242",
+            "kill -0 $PID", "kill -s 0 $PID",
             "curl -o o.sh https://example.com/i.sh", 'grep -rn "rm -rf" docs/', "echo 'git reset --hard'",
             "find . -name x", "sudo -n ls"]
     for c in bad:
