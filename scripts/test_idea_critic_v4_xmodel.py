@@ -5,6 +5,7 @@ ledger line comes first and covers the frozen list, and that the committed per-m
 recompute from the committed outputs by the frozen keep rule."""
 import hashlib
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -94,8 +95,10 @@ class Results(unittest.TestCase):
         self.assertNotIn("verdict", wq)
 
     def test_skill_md_untouched_by_this_bench(self):
-        skill = " ".join((ROOT / ".claude/skills/idea-critic/SKILL.md").read_text().split())
-        v0 = " ".join((ROOT / "docs/bench/idea-critic-v2-1019/prompts/skill_v0.txt").read_text().split())
+        def norm(p):  # a release stamps metadata.version; that line is not skill text
+            return " ".join(re.sub(r'(?m)^\s*version: ".*"$', "", (ROOT / p).read_text()).split())
+        skill = norm(".claude/skills/idea-critic/SKILL.md")
+        v0 = norm("docs/bench/idea-critic-v2-1019/prompts/skill_v0.txt")
         self.assertEqual(skill, v0)
 
 
