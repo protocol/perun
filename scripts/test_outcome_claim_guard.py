@@ -32,6 +32,19 @@ MUST_FLAG = [
     "Fixed the flaky gate in #19, so the train no longer goes red.",
     "That makes 9 merged today.",
     "The pipeline improved a lot: 3 PRs merged, 40 tests added, 25 files touched.",
+    # the false-positive rules must skip one claim, never the whole sentence or message
+    "Great progress: 12 merged today, 30 still open.",
+    "That makes 40 PRs merged since Monday.",
+    "The audit log is attached and CI is faster now.",
+    "I fixed the merge conflict bug, so the train no longer stalls.",
+    "I fixed one error in the report and the gate is faster now.",
+    # laundering attempts: the skip words must sit right next to the claim word
+    "Train speedup done; see the report.",
+    "Fixed the merge train, no conflicts left.",
+    "Fixed issues blocking the merge train.",
+    "Build speedup is done, per the audit.",
+    "I fixed the errors stalling the merge train.",
+    "Done: pipeline fixed, see the log.",
 ]
 MUST_PASS = [
     "Merge lock opened as #41, unmeasured; I will measure gate minutes after it merges.",
@@ -44,6 +57,17 @@ MUST_PASS = [
     "The README typo is fixed and pushed.",
     "Train r12 is running with #5 and #6; next check at 14:00.",
     "```\nfixed the pipeline, 4 PRs merged today\n```\nLog above is from last week.",
+    # honest status reports that the claim words and tallies used to flag
+    "The Q3 pipeline audit is done.",
+    "Done: the handoff note and the pipeline log.",
+    "Pulling the 40 PRs merged since Monday into the standup draft.",
+    "12 merged today, 30 still open.",
+    "I fixed one error: #12 is still in the queue, not merged.",
+    "I resolved the merge conflicts on #51 and re-queued it.",
+    "The merge hit a conflict on #51, so I resolved it.",
+    "Fixed the unit tests on #8; its pre-merge check is running.",
+    "Cleaned the backlog: 6 issues already fixed, 3 duplicates.",
+    "Closed the already-fixed issues in the backlog.",
 ]
 
 
