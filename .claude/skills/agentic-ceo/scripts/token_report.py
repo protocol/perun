@@ -817,7 +817,8 @@ TOP_TIER = ("opus", "fable")
 # Starting values, not claims about what a session should cost: tune from --json. Rules read only usage fields,
 # model ids, tool NAMES, timestamps and settings keys; never message or tool-result text.
 ADV = {"drops": 2, "drop_floor": 100_000, "jump": 30_000, "jumps": 3, "cache_turns": 10, "switches": 2,
-       "mech_out_per_call": 100, "short_calls": 3, "short_lanes": 5, "mcp_unused": 2}
+       "mech_out_per_call": 100, "short_calls": 3, "short_lanes": 5, "mcp_unused": 2,
+       "main_top_share": 0.5, "main_top_usd": 20.0}
 
 
 def load_settings(project: str):
@@ -955,6 +956,19 @@ def _r_tier(f):
                 f"(mostly mechanical): {', '.join(s['label'] for s in hit)}"), _stake(merge_by_model([s["by_model"] for s in hit]), f["rates"])
 
 
+def _r_main_tier(f):
+    if f["isset"]("model"):
+        return None
+    top = model_stats([t for t in f["turns"] if any(k in (t.get("model") or "") for k in TOP_TIER)])[2]
+    usd, miss = _stake(top, f["rates"])
+    total, _ = _stake(model_stats(f["turns"])[2], f["rates"])
+    # Unpriced top-tier or total spend: no share can be computed, stay silent (never guess).
+    if usd is None or miss or not total or usd < ADV["main_top_usd"] or usd / total < ADV["main_top_share"]:
+        return None
+    return (f"main-session turns on a top tier carry {usd / total:.0%} of the priced spend of this session's main turns",
+            (usd, miss))
+
+
 def _r_short_lanes(f):
     hit = [s for s in f["lanes"] if s["tool_calls"] <= ADV["short_calls"] and not s["in_flight"]]
     if len(hit) >= ADV["short_lanes"]:
@@ -971,6 +985,8 @@ def _r_consults(f):
 # (id, check -> None | (evidence, (usd, unpriced)), recommendation text or fn(f), doc anchor). Order = tie-break.
 ADVICE_RULES = [
     ("tier", _r_tier, "Route mechanical lanes to the cheapest tier at low effort; keep top tier for verify and judge stages. Quality check: the lane's own gate must still pass.",
+     "model-tiering.md, 'Route delivery lanes by work type and stage'; " + TIPS + " tip 3"),
+    ("main-tier", _r_main_tier, "Default the main session to a mid tier (set `model`, or /model at the start of a task) and escalate to the top tier only for a named hard step.",
      "model-tiering.md, 'Route delivery lanes by work type and stage'; " + TIPS + " tip 3"),
     ("consults", _r_consults, "Omit the consult tool from lane toolsets; let the main agent consult once.",
      TIPS + " tip 5"),

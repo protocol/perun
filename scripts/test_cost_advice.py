@@ -175,6 +175,28 @@ class Advise(unittest.TestCase):
         self.settings({"env": {"CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"}})
         self.assertNotIn("tier", self.ids([line(0)]))
 
+    def test_main_tier_fires_on_top_tier_main_turns(self):
+        got = self.run_advise([line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)])
+        self.assertIn("main-tier", got)
+        self.assertGreaterEqual(got["main-tier"]["at_stake_usd"], tr.ADV["main_top_usd"])
+
+    def test_main_tier_silent_below_share(self):
+        rows = [line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)]
+        rows += [line(100 + i, model=SONNET, ctx=20_000_000, out=2000) for i in range(30)]
+        self.assertNotIn("main-tier", self.ids(rows))
+
+    def test_main_tier_silent_below_floor(self):
+        self.assertNotIn("main-tier", self.ids([line(i, model=OPUS) for i in range(3)]))
+
+    def test_main_tier_silent_when_only_lanes_are_top_tier(self):
+        self.lane(1, [line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)])
+        self.assertNotIn("main-tier", self.ids([line(i, model=SONNET) for i in range(3)]))
+
+    def test_main_tier_silent_when_unpriced_or_model_set(self):
+        self.assertNotIn("main-tier", self.ids([line(i, model="acme-opus-1", ctx=2_000_000, out=2000) for i in range(30)]))
+        self.settings({"model": "sonnet"})
+        self.assertNotIn("main-tier", self.ids([line(i, model=OPUS, ctx=2_000_000, out=2000) for i in range(30)]))
+
     def test_short_lanes(self):
         for n in range(5):
             self.lane(n, [line(0, tools=["Read"]), line(1, stop="end_turn")])
