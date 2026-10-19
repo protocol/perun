@@ -32,6 +32,40 @@ MUST_FLAG = [
     "Fixed the flaky gate in #19, so the train no longer goes red.",
     "That makes 9 merged today.",
     "The pipeline improved a lot: 3 PRs merged, 40 tests added, 25 files touched.",
+    # the false-positive rules must skip one claim, never the whole sentence or message
+    "Great progress: 12 merged today, 30 still open.",
+    "That makes 40 PRs merged since Monday.",
+    "The audit log is attached and CI is faster now.",
+    "I fixed the merge conflict bug, so the train no longer stalls.",
+    "I fixed one error in the report and the gate is faster now.",
+    # laundering attempts: the skip words must sit right next to the claim word
+    "Train speedup done; see the report.",
+    "Fixed the merge train, no conflicts left.",
+    "Fixed issues blocking the merge train.",
+    "Build speedup is done, per the audit.",
+    "I fixed the errors stalling the merge train.",
+    "Done: pipeline fixed, see the log.",
+    # laundering attempts found in review: none of these may be skipped
+    "Report: the pipeline is done.",
+    "Per the log, the train is done.",
+    "The log says CI is done.",
+    "Summary: gate work done.",
+    "The CI flake was already fixed.",
+    "The merge queue is already fixed.",
+    "Pipeline already resolved, nothing more to do.",
+    "Auto-merge is fixed.",
+    "The auto-deploy works now.",
+    "Auto-merge is faster now.",
+    "Fixed CI and conflicts.",
+    "Conflicts in the queue were slow, and my change resolved it.",
+    "Closed duplicate tickets and resolved issues blocking the train.",
+    "I fixed one error: the gate.",
+    "Good news: the 40 PRs merged today.",
+    "Of the 40 PRs merged today, all landed cleanly.",
+    "Those 40 PRs merged this week.",
+    "40 PRs merged today, 1 open.",
+    "40 PRs merged today, 0 queued.",
+    "Total: 40 merged so far, 2 pending.",
 ]
 MUST_PASS = [
     "Merge lock opened as #41, unmeasured; I will measure gate minutes after it merges.",
@@ -44,6 +78,14 @@ MUST_PASS = [
     "The README typo is fixed and pushed.",
     "Train r12 is running with #5 and #6; next check at 14:00.",
     "```\nfixed the pipeline, 4 PRs merged today\n```\nLog above is from last week.",
+    # honest status reports that the claim words and tallies used to flag
+    "The Q3 pipeline audit is done.",
+    "Done: the handoff note and the pipeline log.",
+    "I fixed one error in the report: #12 is still in the queue, not merged.",
+    "I resolved the merge conflicts on #51 and re-queued it.",
+    "Fixed the unit tests on #8; its pre-merge check is running.",
+    "Cleaned the backlog: 6 issues already fixed, 3 duplicates.",
+    "Closed 2 already-fixed issues in the backlog.",
 ]
 
 

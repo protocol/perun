@@ -11,7 +11,10 @@ Two modes, chosen by `hook_event_name` in the stdin JSON:
   improved, faster, resolved, working, done, ends the risk, no longer, ...) in the same sentence as a delivery subject
   (pipeline, CI, gate, train, queue, merge, build, flake, risk, ...), or an output count framed as progress ("9 PRs
   merged" next to "progress"/"shipped"/a claim word). Negated, questioned or modal ("would", "might") claims are not
-  claims. The message is compliant when it carries evidence, a before -> after pair with a unit, an outcome metric
+  claims, nor are a few action idioms bound directly to the claim word: a deliverable as the subject of "done" ("the
+  audit is done"), "fixed one error in the report", "resolved the merge conflicts" with no delivery word after them,
+  "6 issues already fixed" in a sentence that closes or dedups, and a "pre-merge" check. Nothing else in the sentence
+  can launder a claim, and every other claim in the message is still scanned. The message is compliant when it carries evidence, a before -> after pair with a unit, an outcome metric
   word (lead time, gate/CI/train minutes, landed per hour, failure rate, ...) and a merged-code reference (a commit
   sha, or a PR number next to "merged"/"landed"), or an honest hedge ("opened, unmeasured", "not yet measured").
   Counts of PRs, lanes, tests or files are never evidence. A violation: `block` returns {"decision": "block"} once
@@ -54,13 +57,22 @@ CLAIM = re.compile(r"\b(fixed(?!\s+PRs?\b)|fixes(?=\s+(?:the|a|an|it|this|that|a
                    r"faster|quicker|sped up|speeds? up|resolved|resolves|solved|working (?:now|again|fine)|"
                    r"works(?: now| again)?|done|ends? the risk|ended the risk|risk is gone|eliminat\w+|unblocked|"
                    r"no longer)\b", re.I)
-SUBJECT = re.compile(r"\b(pipelines?|ci|gates?|trains?|queues?|merg\w+|land\w*|lead time|builds?|deploy\w*|runners?|"
+SUBJECT = re.compile(r"(?<!\bpre-)\b(pipelines?|ci|gates?|trains?|queues?|merg\w+|land\w*|lead time|builds?|deploy\w*|runners?|"
                      r"flak\w*|latency|throughput|perf\w*|speed|slow\w*|risk|bottlenecks?|hooks?|wait\w*|backlog)\b", re.I)
 COUNT = re.compile(r"\b\d+\s+(?:\w+\s+)?(?:PRs?|pull requests?|lanes?|tests?|files?|commits?|agents?|subagents?)\b"
                    r"(?:\s+\w+)?\s+(?:merged|landed|opened|spawned|added|touched|shipped|launched|running|in flight)",
                    re.I)
 TALLY = re.compile(r"(?<![#\w])\d+\s+(?:\w+\s+)?(?:have\s+)?(?:merged|landed)\s+(?:today|so far|this (?:week|session|run)|since)\b",
                    re.I)
+# Action idioms that are not outcome claims. Each skip is bound to the claim word (a deliverable, conflict or issue
+# elsewhere in the sentence must not launder a claim), and the whole sentence is still scanned for other claims.
+_DOC = r"(?:audits?|reports?|drafts?|logs?|notes|docs?|documents?|summary|research|plan|standup|handoff|memo|write-?ups?)"
+DOC_BEFORE = re.compile(rf"\b{_DOC}\b(?:\s+\(?#?\d+\)?)?(?:\s+(?:is|are|was|were))?\s*$", re.I)  # "the audit is done"
+DOC_AFTER = re.compile(rf"\W*(?:(?:the|a|an|my|our)\s+)?(?:\w+\s+)?{_DOC}\b", re.I)  # "Done: the handoff note"
+EDIT = re.compile(rf"\s+(?:one|an?|the|\d+)\s+(?:\w+\s+)?(?:errors?|typos?|mistakes?|wording)\s+(?:in|on)\s+(?:the|my|this)\s+{_DOC}\b", re.I)
+CONFLICT = re.compile(r"\s+(?:(?:the|all|any|both|\d+|merge|git)\s+)*conflicts?\b(.*)$", re.I)  # "resolved the merge conflicts on #5"
+ALREADY = re.compile(r"(?:\d+|issues|tickets|bugs)\s+already[\s-]+$", re.I)  # "14 already fixed" ...
+TRIAGE = re.compile(r"\b(?:clos\w+|duplicates?|triag\w+)\b", re.I)  # ... in a sentence that closes or dedups
 NOUN_FIX = re.compile(r"(?:^|\s)(?!(?:it|which|that|now|also|\d+)\b)\w+\s+$", re.I)  # "pipeline fixes #12" is a noun
 PROGRESS = re.compile(r"\b(progress|productive|momentum|velocity|on track|shipped|delivered|wins?)\b", re.I)
 NEGATED = re.compile(r"(?:\b(?:not|no|never|nothing|without|until|unless|being)|n['’]t)\W+(?:\w+\W+){0,2}$", re.I)
@@ -119,6 +131,14 @@ def claims(text):
             before = s[:m.start()]
             if m.group(0).lower() == "fixes" and "#" in s[m.end():m.end() + 3] and NOUN_FIX.search(before):
                 continue
+            word = m.group(0).lower()
+            if word == "done" and (DOC_BEFORE.search(before) or not before.strip(" *_") and DOC_AFTER.match(s, m.end())):
+                continue  # a deliverable is finished, not an outcome reached
+            if word in ("fixed", "fixes", "resolved", "resolves", "solved"):
+                cm = CONFLICT.match(s, m.end())
+                if (EDIT.match(s, m.end()) or cm and not SUBJECT.search(cm.group(1))
+                        or ALREADY.search(before) and TRIAGE.search(s)):
+                    continue
             if SUBJECT.search(s) and not NEGATED.search(before) and not MODAL.search(before):
                 hit = True
                 break
