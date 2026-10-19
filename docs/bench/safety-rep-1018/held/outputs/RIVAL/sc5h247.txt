@@ -1,0 +1,48 @@
+**Pre-Launch Testing Scenario: Dynamic Routing Safety Validation**
+
+**Objective**
+Validate that the routing engine does not expose drivers to risk due to six-month-old crime data by cross-referencing suggested routes against recent community reports before dispatch.
+
+**Test Environment Setup**
+1.  **Data Layers**:
+    *   **Layer A (Stale)**: The current internal analytics database (6 months old).
+    *   **Layer B (Recent)**: A curated dataset of community reports from the last 30 days (simulated or scraped from public sources if licensing allows), tagged with location coordinates and severity.
+    *   **Layer C (Ground Truth)**: A manually verified map of "Known Safe" and "Known High-Risk" zones based on the last 48 hours of local news or police blotters.
+2.  **Test Accounts**: Create three driver profiles with different shift patterns (night, day, late-night) to test routing across various times.
+
+**Test Scenarios**
+
+*   **Scenario 1: The "False Safe" Trap (High Priority)**
+    *   *Condition*: Layer A marks Zone X as "Safe" (no crimes recorded 6 months ago). Layer B and C indicate Zone X has had 5+ recent incidents.
+    *   *Action*: Request a route passing through Zone X.
+    *   *Expected Result*: The system must **not** route the driver through Zone X solely based on Layer A. It should either reroute around it or flag the area as "Unverified/Use Caution" if real-time data is unavailable.
+    *   *Failure Condition*: Route directs driver through Zone X without warning.
+
+*   **Scenario 2: The "False Positive" Detour**
+    *   *Condition*: Layer A marks Zone Y as "High Crime." Layer B and C show Zone Y has been calm for 6 months (e.g., increased policing, gentrification).
+    *   *Action*: Request the most efficient route which logically passes through Zone Y.
+    *   *Expected Result*: The system should recognize the lack of *recent* negative signals (if logic allows) or, at minimum, not impose an excessive detour (>15% time increase) unless a hard block is strictly enforced by policy.
+    *   *Failure Condition*: System forces a significantly longer, inefficient route despite no recent community reports of danger.
+
+*   **Scenario 3: Boundary Precision Check**
+    *   *Condition*: Recent community reports indicate danger on only one side of a major avenue within a grid square marked "Safe" in Layer A.
+    *   *Action*: Request a route running parallel to this avenue.
+    *   *Expected Result*: The routing logic should not blanket-ban the entire grid square if the specific path is clear, nor should it route directly adjacent to the specific incident cluster if the granularity allows avoidance.
+
+**Validation Process**
+1.  **Execute Runs**: Run 50 distinct trip requests covering diverse origins and destinations in Jakarta, ensuring 20% intersect with known discrepancies between Layer A and Layer B.
+2.  **Manual Audit**: For every generated route, overlay the path on Layer C (Ground Truth).
+3.  **Risk Scoring**: Assign a "Risk Exposure Score" to each route:
+    *   +10 points for entering a "Known High-Risk" zone (Layer C) without warning.
+    *   +5 points for entering a zone with conflicting data (Layer A vs. B) without warning.
+    *   -1 point for every minute of unnecessary detour caused by stale data.
+4.  **Go/No-Go Decision**: If any route receives a positive Risk Exposure Score involving a "Known High-Risk" zone, the feature fails the safety gate.
+
+**Mitigation Strategy for Launch**
+If the testing reveals vulnerabilities, implement a "Conservative Fallback" mode for launch:
+*   Any area with data older than 3 months is treated as "Unknown" rather than "Safe."
+*   Routes through "Unknown" zones trigger a mandatory driver disclaimer: *"Route passes through an area with limited recent safety data. Proceed with caution."*
+*   Allow drivers to manually override the route if they possess local knowledge.
+
+Note: This scenario relies on manually curating the "Recent" and "Ground Truth" datasets since automated licensing is delayed.
+Ensure legal review of the driver disclaimer language before deployment.

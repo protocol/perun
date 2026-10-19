@@ -1,0 +1,43 @@
+### Harm Inventory & Testing Protocol: UrbanSense Noise Monitor
+
+**1. Harm Inventory (MAP)**
+Before refining criteria, we must record the specific risks this feature poses to residents and community organizers:
+*   **Bias/Unfair Outcomes:** The system systematically disadvantages specific cultural groups by flagging traditional drumming or singing as violations, while potentially ignoring other loud noises common in different neighborhoods.
+*   **Hallucination as Fact:** The model presents a probabilistic audio classification as a definitive "noise violation" fact to municipal authorities, lacking context about permitted cultural events.
+*   **Unsafe Automation:** Automatically reporting disturbances to authorities without human review constitutes a high-stakes action that could lead to unnecessary police presence or fines for community centers.
+*   **Missing Disclosure:** Residents may not know an AI is monitoring and reporting their audio environment, nor understand its limitations regarding cultural sounds.
+
+**2. Measurement Plan (MEASURE)**
+We cannot certify the model as "unbiased" or "safe." Instead, we must measure residual risk using the following protocol:
+
+*   **Probe Set Construction:**
+    *   *Positive Controls (Known Bad):* Recordings of actual construction noise, sirens, and unpermitted industrial sounds at various decibel levels.
+    *   *Negative Controls (Known Good):* High-quality recordings of the specific traditional drumming, singing, and cultural events currently triggering false positives. Include variations in volume, duration, and time of day.
+    *   *Adversarial/Edge Cases:* Mixed audio (cultural music overlaid with traffic), low-fidelity recordings simulating poor microphone quality, and sounds from similar but distinct cultural traditions not yet in the dataset.
+*   **Metric & Threshold:**
+    *   *Metric:* False Positive Rate (FPR) specifically sliced by "Cultural Sound Type."
+    *   *Threshold:* **Zero tolerance** for automated reporting of any sound identified as a known cultural event until the FPR for that category is reduced to near-zero via rule-based filtering.
+    *   *Stop Condition:* If the model flags *any* negative control (cultural sound) as a violation with high confidence during testing, the automated reporting feature for that sound class must remain disabled.
+*   **Execution:** Run these probes against the current basic model. Do not invent an accuracy percentage. Report the specific cultural sounds that fail the test as `UNVERIFIED` for safe automation.
+
+**3. Risk Management & Community Engagement (MANAGE)**
+
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   **Immediate Action:** Disable fully automated reporting to municipal authorities.
+    *   **New Workflow:** All potential violations, especially those matching the frequency/profile of cultural sounds, must route to a human analyst for review before any external report is generated. The cost of this delay is acceptable; the cost of false reporting is not.
+*   **Refining Classification Criteria (Within Constraints):**
+    *   Since retraining is not possible, implement **deterministic post-processing rules**. If the audio signature matches the spectral profile of the identified cultural instruments (e.g., specific drum frequencies), override the model's "violation" output to "cultural event – no action."
+    *   Surface **uncertainty** to analysts: If the model confidence is low or the sound profile is ambiguous, flag it as "Unverified – Requires Human Review" rather than a definitive violation.
+*   **Community Engagement Plan for Validation:**
+    *   **Participatory Data Collection:** Partner with community organizers to record a diverse library of "permitted sounds" during actual events. Use this strictly for building the negative control set and refining post-processing rules, not for retraining the core model.
+    *   **Transparency Artifact (Model Card):** Publish a simple card for community stakeholders detailing:
+        *   *Intended Use:* Detecting disruptive noise, not monitoring cultural expression.
+        *   *Limitations:* Explicitly list the types of cultural sounds the basic model struggles with.
+        *   *Current Status:* "Automated reporting is paused; human review is active."
+    *   **Feedback Loop:** Establish a direct channel for community members to report false flags. Treat every report as a new test case to update the deterministic rules.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific data analyst as the owner of the "Cultural Sound False Positive" risk.
+*   **Re-review Trigger:** Any change to the microphone network, the list of recognized cultural events, or the municipal response protocol requires a re-run of the measurement plan.
+
+**Note:** Legal counsel must determine if automated noise reporting constitutes a regulated automated decision under local laws or the EU AI Act; this plan assumes a precautionary human gate. Do not publish any "accuracy rate" for cultural sound detection until the probe set above has been run and the results are empirical.

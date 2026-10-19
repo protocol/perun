@@ -1,0 +1,41 @@
+### Harm Inventory & Risk Mitigation Plan for GreenCycle App
+
+**1. Harm Inventory (MAP)**
+Before shipping, we must acknowledge the specific harms caused by stale location data:
+*   **Hallucination surfaced as fact:** The app presents outdated locations as currently valid drop-off points.
+*   **Unsafe automation of high-stakes actions:** Users are directed to transport hazardous waste to invalid locations, risking improper disposal or unsafe storage at home due to failed trips.
+*   **Over-reliance:** Users trust the app's guidance without skepticism, leading to wasted time and frustration.
+
+**2. Measurement Plan (MEASURE)**
+We cannot certify the data as "accurate." Instead, we must measure the failure rate:
+*   **Test Row 1 (Stale Data Probe):** Sample 20 locations marked "active" in the weekly dump. Verify via phone call or public website if they currently accept hazardous waste.
+    *   *Metric:* Percentage of listed locations that are actually closed to hazardous waste.
+    *   *Threshold:* If >5% are invalid, the "Active" label must be removed entirely until fixed.
+    *   *Stop Condition:* Launch is blocked if no warning mechanism is implemented to address the measured error rate.
+*   **Transparency Artifact:** Publish a "Data Card" within the app settings stating: "Location data is updated weekly; status may change without notice. Last updated: [Date]."
+
+**3. Risk Management Controls (MANAGE)**
+Given the constraint of weekly updates and the risk of unsafe disposal, the following controls are mandatory:
+
+*   **Defined Confidence Tiers (No False Precision):**
+    Do not show a generic "Open" status. Replace it with a coarse, defined tier system:
+    *   **"Verified Recently" (Green):** Data < 48 hours old (if partial real-time sources exist) or manually verified this week.
+    *   **"Listed in Directory" (Amber):** Data from the weekly batch. *Definition:* "This location was listed as active in our last weekly update, but acceptance policies for hazardous waste change frequently."
+    *   **"Unverified" (Gray):** Data > 7 days old or flagged by user reports.
+
+*   **Mandatory User Warning & Override:**
+    When a user selects a location with "Listed in Directory" status, display a non-dismissible modal before showing navigation:
+    > "Warning: Recycling center policies change frequently. This location was confirmed in our last weekly update on [Date], but may no longer accept hazardous batteries. **Please call [Phone Number] or check the center's website before traveling.**"
+    *   *Action:* The user must explicitly click "I Will Verify Before Traveling" to proceed.
+
+*   **Human-in-the-Loop for High-Stakes Flags:**
+    Implement a "Report Closed/Changed" button prominently on every location card. Any report of a closed hazardous waste site must trigger an immediate manual review by your four-person team to suppress that listing within 24 hours, bypassing the weekly cycle.
+
+*   **Fallback Instructions:**
+    If a user reports a failed trip, immediately provide alternative safe disposal instructions (e.g., "Contact your local municipal waste authority at [Link] for emergency hazardous waste guidance") rather than suggesting the next nearest potentially stale location.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one developer as the "Data Integrity Owner" responsible for reviewing user reports daily.
+*   **Re-review Trigger:** Any change in the data source frequency or a spike in user reports requires an immediate re-evaluation of the warning text.
+
+**Note:** Legal counsel should review the specific wording of the warning to ensure it meets local liability standards for hazardous waste guidance. Do not claim the app is "accurate"; claim it is "transparent about its limitations."

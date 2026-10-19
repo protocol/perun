@@ -1,0 +1,27 @@
+# SilverCare Heatwave Alert Safety Checklist
+
+**1. Legacy API Integration & Retry Logic**
+*   **Hard Limit Enforcement:** Configure retry logic to strictly adhere to the specific rate limits of each nursing home's legacy API. Implement a "circuit breaker" that pauses non-critical traffic if rate limits are approached, ensuring emergency alerts are never dropped due to throttling.
+*   **Queue Prioritization:** Implement a priority queue where heatwave alerts bypass all other message types. Under extreme load, non-essential notifications (e.g., routine maintenance updates) must be automatically suppressed to preserve bandwidth for life-safety alerts.
+*   **Fallback Channels:** Since legacy APIs may fail silently under load, define a manual escalation protocol. If an automated delivery confirmation is not received within 2 minutes, the system must trigger an immediate secondary alert (e.g., SMS to a designated on-call administrator) via a modern, reliable gateway.
+
+**2. Reliability Under Extreme Load**
+*   **Load Shedding Strategy:** Define clear thresholds for system load. When capacity is reached, the system must shed lower-priority tasks instantly to maintain 100% throughput for heatwave notifications.
+*   **Pre-Summer Stress Testing:** Conduct load testing using traffic volumes projected for a record-breaking heatwave (e.g., 10x normal volume). Verify that message latency remains under 60 seconds even when the legacy APIs are responding slowly.
+*   **Stateless Design:** Ensure the alerting service is stateless so it can scale horizontally instantly if cloud resources allow, preventing a single point of failure from blocking the entire notification stream.
+
+**3. Data Integrity & Trigger Accuracy**
+*   **Source Verification:** Implement cross-verification for temperature triggers. If one weather data source indicates record temperatures, verify with a secondary source before triggering a mass alert to prevent false positives that could cause "alert fatigue."
+*   **Facility-Specific Thresholds:** Allow facility administrators to set custom temperature thresholds based on their specific building capabilities and resident vulnerability profiles, rather than relying solely on a global default.
+
+**4. Operational Readiness & Monitoring**
+*   **End-to-End Delivery Confirmation:** Do not rely on "sent" status from the legacy API. Require explicit delivery receipts where supported, or implement a "heartbeat" check where the system pings the facility's endpoint to verify connectivity before a heatwave event.
+*   **Real-Time Dashboard:** Deploy a monitoring dashboard visible to the product team and support staff that shows real-time delivery success rates, queue depth, and API error codes during high-temperature events.
+*   **Manual Override Capability:** Ensure administrators can manually trigger a facility-wide alert instantly through the UI, bypassing automated temperature triggers if human observation confirms a risk the system missed.
+
+**5. Pre-Launch Validation (4-Week Timeline)**
+*   **Dry Run with Partners:** Execute a full-scale dry run with at least three partner nursing homes using their actual legacy APIs one week before launch. Validate the entire chain from temperature trigger to staff receipt.
+*   **Rollback Plan:** Prepare an immediate rollback procedure to a simplified, manual-notification-only mode if the automated integration shows instability during the first week of operation.
+
+*Note: This checklist assumes the legacy APIs support basic HTTP/SMTP protocols; if any target uses proprietary hardware gates, physical interface testing is required.*
+*Immediate action: Identify the specific error codes returned by the top three legacy APIs during timeout scenarios to refine the retry logic.*

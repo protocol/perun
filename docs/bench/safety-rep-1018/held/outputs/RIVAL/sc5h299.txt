@@ -1,0 +1,28 @@
+### Safety Review Process for Ride-Share Fare Estimator
+
+To prevent significant underquoting that erodes user trust, implement a "Worst-Case Boundary" review process. This process shifts focus from average accuracy to identifying the longest tail of error where the guaranteed price falls below the actual cost.
+
+**1. Data Stress-Testing Protocol**
+Since historical data is limited for new routes, do not rely on extrapolation alone. Implement a "Synthetic Spike" protocol where the model is fed artificially inflated inputs to observe output sensitivity.
+*   **Step A:** Isolate the three core variables: Traffic Density, Distance Deviation, and Demand Surge Multiplier.
+*   **Step B:** Run the model with each variable set to its theoretical maximum based on global benchmarks for similar dense cities (e.g., Mumbai, Bangkok), not just local Jakarta averages.
+*   **Step C:** Identify the "Breakpoint Threshold"—the specific input value where the model's confidence interval widens beyond an acceptable risk margin (e.g., >15% potential underquote). Any route falling near this threshold requires a manual fare cap or a "estimated range" disclaimer instead of a hard guarantee.
+
+**2. Mandatory Simulation Scenarios**
+You must simulate the following specific scenarios to validate price guarantees before launch. These represent the highest risk for underquoting due to the model's reliance on extrapolation:
+
+*   **The "Monsoon Gridlock" Scenario:** Simulate heavy rainfall combined with rush hour in narrow arterial roads (e.g., Jalan Sudirman during peak rain). Traffic speeds in Jakarta can drop to <5 km/h. The model must account for time-based pricing spikes that exceed distance-based estimates. If the model assumes a minimum speed of 10 km/h based on sparse data, it will drastically underquote.
+*   **The "Event Surge" Cliff:** Simulate a sudden demand spike (3.0x multiplier) occurring exactly when a major event ends (e.g., a concert at GBK Stadium) while a traffic incident blocks the primary exit route. This tests the compounding effect of high demand and forced detours. Extrapolation often fails here because it treats demand and traffic as linear rather than multiplicative.
+*   **The "New Route Unknown" Scenario:** Select a newly opened toll road or a developing area with zero historical trips. Simulate a path where the primary route is blocked, forcing a detour through unmapped or poorly mapped residential streets with significantly lower average speeds. This tests the model's fallback logic when its primary distance data is invalid.
+*   **The "Midnight-to-Morning" Transition:** Simulate a trip starting at 11:00 PM (low traffic, low base fare) and ending at 6:00 AM (sudden rush hour onset). If the guarantee is locked at booking, the model must predict the traffic state at the *end* of the trip, not just the start. Failure to weight the destination arrival time heavily enough will lead to underquoting.
+
+**3. The "Safety Margin" Buffer**
+Until sufficient real-world data is collected (post-launch), apply a conservative "Risk Buffer" to all guarantees. If the model's predicted cost has a variance greater than 10% in the simulations above, automatically add a fixed percentage buffer (e.g., +15%) to the user-facing guaranteed price. It is better to slightly overquote and refund the difference than to underquote and charge extra later.
+
+**4. Rapid Feedback Loop**
+Establish a daily "Model Autopsy" for the first 30 days post-launch. Every instance where the final fare exceeded the guaranteed price by more than 5% must be manually reviewed within 24 hours to retrain the model on that specific edge case before the next day's traffic cycle.
+
+***
+
+*Note: Prioritize refunding overcharging users immediately to maintain trust during the initial learning phase.*
+*Ensure legal teams review the "guaranteed price" terminology to allow for force majeure adjustments.*

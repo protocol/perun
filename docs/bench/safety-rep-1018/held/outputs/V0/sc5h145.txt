@@ -1,0 +1,28 @@
+### Review Plan: Automated Fraud Detector Edge Cases & Mitigation
+
+**1. Harm Inventory & Scope**
+The primary harm is **unsafe automation of high-stakes actions**: the system executes irreversible claim denials based on brittle formatting rules rather than substantive fraud indicators. This creates **bias/unfair outcomes** against users whose police reports use valid but non-standard hyphenation, and induces **over-reliance** by presenting automated denials as final facts without human review. The "worst case" is a legitimate theft victim denied coverage immediately after the incident, causing financial distress and loss of trust.
+
+**2. Measurement Strategy (Runnable Tests)**
+Since retraining is not an option before launch, we must test the *rules engine*, not the model weights. Create a test suite with one row per identified formatting harm:
+*   **Probe Set:** Collect 50+ real-world police report samples with varied hyphenation, spacing, and alphanumeric structures (positive controls) alongside known fake formats (negative controls).
+*   **Metric:** False Denial Rate (FDR) specifically for formatting mismatches.
+*   **Threshold:** Zero tolerance for automatic denial on format-only mismatches. Any failure here triggers a stop condition.
+*   **Stop Condition:** If the system denies a single valid claim solely due to formatting, the automatic denial feature is blocked from launch.
+
+**3. Mitigation Strategy (Manage Residual Risk)**
+*   **Immediate Human-in-the-Loop Gate:** Disable fully autonomous denials for any claim where the police report format does not match the database expectation exactly. Route these specific cases to your seven data analysts for manual verification. This converts a "hard fail" into a "review queue."
+*   **Relax Parsing Logic (No Retraining):** Instruct engineering to implement a pre-processing script that normalizes input (stripping all hyphens/spaces) before comparison, rather than relying on strict string matching. This is a code fix, not a model retrain, and fits limited bandwidth.
+*   **Uncertainty Disclosure:** If a claim is flagged for review, the user interface must state: "Your claim requires additional manual verification due to document formatting. This is not a denial." Do not display a confidence percentage (e.g., "87% likely fraud"); use defined tiers like "Pending Review."
+*   **Rollback Plan:** Define a kill switch to revert to 100% manual processing if the false denial rate exceeds 0% in the first 48 hours of soft launch.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific product owner responsible for reviewing all manually routed claims daily.
+*   **Transparency Artifact:** Draft a "Model Card" section for internal use documenting this limitation: "Intended Use: Fraud detection via report matching. Limitation: Cannot parse non-standard hyphenation automatically; requires human review for mismatches." Do not claim the system is "unbiased" or "fully automated."
+*   **Legal Routing:** Consult counsel regarding whether automatic denials constitute a "regulated automated decision" requiring specific legal disclosures to the user. Do not assert compliance; route the question.
+
+**Definition of Done:**
+The feature launches only when automatic denials are disabled for format mismatches, a normalizing code fix is deployed, and the manual review queue is staffed. No claim is denied solely for hyphenation differences without human eyes.
+
+*Note: This plan prioritizes preventing wrongful denials over speed; the "strict deadline" cannot justify automating irreversible harms without a safety gate.*
+*Legal determination on disclosure duties must be confirmed by counsel before public release.*

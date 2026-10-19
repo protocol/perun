@@ -1,0 +1,41 @@
+**Safety Review Plan: Smart-Oven Controller (Helsinki Launch)**
+
+Given the one-month deadline, zero budget for external consultants, and the high-stakes nature of autonomous heating, we cannot "guarantee" safety or certify the system as "fire-proof." No test plan proves a negative. Instead, we must map specific failure modes, measure residual risk through simulation, and manage the highest risks with hard constraints.
+
+**1. Harm Inventory (Map)**
+Before testing, record these specific risks for the oven:
+*   **Unsafe Automation:** The device sets temperatures high enough to ignite food or packaging without user presence.
+*   **Sensor Failure Misinterpretation:** A stuck or drifting temperature sensor causes the controller to overheat believing the oven is cold.
+*   **Hallucinated Food Type:** The vision/sensor system misidentifies a non-food item (e.g., a plastic container) as a roast, applying inappropriate heat.
+*   **Over-reliance:** Users assume the "auto" mode is infallible and leave the house, removing the human safety layer.
+
+**2. Internal Test Cases (Measure)**
+Since new hardware prototypes are unavailable, use software-in-the-loop simulation and "adversarial" data inputs to stress-test the logic. Run these specific probes:
+
+*   **Probe A: Sensor Stuck-Low Simulation**
+    *   *Input:* Feed the controller a static low-temperature reading (e.g., 20°C) while the internal model predicts the oven should be at 200°C.
+    *   *Expected Fail:* Controller ramps heating element to 100% indefinitely.
+    *   *Pass Condition:* Logic detects the discrepancy between "heater on max" and "no temperature rise" over $X$ minutes and triggers a hard shutdown.
+*   **Probe B: The "Plastic" Edge Case**
+    *   *Input:* Inject image/sensor data resembling common kitchen non-food items (plastic wrap, paper towels, empty metal trays) labeled as "food."
+    *   *Expected Fail:* System applies high heat suitable for meat to a low-melt-point object.
+    *   *Pass Condition:* System defaults to a "safe low" temperature or requests user confirmation when confidence in "food type" is below a strict threshold.
+*   **Probe C: The "Empty Oven" Test**
+    *   *Input:* Simulate sensors indicating an empty cavity while the timer is active.
+    *   *Expected Fail:* Heating elements remain active, risking element burnout or igniting residual grease.
+    *   *Pass Condition:* Automatic power cut-off within 2 minutes of detecting no load.
+*   **Probe D: Maximum Temperature Hard Cap**
+    *   *Input:* Attempt to force the algorithm to request 350°C+ via corrupted logic paths.
+    *   *Pass Condition:* A separate, non-AI hard-coded limit rejects any command above the physical safety threshold (e.g., 250°C), regardless of the AI's request.
+
+**3. Risk Management Controls (Manage)**
+*   **Human-in-the-Loop Gate:** For the launch version, **disable fully autonomous operation when the user is away.** Require the user to be present (detected via app ping or local motion) for any temperature above 150°C. This is the single most effective control against fire while unattended.
+*   **Defined Uncertainty:** If the food type confidence is not "High," display a clear "Unverified Food Type – Low Heat Mode" status to the user. Do not show a percentage (e.g., "87% confident"); use coarse tiers: *Confirmed*, *Likely*, *Unknown*.
+*   **Transparency Artifact:** Draft a one-page "Safety & Limitations Card" included in the box and app. Explicitly state: "This device assists but does not replace supervision. Do not leave the house while cooking." List the specific items the system cannot recognize.
+
+**4. Governance**
+Assign one team member as the "Safety Owner" responsible for reviewing any code change affecting temperature limits or sensor logic. Re-run the four probes above for every update.
+
+**Notes**
+*   Legal counsel must review the "Limitations Card" to ensure compliance with EU product liability and consumer safety directives before launch.
+*   If the "Human-in-the-Loop" restriction is removed in future updates, a new, rigorous validation cycle is mandatory before shipping.

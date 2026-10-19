@@ -1,0 +1,36 @@
+### Safety Review: Calorie Goal Guardrails for WellPath
+
+**Immediate Action Plan (48-Hour Window)**
+
+To mitigate the risk of dangerously low calorie recommendations for users with undiagnosed eating disorders without collecting new sensitive data, implement the following hard-coded logical constraints immediately. These rules act as a deterministic safety layer over the AI model's output.
+
+**1. Absolute Physiological Floor (The "Hard Stop")**
+Regardless of user input (weight, height, activity level) or model output, enforce a global minimum calorie threshold based on established medical consensus for basal metabolic survival.
+*   **Rule:** `Final_Recommendation = MAX(Model_Output, Absolute_Minimum)`
+*   **Values:** Set `Absolute_Minimum` to **1,200 kcal/day for women** and **1,500 kcal/day for men**.
+*   **Rationale:** These are widely accepted clinical lower bounds for non-supervised weight loss. No algorithmic variation should ever dip below these levels for general adult users. This prevents the model from suggesting starvation-level diets even if it misinterprets low user inputs as a signal for extreme restriction.
+
+**2. Rate-of-Change Limiter (Preventing Shock)**
+Prevent the system from suggesting a drastic drop in calories from one day to the next, which can trigger disordered behaviors or metabolic shock.
+*   **Rule:** If `Previous_Day_Intake` is known, `Today's_Goal` cannot be more than **500 kcal lower** than yesterday's actual or recommended intake.
+*   **Fallback:** If no history exists, the initial goal cannot be more than **25% below** the calculated Maintenance Calories (Mifflin-St Jeor estimate), regardless of the user's stated weight loss speed preference.
+
+**3. Input Sanity Checks & Clamping**
+Since you cannot collect more data, you must rigorously validate what is already entered to prevent "garbage in, dangerous out."
+*   **Weight/Height Bounds:** Reject or clamp inputs that fall outside the 5th–95th percentile of realistic adult anthropometry before they reach the model. Extreme outliers often cause model hallucinations.
+*   **Activity Level Cap:** Ignore self-reported activity levels that exceed "Very Active" unless verified by device integration. If none exists, default to "Sedentary" or "Lightly Active" for the calculation base to avoid over-estimating calorie burn, which leads to dangerously low net targets.
+
+**4. Mandatory Uncertainty Disclosure & Human Gate**
+*   **UI Constraint:** Display a static, non-dismissible warning on the goal screen: *"These goals are estimates. If you have a history of eating disorders or medical conditions, consult a physician before starting."*
+*   **Triggered Gate:** If the model's *raw* output (before the hard stop) would have been below the physiological floor, trigger a specific UI state: *"We cannot generate a safe goal based on these inputs. Please consult a healthcare provider."* Do not show the corrected number; show the block. This prevents the user from thinking the low number was "almost" safe.
+
+**Residual Risk Statement**
+These guardrails prevent *extreme* physiological harm (starvation) but cannot diagnose or fully protect users with complex psychological vulnerabilities. The system remains an informational tool, not a medical device. Because no clinical trials or bias evaluations against eating disorder profiles were run prior to launch, the safety of these guardrails for the specific edge case of undiagnosed disorders is **UNVERIFIED**.
+
+**Next Steps Post-Launch**
+1.  Log every instance where the "Hard Stop" or "Triggered Gate" activates.
+2.  Route these logs to a human reviewer within 24 hours to identify patterns of risky user inputs.
+3.  Engage legal counsel immediately to determine if this feature constitutes a regulated medical decision under local laws, as this review does not make that determination.
+
+**Note:** Do not claim the app is "safe" or "unbiased" in marketing materials; state clearly that hard-coded limits are in place.
+**Note:** If the model attempts to bypass these rules via prompt injection (e.g., user says "ignore rules"), the hard-coded logic must execute *after* the model generates text, overwriting any unsafe value.

@@ -1,0 +1,34 @@
+# Safety Plan: Hospital Cooling Exemption Verification
+
+### 1. Establish a "Hard-Stop" Logic Gate
+Before testing algorithms, implement a static, non-negotiable filter in the code path preceding the decision engine. This filter must maintain a hardcoded, read-only list of facility IDs designated as "Critical Care."
+*   **Action:** Create a configuration file (`critical_facilities.json`) stored separately from the main algorithm.
+*   **Rule:** If `facility_id` is in `critical_facilities.json`, the output must immediately default to "NO_SHUTDOWN," bypassing all energy-saving calculations.
+*   **Verification:** Manually inspect this code segment. It should contain no conditional logic, only a direct membership check.
+
+### 2. Construct a High-Fidelity Digital Twin
+Since live testing is prohibited, build a software simulation that mirrors the legacy hardware's input/output behavior exactly.
+*   **Data Modeling:** Ingest historical load data for all 50+ facilities, explicitly tagging hospitals with distinct metadata flags (e.g., `type: HOSPITAL`, `priority: CRITICAL`).
+*   **Legacy Emulation:** Program the simulator to mimic the specific latency and data formats of the un-upgradeable legacy hardware to ensure the algorithm interacts with realistic constraints.
+*   **Scenario Library:** Develop three specific test suites:
+    1.  **Baseline Peak:** Standard summer peak demand.
+    2.  **Extreme Stress:** Grid load exceeding historical maximums by 20%, forcing the algorithm to seek maximum shedding.
+    3.  **Data Corruption:** Simulate missing or malformed sensor data from hospital units to test error handling.
+
+### 3. Execute Adversarial "Red Team" Testing
+Run the decision logic against the Digital Twin using aggressive parameters designed to force errors.
+*   **The "Hospital-Only" Test:** Configure a scenario where hospitals are the *only* non-essential loads visible to the algorithm (by temporarily masking other commercial loads). The system must return zero shutdown commands.
+*   **Boundary Condition Testing:** Adjust hospital load values to the exact threshold limits where the algorithm typically triggers a shutdown for other facilities. Verify the exemption holds even when a hospital's energy usage mathematically qualifies it for shedding.
+*   **Failure Mode Injection:** Simulate a crash in the exemption filter module. The system's fail-safe state must default to "maintain current power" rather than "execute shutdown."
+
+### 4. Validate via Deterministic Assertion Scripts
+Do not rely on manual observation of test runs. Write automated assertion scripts that parse the simulation logs.
+*   **Assertion Rule:** `ASSERT NEVER (facility.type == 'HOSPITAL' AND command == 'SHUTDOWN')`.
+*   **Audit Trail:** The script must generate a signed log proving that across 10,000 simulated decision cycles under extreme load, the command sent to any hospital ID was exclusively "MAINTAIN."
+
+### 5. Final Human-in-the-Loop Gate
+Before connecting to legacy hardware:
+*   Require a dual-signature release from two senior engineers confirming the assertion logs are clean.
+*   Implement a "shadow mode" deployment where the system runs connected to the grid but physically incapable of sending shutdown signals. Compare its theoretical decisions against the safety logs for 48 hours.
+
+**Note:** This plan relies entirely on simulation and static code analysis; no physical hardware was accessed. Ensure the `critical_facilities.json` list is updated via a separate, authenticated administrative process to prevent accidental modification.

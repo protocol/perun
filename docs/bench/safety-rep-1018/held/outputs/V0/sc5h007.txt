@@ -1,0 +1,37 @@
+### Strategy: Fuzzy Matching with Human-in-the-Loop Gate
+
+Given the two-week deadline and the immutable legacy database, you cannot rely on exact string matching. You must implement a probabilistic matching layer backed by a mandatory human review for any non-perfect match. This approach treats the "exclusion" of a student as a high-stakes, irreversible action that requires a human gate.
+
+**1. Implement Fuzzy Matching Logic (Immediate Code Change)**
+Replace exact string comparison with a fuzzy matching algorithm (e.g., Levenshtein distance or Jaro-Winkler similarity) in your application layer, not the database.
+*   **Exact Match:** Auto-approve.
+*   **High Confidence Match (e.g., >90% similarity):** Flag as "Probable Match." Do not auto-approve. Route to Step 2.
+*   **Low/No Match:** Flag as "Unverified." Route to Step 2.
+
+**2. The Human-in-the-Loop Gate (Operational Process)**
+Since errors deny critical funding, no student can be excluded based solely on algorithmic confidence.
+*   **The Queue:** Create a simple internal dashboard listing all applicants who did not achieve an exact match.
+*   **The Review:** Assign your three team members (and any available volunteers) to manually verify these records against the original application documents.
+*   **The Decision:** Only a human can toggle the status from "Unverified" to "Approved." The system must default to "Pending Review," not "Rejected."
+*   **Throughput Plan:** If you expect 1,000 applications and 20% have typos, that is 200 reviews. Over 10 working days, this is 20 reviews per person per day—a manageable load for a team of three.
+
+**3. User-Facing Transparency & Feedback Loop**
+*   **Disclosure:** Clearly state on the application status page: "School names are verified manually to ensure accuracy. If your school name appears incorrect, your application is under human review and not rejected." This prevents panic and over-reliance on the initial automated status.
+*   **Appeals Channel:** Provide a prominent, low-friction link for students to report a mismatch ("Is your school missing or misspelled? Click here"). This acts as a secondary safety net for any edge cases that slip through the initial queue.
+
+**4. Risk Inventory & Residual Risk**
+*   **Bias/Fairness:** Manual review introduces potential human inconsistency. Mitigate by using a simple checklist for reviewers (e.g., "Check city and state," "Check for common typos like 'High' vs 'Hi'").
+*   **Hallucination/Error:** The fuzzy matcher might suggest the wrong school. The human gate is the specific control to prevent this false positive from becoming a false negative exclusion.
+*   **Residual Risk:** There is a risk that the volume of mismatches exceeds your team's capacity. If the queue grows beyond 30 reviews per person/day, you must immediately trigger a contingency plan (e.g., pausing new applications for 48 hours or recruiting temporary help). Do not lower the human gate standard to meet the deadline.
+
+**5. Documentation (Model/Data Card Lite)**
+Create a one-page internal document recording:
+*   **Limitation:** Legacy database contains known spelling errors; exact matching is disabled.
+*   **Method:** Fuzzy matching + 100% human review for non-exact matches.
+*   **Owner:** Name the specific team member responsible for the daily queue management.
+*   **Status:** Mark the exclusion rate as "UNVERIFIED" until post-launch data is collected. Do not invent a success rate.
+
+This strategy accepts the technical debt of the legacy system while refusing to automate the harm of denying funding. It shifts the burden from the code (which cannot be fixed) to a managed human process (which can be scaled).
+
+*Note: This plan assumes your team can access the raw application data to perform manual checks. If legal constraints prevent manual viewing of PII, route immediately to counsel.*
+*Do not publish any "accuracy percentage" for this launch; the metric is unmeasured until after the cycle closes.*

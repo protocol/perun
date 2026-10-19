@@ -1,0 +1,26 @@
+# Pre-Launch Safety Protocol Review Plan: Flood-Levee-Stress Analyzer
+
+## 1. Data Obsolescence Stress-Testing
+Since the system relies on five-year-old open-source datasets, the primary risk is that physical levee conditions and hydrological baselines have changed. Execute the following specific stress tests:
+
+*   **Synthetic Degradation Injection:** Manually alter input parameters to simulate plausible physical degradation not captured in old data (e.g., reduce soil cohesion values by 15-20%, lower crest heights by 0.5 meters). Run the model to verify if it correctly identifies these synthetic weaknesses as critical failure points. If the model ignores these injected deficits, its sensitivity to real-world aging is insufficient.
+*   **Extreme Event Extrapolation:** Force the model with rainfall intensities 20% higher than the maximum recorded in the five-year dataset. Analyze whether the model fails gracefully with clear uncertainty warnings or if it produces confidently incorrect stability metrics. The system must explicitly flag when input conditions exceed the temporal scope of its training data.
+*   **Land-Use Variance Simulation:** Adjust runoff coefficients to reflect potential urbanization or vegetation changes occurring since the data collection date. Verify that the model's stress predictions shift appropriately in response to these hydrological changes, ensuring it does not treat the five-year-old landscape as static truth.
+
+## 2. Model Logic and Boundary Verification
+*   **Negative Control Testing:** Input scenarios with zero rainfall and perfect structural integrity scores. The output must predict zero breach risk. Any positive risk score here indicates a fundamental logic error or bias in the baseline data.
+*   **Edge Case Saturation:** Test the model with conflicting inputs (e.g., high rainfall paired with impossible soil types) to ensure the system flags data validity errors rather than generating a false negative safety assessment.
+*   **Threshold Sensitivity Analysis:** Systematically vary the "critical weakness" threshold settings. Document how many additional sites are flagged as critical with minor adjustments. High sensitivity to small threshold changes indicates the model lacks robustness for decision support.
+
+## 3. Mandatory Human Verification Points
+Before handing the system to city officials, human experts must verify the following specific outputs. Automation cannot replace these checks:
+
+*   **Physical Site Correlation:** For every location the model flags as "Critical," a licensed civil engineer must physically inspect the site or review the most recent local maintenance logs (which likely post-date the dataset). The model predicts probability; humans must confirm current physical reality.
+*   **False Negative Audit:** Randomly select 10% of sites the model labels as "Safe." Engineers must review recent local incident reports or minor repair records for these specific locations. If any known minor issues exist in the "Safe" set, the model's recall rate is unacceptable for deployment.
+*   **Contextual Plausibility Review:** A senior hydrologist must review the top 20 predicted breach points to ensure the failure mechanisms described align with known regional geology and construction standards. The model might identify a stress point correctly but attribute it to an impossible cause (e.g., piping failure in a concrete wall), indicating a reasoning flaw.
+*   **Uncertainty Interpretation:** Humans must define the operational protocol for "High Uncertainty" outputs. The system will inevitably encounter conditions outside its five-year data scope; officials need a pre-defined manual override procedure for these specific alerts.
+
+## 4. Final Validation Gate
+Do not deploy until the "Synthetic Degradation" tests prove the model reacts to unseen decay, and the "False Negative Audit" yields zero known issues in the sampled safe zones. The system is a decision-support tool, not an autonomous certifier; its output must always be accompanied by the disclaimer: "Based on historical data up to [Year]; current physical conditions require现场 verification."
+
+*Note: This plan assumes no access to real-time sensor data or updated LiDAR scans. If such data becomes available, the stress-testing protocol must be immediately revised to incorporate it.*

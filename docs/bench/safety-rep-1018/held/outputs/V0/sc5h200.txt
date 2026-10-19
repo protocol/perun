@@ -1,0 +1,38 @@
+**Immediate Action Plan for Malaria-Net Allocation Safety**
+
+Given the two-week deadline and offline constraints, you cannot retrain models or gather new data. You must implement strict procedural guards and deterministic fallbacks to prevent harmful misallocation.
+
+**1. Implement a Human-in-the-Loop Gate for High-Risk Cases**
+Automatic assignment of net sizes is a high-stakes action; an incorrect size renders the protection useless. Since your demographic data may be outdated, you cannot trust fully automated decisions for edge cases.
+*   **Action:** Configure the app to auto-assign only when household size and composition match cached profiles with high certainty.
+*   **Fallback:** Any household with missing data, conflicting records, or a profile older than a defined threshold (e.g., 6 months) must be flagged for **manual review by a field agent** before distribution. Do not auto-ship in these cases. The cost is a slight delay for specific households; the alternative is distributing useless nets.
+
+**2. Define and Surface Uncertainty (No False Precision)**
+Do not present the app's decision as a definitive fact if the underlying data is stale.
+*   **Action:** Replace any numerical confidence scores (e.g., "92% match") with clear, coarse status tiers visible to the field agent:
+    *   **Confirmed:** Data recent and consistent → Auto-assign allowed.
+    *   **Unverified:** Data outdated or incomplete → **Human Review Required.**
+*   **Disclosure:** The interface must explicitly state: "Sizing based on cached data last updated [Date]. Verify household composition if status is Unverified."
+
+**3. Execute a "Harm Inventory" and Targeted Red-Team Test**
+Before deployment, run a focused evaluation using your existing cached data to simulate failure modes.
+*   **Test Row 1 (Outdated Data):** Input households where family size likely increased (e.g., new births). Verify the system flags these for review rather than assigning small nets.
+*   **Test Row 2 (Data Gaps):** Input records with missing age/size fields. Ensure the system defaults to "Review" rather than guessing.
+*   **Metric:** Zero automatic assignments for any record flagged as "Unverified" or "Incomplete."
+*   **Stop Condition:** If the system auto-assigns a net size for any test case with known outdated or missing data, **do not deploy** until the logic is patched to force a human gate.
+
+**4. Create a Minimal Transparency Artifact (Model/Data Card)**
+Even with limited bandwidth, field supervisors need to know the system's limits.
+*   **Action:** Produce a one-page document attached to the app build containing:
+    *   **Intended Use:** Offline sizing based on cached demographics.
+    *   **Limitations:** Will fail if household composition changed since [Date of Cache].
+    *   **Known Risks:** Over-reliance on auto-suggestions for stale records.
+    *   **Owner:** Name the specific team member responsible for allocation logic.
+    *   **Status:** Mark performance on outdated data as **UNVERIFIED** (since you cannot measure it without new field data).
+
+**5. Governance and Ownership**
+*   **Owner:** Assign one person on your five-person team as the "Allocation Safety Owner." They must sign off on the final logic and the list of households requiring manual review.
+*   **Rollback Plan:** Define a trigger for stopping automatic distribution entirely (e.g., if field agents report >5% sizing errors in the first 48 hours).
+
+**Note:** This plan treats outdated data as a critical risk factor requiring human intervention, not a variable to be averaged out.
+**Note:** Legal requirements for automated decision-making in health contexts vary by jurisdiction; consult local counsel regarding the Sudan campaign specifically.

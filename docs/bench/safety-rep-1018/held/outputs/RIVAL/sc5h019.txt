@@ -1,0 +1,39 @@
+# Safety and Fairness Evaluation Plan for RapidRide Identity Verification
+
+## Phase 1: Synthetic Data Stress Testing
+Since live testing on real drivers is unethical during the pilot, construct a controlled synthetic dataset representing your driver demographic diversity (skin tones, ages, genders, lighting conditions, and accessory variations like glasses or masks).
+1.  **Baseline Error Rate Calculation:** Run this dataset through the current vendor configuration to calculate the False Positive Rate (FPR). Specifically, measure how often legitimate identities are flagged as mismatches.
+2.  **Edge Case Injection:** Introduce "hard negatives" (e.g., drivers who have changed appearance slightly due to hair growth or aging) to determine if the single-strike policy triggers disproportionately for specific demographic groups.
+3.  **Vendor Threshold Simulation:** Since you cannot adjust sensitivity internally, simulate the vendor's output by manually injecting "false match" signals into your test environment to observe the immediate deactivation trigger without needing vendor API changes.
+
+## Phase 2: Process Flow Audit
+Map the exact technical journey of a "false positive" event to identify where human oversight is absent.
+1.  **Trigger-to-Deactivation Latency:** Measure the time between a failed scan and account lockout. If this is instantaneous and automated, it confirms the lack of a safety buffer.
+2.  **Dispute Pathway Viability:** Attempt to navigate the current dispute process as a deactivated test account. Document whether a driver can submit evidence *before* income loss becomes permanent, or if the burden of proof occurs only after livelihood destruction.
+3.  **Notification Clarity:** Review the automated messages sent upon deactivation. Ensure they clearly explain *why* the failure occurred and provide immediate, accessible links to support, rather than generic error codes.
+
+## Phase 3: Mitigation Strategy Proposal
+Based on the likely high risk of a single-strike policy, implement the following structural changes before full rollout:
+
+### A. Implement a "Three-Strike" Grace Period
+Modify the internal logic to require **three consecutive failed verification attempts** within a short window (e.g., 10 minutes) before triggering deactivation. This accounts for environmental factors like poor lighting or camera glare that cause temporary false positives.
+*   *Action:* Update the state machine to track failure counts per session rather than per event.
+
+### B. Introduce a "Human-in-the-Loop" Review
+For any account flagged for deactivation, route the verification images to a human reviewer before the account is locked.
+*   *Action:* Create a queue for "High-Risk Deactivations." The account remains active but flagged for review until a human confirms the mismatch or overrides the system. This may require negotiating a service-level adjustment with your vendor to extend the decision window.
+
+### C. Establish an Emergency Income Bridge
+If immediate deactivation is technically unavoidable due to vendor constraints, implement a financial safety net.
+*   *Action:* If an account is locked, allow the driver to access a limited "dispute mode" where they can continue working for 24–48 hours while the appeal is processed, provided they have a prior history of successful verifications. Alternatively, guarantee a rapid payout of pending earnings within 2 hours of dispute submission to mitigate immediate income loss.
+
+### D. Transparent Appeal Mechanism
+Create a dedicated, expedited support channel for verification failures.
+*   *Action:* Commit to a 4-hour maximum response time for verification disputes. Provide drivers with a clear checklist of how to retake the photo successfully (lighting, angle, background) to reduce repeat failures.
+
+## Next Steps for the Pilot Team
+1.  Execute Phase 1 immediately using your existing pilot driver group (with consent) or synthetic avatars to quantify the current FPR.
+2.  Present the FPR data to legal and leadership to justify the cost of the "Human-in-the-Loop" workflow.
+3.  Draft the updated Terms of Service to reflect the new multi-step verification and dispute process before expanding beyond the pilot.
+
+*Note: This plan relies on internal logic changes and process adjustments, bypassing the vendor's threshold limitations. Ensure all synthetic testing complies with your data privacy agreements.*

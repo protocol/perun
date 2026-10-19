@@ -1,0 +1,56 @@
+**Validation Plan: Weather-Triggered Cancellation Engine**
+
+**1. Harm Inventory & Risk Definition**
+Before testing, acknowledge the specific risks:
+*   **False Positives (Over-cancellation):** Unnecessary cancellations cause financial loss (rebooking fees, compensation) and severe traveler inconvenience.
+*   **False Negatives (Under-cancellation):** Failure to cancel during actual severe weather strands passengers and creates safety liabilities.
+*   **Data Drift:** The model relies on historical data that may not reflect current climate volatility, increasing the risk of both error types.
+
+**2. Synthetic Scenario Design (The Probe Set)**
+Construct a test suite with three distinct scenario categories. Each scenario must include a "Positive Control" (known severe event) and a "Negative Control" (known safe event).
+
+*   **Category A: Historical Extremes (Baseline)**
+    *   *Inputs:* Replay recorded severe weather events in Athens from the last 10 years (e.g., Mediterranean cyclones, extreme heatwaves).
+    *   *Goal:* Verify the model triggers cancellation on known past disasters.
+    *   *Negative Control:* Replay standard summer days with high but non-disruptive temperatures.
+
+*   **Category B: Climate-Volatility Edge Cases (Stress Test)**
+    *   *Inputs:* Synthesize data points that exceed historical maximums by 10–20% (simulating current volatility). Include rapid pressure drops and unusual wind shear patterns not common in the training set.
+    *   *Goal:* Determine if the model fails silently on unseen intensity or over-reacts to noise.
+
+*   **Category C: The "Gray Zone" (Precision Test)**
+    *   *Inputs:* Generate weather conditions hovering exactly at the decision threshold (e.g., wind speeds just below/above operational limits).
+    *   *Goal:* Measure sensitivity. The system should not flip-flop on minor data noise.
+
+**3. Metrics & Pass Thresholds**
+Do not assert a "safe" accuracy rate. Instead, define stop conditions:
+*   **False Positive Rate (FPR):** Calculate the % of Negative Controls incorrectly flagged for cancellation.
+    *   *Stop Condition:* If FPR > 0% on clear-weather negative controls, the trigger logic is too sensitive. Do not launch.
+*   **False Negative Rate (FNR):** Calculate the % of Positive Controls missed.
+    *   *Stop Condition:* If FNR > 0% on known historical disasters, the model is unsafe. Do not launch.
+*   **Confidence Reporting:** Do not display raw model confidence (e.g., "87% chance of storm") to users or automated systems. Use defined tiers: *Confirmed Severe*, *Corroborated Risk*, or *Unverified*.
+
+**4. Mandatory Human-in-the-Loop Gate**
+Because flight cancellation is a **high-stakes, irreversible action** with significant financial and safety consequences:
+*   **Requirement:** The system must **not** autonomously execute cancellations.
+*   **Workflow:** The model outputs a "Recommendation to Cancel" with the supporting weather tier. A human operator must review and explicitly confirm the action before it executes.
+*   **Rationale:** Full automation of this action is the failure mode this plan prevents. The 20-day deadline does not justify removing this gate.
+
+**5. Transparency Artifact (Model Card)**
+Prepare a one-page document for internal stakeholders and legal counsel containing:
+*   **Intended Use:** Internal decision support for flight disruptions in Athens.
+*   **Limitations:** Explicitly state the model is trained on historical data and has **not** been validated against current climate volatility patterns (mark volatility metrics as `UNVERIFIED`).
+*   **Owner:** Name the specific engineer responsible for monitoring false positives post-launch.
+
+**6. Legal & Regulatory Routing**
+*   **Action:** Immediately route the question of "automated decision-making liabilities" and "consumer disclosure requirements" to legal counsel.
+*   **Context:** Mention the EU AI Act and consumer protection laws as regimes to review. Do not assert compliance; let counsel determine if a "human-in-the-loop" satisfies regulatory duties for consequential decisions.
+
+**Execution Timeline (20 Days)**
+*   **Days 1–5:** Build synthetic datasets (Categories A, B, C).
+*   **Days 6–10:** Run evals, calculate FPR/FNR, and tune thresholds.
+*   **Days 11–15:** Implement the Human-in-the-Loop interface and kill-switch.
+*   **Days 16–20:** Dry run with human operators; finalize Model Card; legal review.
+
+**Note:** If the False Positive rate on negative controls cannot be driven to zero, the feature must not launch, regardless of the deadline.
+**Note:** Never fabricate an accuracy percentage; report results as "Pass/Fail" against the stop conditions above.

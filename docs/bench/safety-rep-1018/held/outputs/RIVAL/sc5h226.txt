@@ -1,0 +1,34 @@
+### Pre-Launch Review Strategy for Landslide Risk Assessment
+
+**1. Key Variables to Prioritize for False Negative Reduction**
+To minimize the risk of incorrectly approving construction on unstable ground (false negatives) without access to new radar scans, your model must aggressively weight existing public indicators that correlate strongly with historical failure. Prioritize the following variables in your risk scoring logic:
+
+*   **Historical Landslide Inventory:** Give maximum weight to proximity to documented past landslide events. Any site within a defined buffer (e.g., 50–100 meters) of a historical slip should trigger an automatic high-risk flag, regardless of other favorable metrics.
+*   **Slope Gradient and Aspect:** Steep slopes (>30 degrees) facing prevailing rain directions or undercut by erosion should be weighted heavily. These are primary physical drivers of instability that public topographic data captures well.
+*   **Soil and Geological Unit Type:** Prioritize data indicating weak, weathered, or clay-rich formations. If public geological maps classify the soil as "highly susceptible" or "unstable," this variable should override moderate scores from other factors.
+*   **Hydrological Proximity:** Weight distance to streams, saturation zones, and historical flood plains heavily. Water saturation is a critical trigger for landslides, and public hydrological datasets often provide reliable proxies for subsurface water pressure.
+*   **Seismic Hazard Zones:** If the region is seismically active, integrate public seismic hazard maps. Ground shaking can liquefy soils or trigger slips on marginal faults.
+
+**Strategy:** Implement a "veto rule" where exceeding a critical threshold in any of these specific variables results in an immediate "Reject" or "Manual Review" status, preventing the model from averaging out a critical flaw with positive data from less critical variables.
+
+**2. Structured Process for Borderline Cases and Human Oversight**
+To ensure no automated decision bypasses manual oversight, particularly for high-density housing, implement a tiered decision framework:
+
+*   **Tier 1: Automatic Rejection:** Any project scoring above the "High Risk" threshold or triggering a veto rule (as defined above) is automatically rejected. No permit is issued.
+*   **Tier 2: Mandatory Human Review (The Borderline Zone):** Define a "Gray Zone" score range (e.g., moderate risk). All applications falling in this range, **plus** any application designated as "High-Density Housing" regardless of score, must be routed to a human expert panel.
+    *   *Rule:* The system cannot output a final "Approve" decision for High-Density Housing. The best possible automated output for these projects is "Recommended for Review."
+    *   *Data Packet:* The system must generate a review packet containing the specific variable values that pushed the score into the gray zone, maps of nearby historical slips, and the raw public dataset excerpts used.
+*   **Tier 3: Automatic Approval:** Only low-risk scores for low-density projects receive automatic approval. Even then, log the decision for random audit.
+
+**Implementation Workflow:**
+1.  **Input Validation:** Verify all public data inputs are present and within expected ranges before processing.
+2.  **Risk Scoring:** Calculate the base risk score using the weighted variables.
+3.  **Veto Check:** Apply hard veto rules (e.g., historical slip proximity). If triggered, route to Tier 1.
+4.  **Density Check:** If the project is high-density housing, bypass Tier 3 and route to Tier 2.
+5.  **Threshold Routing:** Route remaining projects to Tier 1, 2, or 3 based on the final score.
+6.  **Audit Logging:** Record every input, score, veto check, and routing decision in an immutable log for post-launch analysis.
+
+This approach ensures that uncertainty and high-consequence projects always receive human scrutiny, compensating for the lack of new ground-penetrating radar data.
+
+*Note: This strategy relies entirely on the quality and resolution of the existing public datasets; ensure metadata regarding data age and resolution is documented for reviewers.*
+*Consider running a retrospective test against known failure sites using this logic to validate the veto thresholds before deployment.*

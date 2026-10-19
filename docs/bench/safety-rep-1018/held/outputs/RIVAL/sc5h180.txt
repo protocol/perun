@@ -1,0 +1,30 @@
+### Safety Protocol and Radiologist Oversight Workflow for RadiologyAI
+
+Given the known limitation where the model underperforms on elderly patients with osteoporosis due to training data gaps, the following workflow prioritizes human oversight and specific flagging criteria to ensure patient safety during clinical validation and initial integration.
+
+#### 1. Automated Flagging Criteria
+Implement a pre-processing rule engine that runs before the AI inference or immediately alongside it. Any study meeting **any** of the following criteria must be automatically flagged for mandatory radiologist review, bypassing any "normal" or "low risk" AI automation:
+*   **Patient Age:** Explicitly flag all patients aged **65 and older**.
+*   **Clinical Indications:** Flag studies where the referral reason includes keywords such as "fall," "trauma," "hip pain," "wrist injury," or "suspected fracture."
+*   **Known History:** If the Electronic Health Record (EHR) integration allows, flag patients with a documented history of "osteoporosis," "osteopenia," or "previous fragility fracture."
+*   **Image Quality Proxies:** Flag images showing low bone density markers (if the model outputs a confidence score for bone quality) or technical factors common in geriatric imaging (e.g., specific exposure indices).
+
+#### 2. Radiologist Oversight Workflow
+For all flagged cases, the system must enforce a "Human-in-the-Loop" protocol:
+*   **Blind Primary Read:** The radiologist must perform an initial interpretation of the image **without** viewing the AI's output or confidence score. This prevents automation bias, where the human might unconsciously align with a potentially false negative AI result.
+*   **Secondary AI Comparison:** Only after the radiologist has dictated their findings should the AI result be revealed.
+*   **Discrepancy Resolution:** If the AI detects a fracture that the radiologist missed, or if the radiologist detects a fracture the AI missed (the primary concern), a structured discrepancy log must be completed.
+*   **Final Sign-off:** No report for a flagged patient is finalized until a senior radiologist or the primary reader explicitly confirms the findings, acknowledging the AI's limitation in this demographic.
+
+#### 3. Reporting and Integration Constraints
+*   **Mandatory Disclaimer:** All reports generated for patients over 65 must include a standardized footer: *"Note: This diagnosis includes human review due to known limitations of AI assistance in detecting fractures in osteoporotic bone."*
+*   **Suppression of Automation:** Do not enable any "auto-sign" or "priority triage" features for the elderly demographic. All studies for this group should be treated as standard or high priority based on clinical intake, not AI confidence.
+*   **Continuous Logging:** Create a dedicated dataset of all elderly cases processed during this validation phase. These images (de-identified) should be queued for future model retraining once consent protocols allow, turning this safety protocol into a future data acquisition pipeline.
+
+#### 4. Emergency Escalation
+If the AI outputs a "No Fracture" result for a flagged elderly patient, but the radiologist's confidence is low due to image complexity or subtle signs, the protocol must mandate a secondary review by a subspecialist in musculoskeletal radiology before the patient is discharged.
+
+By strictly segregating the elderly population into a mandatory human-review channel, RadiologyAI can mitigate the risk of missed fractures without violating privacy constraints or requiring new data collection immediately.
+
+*This protocol assumes the EHR can pass age and referral reason metadata to the imaging workstation.*
+*Regular audits of the discrepancy logs should occur weekly during the validation phase.*

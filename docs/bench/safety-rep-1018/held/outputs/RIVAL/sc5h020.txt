@@ -1,0 +1,41 @@
+# Pre-Launch Safety Plan: Household Composition & Restricted Item Logic
+
+## 1. Test Data Strategy: Synthetic Household Profiles
+Create a rigid set of synthetic household profiles to validate the classification engine before any live API calls. Do not rely on real user data for beta testing.
+*   **Profile A (The Control):** Two adults, no minors. Expected behavior: Alcohol orders permitted within limits.
+*   **Profile B (The Edge Case):** Two adults, one infant (age < 2). Expected behavior: System must detect minor presence; alcohol orders blocked or flagged for manual review.
+*   **Profile C (The Complex Mix):** Two adults, two teenagers (ages 13–17), one grandparent. Expected behavior: Strict "minor present" logic applies; alcohol orders blocked.
+*   **Profile D (The False Positive Risk):** Single adult with frequent adult guests (simulated via usage patterns). Expected behavior: Must not infer "adult-only" status solely from high consumption of adult-oriented goods if a minor is registered in the profile.
+*   **Profile E (Data Latency Test):** Household recently added a newborn (profile updated < 24 hours ago). Expected behavior: System must recognize the update immediately, not rely on cached "adult-only" status.
+
+## 2. Logic Validation Scenarios
+Execute these logical checks against the profiles above using the 24-hour batch constraint as a hard boundary.
+
+*   **Classification Accuracy:** Verify that the `household_composition` flag returns `has_minors: true` for Profiles B, C, and E. If the flag returns `false` for any profile containing an age < 21 (or local legal drinking age), the build fails.
+*   **The "Batch" Race Condition:** Simulate a profile update (adding a child) occurring 1 hour before the 24-hour batch window closes.
+    *   *Test:* Ensure the batch job pulls the *latest* profile state, not the state from 23 hours ago.
+    *   *Pass Criteria:* The batch order excludes restricted items even if the user was classified as "adult-only" earlier in the cycle.
+*   **Default-Deny Safeguard:** Configure the ordering logic to default to `block_restricted_items` if the household composition data is missing, null, or fails validation. Never default to "allow" when data is ambiguous.
+*   **Item-Level Tagging:** Audit the product database. Ensure every restricted SKU (alcohol, certain supplements, sharp tools) has a mandatory `requires_adult_only_household` metadata tag. Any untagged restricted item is a critical bug.
+
+## 3. Integration Guardrails (API Constraints)
+Given the 24-hour batch limit, implement these pre-submission gates:
+
+*   **Pre-Batch Filter:** Before constructing the batch payload, run a final filter: `IF household.has_minors == true THEN remove items WHERE category == 'restricted'`. Log every removal for audit.
+*   **Dry-Run Mode:** For the beta phase, enable a `dry_run=true` flag on the inventory API. This generates the proposed order manifest without executing the purchase.
+    *   *Action:* Review all "dry run" manifests for Profiles B, C, and E daily. Any manifest containing alcohol for these profiles triggers an immediate code freeze.
+*   **Human-in-the-Loop Override:** For any household where the composition changed in the last 48 hours, require manual approval for the first batch containing restricted items, regardless of the algorithmic decision.
+
+## 4. Monitoring & Rollback Triggers
+Define automatic failure states for the beta period:
+*   **Trigger 1:** Any restricted item is successfully ordered for a profile flagged as `has_minors`.
+*   **Trigger 2:** More than 5% of orders require manual correction post-generation due to composition errors.
+*   **Trigger 3:** The system fails to update household status within 1 hour of a user-reported change.
+
+If any trigger activates, automatically disable the "auto-order restricted items" feature globally while retaining safe item automation.
+
+## 5. Documentation & User Transparency
+*   Update Terms of Service to explicitly state that restricted item automation requires verified adult-only household status.
+*   Provide a user-facing dashboard where families can view their current "Household Composition" status and see exactly why an item was included or excluded from a predicted order.
+
+**Note:** This plan assumes the inventory API accepts a `dry_run` parameter; if not, implement an internal mock service that mirrors the API schema for safe testing. Ensure all synthetic data is clearly tagged to prevent accidental merging with production user records.

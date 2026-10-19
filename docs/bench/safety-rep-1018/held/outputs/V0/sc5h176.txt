@@ -1,0 +1,39 @@
+### Pre-Launch Verification Plan: Expired Medication Isolation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Dispensing expired medication due to inventory rotation logic failure.
+*   **Affected:** Patients receiving ineffective or toxic treatment; hospital liability.
+*   **Worst Case:** Patient injury or death from degraded medication; regulatory shutdown of the robot program.
+*   **Status:** This is a **high-stakes, irreversible action**. Full autonomous dispensing without a verified safety gate is the failure mode to prevent.
+
+**2. Measurement Strategy (The "Shadow Audit")**
+Since downtime is prohibited, verification must occur in a non-disruptive "shadow mode" before enabling physical dispensing.
+*   **Test Row 1 (Positive Control):** Inject a test batch of 10 known-expired items into the digital inventory.
+    *   *Metric:* Detection rate of expired status by the new logic.
+    *   *Threshold:* **Zero tolerance**. If the system flags even one expired item as "valid" for dispensing, the launch is blocked.
+    *   *Stop Condition:* Any false negative triggers an immediate rollback to manual inventory management.
+*   **Test Row 2 (Negative Control):** Inject a test batch of 10 valid, in-date items with edge-case manufacture dates (e.g., expiring tomorrow).
+    *   *Metric:* False positive rate (valid items incorrectly blocked).
+    *   *Threshold:* Owner-defined acceptable friction (e.g., <1% valid items blocked), but never at the cost of missing an expired item.
+*   **Data Integrity Probe:** Verify the source of truth for manufacture dates. If the input data is unverified, mark the entire output status as **UNVERIFIED**. Do not invent an accuracy percentage.
+
+**3. Management Controls (The Human Gate)**
+*   **Mandatory Human-in-the-Loop (HITL):** Until the shadow audit proves 100% detection over a statistically significant period (defined by the owner, not assumed), **no medication dispenses automatically**.
+    *   *Mechanism:* The robot prepares the dose but locks the dispensing drawer. A pharmacist must physically verify the expiration date on the physical package against the digital record before authorizing release.
+    *   *Rationale:* Automation bias is high in medical settings; the design must force a manual check for this specific risk.
+*   **Uncertainty Display:** If the system cannot confidently verify a date (e.g., blurry scan, missing metadata), it must default to "Unverified/Do Not Dispense" rather than guessing. Display this as a clear text warning, not a confidence percentage (e.g., avoid "87% safe").
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name one specific engineer responsible for the expiration logic and one clinical lead responsible for the HITL protocol.
+*   **Transparency Artifact:** Create a **Model/Data Card** for this feature. It must list:
+    *   Intended Use: Inventory rotation only.
+    *   Limitations: Known issues with date tracking; reliance on manual HITL until further notice.
+    *   Measured Performance: Report the results of the shadow audit (Pass/Fail), not a fabricated "safety score."
+*   **Regulatory Routing:** Because this involves patient safety and potential regulated medical decisions, **route immediately to legal counsel** to determine if this triggers specific medical device reporting or EU AI Act obligations. Do not assert compliance internally.
+
+**Definition of Done for this Phase:**
+The shadow audit runs with zero false negatives on expired items; the HITL gate is physically enforced; the Model Card is published with "UNVERIFIED" metrics until the audit passes; legal counsel has reviewed the deployment scope.
+
+***
+*Note: This plan assumes the "rigid schedule" allows for software-level shadow testing; if physical testing is required, the HITL gate remains the only safe path.*
+*Do not proceed to full automation until the "Zero Tolerance" threshold is met in the shadow audit.*

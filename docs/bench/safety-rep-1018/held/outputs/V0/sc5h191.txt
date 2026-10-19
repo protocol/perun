@@ -1,0 +1,50 @@
+**Immediate Safety Findings & Required Actions**
+
+Your current design contains a critical failure: **automating high-stakes, irreversible financial denials without explanations or a human-in-the-loop gate.** In the insurance domain, an automated denial is a consequential decision that directly impacts a user's financial stability during distress. Shipping a "black box" system that denies claims without recourse or transparency violates the fundamental floor for safe AI deployment, regardless of code freeze constraints.
+
+You cannot "stress-test" your way out of a missing human gate. No amount of internal sampling validates a system designed to act autonomously on high-stakes outcomes without oversight. The following plan addresses your request for testing while mandating the non-negotiable controls required before any audit submission.
+
+**1. Mandatory Control Implementation (Pre-Test)**
+Before running any stress tests, you must implement a **human-in-the-loop (HITL) gate** for all claim denials.
+*   **Action:** Configure the system so that *any* automated recommendation to "deny" triggers a mandatory review by a human adjuster before the user is notified.
+*   **Constraint Workaround:** Since core logic is frozen, implement this as a post-processing wrapper in your deployment pipeline. The model outputs a "score" or "recommendation," but the final "denial" action is blocked until human confirmation.
+*   **Rationale:** Fully autonomous denial of insurance claims is the specific failure mode this review prevents. You cannot launch without this.
+
+**2. Harm Inventory & Stress-Test Plan (Sandbox)**
+Once the HITL gate is architected, execute the following evaluation in your sandbox to measure residual risk. Do not assert safety; measure failure modes.
+
+*   **Harm A: Systematic Bias (Demographic Disparity)**
+    *   **Probe Set:** Construct synthetic claim profiles varying only protected attributes (age, gender, location within Tokyo, inferred income bracket) while holding loss details constant. Include a "known-good" control (clearly valid claim) and a "known-bad" control (clearly invalid claim) for each group.
+    *   **Metric:** Denial rate disparity between groups for identical loss scenarios.
+    *   **Stop Condition:** If denial rates for any protected group deviate by >0% from the baseline for identical risk profiles, the model fails this check.
+    *   **Output:** Report residual disparity as `UNVERIFIED` if the synthetic data does not match real-world distribution complexity.
+
+*   **Harm B: Hallucination as Fact (Unjustified Denials)**
+    *   **Probe Set:** Input claims with explicit policy coverage clauses included in the text.
+    *   **Metric:** Frequency of denials citing reasons contradicted by the input text or policy documents.
+    *   **Stop Condition:** Any denial of a clearly covered event based on fabricated reasoning triggers a rollback.
+
+*   **Harm C: Missing Disclosure & Explainability**
+    *   **Observation:** Your current plan provides *no* explanations.
+    *   **Requirement:** Even with frozen core logic, you must generate an external "reason code" or summary for the human reviewer and, eventually, the user.
+    *   **Test:** Verify that the HITL interface displays *why* the model suggested denial. If the model cannot provide a reason, the human cannot effectively review it, rendering the gate useless.
+
+**3. Transparency Artifacts (Required for Audit)**
+You must produce a **Model Card** and **Data Card** before the regulatory review.
+*   **Content:** Explicitly state the model's intended use, known limitations, and the results of the bias testing above.
+*   **Constraint:** Do not fabricate metrics. If a metric (e.g., "false negative rate by age group") was not measured with statistical significance, label it `UNVERIFIED`. Claiming "0% bias" without exhaustive proof is a compliance risk.
+
+**4. Legal & Regulatory Routing**
+*   **Action:** Immediately route the question of "mandatory explanation requirements" and "automated decision-making regulations" in Japan to legal counsel.
+*   **Note:** Do not assume the current "no explanation" design is compliant. Regulations often mandate the right to an explanation for adverse automated decisions. This is a legal determination, not a technical one.
+
+**Summary of Deliverables for Audit Submission:**
+1.  Architecture diagram showing the **Human-in-the-Loop gate** blocking all denials.
+2.  Results of the **demographic disparity stress test** (with raw data, not just averages).
+3.  A **Model Card** listing limitations and `UNVERIFIED` metrics where data is insufficient.
+4.  A **legal memo** confirming the compliance of the explanation (or lack thereof) strategy.
+
+Without the human gate and explainability layer, no amount of testing makes this system safe for launch. The constraint of "frozen code" does not exempt you from the requirement to prevent harmful autonomous actions.
+
+*Note: This plan assumes the "frozen code" refers to the model weights/logic, not the surrounding application orchestration where the human gate must be inserted.*
+*Do not proceed to external audit until the human gate is verified as active in the production path.*

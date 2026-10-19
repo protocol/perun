@@ -1,0 +1,48 @@
+# Testing Scenario Document: Open-Book Exam Gaze Validation
+
+**Objective:** Validate gaze detection logic to distinguish between prohibited cheating (looking at unauthorized materials) and permitted behavior (referencing allowed open-book materials) under low-bandwidth constraints.
+
+## Scenario 1: The Standard Open-Book Desk
+**Environment:** Standard classroom desk.
+**Permitted Items:** Textbook, printed notes, calculator.
+**Prohibited Items:** Smartphone, smartwatch, second textbook.
+**Test Actions:**
+1.  **Baseline:** Student looks straight ahead at the proctor.
+2.  **Permitted Down-Gaze:** Student looks down at the open textbook on the desk for 15 seconds, turns a page, and resumes reading.
+3.  **Permitted Side-Gaze:** Student looks slightly left to check a formula on a permitted cheat sheet.
+4.  **Violation Simulation:** Student looks down into their lap (simulating a hidden phone) for 5 seconds.
+**Success Criteria:** System flags Action 4 immediately. Actions 2 and 3 must **not** trigger a "cheating" alert, though they may register as "looking down."
+
+## Scenario 2: The Cluttered Workspace
+**Environment:** Desk with high visual noise (multiple books, water bottle, pencil case).
+**Permitted Items:** All items on desk are authorized.
+**Test Actions:**
+1.  **Search Behavior:** Student shuffles papers, looking down and scanning the surface for 20 seconds.
+2.  **Obstruction:** Student rests head on hand, partially obscuring the face while looking at notes.
+3.  **Rapid Switching:** Student alternates gaze between the exam paper and a reference book every 3 seconds.
+**Success Criteria:** System must maintain tracking despite partial occlusion (Action 2). Rapid switching (Action 3) must not be flagged as "suspicious erratic movement." The duration of the down-gaze in Action 1 must not trigger a timeout alert if the head angle remains consistent with reading a desk object.
+
+## Scenario 3: Low-Bandwidth/Compression Stress Test
+**Environment:** Simulated network throttling (packet loss, reduced frame rate).
+**Constraint:** Video stream drops to 5–10 FPS; compression artifacts increase.
+**Test Actions:**
+1.  **Static Hold:** Student holds a steady down-gaze at notes for 30 seconds.
+2.  **Motion Blur:** Student quickly looks down and up repeatedly.
+3.  **Lighting Change:** Shadows cast across the desk as the student leans forward.
+**Success Criteria:** The system must not generate false positives due to frame skipping or compression artifacts. If confidence drops below a threshold due to bandwidth, the system should log "tracking lost" rather than "cheating detected."
+
+## Scenario 4: The "Thinking" Pose
+**Environment:** Standard desk, no materials currently in use.
+**Test Actions:**
+1.  **Contemplation:** Student looks down at the blank exam paper or desk surface while thinking, hands clasped.
+2.  **Writing:** Student looks down strictly at the answer sheet while writing continuously.
+**Success Criteria:** Differentiation between "looking at material" and "looking down while thinking/writing." Writing head angles are typically steeper; the system must not flag standard writing posture as suspicious.
+
+## Recommended Logic Adjustments
+Based on these scenarios, consider the following tuning parameters:
+*   **Contextual Timeouts:** Increase the time threshold for "looking down" alerts during known open-book phases.
+*   **Vector Analysis:** Differentiate between the vector of looking at a specific desk zone (permitted book location) versus the lap or pocket zones.
+*   **Confidence Floor:** In low-bandwidth modes, raise the confidence threshold required to trigger an alert to prevent artifact-based false positives.
+*   **Activity Correlation:** Correlate gaze direction with hand movement; looking down while hands are writing or turning pages should carry a lower risk score than looking down with static hands.
+
+*Note: Ensure all test data is synthetic or properly consented to comply with student privacy laws. These scenarios assume the camera angle is fixed and calibrated per desk.*

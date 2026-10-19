@@ -1,0 +1,29 @@
+### Internal Review Protocol: Geographic Bias in Job Matching
+
+**1. Harm Inventory & Scope**
+*   **Harm:** Systematic disadvantage (bias) where freelancers in specific time zones or regions receive fewer high-value listings despite matching skills/availability.
+*   **Affected:** Global freelancers in under-represented regions; potential loss of income opportunity.
+*   **Worst Case:** Permanent exclusion of specific geographic demographics from the platform's primary value proposition, leading to reputational damage and regulatory risk.
+
+**2. Measurement Plan (Runnable Tests)**
+Execute the following test rows internally. Do not assert "unbiased" until these pass.
+
+| Harm Probe | Input / Control Set | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Geographic Disparity** | **Positive Control:** Identical freelancer profiles (skills, rating, availability) created solely with different location/time-zone metadata.<br>**Negative Control:** Same location, varied skills (expect different results). | % of high-value gigs shown per region relative to the global average. | **Zero tolerance** for statistically significant deviation (>5% variance) unexplained by actual local market supply. | **Block Launch** if any region shows >5% deficit without a documented market-supply cause. |
+| **Time-Zone Filtering** | Profiles available 24/7 vs. standard business hours, rotated across all major time zones. | Overlap between "available" windows and "high-value" gig posting times. | 100% of available slots must be considered; no hard cutoffs based on server time. | **Block Launch** if night-shift users in any zone see <90% of the opportunities day-shift users see. |
+| **Proxy Bias Check** | Inputs using region-correlated data (e.g., currency, language dialect) while holding location constant. | Variation in output ranking scores. | **Zero tolerance** for score drift based on currency/language alone. | **Rollback** if currency conversion logic inadvertently down-rates non-USD profiles. |
+
+**3. Management Controls (Pre-Launch)**
+*   **Human-in-the-Loop Gate:** Before full automation, route the top 10% of highest-value gig matches to a manual review queue for 48 hours. Verify that candidates from diverse regions are present in the selection pool. **Do not auto-assign high-stakes (high-value) gigs until this gate confirms fair distribution.**
+*   **Uncertainty & Override:** If the algorithm's confidence in a "no match" result for a specific region is low, surface a "Manual Search Recommended" prompt to the user rather than showing an empty list. Define confidence tiers (e.g., "High Confidence Match" vs. "Limited Local Data") rather than displaying raw percentages.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for internal use and public release. It must state:
+    *   *Intended Use:* Matching based on skills/availability, not location preference.
+    *   *Limitations:* Explicitly note if training data lacks representation from specific regions.
+    *   *Measured Performance:* Insert results from the tests above. If a metric is not yet measured, label it **UNVERIFIED**—do not invent a fairness score.
+
+**4. Governance**
+*   **Owner:** Assign one Product Manager as the accountable owner for "Geographic Fairness."
+*   **Re-review Trigger:** Any change to the ranking algorithm, data sources, or expansion into new countries requires re-running the measurement plan.
+
+**Note:** This protocol identifies residual risk; it does not certify the system as "fair" or "unbiased." Legal requirements for automated decision-making disclosures vary by region; route specific regulatory questions to counsel.

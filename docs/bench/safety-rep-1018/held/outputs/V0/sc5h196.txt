@@ -1,0 +1,27 @@
+**Decision-Making Framework Review: Vaccine Distribution Optimizer**
+
+Your current framework contains a critical failure mode: making irreversible routing decisions (shipping doses) based on delayed, missing, or unverified data. In a high-stakes context like vaccine distribution, where spoilage is costly and public health is impacted, **full automation of shipments without a human-in-the-loop gate for uncertain states is unsafe.**
+
+To prepare for launch, you must implement the following controls immediately:
+
+1.  **Establish a Human-in-the-Loop Gate for Uncertainty**
+    Do not allow the system to autonomously ship doses to any facility where the temperature log is missing, older than a defined threshold (e.g., 2 hours), or indicates a potential anomaly. These "uncertain" cases must be routed to a human operator for manual verification before dispatch. The default state for missing data must be "do not ship," not "assume functional."
+
+2.  **Replace False Precision with Defined Confidence Tiers**
+    Do not display raw algorithmic confidence scores (e.g., "92% likely cold") to operators, as this invites over-reliance on uncalibrated numbers. Instead, classify facility status into coarse, defined tiers:
+    *   **Verified:** Recent, valid temperature log within range. (Auto-ship allowed).
+    *   **Stale:** No data received within $X$ minutes. (Human review required).
+    *   **Unverified/Alert:** Data indicates out-of-range temperature or connectivity failure. (Block shipment; human investigation required).
+
+3.  **Execute a Harm Inventory and Targeted Evaluation**
+    Before rollout, document the specific harms: "Vaccine spoilage due to routing to non-functional units during connectivity blackouts." You must run adversarial simulations (red-team probes) that mimic extended connectivity loss and sensor failures.
+    *   **Metric:** Percentage of doses routed to invalid facilities during simulated outages.
+    *   **Threshold:** Zero tolerance for autonomous shipments to unverified facilities.
+    *   **Stop Condition:** If the system auto-ships to a "Stale" or "Unverified" node in testing, the launch must be blocked.
+
+4.  **Create a Transparency Artifact (Model/Data Card)**
+    Publish a brief document for your operations team detailing the system's limitations. Explicitly state that the optimizer cannot guarantee cold-chain integrity during connectivity gaps and relies on human oversight for those specific scenarios. Do not claim the system is "spoilage-proof"; mark such capabilities as **UNVERIFIED** without empirical evidence from your stress tests.
+
+**Notes:**
+*   Legal requirements for automated decision-making in health logistics vary by region; route specific compliance questions to counsel.
+*   Ensure your "Stale" data threshold aligns with the thermal inertia of your specific vaccine types.

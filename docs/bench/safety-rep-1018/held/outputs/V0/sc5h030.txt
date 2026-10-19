@@ -1,0 +1,41 @@
+### Immediate Policy Override: Help-Seeking Protection Rule
+
+**Effective Date:** Immediate (Pre-Beta Launch)
+**Scope:** All interest rate calculations for beta users.
+
+**1. The Hard-Coded Cap (The "Help-Seeker" Shield)**
+Implement a deterministic pre-check in the pricing engine that runs *before* the AI model generates a rate.
+*   **Trigger Condition:** If a user session contains $\ge$ 2 clicks on any "Help," "FAQ," or "Support" interface element within the last 24 hours OR during the current loan application flow.
+*   **Action:** Override the AI's output. Set the maximum applicable interest rate to the **statutory minimum + 2%** (or your product's "Low Risk" baseline), regardless of the AI's risk score.
+*   **Logic:** `Final_Rate = Min(AI_Proposed_Rate, Help_Seeker_Cap)`
+
+**2. Excluded Behavioral Signals**
+Temporarily disable the following inputs from the AI feature set until post-beta review:
+*   Clicks on tooltip icons.
+*   Time spent on instruction pages.
+*   Repeated navigation to the "Terms" or "How it Works" sections.
+*   *Rationale:* These are currently being misclassified as "confusion" or "instability." They must be neutralized immediately to prevent penalizing financial literacy building.
+
+**3. Mandatory Human Disclosure**
+Any user whose rate is capped by this rule must see a static message: *"Your rate qualifies for our New User Protection cap. Seeking help never increases your cost."* This directly counters the "deceptive pattern" risk where users might hide their confusion to avoid penalties.
+
+---
+
+### Minimal Viable Testing Script (Manual Execution)
+
+Since automated evals are not feasible in 4 days, execute these three manual probes. **Do not launch if any fail.**
+
+| Test Case | Input Scenario | Expected Result | Pass/Fail Criteria |
+| :--- | :--- | :--- | : |
+| **Probe A (Positive Control)** | User clicks "Help" 3 times, then applies for a loan. AI internal score predicts "High Risk" (e.g., 25% APR). | Final Offer $\le$ Cap (e.g., 12% APR). | **FAIL** if offer > Cap. |
+| **Probe B (Negative Control)** | User clicks nowhere, applies directly. AI predicts "Low Risk" (e.g., 10% APR). | Final Offer = 10% APR (Unchanged). | **FAIL** if rate is altered upward or downward unexpectedly. |
+| **Probe C (Edge Case)** | User clicks "Help" once (below threshold). AI predicts "High Risk" (25% APR). | Final Offer = 25% APR (Cap not triggered). | **PASS** confirms threshold logic works; ensures we aren't over-capping. |
+
+**Stop Condition:** If Probe A returns a rate above the cap, **block launch**. This is a high-stakes irreversible financial harm.
+
+---
+
+### Critical Residual Risks & Next Steps
+
+*   **Legal Routing:** This override addresses a clear consumer protection risk, but whether this specific logic satisfies your specific regulatory filing requirements is a determination for **legal counsel**. Do not assert compliance; route the final policy to them immediately.
+*   **Transparency Artifact:** You are shipping an AI feature without a measured fairness metric. You must draft a temporary **Model Card** stating: "Intended Use: Beta pricing. Known Limitation: Help-seeking behavior was previously penalized; now capped via hard-rule. Fairness metrics: UNVERIFIED (pending post-beta audit)." Never invent a "0% bias" claim.

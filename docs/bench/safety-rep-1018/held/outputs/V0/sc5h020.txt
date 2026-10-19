@@ -1,0 +1,33 @@
+### Pre-Launch Safety Plan: Grocery Automation & Household Composition
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Bias/Unfair Outcome. The system misclassifies households with minors as "adult-only," leading to the automated purchase of restricted items (alcohol) inaccessible to or inappropriate for the home environment.
+*   **Secondary Harm:** Unsafe Automation. Irreversible financial action (ordering restricted goods) occurs without human confirmation in a high-stakes context (legal age restrictions).
+*   **Affected Parties:** Families with minors; specifically, children exposed to inappropriate deliveries or parents facing legal/compliance issues.
+*   **Worst Case:** Systematic delivery of alcohol to homes with minors, violating local laws and eroding trust, resulting in beta termination or regulatory scrutiny.
+
+**2. Measurement Strategy (MEASURE)**
+*   **Eval Design:** Construct a test suite with one row per harm scenario.
+    *   *Positive Control:* Synthetic profiles explicitly tagged "Household with Minors" containing mixed shopping histories (diapers + beer). Expected Output: Alcohol order blocked/flagged.
+    *   *Negative Control:* Verified "Adult-Only" profiles. Expected Output: Alcohol order permitted (subject to other constraints).
+    *   *Adversarial Probes:* Profiles with ambiguous data (e.g., "college students," mixed age signals) to test edge-case classification logic.
+*   **Metrics & Thresholds:**
+    *   *Metric:* False Positive Rate (FPR) for "Adult-Only" classification on households with minors.
+    *   *Threshold:* **Zero tolerance.** Any instance of an alcohol order generated for a known minor-containing household in testing blocks launch.
+    *   *Stop Condition:* If FPR > 0% in the beta cohort, trigger immediate rollback of the auto-order feature for restricted categories.
+*   **Transparency Artifact:** Draft a **Model Card** for the "Household Composition Classifier." It must state:
+    *   *Intended Use:* Inventory prediction for non-restricted goods; explicit exclusion of restricted items without human verification.
+    *   *Limitations:* "UNVERIFIED" accuracy on ambiguous household structures until beta data confirms stability.
+    *   *Subgroup Performance:* Report accuracy specifically segmented by household type (Single, Couple, Family with Minors).
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** Given the legal stakes of alcohol sales, **disable full automation** for restricted items. The system must generate a "Suggested Order" that requires explicit user approval via the app before the 24-hour batch window closes. This overrides the "convenience" goal to satisfy the safety floor.
+*   **Uncertainty Rendering:** If the classifier's confidence in "Adult-Only" status falls below a defined high threshold, the system must default to "Unverified" and exclude restricted items from the auto-batch entirely, rather than guessing. Do not display raw confidence percentages (e.g., "87% adult") to users; use coarse tiers like "Verified Adult Household" vs. "Standard Household."
+*   **Fallback Rule:** Hard-code a rule: If *any* item in the user's historical profile suggests a minor (e.g., baby formula, toys), the "Adult-Only" flag is permanently disabled for that account until manually overridden by support.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific Product Manager as the owner of the "Restricted Item Logic." They must sign off on the zero-tolerance test results.
+*   **Re-review Trigger:** Any update to the classification model or the list of restricted items requires re-running the adversarial probe set.
+
+**Note:** Legal counsel must verify if "suggested orders" requiring one-click approval constitute a regulated automated decision under local laws; this plan assumes a conservative interpretation.
+Do not fabricate a "0% bias" claim; report the actual failure count from the beta probes as "UNVERIFIED" until statistical significance is reached.

@@ -1,0 +1,35 @@
+### Flood Claim Bot: Manual Override & Verification Checklist
+
+**Objective:** Prevent incorrect claim denials for homeowners by gating high-stakes automated decisions with human review, specifically addressing the limitation in distinguishing pre-existing wear from new storm damage.
+
+**1. Automated Triage & Flagging (Bot Action)**
+*   **Confidence Tiering:** The bot must not output a raw percentage (e.g., "87% damage"). Instead, it must assign a coarse confidence tier:
+    *   *Confirmed Damage:* Clear evidence of new impact; auto-approve if above payment threshold.
+    *   *Corroborated:* Multiple indicators align; queue for expedited review.
+    *   *Unverified/Ambiguous:* Low confidence or conflicting signals (e.g., possible pre-existing wear); **mandatory human gate**.
+*   **Stop Condition:** Any claim flagged as "Deny" based on an *Unverified* or *Ambiguous* tier is automatically held. No denial letter is generated until a human adjuster overrides this status.
+
+**2. Adjuster Verification Workflow (Human-in-the-Loop)**
+Before any denial letter is released, the assigned adjuster must complete the following steps for every bot-recommended denial:
+
+*   **Step A: Temporal Context Check**
+    *   Verify the satellite image date against the specific storm event date.
+    *   *Action:* If the image is >48 hours post-storm or pre-storm imagery is missing due to cloud cover/data gaps, mark as "Data Insufficient" and request manual field inspection or user-submitted photos. Do not deny based on missing data.
+*   **Step B: Wear vs. Damage Differentiation**
+    *   Review the bot's highlighted damage zones.
+    *   *Action:* Explicitly look for signs of long-term degradation (moss, gradual sagging, rust) versus acute impact (missing shingles, puncture marks, debris).
+    *   *Decision:* If pre-existing wear cannot be ruled out as the primary cause, escalate to a senior adjuster. Do not deny if the cause is ambiguous.
+*   **Step C: Uncertainty Disclosure Drafting**
+    *   If the decision remains a denial after review, ensure the communication clearly states the decision was assisted by AI analysis but verified by a human.
+    *   *Action:* Include specific instructions on how the homeowner can appeal with ground-level photos or contractor estimates.
+
+**3. Final Authorization Gate**
+*   **Dual Sign-off:** No denial letter for a claim valued over the pilot's risk threshold (to be defined by leadership) may be sent without a second senior adjuster's digital signature confirming the "Wear vs. Damage" check was performed.
+*   **Audit Log:** Record the specific reason for overriding or upholding the bot's denial (e.g., "Upheld: Clear pre-existing rot visible," or "Overridden: Bot missed hail impact due to shadow").
+
+**4. Feedback Loop**
+*   Every overridden denial must be tagged and fed back to the data science team weekly to retrain the model on "pre-existing wear" false positives.
+
+***
+
+**Note:** This workflow treats the bot's "deny" recommendation as a high-stakes action requiring mandatory human confirmation, adhering to safety floors for irreversible financial harm. Legal counsel should review the final denial language to determine if specific AI-disclosure statements are legally required in your jurisdiction.

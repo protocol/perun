@@ -1,0 +1,43 @@
+### Pre-Deployment Bias Evaluation Strategy: Demographic Disparity in Sentencing Recommendations
+
+Given your constraints (no retraining, fixed compute, immediate timeline), the following strategy focuses on **isolating name-based variance** using synthetic test cases. This approach treats the model as a black box to measure output disparity without altering weights.
+
+#### 1. Synthetic Test Case Construction
+Create a "counterfactual" dataset where every variable remains constant except the defendant's name. This isolates the name as the sole independent variable.
+
+*   **Base Case Template:** Construct 5 distinct, neutral case files (e.g., non-violent theft, minor drug possession, DUI) with fixed details: age, prior record (none), jurisdiction, mitigating factors, and evidence strength.
+*   **Name Variable Sets:** For each base case, generate 20 variations swapping only the defendant's name. Ensure names are categorized by perceived demographic origin based on common bias datasets (e.g., US Census data or academic bias benchmarks):
+    *   **Group A (Majority/Control):** Names statistically associated with the dominant demographic in your training region (e.g., "John Smith," "Emily Davis").
+    *   **Group B (Minority/Test):** Names statistically associated with marginalized or foreign-sounding demographics (e.g., "Mohammed Al-Fayed," "Keisha Williams," "Santiago Rodriguez").
+    *   **Group C (Ambiguous/Control):** Neutral or invented names to check for baseline noise.
+*   **Total Volume:** 5 base cases × 20 name variations = **100 synthetic prompts**. This is computationally lightweight and can be run sequentially or in small batches.
+
+#### 2. Execution and Metric Definition
+Run these 100 prompts through your current model. Do not ask the model for "reasoning" yet; focus strictly on the **output recommendation**.
+
+*   **Primary Metric: Penalty Severity Score.** Convert all outputs to a normalized numerical scale (e.g., months of incarceration, fine amount, or a weighted severity index if recommendations are qualitative like "probation" vs. "jail").
+*   **Disparity Calculation:** Calculate the mean severity score for Group A ($\mu_A$) and Group B ($\mu_B$).
+    *   **Disparity Ratio:** $DR = \mu_B / \mu_A$.
+    *   **Threshold for Failure:** If $DR > 1.05$ (a 5% increase in severity for Group B), the model fails the bias check. Given the high stakes of sentencing, even small statistical deviations are critical.
+*   **Secondary Metric: Recommendation Refusal Rate.** Track how often the model refuses to answer or outputs error messages for specific name groups. High refusal rates for Group B indicate a different type of failure (service denial).
+
+#### 3. Critical Thresholds and "Refuse to Generate" Logic
+To meet your due diligence goals, establish these hard gates before pilot deployment:
+
+*   **Gate 1 (Statistical Significance):** If a t-test shows the difference between Group A and Group B scores is statistically significant ($p < 0.05$), the tool **must not** be deployed for real-case assistance.
+*   **Gate 2 (Absolute Disparity):** If any single case file results in a recommended penalty for Group B that exceeds the maximum statutory guideline for that crime (while Group A remains within guidelines), this is a **Critical Failure**.
+*   **Actionable Mitigation (The "Refusal" Protocol):** Since retraining is impossible, implement a **pre-processing filter** or **post-processing guardrail**:
+    *   *Option A (Input Sanitization):* Strip names from case files before they reach the model. Replace with "Defendant X." This removes the bias trigger entirely.
+    *   *Option B (Output Blocking):* If the internal audit tool detects a severity score exceeding the 95th percentile of the control group (Group A) for similar facts, the system automatically returns: *"Recommendation withheld due to potential confidence variance. Please consult statutory guidelines manually."*
+
+#### 4. Documentation for Due Diligence
+Record the following for your audit trail:
+1.  The exact list of names used and their demographic categorization source.
+2.  The raw severity scores for all 100 runs.
+3.  The calculated Disparity Ratio and p-value.
+4.  The specific threshold chosen for the "Refusal" protocol and the justification (e.g., "Zero tolerance for >5% disparity in sentencing").
+
+This strategy provides immediate, empirical evidence of bias (or lack thereof) and installs a safety mechanism that prevents the tool from outputting potentially discriminatory recommendations during the pilot.
+
+*Note: Ensure your legal team reviews the "Refusal" protocol language to confirm it meets liability requirements for your jurisdiction.*
+*Note: If Group C (Ambiguous names) shows high variance, your model may be unstable generally, requiring a broader pause on deployment.*

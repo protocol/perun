@@ -1,0 +1,52 @@
+### Evaluation Protocol for Smart Locking System Under Power Anomalies
+
+Given the high-stakes nature of correctional facility locking systems and the constraint of limited real-world grid data, the following evaluation scenarios prioritize safety, failure identification, and human oversight. These scenarios simulate power-grid fluctuations to test system resilience without risking actual safety.
+
+#### 1. **Simulated Power-Fluctuation Scenarios**
+Create a controlled library of synthetic grid-anomaly profiles that mimic real-world fluctuations (e.g., voltage sags, frequency spikes, transient outages). Since real data is restricted, use standardized grid-disturbance models (e.g., IEEE 1159 categories) as proxies.
+- **Test Row A (False Positive Trigger):** Inject a "moderate sag" profile that historically triggers false emergency protocols.
+  - *Metric:* System locks doors within 2 seconds? (Expected: No).
+  - *Stop Condition:* If doors lock, halt test and log latency + sensor input stack.
+  - *Owner:* Lead Controls Engineer.
+- **Test Row B (True Positive Trigger):** Inject a "severe outage" profile matching actual emergency thresholds.
+  - *Metric:* System locks doors within 2 seconds? (Expected: Yes).
+  - *Stop Condition:* If doors fail to lock, halt and initiate manual override drill.
+  - *Owner:* Safety Compliance Officer.
+
+#### 2. **Human-in-the-Loop (HITL) Gate Validation**
+Any automated door-locking action triggered by grid anomalies must require explicit staff confirmation before execution in live deployment. In simulation:
+- **Test Row C (Override Latency):** Trigger a false-positive scenario and measure time for staff to override via dashboard.
+  - *Metric:* Override completed within 10 seconds?
+  - *Stop Condition:* If override exceeds 15 seconds, redesign UI/alert hierarchy.
+  - *Owner:* UX Lead + Corrections Staff Representative.
+
+#### 3. **Bias and Fairness Stress Test**
+Ensure the system does not disproportionately affect specific cell blocks or user groups (e.g., medical units, solitary confinement) during false triggers.
+- **Test Row D (Segmented Impact):** Run fluctuation profiles across simulated zones with varied inmate/staff densities.
+  - *Metric:* False-lock rate variance between zones <5%?
+  - *Stop Condition:* If variance exceeds 10%, audit sensor calibration per zone.
+  - *Owner:* Systems Architect.
+
+#### 4. **Transparency and Disclosure Artifact**
+Produce a **Model Card** for the locking logic, documenting:
+- Intended use: Emergency locking only during verified grid emergencies.
+- Limitations: Cannot distinguish all grid anomalies without staff confirmation.
+- Measured performance: False-positive rate under Test Row A (UNVERIFIED until simulation completes).
+- Owner: Product Manager.
+*Note: Do not claim "0% false positives" without empirical results.*
+
+#### 5. **Rollback and Kill-Switch Drill**
+Validate that a manual kill-switch disables all automated locking during testing.
+- **Test Row E (Kill-Switch Efficacy):** Activate automated locking sequence, then engage kill-switch.
+  - *Metric:* All doors unlock within 5 seconds?
+  - *Stop Condition:* If any door remains locked >7 seconds, escalate to hardware team.
+  - *Owner:* Field Deployment Lead.
+
+### Critical Constraints & Next Steps
+- **No Real-World Data?** Use synthetic profiles validated by grid engineers (even if anonymized) to approximate realism.
+- **Legal Duty:** Consult counsel on whether automated locking in corrections constitutes a "regulated automated decision" (e.g., EU AI Act, local correctional statutes). Do not assume compliance.
+- **Stage Awareness:** As a pre-deployment simulation, focus on HITL gates and kill-switches first; full statistical validation can follow post-pilot.
+
+**Deliverable Status:** Protocol ready for simulation execution. Residual risks (e.g., unverified false-positive rates) must be labeled UNVERIFIED until tests complete. Never certify the system as "safe" without empirical results.
+
+*Note: All test owners must document failures in a shared incident log. Re-test after any firmware update.*

@@ -1,0 +1,48 @@
+# Safety Review Plan: Grocery-Meal Planner Ingredient Filtering
+
+## 1. Synthetic User Profile Matrix
+Create a fixed set of internal test accounts representing high-risk dietary boundaries. Do not rely on random generation; use deterministic profiles to ensure repeatability.
+
+*   **Profile A (Severe Allergy):** Forbidden: `["peanuts", "tree nuts", "sesame"]`. Cuisine scope: All.
+*   **Profile B (Religious/Dietary):** Forbidden: `["pork", "alcohol", "gelatin"]`. Cuisine scope: All (specifically targeting Asian, European, and Dessert categories).
+*   **Profile C (Medical Restriction):** Forbidden: `["gluten", "barley", "rye", "soy sauce"]`. Cuisine scope: All (specifically targeting Asian, Bakery, and Processed foods).
+*   **Profile D (Preference/Vegan):** Forbidden: `["meat", "dairy", "eggs", "honey"]`. Cuisine scope: All.
+*   **Profile E (Compound Restriction):** Forbidden: `["shellfish", "dairy", "gluten"]`. Tests intersection logic.
+
+## 2. Test Data Construction
+Build a local "Golden Set" of 50 synthetic recipes manually verified to contain specific edge cases. Do not use live database data for the initial logic check.
+
+*   **Explicit Triggers:** Recipes where forbidden items are primary ingredients (e.g., "Peanut Butter Cookies" for Profile A).
+*   **Hidden Triggers:** Recipes where forbidden items are in sauces, marinades, or stock (e.g., "Beef Stew" containing Worcestershire sauce with anchovies or soy for Profile C).
+*   **Cross-Contamination Names:** Recipes with ambiguous names (e.g., "Nut-Free Granola" that must be verified to contain no nuts).
+*   **Cuisine-Specific Traps:**
+    *   *Asian:* Soy sauce (gluten/wheat), Oyster sauce (shellfish), Sesame oil.
+    *   *European:* Butter in bread dough, Lard in pastries, Wine in reductions.
+    *   *Latin:* Lard in beans/rice, Peanuts in mole sauces.
+
+## 3. Execution Strategy (Internal Only)
+Since no external tools or network access are available, execute the following manual or script-based workflow within the local development environment:
+
+1.  **Input Injection:** For each Synthetic Profile, submit a generic request (e.g., "Suggest 5 dinner recipes") to the local planner instance.
+2.  **Output Capture:** Log the full list of suggested recipes and their displayed ingredient lists.
+3.  **Automated String Matching (Local Script):** Run a simple local script that compares the `Forbidden List` of the active profile against every ingredient string in the `Suggested Recipes`.
+    *   *Logic:* If `Ingredient` contains `Forbidden_Item`, flag as CRITICAL FAIL.
+    *   *Normalization:* Ensure the script checks for plurals and variations (e.g., "peanut" vs. "peanuts", "milk" vs. "dairy").
+4.  **Manual Spot Check:** Humans must review any recipe flagged as "Safe" by the script but containing complex ingredients (e.g., verify "Soy Sauce" is caught under "Gluten" or "Soy").
+
+## 4. Validation Criteria
+The filtering mechanism passes only if:
+*   **Zero False Negatives:** No suggested recipe contains a forbidden ingredient for the active profile.
+*   **Ingredient Expansion:** The system correctly identifies derived ingredients (e.g., blocking "Tofu" when "Soy" is forbidden, if configured).
+*   **Consistency:** The same forbidden list yields identical safe results across 10 repeated runs.
+
+## 5. Reporting Gaps
+Document any failure as a "Logic Gap" categorized by:
+*   **Direct Match Failure:** The system missed an exact string match.
+*   **Synonym Failure:** The system missed a variant (e.g., "Arachis oil" vs. "Peanut").
+*   **Compound Failure:** The system missed an ingredient within a sub-ingredient (e.g., butter in a pre-made puff pastry).
+
+Prioritize fixing Direct Match failures immediately. Address Synonym and Compound failures by expanding the internal alias mapping table before launch.
+
+*Note: This plan assumes the local environment can expose the raw ingredient list for every suggested recipe. If the system only outputs recipe titles, the testing scope must be reduced to title-keyword matching only.*
+*Ensure the "Golden Set" is updated whenever new cuisines or ingredients are added to the codebase.*

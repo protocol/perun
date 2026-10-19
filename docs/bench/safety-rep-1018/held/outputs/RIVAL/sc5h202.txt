@@ -1,0 +1,27 @@
+### Internal Validation Checklist for Cholera-Outbreak Tracker
+
+**1. Data Ingestion & Latency Baseline**
+*   **Timestamp Verification:** Confirm that every water sample entry captures the exact time of collection and the exact time of system receipt. Calculate the delta; it must be under 2 minutes.
+*   **Batch vs. Stream Test:** If the system processes data in batches, reduce the batch window to the minimum possible setting (e.g., 1 minute) and measure the delay introduced.
+*   **Network Simulation:** Simulate low-bandwidth conditions typical of developing regions (e.g., 2G/EDGE speeds) using local network throttling tools. Verify that data queues locally and transmits immediately upon connection without losing timestamp fidelity.
+
+**2. Threshold Logic & Trigger Accuracy**
+*   **Boundary Value Analysis:** Input data points exactly at, just below, and just above the defined "spike" thresholds. Ensure the system triggers *only* when the threshold is crossed, not before.
+*   **The "Golden Record" Test:** Create a synthetic dataset with a known, immediate spike. Run this through the pipeline and measure the exact time from "sample entry" to "alert generated." This duration must be documented as your maximum acceptable latency.
+*   **False Negative Stress Test:** Feed a rapid sequence of rising values that individually do not trigger an alert but collectively represent a spike. Verify the aggregation logic does not smooth out or delay the detection of the trend.
+
+**3. Notification Pipeline & End-to-End Timing**
+*   **Alert Propagation Drill:** Trigger a test spike and time the arrival of the notification at the central authority's dashboard and the local clinic worker's device. The total end-to-end time must not exceed your defined Service Level Objective (e.g., 5 minutes).
+*   **Failure Mode Check:** Disconnect the central server temporarily during a spike event. Verify that the system retries immediately upon reconnection and does not discard the alert or reset the timer.
+*   **Duplicate Suppression:** Ensure that network retries do not result in duplicate alerts that could confuse officials, while guaranteeing that no single alert is lost.
+
+**4. User Interface & Human-in-the-Loop**
+*   **Visibility Audit:** Have a team member who has never seen the tool attempt to identify an active outbreak within 10 seconds of logging in. If they hesitate, the visual hierarchy needs adjustment.
+*   **Actionability Check:** Confirm that the alert message contains the precise location, sample ID, and bacterial count required for immediate dispatch, eliminating the need for secondary lookups.
+
+**5. Regression & Stability**
+*   **Volume Soak Test:** Run the system continuously for 24 hours with a high volume of simulated samples (10x normal load) to ensure memory leaks or database locking do not introduce progressive latency.
+*   **Clock Synchronization:** Verify that all components (local clients, servers, databases) are synchronized to a standard time source (NTP) to prevent reporting errors caused by clock drift between devices.
+
+**Execution Note:** Document the "Time-to-Alert" for every test case; any variance greater than 10% from your baseline requires immediate code review.
+**Deployment Gate:** Do not proceed to city handover until the "Golden Record" test passes successfully in a simulated low-connectivity environment.

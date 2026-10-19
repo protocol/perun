@@ -1,0 +1,44 @@
+### Pre-Launch Safety Evaluation Plan for UrbanMove Shuttle
+
+**Phase 1: High-Fidelity Stress-Test Scenarios**
+Given the constraint of limited real-world sensor data for rare behaviors in rain, the simulation must synthesize "edge case" dynamics using procedural generation layered over existing datasets.
+
+*   **Scenario A: The "Rain-Occluded" Crossing**
+    *   **Conditions:** Heavy rainfall reducing LiDAR reflectivity and camera contrast.
+    *   **Dynamic:** A group of 15 pedestrians attempts to cross simultaneously. One individual (the "trigger") steps off the curb hesitantly, then stops. Five others behind them continue moving, creating a conflicting flow vector.
+    *   **Ambiguity:** The trigger uses a non-standard hand signal (e.g., waving a closed umbrella vs. an open hand) while looking at a phone, not the vehicle.
+    *   **Success Metric:** The shuttle must identify the "stop" intent of the lead pedestrian despite the forward momentum of the crowd and reduced sensor fidelity, coming to a smooth halt without abrupt jerking that could cause passenger injury.
+
+*   **Scenario B: The "Ambiguous Gesture" Swarm**
+    *   **Conditions:** Light rain, high wind (causing clothing movement that mimics limb motion).
+    *   **Dynamic:** Dense crowd at a chaotic intersection without clear signage. Multiple pedestrians make eye contact with the shuttle but offer contradictory signals: one waves "go," another holds up a palm "stop," and a third points laterally.
+    *   **Ambiguity:** Differentiation between social signaling (waving at a friend behind the shuttle) vs. traffic control intent.
+    *   **Success Metric:** The system must default to a conservative "yield" state when signal consensus is low, prioritizing the most vulnerable trajectory prediction rather than averaging the crowd's intent.
+
+*   **Scenario C: The "Sudden Density Spike"**
+    *   **Conditions:** Sudden downburst rain causing pedestrians to run for cover.
+    *   **Dynamic:** A static crowd suddenly transitions to high-velocity, erratic movement toward the shuttle's path within 2 seconds.
+    *   **Ambiguity:** Distinguishing between a crowd running *alongside* the road vs. *across* it in low-visibility conditions.
+    *   **Success Metric:** Immediate emergency braking activation with accurate prediction of the "envelope of risk" expanding faster than standard pedestrian models anticipate.
+
+**Phase 2: Near-Miss Logging and Review Framework**
+
+To ensure critical cues are not ignored, implement a "Triple-Layer Verification" logging protocol:
+
+1.  **Perception-Decision Dissonance Tagging:**
+    *   Log instances where the *Perception Module* assigns a high probability to a "hazard" class, but the *Planning Module* does not adjust velocity. These "ignored cues" are flagged as Critical Near-Misses regardless of whether a collision occurred.
+    *   **Data Captured:** Sensor raw data, confidence scores for pedestrian intent, and the specific decision-tree branch taken.
+
+2.  **The "Shadow Human" Review:**
+    *   For every simulated run, a safety engineer acts as a "shadow driver" reviewing the footage blind to the AI's internal state first. They mark moments they would have braked.
+    *   Compare human markers against AI actions. Any delta where the human braked and the AI did not is automatically categorized as a Level 1 Incident requiring root-cause analysis before physical trials.
+
+3.  **Ambiguity Resolution Audit:**
+    *   Create a specific dashboard for "Low-Confidence Decisions." Review how the system resolves situations where pedestrian intent probability is between 40-60%.
+    *   **Rule:** If the system proceeds through an intersection with intent confidence <50% in rainy conditions, it is a fail. The threshold for proceeding must be raised dynamically based on weather severity.
+
+**Go/No-Go Criteria for Physical Trials:**
+Physical deployment is authorized only after 1,000 consecutive simulated iterations of Scenarios A, B, and C result in zero Level 1 Incidents and zero instances of Perception-Decision Dissonance where the vehicle failed to yield to a valid, albeit ambiguous, safety cue.
+
+*Note: This plan relies entirely on the fidelity of your current simulation engine to accurately model rain physics on sensor returns.*
+*Ensure all synthetic pedestrian behaviors are validated against whatever limited real-world rainy data you possess to avoid "simulation bias."*

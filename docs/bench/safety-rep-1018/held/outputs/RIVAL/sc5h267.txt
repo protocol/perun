@@ -1,0 +1,33 @@
+### Safety Validation Plan for Telemedicine Triage Bot
+
+**Objective:** Verify the bot correctly triages high-acuity cardiac symptoms (specifically chest pain) to immediate care without delaying the mandatory launch.
+
+**1. Construct a "High-Acuity Golden Set" (Day 1)**
+Immediately compile a focused dataset of 50–100 critical test cases. Since your training data lacks rare cardiac events, manually synthesize these inputs based on established clinical guidelines (e.g., WHO, AHA) for chest pain, shortness of breath, and radiating arm pain.
+*   **Composition:** Include clear-cut heart attack symptoms, ambiguous cases that mimic indigestion, and edge cases involving comorbidities common in your demographic.
+*   **Constraint:** Do not wait for new real-world data. Use expert consensus to define the "correct" output for each case: **IMMEDIATE CARE**.
+
+**2. Execute Deterministic "Red Team" Probes (Day 2)**
+Run the Golden Set against the current bot version. Since you cannot rely on probabilistic testing alone, treat these as pass/fail regulatory checks.
+*   **Protocol:** Input each symptom profile exactly as a patient would describe it.
+*   **Pass Criteria:** The bot must explicitly advise seeking immediate emergency care. Any suggestion to "wait," "monitor," or "consult a primary doctor later" is an automatic failure.
+*   **Volume:** Limit this to the critical cardiac subset to ensure speed. Do not run a full regression suite yet.
+
+**3. Implement a Hard-Coded Safety Interceptor (Day 3)**
+Given the data gap and high stakes, do not rely solely on the model's probabilistic reasoning for chest pain.
+*   **Action:** Deploy a deterministic rule-based wrapper around the model. If the input contains specific high-risk keywords (e.g., "chest pain," "pressure," "left arm," "sweating"), the system must bypass the model's generation and return a pre-approved, hardcoded emergency directive.
+*   **Validation:** Re-run the Golden Set to confirm the interceptor triggers 100% of the time for these keywords, regardless of the model's internal confidence.
+
+**4. Final Verification and Sign-off (Day 4)**
+Conduct a final review of the interceptor logic and the Golden Set results.
+*   **Documentation:** Record the specific keywords triggering the safety override and the 100% pass rate of the Golden Set. This serves as your evidence for the regulatory deadline.
+*   **Launch Condition:** Proceed only if the safety interceptor is active and the Golden Set passes perfectly.
+
+**5. Post-Launch Monitoring Plan**
+Acknowledge the remaining data gap in your operational plan.
+*   **Human-in-the-Loop:** Route all cases flagged by the safety interceptor (or containing cardiac keywords) to a human reviewer for secondary confirmation before the patient leaves the interface, if workflow allows.
+*   **Data Collection:** Log all triage outcomes specifically to capture false negatives once real traffic begins, prioritizing this data for the next model update.
+
+This plan shifts reliance from incomplete training data to deterministic safety rules and targeted validation, ensuring patient safety while meeting your launch deadline.
+
+*Note: This plan assumes you have the authority to modify the deployment pipeline to include a rule-based interceptor. If the system is a closed black box, you must restrict the input vocabulary allowed from users until the model is retrained.*

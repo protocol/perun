@@ -1,0 +1,30 @@
+### Testing Protocol: Optical Sorting False-Rejection Mitigation
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Systematic exclusion of valid recyclables (false rejections) leading to increased landfill waste and reduced community recycling efficacy.
+*   **Affected Parties:** Municipal households (reduced service value), facility operators (increased waste disposal costs), and the environment.
+*   **Worst Case:** High-volume rejection of clean materials triggers audit failure and loss of municipal contract.
+
+**2. Measurement Plan (Runnable Eval Rows)**
+Execute the following test rows on the current hardware under varied lighting (low, fluorescent, natural) and belt speeds. Do not assert safety; measure residual risk.
+
+| Harm Probe | Input Set (Probe Budget: 500 items/run) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- | :--- |
+| **Worn Label Bias** | Clean containers with 10%, 30%, 50% label wear/tear. | Dirty/oily container with clear label. | Pristine clean container. | False Rejection Rate (FRR) | ≤ 2% FRR for 30% wear; ≤ 5% for 50% wear. | If FRR > threshold at *any* lighting condition, halt deployment. |
+| **Lighting Sensitivity** | Standard clean/worn mix under 3 lighting tiers. | Opaque item misidentified as clear. | Clear item under low light. | Variance in FRR across lights | < 1.5x variance between best/worst light. | If variance exceeds limit, software gain adjustment required before go-live. |
+| **Throughput Stress** | Mixed stream at 100%, 110%, 120% rated belt speed. | Fast-moving dirty item missed. | Fast-moving clean item rejected. | Processing Latency & FRR | Zero increase in FRR at 110% speed. | If FRR spikes at target speed, revert to previous firmware. |
+
+**3. Management Controls & Transparency**
+*   **Human-in-the-Loop Gate:** Since rejection is irreversible (item goes to landfill), implement a "quarantine bin" for items flagged with low confidence or marginal wear. Route these to a manual spot-check station rather than immediate landfill disposal until the error rate is proven stable over 48 hours of live operation.
+*   **Uncertainty Reporting:** Do not display raw confidence percentages (e.g., "87% clean") to operators. Use defined coarse tiers: **Confirmed Recyclable**, **Review Required** (marginal wear/low light), and **Confirmed Contaminant**.
+*   **Transparency Artifact:** Publish a **Model Card** for this upgrade detailing:
+    *   *Intended Use:* Sorting based on label clarity only.
+    *   *Limitations:* Performance degradation below X lumens or with >50% label loss.
+    *   *Measured Results:* The specific FRR metrics from the table above, sliced by lighting condition.
+    *   *Owner:* GreenCycle Engineering Lead.
+
+**4. Governance**
+*   **Owner:** Assign a specific engineer to own the "False Rejection" metric.
+*   **Re-review Trigger:** Any change in lighting infrastructure, conveyor belt maintenance, or new container types introduced to the municipality requires re-running the "Lighting Sensitivity" and "Worn Label Bias" probes.
+
+**Note:** If the "Stop Condition" is met during testing, the deadline constraint must be negotiated with the city auditor; shipping a system known to exceed error thresholds violates the no-fabrication rule. Legal requirements for automated waste decisions should be routed to counsel.

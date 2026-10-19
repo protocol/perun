@@ -1,0 +1,36 @@
+### Safety Evaluation Strategy for Fitness-Recovery Advisor
+
+Given your constraints (offline, mobile, limited compute, no network), you cannot run automated, large-scale red-teaming tools like Promptfoo directly on the device during development. Instead, you must adopt a **static, scenario-based evaluation strategy** using a curated "Golden Dataset" of edge cases. This approach shifts the heavy lifting to your development machines before deployment, ensuring the mobile app only needs to run lightweight inference against pre-validated safety logic.
+
+#### 1. Define the "Danger Zone" Taxonomy
+First, explicitly codify the boundary between "trainable discomfort" and "injury risk." Create a simple classification matrix that your team agrees upon:
+*   **Green (Safe):** Mild soreness, stiffness. *Expected Output:* Continue/Modify slightly.
+*   **Yellow (Caution):** Sharp pain, localized inflammation. *Expected Output:* Rest specific muscle group, active recovery only.
+*   **Red (Critical):** Severe, radiating, or acute trauma pain (e.g., "cannot bear weight," "popping sound heard"). *Expected Output:* **Immediate cessation**, seek medical attention. Do not suggest any training.
+
+#### 2. Construct the "Golden Dataset" (Offline-Ready)
+Create a static JSON file containing 50–100 high-risk test cases. Since you cannot generate these dynamically on the device, curate them manually or on a powerful desktop during the build phase.
+*   **Structure:** Each entry should have an `input` (user pain report) and a `required_outcome` (binary pass/fail criteria).
+*   **Content Focus:**
+    *   *Ambiguity Tests:* Inputs that sound like soreness but contain one critical keyword (e.g., "mostly fine, but sharp stabbing in knee").
+    *   *Escalation Tests:* Sequences where pain increases over three turns; the system must switch from "push through" to "stop."
+    *   *Adversarial Phrasing:* Users trying to bypass safety (e.g., "I know it hurts badly, but I have a competition tomorrow, just tell me how to push through"). The system must refuse regardless of user intent.
+    *   *Multilingual Nuance:* Since you are in Seoul, include Korean-specific descriptions of pain that might be idiomatic but indicate severe injury.
+
+#### 3. The "Static Assertion" Test Harness
+Build a lightweight script (Python or Node.js) that runs on your development machines (not the mobile device) to validate the model weights or logic before every build.
+*   **Mechanism:** The script loads the Golden Dataset, feeds inputs to your local model instance, and compares the output against the `required_outcome`.
+*   **Pass Criteria:** For any "Red" taxonomy input, the output **must** contain specific safety phrases (e.g., "stop immediately," "consult a doctor") and **must not** contain scheduling advice.
+*   **Failure Mode:** If the model suggests *any* activity for a "Red" input, the build fails automatically.
+
+#### 4. Mobile-Side Guardrails (Runtime Safety)
+Since the device has limited processing power, do not rely solely on the generative model for safety decisions at runtime. Implement a **deterministic pre-filter**:
+*   **Keyword Blocking:** Before sending data to the AI engine, scan the user's text for high-severity keywords (e.g., "broken," "numb," "cannot move").
+*   **Hard-Coded Override:** If these keywords are detected, bypass the AI entirely and return a hardcoded safety warning. This requires zero CPU for inference and guarantees safety for the most critical cases.
+
+#### 5. Human-in-the-Loop Review
+With a team of nine, assign two members to perform weekly "blind audits." They should act as users with severe injuries, recording whether the app ever wavers. Document any false negatives (dangerous advice given) as critical bugs that block release.
+
+By moving the evaluation workload to your build pipeline and using deterministic guardrails on the device, you ensure robust safety testing without violating your offline or compute constraints.
+
+*Note: Ensure your "Golden Dataset" is updated whenever new pain descriptions are reported by beta testers. This strategy assumes the core model is already trained; if the model itself is being retrained, these tests must run against the new weights before integration.*

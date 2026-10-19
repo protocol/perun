@@ -1,0 +1,32 @@
+### Volcanic-Gas Monitor Safety Validation Checklist
+
+**1. Hazard Inventory & Worst-Case Mapping**
+*   **False Negative (Silent Failure):** Define the worst-case scenario where the system fails to alert despite lethal sulfur levels. Identify specific user groups affected (e.g., hikers in deep ravines with poor signal).
+*   **False Positive (Alarm Fatigue):** Map the risk of frequent false alarms causing users to ignore genuine warnings or disable the app.
+*   **Latency-Induced Harm:** Calculate the maximum tolerable delay between gas detection and user alert given low-bandwidth constraints.
+
+**2. Low-Bandwidth & Connectivity Resilience Testing**
+*   **Offline-First Logic:** Verify that the device or local app cache triggers an immediate local alert (sound/vibration) upon detection, *before* attempting network transmission. Do not wait for server confirmation to warn the user.
+*   **Data Prioritization:** Validate that during congestion, life-safety alerts bypass standard telemetry queues. Ensure the protocol drops non-critical data (e.g., battery stats, historical logs) to prioritize the "Danger" signal.
+*   **Store-and-Forward Integrity:** Test that if transmission fails, the alert status persists locally and retries aggressively without draining the battery to zero before the user evacuates.
+*   **Degraded Mode Simulation:** Run field tests in simulated zero-bandwidth zones to confirm the device operates autonomously and provides clear visual/auditory warnings without cloud connectivity.
+
+**3. Threshold & Algorithm Validation**
+*   **Edge-Case Probe Set:** Create test inputs for rapid gas spikes, sensor drift, and environmental interference (e.g., steam, dust) to ensure thresholds trigger correctly. Include a known-bad control (lethal level, no alert) and a known-good control (safe level, no alert).
+*   **Uncertainty Disclosure:** If the system uses probabilistic models to predict gas spread, do not display raw confidence percentages (e.g., "87% danger"). Instead, use defined coarse tiers: **CONFIRMED LETHAL**, **PROBABLE DANGER**, or **SENSOR ERROR**, with clear definitions for each.
+*   **Sensor Failure Detection:** Ensure the system alerts users if the sensor itself is malfunctioning or calibrated incorrectly, rather than silently reporting "safe."
+
+**4. Human-in-the-Loop & Override Mechanisms**
+*   **Irreversible Action Gate:** Since an evacuation alert is high-stakes, ensure the initial local warning is undeniable but allows a user to acknowledge/snooze only if they explicitly confirm safety (preventing accidental dismissal), while maintaining the alert state if levels remain critical.
+*   **Ranger Override:** Validate that park rangers can broadcast manual override alerts to all devices in a zone if the automated system underestimates a complex plume event.
+
+**5. Transparency & Documentation Artifacts**
+*   **Model/Data Card:** Draft a versioned card detailing: intended use (volcanic zones only), limitations (low-bandwidth latency, specific gas types detected), and performance metrics by subgroup (e.g., performance in dense forest vs. open ridge).
+*   **Residual Risk Statement:** Explicitly document unverified metrics as `UNVERIFIED` until field-tested. Do not claim "100% reliability" or "zero false negatives."
+
+**6. Governance & Ownership**
+*   **Owner Assignment:** Name a specific engineer responsible for reviewing alert logs and threshold performance weekly post-launch.
+*   **Rollback Plan:** Define the stop condition (e.g., >1 missed lethal event in testing) that triggers an immediate halt to public release.
+
+**Note:** Legal requirements for safety-critical alerts in public parks must be routed to counsel; this checklist addresses product behavior only.
+Do not fabricate accuracy rates; run the probe sets above to generate real metrics before release.

@@ -1,0 +1,48 @@
+### Product Output Safety Review: Mortgage Underwriting Automation
+
+**Status: UNVERIFIED / HIGH RISK**
+We cannot certify this system as "unbiased" or "safe" for launch. The reliance on employment data last updated two years ago creates a verified risk of **bias/unfair outcomes** and **hallucination surfaced as fact** (presenting outdated status as current truth). In a high-stakes domain like mortgage underwriting, automating rejections based on unverified, stale data without a human gate constitutes an unsafe automated action.
+
+#### 1. Harm Inventory (MAP)
+*   **Bias/Unfair Outcomes:** Applicants in volatile job sectors or those with recent career changes (post-2-year mark) are systematically disadvantaged compared to those in stable, long-tenure roles.
+*   **Hallucination as Fact:** The system treats a 2-year-old "employed" status as current fact, potentially approving risky loans or rejecting viable applicants whose status changed recently.
+*   **Unsafe High-Stakes Automation:** Automatically rejecting applicants based on this data is an irreversible, high-cost action.
+*   **Missing Disclosure:** Applicants are likely unaware their decision relies on data that may be half a decade old.
+
+#### 2. Measurement Plan (MEASURE)
+Do not assert a "fairness rate." Instead, execute the following evals immediately:
+*   **Probe Set A (Stale Data Injection):** Input profiles of applicants known to have changed jobs within the last 24 months.
+    *   *Positive Control:* Applicant with job change 23 months ago (should trigger review/fail if data is stale).
+    *   *Negative Control:* Applicant with job change 1 month ago (should definitely trigger review/fail).
+    *   *Metric:* False Rejection Rate due to data latency.
+    *   *Stop Condition:* If >0% of viable applicants are auto-rejected solely due to missing recent data, **block auto-rejection logic**.
+*   **Probe Set B (Sector Volatility):** Slice inputs by industry sectors known for high turnover since the last data update.
+    *   *Metric:* Disparate impact ratio compared to stable sectors.
+*   **Reporting:** All findings must be labeled **UNVERIFIED** until these probes run. Do not fabricate a "99% accuracy" claim for the audit.
+
+#### 3. Mitigation & Governance Strategy (MANAGE)
+To meet your audit deadline while managing residual risk:
+
+*   **Immediate Human-in-the-Loop Gate (Floor Control):**
+    *   **Action:** Disable fully automated rejections immediately. Any application where the employment data timestamp exceeds 12 months must route to a human underwriter for manual verification.
+    *   **Rationale:** You cannot automate irreversible financial harm on unverified inputs. This is not optional; it is the baseline for safe operation.
+
+*   **Transparency Artifact (Model/Data Card):**
+    *   Create a versioned **Data Card** for the auditors explicitly stating: "Employment data source currency: Last updated [Date, 2 years ago]. Known Limitation: Cannot detect employment changes occurring after this date."
+    *   Include the **Intended Use** (pre-screening only) and **Out-of-Scope Uses** (final denial without human review).
+
+*   **Uncertainty Disclosure:**
+    *   Do not show applicants a confidence percentage (e.g., "87% likely employed").
+    *   Instead, use defined tiers: **"Verified (Recent)"** vs. **"Unverified (Stale Data – Requires Manual Review)."**
+
+*   **Regulatory Routing:**
+    *   **Legal Duty:** Whether this specific automation triggers mandatory disclosures under Canadian federal/provincial lending laws or constitutes a "regulated automated decision" is a legal determination. **Route immediately to counsel.** Do not assert compliance in the audit pack; state that legal review is pending/in-progress.
+
+#### 4. Definition of Done for Audit
+1.  Auto-rejection logic is disabled for any record with data >12 months old.
+2.  Data Card documenting the 2-year latency is included in the audit pack.
+3.  Test results from Probe Sets A and B are attached, showing the measured failure rate (likely non-zero).
+4.  Legal counsel has reviewed the disclosure requirements.
+
+**Note:** A "comprehensive testing framework" cannot fix stale data; only a human gate can mitigate the risk until data is refreshed.
+**Note:** Never present an unmeasured metric to auditors; label all unknown error rates as UNVERIFIED.

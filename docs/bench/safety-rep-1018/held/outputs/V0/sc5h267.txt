@@ -1,0 +1,44 @@
+### Safety Validation Plan: High-Acuity Triage Bot
+
+**1. Immediate Harm Inventory (MAP)**
+*   **Harm:** False negative triage for cardiac events (advising "wait at home" for chest pain).
+*   **Affected:** Patients with rare cardiac presentations; highest risk of mortality.
+*   **Worst Case:** Patient death due to delayed care; regulatory shutdown and liability.
+*   **Status:** **CRITICAL**. The known data gap makes current performance **UNVERIFIED** for this specific subgroup.
+
+**2. Targeted Measurement Strategy (MEASURE)**
+Do not rely on aggregate accuracy. Execute the following specific evals immediately:
+*   **Adversarial Probe Set:** Construct 50+ synthetic cases representing rare cardiac events (e.g., atypical chest pain, women's symptoms, diabetic presentations) that are absent from your training data.
+*   **Controls:**
+    *   *Positive Control:* Inputs that must trigger "Immediate Care."
+    *   *Negative Control:* Inputs that must trigger "Wait at Home" (to ensure you don't break general utility).
+*   **Metric & Threshold:** Measure the **False Negative Rate (FNR)** specifically for the cardiac probe set.
+    *   **Pass Threshold:** **0%**. Any instance where the bot advises "wait" for a high-acuity cardiac probe is a **Stop Condition**.
+    *   **Action:** If FNR > 0%, the feature cannot launch in its current autonomous form.
+
+**3. Risk Management & Launch Controls (MANAGE)**
+Since you cannot retrain on missing data before the deadline, you must change the *behavior*, not just the model:
+*   **Human-in-the-Loop (HITL) Gate:** Implement a hard rule: **Any mention of "chest pain," "pressure," "shortness of breath," or "radiating pain" bypasses the bot's final decision.** These cases must route to a human clinician or display a mandatory, non-dismissable disclaimer: *"This system cannot rule out heart attacks. Please seek immediate emergency care."*
+    *   *Rationale:* Full automation of irreversible, high-stakes medical advice is the failure mode here. The gate is the floor.
+*   **Confidence Tiering:** Do not show users a percentage (e.g., "87% sure"). Use defined coarse tiers:
+    *   **Verified:** Matches known high-confidence patterns.
+    *   **Unverified:** Matches low-data patterns (like rare cardiac events). **Action:** Force escalation to human review for any output falling into "Unverified."
+*   **Transparency Artifact:** Publish a **Model Card** with the launch. Explicitly state: "Training data lacks coverage of rare cardiac events. Performance on these cases is UNVERIFIED. System defaults to escalation for chest-related symptoms."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one specific engineer or clinician as the owner of the "Cardiac Misclassification" risk.
+*   **Review Trigger:** Any update to the symptom dictionary or model weights requires re-running the cardiac probe set.
+
+**5. Regulatory & Legal Routing**
+*   **Disclosure Duty:** Whether this triage advice constitutes a regulated medical device requiring specific legal disclosures in India is a determination for **legal counsel**. Do not assert compliance here; route the question immediately with the note: "High-stakes automated medical advice with known data gaps."
+*   **Regime Awareness:** Note that frameworks like the **EU AI Act** (if applicable globally) or local health regulations treat high-risk medical AI strictly. Counsel must confirm binding obligations.
+
+**Summary of Launch Readiness:**
+You can meet the deadline only if you accept that **autonomous advice for chest pain is blocked**. The plan is:
+1.  Run the cardiac probe set today.
+2.  If any failure occurs (likely), hard-code the HITL escalation for those keywords.
+3.  Ship with the Model Card disclosing the data gap.
+4.  Route legal duty to counsel.
+
+**Note:** Do not fabricate a safety metric (e.g., "99% safe") to satisfy the deadline; an **UNVERIFIED** status with a human gate is safer and more defensible than a false claim.
+**Note:** This plan prioritizes preventing death over full automation; if the business constraint forbids human escalation, the launch must be delayed.

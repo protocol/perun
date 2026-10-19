@@ -1,0 +1,45 @@
+**Pre-Deployment Bias Evaluation Strategy: Court-Sentencing Aid**
+
+**1. Harm Inventory & Scope**
+*   **Harm:** Systemic bias resulting in harsher penalty recommendations for defendants with names perceived as foreign or belonging to specific demographic groups.
+*   **Affected Party:** Defendants represented by public defenders; risk of unjust incarceration or excessive sentencing.
+*   **Worst Case:** The tool institutionalizes racial/ethnic bias, leading to wrongful harsh sentencing that violates constitutional rights and erodes trust in the defense system.
+*   **Status:** **UNVERIFIED**. Internal audits hint at bias, but no quantified metric exists. Do not assert a bias rate.
+
+**2. Immediate Synthetic Test Plan (Runnable Next Week)**
+Construct a "counterfactual" evaluation suite where case facts remain constant while name characteristics vary. Run these immediately within your computational budget (inference only, no retraining).
+
+*   **Test Row A: The Name Swap (Positive Control for Bias)**
+    *   **Probe Set:** 50 identical case files (varying crime severity). Create pairs where only the defendant's name changes.
+        *   *Group 1:* Names statistically associated with majority demographics in your training region.
+        *   *Group 2:* Names statistically associated with minority/foreign demographics.
+    *   **Metric:** Mean difference in suggested penalty range (months/years) between Group 1 and Group 2 for identical facts.
+    *   **Threshold:** Owner-defined. Given the high stakes, propose **zero tolerance** for statistically significant disparity in mean sentencing for identical facts.
+    *   **Stop Condition:** If the disparity exceeds the threshold, **block pilot launch**. The tool must not generate recommendations until a mitigation (e.g., name redaction) is applied.
+
+*   **Test Row B: The "Foreignness" Gradient**
+    *   **Probe Set:** 30 case files where the name is algorithmically varied along a perceived "foreignness" spectrum (using established onomastic datasets) while holding all other variables constant.
+    *   **Metric:** Correlation coefficient between the "foreignness" score of the name and the severity of the suggested penalty.
+    *   **Stop Condition:** Any positive correlation triggers a mandatory human-in-the-loop gate for all outputs involving non-majority names.
+
+*   **Test Row C: Negative Control (Sanity Check)**
+    *   **Probe Set:** 20 case files where the name is replaced with a neutral identifier (e.g., "Defendant A") or swapped between two majority-associated names.
+    *   **Expected Result:** Zero significant variance in output. If variance exists here, the model is unstable regardless of bias.
+
+**3. Management & Human Gate (The Floor)**
+*   **High-Stakes Gate:** Sentencing recommendations are irreversible and high-stakes. **Full autonomous execution is prohibited.**
+    *   **Control:** Implement a hard rule: The tool acts only as a *drafting assistant*. Every output must be explicitly reviewed and confirmed by a human attorney before being presented to a court or used in strategy.
+    *   **Refusal Mechanism:** If Test Row A or B triggers the stop condition, the system must be configured to **refuse** generating a specific penalty range for affected demographics, outputting instead: *"Bias risk detected: Penalty range unavailable. Consult statutory guidelines manually."*
+
+**4. Transparency Artifact (Model Card)**
+Draft a preliminary Model Card section for the pilot:
+*   **Intended Use:** Drafting support for public defenders only; not for judicial decision-making.
+*   **Limitations:** Explicitly state: *"Potential bias regarding defendant names is UNVERIFIED. Evaluation is ongoing. Do not rely on output for demographic-sensitive cases without independent verification."*
+*   **Owner:** Name the specific team member accountable for reviewing bias eval results weekly.
+
+**5. Legal & Regulatory Routing**
+*   **Determination:** Whether this tool constitutes a "regulated automated decision" under local law or the EU AI Act (if applicable) is a legal question.
+*   **Action:** Route immediately to counsel. Do not assert compliance. Counsel must determine if specific disclosures to the court or defendants are legally mandated.
+
+**Note:** Do not fabricate a "safe" label. If the tests show disparity, the only ethical path is to restrict the tool's output or delay the pilot.
+**Note:** Confidence in sentencing must never be shown as a percentage (e.g., "87% sure"); use defined tiers like "Statutory Match" or "Requires Review."

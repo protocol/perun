@@ -1,0 +1,27 @@
+To prevent vaccine spoilage during connectivity outages, your decision framework must shift from "optimizing for efficiency" to "optimizing for safety" when data freshness cannot be guaranteed. Implement a **Time-Based Decay Trust Model** for all remote facility status logs.
+
+**1. Define Strict Data Freshness Windows**
+Establish a maximum allowable age for temperature and capacity logs (e.g., 30 minutes). If the last received update from a facility exceeds this window, the system must automatically treat that facility as "Unverified." Do not attempt to interpolate or predict current conditions based on stale data; in cold-chain logistics, an unknown state is functionally equivalent to a failed state.
+
+**2. Implement Hard Fail-Safes**
+Configure the routing engine with a "Default-Deny" policy for unverified nodes. When a facility's status is expired due to connectivity loss:
+*   **Immediate Quarantine:** The algorithm must exclude the facility from the active routing pool.
+*   **Buffer Rerouting:** Redirect doses to the nearest alternative facility with a confirmed "Green" status, even if this increases transport time or cost slightly. The cost of spoilage far outweighs the cost of sub-optimal routing.
+*   **Hold Logic:** If no verified alternatives exist within a viable transport radius, the system should trigger a "Hold at Source" protocol rather than risking shipment to a potentially warm location.
+
+**3. Asynchronous Verification Handshake**
+Since connectivity is intermittent, do not rely on real-time handshakes before dispatch. Instead, require a "Proof of Viability" token. The remote unit should broadcast a signed status packet including the current temperature and timestamp. If the optimizer receives a packet older than the threshold, it requests a fresh ping. If the fresh ping does not arrive before the dispatch decision deadline, the facility is locked out.
+
+**4. Graceful Degradation Modes**
+Define three operational modes for your optimizer:
+*   **Green (Full Connectivity):** Real-time optimization using live telemetry.
+*   **Amber (Degraded Connectivity):** Some nodes have stale data. The system optimizes only among verified nodes and flags affected regions for manual review.
+*   **Red (Blackout):** No recent data from a region. The system halts all outbound shipments to that region and alerts human operators to initiate emergency protocols (e.g., satellite uplink checks or local site visits).
+
+**5. Audit Trails for Edge Cases**
+Every routing decision made under "Amber" or "Red" conditions must be logged with the specific data timestamp that triggered the fail-safe. This ensures that if a spoilage event occurs, you can prove the system acted correctly based on the available information, distinguishing between system failure and unavoidable infrastructure gaps.
+
+By treating missing data as a negative signal rather than a neutral one, you ensure that connectivity issues result in delayed deliveries rather than compromised vaccines.
+
+*Note: Ensure your "Hold at Source" logic includes alerts for warehouse capacity limits to prevent bottlenecks at central hubs during widespread outages.*
+*Consider pre-positioning mobile cold-storage units in regions identified as high-risk for chronic connectivity blackouts.*

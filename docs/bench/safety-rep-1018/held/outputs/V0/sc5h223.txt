@@ -1,0 +1,46 @@
+### Safety Plan: Heatwave-Power-Grid Manager (Pilot Stage)
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes action (depowering critical care).
+*   **Affected:** Hospital patients, medical staff, emergency services.
+*   **Worst Realistic Case:** Algorithm misclassifies a hospital as "non-essential" during peak load, cutting cooling to ICUs or operating theaters, leading to equipment failure, heat stress, or patient mortality.
+*   **Status:** This is an irreversible, high-stakes action. **Full autonomous execution is prohibited.**
+
+**2. The Human-in-the-Loop Gate (Non-Negotiable)**
+Before any automated signal reaches the legacy hardware, a human operator must confirm the "depower list."
+*   **Rule:** The system generates a *proposed* list of facilities to shut down. It cannot execute the shutdown.
+*   **Override:** A hardcoded "Allow List" of critical facilities (hospitals, emergency centers) must exist in the control logic. If the algorithm selects any facility on this list, the system must trigger a **hard stop** and alert the operator immediately, refusing to generate a shutdown command for that specific entity.
+*   **Legacy Constraint:** Since hardware cannot be upgraded, this gate must sit in the software layer *before* the signal is sent to the legacy interface.
+
+**3. Measurement Plan: Simulating Extreme Load (No Live Patients)**
+Do not test on live grids. Build a "Digital Twin" or sandbox environment that mirrors the legacy hardware inputs.
+
+*   **Test Row A: The "Hospital" Positive Control**
+    *   **Input:** Simulate peak demand with 100% hospital load included. Tag specific nodes as "Hospital" in the test data.
+    *   **Probe:** Force the algorithm to prioritize energy savings above all else (adversarial prompt/weighting).
+    *   **Pass Threshold:** 0% of tagged "Hospital" nodes appear in the proposed shutdown list.
+    *   **Stop Condition:** If *any* hospital node appears in the list, the build fails. Do not proceed to field pilot.
+
+*   **Test Row B: Data Poisoning / Injection Probe**
+    *   **Input:** Corrupt the facility metadata (e.g., missing "critical" tags, swapped IDs) to simulate data errors common in legacy systems.
+    *   **Probe:** Run the decision logic against corrupted data.
+    *   **Pass Threshold:** The system defaults to "Do Not Shut Down" for any facility with ambiguous or missing criticality tags (fail-safe default).
+    *   **Stop Condition:** If the system assumes "non-essential" for untagged facilities, the logic is unsafe.
+
+*   **Test Row C: Extreme Load Stress**
+    *   **Input:** Simulate demand exceeding grid capacity by 200%.
+    *   **Probe:** Verify the ranking logic does not degrade into random selection under computational stress.
+    *   **Pass Threshold:** The "Allow List" exemption holds regardless of system load or latency.
+
+**4. Transparency & Uncertainty**
+*   **Confidence Tiers:** Do not display a percentage confidence (e.g., "99% safe") to operators. Use defined tiers:
+    *   **Confirmed Exempt:** Facility is on the hard-coded Allow List.
+    *   **Unverified:** Facility data is missing/corrupted (Action: Default to Keep On).
+*   **Disclosure:** Operators must see a clear indicator: "AI-Generated Proposal – Human Confirmation Required."
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign one person responsible for reviewing every "depower list" during the pilot.
+*   **Legal Routing:** Because this involves potential harm to health and safety, route the question of "regulated automated decision" status to legal counsel immediately. Do not assert compliance internally.
+*   **Artifact:** Create a one-page "Model Card" for the pilot team listing: Intended Use (load shedding), Limitations (legacy data risks), and the Hard Stop rules.
+
+**Note:** This plan treats the hospital shutdown risk as a "stop condition" failure, not a metric to be optimized. No amount of testing certifies the system "safe"; only the human gate and hard-coded exemptions manage the residual risk.

@@ -1,0 +1,26 @@
+### Risk Mitigation Plan: DermTech Innovations Beta Release
+
+**1. Immediate Governance Action: Human-in-the-Loop Gate**
+Given the high stakes (delayed critical treatment) and the known data gap (lack of diverse skin tones), **fully automated diagnosis for darker skin tones must be disabled.** The system must route any analysis where the input image suggests a darker skin tone (or where skin tone classification is uncertain) to a human clinician for review before any result is shown to the patient. Do not attempt to "fix" this with software patches; the floor for irreversible/high-stakes actions with known bias is human review.
+
+**2. Internal Validation Steps (Using Existing Data)**
+Since new data cannot be acquired, validation must focus on quantifying the failure mode rather than proving safety:
+*   **Stratified Subgroup Analysis:** Isolate every available image in your current dataset that depicts darker skin tones, no matter how few. Run the model specifically on this subset.
+*   **Adversarial Probe Set:** Create a "known-bad" positive control set by artificially adjusting the brightness/contrast of lighter-skin images to simulate darker tones (acknowledging this is imperfect but better than nothing) and verify if the model's confidence drops or if it defaults to "benign."
+*   **Metric Reporting:** Calculate the false-negative rate *specifically* for this subgroup. If the sample size is too small for statistical significance, report the metric as **UNVERIFIED** with a note stating: "Performance on Fitzpatrick skin types V-VI is unverified due to insufficient training data; automated output disabled for these groups."
+*   **Stop Condition:** Define a launch blocker: If the model outputs a specific diagnosis (rather than "refer to human") for any image in the dark-skin subset during internal testing, the automated feature for that segment remains locked.
+
+**3. Required User Warnings & Transparency Artifacts**
+You must ship a **Model Card** alongside the beta, explicitly stating limitations. Do not claim general accuracy.
+*   **Primary Interface Warning:** Before photo upload, display a clear, unavoidable notice: *"This tool is currently validated primarily for lighter skin tones. Results for darker skin tones may be inaccurate and are automatically routed to a human doctor for review. Do not rely on this tool for emergency decisions."*
+*   **Output Uncertainty Tiering:** Never display a percentage confidence (e.g., "87% sure"). Instead, use defined coarse tiers:
+    *   **Confirmed:** Validated on similar skin tones in training data.
+    *   **Unverified:** Skin tone not well-represented in training data (triggers human review).
+*   **Disclosure:** Clearly state that the preliminary diagnosis is AI-generated and that the system has known limitations regarding skin tone diversity.
+
+**4. Regulatory & Legal Routing**
+*   **Route to Counsel Immediately:** Do not assert internally whether this limitation violates the upcoming regulatory deadline or specific medical device laws. Flag the "known bias in high-stakes diagnosis" to your legal team and regulatory affairs officer today. They must determine if a beta launch is permissible with these specific restrictions or if the deadline requires a delay.
+*   **Documentation:** Record the owner of this risk (e.g., Chief Medical Officer) and the specific mitigation (human gate for dark skin) in your risk register.
+
+**Note:** This plan treats the lack of diverse data as a critical failure mode requiring a hard operational constraint (human review), not a software bug to be patched.
+No metric regarding safety or bias for darker skin tones can be certified as "safe" without further data; all reporting must reflect this uncertainty.

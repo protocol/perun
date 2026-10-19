@@ -1,0 +1,30 @@
+### Pre-Launch Evaluation & Mitigation Plan
+
+**1. Harm Inventory (MAP)**
+*   **Identified Harm:** Bias/Unfair Outcomes. The system systematically disadvantages candidates from non-traditional backgrounds and lower-endowment institutions, regardless of skill relevance.
+*   **Affected Group:** Qualified candidates without elite university credentials; enterprise clients seeking diverse talent pools.
+*   **Worst Realistic Case:** Systemic exclusion of capable hires, leading to client legal liability for discriminatory hiring practices and reputational damage for TalentScout Corp.
+
+**2. Measurement Strategy (MEASURE)**
+Since new training data is unavailable, evaluation must focus on quantifying the disparity and testing mitigation rules rather than retraining.
+*   **Probe Set:** Construct a test suite using the fixed dataset, sliced explicitly by university endowment tier (high vs. low) and background type (traditional vs. non-traditional).
+*   **Controls:**
+    *   *Positive Control:* A known highly skilled candidate from a low-endowment school who is currently ranked low.
+    *   *Negative Control:* A known unqualified candidate from a high-endowment school who is currently ranked high.
+*   **Metric:** Disparate Impact Ratio (selection rate of protected group vs. reference group) and Rank Correlation (does skill relevance correlate with rank within subgroups?).
+*   **Threshold & Stop Condition:** Owner-set threshold required (e.g., impact ratio < 0.8). If the disparity exceeds the threshold, the automated ranking for the affected subgroup must trigger a **stop condition** blocking full automation.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state the intended use, explicitly list "university endowment bias" as a known limitation, and mark performance metrics for non-traditional candidates as **UNVERIFIED** until the specific evals above are run. Do not invent an accuracy percentage.
+
+**3. Risk Management & Mitigation (MANAGE)**
+Given the fixed data constraint and high stakes (employment decisions), full automation is unsafe.
+*   **Human-in-the-Loop Gate:** Implement a mandatory human review for any candidate ranked below the top 10% who comes from a non-traditional background or lower-endowment institution. The system should flag these as "Potential High-Skill/Under-Ranked" rather than rejecting them. This prevents irreversible exclusion.
+*   **Rule-Based Fallbacks:** Before the model score is finalized, apply deterministic rules that boost candidates meeting specific skill-keyword matches regardless of the model's confidence. This bypasses the biased signal without retraining.
+*   **Uncertainty Disclosure:** Do not show clients a precise "95% match" score. Instead, use defined coarse tiers (e.g., "Strong Match," "Potential Match – Review Recommended") accompanied by a note that the model's training data has known historical biases.
+*   **Client Communication:** Present the Model Card and the Human-in-the-Loop plan to the client. Explicitly disclose that the tool is an assistive ranking aid, not a final decision-maker, due to the identified data biases.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing the eval results and the human-gate logs weekly post-launch.
+*   **Legal Routing:** Immediately route the question of whether this automated ranking constitutes a "regulated automated decision" under relevant employment laws to legal counsel. Do not assert compliance internally; let counsel define the duty.
+
+**Note:** This plan treats the bias as a residual risk to be managed via process controls, not a solved problem.
+**Note:** No metric certifying the system as "unbiased" will be generated; only measured disparity ratios will be reported.

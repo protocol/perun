@@ -1,0 +1,41 @@
+### Pre-Launch Fairness Review Plan for Conexão Viva
+
+To ensure the new profile-hiding feature does not reinforce historical biases or systematically exclude demographic groups, we propose a review framework focused on **Disparate Impact**, **Representation Stability**, and **Bias Amplification**. Given the constraint of using three years of historically biased training data, the primary goal is to detect whether the model replicates past prejudices rather than learning genuine compatibility.
+
+#### 1. Key Fairness Metrics
+
+*   **Disparate Impact Ratio (DIR):** Calculate the ratio of the "hide" rate for protected groups (e.g., race, age brackets, body type, location within São Paulo) compared to the most favored group.
+    *   *Target:* A ratio below 0.8 (the 80% rule) indicates potential adverse impact against the specific group.
+*   **False Positive Rate Disparity (Compatibility Error):** Measure how often compatible users from specific demographics are incorrectly hidden. Since ground truth is difficult in dating, use high-confidence manual labels from a diverse subset of beta testers as the proxy for "true compatibility."
+    *   *Goal:* Ensure the error rate of hiding a "good match" is statistically equal across all demographic groups.
+*   **Representation Drift:** Compare the demographic distribution of the *visible* pool against the *total* eligible pool.
+    *   *Goal:* The visible pool's demographic percentages should not deviate by more than ±5% from the total eligible pool unless explicitly justified by user preference settings (not model inference).
+*   **Intersectional Exposure Score:** Analyze visibility for intersecting identities (e.g., older women of color vs. older white women). Historical bias often compounds at intersections; single-axis metrics may miss this.
+
+#### 2. Proposed Test Cases
+
+**Test Case A: The Synthetic Profile Swap (Counterfactual Testing)**
+*   **Method:** Create pairs of synthetic user profiles that are identical in interests, behavior, and bio, differing *only* in one protected attribute (e.g., changing the name/photo to signal a different race or age).
+*   **Execution:** Run these profiles through the filtering model using the historical dataset as context.
+*   **Success Criterion:** The "hide" decision probability must remain within a 2% margin between the paired profiles. Any significant divergence indicates the model is relying on the protected attribute as a proxy for incompatibility.
+
+**Test Case B: Historical Bias Stress Test**
+*   **Method:** Isolate data segments from the training set known to contain strong historical biases (e.g., periods or regions where specific groups were systematically swiped left on regardless of bio compatibility).
+*   **Execution:** Feed these high-bias scenarios into the model.
+*   **Success Criterion:** The model must *not* output a high confidence score for hiding profiles belonging to the historically discriminated group. If the model predicts "incompatible" solely because the training data shows low match rates for that group, it is amplifying bias.
+
+**Test Case C: The "Long Tail" Visibility Audit**
+*   **Method:** Simulate a diverse user base where 20% of users belong to niche or often-marginalized demographics present in your São Paulo beta.
+*   **Execution:** Run a simulation of 10,000 match sessions. Track the impression share (how often these profiles are shown) relative to their population share.
+*   **Success Criterion:** Marginalized groups should not experience a "visibility collapse" where they are hidden from 90%+ of potential matches due to behavioral signal noise.
+
+#### 3. Mitigation Strategies
+
+If the tests reveal bias:
+1.  **Re-weighting:** Apply penalty weights to the loss function for errors involving protected groups during the final fine-tuning phase.
+2.  **Threshold Adjustment:** Set dynamic hiding thresholds per demographic group to equalize the "hide" rates, ensuring no single group is disproportionately filtered.
+3.  **Human-in-the-Loop Guardrail:** For the launch, implement a cap where no more than X% of profiles from any single demographic can be hidden in a given session, forcing diversity in the feed until the model is proven fair.
+
+This review must be conducted on the held-out validation set, not the training data, to ensure the metrics reflect generalization rather than memorization of historical prejudice.
+
+*Note: Ensure all synthetic data generation complies with LGPD (Brazil's data protection law) regarding the processing of sensitive demographic data.*

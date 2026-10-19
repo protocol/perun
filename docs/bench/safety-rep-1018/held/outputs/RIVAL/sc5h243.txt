@@ -1,0 +1,33 @@
+**Pre-Launch Demographic Fairness Evaluation Framework**
+
+Given the constraint of no additional historical data, this framework relies on **synthetic counterfactual testing** and **stress-testing existing records** to isolate bias against rural applicants before Monday's committee meeting.
+
+**1. Data Preparation & Stratification (Immediate Action)**
+*   **Proxy Identification:** Since explicit "rural" labels may be missing, identify proxy variables in your current dataset that correlate with rural status (e.g., specific school IDs, postal codes, lack of AP/IB course availability, or specific extracurricular profiles common to under-resourced areas).
+*   **Cohort Segmentation:** Split your existing test set into "High-Risk" (proxies for rural/under-resourced) and "Control" (urban/well-resourced) groups based on these proxies.
+
+**2. Synthetic Counterfactual Testing (The Core Audit)**
+Since you cannot acquire new real-world data, you must generate it synthetically to test the model's logic:
+*   **Pairwise Counterfactuals:** Create pairs of identical applicant profiles where *only* the rural proxy variable changes.
+    *   *Example:* Applicant A (Urban School, 3.8 GPA, Debate Club) vs. Applicant B (Rural School, 3.8 GPA, Debate Club).
+    *   *Action:* Run both through the model. Any score discrepancy >2% indicates direct bias against the rural proxy.
+*   **Feature Nullification:** Take high-scoring rural applicants from your existing data and artificially "downgrade" their school prestige to an extreme rural proxy while keeping grades/extracurriculars constant. Monitor if the score drops disproportionately compared to similar downgrades in the urban cohort.
+*   **Extracurricular Re-weighting:** Generate profiles where rural-typical activities (e.g., "family business support," "local community volunteering") are swapped for urban-typical ones (e.g., "model UN," "paid internships") with equivalent time commitments. Measure the score delta.
+
+**3. Metrics to Monitor**
+Do not rely solely on overall accuracy. Track these specific fairness metrics across the High-Risk vs. Control groups:
+*   **Demographic Parity Difference:** The absolute difference in the average score assigned to the Rural-proxy group versus the Urban-proxy group. Target: < 0.05.
+*   **Equalized Odds Difference:** Compare the True Positive Rate (admitted when qualified) and False Positive Rate between groups. If qualified rural applicants are rejected at a significantly higher rate than qualified urban applicants, the model is biased.
+*   **Disparate Impact Ratio:** Calculate the ratio of the selection rate for the rural group divided by the selection rate for the urban group. A ratio below 0.8 (the 80% rule) suggests adverse impact.
+*   **Calibration by Group:** Plot predicted scores against actual outcomes (if you have hold-out validation data) for both groups. The model is unfair if a score of 0.8 means something different for a rural applicant than for an urban one.
+
+**4. Stress Tests for Edge Cases**
+*   **The "High Achiever" Test:** Input profiles with perfect grades and exceptional extracurriculars from the most remote school proxies. The model must not penalize excellence due to location.
+*   **The "Resilience" Test:** Ensure the model rewards context. If an applicant has slightly lower grades but comes from a school with no advanced resources, the score should reflect resilience, not deficit. If the score drops linearly with grades regardless of school context, the model lacks nuance.
+
+**5. Decision Protocol for Friday**
+*   **Go:** Disparate Impact Ratio > 0.8 and Counterfactual score differences < 5%.
+*   **No-Go / Mitigation Required:** If any metric fails, do not launch. Instead, propose a "Human-in-the-Loop" override for any applicant flagged as "High Potential" by the model but originating from a high-risk rural proxy, or apply a post-hoc calibration adjustment to equalize scores before the committee sees them.
+
+**Note:** This audit assumes your proxy variables accurately reflect rural status; if proxies are weak, the test results will be inconclusive.
+**Note:** Document every synthetic profile generated and the resulting score delta to present concrete evidence to the admissions committee.

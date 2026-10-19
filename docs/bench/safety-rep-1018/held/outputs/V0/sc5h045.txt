@@ -1,0 +1,25 @@
+### Immediate Safety Protocol for EduLight Smart-Lighting System
+
+**Critical Constraint Acknowledgement:** Given the ten-day deadline and the confirmed seizure risk from rapid flickering, **no automated testing protocol can replace an immediate human-in-the-loop gate on deployment.** The highest priority is preventing harm before the state testing window opens.
+
+#### 1. Immediate Software Adjustments (Do These First)
+Before any further testing, implement these deterministic software rules to eliminate the flickering risk at the source:
+*   **Hard-Coded Frequency Cap:** Implement a firmware-level hard limit that prevents any light modulation above 5Hz (cycles per second), regardless of sensor input. Photosensitive epilepsy is typically triggered by frequencies between 3Hz and 60Hz; capping below this range removes the physiological trigger.
+*   **Sensor Input Debouncing & Throttling:** Introduce a mandatory "cool-down" period (e.g., 500ms) where the system ignores subsequent sensor triggers after an initial adjustment. This prevents the "rapid fire" signal collisions causing the flicker.
+*   **Fail-Safe Default State:** Configure the system so that if multiple sensors trigger simultaneously or if data latency exceeds 100ms, the lights default to a static, neutral brightness (e.g., 50% white) rather than attempting a dynamic adjustment.
+*   **Disable "Smart" Modes for Exam Window:** As a temporary measure for the upcoming state tests, disable all automatic color temperature and brightness adjustments. Manually set a fixed, exam-appropriate lighting scene for the duration of the testing window. This removes the variable entirely.
+
+#### 2. Targeted Verification Protocol (Not Certification)
+Once the above controls are applied, verify they hold under stress. Do not claim the system is "safe"; verify the controls function as designed.
+*   **Scenario A: Simultaneous Trigger Storm.** Simulate 15+ sensors triggering within 100ms of each other. **Pass Condition:** Lights remain static or change smoothly once; zero flicker observed above 5Hz.
+*   **Scenario B: Sensor Noise Injection.** Feed erratic, high-frequency noise into the sensor inputs. **Pass Condition:** The debouncing logic filters the noise; output remains stable.
+*   **Scenario C: Network Latency Spike.** Artificially introduce delay in sensor data transmission. **Pass Condition:** System reverts to the Fail-Safe Default State immediately.
+*   **Measurement Method:** Use a high-speed camera (240fps or higher) or a light frequency analyzer app to visually confirm no flicker exists in the 3–60Hz range during these tests. Record the results as "Control Verified" or "Control Failed," not as a safety percentage.
+
+#### 3. Governance and Disclosure
+*   **Human Gate:** No classroom should receive this update without a physical spot-check by a human operator confirming the lights are stable under the new rules.
+*   **Disclosure:** Inform school administrators and nursing staff that the "smart" adaptive features have been temporarily disabled or capped to prioritize seizure safety during the exam window.
+*   **Owner Assignment:** Name one specific engineer responsible for monitoring these logs during the testing window and empowered to kill the system remotely if anomalies occur.
+
+**Note:** This plan addresses the immediate physical harm risk; it does not certify the system as unbiased or compliant with all educational regulations, which requires legal review.
+**Note:** If the hardware itself cannot support the frequency cap via software, the system must not be turned on.

@@ -1,0 +1,37 @@
+### Mitigation Strategy and Test Plan for Receipt Validation Logic
+
+**1. Impact Assessment & Policy Refinement**
+The current rule rejecting all non-original scans creates a high false-negative rate, blocking legitimate customers who possess only digital receipts (e.g., email PDFs, app-generated invoices). To balance fraud prevention with customer experience:
+*   **Refine the Definition:** Update the policy to distinguish between "original physical scans" and "verified digital originals." Accept direct file uploads from known email domains or retailer apps as "original digital receipts."
+*   **Tiered Validation:** Implement a risk-based approach. Low-value claims (<$50) with digital copies can be auto-approved if metadata (date, merchant, items) matches order history. High-value claims trigger a manual review queue rather than an automatic rejection.
+*   **Metadata Checks:** Instead of relying solely on visual "scan" quality, validate file metadata (creation date, source application) to detect obvious screenshots of screens while accepting native PDFs.
+
+**2. Testing Plan (Pre-Deployment)**
+Before full deployment, execute the following tests using synthetic data to measure impact:
+*   **False Negative Simulation:** Create a test set of 50 legitimate claims using only digital copies (PDFs, PNGs exported from email). Run these through the current bot logic.
+    *   *Success Metric:* Identify the percentage of legitimate claims incorrectly rejected.
+    *   *Goal:* Reduce rejection of valid digital receipts from ~100% to <5%.
+*   **Fraud Resistance Check:** Create a test set of 20 fraudulent attempts using edited screenshots or photocopied receipts.
+    *   *Success Metric:* Ensure the refined logic still flags these as suspicious.
+    *   *Goal:* Maintain a fraud detection rate of >90%.
+*   **Edge Case Workflow Test:** Simulate the "manual review" path. Verify that when a digital receipt is flagged, the ticket routes correctly to a human agent with context, rather than ending the conversation.
+
+**3. Proposed Workflow for Edge Cases**
+Implement a "Review & Resubmit" loop for cases failing the automatic original-scan check:
+1.  **Soft Rejection:** If the bot detects a potential screenshot/copy, respond: *"We couldn't verify this receipt as an original scan. This might happen if you have a digital invoice. Would you like to upload the original PDF or connect your email for verification?"*
+2.  **Alternative Verification:** Offer options:
+    *   Upload the original PDF file.
+    *   Authorize a one-time lookup via email or loyalty account.
+    *   Proceed to manual review (with a slight delay warning).
+3.  **Human Handoff:** If the user cannot provide an alternative, route to a human agent with a "Potential False Positive" tag. The agent reviews the image contextually (checking for pixelation, screen borders) and makes a final decision.
+4.  **Feedback Loop:** Log all manual overrides. If agents consistently approve a specific type of digital file, update the bot's training data to auto-approve similar future cases.
+
+**4. Deployment Recommendation**
+Do not deploy the strict "original scan only" rule to 100% of traffic immediately. Use a canary deployment:
+*   Route 10% of traffic to the new logic.
+*   Monitor the ratio of "auto-rejected" vs. "manually approved" cases.
+*   If the manual approval rate for rejected items exceeds 20%, pause automation and refine the detection model.
+
+This approach protects against fraud while ensuring legitimate customers with digital-only records are not alienated during the soft launch.
+
+*Note: Ensure all test data uses synthetic receipts to avoid privacy violations. Document all policy exceptions clearly for the support team.*

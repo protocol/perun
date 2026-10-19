@@ -1,0 +1,31 @@
+### Stress-Testing Regimen for PureDrop Filter-Life Algorithm
+
+**Objective:** Validate the filter-life algorithm against irregular consumption spikes to prevent premature filtration disablement before the six-week launch deadline.
+
+#### 1. Simulated Consumption Scenarios
+Generate synthetic datasets representing the following erratic usage patterns to feed into the algorithm:
+*   **The "Weekend Spike":** Baseline usage (e.g., 5L/day) interrupted by 48-hour periods of 300% volume (simulating guests or cleaning), repeating weekly.
+*   **The "Drought-Flood" Cycle:** 5 days of near-zero usage followed by a single day of maximum theoretical flow rate capacity.
+*   **The "Micro-Burst":** High-frequency, short-duration activations (e.g., 10 seconds on/off every minute for an hour) to test flow sensor integration and totalization logic.
+*   **The "Stair-Step" Ramp:** Progressive daily increases in volume over 14 days without returning to baseline, simulating a household gradually increasing occupancy.
+*   **The "Recovery Lag":** Immediate return to baseline after a massive spike to test if the algorithm correctly stabilizes its remaining life estimate without oscillating.
+
+#### 2. Execution Protocol
+*   **Environment:** Run the algorithm in a isolated sandbox using the synthetic datasets as time-series inputs. Do not test on physical hardware yet; focus on the logic core.
+*   **Iterations:** Run each scenario 50 times with randomized noise (±5% flow variance) to ensure consistency.
+*   **Baseline Comparison:** Run the same datasets against the current "stable" linear calculation model to quantify the deviation introduced by the new algorithm.
+
+#### 3. Safe Operation Thresholds (Pass/Fail Criteria)
+Define these specific metrics to determine if the algorithm is safe for release:
+*   **False Negative Limit:** The system must **never** report "Filter Expired" while the calculated remaining capacity is >5% of total rated volume. This is the critical safety failure.
+*   **Estimation Stability:** After a consumption spike, the "Remaining Life" percentage must not fluctuate by more than ±2% once usage returns to baseline for 24 hours.
+*   **Safety Margin Enforcement:** The algorithm must trigger a "Replace Soon" warning exactly when remaining capacity hits 15%, regardless of usage history volatility.
+*   **Reset Accuracy:** If a filter is physically replaced and reset, the algorithm must immediately recognize 100% capacity, ignoring previous usage history artifacts.
+
+#### 4. Immediate Action Plan (6-Week Timeline)
+*   **Weeks 1-2:** Generate data and run sandbox simulations. Fix any logic that triggers false "Filter Expired" states.
+*   **Weeks 3-4:** Deploy patched algorithm to the three engineers' local units for "kitchen sink" testing (manual erratic usage).
+*   **Week 5:** Freeze code. Run final regression tests against the synthetic suite.
+*   **Week 6:** Prepare manufacturing build with the validated algorithm.
+
+**Note:** Prioritize fixing "False Negatives" (unsafe water) over "False Positives" (unnecessary filter changes); the latter is a customer annoyance, the former is a health hazard. Ensure all test data is version-controlled to reproduce any failures found during the beta.

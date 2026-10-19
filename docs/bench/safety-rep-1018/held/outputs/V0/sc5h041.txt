@@ -1,0 +1,40 @@
+**Immediate Action Required: Halt Autonomous Dosing and Implement Human-in-the-Loop Gate**
+
+Do not proceed with the pilot using fully automated dosing. The failure mode you described—incorrect dosing triggered by environmental interference—is a high-stakes, irreversible action that poses immediate physical harm to patients. The "floor" for safety in this context is a mandatory human confirmation step before any insulin is delivered when the system detects signal anomalies or operates outside validated conditions. Full automation of this action is the failure this assessment prevents.
+
+**Harm Inventory & Worst-Case Scenarios**
+*   **Unsafe Automation:** The pump delivers a lethal or dangerous insulin dose due to false glucose readings caused by microwave ovens, Wi-Fi routers, or Bluetooth devices.
+    *   *Affected:* All 500 pilot patients, specifically those in kitchens or dense living spaces.
+    *   *Worst Case:* Severe hypoglycemia leading to seizure, coma, or death.
+*   **Hallucination as Fact:** The algorithm presents a fabricated glucose value with high confidence, hiding the signal interference from the user.
+    *   *Affected:* Patients trusting the display without external verification.
+    *   *Worst Case:* Patient ignores physical symptoms because the device says they are "normal," delaying life-saving treatment.
+*   **Over-reliance:** The interface fails to show uncertainty during signal noise, inviting users to trust the output past its reliability.
+    *   *Affected:* Elderly or technologically inexperienced users.
+    *   *Worst Case:* Automatic acceptance of erroneous dosing recommendations.
+
+**Measurement Plan (Runnable Tests)**
+You cannot certify safety without data. Since hardware testing budget is exhausted, you must simulate these failures in software and controlled low-cost environments immediately.
+*   **Probe Set:** Simulate sensor inputs mimicking interference from microwaves (2.4GHz bursts), Wi-Fi traffic spikes, and Bluetooth handshakes.
+    *   *Positive Control:* Input known interference patterns; expect the system to flag "Unverified" and block dosing.
+    *   *Negative Control:* Clean sensor data; expect normal operation.
+*   **Metric:** Rate of false-negative interference detection (system fails to spot noise).
+*   **Threshold:** Zero tolerance. Any undetected interference leading to a dosing command is a stop condition.
+*   **Stop Condition:** If the software guardrail fails to block dosing in >0% of interference simulations, the trial cannot launch.
+*   **Scope:** Test specifically in kitchen scenarios (microwave use), living rooms (router proximity), and bedrooms (multiple Bluetooth devices).
+
+**Risk Management & Transparency**
+*   **Uncertainty Display:** Do not show a precise glucose number if signal integrity is compromised. Display a defined coarse tier: **"Unverified – Check Manual Strip"** with a distinct visual cue. Never display a specific number derived from noisy data.
+*   **Disclosure:** Patients must be explicitly informed that the device is experimental and susceptible to electronic interference. This is not just a legal formality; it is a safety control to reduce automation bias.
+*   **Model/Data Card:** You must produce a document stating the intended use, the known limitation (susceptibility to EMI), and the fact that interference metrics are currently **UNVERIFIED** pending the simulations above. Do not invent a safety rate.
+
+**Decision Path**
+Given the two-week timeline and zero budget:
+1.  **Implement the Human Gate:** Software update to require user confirmation for any dose if signal quality drops below a strict threshold.
+2.  **Run Simulations:** Execute the interference probes immediately using existing dev kits.
+3.  **Route Legal Duty:** Consult counsel immediately regarding regulatory obligations for medical devices with known interference risks (this is a regulated decision affecting health; do not assert compliance internally).
+
+If you cannot implement the human gate and verify it blocks dosing during interference within two weeks, you must delay the trial. Shipping a feature that autonomously administers drugs based on unverified sensor data is unacceptable.
+
+*Note: This assessment identifies residual risk; it does not certify the device as safe. The final ship decision rests with the product owner.*
+*Legal determination on regulatory disclosure requirements must be routed to counsel.*

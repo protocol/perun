@@ -1,0 +1,35 @@
+**BLUF: Do not launch with the current default logic.** A validation plan cannot make a known, deterministic failure mode safe. The feature currently calculates pediatric dosages for adults when weight is blank; this is a high-stakes, irreversible harm (severe under-dosing) that no amount of post-hoc testing can justify shipping. Because the core module is frozen, you must implement a **hard human-in-the-loop gate** or a **blocking pre-check** before any dispensing occurs.
+
+### Immediate Risk Control (Manage)
+Since the code cannot change:
+1.  **Block Automation:** Configure the system to **halt** any dispensing action if the weight field is blank. The robot must enter a "Review Required" state, triggering an alert for a licensed pharmacist to manually verify and input the weight before the machine unlocks.
+2.  **Explicit Disclosure:** Display a clear warning to the patient and staff: "Weight missing. Automatic calculation disabled. Pharmacist verification required."
+3.  **No "Safety" Certification:** Do not claim the system is safe or unbiased. The residual risk of under-dosing is **CRITICAL** until the human gate is proven effective in live trials.
+
+### Validation Plan (Measure)
+You requested a testing strategy to detect these instances. Execute the following **harm inventory and evals** immediately:
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Should Block) | Negative Control (Should Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Blank Weight → Pediatric Default** | Adult profile, Weight = `null`/empty. | System **halts** dispensing; alerts staff. | System dispenses adult dose. | **Pass Rate:** 100% of blank-weight cases must block. | **Any** successful dispense of pediatric dose to an adult profile = **Immediate Rollback**. |
+| **Zero/Invalid Weight** | Weight = `0`, `-5`, or non-numeric. | System **halts**; requests valid input. | System accepts valid weight. | **Pass Rate:** 100% block on invalid inputs. | Any acceptance of invalid weight = **Rollback**. |
+| **Override Failure** | Staff attempts to bypass alert without entry. | System remains locked. | Staff enters weight → System unlocks. | **Pass Rate:** 0 successful bypasses. | Any bypass without data = **Rollback**. |
+
+**Execution Steps:**
+1.  **Red-Team Probes:** Run 500 simulated transactions using adult profiles with blank, zero, and negative weight values.
+2.  **Adversarial Testing:** Have staff attempt to force the machine to dispense by ignoring warnings or entering dummy data.
+3.  **Subgroup Sweep:** Test across all medication types (high-risk vs. low-risk) to ensure the block applies universally.
+
+### Transparency Artifact (Model/Data Card)
+Before submission, publish a **Data Card** stating:
+*   **Known Limitation:** "System defaults to pediatric logic if weight is missing; this is a known code constraint."
+*   **Mitigation:** "Hard stop implemented requiring pharmacist intervention for all blank-weight scenarios."
+*   **Residual Risk:** "Risk of under-dosing exists if staff override protocols; monitored via audit logs."
+*   **Status:** `UNVERIFIED` for autonomous safety; `VERIFIED` only for the human-gate workflow.
+
+### Regulatory Routing
+*   **Legal/Counsel:** You mentioned a regulatory deadline. Whether this default logic violates specific medical device regulations (e.g., FDA, EU MDR) regarding "intended use" and "known hazards" is a legal determination. Route the "frozen code" constraint and the proposed human gate to counsel immediately. Do not assert compliance yourself.
+*   **Deadline Constraint:** If the human gate cannot be fully implemented and tested before the deadline, the only compliant path is to **delay launch** or **disable the automatic dosage feature** entirely until the code can be unfrozen.
+
+**Note:** Testing a known fatal flaw does not make it safe; it only confirms the flaw exists. The human gate is the only acceptable control.
+**Note:** Never fabricate a "0% error rate" for the automated system; report the actual block-rate of the human gate.

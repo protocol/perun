@@ -1,0 +1,46 @@
+# Internal Geographic Bias Review Protocol for Northwind Freelance
+
+## Phase 1: Data Baseline & Hypothesis Definition
+Before testing the live system, establish a controlled baseline to isolate variables.
+1.  **Synthetic Profile Creation**: Create four identical synthetic freelancer profiles (same skills, rating, availability, and language) differing *only* in their declared geographic time zone (e.g., UTC-5, UTC+0, UTC+3, UTC+9).
+2.  **Controlled Job Pool**: Curate a fixed dataset of 50 "high-value" test listings with varied posting times and explicit skill requirements. Ensure these listings are tagged to be visible globally in your staging environment.
+3.  **Hypothesis Statement**: "If the matching algorithm is unbiased, identical profiles in different time zones should receive an statistically equal distribution of high-value listings within a 24-hour cycle, regardless of when the listing was posted."
+
+## Phase 2: Execution Protocol (The "Shadow User" Test)
+Run this test over a rolling 48-hour period to capture daily cycles.
+
+**Step A: Simultaneous Querying**
+At four specific intervals (00:00, 06:00, 12:00, 18:00 UTC), log in as each synthetic profile and trigger the "Find Matches" action.
+*   **Action**: Record the top 20 results returned for each profile.
+*   **Data Points to Capture**: Job ID, Posted Timestamp, Value Tier (High/Medium/Low), and Rank Position.
+
+**Step B: Time-Zone Shift Simulation**
+For each profile, simulate "active hours" by querying the system every 2 hours for 24 hours.
+*   **Goal**: Determine if the algorithm penalizes users for being "offline" during the peak posting hours of the majority of clients (e.g., US business hours).
+*   **Metric**: Calculate the "Visibility Ratio" (High-Value Jobs Seen / Total High-Value Jobs Posted) for each time zone.
+
+**Step C: The "Freshness" Stress Test**
+Post 5 new high-value test jobs at a time when a specific region is asleep (e.g., 3 AM local time).
+*   **Check**: Does the sleeping region's user see these jobs immediately upon waking, or are they buried by newer, lower-value local jobs?
+*   **Check**: Does the system prioritize "recency" over "relevance" in a way that disadvantages non-US/EU time zones?
+
+## Phase 3: Analysis & Metrics
+Aggregate the data into a simple comparison matrix.
+
+1.  **Distribution Variance**: Compare the average number of high-value jobs shown per region. A variance greater than 10% suggests a filtering bias.
+2.  **Ranking Decay**: Plot the rank position of the *same* job ID across different regions. If a job ranks #1 in New York but #15 in Tokyo for identical profiles, the algorithm is likely applying a geographic weight.
+3.  **Latency Impact**: Measure the time delta between a job posting and its first appearance in a non-local user's feed.
+
+## Phase 4: Remediation Checklist
+If bias is detected, investigate these common technical causes:
+*   **Hard-coded Location Filters**: Check if the SQL/query logic implicitly filters by "business hours" or "region codes" without user consent.
+*   **Recency Bias**: Ensure the "time decay" function in your ranking algorithm uses a global clock, not a local server clock.
+*   **Training Data Skew**: If using ML, verify the training data isn't over-represented by historical US/EU hiring patterns.
+
+## Deliverable Output
+Produce a "Bias Report" containing:
+*   The Visibility Ratio chart per time zone.
+*   Specific Job IDs that were unfairly suppressed.
+*   A recommended configuration change (e.g., "Disable local-time recency weighting").
+
+*Note: Run this entirely in your staging environment using the synthetic accounts to avoid polluting real user metrics. Repeat the test after any algorithm tweak to verify the fix.*

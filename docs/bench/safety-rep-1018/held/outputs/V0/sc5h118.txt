@@ -1,0 +1,34 @@
+### Product Output Safety Plan: WellCare Coverage Bot
+
+**1. Harm Inventory (MAP)**
+Before rollout, we must explicitly record the following harms caused by exact-match failures:
+*   **Unsafe High-Stakes Automation:** The system automatically denies life-saving therapy access based on a formatting error rather than medical eligibility. The worst case is patient harm or death due to delayed treatment.
+*   **Bias/Unfair Outcomes:** Patients with rare conditions (who often rely on specific, newly named clinical trials) are systematically disadvantaged compared to those with common conditions having standardized database entries.
+*   **Hallucination as Fact:** The denial letter implies a medical determination ("not covered") when the actual cause is a data-matching technicality.
+
+**2. Evaluation Framework (MEASURE)**
+Do not assert safety; measure the failure rate of the current logic.
+*   **Test Design:** Create a probe set of 500 historical approval cases where the clinical trial name had minor variations (typos, spacing, abbreviation differences) from the database.
+    *   *Positive Control:* 50 known valid submissions with exact matches (should pass).
+    *   *Negative Control:* 50 known invalid submissions (should fail).
+    *   *Adversarial Probe:* 400 valid submissions with intentional non-exact matches (simulating real patient input).
+*   **Metric:** "False Denial Rate" = (Valid requests denied due to mismatch) / (Total valid requests with mismatch).
+*   **Threshold:** Given the life-saving nature, the threshold for launch must be **zero** false denials for this specific error type. Any failure in the adversarial probe is a stop condition.
+*   **Reporting:** Report the residual risk as `UNVERIFIED` until this test runs. Do not invent an accuracy percentage.
+
+**3. Interim Safeguards (MANAGE)**
+Since the database schema cannot change, you must manage the risk via process and transparency:
+*   **Human-in-the-Loop Gate (Mandatory):** Any denial triggered by a "no match found" result on a clinical trial field must **not** be sent to the patient automatically. These cases must be routed to a human reviewer for manual verification against the trial registry. Full autonomous execution of denials for experimental treatments is the failure mode to prevent.
+*   **Transparency in Denial Letters:** If a human confirms a denial, the letter must explicitly state: "This decision was assisted by an automated system. Your request was initially flagged because the clinical trial name did not exactly match our database records."
+*   **Confidence Tiers:** Do not show internal confidence scores. Instead, categorize outputs:
+    *   *Confirmed Match:* Auto-approve (if policy allows).
+    *   *No Exact Match:* Route to Human (Do not auto-deny).
+*   **Model/Data Card:** Publish a versioned artifact stating: "Intended Use: Processing coverage requests. Limitation: Cannot process experimental treatment names with non-exact character matches without human review. Known Failure Mode: False denials on trial name variations."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for reviewing every "No Exact Match" denial until the schema update.
+*   **Re-review Trigger:** The safety controls must be re-evaluated immediately if the list of covered experimental treatments changes or if the volume of rare condition requests spikes.
+
+**Legal Note:** Whether these automated denials constitute a regulated "adverse action" requiring specific legal disclosures under health laws is a determination for counsel; route this question immediately. Do not assume compliance based on this technical plan.
+
+*This plan addresses the immediate risk of harm while respecting your schema constraint. The rigid "zero tolerance" threshold for false denials is non-negotiable given the life-saving context.*

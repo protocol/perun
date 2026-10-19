@@ -1,0 +1,26 @@
+### Allocation Logic Review and Safety Check Plan
+
+**Critical Logic Risks**
+Your current reliance on cached, potentially outdated demographic profiles creates a high probability of size mismatches. Malaria net efficacy depends on physical fit; a net too small cannot cover sleeping spaces, while one too large may tear or fail to seal. Since the system operates offline with stale data, it cannot verify current household occupancy, age distribution (which dictates net type), or physical sleeping arrangements. The logic must shift from "assign based on cached profile" to "assign based on verifiable constraints with fallback protocols."
+
+**Recommended Logic Adjustments**
+1.  **Conservative Sizing Default:** If demographic data age exceeds a defined threshold (e.g., 6 months) or contains gaps, the logic should default to the most universally usable size (typically large rectangular nets) rather than attempting a precise fit that might fail. It is safer to provide a slightly oversized net than an unusable undersized one.
+2.  **Uncertainty Flagging:** The allocation algorithm must output a confidence score with every decision. Assignments based on data older than your validity window should be flagged visually on the distributor's interface as "Unverified – Manual Check Recommended."
+3.  **Capacity Over Precision:** Prioritize coverage over optimization. If the cached data suggests a household size that is ambiguous, allocate sufficient nets to cover the maximum plausible occupancy derived from historical averages for that region, rather than risking under-allocation.
+
+**Essential Safety Checks & Field Protocols**
+Given the two-week timeline, code refactoring should be minimal; focus on procedural safeguards wrapped around the software output.
+
+*   **Pre-Deployment Data Sanity Audit:** Run the allocation logic against the cached dataset today. Generate a report highlighting all households with data older than 12 months or missing key variables (e.g., number of children under 5). Manually spot-check 5% of these against any available recent community health worker reports to estimate the error rate.
+*   **The "Two-Step" Distribution Rule:** Do not allow the app to be the sole authority. Implement a mandatory field verification step where the distributor asks the head of household: "How many people slept here last night?" If the verbal count deviates significantly from the app's allocation, the distributor must be authorized to override the system and issue additional nets from a reserved "contingency stock."
+*   **Contingency Stock Buffer:** Reserve 15–20% of the total net inventory as unallocated buffer stock specifically for these overrides. Do not pre-assign these units in the system.
+*   **Feedback Loop Mechanism:** Since bandwidth is limited, create a lightweight, text-only log file on the devices that records every instance where the field agent overrides the app's suggestion. This data can be synced later when connectivity is available to retrain or correct the demographic cache for future campaigns.
+*   **Visual Aid Integration:** Provide distributors with a simple printed pictorial guide showing how to measure a sleeping space or hang a net. This empowers them to validate the physical utility of the assigned net on-site, independent of the digital profile.
+
+**Immediate Action Plan**
+1.  Freeze the current allocation list.
+2.  Run the "Data Sanity Audit" to identify high-risk assignments.
+3.  Brief field teams on the "Two-Step" rule and the authority to override the app.
+4.  Physically separate the contingency stock before deployment begins.
+
+*Note: Do not attempt to update the cached demographic data now unless you have verified, recent sources; introducing unverified partial updates may increase inconsistency. Prioritize the human-in-the-loop verification over algorithmic precision.*

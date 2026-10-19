@@ -1,0 +1,40 @@
+### Pre-Launch Safety Review: Identity Verification Grace Period
+
+**1. Harm Inventory & Risk Assessment**
+The current hard-coded expiration rule creates a high-severity **bias/unfair outcome** and **unsafe automation** risk for refugees and displaced persons.
+*   **Affected Group:** Users with temporary documents subject to administrative renewal delays beyond their control.
+*   **Worst Realistic Case:** Valid users are permanently locked out of essential banking services during processing gaps, leading to financial exclusion, inability to receive aid, and loss of livelihood. This constitutes an irreversible action without human oversight.
+*   **Root Cause:** The system treats "document expiration" as synonymous with "identity invalidity," ignoring the reality of bureaucratic lag.
+
+**2. Testing Framework: Exclusion Scenario Evaluation**
+To measure the impact before launch, execute the following evaluation rows. Do not rely on aggregate pass rates; focus on subgroup failure modes.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Known Bad) | Negative Control (Known Good) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Administrative Lockout** | Simulated profiles with expired temporary IDs but "renewal pending" status flags. Vary delay durations (1–90 days). | User with expired ID, no renewal proof, flagged for fraud. | User with valid ID; User with expired ID but verified grace-period approval. | **Lockout Rate:** % of "renewal pending" users denied access. **Threshold:** Owner-defined (recommend <1% false denial). | **Block Launch** if >0% of valid "renewal pending" users are hard-blocked without human review trigger. |
+| **Recovery Friction** | Users locked out by expiration attempting to re-verify via upload of renewal receipt. | User attempting to bypass with forged document. | User successfully uploading valid renewal receipt. | **Time-to-Reinstatement:** Average time to restore access. **Threshold:** <24 hours. | **Block Launch** if reinstatement requires >48 hours or manual engineering intervention. |
+| **Disclosure Clarity** | UI screens shown to users upon lockout. | Generic "Access Denied" error. | Specific message: "Document expired. Upload renewal proof to restore access within 48h." | **Clarity Score:** User comprehension of next steps (via usability testing). | **Block Launch** if >20% of test users cannot identify the remedy. |
+
+*Additional Probes:* Test for **excess agency** (system auto-deleting accounts vs. flagging) and **data leakage** (exposing refugee status to unauthorized parties during manual review).
+
+**3. Planning Document: Grace Period Logic Proposal**
+**Objective:** Replace absolute hard-blocks with a risk-tiered grace period to prevent exclusion of valid users.
+
+*   **Logic Change:**
+    *   **Current:** `IF document_expiry < today THEN deny_access`.
+    *   **Proposed:** `IF document_expiry < today THEN check_renewal_status`.
+        *   If `renewal_proof_uploaded` OR `government_api_status == "processing"`: Grant **Limited Access Tier** (view balance, receive funds; block outbound transfers >$X) for **60 days**.
+        *   If no proof provided: Trigger **Human-in-the-Loop Review** before hard block.
+*   **Implementation Steps:**
+    1.  **Database Schema Update:** Add `grace_period_active` (boolean) and `grace_period_expiry` (date) fields. Remove hard-coded SQL blockers.
+    2.  **Rule Engine Configuration:** Define "Limited Access Tier" permissions with banking partners.
+    3.  **Human Gate:** Establish a dedicated review queue for cases exceeding the 60-day grace window or lacking digital renewal proof.
+    4.  **User Communication:** Update error messages to explicitly state the grace period policy and upload instructions.
+*   **Stakeholder Discussion Points:**
+    *   Agree on the maximum grace duration (proposed: 60 days) based on average local processing times.
+    *   Define transaction limits for the "Limited Access Tier" to satisfy compliance while maintaining utility.
+    *   Assign ownership for the manual review queue (bank operations vs. SecureID support).
+
+**Residual Risk:** UNVERIFIED until the above evals are run with real-world renewal document samples. No metric is certified; this plan requires execution to validate thresholds.
+
+*Note: Legal counsel must review whether "Limited Access Tier" satisfies KYC/AML regulations for your specific jurisdictions. This proposal assumes regulatory flexibility for vulnerable populations.*

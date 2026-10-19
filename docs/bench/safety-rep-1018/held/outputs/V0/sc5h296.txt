@@ -1,0 +1,29 @@
+### Failure Mode Analysis: Missed Leak Detections
+
+**Critical Failure Scenarios**
+1.  **Masking by Ambient Noise:** The device fails to distinguish a pipe burst because background sounds (washing machines, heavy rain on the roof, loud HVAC systems, or traffic) overlap with the target frequency range, causing the algorithm to classify the event as "normal household noise."
+2.  **Attenuation and Distance:** The leak occurs far from the sensor (e.g., behind a closed door, in an insulated crawlspace, or through multiple pipe bends), reducing the acoustic signature below the trigger threshold before it reaches the microphone.
+3.  **Non-Standard Burst Profiles:** The failure involves a slow-developing rupture or a specific pipe material (e.g., PEX vs. copper) that generates a sound profile distinct from the training data, leading to a false negative.
+4.  **Battery-Saving Blind Spots:** The duty cycle required to meet battery constraints creates time gaps where a short-duration, high-intensity burst occurs and resolves (or drops below threshold) between sampling windows.
+5.  **Sensor Degradation/Obstruction:** Dust, condensation, or physical misalignment over time dampens the microphone's sensitivity, shifting the effective threshold higher than the firmware expects.
+
+### Proposed Acoustic Simulation Test Suite
+
+To validate sensitivity thresholds within your two-week timeline and battery constraints, execute the following lab simulations:
+
+*   **Test 1: The "Noise Floor" Stress Test**
+    *   **Setup:** Play recorded target leak sounds at varying decibel levels while simultaneously playing common household noises (dishwasher, shower, rain) at realistic volumes.
+    *   **Goal:** Identify the Signal-to-Noise Ratio (SNR) where detection fails. Adjust thresholds to ensure the device triggers even when the leak is 10dB lower than the ambient noise.
+*   **Test 2: Attenuation Mapping**
+    *   **Setup:** Place the device in a test rig with variable barriers (drywall, insulation, closed doors) between the sound source and the sensor. Measure the dB drop for different pipe materials and leak types.
+    *   **Goal:** Define the minimum "worst-case" acoustic signature the device must detect to cover the furthest point in a standard home layout.
+*   **Test 3: Duty Cycle Interception**
+    *   **Setup:** Simulate the device's sleep/wake schedule. Trigger short, sharp burst sounds at random intervals relative to the wake cycle.
+    *   **Goal:** Quantify the probability of missing a leak based on the current battery-saving sampling rate. If miss rates are high, you must either increase sampling frequency (impacting battery) or lower the trigger threshold to catch partial events.
+*   **Test 4: Edge-Case Profile Injection**
+    *   **Setup:** Inject audio files of non-standard failures (slow drips accelerating to bursts, different water pressures) that were not in the original training set.
+    *   **Goal:** Ensure the algorithm generalizes beyond its specific training data and does not reject valid emergencies due to slight spectral differences.
+
+**Immediate Action Required:** Given the autonomous nature of this alert system and the potential for property damage, you must implement a "human-in-the-loop" verification for the pilot phase if possible, or clearly disclose to the 100 homes that this is a beta system with known limitations. Do not certify the system as "safe" or "fail-proof" based solely on these lab tests; report the residual risk of missed detections to your pilot users explicitly.
+
+*Note: Legal requirements for automated safety disclosures vary by region; route specific compliance questions to counsel before finalizing user agreements.*

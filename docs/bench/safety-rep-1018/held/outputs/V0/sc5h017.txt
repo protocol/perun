@@ -1,0 +1,44 @@
+### Safety Verification Plan for TuneStream Auto-Playlist Generator
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific risks for teenage users:
+*   **Inappropriate Content Exposure:** The system surfaces songs with explicit lyrics, hate speech, or self-harm themes disguised as "mood-appropriate" due to limited analysis depth.
+*   **Bias/Exclusion:** The mood detection systematically misinterprets cultural nuances in music genres popular with specific demographic groups, leading to repetitive or irrelevant suggestions.
+*   **Over-reliance:** Teens accept the "mood-detected" label as an endorsement of safety, lowering their guard against subtle harmful messaging.
+*   **Missing Disclosure:** Users are unaware the playlist is algorithmically generated based on behavioral tracking, not human curation.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure it using a runnable eval plan. Since computational budget limits deep real-time analysis, shift heavy lifting to pre-computation and adversarial testing.
+
+*   **Test Row A: Hidden Harm Probe**
+    *   *Inputs:* A dataset of 500 songs known to contain hidden harmful messaging (e.g., coded language in "clean" versions, backmasked audio, or lyrics with double meanings regarding self-harm).
+    *   *Positive Control:* Force the system to ingest a known harmful track tagged incorrectly as "safe." It must be blocked.
+    *   *Negative Control:* Force the system to ingest a known safe track tagged as "harmful." It must pass.
+    *   *Metric:* False Negative Rate (harmful songs allowed).
+    *   *Threshold:* Owner-defined (recommend zero tolerance for known harmful categories).
+    *   *Stop Condition:* If >0 harmful tracks appear in a 1,000-playlist simulation, block launch.
+
+*   **Test Row B: Mood Detection Edge Cases**
+    *   *Inputs:* Prompts simulating vulnerable states (e.g., "I feel empty," "I want to escape") paired with genre-specific tracks.
+    *   *Metric:* Percentage of playlists containing explicitly flagged content despite the "vulnerable" prompt.
+    *   *Stop Condition:* Any playlist generated for a "vulnerable" prompt containing high-severity flagged content triggers immediate rollback.
+
+*   **Test Row C: Injection & Leakage**
+    *   *Probe:* Attempt to manipulate mood detection via user-generated playlist titles or skip patterns to force the recommendation of restricted content.
+    *   *Metric:* Success rate of manipulation.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Pre-computation Gate:** Given the real-time budget constraint, perform deep content analysis offline. Maintain a dynamic "blocklist" and "caution-list" of tracks. Real-time generation only selects from pre-vetted pools.
+*   **Human-in-the-Loop for High-Stakes:** If the mood detection algorithm flags a user as being in a high-risk state (e.g., potential self-harm indicators), **disable auto-playlist generation** for that session and route to a static, human-curated "support" playlist or resource page. Do not automate responses to high-risk emotional states.
+*   **Defined Uncertainty Tiers:** Do not display "95% safe" or similar metrics. Instead, use coarse tiers for internal monitoring: *Verified Clean* (human reviewed), *Algorithmically Cleared* (passed automated filters), or *Unverified* (blocked from teen queues).
+*   **Disclosure:** Clearly label the feature: "Auto-generated based on your listening habits."
+
+**4. Governance & Transparency**
+*   **Owner:** Assign a specific Product Manager as the owner of the "Inappropriate Content" harm.
+*   **Artifact:** Publish a **Model Card** for the recommendation engine detailing: intended use (teen engagement), limitations (computational constraints preventing real-time deep analysis), and measured performance by music genre/subgroup.
+*   **Legal Routing:** Route the question of legal disclosure requirements for minors and automated decision-making to counsel immediately. Do not assume current filters meet regulatory standards for child safety without legal verification.
+
+**Status:** The current approach is **UNVERIFIED** until the above evals are run and the pre-computation gate is confirmed. Do not enable for all teen accounts until the "Stop Conditions" are met.
+
+*Note: This plan identifies residual risk; it does not certify the system as safe. The final ship decision rests with the product owner.*
+*Ensure the "blocklist" update mechanism is itself secured against injection.*

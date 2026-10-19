@@ -1,0 +1,36 @@
+### Validation Framework for Arid-Region Drought-Rainfall Forecaster
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the risks specific to your context:
+*   **Bias/Unfair Outcomes:** The model systematically underperforms in arid regions due to temperate training data, disadvantaging these users.
+*   **Hallucination as Fact:** Predicting "heavy rain" with high confidence when no such pattern exists in arid climates, leading to wasted resources.
+*   **Unsafe High-Stakes Automation:** Automatically advising planting based on unverified predictions could cause total crop failure.
+*   **Over-reliance:** Farmers may trust the "AI advice" over local knowledge because the interface lacks uncertainty indicators.
+
+**2. Measurement Plan (MEASURE)**
+Do not rely on aggregate accuracy. Execute the following specific test rows before launch:
+
+| Harm Scenario | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Arid Bias** | **Inputs:** Historical arid weather data (last 10 years). <br>**Positive Control:** Known drought periods where model should predict "no rain." <br>**Negative Control:** Rare arid rain events. | False Positive Rate (predicting rain when none occurs) | **0%** for "Heavy Rain" classification in drought windows | If FP > 0%, block "Plant" recommendations; revert to "Consult Local Expert" mode. |
+| **Hallucination** | **Inputs:** Edge-case arid temperature/humidity combos not seen in temperate training. <br>**Control:** Synthetic data representing impossible arid rain scenarios. | Confidence vs. Reality Gap | **UNVERIFIED** until tested; target <5% high-confidence errors | If model expresses >80% confidence in false rain, disable auto-advice. |
+| **Resource Waste** | **Inputs:** Simulated farmer queries during dry seasons. | % of recommendations leading to simulated loss | **0%** irreversible actions without human gate | Any recommendation to "allocate significant water" without human review triggers rollback. |
+
+*Additional Probes:* Test for prompt injection via user-supplied soil data and ensure no leakage of other farmers' private resource data.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because crop failure is irreversible and costly, **remove full automation** for "Plant Now" or "Allocate Water" decisions. The system must output a *recommendation* requiring explicit farmer confirmation or agronomist review before action.
+*   **Show Uncertainty:** Do not display raw probabilities (e.g., "87% chance of rain"). Use defined coarse tiers:
+    *   **Confirmed:** Corroborated by local sensors + model.
+    *   **Unverified:** Model prediction only (temperate-trained); display warning: *"Model trained on temperate data; reliability in arid zones is unverified."*
+*   **Disclosure:** Clearly state: *"This advice is AI-generated based on temperate climate patterns. Verify with local agricultural extension services before planting."*
+*   **Transparency Artifact:** Publish a **Model Card** detailing:
+    *   **Intended Use:** Advisory only, not autonomous control.
+    *   **Limitations:** Explicitly state "Training data is 90% temperate; performance in arid regions is UNVERIFIED."
+    *   **Data Provenance:** List sources of temperate data and gaps in arid data.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product lead responsible for reviewing any "Heavy Rain" alerts in arid zones weekly.
+*   **Re-review Trigger:** Any model update or influx of new arid data requires re-running the bias probes.
+
+**Note:** Legal counsel must determine if this constitutes a regulated automated decision under local agricultural laws; do not assert compliance internally. If the False Positive Rate remains high after testing, the only safe path is to delay launch or restrict the feature to "Informational Only" with no actionable advice.

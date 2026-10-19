@@ -1,0 +1,37 @@
+### Safety Validation Plan for Wildfire-Smoke Monitor
+
+Given the high-stakes nature of advising asthmatics where incorrect "safe" advice could trigger severe health episodes, a standard code review is insufficient. The following workflow maps, measures, and manages the specific output harms before wider expansion.
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the worst-case scenarios for your specific users:
+*   **Hallucination as Fact:** The system generates a "Safe" alert despite dangerous smoke levels due to sensor error or model drift.
+*   **Bias/Unfair Outcomes:** Alerts are less accurate for specific geographic regions (e.g., rural vs. urban) or demographic groups due to training data gaps.
+*   **Over-reliance:** Users trust the app blindly without checking official sources because the interface implies certainty.
+*   **Unsafe Automation:** The app pushes a definitive "Go Outside" notification without a human-in-the-loop gate for borderline cases.
+
+**2. Measurement Strategy (MEASURE)**
+Do not assert safety; measure residual risk using adversarial evals. Construct a test suite with one runnable row per identified harm:
+*   **Probe Sets:** Create inputs simulating edge cases: rapid smoke density spikes, sensor dropouts, and conflicting data sources. Include "positive controls" (known dangerous scenarios that must trigger warnings) and "negative controls" (known safe scenarios).
+*   **Subgroup Slicing:** Run tests segmented by region and device type to detect bias.
+*   **Metrics & Thresholds:** Define a **zero-tolerance threshold** for false negatives (telling a user it is safe when it is not). Any failure here is a hard stop condition.
+*   **Injection & Leakage:** Test for prompt injection via corrupted sensor data and ensure no user health data leaks in logs.
+*   **Reporting:** Report results as `UNVERIFIED` for any metric not explicitly tested. Do not invent an accuracy percentage (e.g., "99% safe") without empirical evidence from these specific probes.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** For any alert where smoke density is near the threshold or data is conflicting, **do not automate the decision**. Route these cases to a human reviewer or default to a conservative "Caution/Unknown" status. Fully autonomous "Safe" decisions in high-risk zones are the failure mode to prevent.
+*   **Defined Confidence Tiers:** Never display raw model confidence (e.g., "87% safe") to users, as this implies false precision. Instead, use defined coarse tiers:
+    *   *Confirmed Safe* (Multiple corroborating sources)
+    *   *Corroborated* (Single reliable source)
+    *   *Unverified* (Conflicting data – Default to "Stay Inside")
+*   **Disclosure:** Clearly state that the alert is AI-generated and intended as an advisory, not a medical guarantee.
+*   **Constraint Adherence:** To meet the 30-second latency requirement on standard mobile data, pre-compute risk tiers where possible and use lightweight deterministic rules for the final gate, reserving heavy model inference for non-real-time analysis.
+
+**4. Governance & Artifacts**
+*   **Model/Data Card:** Ship a versioned artifact detailing intended use (advisory only), data provenance, known limitations (e.g., "less accurate in heavy rain"), and subgroup performance. Absence of this card is a transparency failure.
+*   **Owner Assignment:** Name a specific owner responsible for re-reviewing the model whenever sensor inputs or regional data sources change.
+*   **Legal Routing:** Consult counsel regarding legal disclosure duties and whether this constitutes a regulated medical decision in your target regions. Do not assume compliance; route the determination.
+
+**Deliverable Status:** This plan provides the inventory, eval structure, and gating logic required. Execution requires running the specified probes and recording actual pass/fail rates.
+
+*Note: No safety certification is issued here; the ship decision remains with the product owner based on measured residual risk.*
+*Legal determinations regarding medical device regulation must be routed to qualified counsel.*

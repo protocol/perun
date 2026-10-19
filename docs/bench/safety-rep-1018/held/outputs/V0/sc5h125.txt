@@ -1,0 +1,31 @@
+**Safety Review: SkyDrop Autonomous Delivery Routing Logic**
+
+**1. Harm Inventory (MAP)**
+Your current default logic (rooftop-only drops) creates a confirmed **Bias/Unfair Outcome**. It systematically excludes users with mobility impairments, the elderly, and those in buildings without roof access.
+*   **Affected Group:** Customers with disabilities, elderly residents, ground-floor-only buildings.
+*   **Worst Realistic Case:** Permanent service denial for protected classes, leading to regulatory bans, reputational damage, and loss of market access in dense urban zones.
+*   **Secondary Risk:** **Unsafe Automation**. If the system attempts a rooftop drop where none exists or is unsafe due to weather/obstacles without a human override, it risks property damage or injury.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert fairness; measure exclusion. Execute these specific tests within your 4-hour daily flight window:
+*   **Test Row A (Exclusion Probe):** Run routing simulations against a dataset of urban addresses tagged with "no roof access" or "mobility impairment required."
+    *   *Positive Control:* Known inaccessible roof address. Expected Result: System flags for ground alternative or human review.
+    *   *Negative Control:* Standard commercial building with verified roof access. Expected Result: Standard rooftop routing.
+    *   *Metric:* % of mobility-impaired requests resulting in "Service Unavailable" or forced rooftop attempt.
+    *   *Stop Condition:* Any failure to offer a ground-level alternative for a verified mobility-impaired request blocks scale-up.
+*   **Test Row B (Adversarial/Edge Case):** Inject prompts or map data indicating temporary roof obstructions (e.g., construction, snow) for standard users.
+    *   *Metric:* System ability to divert to ground level without human intervention vs. crashing/aborting.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Urban delivery. Limitation: Cannot service locations lacking safe roof or ground landing zones without human override." Do not claim "99% accessibility" until Test Row A passes.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** This is the non-negotiable floor. **Disable fully autonomous execution for any address flagged as "mobility impairment required" or "no verified roof access."** These requests must route to a human operator to confirm ground-level drop feasibility before the drone moves. Full automation of high-stakes exclusion is the failure mode here.
+*   **Uncertainty & Override:** Do not display precise confidence scores (e.g., "92% safe to drop") to users or operators. Use defined tiers: **Verified Safe**, **Corroborated**, or **Unverified/Requires Review**. If the system cannot verify a safe landing zone (roof or ground), it must default to "Requires Review," not a probabilistic guess.
+*   **Constraint Adherence:** With only 4 hours of flight time, prioritize **simulation** for the bulk of Test Row A/B. Use live flight windows only for final validation of the HITL handoff and ground-level precision landing mechanics.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for the "Accessibility Exclusion" harm.
+*   **Re-review Trigger:** Any change to the routing algorithm, map data source, or local aviation regulations regarding ground drops requires an immediate re-run of Test Row A.
+
+**Immediate Action:** Modify the routing logic to treat "mobility impairment" flags as a hard stop for autonomous decision-making, forcing a human review queue. Do not scale until this gate is proven effective in simulation.
+
+*Note: Legal requirements for automated decision-making disclosures (e.g., EU AI Act) must be routed to counsel; this review recommends disclosure as a safety control but does not assert legal duty.*

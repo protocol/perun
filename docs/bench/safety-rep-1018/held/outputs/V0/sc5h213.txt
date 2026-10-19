@@ -1,0 +1,24 @@
+### Plan for Scenario Prioritization and Confidence Documentation
+
+**1. Prioritization Strategy: Risk-Weighted Edge Case Selection**
+Given the six-hour simulation constraint and the imminent deadline, you cannot test all edge cases. Prioritize simulations using a "Worst-Plausible-First" approach focused on irreversible harm (failed evacuation). Execute simulations in this strict order:
+
+*   **Tier 1 (Critical Stop-Gates):** Simulate the maximum historically recorded tsunami for each specific coastal segment combined with the highest probable tide levels. These represent the "known worst-case" baselines. If the model underestimates surge height here, the system must not ship.
+*   **Tier 2 (High-Impact Compound Events):** Simulate moderate-magnitude tsunamis occurring during rare but plausible high-tide windows or storm surges. These compound events often cause disproportionate damage and are frequent sources of model failure.
+*   **Tier 3 (Geological Uncertainty Bounds):** Select three to five scenarios representing the extremes of your geological input data (e.g., shallow vs. deep fault slip, varying rupture velocities) rather than random sampling. This tests the model's sensitivity to the most uncertain variables.
+
+**Stop Condition:** If any Tier 1 simulation produces an underestimate of surge height compared to established hydrodynamic benchmarks or historical data, halt the rollout. Do not proceed to Tier 2 or 3 until the fundamental safety floor is verified.
+
+**2. Confidence Framework: Defined Coarse Tiers**
+Do not present decision-makers with specific numerical confidence intervals (e.g., "87% confidence") or precise error margins. In high-stakes emergency contexts, specific numbers imply a calibration precision that likely does not exist and invites dangerous over-reliance. Instead, adopt a **Defined Coarse Tier** system for all outputs:
+
+*   **Tier A (Corroborated):** The prediction aligns with multiple historical analogs and falls within the consensus of established physical models. *Action:* Proceed with standard evacuation protocols.
+*   **Tier B (Single-Source/Modeled):** The prediction relies heavily on the current simulation engine without strong historical precedent for this specific geographic configuration. *Action:* Expand evacuation zones by a predefined safety buffer; treat as a confirmed threat.
+*   **Tier C (Unverified/Extrapolated):** The input parameters exceed the range of data used to train or validate the model. *Action:* Issue maximum alert; assume the worst-case physical limit regardless of the specific number generated.
+
+**Implementation Requirement:** Every output must display the Tier label prominently alongside the height estimate. Accompany this with a mandatory "Human-in-the-Loop" gate: no automated evacuation order or zone designation is finalized based solely on Tier B or C outputs without explicit confirmation by a senior emergency official.
+
+**Transparency Artifact:** You must produce a **Model Card** before rollout. This document must list the intended use (evacuation zoning), the specific limitations (e.g., "not validated for fault slips >X meters"), and the performance results of the Tier 1 simulations broken down by coastal segment. If a metric has not been measured due to time constraints, label it explicitly as **UNVERIFIED**; do not fabricate a rate or claim coverage you have not tested.
+
+**Note:** Legal requirements for disclosing AI-generated decisions in life-safety contexts vary by jurisdiction; route this determination to legal counsel immediately.
+This plan addresses the simulation bottleneck by focusing only on scenarios that could cause fatal underestimation.

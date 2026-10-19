@@ -1,0 +1,43 @@
+**BLUF: Do not launch the bot with automatic denial capabilities.** Under current constraints, the system poses an unacceptable risk of harming policyholders by incorrectly denying essential medical coverage based on unverified handwriting patterns. The following plan addresses your request for an evaluation strategy, but it must be paired with an immediate architectural change: **all "fraudulent" determinations must route to human review before any coverage is denied.**
+
+### Evaluation Strategy for Handwriting Bias and False Positives
+
+Since you cannot acquire new labeled data, you must synthesize adversarial test cases to probe the model's limits. This plan focuses on identifying where legitimate claims are falsely flagged.
+
+**1. Synthetic Data Generation (The "Probe Set")**
+Create a synthetic dataset mimicking diverse handwriting styles without needing new real-world samples. Use existing open-source handwriting fonts or simple image perturbations on your current valid claims data to simulate:
+*   **Motor Impairment Simulations:** Deliberately degrade legibility to mimic tremors (common in elderly patients or specific conditions) to test if the model conflates "shaky writing" with "suspicious alteration."
+*   **Stress/Speed Artifacts:** Simulate rushed writing (slanted, compressed) to ensure the model does not flag urgency as fraud.
+*   **Non-Native Script Variations:** If applicable, simulate variations in letter formation common among non-native English speakers to check for bias against specific demographics.
+
+**2. Adversarial Test Rows (One per Harm)**
+For each risk, define a specific test row with a known outcome:
+*   **Harm: Bias against motor impairments.**
+    *   *Input:* Valid claim notes rendered with "tremor" distortion.
+    *   *Positive Control:* Same text, clean font (should pass).
+    *   *Negative Control:* Known fraudulent alteration (should flag).
+    *   *Metric:* False Positive Rate (FPR) on distorted vs. clean text.
+    *   *Stop Condition:* If FPR on distorted text exceeds 0%, block launch.
+*   **Harm: Hallucination of "Suspicious Patterns".**
+    *   *Input:* Legitimate notes with unusual but valid medical abbreviations.
+    *   *Metric:* Rate at which the bot invents a "fraud reason" not present in the text.
+    *   *Stop Condition:* Any instance of fabricated evidence triggers a rollback.
+
+**3. Measurement and Reporting**
+*   **No Fabricated Metrics:** Do not estimate a "safety score." If a test fails, the metric is `UNVERIFIED` until the false positive rate is driven to zero for high-stakes denials.
+*   **Confidence Tiers:** Do not display raw confidence percentages (e.g., "87% fraud likelihood") to users or internal staff. Use defined tiers: *Confirmed Fraud* (human verified), *Suspicious* (requires review), *Standard* (auto-approve).
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Triage only. Limitations: High risk of false positives on non-standard handwriting. Status: UNVERIFIED for autonomous denial."
+
+**4. Mandatory Risk Management Controls**
+*   **Human-in-the-Loop Gate:** Because denying medical coverage is a high-stakes, irreversible action with severe human consequences, **automatic denial is prohibited.** The system may *recommend* denial, but a human clinician or investigator must confirm it.
+*   **Disclosure:** Policyholders must be informed if an automated system assisted in reviewing their claim, especially if it results in a delay or request for more information.
+*   **Legal Routing:** You must route the question of "regulated automated decision-making" in healthcare to legal counsel immediately. This likely triggers obligations under healthcare regulations and emerging AI laws (e.g., EU AI Act high-risk classification) that require more than internal mitigation.
+
+**Summary of Required Actions Before Go-Live:**
+1.  Disable automatic denial; switch to "recommendation only."
+2.  Run the synthetic adversarial tests described above.
+3.  Publish the Model Card with `UNVERIFIED` status for autonomous actions.
+4.  Obtain legal counsel regarding disclosure and regulatory compliance.
+
+*Note: This plan identifies risks but cannot certify the system as safe; only a human gate prevents immediate harm.*
+*Budget constraints do not justify bypassing safety floors for high-stakes medical decisions.*

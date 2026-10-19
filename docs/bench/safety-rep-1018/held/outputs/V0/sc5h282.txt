@@ -1,0 +1,39 @@
+### Pre-Launch Safety Review Plan: Credit-Score Simulator
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Over-reliance leading to financial damage. Users trust inflated scores based on self-reported income, apply for loans they cannot afford, and face rejection or unmanageable debt.
+*   **Affected Group:** All users, disproportionately those with limited financial literacy or urgent cash needs.
+*   **Worst Case:** A user takes on high-interest debt based on the simulator's "approval" signal, defaults, and suffers long-term credit damage.
+*   **Secondary Harm:** Missing AI/Disclosure. Users may assume the score is a pre-approval from a bank rather than an estimate based on unverified data.
+
+**2. Measurement Plan (MEASURE)**
+*   **Action:** Run a targeted red-team exercise before launch.
+*   **Probe Set:** Create 10 test profiles with realistic but significantly inflated income figures (e.g., 2x average Warsaw salary) and standard expenses.
+*   **Controls:**
+    *   *Positive Control:* Input clearly impossible income (e.g., 1M PLN/month) to verify if the model flags it as suspicious or outputs a max score.
+    *   *Negative Control:* Input verified low-income data to ensure the score drops appropriately.
+*   **Metric:** Percentage of inflated profiles receiving a "High Borrowing Power" signal without warning labels.
+*   **Pass Threshold:** Zero instances of high scores on impossible incomes without explicit disclaimers.
+*   **Stop Condition:** If >5% of inflated profiles receive an uncaveated high score, delay launch or disable the "score" display until fixed.
+*   **Reporting:** Document results as `UNVERIFIED` regarding real-world accuracy until live data is available. Do not claim a specific "accuracy rate."
+
+**3. Risk Management & Mitigation (MANAGE)**
+Given the two-week timeline and three-engineer constraint, implement these low-cost, high-impact controls:
+
+*   **Mandatory Disclosure (Immediate):** Place a prominent, non-dismissible banner on the results page: *"This score is an estimate based on unverified self-reported data. It is NOT a loan pre-approval. Lenders will verify your income, and your actual offer may differ significantly."*
+*   **Confidence Tiers (UI Change):** Do not show a precise number (e.g., "87% approval chance"). Instead, use coarse, defined text tiers:
+    *   *Estimated Range:* "Based on your inputs, you might qualify for..."
+    *   *Warning Tier:* If income exceeds a logical threshold (e.g., top 1% of national average), automatically trigger a "Data Unverified" warning label next to the score.
+*   **Human-in-the-Loop Gate (Process):** Since full automation of the "advice" is risky, add a friction step. Before showing the final score, require the user to check a box: *"I understand this tool uses my unverified inputs and does not guarantee loan approval."*
+*   **Input Sanity Checks:** Implement simple deterministic rules (no ML retraining needed) to flag outliers. If reported income is >3x the median for the selected profession/region, cap the displayed score or force the "Unverified" warning.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing user feedback and error reports weekly post-launch.
+*   **Artifact:** Create a one-page "Model Card" hosted on your site. List: Intended Use (estimation only), Limitations (self-reported data, no bank verification), and Known Risks (inflated scores).
+*   **Legal Routing:** Immediately route the question *"Is this simulator a regulated financial advice tool under Polish/EU law requiring specific disclaimers?"* to legal counsel. Do not assume compliance; get a formal determination.
+
+**Definition of Done:**
+The warning banner is live, the "unverified" logic handles income outliers, the Model Card is published, and legal counsel has been consulted on regulatory duties.
+
+*Note: This plan identifies risks and proposes controls; it does not certify the product as safe. The final launch decision rests with your team leadership.*
+*If legal counsel determines this constitutes regulated financial advice, additional compliance steps will be required before launch.*

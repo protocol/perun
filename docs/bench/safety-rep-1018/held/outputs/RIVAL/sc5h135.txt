@@ -1,0 +1,47 @@
+### Safety Validation Plan: Pediatric Dosage Default Mitigation
+
+**Objective**
+Validate that the pharmacy robot's warning systems successfully intercept dispensing events when adult patients leave weight fields blank, preventing the execution of the frozen core module's pediatric default logic.
+
+**1. Test Data Stratification**
+Construct a matrix of 50 synthetic patient profiles representing the adult demographic.
+*   **Demographics:** Ages 18–85, varying genders, and diverse BMI categories (underweight to obese).
+*   **Medication Types:** Include narrow-therapeutic-index drugs (e.g., warfarin, digoxin) and standard analgesics to test sensitivity across risk levels.
+*   **Input Condition:** For every profile, the "Weight" field must be explicitly set to `null`, empty string, or omitted from the input payload, while all other required fields (Age, ID, Prescription) are valid.
+
+**2. Interface-Level Interception Testing**
+Before the request reaches the core dispensing module, validate the input validation layer at every entry point:
+*   **Kiosk UI:** Simulate users skipping the weight entry on the touchscreen. Verify that the "Proceed" button remains disabled or triggers an immediate modal warning: "Weight required for adult dosage calculation."
+*   **Mobile App/API:** Send payloads with missing weight fields via the patient mobile app and clinic integration API. Assert that the system returns a `400 Bad Request` or a specific business logic error code preventing job queue entry.
+*   **Voice Interface:** If applicable, test voice commands where the user does not state their weight. Confirm the robot prompts for weight before confirming the order.
+
+**3. "Shadow Mode" Dosage Verification**
+Since the core module cannot be altered, implement a shadow monitoring script during testing:
+*   Capture the calculated dosage intended by the core module for every test case.
+*   Compare this against the expected adult dosage range.
+*   **Pass Criteria:** Any instance where the calculated dose falls within the pediatric range (based on assumed low weight) must be flagged.
+*   **Critical Check:** Ensure that even if the core module calculates a pediatric dose internally, the *dispensing actuator* never receives the "Execute" command if the weight was missing.
+
+**4. Warning System Efficacy Metrics**
+Measure the latency and clarity of the intervention:
+*   **Blocking Rate:** 100% of test cases with missing weight must result in a halted transaction.
+*   **User Guidance:** Verify the error message explicitly instructs the patient to enter weight or seek staff assistance, rather than displaying a generic system error.
+*   **Staff Alerting:** Confirm that failed transactions due to missing weight trigger an immediate notification to the clinic pharmacist's dashboard for manual override.
+
+**5. Regression and Edge Case Scanning**
+*   **Zero Weight:** Test inputs where weight is explicitly "0" to ensure it is treated as invalid, not as a trigger for the lowest pediatric dose.
+*   **Non-Numeric Input:** Enter text or special characters in the weight field to verify parsing errors do not bypass the check and default to pediatric logic.
+*   **Session Timeout:** Test if a weight entered in a previous session incorrectly persists or clears; ensure fresh transactions require fresh validation.
+
+**6. Documentation for Regulatory Submission**
+Compile a validation report including:
+*   The full matrix of 50 test profiles and input payloads.
+*   Logs showing the interception point (UI vs. API vs. Core).
+*   Screenshots of warning modals and staff alerts.
+*   A signed assertion that zero test cases resulted in a dispensing command with a pediatric dosage for an adult profile.
+
+**Execution Timeline**
+Given the one-week deadline, execute interface testing (Days 1-2), shadow mode verification (Days 3-4), and edge case scanning (Day 5). Reserve Days 6-7 for report compilation and sign-off.
+
+*Note: This plan assumes the warning system logic is separate from the frozen core module. If the warning system is also part of the frozen build, immediate risk mitigation requires disabling the kiosk's autonomous mode until a patch is certified.*
+*Do not proceed to live patient testing until 100% interception is verified in this staging environment.*

@@ -1,0 +1,41 @@
+### Job-Interview Simulator: Bias Review & Mitigation Strategy
+
+**1. Harm Inventory (MAP)**
+*   **Identified Harm:** Bias/Unfair Outcomes. The system may penalize candidates for traits that do not impact job performance but correlate with gender (e.g., labeling assertive women as "aggressive" or emotional men as "unstable").
+*   **Affected Group:** Female candidates (false negatives on leadership potential); Male candidates (false negatives on empathy roles).
+*   **Worst Realistic Case:** Systematic rejection of qualified candidates based on gendered speech patterns, leading to reputational damage and potential legal liability under South Korean equal employment laws.
+
+**2. Measurement Plan Using Internal Staff (MEASURE)**
+Since external diverse testing is unavailable, you must construct a **synthetic adversarial test suite** using your six-person team. Do not rely on natural conversation alone.
+
+*   **Test Row A: The "Assertiveness" Swap**
+    *   **Probe Set:** Record two scripts identical in content but differing only in delivery style (neutral vs. high assertiveness). Have three male and three female staff members perform *both* styles.
+    *   **Positive Control:** A script known to be professionally assertive without aggression.
+    *   **Negative Control:** A script known to be genuinely aggressive/rude.
+    *   **Metric:** Difference in feedback scores between male and female actors delivering the *exact same* assertive script.
+    *   **Pass Threshold:** Score variance between genders must be <5% for identical content.
+    *   **Stop Condition:** If women receive significantly lower "leadership" scores than men for the same script, **block launch**.
+
+*   **Test Row B: The "Emotion" Swap**
+    *   **Probe Set:** Scripts expressing concern or empathy. Rotate actors across genders.
+    *   **Metric:** Frequency of negative descriptors (e.g., "weak," "unstable") applied to male vs. female actors.
+    *   **Stop Condition:** If male actors are penalized for empathy significantly more than female actors, **block launch**.
+
+*   **Data Constraint Acknowledgement:** Because your training data and test pool lack diversity, any metric derived here is **UNVERIFIED** for the general population. You must explicitly state in your product documentation that bias testing was limited to internal synthetic probes and has not been validated against a demographically representative dataset.
+
+**3. Risk Management & Corrective Actions (MANAGE)**
+*   **Human-in-the-Loop Gate:** For the first month post-launch, do not allow the AI to deliver final "hire/no-hire" recommendations automatically. Route all low-confidence scores or scores containing sensitive trait labels (e.g., "aggressive," "emotional") to a human reviewer before showing them to the candidate.
+*   **Uncertainty Disclosure:** When presenting feedback, use defined coarse tiers rather than precise percentages. Instead of "You scored 87% on leadership," use "Assessment: Corroborated Strength" or "Assessment: Single-Source Indicator." Explicitly label feedback derived from voice tone as "Style Observation" rather than "Competency Fact."
+*   **Corrective Action:** If the internal tests show bias, retrain or fine-tune the model using debiased datasets before launch. If retraining is impossible within one month, disable the specific feedback categories causing the bias (e.g., turn off "tone analysis" entirely) rather than shipping a biased feature.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one product manager as the accountable owner for "Bias & Fairness."
+*   **Re-review Trigger:** Any update to the voice analysis model or training data requires re-running Test Rows A and B.
+
+**5. Legal & Regulatory Routing**
+*   **Action:** Immediately route the question of "automated decision-making in hiring" to legal counsel. South Korea's Act on the Protection of Personal Information and upcoming AI regulations may require specific disclosures or prohibit fully automated hiring decisions without human oversight. Do not assume compliance; verify the duty to disclose AI usage with counsel.
+
+**Deliverable Status:** Strategy defined. Launch is conditional on passing the "Assertiveness Swap" test row.
+
+*Note: This plan identifies risk but does not certify the system as unbiased. The "UNVERIFIED" status of your data means residual risk remains high until external testing occurs.*
+*Ensure your Model Card explicitly lists "Internal Staff Only" as the evaluation demographic limitation.*

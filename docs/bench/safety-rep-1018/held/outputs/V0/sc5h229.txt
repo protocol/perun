@@ -1,0 +1,28 @@
+**Pre-Launch Safety Preparation Strategy: Volcanic Ash Tracker**
+
+**1. Validation of Accuracy Against Known Trajectories**
+Given the two-week constraint and the legacy integration, validation must prioritize adversarial testing over exhaustive coverage.
+*   **Construct a "Golden Set" of Historical Events:** Aggregate data from three distinct past eruptions with well-documented plume trajectories and confirmed flight diversions. Do not rely on simulated data alone.
+*   **Execute Adversarial Probe Rows:** For each historical event, run the tracker with:
+    *   *Positive Controls:* Inputs matching known ash locations to verify correct "Avoid" alerts.
+    *   *Negative Controls:* Inputs from clear airspace near plume edges to verify no false positives (which cause unnecessary fuel-burning diversions).
+    *   *Edge Cases:* Inputs with partial data loss or latency spikes mimicking the older navigation system's limitations.
+*   **Define Pass/Fail Thresholds:** Establish a zero-tolerance threshold for "Missed Detections" (failing to flag a known hazardous zone). For "False Positives," set a maximum allowable rate based on pilot operational tolerance (e.g., <1% of clear routes flagged).
+*   **Document Residual Risk:** If any historical trajectory yields a missed detection, mark the accuracy metric as **UNVERIFIED** for those specific conditions. Do not invent an overall accuracy percentage. Publish a **Model Card** detailing these tested scenarios, the specific limitations of the legacy integration, and the known failure modes.
+
+**2. Fail-Safe Mechanism for Data Interruption**
+Because the system advises on high-stakes, irreversible actions (flight path changes affecting safety and fuel), full automation is prohibited. The design must enforce a **Human-in-the-Loop (HITL)** gate.
+*   **Uncertainty Tiering:** Never display raw confidence scores (e.g., "87% safe") to pilots. Instead, implement defined coarse tiers:
+    *   *CONFIRMED:* Data corroborated by multiple sources; clear routing advice.
+    *   *SINGLE-SOURCE:* Data from one sensor; advisory only, requires pilot cross-check.
+    *   *UNVERIFIED/LOST:* Data feed interrupted or inconsistent; **NO ROUTING ADVICE GENERATED.**
+*   **The "Silent Failure" Protocol:** If the data feed interrupts or the legacy system fails error-checking, the tracker must **cease generating routing advice immediately**. It must not default to the last known good path or a "best guess." The interface must clearly display: "ASH DATA UNAVAILABLE – RELY ON STANDARD PROCEDURES."
+*   **Mandatory Pilot Confirmation:** For any "CONFIRMED" diversion recommendation, the system must require explicit pilot acknowledgment before updating the flight management system, preventing automation bias where pilots trust the tool over their instruments.
+
+**3. Governance and Launch Readiness**
+*   **Owner Assignment:** Name a specific individual responsible for reviewing any "UNVERIFIED" outcomes during the launch window.
+*   **Kill Switch:** Implement an immediate global disable switch accessible to ground control to halt all automated advice if post-launch monitoring detects anomalous behavior.
+*   **Legal Routing:** Since this involves safety-of-life decisions, route the question of regulatory disclosure and liability under aviation law to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** This strategy assumes the "older navigation system" cannot be patched; all error handling must occur in your tracker's layer before data reaches the pilot.
+**Note:** If the "Golden Set" validation reveals any missed detections in high-risk zones, the launch must be delayed regardless of the partnership agreement.

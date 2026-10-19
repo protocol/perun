@@ -1,0 +1,34 @@
+### Pre-Launch Audit and Monitoring Plan for Predictive Funding Algorithm
+
+**1. Harm Inventory & Risk Documentation (Week 1)**
+Immediately document the specific harm: **Bias/Unfair Outcomes**. The model systematically disadvantages schools with high percentages of English Language Learners (ELL) by misinterpreting test scores as low potential, leading to under-funding.
+*   **Affected Group:** Schools with high ELL populations; specifically, the students within those schools who rely on equitable resource allocation.
+*   **Worst Realistic Case:** Persistent under-resourcing widens the achievement gap, violating equity mandates and potentially triggering legal challenges or loss of public trust.
+*   **Status:** This metric is **UNVERIFIED** for fairness until the specific evals below are run. Do not assert the model is "fair" or "unbiased" in any presentation.
+
+**2. Measurement Strategy: Runnable Eval Plan (Weeks 1–2)**
+Since core weighting variables cannot be changed, the audit must quantify the residual risk and test mitigation layers outside the core model. Create one test row per harm:
+*   **Probe Set:** Construct a synthetic dataset mirroring real demographics but isolating the ELL variable. Include a **positive control** (schools with low test scores due to language barriers but high actual need) and a **negative control** (schools with low scores due to other factors).
+*   **Metric:** Disparity Ratio (Funding allocated to high-ELL schools vs. demographically similar non-ELL schools).
+*   **Threshold:** Owner-set. Propose **zero tolerance** for automated funding decisions that result in a disparity ratio below 1.0 for high-ELL cohorts without human review.
+*   **Stop Condition:** If the disparity ratio exceeds the threshold, the automated allocation for affected schools must trigger a **human-in-the-loop gate**. No funds are released automatically for these cases until a policy expert reviews the specific allocation.
+*   **Additional Probes:** Test for **prompt injection** (if any natural language inputs exist) and **data leakage** (ensure no private student data leaks into public reports).
+
+**3. Managing Residual Risk: The Human Gate (Week 2)**
+Because the algorithm executes a **high-stakes, irreversible action** (allocating public funds) and currently exhibits known bias:
+*   **Mandatory Control:** Implement a hard gate. Any school flagged as high-ELL or falling into the "disadvantaged" cluster based on the evals must undergo manual review by a policy expert before funds are disbursed.
+*   **Uncertainty Disclosure:** Do not present the model's output as a precise fact. In internal dashboards, label allocations for high-risk groups as **"Unverified – Requires Review"** rather than showing a false-precision confidence percentage (e.g., avoid "87% accurate").
+*   **Transparency Artifact:** Draft a **Model Card** for the state board. It must explicitly state:
+    *   **Intended Use:** Resource allocation support.
+    *   **Limitations:** Known bias against ELL populations due to legacy variable constraints.
+    *   **Measured Performance:** Report the disparity ratios from your evals by subgroup, not just aggregate accuracy.
+    *   **Owner:** Name the specific lead responsible for this output harm.
+
+**4. Post-Deployment Monitoring (Week 3+)**
+*   **Continuous Eval:** Run the disparity metric weekly on live data.
+*   **Rollback Trigger:** If the live disparity ratio exceeds the threshold for two consecutive cycles, automatically suspend automated allocations and revert to full manual review.
+*   **Governance:** Assign a specific owner to re-review the model whenever input data distributions shift or if the state updates performance metrics.
+
+**Note on Legal Duty:** Whether this automated decision triggers specific regulatory requirements under state or federal law (e.g., civil rights statutes) is a legal determination. Route this question to counsel immediately; do not assert compliance in the board presentation.
+
+**Note on Constraints:** This plan accepts your constraint (no variable changes) but insists that **full automation** of biased outcomes is the failure mode. The human gate is the non-negotiable floor.

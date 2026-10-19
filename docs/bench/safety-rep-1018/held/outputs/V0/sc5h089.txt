@@ -1,0 +1,33 @@
+### Contingency Plan: Graceful Timeout & Exit Assurance
+
+**Objective:** Prevent vehicle entrapment during network latency spikes without infrastructure upgrades, ensuring a human-in-the-loop gate for all exit failures.
+
+**1. Software Logic Changes (Immediate Implementation)**
+*   **Local Caching & Optimistic Release:** Modify the barrier controller to cache successful payment confirmations locally. If the network times out during the exit check but a valid, recent (e.g., <15 mins) payment token exists in the local cache, the barrier must default to **OPEN**. Treat "network unreachable" as a non-fatal error that triggers a "verify later" sync job, not a "deny exit" command.
+*   **Hard Timeout Threshold:** Set a strict software timeout (e.g., 3 seconds). If the payment gateway does not respond within this window, the system must automatically trigger the **Fallback Mode** rather than hanging or denying access.
+*   **Fallback Mode Activation:** Upon timeout or cache miss, the system must immediately:
+    1.  Display a clear message: "Verifying payment offline. Please wait."
+    2.  Flash the lane lights to alert the on-site attendant.
+    3.  Unlock the manual override interface for staff.
+    4.  **Crucially:** Do not keep the barrier closed indefinitely. If no attendant responds within 30 seconds, the barrier defaults to **OPEN** and logs the event as "Unverified Exit – Review Required." The cost of a free exit is lower than the liability of trapping a user.
+
+**2. Human-in-the-Loop Protocol**
+*   **Mandatory Staffing:** No automated lane goes live without an on-site attendant physically present during the first 30 days.
+*   **Override Procedure:** Attendants are equipped with a tablet or physical button to instantly raise the barrier. This is the primary safety gate for high-stakes actions (trapping a user).
+*   **Reconciliation:** All "Unverified Exits" are flagged in a daily report for manual review against payment logs later, rather than blocking the user in real-time.
+
+**3. Testing Steps for Poor Connectivity**
+*   **Simulation Setup:** Use a network throttling tool (e.g., TC on Linux or a hardware emulator) to simulate high latency (2s–10s) and 100% packet loss between the barrier controller and the payment gateway.
+*   **Test Case A (Valid Payment + Latency):** Initiate a valid payment, then cut the network before the exit scan.
+    *   *Pass Criteria:* Barrier opens within 4 seconds using local cache; no user distress; event logged for later sync.
+*   **Test Case B (Network Total Failure):** Simulate complete outage during exit scan with no local cache.
+    *   *Pass Criteria:* System enters Fallback Mode within 3 seconds; attendant alert triggers; barrier opens automatically after 30 seconds if unattended.
+*   **Test Case C (Red Team/Adversarial):** Attempt to exit with an invalid/expired token while simulating network latency.
+    *   *Pass Criteria:* System attempts local validation (fails), alerts attendant immediately, and *does not* open automatically until the attendant verifies identity or overrides. (Balance security with safety: do not auto-open for clearly invalid tokens without human check, but ensure the human check is instant).
+*   **Metric:** Zero instances of the barrier remaining closed for >45 seconds due to software logic.
+
+**4. Transparency & Disclosure**
+*   Post signage at entry: "Exit barriers may operate in offline mode during network issues. Your payment will be verified subsequently."
+*   Log all offline exits clearly in the admin dashboard as "UNVERIFIED – MANUAL REVIEW PENDING."
+
+**Note:** This plan prioritizes preventing physical entrapment (high-stakes harm) over immediate revenue assurance, shifting verification to post-exit reconciliation. Legal counsel should review the "default open" policy regarding terms of service enforcement.

@@ -1,0 +1,37 @@
+### Contingency Procedures and Fallback Mechanisms for Biometric Payroll
+
+**1. Immediate Fallback Authentication Protocol (The "Human Gate")**
+Since legacy hardware cannot be upgraded, you must implement a non-biometric override immediately. Do not rely on the scanner as the single point of truth for wage eligibility.
+*   **Procedure:** Establish a "Manual Verification Station" at every clock-in point staffed by a supervisor or HR representative during shift changes.
+*   **Trigger:** If a worker fails three consecutive scan attempts, or presents with a visible bandage/injury affecting the hand, the supervisor initiates manual entry.
+*   **Action:** The supervisor verifies identity via employee ID badge and visual confirmation, then manually logs the clock-in/out time in the payroll system with a specific flag: `BIOMETRIC_FAIL_MANUAL_OVERRIDE`.
+*   **Governance:** This is not a loophole; it is a required human-in-the-loop gate for high-stakes actions (wage payment). The system must treat a manual override as equal validity to a biometric scan for payment processing.
+
+**2. The "Presumed Valid" Pay Rule (Financial Safety Net)**
+To prevent financial distress from scanning errors, decouple the *act* of clocking in from the *guarantee* of pay during the pilot.
+*   **Policy:** Implement a "Dispute-First, Deduct-Later" rule for the pilot phase. If a worker claims they worked but the system shows no scan and no manual override was logged, the default action is to **pay the claimed hours** provisionally.
+*   **Process:** Payroll issues the full claimed amount immediately. An investigation into the discrepancy occurs *after* payment is secured. Deductions for unverified time only happen if fraud is conclusively proven later, never as a first resort.
+*   **Rationale:** This shifts the risk of system failure from the vulnerable worker to the company, eliminating the threat of unpaid wages due to technical or physical limitations.
+
+**3. Injury Registration and Temporary Exemption**
+Create a fast-track administrative path for injured workers to bypass the biometric requirement entirely for the duration of their injury.
+*   **Mechanism:** Allow workers to self-report or have a supervisor report a hand injury via a simple form (digital or paper).
+*   **Effect:** Upon submission, the worker's profile is flagged in the system to `EXEMPT_BIOMETRIC`. Their authentication method automatically switches to PIN + Badge or Supervisor Sign-off for a set period (e.g., 14 days), renewable.
+*   **Communication:** Clearly post signage stating: "Injured? Tell us now and clock in with your badge. Your pay is protected."
+
+**4. Measurement and Testing Plan (Pre-Launch)**
+Before going live, you must measure the failure rate specifically for the at-risk group.
+*   **Test Row 1 (Injury Simulation):** Recruit 5 volunteers to wear bandages on various parts of their hands. Attempt to clock in 10 times each.
+    *   *Metric:* Failure rate % for bandaged hands.
+    *   *Stop Condition:* If failure rate > 20% and manual override takes > 2 minutes per person, the launch is blocked until more supervisors are scheduled.
+*   **Test Row 2 (Fallback Latency):** Simulate a queue of 20 workers where 5 require manual override.
+    *   *Metric:* Total time added to shift start.
+    *   *Threshold:* Must not delay shift start by more than 5 minutes.
+
+**5. Transparency Artifact (Model/Data Card Lite)**
+Draft a one-page notice for workers explaining:
+*   **Limitation:** The scanner may fail on injured hands.
+*   **Recourse:** Exactly how to use the manual override.
+*   **Guarantee:** Explicit statement that using the fallback will not delay or reduce pay.
+
+**Note:** Legal counsel must review the "Presumed Valid" pay rule to ensure it aligns with local labor laws regarding timekeeping records. Do not claim the system is "bias-free"; explicitly acknowledge the physical limitation in all worker communications.

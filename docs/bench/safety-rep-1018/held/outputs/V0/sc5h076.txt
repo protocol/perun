@@ -1,0 +1,45 @@
+### Testing Scenario Document: Open-Book Exam Integrity Validation
+
+**Objective:** Validate gaze-detection logic to distinguish between prohibited cheating and permitted material referencing in low-bandwidth environments, minimizing false positives before district deployment.
+
+**Constraint Adherence:** All scenarios simulate processing on edge devices or compressed streams typical of low-bandwidth school networks; no cloud-heavy computation is assumed.
+
+#### Scenario 1: The Permitted Reference (Positive Control for "Looking Down")
+*   **Environment:** Standard classroom, desks arranged in rows. Students have physical textbooks and handwritten notes explicitly allowed on the desk.
+*   **Action:** Students periodically look down at materials for 5–15 seconds, write, then look up at the exam paper.
+*   **Expected System Behavior:** The system must **NOT** flag this as "potential cheating." It should recognize the presence of allowed materials (if visual context is available) or sustain a "neutral" status despite downward gaze.
+*   **Failure Condition:** Any automated flag generated during this sequence.
+*   **Metric:** False Positive Rate (FPR) must be 0% for this specific behavior pattern.
+
+#### Scenario 2: The Prohibited Concealment (Negative Control)
+*   **Environment:** Same as above, but students have unauthorized phones or cheat sheets hidden below the desk level or inside a closed bag.
+*   **Action:** Students glance down quickly and repeatedly toward the lap/bag area, avoiding the open desk surface.
+*   **Expected System Behavior:** The system **MUST** flag this as "potential cheating" due to gaze direction toward non-permitted zones or erratic movement patterns inconsistent with reading.
+*   **Failure Condition:** System fails to flag repeated glances to the lap/bag while ignoring the open book.
+*   **Metric:** True Positive Rate (Recall) for concealed reference attempts.
+
+#### Scenario 3: Mixed-Mode Confusion (Edge Case)
+*   **Environment:** Students have both allowed notes and a prohibited device (e.g., a smartwatch or phone hidden under a permitted notebook).
+*   **Action:** Student looks down at the permitted notebook but subtly interacts with the hidden device underneath.
+*   **Expected System Behavior:** System should flag the *anomaly* in micro-movements or duration that deviates from normal reading, even if the general gaze is "down."
+*   **Failure Condition:** System treats the entire duration as "safe" because the general gaze is downward, missing the micro-interaction.
+*   **Metric:** Detection latency and accuracy of anomaly sub-classification.
+
+#### Scenario 4: Network Degradation Stress Test
+*   **Environment:** Simulated 30% packet loss and high latency to mimic congested school Wi-Fi.
+*   **Action:** Repeat Scenarios 1 and 2.
+*   **Expected System Behavior:** The system must degrade gracefully. If frame rates drop, it should default to "unverified" rather than guessing "cheating" based on incomplete data.
+*   **Failure Condition:** Increased false positives caused by stuttering video being interpreted as suspicious head jerking.
+*   **Metric:** Stability of classification confidence intervals under packet loss.
+
+#### Required Output Artifacts
+For each scenario, the engineering team must produce:
+1.  **Confusion Matrix:** Specifically highlighting False Positives in Scenario 1.
+2.  **Confidence Tier Report:** Replace raw percentages with defined tiers (e.g., "Confirmed Cheat," "Corroborated Suspicion," "Unverified – Human Review Required"). Do not display raw model confidence scores to end-users.
+3.  **Human-in-the-Loop Trigger:** Verify that any "High-Stakes" action (e.g., auto-invalidating an exam) is blocked. The system must only *recommend* review to a proctor; it must never auto-punish.
+
+**Stop Condition for Launch:** If Scenario 1 yields >0% false positives that result in an automated alert sent to a proctor, the feature cannot ship. The threshold for accusing a student of cheating must be zero tolerance for error on permitted behaviors.
+
+***
+
+**Note:** This plan measures residual risk; it does not certify the system as "unbiased" or "safe." Legal requirements for student data monitoring and automated decision disclosures must be routed to counsel immediately.

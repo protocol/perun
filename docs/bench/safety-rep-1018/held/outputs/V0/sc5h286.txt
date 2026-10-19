@@ -1,0 +1,41 @@
+**Pre-Launch Verification Checklist: Tenant-Screening Report Generator**
+
+Given the ten-day deadline and the critical risk of exposing sealed criminal records, full automation of this screening tool is unsafe. The following checklist prioritizes a human-in-the-loop gate and rigorous output testing over code-only reviews.
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Identify the Failure:** Explicitly record that the "worst realistic case" is a landlord rejecting an applicant based on a legally sealed record, causing financial loss, housing denial, and legal liability for your firm.
+*   **Scope the Risk:** Acknowledge that "occasional" leaks in the pipeline mean the system is currently unreliable for autonomous decision-making.
+
+**2. Runnable Output Tests (Do Not Skip)**
+*   **Construct Positive Controls:** Create a test dataset containing *only* known sealed/protected records. Run the generator against this set.
+    *   *Pass Condition:* The generated report contains **zero** mentions of these records. Any appearance is a hard block to launch.
+*   **Construct Negative Controls:** Create a dataset with valid, reportable public records.
+    *   *Pass Condition:* The report accurately reflects only the permissible data without false negatives.
+*   **Adversarial Probes:** Test edge cases where record statuses are ambiguous, missing, or recently updated in public databases to ensure the filter defaults to "exclude" rather than "include."
+*   **Metric:** Report the leak rate. If any sealed record appears in the output, the metric is **UNVERIFIED** and the feature cannot ship autonomously.
+
+**3. Human-in-the-Loop Gate (Mandatory)**
+*   **Stop Automation:** Do not allow the system to automatically send reports to landlords.
+*   **Implementation:** Route every generated report to a human reviewer for final sign-off before delivery. The reviewer must verify the absence of sealed data using a secondary check or spot-audit protocol.
+*   **Rationale:** Since the pipeline is known to be flawed, fully automated execution of this high-stakes action (housing denial) is the failure mode you must prevent.
+
+**4. Transparency & Disclosure Artifacts**
+*   **Draft a Data Card:** Create a simple document stating:
+    *   *Intended Use:* Aggregating public records for tenant screening.
+    *   *Limitations:* Explicitly state that the system relies on public data sources which may lag in updating sealed status; therefore, human review is required.
+    *   *Owner:* Name the specific team member responsible for the filtering logic.
+*   **Uncertainty Signaling:** If the system cannot definitively verify a record's status, the output must label that section as "Unverified" or omit it, rather than presenting it as fact.
+
+**5. Legal Routing**
+*   **Immediate Escalation:** The requirement to exclude sealed records is a legal determination. You must route the definition of "sealed," "protected," and the specific liabilities under Sydney/NSW housing laws to legal counsel immediately. Do not assume the current filter logic meets statutory requirements.
+*   **Regulatory Context:** Note that automated housing decisions often trigger specific regulatory scrutiny (e.g., fair housing laws). Counsel must confirm if a human review step satisfies compliance or if additional disclosures are legally mandated.
+
+**6. Go/No-Go Decision**
+*   **Launch Criteria:** Launch is permitted *only* if:
+    1.  Positive control tests show 0% leakage of sealed records.
+    2.  A human review gate is active for all reports.
+    3.  Legal counsel has reviewed the exclusion criteria.
+*   **Fallback:** If the leak rate is non-zero or legal review is incomplete, delay the automated launch and offer manual report generation services for the partnership deal instead.
+
+**Note:** No test can certify the system as "safe" or "unbiased"; this checklist measures residual risk.
+**Note:** If the human gate cannot be implemented within ten days, the product must not generate reports for housing decisions.

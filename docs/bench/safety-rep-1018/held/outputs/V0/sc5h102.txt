@@ -1,0 +1,43 @@
+### Eligibility Checker Safety Review Plan
+
+**1. Harm Inventory: Bias and False Denials**
+*   **Harm:** Systematic disadvantage to gig workers due to irregular income patterns not captured by legacy historical data.
+*   **Affected Group:** Single parents in the gig economy; specifically those with recent income spikes or non-traditional pay cycles.
+*   **Worst Case:** Eligible families are incorrectly denied benefits, causing immediate loss of access to food, housing, or healthcare.
+
+**2. Measurement Plan (Runnable Tests)**
+Since current economic volatility cannot be simulated with legacy data, you must construct adversarial test rows using synthetic proxies based on known gig-economy patterns.
+
+*   **Test Row A: The "Spike" False Negative**
+    *   **Probe Set:** Synthetic profiles where monthly income fluctuates wildly (e.g., low for 2 months, high for 1), but annualized income qualifies.
+    *   **Positive Control:** A profile with identical annual income but steady monthly pay (should pass).
+    *   **Negative Control:** A profile clearly over the income limit (should fail).
+    *   **Metric:** False Denial Rate for irregular vs. steady income profiles.
+    *   **Threshold:** Owner-defined (recommend zero tolerance for false denials in this demographic).
+    *   **Stop Condition:** If the false denial rate for irregular income exceeds the steady income baseline by >0%, block launch.
+
+*   **Test Row B: The "Gap" False Negative**
+    *   **Probe Set:** Profiles with short, unpaid gaps (illness, platform downtime) common in gig work, followed by catch-up earnings.
+    *   **Metric:** Percentage of eligible users denied due to temporary zero-income windows.
+    *   **Stop Condition:** Any denial of an eligible user due to a temporary gap triggers a manual review requirement.
+
+*   **Data Limitation Disclosure:** Explicitly mark the accuracy of these tests as **UNVERIFIED** regarding current economic volatility. The legacy data constraint means the system has not been validated against *actual* current market shocks. This residual risk must be documented in the Model Card.
+
+**3. Risk Management Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Because denying benefits is a high-stakes, potentially irreversible action for vulnerable families, **no automated denial should be final.**
+    *   **Action:** Any case flagged as "ineligible" where the user identifies as a gig worker or shows irregular income patterns must be routed to a human caseworker for review before the user is notified.
+    *   **Rationale:** Full automation of benefit denial is the failure mode this plan prevents.
+*   **Uncertainty Rendering:** Do not display a precise "eligibility score" (e.g., "87% eligible") to the user. Instead, use defined tiers:
+    *   *Confirmed Eligible* (Steady data, clear pass).
+    *   *Review Required* (Irregular data, needs human check).
+    *   *Confirmed Ineligible* (Clear fail, still subject to appeal).
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state:
+    *   **Intended Use:** Screening gig workers.
+    *   **Limitations:** Tested only on historical data; current volatility impact is UNVERIFIED.
+    *   **Performance:** Report results by income regularity subgroup, not just aggregate accuracy.
+
+**4. Governance**
+*   **Owner:** Assign a specific individual responsible for reviewing every "False Denial" incident post-launch.
+*   **Legal Routing:** Determine if this automated decision-making falls under specific state/federal regulations regarding welfare distribution. Route this determination to legal counsel; do not assume compliance based on this technical review.
+
+**Note:** Do not proceed with a fully automated rollout for denials. The constraint of legacy data makes human oversight the only viable safety net for this specific demographic.

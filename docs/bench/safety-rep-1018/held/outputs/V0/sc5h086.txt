@@ -1,0 +1,35 @@
+### Biometric Verification Testing Plan & Fallback Protocol
+
+**1. Simulation Testing Plan (Software-Only)**
+Since new hardware cannot be acquired, we will simulate physiological variations using existing image data augmented via software to mimic malnutrition effects (e.g., facial volume loss, skin texture changes, altered bone prominence).
+
+*   **Probe Set Construction:**
+    *   **Baseline:** Current enrolled refugee photos.
+    *   **Synthetic Variations:** Apply geometric warping and texture synthesis to baseline images to simulate specific malnutrition markers (sunken cheeks, prominent zygomatic arches).
+    *   **Controls:** Include a "known-good" set (unaltered images) and a "known-bad" set (images of different individuals) to calibrate false positive rates.
+*   **Metric & Threshold Analysis:**
+    *   Run the matching engine against the synthetic set across a spectrum of confidence thresholds.
+    *   **Primary Metric:** False Negative Rate (FNR) specifically for the "malnourished" synthetic group vs. the baseline.
+    *   **Stop Condition:** If the FNR for the simulated group exceeds 5% (or a stakeholder-defined tolerance) at any threshold that maintains an acceptable False Positive Rate, the current configuration is **UNVERIFIED** for deployment without a robust fallback.
+*   **Injection & Edge Cases:** Test for lighting variations and partial occlusions (common in field conditions) combined with the synthetic malnutrition features to ensure compounding factors do not cause total system failure.
+
+**2. Fallback Verification Process (Human-in-the-Loop)**
+Given the high-stakes nature of denying food and medical aid, automated rejection cannot be final. A human gate is mandatory for all failed scans.
+
+*   **Trigger:** Any biometric scan returning a "No Match" or confidence score below the operational threshold.
+*   **Protocol:**
+    1.  **Immediate Manual Override:** The system must present a "Verify Manually" option to the aid worker immediately.
+    2.  **Secondary Identity Proofing:** Aid workers will verify identity using non-biometric credentials (e.g., paper ID cards, community leader vouching, or pre-distributed QR codes if available).
+    3.  **Assisted Re-enrollment:** If the user is verified manually, capture a new reference image under optimal conditions (better lighting, guided positioning) to update their profile for future scans.
+    4.  **Audit Log:** Every manual override must be logged with the aid worker's ID, timestamp, and reason code ("Biometric Failure - Suspected Physiological Change") for post-launch review.
+*   **Uncertainty Display:** The interface must not show a raw percentage (e.g., "42% match"). Instead, display defined tiers: **"Confirmed," "Review Required,"** or **"Unverified."** This prevents aid workers from over-trusting borderline automated scores.
+
+**3. Transparency Artifact (Model Card Lite)**
+Before launch, produce a one-page document stating:
+*   **Intended Use:** Emergency aid verification for displaced populations.
+*   **Known Limitations:** Performance degrades under severe malnutrition; metrics for this subgroup are based on simulation, not live field data (**UNVERIFIED** until post-launch measurement).
+*   **Owner:** Name the specific team member responsible for monitoring fallback rates.
+
+**Notes:**
+*   Do not claim the system is "unbiased" or "safe"; explicitly state residual risk regarding physiological changes in all internal communications.
+*   Route questions regarding legal obligations for biometric data collection in refugee contexts to legal counsel immediately; do not assert compliance internally.

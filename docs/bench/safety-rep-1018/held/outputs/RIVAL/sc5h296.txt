@@ -1,0 +1,32 @@
+### Acoustic Simulation Test Plan for Leak Detector Sensitivity
+
+To validate sensitivity thresholds and identify failure modes where major leaks go undetected, execute the following five acoustic simulation scenarios in your lab. These tests prioritize edge cases where signal processing might suppress valid emergency patterns due to noise masking, frequency mismatches, or duty-cycle limitations.
+
+**1. The "Masking Noise" Stress Test**
+*   **Objective:** Determine if common household ambient sounds drown out the specific frequency signature of a burst pipe.
+*   **Method:** Play a recorded major leak signature (high-pressure hiss/whoosh) at a fixed decibel level representing a critical failure. Simultaneously introduce competing audio sources at varying volumes: a running washing machine (low-frequency rumble), a vacuum cleaner (broadband noise), and a television (dynamic range).
+*   **Success Metric:** The device must trigger an alert even when the leak signal-to-noise ratio (SNR) drops to -3dB. Failure occurs if the device classifies the combined sound as "normal household activity."
+
+**2. The Intermittent Flow & Duty-Cycle Trap**
+*   **Objective:** Verify detection when leak patterns are irregular, potentially falling between the device's battery-saving sampling windows.
+*   **Method:** Simulate a leak that pulses on for 2 seconds and off for 15 seconds (mimicking a valve struggling to close or a crack that opens/closes with pressure changes). Align the "off" periods with the device's deepest sleep intervals.
+*   **Success Metric:** The device must accumulate enough evidence across multiple active windows to trigger an alert within 60 seconds of the first pulse. Failure occurs if the device resets its internal counter during every sleep cycle, never reaching the trigger threshold.
+
+**3. The Frequency Drift Simulation**
+*   **Objective:** Test robustness against variations in pipe material and water pressure that shift the acoustic signature away from the "golden" training model.
+*   **Method:** Generate leak sounds shifting gradually from the expected high-frequency hiss (typical of copper/small cracks) to lower-frequency gurgling/thumping (typical of PVC/large bursts or air in lines). Sweep the frequency spectrum from 500Hz to 4kHz.
+*   **Success Metric:** Detection must remain consistent across the entire spectrum. Failure occurs if sensitivity drops sharply outside a narrow band, causing large, low-frequency bursts to be ignored.
+
+**4. The "Slow Ramp" False Negative**
+*   **Objective:** Ensure the algorithm detects leaks that escalate gradually rather than starting with a sudden spike, which some anomaly detectors might miss if they rely on sudden delta changes.
+*   **Method:** Start with silence, then increase the volume of the leak simulation linearly over 10 minutes until it reaches a "major emergency" level.
+*   **Success Metric:** The device must trigger before the sound pressure level exceeds the threshold of a "major leak," regardless of the rate of change. Failure occurs if the device adapts its baseline too aggressively, treating the escalating leak as the new normal.
+
+**5. Multi-Source Confusion Test**
+*   **Objective:** Validate that the device does not suppress alerts when multiple minor sounds occur simultaneously, mimicking a chaotic household environment.
+*   **Method:** Combine three distinct non-emergency sounds (e.g., faucet drip, dog barking, footsteps) to create a complex acoustic profile, then layer the leak signature on top.
+*   **Success Metric:** The device must isolate the leak signature from the complex background. Failure occurs if the classifier labels the entire mixture as "complex noise" and suppresses the alert to avoid false positives.
+
+**Execution Note:** Record the raw audio and the device's internal decision log for every test to correlate specific waveform features with missed triggers.
+
+**Calibration Note:** Ensure your lab speakers can reproduce the low-frequency rumble of large bursts accurately, as consumer speakers often filter these out, skewing results.

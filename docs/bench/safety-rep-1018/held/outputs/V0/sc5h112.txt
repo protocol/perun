@@ -1,0 +1,22 @@
+I cannot confirm that your current filtering logic guarantees user safety, nor can I state definitively that no harmful location suggestions will reach your users. No test or code review can prove a system is "safe" or "unbiased," especially when you have identified a known data failure mode (parks incorrectly flagged as closed) that directly impacts physical safety.
+
+Asserting a "zero harm" guarantee under these conditions would be a fabrication of safety metrics. Instead, here is the immediate harm inventory and management plan required for your launch:
+
+**Harm Inventory**
+*   **Unsafe Automation of High-Stakes Actions:** Routing users to dimly lit, restricted, or non-existent locations creates a risk of physical harm, harassment, or trespassing. This is an irreversible action once the user arrives.
+*   **Hallucination Surfaced as Fact:** Presenting a closed park as "open" based on flawed data is a factual error presented with authority.
+*   **Over-Reliance:** Users may trust the app's suggestion implicitly without verifying the location themselves.
+
+**Immediate Management Plan (Pre-Launch)**
+Since you cannot switch data providers, you must implement a **human-in-the-loop gate** or a **strict uncertainty disclosure** before Friday:
+
+1.  **Stop Condition for High-Risk Zones:** Do not automatically suggest locations classified as "parks" or "outdoor areas" if the confidence in their status is not absolute. If the data source has a known error rate for these tags, the system must withhold the suggestion rather than risk a false positive.
+2.  **Defined Uncertainty Tiers:** Do not show a specific confidence percentage (e.g., "90% safe"). Instead, use coarse, defined tiers. If a location's status cannot be corroborated by a secondary signal (even a simple time-of-day check or static whitelist of major parks), label it **"Unverified – Please Confirm On-Site"** or suppress it entirely.
+3.  **Explicit Disclosure:** You must disclose to the user that location data is automated and may contain errors. A disclaimer such as *"Location suggestions are automated and may not reflect real-time access status. Please verify safety and opening hours before visiting"* is a minimum control.
+4.  **Runnable Test Row:** Before launch, run a specific probe set using known "closed-but-flagged-open" parks from your data source. The pass threshold for launching this feature must be **zero** false positives for high-risk categories. If your current logic fails this specific probe, the feature must not ship in its current autonomous form.
+
+**Residual Risk**
+The residual risk is **UNVERIFIED** until you run the specific adversarial probes against your known bad data points. There is no evidence to support a claim of guaranteed safety. The decision to ship with these known gaps rests with your team, but it must be an informed acceptance of risk, not a certified clearance.
+
+**Note:** Legal counsel should review whether routing users to potentially unsafe locations triggers specific liability or regulatory duties in Tokyo.
+**Note:** Treat the "zero budget" constraint as fixed; the solution above uses process controls (gating/disclosure) rather than new data purchases.

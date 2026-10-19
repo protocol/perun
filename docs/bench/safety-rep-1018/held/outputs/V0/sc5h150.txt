@@ -1,0 +1,40 @@
+### Safety Plan: Mitigating Automated Denial Risks Due to Data Latency
+
+**1. Harm Inventory (MAP)**
+*   **Harm Identified:** Unsafe automation of high-stakes/irreversible actions. The system automatically denies critical welfare benefits based on stale data without human verification, causing eligible families to lose support.
+*   **Affected Group:** Immigrants and refugees with valid status but delayed database updates.
+*   **Worst Case:** Families face immediate loss of food, housing, or medical support due to a technical lag, leading to severe humanitarian distress and potential legal liability for the contractor.
+*   **Root Cause:** The legacy integration layer cannot support real-time sync, yet the decision logic treats database status as the sole source of truth.
+
+**2. Measurement & Evaluation Plan (MEASURE)**
+*   **Test Strategy:** Do not test only for code correctness; test for *harm*.
+    *   **Probe Set:** Create a dataset of 50 synthetic applicant profiles where the legacy database shows "expired/invalid" but a attached document field indicates "valid/renewed."
+    *   **Positive Control:** Inputs that should trigger a denial (truly invalid status).
+    *   **Negative Control:** Inputs that should trigger a manual review (database mismatch + physical proof present).
+    *   **Metric:** Percentage of "Negative Control" cases that result in an *automatic* denial vs. a *pending review* flag.
+    *   **Pass Threshold:** 0% automatic denials for cases containing physical proof of status. Any automatic denial in this category is a **stop condition** for launch.
+    *   **Injection Check:** Verify that uploading a document does not crash the legacy layer or get ignored by the decision engine.
+*   **Transparency Artifact:** Draft a **Model/Data Card** for this module.
+    *   **Intended Use:** Initial screening only; not final adjudication.
+    *   **Limitations:** Explicitly state: "Database status may lag behind legal reality by up to [X] days. Automatic denials are disabled for applicants submitting documentary evidence."
+    *   **Status:** Mark the "Real-time Accuracy" metric as **UNVERIFIED** due to legacy constraints; do not fabricate a reliability percentage.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):**
+    *   **Logic Change:** Modify the denial rule immediately. If `visa_status_db == "invalid"` AND `physical_proof_uploaded == true`, the system **must not** execute an automatic denial.
+    *   **Action:** Route these cases to a "Pending Manual Review" queue. Benefits must continue (or not be cut) until a human agent verifies the physical document against the database lag.
+    *   **Constraint Adherence:** This requires only a logic flag change in the application layer, not a update to the legacy integration sync, fitting the "no budget/no update" constraint.
+*   **Uncertainty Disclosure:**
+    *   **User Facing:** Display a clear message to applicants: "Your application requires manual review because your documents differ from our current database records. This is standard procedure for recent status changes. Your benefits will not be stopped during this review."
+    *   **Internal Facing:** Dashboard alerts must label these cases as "Data Latency Suspected" rather than "Fraud Risk" to prevent agent bias.
+*   **Rollback Plan:** If the manual review queue exceeds processing capacity within 48 hours of launch, trigger a kill-switch to pause *all* automated denials, moving 100% of cases to manual review until staffing aligns.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific Product Owner or Engineering Lead responsible for the "Manual Review Queue" throughput.
+*   **Re-review Trigger:** Any change to the legacy database schema or the definition of "valid status" requires re-running the harm evaluation probes.
+
+**Legal & Regulatory Note:**
+The requirement to disclose automated decision-making or the specific regulatory status of welfare denials for immigrants is a legal determination. Route this immediately to counsel to verify compliance with relevant administrative laws and the EU AI Act (if applicable) before finalizing user-facing text. Do not assert compliance internally without this validation.
+
+**Implementation Immediate Next Step:**
+Hard-code the exception logic: `IF (proof_exists) THEN (status = "MANUAL_REVIEW") ELSE (proceed_with_legacy_logic)`. Deploy this patch before any further testing.

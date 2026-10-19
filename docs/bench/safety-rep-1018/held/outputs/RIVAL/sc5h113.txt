@@ -1,0 +1,37 @@
+### Bias Evaluation and Mitigation Plan for GreenLeaf Finance
+
+**1. Immediate Harm Assessment**
+The current logic creates a disparate impact violation by systematically denying credit to a protected class (public school teachers) based on generalized sector data rather than individual merit.
+*   **Financial Exclusion:** Qualified educators are falsely labeled high-risk, denying them capital for emergencies or business growth.
+*   **Reputational Risk:** Launching a campaign targeting educators while secretly denying them based on profession invites regulatory scrutiny and public backlash.
+*   **Legal Exposure:** This pattern may violate fair lending laws (e.g., ECOA in the US) which prohibit discrimination based on occupation when individual capacity to repay exists.
+
+**2. Evaluation Strategy (Pre-Launch)**
+Since individual pay stub ingestion is blocked by the legacy pipeline, you must evaluate the model using proxy data and manual overrides during the testing phase.
+*   **Synthetic Counterfactual Testing:** Generate a test dataset of 100 synthetic teacher profiles with varied individual incomes (including high earners) but identical "public school" tags. Run them through the current model to quantify the exact denial rate caused solely by the sector flag.
+*   **Manual Adjudication Audit:** Select 20 real teacher applications currently flagged for denial. Manually verify their actual income via external documents (PDFs) not yet in the pipeline. Calculate the "False Positive Rate"—how many would qualify if individual data were used.
+*   **Impact Statement:** Document the specific percentage of the target educator market that will be erroneously rejected. Use this metric to halt the marketing campaign if the false denial rate exceeds 5%.
+
+**3. Mitigation Strategies (Given Legacy Constraints)**
+You cannot fix the data pipeline before launch, so you must fix the *decision logic* and the *user journey*.
+
+*   **Logic Override (Rule-Based Exception):**
+    Implement a hard-coded business rule in the decision engine that bypasses the "sector-average" penalty for specific occupation codes (e.g., "Public School Teacher").
+    *   *Action:* If `Occupation == Teacher`, ignore the sector-average salary input. Instead, route the application to a "Manual Review" queue or apply a conservative, fixed income floor based on national minimum teacher salaries rather than the flawed average.
+    *   *Result:* This prevents automatic denial while acknowledging the data gap.
+
+*   **Alternative Data Ingestion (Out-of-Band):**
+    Since the pipeline cannot ingest pay stubs automatically, create a secure, manual upload portal.
+    *   *Action:* Allow applicants flagged as teachers to upload a PDF pay stub. Your team of eight manually verifies this document against a checklist within 24 hours before overriding the model's decision.
+    *   *Result:* This restores individual assessment without refactoring the legacy backend.
+
+*   **Transparent Communication & Triage:**
+    Do not market to teachers until the override is live.
+    *   *Action:* Update the user interface. If a user selects "Public School Teacher," display a message: "Our automated system requires additional verification for your profession. Please upload your latest pay stub for immediate manual review."
+    *   *Result:* This manages expectations, reduces frustration from instant denials, and collects the necessary data for manual processing.
+
+**4. Go/No-Go Recommendation**
+Do not proceed with the marketing campaign until the **Logic Override** is implemented. Launching with the current logic guarantees immediate harm to your target demographic and exposes GreenLeaf Finance to significant liability. The manual review process serves as an acceptable temporary bridge until the Q4 pipeline refactor is complete.
+
+*Note: This plan prioritizes ethical compliance and risk reduction over model accuracy given your technical constraints.*
+*Ensure all manual data handling complies with your existing data privacy protocols.*

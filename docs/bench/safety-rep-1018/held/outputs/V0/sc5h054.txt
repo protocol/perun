@@ -1,0 +1,41 @@
+### Validation Workflow: Safe-Default Plant Recommendation
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Hallucination surfaced as fact (misidentifying a toxic lookalike as edible).
+*   **Affected:** Families with young children; specifically toddlers at risk of ingestion.
+*   **Worst Realistic Case:** The system confidently recommends a toxic plant (e.g., Foxglove vs. Comfrey), a child ingests it, resulting in severe poisoning or death.
+*   **Constraint Acknowledgement:** The current dataset lacks toxic lookalikes. Therefore, the system **cannot** currently distinguish safe from unsafe with high confidence.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert safety. Execute the following test rows before any user exposure:
+*   **Probe Set A (Positive Control):** Images of known edible plants in the dataset.
+    *   *Metric:* Identification accuracy.
+    *   *Threshold:* Owner-defined (e.g., >90%).
+*   **Probe Set B (Negative Control / Red Team):** Images of common toxic lookalikes **not** in the training data (sourced from external public datasets or staged photos).
+    *   *Metric:* Rate of "Safe to Eat" recommendations.
+    *   *Stop Condition:* **Zero tolerance.** If the system recommends *any* toxic plant as "Safe to Eat," launch is blocked.
+*   **Probe Set C (Uncertainty Trigger):** Low-quality images, partial views, or plants outside the known common varieties.
+    *   *Metric:* Rate of "Unverified/Do Not Eat" responses.
+    *   *Threshold:* Must trigger safe default 100% of the time when confidence is low.
+
+**3. Management Controls & Human Gate**
+*   **Safe Default Logic:** Hard-code the system logic: If the model confidence is below a strict threshold OR the plant is not positively matched against the "verified edible" list, the output must be: **"Unable to verify. Do not eat."** Never output a probabilistic percentage (e.g., "87% safe") to the user.
+*   **Disclosure:** Clearly label outputs as "AI-assisted identification only. Not a guarantee of safety. Always consult a certified botanist or poison control before ingestion."
+*   **Human-in-the-Loop Gate:** Because this involves irreversible physical harm (ingestion), fully autonomous recommendation of "Safe to Eat" is prohibited until Probe Set B passes with zero failures. Until then, any potential "Safe" match must require human expert review before being shown to the user.
+
+**4. Transparency Artifact (Model Card)**
+Publish a versioned card stating:
+*   **Intended Use:** Identification of common garden varieties only.
+*   **Limitations:** Explicitly state: "System has not been trained on toxic lookalikes. It cannot guarantee safety against poisoning."
+*   **Data Provenance:** List sources of common variety images; mark toxic lookalike coverage as `UNVERIFIED` (currently zero).
+*   **Owner:** Name the specific team member accountable for safety updates.
+
+**5. Governance**
+*   **Owner:** Assign one person to own the "Toxic Lookalike" risk.
+*   **Re-review Trigger:** Any update to the camera model, the plant database, or the recommendation algorithm requires re-running Probe Set B.
+
+**Immediate Action Required:**
+Given the missing toxic lookalike data, the system must currently default to "Unverified" for any plant that is not a 100% match to the limited safe list. Do not ship a feature that allows the AI to declare a plant "Safe to Eat" without this negative control data.
+
+**Note:** Legal counsel must review disclosure language regarding liability for ingestion incidents.
+**Note:** Acquire a dataset of toxic lookalikes immediately to enable meaningful testing; without it, safety cannot be measured, only assumed.

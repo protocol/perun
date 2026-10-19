@@ -1,0 +1,52 @@
+### Fail-Safe Testing Protocol: Firmware Cache Integrity & Toxic Dispensing Prevention
+
+**Objective:** Verify that the smart feeder's local cache correctly handles interrupted cloud updates and defaults to a safe state (preventing dispensing) when ingredient compatibility data is stale, missing, or conflicting, prior to the mandatory weekend OTA rollout.
+
+**Constraints:** 6 IoT engineers, testing window ends before weekend OTA deadline, no network dependency during critical failure simulation, zero tolerance for toxic dispensing.
+
+#### Phase 1: Baseline & Hazard Definition (Hours 0-2)
+1.  **Define Toxic Triggers:** Establish a controlled "Poison List" of 3 specific ingredients (e.g., "Xylitol," "Grapes," "Onion Powder") known to be safe in the current firmware but marked as "Toxic" in the pending update payload.
+2.  **Snapshot Current State:** Record the current local cache version and the exact timestamp of the last successful sync on all 6 test devices.
+3.  **Construct Malformed Payloads:** Create three specific update packages:
+    *   *Packet A (Truncated):* Valid header, missing compatibility list body.
+    *   *Packet B (Corrupted Checksum):* Valid structure, invalid integrity hash.
+    *   *Packet C (Logic Conflict):* Marks a previously safe ingredient as "Toxic" but fails to include the required "Safe Alternative" mapping.
+
+#### Phase 2: Interrupted Update Simulation (Hours 2-6)
+*Assign one engineer per device; two engineers oversee data logging.*
+
+**Scenario A: Connection Loss During Download**
+1.  Initiate OTA update with Packet A.
+2.  Simulate network drop at 40%, 70%, and 90% completion.
+3.  **Critical Check:** Immediately attempt to dispense food containing a "Toxic Trigger" ingredient.
+4.  **Pass Criteria:** Device refuses to dispense OR dispenses only based on the *previous* known-safe cache (if the new data was never fully committed). If the device attempts to parse incomplete data and defaults to "Allow All," this is a Critical Fail.
+
+**Scenario B: Power Loss During Write/Verification**
+1.  Initiate OTA update with Packet B.
+2.  Cut power to the device specifically during the "Writing to Flash" or "Verifying Checksum" stage.
+3.  Restore power and attempt immediate dispensing of a "Toxic Trigger."
+4.  **Pass Criteria:** Device boots into "Safe Mode" (limited functionality) or reverts strictly to the pre-update cache. It must not accept the corrupted compatibility list.
+
+**Scenario C: Logical Inconsistency Handling**
+1.  Force install Packet C (simulating a server-side logic error that passed initial validation).
+2.  Attempt to dispense the conflicting ingredient.
+3.  **Pass Criteria:** The logic engine detects the missing "Safe Alternative" or conflicting rule and blocks dispensing with a "Configuration Error" alert, rather than defaulting to a permissive state.
+
+#### Phase 3: The "Stale Cache" Stress Test (Hours 6-10)
+1.  **Time Manipulation:** On two devices, manually rollback the system clock to simulate a device that has missed multiple update cycles.
+2.  **Force Update:** Push a massive delta update (skipping intermediate versions).
+3.  **Action:** Attempt to dispense an ingredient that changed status in *any* of the skipped versions.
+4.  **Pass Criteria:** The device must process the full chain of logic or reject the update entirely if intermediate safety rules cannot be reconciled. No dispensing occurs until the cache is fully coherent.
+
+#### Phase 4: Verification & Go/No-Go Decision (Hours 10-12)
+1.  **Log Audit:** Aggregate logs from all 6 devices. Look for any instance where `Dispense_Command = TRUE` while `Cache_Status != VALID`.
+2.  **Physical Inspection:** Verify no physical dispensing occurred during any "Block" expected scenario.
+3.  **Decision Gate:**
+    *   **GO:** 100% of tests resulted in either successful safe update or safe failure (no dispense).
+    *   **NO-GO:** Any single instance of toxic ingredient dispensing, or any instance where the device accepted a corrupted cache without flagging an error.
+
+**Immediate Mitigation if NO-GO:** Hardcode a "Global Lockout" flag in the bootloader that prevents the feeder from operating if the cache version does not match the signed update manifest exactly, requiring a manual factory reset to clear.
+
+---
+*Note: This protocol assumes the ability to simulate power/network cuts locally; if physical access is limited, prioritize Scenario B (Power Loss) as it represents the highest risk of data corruption.*
+*Ensure all "Toxic Trigger" tests use non-harmful substitute kibble to protect test animals while validating the logic path.*

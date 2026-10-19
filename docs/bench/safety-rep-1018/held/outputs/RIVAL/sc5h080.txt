@@ -1,0 +1,39 @@
+# Immediate Bias Audit and Manual Override Framework for LearnBridge
+
+## Phase 1: Identification of Affected Submissions
+Since retraining is prohibited, you must isolate potentially biased submissions using heuristic markers present in your current data logs. Focus on detecting the "digital fingerprint" of speech-to-text (STT) tools without analyzing the content for plagiarism yet.
+
+**Filter Criteria for Flagging:**
+1.  **Punctuation Anomalies:** STT tools often omit commas or place periods inconsistently compared to typed text. Flag essays with a comma-to-word ratio significantly below the cohort average.
+2.  **Homophone Errors:** STT frequently confuses contextually similar sounding words (e.g., "their" vs. "there," "write" vs. "right"). Flag submissions containing >3 such errors per 500 words.
+3.  **Submission Metadata:** Cross-reference submission timestamps. STT users often dictate in single, long sessions rather than the stop-start pattern of typing. Flag essays drafted in one continuous session exceeding 15 minutes without edit saves (if edit history is logged).
+4.  **Vocabulary vs. Syntax Mismatch:** Flag essays where vocabulary complexity (grade level) is high, but sentence structure is unusually linear or lacks subordinate clauses, a common trait of dictated speech.
+
+**Action:** Run a script to tag any submission meeting 2+ of these criteria as "Review Required – Potential STT Bias."
+
+## Phase 2: Manual Override Procedure
+Establish a temporary "Equity Review Board" consisting of two educators and one data scientist to handle flagged essays.
+
+**The "Clean Score" Protocol:**
+1.  **Blind Re-grading:** Remove the original automated score. Present the essay to a human grader with instructions to ignore all stylistic markers associated with dictation (e.g., lack of commas, homophone slips unless they obscure meaning).
+2.  **Plagiarism Decoupling:** Run the plagiarism check *separately* from the style/grammar scoring. If the text is original but flagged for "poor mechanics" due to STT artifacts, the mechanics penalty must be waived.
+3.  **Delta Calculation:** Compare the human "Clean Score" against the original automated score.
+    *   If the difference is >5%, automatically adopt the human score.
+    *   If the difference is ≤5%, retain the higher of the two scores to benefit the student.
+4.  **Documentation:** Log the override reason as "Assistive Technology Artifact Adjustment" for end-of-semester reporting. Do not alter the original model weights.
+
+## Phase 3: Communication and Deployment
+1.  **Student Notification:** Send a targeted communication to students identified in Phase 1 (or all students if privacy allows), stating: *"We are reviewing grading algorithms to ensure fairness for diverse input methods. If you feel your essay grade was impacted by speech-to-text usage, you may request an immediate manual review."*
+2.  **Opt-Out Mechanism:** Allow any student to self-identify as an STT user and trigger the Manual Override Protocol immediately, bypassing the heuristic filter.
+3.  **Freeze Policy:** Publish a notice that no grades lower than a specific threshold (e.g., B-) will be finalized for flagged essays until the manual review is complete.
+
+## Execution Timeline
+*   **Days 1–3:** Run heuristic filters and generate the "Review Required" list.
+*   **Days 4–10:** Equity Review Board conducts blind re-grading of flagged items.
+*   **Days 11–14:** Finalize grades, apply overrides, and notify students.
+*   **Day 15:** Semester launch with the manual safety net active for late submissions.
+
+This approach isolates the bias source mechanically rather than statistically, ensuring immediate fairness without violating the constraint against model retraining.
+
+*Note: Ensure all human graders are calibrated on what constitutes an STT artifact versus actual writing deficiency to maintain consistency.*
+*Retain all logs of overridden grades to serve as the training dataset for the post-semester model update.*

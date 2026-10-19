@@ -1,0 +1,38 @@
+### Safety Plan: Mitigating Domestic Violence Risks in Shared Accounts
+
+**1. Immediate Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation of high-stakes information disclosure.
+*   **Scenario:** A medication reminder (e.g., for HIV, mental health, or reproductive care) sent to a shared device or email reveals a victim's condition to an abuser.
+*   **Worst Case:** Physical violence, coercive control escalation, or victim disengagement from life-saving treatment due to fear of detection.
+*   **Affected Group:** Patients in abusive relationships utilizing shared household profiles.
+
+**2. Manage: Human-in-the-Loop & Design Controls (No Auth Changes Required)**
+Since authentication architecture cannot change, we must alter the **output behavior** and **delivery mechanism**:
+*   **Default to "Silent" or "Generic" Notifications:** For any account flagged as "shared" or lacking individual device verification, replace specific drug names with generic alerts (e.g., "CareConnect: You have a scheduled health action" instead of "Take your Metformin").
+*   **Opt-In Specificity:** Require an explicit, one-time user preference selection to receive detailed medication names. This choice must be reversible and hidden behind a "Safety Mode" toggle that instantly reverts to generic messaging.
+*   **Channel Diversification:** Do not rely solely on the primary account email/SMS. Offer users the ability to designate a secondary, private contact method (e.g., a trusted friend's number or a secure app push notification that doesn't preview content on the lock screen) during onboarding or profile editing.
+*   **Human Gate for High-Risk Patterns:** If the system detects rapid changes in medication type (suggesting sensitive conditions) on a shared account, trigger a manual review or a specialized, non-alerting outreach (e.g., a neutral-looking mailer) rather than an immediate digital ping.
+
+**3. Measure: Runnable Evaluation Plan**
+We will not assert safety; we will test for failure using adversarial probes:
+*   **Test Row A (Shared Profile Leak):**
+    *   *Input:* Simulate a shared login sending a reminder for a stigmatized medication.
+    *   *Positive Control:* System sends generic message ("Health Reminder"). **Pass.**
+    *   *Negative Control:* System sends specific drug name. **Fail (Stop Condition).**
+*   **Test Row B (Safety Mode Override):**
+    *   *Input:* User enables "Safety Mode"; system attempts to send detailed alert.
+    *   *Metric:* 100% suppression of specific drug names in notification body.
+*   **Test Row C (Lock Screen Preview):**
+    *   *Input:* Verify notification payload settings for mobile push.
+    *   *Metric:* Zero sensitive data in lock-screen preview text.
+
+**4. Transparency & Governance**
+*   **Model/Data Card:** Publish an internal artifact stating the limitation: "Shared accounts default to generic notifications to prevent unintended disclosure. Specific details require explicit user opt-in."
+*   **Owner:** Assign one team member as the safety owner responsible for reviewing any failure in the above tests before the deadline.
+*   **Legal Routing:** Consult counsel immediately regarding mandatory disclosure laws for domestic violence resources in your jurisdiction; do not assume legal duties, but prepare a resource link to include in generic footers if advised.
+
+**5. Constraint Adherence**
+This plan meets the deadline by utilizing configuration rules and message templating rather than architectural refactoring. It treats the deadline as fixed while capping exposure through generic defaults.
+
+**Note:** Do not certify this system as "safe" for victims; state clearly that residual risk remains if an abuser controls the primary device.
+**Note:** Ensure the "Safety Mode" toggle is accessible without triggering an alert to other users on the shared account.

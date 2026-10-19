@@ -1,0 +1,36 @@
+### Immediate Bias Mitigation Plan for LearnBridge Automated Tutoring
+
+**1. Harm Inventory & Identification (MAP)**
+*   **Identified Harm:** Systematic disadvantage (bias) against students using assistive speech-to-text tools, resulting in unjustified grade reductions and potential plagiarism flags.
+*   **Affected Group:** Students with disabilities utilizing speech-to-text interfaces.
+*   **Worst Case:** Academic failure, loss of confidence, and legal liability due to discriminatory grading practices.
+*   **Detection Strategy:** Since retraining is prohibited, you must identify affected submissions via **proxy signals** in the current data. Filter for essays exhibiting:
+    *   Unusual punctuation patterns common in dictation (e.g., missing commas, run-on sentences).
+    *   Specific phonetic spelling errors or homophone swaps (e.g., "their" vs. "there") distinct from typical typing errors.
+    *   Metadata flags if the client-side application logs input method (check if "voice input" tags exist in submission headers).
+    *   Outlier scores where the "plagiarism" confidence is high but textual overlap with known sources is low.
+
+**2. Measurement & Audit Protocol (MEASURE)**
+Execute a targeted audit on the upcoming batch of submissions before final grades are released:
+*   **Probe Set:** Isolate the top 10% of essays flagged for plagiarism or low scores. Manually review a stratified sample of these against a control group of non-flagged essays.
+*   **Metric:** Calculate the **False Positive Rate (FPR)** for plagiarism detection specifically within the identified "speech-to-text" proxy group versus the general population.
+*   **Threshold:** If the FPR for the assistive-tech group exceeds 0% (zero tolerance for discriminatory false positives in high-stakes grading), the automated grade for that segment is invalidated.
+*   **Stop Condition:** Any submission matching the proxy signals for speech-to-text usage must automatically trigger a "Manual Review Required" status, blocking the automated grade from reaching the student record.
+
+**3. Management & Human-in-the-Loop Gate (MANAGE)**
+Implement an immediate procedural override to manage residual risk without code changes:
+*   **The Gate:** Establish a **mandatory human review** for any essay triggering the proxy signals identified above. The system should output a "Needs Educator Verification" flag rather than a final grade.
+*   **Uncertainty Disclosure:** Do not display a specific "plagiarism probability" percentage to students or teachers for these flagged items. Instead, use a coarse tier: **"Unverified – Requires Human Review."** This prevents automation bias where teachers might trust a flawed numeric score.
+*   **Override Procedure:**
+    1.  Route flagged essays to a dedicated queue for your team of educators.
+    2.  Provide reviewers with a checklist: "Does the writing style match the student's previous work?" and "Are errors consistent with speech-to-text artifacts?"
+    3.  Allow the educator to explicitly override the system's suggestion with a justification note.
+*   **Transparency Artifact:** Draft a temporary **Model Limitation Notice** for internal staff and affected students. State clearly: "The current automated detector has known limitations with speech-to-text inputs. All such cases are undergoing mandatory human review to ensure fairness." Do not claim the system is "bias-free."
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one lead data scientist and one lead educator as joint owners of this mitigation loop for the semester.
+*   **Re-review:** Re-evaluate the proxy signals weekly. If new patterns of false positives emerge, update the filtering criteria immediately.
+*   **Legal Routing:** Since this involves grading students with disabilities, route the question of legal disclosure requirements and regulatory compliance (e.g., ADA, local education laws) to legal counsel immediately. Do not assert compliance internally.
+
+**Note:** This plan treats the algorithmic output as unverified for the specific at-risk group until a human confirms it.
+**Note:** No metric regarding "fairness" or "bias rate" should be published as a fixed number until the manual audit is complete; mark all pre-audit estimates as UNVERIFIED.

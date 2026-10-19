@@ -1,0 +1,42 @@
+**Evaluation Protocol for Smart Lighting and Locking System Stress Testing**
+
+**Objective:** Validate system resilience against power-grid fluctuations to prevent false emergency activations and unintended locking events in a controlled simulation environment.
+
+**Phase 1: Synthetic Data Generation & Simulation Setup**
+Since real-world grid data is restricted, construct a "Grid Anomaly Library" using synthetic datasets that mirror known failure modes without requiring live clearance.
+*   **Waveform Synthesis:** Generate digital signal profiles representing voltage sags, swells, frequency deviations, and harmonic distortions typical of grid instability.
+*   **Scenario Injection:** Use a hardware-in-the-loop (HIL) simulator or a software-defined power source to inject these synthetic waveforms directly into the system's power management interface. This isolates the test from physical safety risks while maintaining signal fidelity.
+*   **Baseline Establishment:** Run the system under stable "nominal" conditions to record standard locking/unlocking latencies and sensor baselines.
+
+**Phase 2: Targeted Stress Scenarios**
+Execute the following specific evaluation scenarios, monitoring for false positives in emergency protocol triggers:
+
+1.  **The "Brownout" Simulation:**
+    *   *Input:* Gradual voltage reduction (10%–20%) over 5 seconds, held for 30 seconds, then restored.
+    *   *Success Criteria:* System maintains normal operation or switches to backup power seamlessly without triggering cell-door lockdowns. Lighting dims appropriately if designed for power saving, but does not lock.
+
+2.  **The "Transient Spike" Test:**
+    *   *Input:* Rapid voltage spikes (up to 150% nominal) lasting <100ms, repeated at random intervals.
+    *   *Success Criteria:* Power conditioning filters absorb spikes; the logic controller ignores the noise. No reboot cycles or state changes occur.
+
+3.  **The "Flicker" Frequency Test:**
+    *   *Input:* Rapid oscillation of power frequency (e.g., 59Hz–61Hz) mimicking grid instability.
+    *   *Success Criteria:* System distinguishes between genuine grid collapse and transient frequency noise. Emergency protocols remain dormant unless frequency deviation exceeds the strict, pre-defined safety threshold for >5 seconds.
+
+4.  **The "Hard Cut & Restore" Cycle:**
+    *   *Input:* Immediate power loss followed by restoration after 2s, 10s, and 60s intervals.
+    *   *Success Criteria:* Upon restoration, the system performs a self-check and returns to the *previous* state (unlocked) rather than defaulting to a "fail-secure" locked state unless a genuine fire/security alarm is active.
+
+5.  **Compound Stress Event:**
+    *   *Input:* Simultaneous voltage sag and high-frequency noise during a scheduled automatic lock/unlock cycle.
+    *   *Success Criteria:* The system completes the scheduled cycle correctly or pauses safely without engaging emergency lockdown.
+
+**Phase 3: Failure Mode Analysis & Validation**
+*   **State Logging:** Ensure every test run logs the internal state machine transitions. Specifically, capture the exact timestamp and signal value that triggers any state change.
+*   **False Positive Audit:** Any instance where a cell door locks without a concurrent "Security Emergency" or "Fire" signal (simulated separately) is a critical failure.
+*   **Recovery Verification:** After each stress event, verify that manual override controls for staff remain functional and that the system does not enter a "zombie" state requiring a hard reset.
+
+**Deliverable:** A comprehensive report mapping each synthetic waveform to system response, highlighting specific voltage/frequency thresholds that cause logic errors, and recommended firmware adjustments to debounce these signals.
+
+*Note: All testing must remain within the isolated simulation network; do not connect to any external grids or live facility hardware until these synthetic tests are passed.*
+*Ensure synthetic data covers edge cases beyond standard operating parameters to guarantee robustness.*

@@ -1,0 +1,34 @@
+### Plan to Identify and Route Historic Property Claims
+
+**Objective:** Prevent systematic underpayment by flagging potential historic properties for manual review without incurring new data licensing costs.
+
+**Phase 1: Define Heuristic Indicators (Days 1–2)**
+Since updated cost databases are unavailable, rely on existing policy data to create a "Historic Probability Score." Collaborate with senior adjusters to define low-cost proxy variables already present in your system:
+*   **Year Built:** Set a dynamic threshold (e.g., pre-1940 or pre-1950) based on local architectural eras.
+*   **Keywords in Property Description:** Scan for terms like "Victorian," "Craftsman," "Colonial," "original hardwood," "plaster," "slate," or "masonry."
+*   **Location Data:** Cross-reference zip codes or specific neighborhoods known for historic districts (often public knowledge or already mapped in your GIS tools).
+*   **Square Footage vs. Room Count:** Older homes often have different room-to-square-footage ratios compared to modern builds; flag outliers.
+*   **Previous Claim Notes:** Search historical text fields for adjuster comments mentioning "custom," "antique," or "difficult to source materials."
+
+**Phase 2: Implement a Triage Logic Layer (Days 3–5)**
+Develop a lightweight script or database query that runs against the current UAT environment. This logic should not alter the valuation engine but rather act as a pre-processor:
+1.  **Ingest** the pending claim queue.
+2.  **Score** each claim based on the presence of the indicators defined in Phase 1. Assign higher weights to specific combinations (e.g., Year Built < 1920 + Keyword "Plaster").
+3.  **Thresholding:** Establish a conservative cutoff score. Any claim exceeding this score is automatically flagged.
+    *   *Strategy:* Prioritize false positives (sending modern homes to humans) over false negatives (missing a historic home) to ensure no underpayment occurs during this interim phase.
+
+**Phase 3: Routing and Workflow Integration (Days 6–8)**
+Modify the UAT workflow to handle flagged claims:
+*   **Automatic Reassignment:** Configure the system to route flagged claims to a dedicated "Special Review" queue instead of the automated calculation path.
+*   **Human-in-the-Loop:** Assign your most experienced adjusters to this queue. Their task is not to re-calculate from scratch immediately, but to verify the "historic" status.
+*   **Manual Override Protocol:** If confirmed as historic, the adjuster applies a manual contingency factor or uses a separate, simplified lookup table for common historic materials (created internally from general knowledge) to adjust the final estimate before approval.
+
+**Phase 4: Validation and Feedback Loop (Days 9–10)**
+*   **Sample Audit:** Randomly select 10% of the *non-flagged* claims for manual spot-checking to ensure the heuristic thresholds aren't missing unique historic properties that lack standard keywords.
+*   **Calibration:** After the first 50 manual reviews, refine the scoring weights. If too many modern homes are being flagged, tighten the year-built threshold. If historic homes are slipping through, broaden the keyword list.
+
+**Long-Term Data Collection**
+While operating this manual filter, instruct adjusters to tag confirmed historic claims with a specific code. This builds an internal proprietary dataset of "confirmed historic" vs. "modern" claims, which will be valuable for training a more precise model or justifying the ROI of a future paid database license.
+
+**Note:** This approach relies entirely on data you already possess and requires only logic changes, not new vendor contracts.
+Ensure legal/compliance reviews the "manual contingency factor" process to maintain regulatory adherence during the interim period.

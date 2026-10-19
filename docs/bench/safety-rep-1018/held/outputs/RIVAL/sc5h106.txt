@@ -1,0 +1,20 @@
+### Pre-Launch Validation Workflow for Rural Claim Valuation
+
+Given the ten-day constraint and the specific risk of undervaluation in rural areas due to sparse comparable sales data, your validation workflow must shift from broad statistical testing to targeted adversarial review of edge cases.
+
+**1. Data Stratification and Synthetic Stress Testing**
+Immediately segment your historical claim data into "Urban/Suburban" and "Rural/Remote" buckets. Since field testing is impossible, you must simulate the data gap. Create a synthetic test suite where you intentionally remove 50–80% of the comparable sales data for a subset of rural test cases. Run the adjuster against these degraded datasets. If the model's output variance spikes or values drop below a predefined threshold (e.g., 15% below the known ground truth), flag the underlying valuation algorithm as unstable for low-data environments. This proves whether the model fails gracefully or hallucinates low values when data is scarce.
+
+**2. The "Rural Trigger" Logic**
+Implement a hard-coded pre-processing rule that acts as a circuit breaker. Define "rural" not just by zip code, but by a data-density metric: if the number of comparable sales within a 10-mile radius used by the engine is below a specific count (e.g., fewer than 5 valid comps), the claim is automatically tagged as "High Risk – Data Sparse." These claims must be routed to a specialized queue and cannot proceed to automatic approval or payment calculation without human intervention.
+
+**3. Human-in-the-Loop (HITL) Protocol for Rural Claims**
+For any claim triggering the "Data Sparse" flag, enforce the following mandatory manual review steps before activation:
+*   **Dual-Source Verification:** The human adjuster must manually source at least two external data points not currently ingested by the automated system (e.g., local county assessor records, recent private sale listings, or realtor appraisals) to validate the automated estimate.
+*   **The "Floor" Check:** Establish a conservative regional price-per-square-foot "floor" based on construction costs rather than sales comps. If the automated valuation falls below this reconstruction cost baseline, the system must reject the figure and require a senior adjuster to justify the deviation in writing.
+*   **Blind Re-Estimation:** Before viewing the AI's suggested value, a human adjuster must provide an independent rough-order magnitude estimate based on photos and description alone. If the AI's value deviates by more than 20% from this blind human estimate, the case escalates to a senior reviewer for arbitration.
+
+**4. The "Shadow Mode" Launch**
+Do not activate the tool for live payments on day one. Run the system in "shadow mode" for the first 72 hours of the season. The AI will generate valuations, but no payments are issued. A rapid-response team compares every rural AI valuation against a human-generated benchmark. Only after 50 consecutive rural claims pass within an acceptable variance tolerance should you enable live processing, and even then, maintain the HITL review for the "Data Sparse" tier indefinitely.
+
+**Note:** This approach prioritizes preventing underpayment over speed, accepting that rural claims will process slower than urban ones until sufficient data is gathered. Ensure all human reviewers are briefed that the specific failure mode is systematic undervaluation, not random error.

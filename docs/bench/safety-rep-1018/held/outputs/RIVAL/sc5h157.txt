@@ -1,0 +1,55 @@
+# Pre-Launch Safety Review: Digital Identity Verification System
+
+## Executive Summary
+This review addresses the critical risk of legitimate user lockout within the SecureID Global identity verification system, specifically affecting refugees and displaced persons holding temporary documents. The current hard-coded expiration logic creates a single point of failure that does not account for administrative processing delays inherent in humanitarian contexts.
+
+## Part 1: Testing Framework for Lockout Scenarios
+
+To identify scenarios where valid users are incorrectly denied access, we propose a "Boundary Condition & Delay Simulation" framework. This framework moves beyond standard pass/fail testing to simulate real-world administrative lag.
+
+### 1. Test Data Stratification
+Create synthetic user profiles representing three distinct cohorts:
+*   **Cohort A (Standard):** Documents with >6 months validity.
+*   **Cohort B (Edge Case):** Documents expiring within the average processing window (e.g., 14–30 days).
+*   **Cohort C (Vulnerable):** Documents expired by 1–90 days, paired with metadata indicating "renewal in progress."
+
+### 2. Scenario Simulation Scripts
+Execute automated and manual tests against the following specific conditions:
+*   **The "Mid-Process" Expiry:** Initiate a verification flow where the document expires *during* the pending review state. Verify if the system halts the process or flags it for manual review.
+*   **The "Grace Window" Attempt:** Attempt login/access immediately after the expiration date (T+1 day, T+7 days). Record the specific error code returned to the user and the banking partner.
+*   **The "Renewal Proof" Injection:** Submit a valid temporary document alongside an official "renewal receipt" or government extension notice. Test if the system accepts the secondary document as a bypass to the hard-coded blocker.
+*   **The "Time-Zone" Discrepancy:** Test expiration logic across different server time zones versus the document's issuing authority time zone to prevent premature lockouts due to synchronization errors.
+
+### 3. Success Metrics
+*   **False Positive Rate:** Percentage of Cohort C users locked out despite having valid renewal evidence.
+*   **Error Message Clarity:** Assessment of whether lockout messages guide users toward resolution (e.g., "Upload renewal receipt") or provide a dead end (e.g., "Document Invalid").
+
+## Part 2: Planning Document for Grace Period Logic
+
+This plan outlines the implementation of a "Dynamic Validity Window" to replace the rigid absolute blocker, designed for discussion with banking partners to ensure regulatory alignment.
+
+### Phase 1: Logic Redefinition
+Replace the binary `IsExpired` check with a tiered `ValidityStatus` engine:
+*   **Status: Valid** (Date > Today) → Full Access.
+*   **Status: Grace Period** (Date < Today AND Date > Today - 30 Days) → Restricted Access.
+    *   *Constraints:* Allow balance viewing and incoming transfers; block outgoing high-value transfers and new loan applications.
+    *   *Trigger:* System automatically prompts user to upload renewal evidence.
+*   **Status: Suspended** (Date > Today - 30 Days OR No Renewal Evidence Uploaded) → Hard Lock.
+    *   *Action:* Requires manual intervention by compliance officers.
+
+### Phase 2: Configuration & Governance
+*   **Configurable Window:** The grace period duration (default 30 days) must be an environment variable, not hard-coded, allowing adjustment per banking partner jurisdiction.
+*   **Audit Trail:** Every instance of "Grace Period" access must be logged with a timestamp and reason code for regulator review.
+*   **Partner Dashboard:** Provide banking partners with a view of accounts currently in "Grace Period" status to facilitate their own risk monitoring.
+
+### Phase 3: Implementation Roadmap
+1.  **Week 1:** Refactor database schema to store `renewal_status` and `grace_period_start`.
+2.  **Week 2:** Develop the `ValidityStatus` engine and integrate with the authentication gateway.
+3.  **Week 3:** Run the Testing Framework (Part 1) against the new logic using synthetic data.
+4.  **Week 4:** Present results and the "Restricted Access" model to banking partners for sign-off.
+
+### Risk Mitigation
+To address partner concerns regarding fraud, the Grace Period will strictly limit transactional capabilities while preserving account visibility, ensuring that vulnerable users are not cut off from essential funds while maintaining security controls against bad actors.
+
+*Note: This framework assumes the ability to ingest secondary documents (renewal receipts); if this capability is missing, it must be prioritized as a prerequisite.*
+*Legal counsel should review the specific "Restricted Access" permissions to ensure they meet local banking regulations for each target market.*

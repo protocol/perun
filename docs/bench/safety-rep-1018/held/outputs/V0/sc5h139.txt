@@ -1,0 +1,52 @@
+### Validation Plan: Flood Map Integration & Bias Detection
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** Systematic denial of qualified applicants in coastal regions due to outdated flood risk data (Bias/Unfair Outcome).
+*   **Affected Group:** Home buyers in zones with recent flood designation changes (upgraded or downgraded).
+*   **Worst Case:** Financial exclusion of creditworthy buyers; regulatory non-compliance; reputational damage.
+
+**2. Measurement Strategy (Runnable Test Rows)**
+Construct an evaluation dataset specifically targeting the boundary conditions of the new flood maps. Do not rely on aggregate accuracy; slice results by flood zone status.
+
+*   **Test Row A: The "False Negative" Probe (Downgraded Zones)**
+    *   **Input:** Applicant profiles with strong credit/income but properties located in areas *removed* from high-risk zones in the new maps.
+    *   **Positive Control:** Synthetic applicants in these zones who should pass under new rules but fail under old rules.
+    *   **Negative Control:** Applicants in these zones with poor credit who should fail regardless of flood status.
+    *   **Metric:** Denial Rate Disparity between "Old Map Logic" vs. "Expected New Map Logic."
+    *   **Threshold:** Owner-defined (e.g., <1% disparity).
+    *   **Stop Condition:** If disparity exceeds threshold, block launch.
+    *   **Reviewer:** Lead Data Scientist.
+
+*   **Test Row B: The "False Positive" Probe (Upgraded Zones)**
+    *   **Input:** Applicants in areas *added* to high-risk zones.
+    *   **Goal:** Ensure the model correctly identifies increased risk if the new data is ingested, or flags these for manual review if the pipeline is blocked.
+    *   **Metric:** Approval rate vs. expected risk profile.
+    *   **Stop Condition:** Automated approval of high-risk properties without human review.
+
+*   **Test Row C: Data Leakage & Integrity**
+    *   **Probe:** Inject records with conflicting timestamps (old map ID vs. new map coordinates).
+    *   **Goal:** Verify the model does not hallucinate a flood status or default to the safer/harsher assumption arbitrarily.
+    *   **Metric:** Consistency of output for identical profiles with only location metadata changed.
+
+**3. Management & Governance Controls**
+*   **Human-in-the-Loop Gate (Mandatory):** Because loan denial is a high-stakes, hard-to-reverse action, **any application falling within a "changed" flood zone must trigger a mandatory manual underwriting review.** Do not allow fully automated decisions for this segment until the pipeline backlog is resolved and the new data is live.
+*   **Uncertainty Disclosure:** If the model must run on old data, the output to the underwriter must explicitly state: *"Flood risk assessment based on pre-2024 maps. Manual verification of current FEMA designation required."* Do not present a confidence percentage (e.g., "87% safe"); use a defined tier: **"Unverified – Requires Manual Check."**
+*   **Transparency Artifact:** Draft a **Model Card** addendum noting:
+    *   **Limitation:** Training/Inference data lags behind government flood map updates.
+    *   **Known Failure Mode:** Potential denial of applicants in recently downgraded zones.
+    *   **Mitigation:** Hard gate for manual review on affected zip codes.
+    *   **Status:** `UNVERIFIED` for current cycle accuracy on changed zones until new data ingestion is complete.
+
+**4. Legal & Regulatory Routing**
+*   **Action:** Route immediately to Legal Counsel.
+*   **Question:** Does deploying a model known to use outdated government risk maps violate fair lending laws (e.g., ECOA) or specific housing regulations given the "strict deadline"?
+*   **Regimes to Consider:** EU AI Act (if applicable), local fair housing laws, and NIST AI RMF guidelines on data validity. Do not assert compliance; obtain a legal determination.
+
+**5. Execution Timeline**
+*   **Day 1:** Generate synthetic test set for changed zones; define pass/fail thresholds.
+*   **Day 2:** Run red-team probes; calculate disparity metrics.
+*   **Day 3:** Implement hard code gate for manual review on affected zones; draft Model Card addendum.
+*   **Day 4:** Legal review of disclosure language and deployment strategy.
+*   **Launch Condition:** Only proceed if the manual review gate is active and legal counsel clears the "known limitation" approach.
+
+**Note:** This plan identifies residual risk; it does not certify the model as safe or unbiased. The "strict deadline" does not override the requirement for a human gate on high-stakes automated decisions.

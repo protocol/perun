@@ -1,0 +1,35 @@
+**BLUF: Do not deploy the current logic.** Treating temporary medical leave as permanent unemployment creates a high-probability bias failure that will systematically deny relief to borrowers recovering from illness. Given your API constraint, you must implement a human-in-the-loop gate immediately rather than automating these rejections.
+
+**1. Harm Inventory (MAP)**
+*   **Bias/Unfair Outcome:** The system disadvantages a protected class (individuals with temporary health conditions/disabilities) by misclassifying their income status.
+*   **Worst Case:** Homeowners facing temporary health crises lose their homes due to automated denial, leading to severe financial ruin and potential regulatory enforcement actions for discriminatory lending practices.
+*   **Affected Parties:** Borrowers on medical leave; HomeStable (reputational and legal liability).
+
+**2. Measurement Plan (MEASURE)**
+*   **Test Strategy:** Do not rely on aggregate approval rates. Construct a specific evaluation set containing:
+    *   *Positive Controls:* Applications with explicit "temporary medical leave" flags or known recovery timelines.
+    *   *Negative Controls:* Applications with verified permanent unemployment.
+    *   *Adversarial Probes:* Inputs where income drop is present but reason is ambiguous.
+*   **Metric:** False Rejection Rate specifically for the "temporary leave" segment.
+*   **Threshold:** Zero tolerance for auto-rejection of cases identified as temporary leave. Any failure here is a stop condition for launch.
+*   **Status:** Until you can ingest medical documentation, any metric claiming "fairness" for this segment is **UNVERIFIED**. Do not fabricate a safety score.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because the API cannot distinguish temporary vs. permanent status, **all** applications showing an income drop must be routed to a human reviewer. Do not auto-reject any application where the cause of income loss is not explicitly confirmed as permanent by a verifiable source your system can read.
+*   **Uncertainty Disclosure:** If you must communicate with users before human review, do not state "Application Denied." State "Under Review: Additional Documentation Required." Never present a provisional automated decision as a final fact.
+*   **Constraint Handling:** Your deadline and backlog pressure are real, but they do not lower the floor for high-stakes automation.
+    *   *Action:* Cap the volume of automated decisions to only those with clear, verified permanent unemployment data.
+    *   *Action:* Triage the backlog manually for the medical leave cohort.
+    *   *Cost:* This will delay processing for the affected group. Accept this delay as the cost of avoiding irreversible harm.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign a specific product owner to sign off on the residual risk of every denied application in this category.
+*   **Legal Routing:** Mortgage modification involving health status touches fair lending laws (e.g., ECOA in the US) and potentially disability protections. **Route immediately to legal counsel** to determine if this specific logic triggers regulated automated decision-making requirements or mandatory disclosures. Do not assert compliance internally.
+*   **Transparency Artifact:** Draft a model card noting the current limitation: "System cannot ingest medical leave documentation; temporary income drops are excluded from automated approval/rejection and require human review."
+
+**Summary of Required Changes:**
+1.  Disable auto-rejection for any income drop not explicitly verified as permanent.
+2.  Route all ambiguous/medical-leave cases to human reviewers.
+3.  Engage legal counsel regarding fair lending implications before processing further.
+
+*Note: This plan prioritizes preventing irreversible housing loss over meeting the immediate processing deadline. The "floor" for high-stakes financial decisions cannot be relaxed due to resource constraints.*

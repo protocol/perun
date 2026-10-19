@@ -1,0 +1,41 @@
+### Structured Failure-Mode Analysis Plan for Visual Obstruction Risks
+
+**Phase 1: Data Stratification and Baseline Establishment**
+1.  **Catalog Existing Logs:** Segment your current video logs into three distinct categories:
+    *   **Control Group:** Clear falls with solid-color clothing (high contrast).
+    *   **Risk Group:** Falls where detection failed, specifically noting clothing patterns (stripes, checks, florals, low-contrast blends).
+    *   **Negative Control:** Non-fall movements (sitting, bending) with patterned clothing to measure false positive rates.
+2.  **Define Metrics:** Establish the "Pattern Interference Score" (PIS). For each clip, record:
+    *   Pattern frequency (cycles per inch relative to camera resolution).
+    *   Color contrast ratio between clothing and background floor/walls.
+    *   Detection latency (time from impact to alert) or binary failure (detected/not detected).
+
+**Phase 2: Simulation and Stress Testing (Software-Only)**
+Since hardware changes are impossible, use software manipulation of existing logs to expand the test surface:
+1.  **Digital Pattern Injection:** Use video processing scripts to overlay high-frequency patterns (stripes, grids) onto the "Control Group" videos where detection originally succeeded. This isolates the pattern as the sole variable.
+2.  **Contrast Degradation:** Systematically reduce the contrast and saturation of the "Risk Group" videos to simulate poor lighting conditions common in care facilities, testing if patterns become more confusing under low light.
+3.  **Motion Vector Analysis:** Run your existing optical flow algorithms on these modified clips. Document if the pattern creates "noise" that the algorithm mistakes for static background texture, causing it to ignore the motion of the fall.
+
+**Phase 3: Quantification and Risk Modeling**
+1.  **Failure Rate Calculation:** Calculate the specific failure rate for patterned clothing vs. solid clothing.
+    *   *Formula:* (Failed Detections with Patterns / Total Patterned Fall Events) vs. (Failed Detections with Solids / Total Solid Fall Events).
+2.  **Threshold Identification:** Identify the specific pattern frequency or contrast threshold where detection drops below 99% reliability. This defines your "Unsafe Zone."
+3.  **Impact Assessment:** Map these findings to real-world scenarios. Estimate the percentage of your target demographic likely to wear clothing falling into the "Unsafe Zone" based on common senior fashion trends.
+
+**Phase 4: Software Mitigation Strategies**
+Propose and validate the following algorithmic adjustments using the test data:
+1.  **Multi-Modal Fusion Weighting:** If the robot has non-visual sensors (LiDAR, accelerometer, depth sensors), increase their weighting in the decision matrix when visual confidence scores drop due to high-frequency texture noise.
+2.  **Temporal Consistency Checks:** Modify the logic to require a "state change" verification over a longer time window (e.g., 2 seconds instead of 500ms) if the visual stream contains high-frequency patterns, reducing reliance on single-frame texture analysis.
+3.  **Background Subtraction Refinement:** Implement an adaptive background modeling technique that updates more slowly when high-pattern noise is detected, preventing the user's clothing from being absorbed into the background model.
+4.  **Confidence Threshold Dynamic Adjustment:** Lower the threshold for triggering an alert when pattern noise is detected, accepting a higher rate of false positives (which can be cleared by a human) over the risk of a false negative (missed fall).
+
+**Phase 5: Documentation for Certification**
+Compile a "Safety Case" document containing:
+*   The methodology of the digital stress testing.
+*   The quantified risk reduction achieved by the software mitigations.
+*   A clear "Limitation Statement" defining any remaining edge cases, accompanied by a procedural recommendation for care facilities (e.g., "Residents with high-risk clothing patterns should be paired with a wearable fall detector as a secondary safeguard").
+
+This approach allows you to rigorously quantify the risk and validate software fixes without new hardware, providing the evidence needed for your procurement deadline.
+
+*Note: Prioritize the "Multi-Modal Fusion" mitigation if your hardware supports it, as it offers the highest reliability gain without altering core vision logic.*
+*Ensure all simulated data is clearly labeled as synthetic in your certification docs to maintain audit integrity.*

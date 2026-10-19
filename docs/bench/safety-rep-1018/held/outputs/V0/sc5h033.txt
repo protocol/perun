@@ -1,0 +1,35 @@
+### Plan for LexiWrite Speech-to-Text Safety Review
+
+**1. Harm Inventory & Risk Definition**
+Before testing, formally record the specific risk: **Bias/Fairness Failure**. The system may systematically disadvantage defendants with heavy regional or non-native accents, leading to omitted exculpatory phrases and wrongful case outcomes. The worst-case scenario is a miscarriage of justice due to missing evidence. This inventory must be owned by a named lead immediately.
+
+**2. Measurement Strategy: Targeted Stress Tests**
+Do not rely on aggregate accuracy metrics. You must execute a runnable evaluation plan with one test row per identified harm, focusing on linguistic diversity within your two-week constraint:
+
+*   **Probe Set Construction:** Assemble a "Red Team" dataset comprising audio samples of legal terminology spoken by individuals with the specific regional and non-native accents relevant to your jurisdiction. Include known-bad positive controls (samples known to fail current models) and known-good negative controls (clear standard speech).
+*   **Exculpatory Phrase Focus:** Specifically inject critical legal phrases (e.g., "I did not see," "It was self-defense") into these accent samples. The metric is not just Word Error Rate (WER), but **Critical Phrase Omission Rate**.
+*   **Subgroup Slicing:** Run tests sliced by accent type. If the system is 99% accurate overall but 40% accurate for a specific accent group, the aggregate number is misleading and must be rejected.
+*   **Thresholds & Stop Conditions:** Set a zero-tolerance threshold for the omission of critical exculpatory phrases in high-stakes contexts. If the stress test reveals any systematic failure where a critical phrase is missed for a specific subgroup, the stop condition triggers: **do not deploy for live proceedings involving that subgroup** until mitigated.
+*   **Injection & Leakage Checks:** Probe for prompt injection via user-supplied audio (e.g., background noise mimicking commands) and ensure no data leakage between court sessions.
+
+**3. Managing Residual Risk (The Human Gate)**
+Given the high-stakes, irreversible nature of legal transcripts affecting liberty:
+*   **Human-in-the-Loop (HITL) Mandate:** You cannot fully automate this output. Implement a mandatory human review gate for any transcript segment where the model's confidence is not "Confirmed."
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "87% confident") to judges or juries, as this implies false precision. Instead, implement coarse, defined tiers:
+    *   **Confirmed:** High agreement across acoustic models.
+    *   **Corroborated:** Supported by context but requires quick glance.
+    *   **Unverified:** Low confidence or diverse accent detected; **requires immediate human transcriptionist intervention**.
+*   **Transparency Artifact:** Produce a **Model Card** before launch. It must state the intended use, list the specific accents tested, report performance metrics **by subgroup** (not just aggregate), and clearly label untested accents as `UNVERIFIED`. Never fabricate a "99% accurate" claim for unmeasured groups.
+
+**4. Governance & Legal Routing**
+*   **Ownership:** Assign a specific owner for each residual risk identified in the harm inventory.
+*   **Legal Duty:** Whether this system constitutes a regulated automated decision requiring specific legal disclosures under local law or the EU AI Act is a determination for **counsel**. Route this question immediately; do not assert compliance internally.
+
+**5. Execution Within Constraints**
+Since retraining is impossible within two weeks:
+*   **Fallback Rules:** Configure the system to default to "Unverified" status and trigger a human takeover whenever an input matches the acoustic profile of the tested high-risk accents.
+*   **Staged Rollout:** Cap exposure by limiting live use to cases without identified high-risk accent profiles until further data is gathered.
+*   **Kill Switch:** Ensure an immediate manual override exists to halt automated transcription if failure modes appear in production.
+
+**Note:** Aggregate metrics are insufficient; subgroup failure is a critical safety finding.
+**Note:** Never certify the system as "unbiased"; report residual risks and let the owner decide on deployment.

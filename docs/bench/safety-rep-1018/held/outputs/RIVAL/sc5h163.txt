@@ -1,0 +1,27 @@
+# Notification System Audit and Correction Plan
+
+**Phase 1: Immediate Logic Freeze and Data Isolation (Days 1-2)**
+*   **Halt Automated Sends:** Immediately disable the production trigger for demographic-specific messages while allowing generic, non-targeted alerts to function if verified safe.
+*   **Data Snapshot:** Export the current geolocation dataset and the specific rules engine logic mapping coordinates to demographic groups. Do not modify the live database yet; create a read-only mirror for analysis.
+*   **Infrastructure Mapping:** Document the exact data flow from the internal geolocation source to the message generation template within your existing infrastructure. Identify the specific code modules responsible for filtering recipients based on the flawed data.
+
+**Phase 2: Forensic Logic Audit (Days 3-5)**
+*   **Rule Verification:** Manually trace ten known test cases (covering diverse demographics and locations) through the current logic. Compare the system's predicted recipient list and message content against ground-truth polling location data.
+*   **Flaw Identification:** Pinpoint whether the error stems from raw geolocation data inaccuracies, incorrect boundary definitions (e.g., zip code to precinct mapping), or faulty conditional logic in the message templating engine.
+*   **Impact Assessment:** Calculate the potential scope of misinformation by running the flawed logic against the full voter registry in a sandboxed environment to estimate how many voters received or would receive incorrect information.
+
+**Phase 3: Remediation and Internal Validation (Days 6-9)**
+*   **Logic Patching:** Rewrite the filtering logic to bypass the flawed demographic/geolocation correlation. Implement a fallback mechanism where, if geolocation confidence is below 100%, the system defaults to a generic "Verify your location at [Official State Website]" message rather than guessing.
+*   **Content Hardening:** Modify message templates to remove specific polling location names unless the data match is exact. Insert mandatory verification language directing users to official state resources.
+*   **Deterministic Testing:** Since third-party verification is unavailable, construct a comprehensive internal test suite using a manually curated list of 100% verified voter addresses and their correct polling places. Run the patched system against this "golden set" to ensure zero false positives/negatives.
+
+**Phase 4: Controlled Deployment and Monitoring (Days 10-12)**
+*   **Staged Rollout:** Deploy the fix to a small, internal control group (engineering team and selected non-critical staff accounts) to verify end-to-end delivery and content accuracy.
+*   **Full Activation:** Once the control group confirms accuracy, re-enable the system for the full voter base with heightened logging.
+*   **Real-time Watch:** Establish a manual monitoring rotation to review every outgoing message batch for the first 48 hours. Any anomaly triggers an immediate revert to the generic "verify online" message.
+
+**Phase 5: Post-Deployment Verification**
+*   **Feedback Loop:** Set up a dedicated, staffed hotline and email address specifically for voters reporting message discrepancies.
+*   **Correction Protocol:** If a voter reports an error, manually verify their status immediately and issue a corrected notification via an alternative channel if possible.
+
+**Note:** This plan relies entirely on your internal team's ability to curate a "golden set" of test data since external verification tools are excluded. Prioritize accuracy over specificity; a generic message directing voters to official sources is safer than a specific but potentially wrong one.

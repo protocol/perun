@@ -1,0 +1,25 @@
+### Pre-Launch Validation Checklist: Friend Suggestion Safety
+
+**1. Static Rule Filtering (Zero Compute Cost)**
+*   **Hard Block List:** Before the algorithm runs, cross-reference all candidate suggestions against your existing database of flagged/suspended accounts. Hard-code a rule: `IF candidate_account.status == "flagged" THEN exclude_from_suggestions`.
+*   **Geographic Buffer Check:** Verify if "suspicious" accounts are clustered. If a specific geographic node has a high density of flagged users, implement a temporary threshold to reduce suggestion volume from that specific region until manual review is complete.
+
+**2. Low-Cost Sampling Strategy**
+*   **Targeted Edge Sampling:** Instead of testing the whole model, isolate the "boundary cases." Extract a small sample (e.g., 50–100 instances) where a legitimate user and a flagged user share the same geographic tag. Run the suggestion logic *only* on these pairs to see if the flagged account appears in the top-N recommendations.
+*   **Inverse Validation:** Take a list of 20 known bad actors in Nairobi. Manually trace their immediate geographic neighbors in your dataset. Check if your current logic would naturally surface these bad actors to their innocent neighbors. This requires no model retraining, only data lookup.
+
+**3. Manual Review Workflow**
+*   **"Shadow Mode" Audit:** Do not enable the feature for all users yet. Enable it for an internal test group (your team of four). Each day, review the top 10 suggestions generated for each test account. Flag any suggestion that links to an account with <5 connections, no profile picture, or recent creation dates (common bad actor traits).
+*   **Geographic Cluster Spot-Check:** Identify the top 3 most dense geographic regions in your Nairobi dataset. Manually inspect the top 20 suggested connections for a random user in each region. Look for patterns where multiple suggested accounts share identical metadata (e.g., same join date, similar naming conventions), which often indicates bot networks.
+
+**4. Launch Guardrails**
+*   **Kill Switch Metric:** Define a simple failure metric before launch. Example: "If >2% of user reports on new friend suggestions cite 'spam' or 'suspicious,' immediately disable the geographic weighting factor."
+*   **Phased Rollout:** Release the feature to 1% of users in a low-risk demographic first. Monitor user reports and block rates daily. Do not expand the rollout until 7 days pass with zero confirmed suggestions of flagged accounts.
+
+**5. Data Hygiene Verification**
+*   **Flag Latency Check:** Confirm how quickly an account marked "suspicious" is updated in the suggestion engine's cache. If there is a 24-hour delay, your logic might suggest a banned user during that window. Ensure the flag check is real-time or near real-time.
+
+***
+
+*Note: These steps rely on querying existing data and applying logical filters rather than retraining models, fitting your tight compute budget.*
+*Prioritize the "Hard Block List" implementation immediately, as it provides the highest safety guarantee with minimal engineering effort.*

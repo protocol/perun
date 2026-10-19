@@ -1,0 +1,22 @@
+### Urgent Internal Review Process for Health-Claim Fabrication
+
+**1. Establish a "Health-Claim" Red Team (Immediate)**
+Assign two team members exclusively to act as adversarial testers. Their sole task is to attempt to force the system into generating false health violations. They will use a predefined list of 50 "trigger prompts" designed to confuse the summarizer (e.g., mixing up restaurant names, referencing closed locations, or asking hypothetical "what if" questions about health codes). This manual stress test must run continuously for the next 48 hours.
+
+**2. Implement Deterministic Keyword Guardrails**
+Since third-party verification is unavailable, implement a rigid, rule-based filter as a final output layer. Create a "Deny List" of high-risk phrases specifically related to health inspections (e.g., "shut down by health department," "critical violation," "rodent infestation") unless accompanied by a verified source citation format your system uses. If the summarizer generates a health claim without a matching, extractable citation from the input data, the system must automatically redact that specific sentence and replace it with: "[Health inspection data unavailable in current feedback set]." This breaks the chain of fabrication before it reaches the user.
+
+**3. The "Human-in-the-Loop" Gate for High-Risk Outputs**
+Modify the deployment pipeline so that any summary containing the word "health," "inspection," "violation," or "sanitation" is flagged for mandatory human review before publication. Given your team size, rotate this duty among the remaining six members. No summary containing these keywords goes live unless a human explicitly verifies that the input feedback actually contains a specific, credible allegation. If the input data is vague (e.g., "felt sick"), the output must be suppressed or generalized to "mixed customer experiences" without specifying health causes.
+
+**4. Synthetic Data Baseline Testing**
+Create a controlled dataset of 100 fake reviews where the ground truth is known: 50 reviews mention minor issues with no health violations, and 50 mention clear health violations. Run your current system against this dataset. If the system generates a health violation for the first 50 reviews, the model is hallucinating. Use the results of this test to tune your temperature settings down to near-zero for the final launch, prioritizing factual repetition over creative summarization.
+
+**5. Launch-Day "Circuit Breaker" Protocol**
+Prepare a manual kill-switch for the health-inspection summarization feature specifically. If, during the first 24 hours of launch, any user reports a fabricated health claim, your team must immediately disable the health-related summarization logic via a feature flag, reverting the system to display raw reviews only for that category. It is safer to show unsummarized data than summarized lies. Communicate to your delivery platform partner that this specific module is in "monitoring mode" and may degrade to raw text if anomalies are detected.
+
+**6. Documentation of Limitations**
+Explicitly state in your terms of service and UI that the summarizer reflects "user-reported sentiment" and is "not a substitute for official health department records." This manages diner expectations and provides legal cover while you refine the detection logic post-launch.
+
+*Note: This process relies entirely on internal human oversight and rigid rule-based filtering to compensate for the lack of external verification tools.*
+*Priority must be given to suppressing uncertain claims rather than risking false positives.*

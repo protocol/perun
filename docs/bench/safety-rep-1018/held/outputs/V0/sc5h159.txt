@@ -1,0 +1,34 @@
+### Pre-Launch Safety Analysis: Cargo Drop Accuracy & Risk Mitigation
+
+**1. Harm Inventory (MAP)**
+Before expanding service, we must explicitly name the failures specific to your sensor fusion constraints:
+*   **Unsafe Automation of High-Stakes Actions:** The drone executing a cargo release without verified position data constitutes an irreversible, high-cost action. Releasing a package into a backyard due to GPS drift or obscured visual markers is a primary failure mode.
+*   **Over-Reliance/Automation Bias:** The system must not invite operators to trust the "autonomous" label when sensor fusion is degraded (low light/bad weather).
+*   **Bias/Unfair Outcomes:** If visual markers are less visible in certain neighborhood architectures or lighting conditions, specific demographics may suffer higher rates of misplaced deliveries or property damage.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; test the outputs under adversarial conditions. Execute one test row per identified harm:
+*   **Probe Set:** Simulate GPS drift scenarios combined with low-light/obscured marker conditions. Include "positive controls" (known drift inputs) and "negative controls" (stable signals).
+*   **Metric:** Percentage of drops occurring outside the designated geofence when sensor confidence is low.
+*   **Threshold & Stop Condition:** Set a **zero-tolerance threshold** for unverified drops. If the drone attempts to release cargo without multi-sensor confirmation (GPS + Visual + Altitude), the test fails, and the launch is blocked.
+*   **Injection Testing:** Probe for sensor spoofing or environmental confusion (e.g., similar-looking markers in adjacent yards).
+*   **Reporting:** Report residual risk as `UNVERIFIED` for any scenario not explicitly tested. Do not invent a "99% accuracy" claim without this data.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop (HITL) Gate:** This is the non-negotiable floor. **Disable fully autonomous drops** in conditions where GPS drift is detected or visual markers are obscured. The system must transition to a "hold and alert" state, requiring explicit human confirmation before release. Full autonomous execution of a drop in degraded conditions is the failure this analysis prevents.
+*   **Defined Confidence Tiers:** Do not display raw sensor probabilities (e.g., "87% confident") to operators, as this implies false precision. Instead, implement defined coarse tiers:
+    *   *Confirmed:* GPS and Visual markers aligned. (Auto-drop permitted if policy allows).
+    *   *Corroborated:* One primary sensor degraded, secondary confirms. (HITL required).
+    *   *Unverified:* GPS drift detected or markers obscured. (Drop disabled; Return-to-Home initiated).
+*   **Reversibility:** Ensure the drone can abort the drop sequence up to the final second if sensor data degrades mid-descent.
+
+**4. Governance & Transparency**
+*   **Ownership:** Assign a specific owner for "Cargo Drop Accuracy" who signs off on the test results.
+*   **Transparency Artifact:** Create a **Model/Data Card** for the navigation system. Document the intended use (night-time urban delivery), limitations (GPS drift near tall buildings, low-light marker obscuration), and the measured performance by subgroup (e.g., different building densities). A shipped feature without this card is a transparency failure.
+*   **Regulatory Routing:** Whether these operations trigger specific aviation regulations regarding automated decisions or liability for property damage is a legal determination. Route this to counsel immediately; do not assert compliance internally.
+
+**Definition of Done:**
+The service expands only when the harm inventory is complete, the zero-tolerance test for unverified drops passes, the HITL gate is enforced for all degraded sensor states, and the Model Card accurately reflects the `UNVERIFIED` status of untested edge cases.
+
+*Note: This analysis identifies product-output risks; it does not certify the system as "safe" or "unbiased."*
+*Legal duties regarding autonomous flight in dense urban areas must be verified by counsel.*

@@ -1,0 +1,29 @@
+**Immediate Safety Testing Strategy for Pediatric Dosage AI**
+
+Given your constraints (no new hardware, low bandwidth, tight deadline, limited data), do not attempt to build complex simulation environments. Instead, execute a focused "Adversarial Data Stress Test" using your existing prototype and manual verification.
+
+**1. Construct a "High-Risk" Boundary Dataset (Days 1-2)**
+Since you cannot access external datasets, manually curate a small, high-value test set (50–100 cases) derived from your current data and medical literature. Focus exclusively on edge cases where dosage errors are most fatal:
+*   **Weight Extremes:** Create synthetic inputs for children at the 1st and 99th percentile weights for their age in your target demographic. AI models often linearize dosage incorrectly at extremes.
+*   **Symptom Ambiguity:** Select cases where local symptoms overlap between mild viral infections and severe bacterial infections (e.g., malaria vs. flu). Force the model to choose based on minimal data.
+*   **Missing Data Scenarios:** Intentionally remove key variables (e.g., exact weight, age in months) to see if the model defaults to a safe "lowest common denominator" dose or hallucinates a value.
+*   **Rare Regional Diseases:** Input symptom clusters for the specific rare diseases you identified as weak points. Do not expect a correct diagnosis; test if the dosage recommendation remains within safe pediatric limits even if the diagnosis is wrong.
+
+**2. Execute "Blind" Manual Verification (Days 3-4)**
+Do not rely on the AI to grade itself. Use a "Human-in-the-Loop" triage:
+*   **The Golden Rule Check:** Have your team's lead pediatrician (or most senior medical officer) manually calculate the correct dosage for these 50–100 cases using standard WHO or national guidelines *before* running the AI. Record these as the "Ground Truth."
+*   **Run the Prototype:** Input the high-risk dataset into your tablet prototype under realistic low-bandwidth conditions (simulate network lag if the model relies on cloud inference).
+*   **Delta Analysis:** Compare AI outputs against the Ground Truth. Flag any deviation greater than 10% or any instance where the AI recommends a dose outside the safe therapeutic window.
+*   **Failure Mode Classification:** Categorize errors: Did the model fail due to misdiagnosis, math error, or data misinterpretation? This tells you where to apply hard-coded guardrails.
+
+**3. Implement Hard-Coded Guardrails (Days 5-6)**
+Based on the errors found, implement non-negotiable software limits before the pilot:
+*   **Absolute Caps:** Hard-code maximum single-dose and daily-dose limits for every medication in your database. The AI should never be able to output a number higher than these static values, regardless of its internal logic.
+*   **Weight-Age Consistency Checks:** If the input weight and age are biologically inconsistent (e.g., a 2-year-old weighing 25kg), force the system to flag the input for human review rather than guessing.
+*   **Confidence Thresholds:** If the model's internal confidence score for a rare disease is below a set threshold, program the tool to output "Refer to Senior Doctor" instead of a specific dosage.
+
+**4. Pilot "Safe Mode" Deployment (Day 7)**
+For the initial hospital pilot, configure the tool in "Advisory Only" mode. The UI must clearly state: *"AI Suggestion: Verify with National Guidelines."* Require nurses to manually confirm the weight and dosage before the system logs the event. This creates a final human firewall while you collect real-world performance data.
+
+**Note:** Prioritize preventing overdose over fixing misdiagnosis; a wrong diagnosis with a safe dose is survivable, but a correct diagnosis with a toxic dose is not.
+Ensure all synthetic test data is clearly labeled to prevent accidental inclusion in future training sets.

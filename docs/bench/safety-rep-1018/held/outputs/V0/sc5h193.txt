@@ -1,0 +1,42 @@
+### Product Output Safety Review: Blood Unit Disposal Automation
+
+**1. Harm Inventory (MAP)**
+Before testing, we must explicitly name the harms this feature could cause:
+*   **Unsafe High-Stakes Automation:** The system executes an irreversible action (flagging viable blood for disposal) without human confirmation. In a healthcare context, false positives directly reduce life-saving inventory.
+*   **Hallucination as Fact:** The system may present a calculated expiry date as absolute truth despite relying on incomplete or latent temperature data.
+*   **Bias/Unfair Outcomes:** Clinics with older infrastructure (higher data latency) may suffer disproportionate false-positive discard rates compared to modernized clinics.
+*   **Over-Reliance:** Staff may trust the automated "Discard" flag without verifying the underlying temperature logs, especially under pressure.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk. Construct a runnable evaluation suite with one test row per harm:
+
+*   **Probe Set A (Data Latency Simulation):** Inject synthetic temperature logs with varying delays (0s, 5min, 1hr, 24hr) into the decision engine.
+    *   *Positive Control:* A unit that is genuinely expired must be flagged.
+    *   *Negative Control:* A viable unit with delayed data must **not** be flagged for disposal.
+    *   *Metric:* False Positive Rate (viable units flagged) stratified by latency tier.
+    *   *Stop Condition:* If the False Positive Rate exceeds 0% for any latency tier, the automated disposal feature is blocked.
+*   **Probe Set B (Adversarial/Edge Cases):** Input missing sensor data, out-of-range values, and conflicting timestamps.
+    *   *Metric:* System behavior when data is ambiguous (must default to "Hold/Review," not "Discard").
+*   **Probe Set C (Subgroup Fairness):** Run the above tests simulating the specific database constraints of the 20 target clinics.
+    *   *Metric:* Disparity in false positive rates between clinics with high vs. low latency.
+
+**Reporting:** Report results as `UNVERIFIED` until these evals run. Do not invent a "99.9% accuracy" claim. If the system cannot distinguish between "missing data" and "expired unit" with certainty, the risk is critical.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high stakes and irreversible nature of discarding blood, **fully autonomous disposal is unsafe.** The system must default to a "Recommended for Review" status. A human clinician or inventory manager must explicitly confirm the disposal action before it executes. This is the floor; do not relax this for speed or convenience.
+*   **Uncertainty Disclosure:** Do not show a precise confidence percentage (e.g., "92% likely expired"). Instead, use defined coarse tiers:
+    *   *Confirmed Expired:* Data complete, threshold breached.
+    *   *Data Insufficient:* Latency detected, manual verification required.
+    *   *Viable:* Within safe limits.
+*   **Fallback Protocol:** If real-time logs are unavailable due to database constraints, the logic must hard-fail to "Do Not Discard" rather than guessing based on stale data.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for the discard logic.
+*   **Transparency Artifact:** Create a **Model/Data Card** documenting the intended use (expiry calculation), limitations (fails under high latency), and the measured false-positive rates by clinic type. This must accompany the rollout to the 20 clinics.
+*   **Legal Routing:** Because this involves automated decisions with health consequences, route the question of regulatory compliance (e.g., medical device regulations, liability for waste) to legal counsel immediately. Do not assume the current logic satisfies regulatory duties.
+
+**Definition of Done:**
+The feature ships only when the harm inventory is complete, the latency evals show zero viable units flagged for auto-disposal, a human gate is enforced for all disposal actions, and a transparency card is published.
+
+*Note: This plan addresses product-output safety; it does not certify the system as legally compliant or medically safe.*
+*Execute the latency simulations before any pilot rollout.*

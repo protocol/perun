@@ -1,0 +1,33 @@
+### Safety Assessment Plan: Sidewalk Interaction Logic
+
+**Phase 1: Static Logic Review & Hazard Mapping (Days 1–3)**
+*   **Objective:** Identify code paths leading to stationary blocking of ramps without executing new firmware.
+*   **Actions:**
+    *   Audit the "waiting for signature" state machine. Map all conditions under which the robot transitions to a stationary state.
+    *   Cross-reference geofenced "no-stop" zones (specifically ramp coordinates) against the current navigation stack's exclusion lists.
+    *   Review sensor fusion logic: Determine if LIDAR/camera data currently classifies ramp textures or slopes as "obstacles" (causing a stop) versus "traversable path" (causing a bypass).
+    *   Simulate historical pilot data: Replay logs from the three cities to identify instances where robots stopped within 1.5 meters of detected ramp curbs.
+
+**Phase 2: Constraint-Aware Mitigation Design (Days 4–7)**
+*   **Objective:** Develop non-firmware solutions and parameter tweaks allowed under the 48-hour notice ordinance.
+*   **Actions:**
+    *   **Operational Parameters:** Define safe "stand-off" distances (e.g., robot must stop 2 meters *before* a ramp, not beside it) that can be updated via configuration files rather than full binary firmware flashes, if your architecture permits hot-reloading configs.
+    *   **Human-in-the-Loop Protocol:** Draft a mandatory remote-monitoring intervention rule. If a robot detects a signature request near a ramp, a remote operator must manually authorize the specific stopping coordinate before the robot halts.
+    *   **Physical/Spatial Geofencing:** Propose updating the central mission-planning map to mark ramp areas as "hard no-stop" zones. If your system allows dynamic map updates without a full firmware rollback, this can be deployed rapidly.
+
+**Phase 3: Validation Strategy (Days 8–14)**
+*   **Objective:** Validate changes without violating the 48-hour notice or risking public safety.
+*   **Actions:**
+    *   **Closed-Course Simulation:** Construct a physical test track replicating narrow sidewalks and ramps. Run the current logic to confirm the hazard, then test the proposed configuration/map updates.
+    *   **Shadow Mode Deployment:** In one city, enable the new logic in "logging only" mode (if available) to see where the robot *would* have stopped versus where it *should* stop, without altering actual behavior.
+    *   **Controlled Live Trial:** Select a low-traffic zone in one city. File the 48-hour notice for a specific 4-hour window to test the updated parameters live with safety drivers present.
+
+**Proposed Timeline for Behavioral Change Validation**
+*   **Week 1:** Complete static review and define configuration-based mitigations.
+*   **Week 2:** Execute closed-course validation and shadow mode analysis.
+*   **Week 3:** File 48-hour notices for controlled live trials in all three cities.
+*   **Week 4:** Analyze live trial data. If successful, schedule the formal firmware update (if required) for the next maintenance window to hardcode these behaviors.
+
+**Immediate Recommendation:** Until validation is complete, issue an operational directive to remote fleet managers to manually override any autonomous stopping command triggered within 2 meters of a detected ramp.
+
+Note: This plan prioritizes configuration and operational changes to bypass the firmware notice constraint. Ensure your legal team reviews the "configuration update" definition against the municipal ordinance to confirm it does not trigger the 48-hour rule.

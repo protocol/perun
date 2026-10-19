@@ -1,0 +1,39 @@
+### Pre-Launch Verification Process for PharmaBot Inventory Logic
+
+Given the constraints of a six-person team, a rigid hospital schedule prohibiting downtime, and the critical safety risk of dispensing expired medication, the verification process must be entirely non-disruptive to live workflows. The following plan isolates the stock management logic for audit using a "Shadow Mode" simulation approach.
+
+**1. Data Mirroring and Environment Isolation**
+Create a secure, isolated staging environment that mirrors the production database structure. Extract a sanitized snapshot of the current inventory data, including all batch numbers, manufacture dates, expiration dates, and current bin locations. Ensure no patient-identifiable information (PII) is included in this dataset to maintain compliance. This snapshot serves as the baseline for testing without touching the live robot or hospital network.
+
+**2. Logic Replay Simulation (Shadow Mode)**
+Develop a standalone simulation script that ingests the mirrored inventory snapshot. This script will execute the exact inventory rotation algorithm used by the robot in a closed loop.
+*   **Input:** The static inventory snapshot.
+*   **Process:** Run the algorithm repeatedly, simulating the passage of time and various dispensing scenarios (e.g., high-volume requests, partial bin depletion, restocking events).
+*   **Output:** A log of every item the algorithm *would* have selected for dispensing.
+
+**3. Automated Expiration Cross-Check**
+Implement a verification validator that compares the simulation's output logs against the known expiration dates in the source snapshot.
+*   **Flagging:** Any instance where the algorithm selects an item with an expiration date prior to the current simulated date is flagged as a critical failure.
+*   **Root Cause Tagging:** Tag failures by specific conditions (e.g., "failed during restock," "failed when primary bin empty") to isolate the logic error.
+
+**4. Edge Case Stress Testing**
+Since the bug is intermittent, manually construct synthetic datasets representing edge cases likely to trigger the flaw:
+*   Batches expiring on the current day.
+*   Mixed batches where valid and expired items share similar manufacture dates.
+*   Scenarios where the preferred bin is empty, forcing the algorithm to search secondary locations.
+Run the Shadow Mode simulation against these synthetic datasets to force the logic into rare states that the production snapshot might not cover.
+
+**5. Deterministic Patch Validation**
+Once the engineering team identifies and patches the logic error:
+*   Re-run the Shadow Mode simulation using the *exact same* inputs (production snapshot and synthetic edge cases).
+*   Confirm zero flags for expired items.
+*   Verify that valid items are still dispensed correctly (regression testing) to ensure the fix did not break normal operations.
+
+**6. Deployment Strategy**
+Because no downtime is allowed:
+*   Deploy the patched logic to the robot during a predefined maintenance window or via a hot-swap mechanism if the architecture supports it.
+*   Keep the "Shadow Mode" validator running in a read-only mode on the live data stream for the first 48 hours post-deployment. It will analyze live decisions without interfering, alerting the team immediately if the robot *would* have dispensed an expired item based on real-time data.
+
+This approach ensures a thorough audit of the specific logic flaw without risking patient safety or disrupting hospital operations.
+
+*Note: This plan assumes the team has access to the source code and database schemas. All testing must occur on infrastructure completely separate from the hospital's live network.*

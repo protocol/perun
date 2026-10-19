@@ -1,0 +1,31 @@
+### Pre-Launch Validation Strategy: Simulated Profiles & Safety Controls
+
+**1. Simulated User Profiles & Movement Patterns (Adversarial Probe Set)**
+To address the misidentification of beginners as advanced athletes without exceeding your physical test subject limits, execute the following simulated scenarios in a controlled environment using recorded video or mannequins before live human testing:
+
+*   **The "Compensating" Beginner:** A user with poor form who uses momentum (swinging) to lift light weights. *Risk:* The system interprets high velocity as high power/capability. *Test:* Verify the model flags "uncontrolled momentum" and defaults to low resistance, rather than increasing load.
+*   **The "Small-Stature" Advanced Athlete:** A lightweight user performing perfect form with moderate weight. *Risk:* The system underestimates mass and overestimates relative effort, or conversely, misreads small joint angles as "advanced range of motion." *Test:* Ensure classification relies on form stability, not just limb length or speed.
+*   **The "Fatigued" Expert:** An advanced user nearing failure, exhibiting slight form breakdown (shaking, slower eccentric phase). *Risk:* The system interprets slowing speed as "struggling beginner" or, conversely, misreads tremors as high-intensity micro-adjustments. *Test:* Confirm the system reduces or holds resistance when form degrades, never increases it.
+*   **The "Occluded" User:** A user partially blocked by equipment or wearing loose clothing that obscures joint landmarks. *Risk:* The computer vision hallucinates joint positions, creating a "perfect" synthetic pose that triggers an advanced rating. *Test:* Verify that missing or low-confidence keypoint data triggers an immediate "Ambiguous Capability" state.
+*   **The "Novice Mimic":** A beginner attempting to copy an advanced movement pattern but lacking the core stability to sustain it. *Risk:* The initial frame looks advanced, triggering a high-weight spike before the instability is detected. *Test:* Ensure the system requires N consecutive frames of stable form before any resistance increase.
+
+**2. The Human-in-the-Loop Safety Gate (Non-Negotiable)**
+You stated the system must default to safe, low resistance when capability is ambiguous. This is your primary control.
+*   **Rule:** If the model's confidence score for "Advanced" is below a strict threshold (e.g., <95%), or if any joint keypoint confidence drops, the system **must** lock to the lowest safe resistance or request manual confirmation.
+*   **Constraint:** Do not allow fully autonomous resistance increases for the pilot phase. Every increase above the baseline "safe default" requires a physical button press or explicit voice confirmation from the user ("Confirm increase?"). This prevents the "dangerously high" scenario entirely while you gather data.
+
+**3. Measurement Plan (Runnable Tests)**
+Do not assert the model is safe. Run these specific tests:
+*   **Test Row A (False Positive Probe):** Run 50 clips of beginners swinging weights. *Metric:* Count of times resistance increased automatically. *Pass Threshold:* 0 increases. *Stop Condition:* Any single instance of automatic increase halts the pilot.
+*   **Test Row B (Ambiguity Probe):** Run 50 clips with occluded views or poor lighting. *Metric:* Count of times system defaulted to "Low Resistance." *Pass Threshold:* 100% default to low. *Stop Condition:* Any instance of high-resistance assignment.
+*   **Test Row C (Calibration Check):** Compare model confidence scores against actual user 1-rep max data. *Metric:* Correlation. *Reporting:* Report residual risk as "UNVERIFIED" for any subgroup (e.g., users under 150lbs) where you lack data. Do not invent an accuracy percentage.
+
+**4. Transparency Artifact**
+Draft a **Model Card** for the pilot participants. It must state:
+*   **Intended Use:** Assistance only; not a certified trainer.
+*   **Known Limitation:** "System may misidentify users utilizing momentum as high-strength athletes."
+*   **Safety Protocol:** "Defaults to low resistance on uncertainty; manual confirmation required for load increases."
+*   **Owner:** Name the specific engineer responsible for the vision model.
+
+**Note:** Legal counsel must review the liability waiver to ensure it covers AI-driven resistance adjustments, specifically regarding the "automated decision" nature of the weight selection.
+**Note:** Never certify the system as "unbiased" or "safe"; only report that specific failure modes were tested and gated.

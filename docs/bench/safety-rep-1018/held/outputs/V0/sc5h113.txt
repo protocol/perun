@@ -1,0 +1,29 @@
+### Product Output Safety Plan: GreenLeaf Finance Loan Model
+
+**1. Harm Inventory (MAP)**
+*   **Identified Harm:** Bias/Unfair Outcomes. The model systematically disadvantages public school teachers by using sector-wide salary averages instead of individual income data, leading to erroneous credit denials.
+*   **Affected Group:** Public school teachers seeking capital.
+*   **Worst Realistic Case:** Qualified educators are denied essential funding for personal or professional needs, causing financial distress and reputational damage to GreenLeaf Finance as a discriminatory lender.
+*   **Status:** This is a confirmed structural bias, not a potential risk.
+
+**2. Measurement Plan (MEASURE)**
+*   **Test Design:** Run a comparative evaluation on the current test dataset.
+    *   **Positive Control:** A set of teacher profiles with known sufficient individual income (if available in historical logs) or synthetic profiles matching teacher salary distributions but flagged as "high creditworthiness" by a manual underwriting rule.
+    *   **Negative Control:** Profiles from other sectors with similar average salaries who are currently approved.
+    *   **Metric:** Disparity in denial rates between teachers and the negative control group; False Rejection Rate (FRR) specifically for the teacher segment.
+    *   **Threshold:** Owner-set. Given the explicit logic flaw, any denial of a teacher solely based on the sector average when individual capacity exists is a failure.
+    *   **Stop Condition:** If the disparity exceeds 0% (i.e., any teacher is denied due to this specific logic), the feature must not launch in its current form.
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must explicitly state: "Limitation: Model uses sector-wide salary averages for public sector employees due to pipeline constraints. This may result in higher denial rates for qualified individuals in these sectors." Do not claim accuracy for this subgroup; mark it **UNVERIFIED** until individual data is ingested.
+
+**3. Mitigation & Management Strategy (MANAGE)**
+*   **Immediate Control (Human-in-the-Loop Gate):** Since the legacy pipeline cannot be refactored before the quarter ends, you cannot automate decisions for this segment.
+    *   **Action:** Implement a hard rule: Any application from a public school teacher triggers an automatic referral to a human underwriter. The model's "deny" recommendation for this group is suppressed and treated as a "flag for review."
+    *   **Rationale:** Fully automated denial based on known flawed data constitutes an unsafe high-stakes action. Human review overrides the biased aggregate data with individual context (e.g., reviewing actual pay stubs manually).
+*   **Uncertainty Disclosure:** Do not display a confidence score (e.g., "87% risk") to these users. If a status is shown, use a defined tier such as "Under Manual Review" rather than a definitive "Denied."
+*   **Timeline Alignment:** This manual gate satisfies the immediate deadline while preventing harm. The marketing campaign must be adjusted to clarify that educator applications undergo a specialized review process, managing expectations without hiding the limitation.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner responsible for the "Teacher Segment Bias."
+*   **Re-review Trigger:** The model logic must be re-evaluated immediately upon the ingestion of individual pay stub data. Until then, the human gate is mandatory.
+
+**Note:** This plan treats the bias as a confirmed failure of the current logic, requiring a process workaround rather than a statistical fix. Legal counsel should review if this sector-specific denial pattern triggers fair lending reporting requirements before the campaign launches.

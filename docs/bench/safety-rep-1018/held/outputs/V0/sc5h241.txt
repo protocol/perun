@@ -1,0 +1,30 @@
+### Rapid Safety Assessment Plan: Rental Pricing Module
+
+**1. Immediate Harm Inventory (Day 1)**
+Define the specific risk: **Bias/Unfair Outcomes**. The algorithm may systematically overprice rentals in specific neighborhoods due to skewed training data, causing financial harm to tenants and reducing housing accessibility.
+*   **Affected Users:** Renters in high-demand or historically under-served neighborhoods; landlords in areas with sparse data.
+*   **Worst Case:** Systemic exclusion of specific demographics from housing markets due to artificially inflated prices, leading to reputational damage and potential regulatory scrutiny.
+
+**2. Targeted "Red-Team" Evaluation (Days 2–3)**
+Do not attempt full data cleaning. Instead, run adversarial probes on the *existing* model to identify failure modes:
+*   **Probe Set:** Construct a test suite of 50–100 synthetic listings varying only by neighborhood, keeping square footage, amenities, and condition constant.
+*   **Controls:**
+    *   *Negative Control:* Listings in neighborhoods with known, stable market rates (verify against a trusted external index).
+    *   *Positive Control:* Listings in neighborhoods suspected of data skew (e.g., areas with recent rapid gentrification or low data volume).
+*   **Metric:** Percentage deviation of algorithmic price vs. market benchmark.
+*   **Stop Condition:** If price inflation exceeds **5%** in any single neighborhood compared to the benchmark, that neighborhood is flagged as **UNVERIFIED**.
+
+**3. Mitigation & Human-in-the-Loop Gate (Days 4–5)**
+Given the strict deadline and inability to retrain, you must restrict the system's agency:
+*   **Confidence Tiers:** Do not display precise algorithmic prices as facts. Categorize outputs:
+    *   *Confirmed:* Data density is high, deviation from benchmark is <2%.
+    *   *Unverified:* Data is sparse or deviation is >2%.
+*   **Actionable Control:** For any listing falling into the **Unverified** tier, **block automatic price publication**. Route these specific listings to a human reviewer for manual validation before they go live. This satisfies the requirement for a human gate on high-stakes financial decisions without delaying the entire launch.
+*   **Transparency Artifact:** Publish an internal "Model Card" lite version noting: "Pricing in [Neighborhood X, Y, Z] is currently unverified due to data sparsity; manual review required." Do not claim the system is unbiased.
+
+**4. Go/No-Go Decision**
+*   **Launch Condition:** The system launches *only* if the human-in-the-loop gate is active for all **Unverified** outputs.
+*   **Rollback Trigger:** If post-launch monitoring shows >5% of live listings are flagged as Unverified, pause automated pricing entirely for those zones.
+
+**Note:** Legal counsel must review whether automated pricing adjustments constitute a regulated decision under UAE consumer protection laws; this plan assumes no legal clearance has yet been granted.
+**Note:** Never fabricate a "0% bias" metric; report residual risk as "Unverified" for flagged zones.

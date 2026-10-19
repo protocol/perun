@@ -1,0 +1,40 @@
+**Pre-Launch Audit Plan: HealthFirst Preauthorization Bot**
+
+**1. Harm Inventory & Scope**
+The primary harm is **unsafe automation of high-stakes actions**: denying medically necessary physical therapy due to rigid character-for-character code matching. This creates immediate access barriers for patients and administrative burdens for providers. The "worst realistic case" is a patient missing a critical rehabilitation window due to a clerical coding variance (e.g., trailing zeros, decimal placement, or legacy code equivalents).
+
+**2. Measurement Strategy (The "Runnable" Test)**
+Since you cannot update the algorithm, you must measure the failure rate of the current logic before launch. Do not assert safety; measure the denial volume.
+
+*   **Probe Set Construction:** Compile a dataset of 500–1,000 historical, *approved* physical therapy requests. Include known variations:
+    *   **Formatting variances:** Codes with/without decimals (e.g., `97110` vs `9711.0`).
+    *   **Synonymous mappings:** Different codes often accepted for the same clinical indication in your region.
+    *   **Typos:** Common data-entry errors previously corrected by human reviewers.
+*   **Controls:**
+    *   *Positive Control:* A batch of requests with exact character matches (should pass).
+    *   *Negative Control:* A batch of clearly unrelated codes (should fail).
+*   **Metric:** **False Denial Rate** = (Legitimate requests denied by bot) / (Total legitimate requests tested).
+*   **Threshold & Stop Condition:** Given the high stakes (health access), propose a **zero-tolerance threshold** for automated denials on non-exact matches. If the False Denial Rate exceeds 0% for the probe set, the stop condition is triggered: **do not enable full auto-denial**.
+*   **Owner:** Assign one engineer to run this script immediately and one clinical lead to validate the "denied" list against medical necessity guidelines.
+
+**3. Management Controls (The Human Gate)**
+Because backend restrictions prevent fixing the root cause (fuzzy matching), you must implement a procedural gate. Full autonomous execution of denials is the failure mode here.
+
+*   **Mandatory Human-in-the-Loop (HITL):** Reconfigure the workflow so the bot **never automatically denies** a request.
+    *   *Logic:* If codes match exactly → Auto-Approve.
+    *   *Logic:* If codes do *not* match exactly → Route to "Pending Manual Review" queue.
+    *   *Rationale:* This converts a potentially harmful automated denial into a delayed but safe human decision. It respects the 5-day deadline without requiring backend code changes.
+*   **Uncertainty Disclosure:** When a request hits the manual queue, the system should notify the provider: "Review required due to code variance," rather than implying the treatment is ineligible.
+*   **Fallback Process:** Establish a "rapid escalation" channel for providers whose requests sit in the manual queue for >4 hours, ensuring the contract start date does not result in care delays.
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name a specific product owner responsible for reviewing the False Denial Rate weekly.
+*   **Transparency Artifact:** Draft a one-page "Model Limitation Note" for internal support staff and external providers. Explicitly state: "This system requires exact character matches and will route all variances to human review. It does not interpret clinical context." Do not claim the system is "accurate" or "unbiased"; state its limitation clearly.
+*   **Legal Routing:** Because this involves automated decisions affecting health coverage, route the question of regulatory disclosure requirements (e.g., notice of automated denial) to legal counsel immediately. Do not assume the current workflow meets regulatory standards.
+
+**Summary of Immediate Actions:**
+1.  Run the historical data probe today to quantify the mismatch volume.
+2.  Disable auto-denial logic; force all non-exact matches to human review.
+3.  Publish the limitation note to manage provider expectations.
+
+*Note: This plan treats the rigid matching as a known defect managed by process, not a feature to be certified safe. The "zero tolerance" threshold for auto-denials is non-negotiable for high-stakes health outcomes.*

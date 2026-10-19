@@ -1,0 +1,37 @@
+**Targeted Testing Plan for Symptom Keyword Routing**
+
+**1. Construct a Symptom-Keyword Matrix**
+Create a spreadsheet mapping your current legacy keywords to their assigned specialist routes. Group these by medical domain (e.g., Cardiology, Neurology, Orthopedics). This serves as your baseline truth table against which test results will be compared.
+
+**2. Develop "Boundary Case" Scenarios**
+Focus testing on the intersection of symptoms where misrouting is most likely. Do not test simple, single-keyword inputs (e.g., "headache") as these likely work. Instead, construct scenarios combining:
+*   **Competing Keywords:** Inputs containing keywords for two different specialties (e.g., "chest pain" + "numb arm" vs. "chest pain" + "heartburn").
+*   **Negation and Context:** Phrases where a keyword appears but is negated or contextualized (e.g., "no fever but severe cough" or "history of migraine, now experiencing vision loss").
+*   **Complex Descriptions:** Natural language descriptions of pain patterns that imply a specialist but lack the exact legacy keyword trigger (e.g., "radiating pain from jaw to left shoulder" vs. the keyword "chest pain").
+
+**3. Execute Manual Test Batches**
+Run these scenarios through your current UAT environment. For each test case, record:
+*   The exact input string.
+*   The keywords the system successfully identified.
+*   The specialist route assigned.
+*   The *correct* specialist route (based on clinical logic).
+*   The severity of the error (e.g., "Critical: Emergency case routed to General Practice").
+
+**4. Isolate Failure Patterns**
+Analyze the failures to identify specific logical gaps in the legacy database:
+*   **Priority Conflicts:** Does the system pick the first keyword found rather than the most severe?
+*   **Missing Combinations:** Are there specific pairs of keywords that cancel each other out incorrectly?
+*   **Synonym Gaps:** Are patients using common terms that the legacy database does not recognize, causing a fallback to General Practice?
+
+**5. Define Manual Override Rules**
+Based on the isolated patterns, draft a list of "If/Then" override rules to be hard-coded before launch.
+*   *Example:* "IF input contains 'radiating' AND 'left arm' THEN force route to Cardiology, regardless of other keywords."
+*   Prioritize these rules by the severity of the potential delay in care.
+
+**6. Validation Loop**
+Re-run the failed test cases against the system with the proposed override rules applied (simulated or configured) to confirm the routing corrects to the appropriate specialist before signing off on the release.
+
+***
+
+*Note: Given the critical nature of urgent care, any scenario identified as "Critical" during testing should trigger an immediate manual triage protocol in the live system until the software override is deployed.*
+*This plan assumes the ability to view which specific keywords the system extracts from a user's input; if this logging is not visible, it must be enabled by engineering to effectively diagnose the root cause.*

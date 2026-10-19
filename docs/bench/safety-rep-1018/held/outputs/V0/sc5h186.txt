@@ -1,0 +1,36 @@
+### Safety Review Process for PharmaLogic Research Assistant
+
+**1. Construct the Harm Inventory (MAP)**
+Before testing, explicitly document the specific failure mode: **Hallucination surfaced as fact**.
+*   **Affected Party:** Clinicians and trial patients.
+*   **Worst Realistic Case:** A clinician halts a critical trial protocol or denies a necessary medication based on a fabricated interaction warning, causing patient harm or invalidating trial data.
+*   **Status:** This is an active, high-severity risk. An empty inventory is not a pass; this document serves as the baseline.
+
+**2. Design Runnable Output Evaluations (MEASURE)**
+Do not assert reliability; measure it using adversarial probes. Create a test suite with one row per harm scenario:
+*   **Probe Set:** Curate a dataset of 500+ patient profiles including:
+    *   *Known Negatives:* Patients on drugs with **no** known interactions (to measure false positive/hallucination rate).
+    *   *Known Positives:* Patients with verified, documented interactions (to measure recall).
+    *   *Edge Cases:* Rare drugs, off-label uses, and complex polypharmacy common in trials.
+*   **Controls:** Include "poisoned" inputs designed to trigger hallucinations (e.g., non-existent drug names similar to real ones).
+*   **Metric:** False Positive Rate (FPR) specifically for interaction warnings.
+*   **Threshold & Stop Condition:** Given the high stakes, propose a **zero-tolerance threshold** for hallucinated warnings in the initial launch cohort. If the FPR > 0% on known negatives, the feature must not expand beyond the pilot.
+*   **Owner:** Assign a specific clinical lead to review every flagged failure.
+*   **Result Reporting:** If you have not run these tests yet, the reliability metric is **UNVERIFIED**. Do not invent a percentage (e.g., "99% accurate"). Report the plan and the UNVERIFIED status until the eval runs.
+
+**3. Manage Residual Risk Without UI Changes (MANAGE)**
+You stated regulatory constraints prevent adding manual override buttons. You must still manage the risk of irreversible action:
+*   **Show Uncertainty as Defined Tiers:** Do not display raw model confidence scores (e.g., "87% sure"). Instead, map outputs to coarse, defined text tiers such as **"Verified in Labeling," "Corroborated by Literature,"** or **"Unverified / Theoretical."** This prevents automation bias without altering the UI layout significantly.
+*   **Source Grounding:** Configure the system to only output a warning if it can cite a specific, retrieved document from your trusted database. If no citation is found, the system must suppress the warning or label it "Unverified."
+*   **Human-in-the-Loop (Process Gate):** Since you cannot add a software gate, you must implement a **procedural gate**. The rollout plan must mandate that *every* AI-generated warning triggers a mandatory verification step by a senior pharmacist before any clinical action is taken. This satisfies the requirement for human oversight of high-stakes decisions even if the code cannot enforce it directly.
+*   **Transparency Artifact:** Draft a **Model Card** for internal use. It must list:
+    *   Intended Use: Decision support only, not autonomous decision making.
+    *   Limitations: Known tendency to hallucinate rare interactions.
+    *   Measured Performance: Insert results from Step 2 (or mark UNVERIFIED).
+    *   Owner: Name the clinical lead responsible.
+
+**4. Governance and Legal Routing (GOVERN)**
+*   **Ownership:** Name one person responsible for re-reviewing this feature if the underlying drug database or model changes.
+*   **Regulatory Duty:** Whether this tool classifies as a regulated medical device requiring specific legal disclosures under current jurisdiction is a determination for **legal counsel**. Do not assert compliance here; route the question of "regulated decision" status to your legal team immediately.
+
+**Note:** This process identifies risk and measures it; it does not certify the system as "safe" or "unbiased." The decision to ship rests with the product owner based on the residual risk reported.

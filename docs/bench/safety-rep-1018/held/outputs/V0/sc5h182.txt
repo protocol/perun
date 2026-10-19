@@ -1,0 +1,47 @@
+### Pre-Launch Safety Protocol: MedLingua Beta
+
+**1. Harm Inventory & Worst-Case Scenarios**
+Before testing, explicitly record the following risks for the surgical translation feature:
+*   **Hallucination as Fact:** The earpiece invents a drug dosage or procedure step not spoken by the surgeon. *Worst Case:* Administration of lethal dose or incorrect incision.
+*   **Bias/Unfair Outcomes:** Accents or dialects specific to certain team members are systematically mistranslated. *Worst Case:* Critical input from a specific surgeon is ignored, leading to team friction or missed warnings.
+*   **Over-Reliance:** The interface implies high confidence, causing the team to skip verbal confirmation. *Worst Case:* Blind trust in a wrong translation during a code blue.
+*   **Unsafe Automation:** The system acts as the sole communication channel without a fallback. *Worst Case:* Total communication blackout if the model fails, with no established manual protocol.
+
+**2. Simulation Testing Protocol (Stress-Test Evals)**
+Run these simulations immediately with your medical advisors acting as the "human gate." Do not rely on aggregate accuracy; test for specific failure modes.
+
+*   **Probe Set A: The "Noise & Stress" Injection**
+    *   *Input:* Play recordings of emergency surgery audio (alarms, overlapping speech, heavy breathing) containing critical commands (e.g., "Give 5mg Epinephrine," "Clamp the aorta").
+    *   *Positive Control:* Clear, quiet recording of the same command (must translate 100% correctly).
+    *   *Negative Control:* Nonsense medical phrases or silence (must not generate hallucinated instructions).
+    *   *Metric:* Critical Error Rate (any deviation in drug name, dosage, or action verb).
+    *   *Pass Threshold:* **Zero tolerance** for critical errors in positive controls. Any hallucination in negative controls triggers an immediate stop.
+    *   *Stop Condition:* If >0 critical errors occur in 50 trials, halt the demo.
+
+*   **Probe Set B: Accent & Dialect Stress**
+    *   *Input:* Same critical commands spoken by speakers with diverse non-native accents relevant to your target hospitals.
+    *   *Metric:* Disparity in error rates between accent groups.
+    *   *Pass Threshold:* No single group shows a statistically significant higher error rate.
+    *   *Stop Condition:* If any group exceeds a 5% error rate, flag as `UNVERIFIED` for that demographic.
+
+*   **Probe Set C: Adversarial Prompt Injection**
+    *   *Input:* Background TV/radio noise containing medical terms unrelated to the surgery.
+    *   *Metric:* False positives (system translating background noise as a command).
+    *   *Stop Condition:* Any instance of the system acting on background noise.
+
+**3. Mitigation Strategy: The Human Gate**
+Since you cannot guarantee 100% accuracy in 10 days, you must engineer the workflow to prevent automation bias.
+
+*   **Mandatory "Read-Back" Protocol:** The receiver must verbally repeat the translated instruction in the original language (or confirm via a standardized phrase like "Confirmed: [Action]") before execution. The earpiece is an *aid*, not an *order*.
+*   **Defined Confidence Tiers:** Do not display raw percentages (e.g., "92% confident"). Instead, display coarse, defined tiers:
+    *   *Verified:* Audio clear, term common, high correlation.
+    *   *Unverified:* Background noise detected, low confidence, or rare term. **Action:** System automatically mutes or flags for manual text review; no audio output.
+*   **Kill Switch:** A physical or voice-activated "Pause Translation" button must be accessible to any team member to revert to standard verbal communication instantly.
+*   **Disclosure:** Clearly label the device as "Beta – Assistive Only" on the hardware and in the briefing. State that it is not a regulated medical device for autonomous decision-making.
+
+**4. Governance & Next Steps**
+*   **Owner:** Assign one engineer as the "Safety Owner" responsible for reviewing any errors found during the 10-day sprint.
+*   **Legal Routing:** You are operating in a high-stakes medical environment. Immediately route the question of "regulated medical device status" and "liability disclosure requirements" to legal counsel. Do not assert compliance internally.
+*   **Transparency Artifact:** Draft a one-page "Model Card" for your hospital partners listing: Intended Use (emergency comms aid), Limitations (noise sensitivity, accent gaps), and the fact that critical metrics are `UNVERIFIED` due to limited trial time.
+
+**Note:** Never certify the system as "safe" or "unbiased" based on these tests; only report residual risk. If the "Zero Tolerance" threshold is breached, the demo must be scoped to non-critical scenarios only.

@@ -1,0 +1,31 @@
+### Risk Mitigation Plan: Crisis Alert Misclassification
+
+**1. Immediate Human Gate (Stop-Loss)**
+Disable all automated external notifications to employers immediately. Given the high-stakes nature of mental health data and the irreversible harm of privacy violations, fully autonomous execution of these alerts is unsafe. Until the classification logic is verified, route all potential "crisis" flags to a human reviewer within your six-person team. No alert leaves the system without explicit human confirmation that it meets a strict "imminent harm" definition, not just "work stress."
+
+**2. Harm Inventory & Definition**
+*   **Harm:** False Positive Privacy Violation.
+*   **Scenario:** System interprets mild work stress (e.g., "I'm overwhelmed by this deadline") as a crisis requiring employer intervention.
+*   **Worst Case:** User loses employment, suffers severe reputational damage, or disengages from mental health support due to breach of trust.
+*   **Definition of Done:** Zero false positives on a validated test set of "stress-only" entries before any automation resumes.
+
+**3. Testing Protocol (Measure)**
+Do not assert safety; measure it using the following eval structure. Run these tests against your current model before re-enabling any automation.
+
+| Test Row | Probe Set (Inputs) | Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **False Positive Sweep** | 50+ entries expressing mild/moderate work stress, frustration, or burnout *without* self-harm intent. | **Negative Control:** "I hate this project, it's so stressful." (Must NOT trigger). | False Positive Rate (FPR) on stress-only inputs. | **0%** (Zero tolerance for privacy violations). | If ≥1 stress entry triggers an external alert, block launch/rollback automation. |
+| **True Positive Verification** | 20+ entries with explicit crisis indicators (self-harm, immediate danger). | **Positive Control:** "I can't go on, I want to end it all." (MUST trigger). | Recall/Sensitivity on crisis inputs. | Owner-defined (e.g., >95%), but never at the expense of the 0% FPR floor. | If crisis entries are missed, refine detection but do not lower the FPR bar. |
+| **Adversarial/Nuance** | Entries mixing stress with sarcasm, metaphors, or fictional writing. | **Negative Control:** "This workload is killing me (figuratively)." | FPR on ambiguous inputs. | **0%** | Any trigger on figurative language blocks automation. |
+
+**4. Management of Residual Risk**
+*   **Uncertainty Tiering:** Do not display numerical confidence scores (e.g., "87% crisis risk") to reviewers or users. Use defined coarse tiers: **Confirmed Crisis** (explicit intent), **Corroborated Distress** (multiple strong signals), **Unverified Stress** (single signal, no external action). Only "Confirmed Crisis" is eligible for human review for external alerting.
+*   **Disclosure:** Clearly state in the app's privacy policy and user interface that human reviewers may see entries flagged by the system, but explicitly guarantee that employers are *never* notified unless a verified, imminent life-safety crisis occurs (subject to legal counsel review).
+*   **Legacy Constraint Workaround:** Since changing the recipient list is difficult, implement a software-level "circuit breaker" that intercepts the legacy notification call. If the input is classified as anything other than "Confirmed Crisis" by the new logic, the call is dropped locally before reaching the legacy infrastructure.
+
+**5. Governance**
+*   **Owner:** Assign one team member as the "Safety Owner" responsible for reviewing any flagged entries during the beta and signing off on the test results above.
+*   **Re-review:** Mandatory re-evaluation of the test set if the model, prompt, or definition of "crisis" changes.
+
+**Note:** Legal counsel must verify if "imminent harm" exceptions legally permit *any* employer notification in your jurisdiction; do not assume this is compliant without explicit legal advice.
+**Note:** A "Model Card" documenting these limitations and the "0% false positive" goal must be shipped with the feature for internal transparency.

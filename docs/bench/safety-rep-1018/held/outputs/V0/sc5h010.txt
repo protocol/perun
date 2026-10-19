@@ -1,0 +1,36 @@
+**Plan: Streamlined Breed Misidentification Risk Reduction**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Bias/Unfair Outcomes. The system systematically denies claims to owners of non-aggressive breeds misidentified as aggressive.
+*   **Affected:** Pet owners facing financial loss and emotional distress; specific breed communities.
+*   **Worst Case:** Widespread wrongful denials leading to regulatory scrutiny, reputational damage, and loss of trust before launch.
+
+**2. Targeted Measurement Strategy (MEASURE)**
+Given the compute budget, do not run extensive simulations. Instead, execute a "Sniper" evaluation strategy focusing on known failure modes:
+*   **Probe Set Construction:** Curate a small, high-value dataset (e.g., 50–100 images) rather than thousands. Include:
+    *   *Positive Controls:* Known aggressive breeds (to ensure the model still works).
+    *   *Negative Controls:* Visually similar non-aggressive breeds (e.g., Pit Bull mixes vs. Staffordshire Terriers, Huskies vs. Malamutes).
+    *   *Edge Cases:* Poor lighting, unusual angles, and puppies vs. adults of contested breeds.
+*   **Metric & Threshold:** Measure False Positive Rate (FPR) specifically for the "aggressive" label on the negative control set.
+    *   *Stop Condition:* If FPR > 0% on the negative control set for high-risk lookalikes, the feature cannot launch for automated denial.
+*   **Injection/Leak Check:** Verify that metadata (like filename hints) isn't leaking into the decision, which can mask true visual errors.
+*   **Reporting:** Report the specific FPR found. If the test cannot be run due to absolute zero compute, mark the risk as **UNVERIFIED**. Do not invent an accuracy percentage.
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Critical):** Because claim denial is a high-stakes, irreversible financial action, **remove full automation for any "aggressive breed" classification.**
+    *   *Rule:* If the model scores a breed as "aggressive" with any confidence level, the claim must route to a human adjuster for visual verification before denial.
+    *   *Automation Scope:* Only auto-approve clear non-aggressive matches; never auto-deny based solely on image recognition.
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% aggressive") to internal staff or users, as this implies false precision. Use defined tiers:
+    *   *Confirmed:* High visual match + human review.
+    *   *Unverified:* Model suggests aggression but requires mandatory human review.
+*   **Transparency Artifact:** Draft a one-page Model Card noting:
+    *   *Intended Use:* Assistance in claim triage, not final adjudication.
+    *   *Limitations:* Known confusion between specific breed pairs; high risk of false positives on mixed breeds.
+    *   *Owner:* Name the specific product owner responsible.
+
+**4. Governance (GOVERN)**
+*   Assign a single owner to review any model updates or data changes.
+*   Schedule a re-evaluation of the "Sniper" probe set quarterly or after any model tweak.
+
+**Note:** Legal counsel must determine if automated breed-based denials trigger specific regulatory disclosures under consumer protection laws; this plan assumes human review mitigates the highest legal risk.
+**Note:** If the "Sniper" test reveals errors, the only compliant path is to keep the human gate; do not attempt to "tune" the threshold to bypass the stop condition.

@@ -1,0 +1,32 @@
+### Plan to Mitigate Historic Home Underpayment Risk
+
+**1. Immediate Triage: Identify "Historic" Claims via Proxy Rules**
+Since updated cost databases are unavailable, implement deterministic code rules to flag high-risk claims for human review without new licensing costs. Configure the system to automatically route any claim matching **two or more** of the following proxies to a human adjuster:
+*   **Age Threshold:** Property build year is prior to 1945 (or local historic era cutoff).
+*   **Keyword Triggers:** Claim description or adjuster notes contain terms like "Victorian," "Craftsman," "original molding," "plaster," "slate," "terracotta," or "hand-hewn."
+*   **Location Overlay:** Property address intersects with known municipal historic district boundaries (often public GIS data).
+*   **Repair Code Anomalies:** Line items include materials rarely used in modern construction (e.g., knob-and-tube wiring, horsehair plaster).
+
+**2. The Human-in-the-Loop Gate (Stop Condition)**
+Establish a hard gate: **No claim flagged by the proxy rules may be auto-adjudicated or have a settlement offer generated.**
+*   **Action:** The system pauses the workflow and assigns the file to a senior adjuster.
+*   **Requirement:** The human must explicitly confirm the valuation accounts for specialized labor and material scarcity before releasing funds.
+*   **Fallback:** If the proxy rules generate too many false positives (overwhelming the team of ten), tighten the logic (e.g., require build year < 1920 + keyword match) rather than removing the gate.
+
+**3. Measurement & Validation (UAT Phase)**
+Do not assert the system is "fair." Instead, run a targeted evaluation during User Acceptance Testing:
+*   **Test Set:** Assemble 50 historical claim files (25 known underpayments from past data, 25 modern homes as controls).
+*   **Metric:** Calculate the "Flagging Rate." The goal is 100% capture of the known underpayment set.
+*   **Stop Condition:** If the tool fails to flag even one known historic underpayment case, the proxy rules must be rewritten before launch.
+*   **Reporting:** Document the residual risk as "UNVERIFIED" for any property type not covered by the proxy rules. Do not invent an accuracy percentage.
+
+**4. Transparency & Disclosure**
+*   **Internal Artifact:** Create a one-page "Limitation Card" for the adjuster team stating: *"This tool uses modern material pricing and systematically underestimates historic restoration costs. It is not authorized for final decision-making on pre-1945 structures."*
+*   **Customer Communication:** If a claim is manually reviewed, ensure the final letter does not imply the automated figure was the baseline. If the automated figure was shown to the customer initially, a clear correction and explanation of the manual override is required to prevent deceptive patterns.
+
+**5. Governance**
+*   **Owner:** Assign one specific lead adjuster as the owner of this risk. They must re-review the proxy keywords quarterly.
+*   **Legal Route:** Consult counsel regarding whether systematic underpayment of a specific class of policyholders (historic owners) triggers regulatory reporting duties or bad-faith exposure. Do not assume the manual review process absolves the duty of fair settlement.
+
+**Note:** This plan treats the algorithm's output as unreliable for this specific segment, relying on human judgment as the primary control.
+**Note:** Budget constraints prevent data fixes, so the "cost" here is increased manual labor per flagged claim, which is the necessary trade-off for fairness.

@@ -1,0 +1,28 @@
+### Pre-Deployment Validation Checklist: Autonomous Lawnmower Firmware
+
+**1. Geofence Integrity & GPS Drift Scenarios**
+*   **Boundary "Squeeze" Test:** Verify behavior when the mower's reported position drifts outside the geofence due to signal error while the physical unit is still inside. The system must prioritize physical safety over reported coordinates and halt rather than correcting by driving further out.
+*   **Multipath Error Zones:** Simulate operation near tall fences, dense hedges, and two-story house overhangs where GPS reflection causes >2m drift. Confirm the mower defaults to a "safe stop" state rather than attempting to re-enter the zone aggressively.
+*   **Neighbor Lot Incursion:** Test specific trajectories where a 1.5m drift pushes the blade deck onto a neighboring flowerbed or patio. Validate that the virtual buffer zone is wider than the maximum observed drift plus the mower's stopping distance.
+
+**2. Unexpected Obstacle & Sensor Fusion Failures**
+*   **Low-Profile Object Detection:** Validate detection of items often missed by basic maps: garden hoses, low stumps, children's toys, and pet waste. The mower must stop before contact, not just upon contact.
+*   **Dynamic Intruders:** Simulate sudden entry of pets, children, or delivery personnel into the mowing path. Verify the emergency stop latency is under 200ms regardless of current speed.
+*   **Sensor Occlusion:** Test scenarios where mud, grass clippings, or rain obscure LiDAR/camera sensors. The system must degrade to a safe halt rather than guessing the path.
+
+**3. High-Stakes Automation Controls (Human-in-the-Loop)**
+*   **Irreversible Action Gate:** Ensure no firmware update allows the mower to operate outside defined daylight hours or without explicit user confirmation of the current map boundary.
+*   **Remote Kill Switch:** Verify that every unit can be immediately disabled remotely by YardBot support if a pattern of drift complaints emerges from a specific neighborhood.
+*   **Uncertainty Disclosure:** The user app must display a "Position Confidence" tier (e.g., "High," "Degraded," "Unverified") based on satellite count and signal quality, rather than a false-precision percentage. If confidence is "Unverified," the mower must not start.
+
+**4. Edge Case Environmental Conditions**
+*   **Slope Slippage:** Test on wet, inclined boundaries where wheel slip causes physical drift even if GPS reads stationary.
+*   **Signal Loss Recovery:** Validate behavior when GPS is lost entirely (e.g., under dense tree cover). The mower must stop immediately, not continue on the last known vector.
+*   **Time/Date Drift:** Ensure the internal clock cannot drift into "night mode" operation due to firmware bugs, preventing noise complaints during quiet hours.
+
+**5. Validation Methodology Constraints**
+*   **Adversarial Simulation:** Since simulation tools are limited, supplement with physical "red team" tests in a controlled yard using GPS spoofers to induce drift artificially.
+*   **Staged Rollout:** Do not ship to the entire user base. Release to <1% of users in low-density areas first, with a hard stop condition if any neighbor incursion is logged.
+*   **Residual Risk Reporting:** Document all unverified metrics as "UNVERIFIED" in the release notes. Do not claim "0% drift" or "100% safety."
+
+**Note:** This checklist identifies risks; it does not certify the system as safe. The final ship decision rests with YardBot leadership based on measured results from the above tests. Legal counsel must review liability regarding neighbor property damage before launch.

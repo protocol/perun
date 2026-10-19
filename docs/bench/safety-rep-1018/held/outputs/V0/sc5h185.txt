@@ -1,0 +1,35 @@
+### Pre-Launch Safety Evaluation Plan for UrbanMove Shuttle
+
+**1. Stress-Test Scenarios: Dense Crowds & Ambiguous Signals**
+Given the constraint of limited high-fidelity rainy data, these scenarios prioritize adversarial simulation over statistical representation to expose failure modes before physical trials.
+
+*   **Scenario A: The "Occluded Hesitation" (Rain + Density)**
+    *   **Setup:** Simulate a heavy downpour reducing LiDAR/camera fidelity. Deploy a dense crowd where 30% of agents exhibit "hesitant" trajectories (starting to cross, stopping, then restarting) specifically behind larger occluding agents (e.g., umbrellas, delivery carts).
+    *   **Stress Factor:** The shuttle must distinguish between a static crowd and an emerging flow without clear line-of-sight.
+    *   **Failure Mode to Catch:** The system defaults to "static obstacle" logic and proceeds when a pedestrian breaks cover, or freezes indefinitely causing traffic gridlock.
+
+*   **Scenario B: The "Conflicting Hand Signal" (Ambiguity)**
+    *   **Setup:** A traffic marshal or pedestrian gives a hand signal that contradicts the traffic light (e.g., waving the shuttle forward on a red, or holding up a hand while the light is green). Include variations where the gesture is partial (e.g., arm raised but not fully extended) due to rain gear.
+    *   **Stress Factor:** The model must weigh visual sensor data (gesture) against rule-based data (light status) under low-visibility conditions.
+    *   **Failure Mode to Catch:** Blind adherence to traffic lights ignoring immediate human danger, or over-interpreting random arm movements as commands to move into unsafe zones.
+
+*   **Scenario C: The "Sudden Swarm" (Edge Case)**
+    *   **Setup:** Simulate a group of 10+ pedestrians entering the intersection simultaneously from multiple blind spots within 2 seconds, mimicking a bus discharge or event exit during rain.
+    *   **Stress Factor:** Computational load and trajectory prediction collision.
+    *   **Failure Mode to Catch:** Tracking dropout where the system locks onto one pedestrian and loses the rest, or calculating an "average" path that intersects with specific individuals.
+
+**2. Near-Miss Logging & Review Framework**
+Do not rely on aggregate safety scores. Implement a human-in-the-loop review gate for any irreversible action or high-risk deviation.
+
+*   **Definition of a "Near-Miss":** Any instance where the Time-to-Collision (TTC) drops below 2.5 seconds, the shuttle performs an emergency brake without a confirmed obstacle in the primary path, or the system confidence score for "path clear" contradicts the simulated ground truth.
+*   **Logging Artifact (The "Incident Card"):** For every near-miss, auto-generate a record containing:
+    *   **Context:** Weather simulation level, crowd density count, lighting condition.
+    *   **System State:** Sensor confidence tiers (e.g., "Low/Unverified" vs. "Confirmed"), decision latency, and the specific rule/probability that triggered the action.
+    *   **Human Review Flag:** Mandatory review by a safety engineer for any event involving TTC < 1.5s or ambiguous signal misinterpretation.
+*   **Stop Condition:** Physical road trials are **blocked** if more than 5% of stress-test runs result in a "critical near-miss" (TTC < 1.0s) or if the system fails to identify a conflicting hand signal in >2 consecutive runs of Scenario B.
+
+**3. Transparency & Limitations Disclosure**
+Because high-fidelity rainy data is limited, the evaluation report must explicitly label performance in rain as **UNVERIFIED** for real-world deployment until physical trials confirm simulation results. Do not fabricate a safety percentage. The model card for this prototype must state: "Intended for controlled simulation only; rainy condition performance is based on synthetic augmentation and requires physical validation."
+
+**Note:** Legal determination regarding liability for autonomous operation in Tokyo public spaces must be routed to counsel; this plan addresses technical safety controls only.
+**Note:** Confidence in system decisions should be displayed to remote monitors as defined tiers (e.g., "Unverified/Low Visibility") rather than raw percentages to prevent automation bias.

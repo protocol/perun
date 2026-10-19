@@ -1,0 +1,26 @@
+### Pre-Launch Safety Audit: Volcanic Gas Dispersion Model
+
+**1. Synthetic Weather Scenarios for Edge-Case Testing**
+Given the lack of historical data for rare wind patterns, you must construct adversarial synthetic scenarios to probe model behavior where training data is absent. Do not rely on aggregate accuracy; test specifically for hallucination and unsafe automation in these gaps. Run the following probe sets:
+
+*   **The "Trapped Valley" Inversion:** Simulate strong thermal inversions with near-zero wind speed in complex topography. *Risk:* The model underestimates gas pooling in low-lying areas, failing to trigger evacuation for residents who are actually in lethal zones.
+*   **The "Rapid Reversal" Shear:** Simulate sudden, high-altitude wind shear that reverses surface flow direction within 15 minutes. *Risk:* The model predicts a safe corridor based on lagging data, directing tourists *into* the plume rather than away from it.
+*   **The "Multi-Source" Convergence:** Simulate simultaneous emissions from multiple fissures with conflicting wind vectors causing gas convergence in an unexpected valley. *Risk:* The model treats sources independently, missing the cumulative lethal concentration in the convergence zone.
+*   **The "Sensor Blackout" Degradation:** Simulate partial sensor failure combined with erratic wind gusts. *Risk:* The model fills missing data with high-confidence hallucinations rather than flagging uncertainty.
+
+For each scenario, define a **stop condition**: If the model predicts a "safe" status where the synthetic ground truth is "lethal," the automated evacuation trigger must be disabled for that specific weather class.
+
+**2. Manual Oversight Triggers and Confidence Tiers**
+Do not display raw confidence percentages (e.g., "87% confident") to operators or the public. This implies a calibration precision that does not exist, especially given your admitted data gaps. Instead, implement a **Defined Coarse Tier** system for internal decision gates:
+
+*   **Tier 1 (Corroborated):** Input conditions match historical data clusters; multiple physical models agree. *Action:* Automated alert generation permitted.
+*   **Tier 2 (Single-Source/Extrapolated):** Input conditions rely on interpolation or single-sensor data; no historical analog. *Action:* **Human-in-the-Loop Gate Required.** No automated evacuation order sends without explicit scientist confirmation.
+*   **Tier 3 (Unverified/Out-of-Distribution):** Input conditions match your synthetic "rare" scenarios or fall outside training bounds. *Action:* **Hard Block on Automation.** System defaults to "Data Insufficient" and alerts the emergency operations center to switch to manual heuristic protocols.
+
+**Oversight Plan:**
+Establish a "Red Team" rotation where one scientist acts solely as the override authority during active unrest. If the model outputs a Tier 2 or Tier 3 confidence level, the system must visually highlight the specific data gap (e.g., "Wind shear exceeds historical max") and require a manual "Confirm Evacuation" or "Hold" action before any public message is released. The default state for unknown conditions must be **fail-safe** (assume danger), not fail-operational (assume safety).
+
+**3. Transparency Artifact**
+Before launch, produce a **Model Card** that explicitly lists these data gaps as "Known Limitations." State clearly that performance in rare wind patterns is **UNVERIFIED** and that the system relies on human intervention in those specific cases. Do not claim the system is "safe" or "unbiased"; document the residual risk that rare events may be misclassified.
+
+**Note:** Because this system automates high-stakes, irreversible actions (evacuation orders) with known data gaps, full autonomous execution is unsafe by design; the human gate is mandatory, not optional. Legal requirements for public disclosure of AI-driven emergency decisions must be routed to counsel immediately.

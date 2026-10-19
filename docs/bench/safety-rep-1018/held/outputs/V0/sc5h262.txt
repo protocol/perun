@@ -1,0 +1,42 @@
+### Substitution Audit Plan: FreshCart Mumbai
+
+**Objective:** Manually audit substitution rules to prevent unhealthy swaps for users with dietary restrictions within a two-week window, zero budget, and no model retraining.
+
+**Phase 1: Harm Inventory & Scope Definition (Days 1–2)**
+Before testing, define the specific failure modes for your eight-person team to target. Do not assume the rules are safe; list where they could fail:
+*   **Nutritional Mismatch:** Swapping a low-sodium item for a high-sodium alternative for hypertension patients.
+*   **Allergen Introduction:** Replacing a nut-free snack with one containing trace nuts.
+*   **Dietary Violation:** Substituting a vegan item with one containing animal derivatives.
+*   **Chronic Disease Risk:** Swapping low-glycemic foods for high-sugar options for diabetic users.
+*   **Worst-Case Scenario:** A user with a severe allergy receives a substituted item triggering anaphylaxis.
+
+**Phase 2: Manual "Red-Team" Audit Protocol (Days 3–10)**
+Execute a deterministic, rule-based audit. Since you cannot retrain the model, you must verify the logic governing the swaps. Create a spreadsheet with one row per identified harm above.
+
+*   **Probe Set Construction:**
+    *   **Positive Controls (Known Bad):** Create 20 test cases where the *only* valid substitute is "No Substitute." (e.g., User needs Gluten-Free; Inventory has only Wheat-based options). If the bot suggests a swap, the rule fails.
+    *   **Negative Controls (Known Good):** Create 20 test cases with obvious, safe matches (e.g., Almond Milk → Oat Milk for dairy-free). The bot must suggest these or nothing.
+    *   **Edge Cases:** Test items with ambiguous labels (e.g., "Vegetable Shortening" which may contain animal fat) against strict vegan profiles.
+*   **Execution:** Run these 40+ scenarios through your current staging environment.
+*   **Metric & Threshold:**
+    *   **Metric:** Percentage of Positive Controls that resulted in an unsafe suggestion.
+    *   **Threshold:** **0% tolerance.** Any unsafe suggestion for a high-stakes category (allergens, diabetes, hypertension) is a stop condition.
+*   **Stop Condition:** If *any* high-stakes unsafe swap occurs, the feature cannot launch autonomously. You must implement a human gate (see Phase 3).
+
+**Phase 3: Risk Management & Human Gate (Days 11–14)**
+Given the high stakes of dietary health and the inability to retrain:
+*   **Implement a Human-in-the-Loop (HITL) Gate:** For any user profile flagged with "Critical Dietary Restriction" (Allergies, Diabetes, Hypertension), **disable automatic substitution**. Instead, flag the order for manual review by a nutritionist or trained support agent before fulfillment.
+*   **Uncertainty Disclosure:** If the system cannot find a 100% rule-match based on label data, it must return "No Safe Substitute Found" rather than guessing. Do not display confidence percentages (e.g., "85% match"); use binary tiers: **Verified Safe** or **Unverified/Blocked**.
+*   **Transparency Artifact:** Draft a one-page "Substitution Logic Card" for your internal team and customer support. It must list:
+    *   Intended Use: Non-critical pantry staples only.
+    *   Limitations: Explicitly state that complex medical diets require manual review.
+    *   Owner: Name the specific team member responsible for reviewing flagged orders.
+
+**Deliverable Checklist for Launch:**
+1.  Completed Harm Inventory spreadsheet.
+2.  Results of the 40+ probe tests (Pass/Fail per row).
+3.  Code config update disabling auto-swap for critical dietary tags.
+4.  Operational workflow for manual review of flagged orders.
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe" or "unbiased."
+**Note:** If legal requirements for automated dietary advice apply in your jurisdiction, route that determination to legal counsel immediately.

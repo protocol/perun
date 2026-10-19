@@ -1,0 +1,35 @@
+### Heatwave Alert Safety Checklist: Final Validation Phase
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Failure Mode:** System silence during record temperatures due to API rate limits or retry exhaustion.
+*   **Affected Group:** Elderly residents in facilities with outdated infrastructure; care staff unaware of escalating heat.
+*   **Worst Realistic Case:** Preventable heatstroke or mortality events because alerts were dropped silently by the integration layer.
+*   **Action:** Explicitly document that "API limitation" is not an acceptable excuse for dropped high-severity alerts. The risk is owned by the product team, not the legacy API.
+
+**2. Measurement Plan (Runnable Tests)**
+*   **Probe Set:** Simulate record-breaking temperature spikes combined with maximum concurrent facility load.
+*   **Controls:**
+    *   *Positive Control:* Inject a known critical alert; verify it bypasses standard queueing if possible.
+    *   *Negative Control:* Send low-priority maintenance messages; verify they are correctly throttled/dropped to save bandwidth for critical alerts.
+*   **Metric:** 100% delivery rate for "Critical/Heatwave" tagged messages under peak load.
+*   **Stop Condition:** If *any* critical alert fails to deliver in simulation, launch is blocked. Do not proceed with "99% reliability" for life-safety systems.
+*   **Injection Check:** Verify that malformed data from legacy APIs cannot crash the alert dispatcher.
+
+**3. Risk Management & Human Gates**
+*   **Fallback Protocol (The Human Gate):** Since full automation is constrained by legacy APIs, implement a mandatory "Escalation Ladder." If the automated API call fails or times out, the system must immediately trigger a secondary, non-API channel (e.g., SMS to a designated on-call human operator, automated voice call, or email to a backup list) to manually intervene.
+*   **Uncertainty Disclosure:** The dashboard for facility administrators must clearly state: "Alerts are subject to legacy network delays. If no alert is received but local temperature exceeds X, initiate cooling protocols immediately." Do not present the system as infallible.
+*   **Override Capability:** Ensure care staff can manually trigger a "Heatwave Emergency" broadcast that bypasses standard frequency limits if they detect local conditions the system missed.
+
+**4. Governance & Transparency**
+*   **Owner Assignment:** Name one specific engineer responsible for the "Legacy API Integration" failure mode. This person must sign off on the fallback logic.
+*   **Transparency Artifact:** Create a one-page "System Limitations & Fallback Guide" for facility administrators. It must list the specific APIs supported, known latency issues, and the exact steps staff must take if the digital alert fails.
+*   **Legal Routing:** Route the question of "liability for missed alerts due to known API constraints" to legal counsel immediately. Do not assert compliance; ask counsel to define the disclosure language required for facilities using outdated systems.
+
+**5. Launch Readiness Criteria**
+*   [ ] Harm inventory signed off with "Silent Failure" as the top risk.
+*   [ ] Red-team test proves critical alerts survive API throttling via fallback channels.
+*   [ ] "UNVERIFIED" metrics are not used; if delivery cannot be proven 100% in testing, the launch is delayed or the scope is reduced to "advisory only" with heavy disclaimers.
+*   [ ] Facility administrators have the fallback guide before go-live.
+
+**Note:** The constraint of outdated APIs increases the necessity of a non-automated human fallback; do not rely solely on software retries.
+**Note:** If the "four-week" deadline prevents building a robust fallback channel, the launch scope must be downgraded to "pilot/advisory" with explicit written warnings to users.

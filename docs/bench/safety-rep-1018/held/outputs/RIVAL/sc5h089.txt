@@ -1,0 +1,52 @@
+# ParkSmart Exit Barrier Contingency Plan
+
+## 1. Software-Level Contingency Measures
+
+Since network infrastructure cannot be upgraded, the software must assume the network is unreliable and implement a "fail-open" safety model where human safety and egress take precedence over revenue protection during outages.
+
+**A. Local Payment Caching & Optimistic Release**
+*   **Mechanism:** Implement a local cache on the exit controller that stores successful payment confirmations with a time-to-live (TTL) window (e.g., 15 minutes).
+*   **Logic:** When a user scans their QR code or license plate:
+    1.  The system attempts a real-time network verification.
+    2.  **If successful:** Raise barrier and log transaction.
+    3.  **If timeout/failure occurs:** Check the local cache for a recent successful payment associated with that vehicle/user ID.
+    4.  **If cached record exists:** Raise barrier immediately, flag the transaction as "pending verification," and queue a background retry to reconcile with the central server once connectivity is restored.
+    5.  **If no cache record:** Proceed to manual override protocol (see below).
+
+**B. Exponential Backoff with Hard Timeout**
+*   Define a strict maximum wait time for network responses (e.g., 3 seconds).
+*   If the payment gateway does not respond within this window, the system must automatically trigger the fallback logic rather than hanging indefinitely. Do not wait for a "failure" message; treat silence as a trigger for contingency mode.
+
+**C. "Fail-Open" Emergency Mode**
+*   If the exit controller detects three consecutive network timeouts across any lane, it should automatically switch the entire garage to "Emergency Egress Mode."
+*   In this mode, the barrier raises for all vehicles after a brief visual/audible warning ("System Offline – Exiting Safely"), logging license plates via local camera storage for later billing reconciliation. Revenue recovery is secondary to preventing entrapment.
+
+**D. Driver-Facing Feedback Loop**
+*   Update the mobile app and on-screen kiosk messages to explicitly state: "Payment Received. Verifying..." followed immediately by "Access Granted" upon local cache hit, even before central confirmation. This reduces driver anxiety during the slight delay of background reconciliation.
+
+## 2. Testing Steps for Poor Connectivity
+
+To verify reliability before the 10-day launch, you must simulate the specific failure modes observed.
+
+**Step 1: Network Throttling Simulation**
+*   Use software tools (e.g., TC on Linux, Network Link Conditioner on macOS, or container-level traffic control) to artificially introduce latency (500ms–5s) and packet loss (5–20%) between the exit controller and the payment gateway.
+*   **Test Case:** Attempt 100 exits with valid payments under high latency.
+*   **Success Criteria:** 100% of barriers raise within 4 seconds. Zero vehicles remain trapped.
+
+**Step 2: Total Outage Simulation**
+*   Physically disconnect the network cable or block all outbound traffic from the exit controller.
+*   **Test Case A (Cached User):** Simulate a user who paid 2 minutes ago. Verify the barrier raises using only local cache data.
+*   **Test Case B (Uncached User):** Simulate a new user. Verify the system transitions to "Emergency Egress Mode" or prompts for manual override within the defined timeout window.
+*   **Success Criteria:** System never hangs. Logs accurately record "Offline Exit" events with timestamps and vehicle IDs for later reconciliation.
+
+**Step 3: Reconciliation Integrity**
+*   Restore network connectivity after a simulated outage.
+*   **Test Case:** Verify that all "pending verification" transactions queued during the outage are successfully synced with the central payment gateway without duplicates or data loss.
+*   **Success Criteria:** Financial records match actual exits; no double-charging occurs.
+
+**Step 4: Stress Test under Load**
+*   Simulate a rush-hour scenario (multiple cars exiting simultaneously) while maintaining artificial latency.
+*   **Success Criteria:** The queue clears continuously; the system does not deadlock or require a manual reboot to resume operations.
+
+*Note: Ensure all local caching logic includes robust encryption to prevent tampering with payment records stored on the device.*
+*Prioritize a "manual override" physical button at each lane as a final non-software failsafe.*

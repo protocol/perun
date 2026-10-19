@@ -1,0 +1,52 @@
+### Pre-Launch Testing Protocol: Pet-Medication Dosage Calculator
+
+Given the high-stakes nature of this feature (potential fatality for small breeds) and the constraint of no live trials, the following protocol prioritizes **human-in-the-loop gating** and **adversarial boundary testing** over statistical certification. No automated output should reach an end-user without these controls.
+
+#### 1. Mandatory Human Gate (Immediate Action)
+Before any algorithmic refinement, implement a **hard stop** on the product flow:
+*   **Rule:** The tool must **never** auto-dispense a final "Administer X mL" instruction for immediate home use without a verified human review step for the first 1,000 uses or until a specific error-rate threshold is proven via simulation.
+*   **Implementation:** The output must be framed as a "Preliminary Calculation – Verify with Veterinarian" until the clinic partner explicitly signs off on a batch of simulated cases. For small breeds (<5kg), a mandatory secondary confirmation screen or vet-approval flag is required.
+
+#### 2. Boundary Condition Test Suite (Literature-Based)
+Construct a static dataset of test cases derived strictly from veterinary pharmacology literature. Do not rely on "average" weights; target the edges where unit conversion and classification errors occur.
+
+**A. Unit Conversion & Scale Traps (The "Fatal Decimal" Tests)**
+*   **Test Case 1 (kg vs. lbs):** Input weight as `5` (intended lbs) vs `5` (intended kg).
+    *   *Expected Fail:* System treats 5 lbs as 5 kg (2.2x overdose).
+    *   *Pass Condition:* System either forces unit selection or flags "Unusually high dose for entered weight" if the resulting mL exceeds literature maximums for that breed.
+*   **Test Case 2 (mg vs. mL):** Input concentration errors.
+    *   *Probe:* Vary the drug concentration input by factors of 10 and 100.
+    *   *Stop Condition:* Any output exceeding the maximum safe dose per kg (from literature) triggers a hard error block, not a warning.
+
+**B. Breed/Weight Misclassification Edges**
+*   **Test Case 3 (The "Small Breed" Cliff):**
+    *   *Inputs:* Breeds at the exact cutoff of weight classes (e.g., a breed classified as "Small" at 4.9kg vs "Medium" at 5.1kg).
+    *   *Probe:* Enter a Chihuahua (2kg) but tag as "Great Dane" (logic error simulation).
+    *   *Metric:* Does the system cap the dose based on the *entered weight* regardless of breed tag? The weight must be the primary governor; breed should only adjust for known metabolic variances documented in literature.
+*   **Test Case 4 (Age Extremes):**
+    *   *Inputs:* Puppies (<8 weeks) and Geriatric (>12 years).
+    *   *Constraint:* Many drugs are contraindicated for these ages.
+    *   *Pass Condition:* System returns "Contraindicated – Consult Vet" rather than a calculated number.
+
+**C. Adversarial "Impossible" Inputs**
+*   **Test Case 5 (Zero/Negative/Null):** Input 0kg, -5kg, or non-numeric weight.
+    *   *Requirement:* System must fail closed (no output) rather than defaulting to a base dose.
+*   **Test Case 6 (Outlier Weights):** Input 0.1kg (unrealistic for most breeds) or 150kg (unrealistic for dogs).
+    *   *Metric:* System must flag "Weight outside valid range for selected breed" before calculating.
+
+#### 3. Measurement & Reporting Plan
+*   **Metric:** **Zero Tolerance for Overdose.** Any test case producing a dose >110% of the literature maximum for that weight is a **Blocker**.
+*   **Reporting:** Do not claim "99% accuracy." Report the specific count of "Fatal Overdose Simulations" triggered and fixed.
+*   **Transparency Artifact:** Create a **Model Card** attached to the tool's "About" section listing:
+    *   *Intended Use:* Preliminary estimation only, not a prescription.
+    *   *Limitations:* "Validated against literature ranges X-Y; not tested on live animals. Contraindications for ages <8 weeks."
+    *   *Owner:* Name the specific team member responsible for reviewing flagged doses.
+
+#### 4. Execution Timeline (2-Week Sprint)
+*   **Days 1-3:** Build the static test dataset from literature (max/min doses per kg).
+*   **Days 4-7:** Run the boundary tests above. Fix any logic that allows an overdose.
+*   **Days 8-10:** Implement the "Human-in-the-Loop" gate for small breeds.
+*   **Days 11-14:** Dry run with the clinic partner using *only* the simulated dataset. No real patients.
+
+**Note:** This protocol treats the tool as a decision-support system, not an autonomous agent. The "fatal" risk requires that the system defaults to silence (error) rather than a potentially wrong number.
+**Legal Routing:** Whether this tool constitutes a regulated medical device in Peru requires immediate counsel review; do not assume "wellness" status for dosing logic.

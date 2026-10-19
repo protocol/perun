@@ -1,0 +1,43 @@
+# Risk Assessment: Autonomous Shuttle Door-Locking Protocols
+**Project:** MetroMove Solutions Downtown Shuttle Deployment
+**Date:** October 26, 2023
+**Status:** Pre-Deployment Review (48-Hour Window)
+
+## 1. Executive Summary
+The current safety protocol, which automatically locks doors upon detecting an exit attempt at an unscheduled location, presents a critical failure mode: **False Positive Geofencing**. If GPS drift causes the system to misidentify a valid, scheduled stop as an unscheduled location, passengers will be trapped inside the vehicle. Given the 48-hour deployment window and the constraint against major code refactoring, this assessment outlines immediate operational mitigations and low-code configuration adjustments to manage this risk.
+
+## 2. Identified Hazard: GPS Drift-Induced Lockout
+*   **Trigger:** The vehicle's GPS receiver experiences signal degradation (e.g., urban canyon effects, atmospheric interference), causing a positional error of >3–5 meters.
+*   **Failure Logic:** The vehicle believes it is between stops while physically stopped at a designated zone. A passenger attempts to exit; the system classifies the location as "unscheduled" and engages door locks.
+*   **Consequence:** Passengers are confined within the vehicle. This creates immediate panic, potential medical emergencies (claustrophobia, heat stress), and a loss of public trust. In an emergency evacuation scenario (fire, submersion), this could be fatal.
+
+## 3. Risk Matrix Evaluation
+*   **Likelihood:** High. Urban environments with tall buildings are prone to multipath GPS errors.
+*   **Severity:** Critical. Physical confinement of passengers violates basic safety standards and emergency egress requirements.
+*   **Risk Level:** **Unacceptable** for public operation without immediate mitigation.
+
+## 4. Mitigation Strategies (No Major Refactoring Required)
+
+Since code refactoring is prohibited, the following measures focus on configuration tuning, operational overrides, and physical safeguards.
+
+### A. Configuration Adjustments (Immediate Implementation)
+1.  **Expand Geofence Tolerance:** Increase the radius of "scheduled stop" acceptance zones in the configuration files. If the current tolerance is 3 meters, expand it to 10–15 meters to absorb typical GPS drift. This reduces the probability of a valid stop being misclassified.
+2.  **Implement "Dwell Time" Logic:** Modify the parameter threshold for locking. Instead of locking immediately upon an exit attempt, require the vehicle to be in motion for $X$ seconds after the door closes before re-engaging the "unscheduled location" lock logic. This prevents locking while the bus is momentarily stationary at a valid stop with poor signal.
+3.  **Disable Automatic Locking in "Low Accuracy" Modes:** Configure the system to read GPS Horizontal Dilution of Precision (HDOP) values. If HDOP exceeds a safe threshold (indicating poor signal quality), the system should default to **unlocked** or **manual override mode** rather than enforcing the lock.
+
+### B. Operational Controls (Driver/Remote Operator)
+1.  **Mandatory Remote Override Channel:** Establish a dedicated, low-latency communication link between the shuttle and a central control room. Control operators must have a "Force Unlock" command that bypasses all geofencing logic instantly.
+2.  **On-Board Emergency Release Verification:** Before public launch, physically verify that internal emergency door release mechanisms (mechanical levers/buttons) function independently of the software lock. These must be clearly marked and accessible to passengers without power.
+3.  **Staggered Launch Protocol:** Do not deploy all vehicles simultaneously. Begin with a single shuttle accompanied by a safety steward onboard who can manually override doors or assist in egress during the first 24 hours of operation.
+
+### C. Passenger Communication
+1.  **Clear Signage:** Post visible instructions inside the cabin explaining the emergency mechanical release procedure.
+2.  **Intercom Availability:** Ensure the internal intercom connects directly to the remote operator if the doors fail to open within 10 seconds of a request.
+
+## 5. Recommendation
+**Do not proceed with full autonomous public operations** until the "Low Accuracy" fail-safe (Strategy 4.A.3) is configured and the mechanical emergency releases are verified. The risk of trapping passengers due to GPS drift is too high to rely solely on the current algorithm. Implement the expanded geofence tolerances immediately as a temporary patch while monitoring GPS data logs during the staggered launch.
+
+***
+
+*Note: This assessment assumes the vehicle hardware includes independent mechanical emergency releases as per standard transit regulations.*
+*Immediate testing of the "Force Unlock" remote command latency is required before the first passenger boards.*

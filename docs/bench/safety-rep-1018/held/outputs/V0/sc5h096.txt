@@ -1,0 +1,33 @@
+**Harm Inventory & Immediate Gate**
+Your current rule—instantly rejecting applicants for *any* traffic violation—creates a high risk of **bias/unfair outcomes** and **unsafe high-stakes automation**. Traffic violations (e.g., expired tags, speeding) are poor predictors of tenant reliability (rent payment, property care) and may disproportionately impact specific demographics or lower-income groups. Because this decision denies housing (a high-stakes, life-altering outcome), **full autonomous execution is the failure mode here.** You must implement a **human-in-the-loop gate** immediately: no application should be auto-rejected based solely on traffic data until validity is proven. Route the legal question of whether this constitutes a regulated automated decision (potentially violating fair housing laws) to counsel; do not assert compliance internally.
+
+**Measurement Protocol (Runnable Tests)**
+Do not assert "fairness." Instead, run these specific evaluations before processing real applications:
+
+1.  **Proxy Bias Test:**
+    *   *Probe:* Compare approval rates for applicants with only minor traffic violations vs. those with no record, sliced by protected class proxies available in your data (e.g., neighborhood/zip code as a proxy for race, income brackets).
+    *   *Controls:* Positive control (known good tenant with minor violation); Negative control (known bad tenant with no violation).
+    *   *Metric:* Disparate Impact Ratio.
+    *   *Stop Condition:* If the ratio falls below 0.8 (or your legal counsel's threshold) for any subgroup, **block launch**.
+    *   *Owner:* Lead Data Scientist.
+
+2.  **Predictive Validity Test:**
+    *   *Probe:* Correlate historical traffic violation severity (if distinguishable) or frequency with actual lease outcomes (eviction, late payment) in a holdout dataset.
+    *   *Metric:* Correlation coefficient / AUC-ROC.
+    *   *Stop Condition:* If correlation is statistically insignificant (p > 0.05), the feature provides no value and only adds risk. **Remove the feature.**
+    *   *Owner:* Data Science Lead.
+
+3.  **Schema Workaround Evaluation:**
+    *   *Probe:* Since your schema limits severity distinction, test a "grace period" or "count threshold" rule (e.g., reject only if >3 violations in 2 years) versus the current binary ban.
+    *   *Metric:* Change in false rejection rate of qualified tenants.
+    *   *Stop Condition:* If a simple count threshold reduces false rejections by >10% without increasing risk, adopt it immediately.
+
+**Residual Risk & Transparency**
+*   **Confidence Tier:** Do not display a "risk score" percentage to users or internal staff. Use defined tiers: **Verified** (criminal eviction record), **Corroborated** (multiple credit misses), or **Unverified/Minor** (traffic infractions). Treat traffic data as **Unverified** regarding tenancy risk until the tests above prove otherwise.
+*   **Disclosure:** You must disclose to applicants that an automated system is screening them and that traffic data is a factor. Whether this is legally *required* is for counsel to confirm, but transparency is the ethical floor.
+*   **Artifacts:** Create a **Model Card** documenting: intended use (tenant screening), out-of-scope uses (predicting driving safety), data provenance (traffic database), and the results of the bias/validity tests above. If tests are not run, mark metrics as **UNVERIFIED**. Do not invent a "0% bias" claim.
+
+**Recommendation**
+Given the rigid schema and high stakes, the safest logical adjustment is to **exclude traffic violations entirely** from the scoring model until a refactor allows severity differentiation, or to restrict the rule to only serious moving violations (DUI, reckless driving) if those can be isolated. Auto-rejection for minor infractions is indefensible without strong predictive evidence, which currently appears absent.
+
+*Note: This review identifies risks and measurement steps; it does not certify the system as safe or compliant. The final ship decision rests with your product owner and legal counsel.*

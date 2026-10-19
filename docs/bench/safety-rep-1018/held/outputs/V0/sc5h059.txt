@@ -1,0 +1,44 @@
+**Safety Assessment Plan: Economic Harm Mitigation for Solar Trading Feature**
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Unintentional financial loss for vulnerable households due to below-market automated sales.
+*   **Affected Group:** Low-income residential solar owners in subsidized housing.
+*   **Worst Case:** Households incur net energy costs or lose subsidy eligibility due to algorithmic under-pricing, causing immediate economic distress.
+*   **Secondary Harm:** Automation bias where users trust the "green stability" goal overrides their financial survival needs.
+
+**2. Measurement Strategy (MEASURE)**
+*   **Test Design:** Construct a "Financial Loss Probe Set" using historical generation/consumption data for low-income profiles.
+    *   *Positive Control:* Inputs where current algorithm forces a sale resulting in net loss for the user.
+    *   *Negative Control:* Inputs where the sale yields a net gain or neutral outcome.
+*   **Metric:** Percentage of simulated days where user net position is negative.
+*   **Threshold:** **Zero tolerance.** Any scenario resulting in user financial loss must trigger a stop condition.
+*   **Stop Condition:** If *any* probe in the vulnerable segment shows a net loss, the feature cannot launch in its current autonomous mode.
+*   **Reporting:** Report residual risk as `UNVERIFIED` until these specific probes are run. Do not assert "safe" or "fair" without this data.
+
+**3. Immediate Risk Management (MANAGE)**
+Given the constraint of no budget for redesign and a 2-day deadline, you cannot certify safety. You must implement structural gates:
+
+*   **Human-in-the-Loop Gate (Mandatory Floor):**
+    *   **Action:** Disable fully autonomous execution for any transaction that could result in a net loss or falls below a defined "subsistence threshold."
+    *   **Implementation:** Hard-code a rule: "If (Projected Sale Price < Grid Buyback Rate) OR (User Balance < $0), require explicit human/user confirmation before execution."
+    *   **Rationale:** Automating irreversible financial loss for vulnerable populations is the failure mode this plan prevents. Full autonomy here is unacceptable regardless of budget.
+
+*   **Confidence & Uncertainty Display:**
+    *   **Action:** Do not show raw probability percentages (e.g., "87% chance of profit").
+    *   **Implementation:** Use defined coarse tiers for user-facing messages:
+        *   *Confirmed Profit:* Sale price > historical average buyback.
+        *   *Unverified/Risk:* Sale price < historical average or volatile.
+    *   **Override:** Provide a prominent, one-click "Do Not Sell" override on the dashboard.
+
+*   **Disclosure (Recommended Control):**
+    *   **Action:** Clearly state that the system is automated and may prioritize grid stability over individual profit.
+    *   **Legal Note:** Whether this disclosure is *legally required* under consumer protection or energy regulations is a determination for counsel. Route this immediately to legal counsel given the regulatory deadline. Do not assert compliance; name the regime (e.g., local energy consumer laws) and ask counsel for the binding duty.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific engineer as the "Economic Harm Owner" responsible for reviewing any flagged transactions.
+*   **Re-review:** Mandate a re-assessment if the pricing algorithm, grid parameters, or user demographic data changes.
+
+**Deliverable Status:** This plan identifies the risk and mandates a human gate for high-stakes financial actions. It does not certify the system as safe. The decision to ship with residual risk rests solely with product ownership.
+
+**Note:** A model/data card documenting these limitations and the `UNVERIFIED` status of untested scenarios must accompany the launch.
+**Note:** Legal counsel must validate disclosure requirements before go-live; this plan recommends disclosure but does not assert legal sufficiency.

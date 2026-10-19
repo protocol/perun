@@ -1,0 +1,40 @@
+### Safety Validation Workflow for Wildfire-Smoke Monitor
+
+**1. Define Ground-Truth Scenarios and Risk Tiers**
+Establish a matrix of synthetic environmental conditions representing real-world variability. Do not rely solely on historical averages; include edge cases critical for asthmatics:
+*   **Safe Zone:** AQI < 50 (Green). Expected output: "Safe for outdoor activity."
+*   **Caution Zone:** AQI 51–100 (Yellow). Expected output: "Unusually sensitive individuals should consider reducing prolonged outdoor exertion."
+*   **High-Risk Zone:** AQI 101–150 (Orange/Red). Expected output: "People with respiratory disease (e.g., asthma) should limit prolonged outdoor exertion."
+*   **Critical Edge Cases:** Rapid transitions (e.g., AQI jumping from 45 to 155 in one update), localized micro-climates (high smoke in one zip code, clear in adjacent), and data gaps (sensor offline).
+
+**2. Construct a "Shadow Mode" Testing Harness**
+Before deploying to live users, run the alert engine in shadow mode against the defined scenarios.
+*   **Input Simulation:** Feed the system timestamped, geolocated smoke density data matching the scenarios above. Simulate standard mobile data latency (3G/4G fluctuations) to ensure the 30-second constraint is met without timing out.
+*   **Output Capture:** Log every generated alert, the trigger threshold, and the latency from data ingestion to push notification.
+*   **Blind Comparison:** Compare system outputs against the pre-defined "Ground-Truth" advice for each scenario. Any deviation in the High-Risk or Critical zones is an immediate failure.
+
+**3. Implement a "Fail-Safe" Default Logic Check**
+Validate the system's behavior under uncertainty. If data is stale, missing, or contradictory:
+*   The system must **never** default to "Safe."
+*   The required fallback is a conservative warning: "Data unavailable; assume poor air quality and stay indoors."
+*   Test this by intentionally cutting data feeds or injecting malformed packets during the simulation.
+
+**4. Conduct Targeted Beta "Canary" Trials**
+With your current nine-developer team and limited beta users:
+*   **Internal Dogfooding:** Developers in high-risk regions must use the app exclusively for 48 hours, manually verifying alerts against official government sources (e.g., AirNow, local fire departments) every hour.
+*   **Controlled User Cohort:** Select a small subset of beta users (e.g., 5–10 individuals) in diverse regions. Require them to report any instance where the app advice contradicts official local warnings.
+*   **Latency Audit:** Specifically measure the time delta between official data updates and the user receiving the alert on mobile data. If any alert exceeds 30 seconds, flag the network path for optimization.
+
+**5. Establish a "Stop-the-Line" Protocol**
+Define clear criteria for halting the wider rollout:
+*   Any single instance of a "Safe" alert issued when official AQI > 100.
+*   System latency exceeding 30 seconds in >5% of test cases.
+*   Failure of the "Fail-Safe" logic during data loss simulations.
+
+**6. Documentation and Sign-off**
+Compile a validation report detailing pass/fail rates for each risk tier, latency statistics, and the results of the fail-safe tests. No expansion to a wider audience occurs until this report confirms zero critical safety errors.
+
+***
+
+*Note: This workflow prioritizes conservative error handling (false positives) over aggressive optimization to prevent life-threatening false negatives.*
+*Ensure all synthetic data used in testing covers the specific particulate matter (PM2.5) densities relevant to wildfire smoke, not just general pollution.*

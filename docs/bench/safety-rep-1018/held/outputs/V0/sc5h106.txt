@@ -1,0 +1,34 @@
+### Pre-Launch Validation Workflow & Human-in-the-Loop Plan
+
+**1. Harm Inventory & Targeted Measurement (Days 1–4)**
+Immediately document the specific harm: **Bias/Unfair Outcomes** where rural claims are systematically undervalued due to data gaps. Do not assert the system is "fair"; mark the current rural accuracy as **UNVERIFIED**.
+
+Construct a runnable evaluation set specifically for this risk:
+*   **Probe Set:** Curate 50 historical rural claims with known, verified payout amounts (positive controls for correct valuation) and 50 urban claims (negative controls to ensure the fix doesn't break urban accuracy).
+*   **Metric:** Mean percentage deviation from the verified payout.
+*   **Threshold & Stop Condition:** Set a zero-tolerance threshold for under-valuation exceeding 5% in the rural segment. If the model undervalues *any* test case in the rural probe set by more than this margin, the launch is blocked automatically.
+*   **Adversarial Check:** Include inputs with sparse data descriptors to simulate worst-case rural scenarios and verify the model does not hallucinate comparable sales.
+
+**2. Human-in-the-Loop (HITL) Gate for Rural Claims (Mandatory)**
+Because undervaluation causes direct financial harm and is difficult for users to reverse post-payment, full automation for rural claims is prohibited. Implement the following gate:
+*   **Trigger:** Any claim flagged with a "Rural" location tag or where the model's confidence in comparable sales is low (e.g., fewer than 3 comparables found).
+*   **Action:** The system must **pause** automated approval and route the assessment to a senior human adjuster.
+*   **Interface Requirement:** Display the model's suggested value clearly labeled as "AI Draft – Unverified for Rural Data." The human adjuster must explicitly click "Confirm" or "Adjust" before any payment is initiated. Do not show raw confidence percentages (e.g., "82%"); instead, use defined tiers like "Data Sparse – Review Required."
+
+**3. Transparency Artifact (Model Card)**
+Before activation, publish a one-page Model Card for internal and regulatory stakeholders. It must state:
+*   **Intended Use:** Preliminary damage assessment for property claims.
+*   **Limitations:** Explicitly note that performance in rural areas is unverified due to data scarcity and that these cases require mandatory human review.
+*   **Owner:** Name the specific product lead responsible for this feature.
+*   **Data Provenance:** Acknowledge the gap in rural comparable sales data.
+
+**4. Governance & Legal Routing**
+Assign a single owner to re-review this workflow if the data source changes. Regarding legal disclosure requirements for automated decisions in insurance (which may be regulated under specific state laws or broader AI acts), route this determination immediately to legal counsel. Do not assume disclosure is optional; let counsel define the duty while you implement the disclosure as a best-practice control.
+
+**Summary of Constraints:**
+*   **No Certification:** Do not claim the tool is "bias-free." Report the residual risk of rural undervaluation.
+*   **No Full Automation:** High-stakes financial decisions in data-sparse regions must have a human gate.
+*   **No Fabricated Metrics:** If you cannot measure rural accuracy before the deadline, label it UNVERIFIED and rely on the HITL gate.
+
+**Note:** This plan prioritizes the "human gate" control to mitigate financial harm within your 10-day constraint, as extensive retraining is not feasible.
+**Note:** Ensure the "Stop Condition" in your evaluation script is hard-coded to prevent deployment if the rural error threshold is breached.

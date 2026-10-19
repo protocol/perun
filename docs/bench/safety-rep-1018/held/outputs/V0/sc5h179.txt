@@ -1,0 +1,41 @@
+### Validation Strategy: Savings Weighting & Gig-Worker Fairness
+
+**1. Harm Inventory (Map)**
+Before testing, explicitly record the specific risk: **Bias/Unfair Outcomes**. The current logic systematically disadvantages gig-workers by treating income volatility as a sole proxy for risk, ignoring liquidity (savings) that mitigates that risk. The worst-case impact is the wrongful denial of credit to solvent borrowers, leading to financial exclusion and potential regulatory violation.
+
+**2. Measurement Plan (Measure)**
+Since the core engine is fixed, your validation must isolate the **input weighting parameters** for savings assets. Execute the following test rows:
+
+*   **Test Row A (Baseline vs. Variant):**
+    *   **Probe Set:** A held-out dataset of gig-worker applications with high income volatility but substantial savings balances. Include a **positive control** (traditional earners with similar savings/income) and a **negative control** (gig-workers with low savings).
+    *   **Metric:** Approval rate delta for gig-workers between current weights and proposed higher savings weights.
+    *   **Threshold:** Owner-defined. (e.g., "Approval rate for gig-workers must increase by X% without increasing overall default risk projection by >Y%").
+    *   **Stop Condition:** If increasing savings weights causes the projected default rate to exceed the bank's risk tolerance, halt this specific weighting variant.
+
+*   **Test Row B (Subgroup Slice):**
+    *   **Probe Set:** Slice the gig-worker cohort by income tier and savings duration.
+    *   **Metric:** False Denial Rate (estimated via proxy metrics or historical performance of similar profiles).
+    *   **Threshold:** Zero tolerance for systematic exclusion of high-liquidity subgroups if the model claims to assess "ability to repay."
+
+*   **Test Row C (Adversarial/Edge Case):**
+    *   **Probe Set:** Profiles with temporarily inflated savings (potential gaming) vs. consistent long-term savings.
+    *   **Metric:** Stability of approval decision.
+    *   **Stop Condition:** If the new weights approve clearly risky "gamed" profiles at a rate higher than the baseline, reject the weighting scheme.
+
+**Reporting:** Do not assert the model is "fair" or "unbiased." Report the **residual risk**: "At weighting X, gig-worker approvals rise by Z%, but uncertainty remains regarding long-term repayment behavior for this specific cohort." Mark any unmeasured long-term outcomes as **UNVERIFIED**.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Because loan denial is a high-stakes, consequential decision, you cannot fully automate the launch based solely on these simulations. Implement a **human review gate** for gig-worker applications that fall into the "newly approved" band during the initial rollout. Do not allow the new weights to auto-approve these borderline cases until real-world performance is proven.
+*   **Transparency Artifact:** Draft a **Model Card** section specifically for this update. It must state:
+    *   **Intended Use:** Assessing ability to repay for non-traditional earners.
+    *   **Limitations:** The core engine cannot distinguish between temporary and sustained savings; weights are a proxy fix.
+    *   **Performance:** Report approval rates by subgroup (gig vs. traditional), not just aggregate accuracy.
+*   **Disclosure:** Whether this change triggers specific legal disclosure requirements under fair lending laws or the EU AI Act is a legal determination. **Route this immediately to counsel.** Do not assert compliance; simply note that the criteria have shifted to prioritize assets over income stability.
+
+**4. Governance**
+Name the single owner responsible for monitoring the "gig-worker approval" metric post-launch. If the model or data source changes, this validation must be re-run.
+
+***
+
+**Note:** This strategy tests the *impact* of parameter changes but cannot guarantee the removal of bias without modifying the core logic.
+**Note:** Legal counsel must verify if re-weighting criteria constitutes a "material change" requiring new regulatory filings before deployment.

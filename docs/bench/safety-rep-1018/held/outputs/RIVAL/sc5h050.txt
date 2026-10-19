@@ -1,0 +1,48 @@
+### Testing Strategy: Geofence Locking & Zone Refinement
+
+**Objective:** Map false-positive locking events in safe neighborhoods and refine high-risk zone boundaries to prevent passenger entrapment while maintaining safety coverage.
+
+#### Phase 1: Baseline Data Collection & Simulation
+Since high-resolution mapping data is unavailable, we must rely on historical trip data and controlled simulation using existing GPS tools.
+
+1.  **Historical Trace Analysis:**
+    *   Extract GPS logs from the past 6 months for all trips occurring between 10:00 PM and 4:00 AM.
+    *   Overlay current "high-risk" zone polygons onto these tracks.
+    *   **Identify False Positives:** Flag any instance where the door-lock trigger fired in areas with historically low incident reports (e.g., well-lit commercial districts, hospital zones, police station vicinities).
+    *   **Cluster Analysis:** Group false positives by geographic cluster to identify systematic boundary overreach (e.g., a zone extending 200 meters too far east into a safe residential block).
+
+2.  **Controlled Field Simulation:**
+    *   Deploy test vehicles with logging enabled to drive specific routes along the *edges* of current high-risk zones during night hours.
+    *   Execute "boundary stress tests": Drive parallel to zone borders at varying speeds to pinpoint the exact GPS coordinate where the lock triggers.
+    *   Record environmental factors that degrade GPS accuracy (e.g., urban canyons, heavy tree cover) which may cause "GPS drift" into a zone when the vehicle is actually outside.
+
+#### Phase 2: Safety Mechanism Validation
+Before refining zones, verify that the current system allows for emergency egress, ensuring no rider is permanently trapped.
+
+*   **Override Latency Testing:** Measure the time delta between a passenger initiating an "emergency unlock" request and the doors physically unlocking. This must be under 2 seconds regardless of zone status.
+*   **Driver Override Verification:** Confirm that the driver can instantly override the automatic lock from the front console without latency.
+*   **Fail-Safe Triggers:** Test if the lock automatically disengages when the vehicle comes to a complete stop (speed = 0) or when the hazard lights are activated. If not, this logic must be added immediately as a critical safety patch.
+
+#### Phase 3: Zone Refinement Methodology
+Use the data from Phase 1 to redraw boundaries using a "buffer and exclude" approach.
+
+1.  **Shrink High-Risk Polygons:**
+    *   Apply a negative buffer (shrinkage) of 50–100 meters to current high-risk zones to create a "confidence margin." This reduces the likelihood of GPS drift triggering false locks.
+    *   Manually carve out "Safe Havens" (hospitals, 24-hour transit hubs, police stations, major hotels) by creating explicit exclusion polygons that override high-risk flags.
+
+2.  **Dynamic Trigger Logic:**
+    *   Instead of a binary "in/out" lock, implement a **dwell-time requirement**. The doors should only lock if the vehicle remains inside a high-risk zone for more than 30 seconds while moving slowly (<10 km/h). This prevents locking during brief transits through zone edges.
+    *   Introduce a "Soft Warning" state: When entering a borderline area, notify the driver and passenger via the app ("Entering enhanced safety zone") without engaging locks immediately, allowing manual activation if desired.
+
+#### Phase 4: Validation Loop
+*   **Re-simulation:** Run the historical false-positive dataset against the new refined zones. Target a >90% reduction in false locks.
+*   **Pilot Deployment:** Roll out the refined zones to 5% of the fleet in one metropolitan sector for 48 hours. Monitor real-time logs for any new entrapment reports.
+*   **Feedback Channel:** Add a one-tap "False Lock Report" button in the passenger app for the pilot group to capture real-world edge cases immediately.
+
+**Deliverable Timeline:**
+*   **Days 1–3:** Data extraction and historical overlay analysis.
+*   **Days 4–7:** Controlled field simulations and override latency testing.
+*   **Days 8–14:** Zone refinement, logic updates (dwell-time), and internal re-simulation.
+*   **Days 15–21:** 5% Pilot deployment, monitoring, and final adjustment before full launch.
+
+Note: Prioritize the "emergency unlock" latency fix immediately, as this is a critical life-safety requirement independent of zone accuracy. Ensure all testing complies with local privacy regulations regarding GPS data usage.

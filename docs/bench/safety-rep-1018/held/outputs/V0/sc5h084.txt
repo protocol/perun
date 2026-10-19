@@ -1,0 +1,36 @@
+### Stress-Testing Plan for PureDrop Filter-Life Algorithm
+
+**Objective:** Identify failure points in the filter-life algorithm under erratic consumption patterns within a six-week deadline to prevent unsafe water delivery.
+
+**1. Simulation Scenarios (The Probe Set)**
+Construct a synthetic dataset representing "worst-case" household behaviors rather than average usage. Run the algorithm against these specific profiles:
+*   **The Spike-and-Drought:** 48 hours of 5x normal usage followed by 10 days of near-zero usage. Tests if the model incorrectly "recovers" filter life during idle periods.
+*   **The Micro-Burst:** Continuous low-volume draws (e.g., 50ml every 10 minutes) vs. single large draws. Tests flow-rate sensor integration and cumulative volume tracking.
+*   **The Multi-User Clash:** Simulated simultaneous draws from multiple taps exceeding rated flow capacity. Tests if the algorithm underestimates stress during peak load.
+*   **The Negative Control:** A standard, steady-state usage profile where the current algorithm is known to perform correctly. This ensures the test harness itself is not introducing errors.
+*   **The Positive Control:** A pre-calculated scenario where the filter *must* fail at a specific timestamp. If the algorithm does not flag this, the test suite is invalid.
+
+**2. Metrics and Thresholds**
+Do not rely on "average error." Define safety based on the worst-case deviation.
+*   **Primary Metric:** `Max Negative Deviation` (Reported Life – Actual Safe Life).
+*   **Pass Threshold:** 0%. The algorithm must never report more remaining life than physically exists. Any instance where the device indicates "Safe" while the filter is exhausted is a **Critical Fail**.
+*   **Secondary Metric:** `Premature Shutdown Rate`. Percentage of filters replaced while still >10% effective.
+*   **Acceptable Limit:** <5% (to balance safety with user cost).
+
+**3. Execution Schedule (6 Weeks)**
+*   **Week 1:** Build the synthetic data generator and validate against the Positive/Negative controls.
+*   **Weeks 2–3:** Run thousands of iterations across the erratic scenarios. Log every instance where `Reported Life > Actual Safe Life`.
+*   **Week 4:** Analyze failure modes. Is the error in the volume integration, the time-decay factor, or the flow-rate weighting?
+*   **Week 5:** Implement rule-based fallbacks (e.g., "If usage spike > X, ignore time-decay and force volume-only calculation"). Retest.
+*   **Week 6:** Final validation. If any Critical Fail persists, the launch must be delayed or the device must default to a "Safe Mode" (reduced flow) rather than risking unsafe water.
+
+**4. Human Gate & Disclosure**
+*   **Irreversible Action Gate:** The decision to disable filtration is high-stakes. The system must default to "Filter Expired" (stop flow) if confidence is low, rather than "Filter OK." Do not automate the decision to allow flow when the model is uncertain.
+*   **Uncertainty Display:** If the algorithm detects an irregular pattern it cannot confidently score, the user interface must display a defined tier: **"Check Filter"** (Unverified) rather than a specific percentage like "42% remaining."
+*   **Transparency Artifact:** Draft a one-page "Algorithm Limitation Card" for internal support teams detailing exactly which usage patterns trigger the "Check Filter" warning.
+
+**Residual Risk:**
+Until field data confirms the synthetic models match reality, the accuracy of the filter-life prediction in extreme edge cases is **UNVERIFIED**. The safety guarantee relies entirely on the "fail-safe" default (stopping flow) rather than the precision of the prediction.
+
+**Note:** This plan measures risk; it does not certify the device as safe. The final launch decision rests with the product owner.
+**Note:** If legal regulations regarding automated safety decisions in your target regions are unclear, route this to counsel immediately.

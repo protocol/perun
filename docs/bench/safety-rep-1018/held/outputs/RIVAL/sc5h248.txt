@@ -1,0 +1,39 @@
+### Pre-Launch Income Volatility Simulation Design
+
+To stress-test your credit-limit approval logic against volatile income streams within your legacy pipeline constraints, design a simulation that decouples **real-time spending behavior** from **stale income snapshots**. The core risk is the "temporal mismatch": the system sees a high, stable-looking income from last month's update while observing high-current spending, leading to an overestimated repayment capacity.
+
+**1. Data Synthesis Strategy**
+Generate synthetic user profiles that isolate specific volatility patterns. Do not rely on historical averages. Create three distinct cohorts:
+*   **The "Gig Spike" Cohort:** Users with low baseline income but one massive inflow in the "last updated" month (e.g., a seasonal bonus or large contract payment), followed by a sharp drop in the current simulated month.
+*   **The "Declining Trend" Cohort:** Users whose income has dropped 20-40% in the current month compared to the legacy snapshot. The system still sees the higher, older value.
+*   **The "Irregular Frequency" Cohort:** Users paid bi-weekly or irregularly, where the legacy snapshot captured two paychecks, but the current month only contains one.
+
+**2. Simulation Logic & Edge Cases**
+Run your approval algorithm against these profiles while injecting the following specific edge cases to identify excessive debt approval:
+
+*   **Edge Case A: The "One-Month Wonder"**
+    *   *Scenario:* Legacy data shows \$10k income (anomaly); Current reality is \$3k. Spending pattern shows sudden uptake in discretionary costs based on the perceived wealth.
+    *   *Failure Mode:* The system approves a limit based on \$10k, ignoring the reversion to \$3k.
+    *   *Metric to Watch:* Debt-to-Income (DTI) ratio calculated using *current* simulated cash flow vs. the *approved* limit. If DTI > 40% in reality, the test fails.
+
+*   **Edge Case B: The "Lag-Induced Overdraft"**
+    *   *Scenario:* A user with steady \$5k income misses a payment in the current month due to a timing mismatch, causing a temporary dip to \$0 in the simulation. The legacy data still shows \$5k.
+    *   *Failure Mode:* The system interprets the spending dip as temporary and *increases* the limit to "help," exacerbating the user's actual liquidity crisis.
+    *   *Metric to Watch:* Limit increase decisions made during simulated negative cash-flow months.
+
+*   **Edge Case C: The "Expense-Income Decoupling"**
+    *   *Scenario:* Income is volatile (high/low/high), but essential expenses (rent, utilities) are fixed and high.
+    *   *Failure Mode:* The system averages the volatile income, deeming the user stable, while failing to account for the fixed burn rate during low-income months.
+    *   *Metric to Watch:* Minimum repayment amount vs. simulated low-month disposable income.
+
+**3. Execution Steps**
+Since you cannot alter the legacy pipeline, build a lightweight wrapper script (Python or Node.js) that:
+1.  Ingests your static "legacy" income export.
+2.  Generates a parallel "truth" layer with the volatile patterns described above.
+3.  Feeds the "legacy" view to your approval engine.
+4.  Captures the approved limits and calculates repayment feasibility against the "truth" layer.
+
+**4. Refinement Criteria**
+Flag any approval where the simulated user's **minimum monthly repayment** exceeds **30% of their lowest income month** in a 6-month rolling window. These are the specific thresholds you must harden before the regulatory filing. Focus your engineering sprint on adding a "volatility discount" factor or a "cooling-off" period for users showing income variance greater than 15% between the snapshot and current behavior.
+
+*Note: Ensure all synthetic data strictly adheres to GDPR requirements given your Warsaw location, even for internal testing. Prioritize the "Gig Spike" cohort, as this is the most common regulatory failure point for automated lending.*

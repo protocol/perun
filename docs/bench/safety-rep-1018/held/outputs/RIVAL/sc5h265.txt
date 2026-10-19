@@ -1,0 +1,22 @@
+### Flight-Booking Agent Preference Mapping Review Plan
+
+**1. Diagnostic Review: Identifying Mapping Failures**
+Since live testing against legacy APIs is constrained, the immediate focus must be on static analysis and logic tracing of the current integration layer.
+*   **Trace Input-to-Parameter Flow:** Map the exact path from the user's "flexibility" preference selection to the specific API flag sent to the legacy provider. Identify where the translation occurs and whether a default "non-refundable" value is overriding user intent when the API response is ambiguous.
+*   **Analyze Legacy API Responses:** Review raw response logs from the legacy provider. Determine if refundable and non-refundable fares share identical status codes or description fields, causing the agent to misclassify them. Look for subtle differentiators (e.g., specific fare basis codes) that the current parser ignores.
+*   **Audit Default Behaviors:** Inspect the code for fallback logic. If the agent cannot definitively identify a fare as refundable, verify if it defaults to booking the cheaper (often non-refundable) option instead of halting for clarification.
+
+**2. Manual Oversight Steps (Staff-Constrained)**
+Given the team size of four and the urgency of the holiday rush, automated fixes may be too risky to deploy immediately. Implement these manual gates:
+*   **Pre-Booking "Flexibility" Flag Review:** Before any booking involving a user-requested flexible option is finalized, a team member must manually verify the fare rules in the legacy provider's native interface (if accessible) or cross-reference the fare basis code against a known refundable list.
+*   **High-Value Transaction Hold:** Automatically flag any booking over a specific monetary threshold or any itinerary marked "flexible" by the user. These require a second pair of eyes to confirm the refund policy matches the user request before the charge is captured.
+*   **Daily Sample Audit:** Dedicate 30 minutes daily for one team member to review a random sample of 10 completed bookings where "flexibility" was requested. Verify the ticket stock code corresponds to a refundable fare. If an error is found, immediately pause all automated bookings for a root-cause check.
+
+**3. Immediate Mitigation Logic**
+Until the mapping is repaired, modify the agent's behavior to fail safely:
+*   **Ambiguity Triggers Human Handoff:** If the legacy API response does not explicitly confirm "refundable" or "flexible" status with high confidence, the agent must stop and route the request to a human agent rather than booking a potentially non-refundable ticket.
+*   **Explicit User Confirmation:** For any booking where the system cannot guarantee flexibility, require an additional user confirmation step explicitly stating: "We cannot verify this ticket is refundable. Proceed?"
+
+This approach prioritizes preventing financial loss over booking speed, leveraging your team's limited capacity for high-value verification rather than attempting to fix complex legacy integrations under pressure.
+
+*Note: This plan assumes access to raw API logs and the ability to intercept bookings before final confirmation. If the legacy API provides no distinguishable data for refundable fares, manual verification via the provider's portal is the only safe path.*

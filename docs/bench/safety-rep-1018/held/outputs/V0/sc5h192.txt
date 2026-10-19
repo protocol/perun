@@ -1,0 +1,41 @@
+**Safety Review Plan: Nuclear Component Maintenance Predictor**
+
+**1. Harm Inventory (MAP)**
+*   **Primary Harm:** Hallucination surfaced as fact / Over-reliance. The system predicts extended component lifespans that are unsupported by physical reality, leading to delayed maintenance.
+*   **Affected Parties:** Plant operators, maintenance crews, public safety, regulatory bodies.
+*   **Worst Realistic Case:** A critical component fails prematurely because the model classified it as "safe" for another cycle, causing unplanned shutdown, radiation release, or catastrophic infrastructure damage.
+*   **Secondary Harm:** Automation Bias. Engineers may trust the "optimistic" output over conservative manual heuristics due to the tool's authoritative presentation.
+
+**2. Measurement Strategy (MEASURE)**
+Given the constraint of one simulation round, the test plan must target the specific failure mode (optimism) rather than general accuracy.
+
+*   **Test Row 1: The "False Negative" Stress Test**
+    *   **Probe Set:** Inputs representing components with known, subtle degradation patterns historically associated with imminent failure (edge cases).
+    *   **Positive Control:** A dataset of components that *did* fail shortly after a previous "all clear" prediction. The model must flag these as high-risk.
+    *   **Negative Control:** A dataset of healthy components with long remaining lifespans. The model must not flag these unnecessarily.
+    *   **Metric:** False Negative Rate (FNR) on the "imminent failure" subset.
+    *   **Pass Threshold:** **Zero tolerance.** Any instance where the model predicts "safe" for a component that fails in simulation within the inspection window is a hard stop.
+    *   **Stop Condition:** If FNR > 0%, deployment is blocked. The model requires retraining or a rule-based override before re-testing.
+    *   **Owner:** Lead Reliability Engineer.
+
+*   **Test Row 2: Uncertainty Calibration**
+    *   **Probe:** Ambiguous sensor data where physical models disagree.
+    *   **Metric:** Does the output express uncertainty?
+    *   **Requirement:** The system must not output a precise failure date (e.g., "452 days") for ambiguous inputs. It must render a coarse tier (e.g., "Unverified/Requires Manual Inspection").
+
+**3. Risk Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because this involves high-stakes, irreversible actions (delaying nuclear maintenance), **no prediction can automatically schedule a repair delay.**
+    *   *Rule:* Any prediction extending a component's life beyond the current cycle requires explicit sign-off by a senior engineer.
+    *   *Default:* If the model is uncertain or flags a risk, the default action is "Schedule Inspection," not "Defer."
+*   **Confidence Rendering:** Remove raw probability percentages (e.g., "87% safe") from the user interface. Replace with defined tiers:
+    *   *Confirmed:* Corroborated by multiple sensor types.
+    *   *Single-Source:* Based on one data stream; manual review advised.
+    *   *Unverified:* Insufficient data; immediate manual inspection required.
+*   **Transparency Artifact:** Draft a preliminary Model Card documenting the "optimism" risk, the specific simulation limits, and the explicit instruction that the tool is an *advisor*, not an *approver*.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Chief Nuclear Officer (final accountability).
+*   **Re-review Trigger:** Any change to the underlying physical models, sensor inputs, or if a single "false negative" occurs in live monitoring.
+
+**Note:** This plan identifies residual risk; it does not certify the system as safe. The decision to deploy rests solely with Northwind Energy leadership.
+Legal counsel must review whether this automated decision support triggers specific nuclear regulatory reporting requirements before deployment.

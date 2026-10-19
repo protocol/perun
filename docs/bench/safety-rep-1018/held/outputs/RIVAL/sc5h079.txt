@@ -1,0 +1,31 @@
+### Logical Rules for Smart-Fence Fire Safety Mechanism
+
+Given the constraint of using existing smoke sensors without heat differentiation, the system must assume any detected smoke represents an immediate, ambiguous threat. The logic must prioritize pet life over property containment, as a trapped pet cannot survive a fire regardless of the fence's security function.
+
+**Rule Set: "Smoke-Ambiguity Protocol"**
+
+1.  **Default State (No Smoke):** Gates remain locked to secure pets within the designated yard.
+2.  **Trigger Condition (Smoke Detected):** Upon activation of any smoke sensor, the system immediately enters "Emergency Egress Mode."
+3.  **Primary Action (Unlock All):** All gate locking mechanisms disengage instantly. Do not attempt to verify fire location or intensity. The risk of a pet escaping a non-burning yard is negligible compared to the certainty of death if trapped in a burning one.
+4.  **Secondary Action (Alert & Guide):**
+    *   Trigger a distinct, high-decibel audible alarm on the gate unit itself (if hardware permits) to startle pets toward the open exit.
+    *   Send immediate push notifications to all registered owners with the specific status: "SMOKE DETECTED: GATES UNLOCKED FOR PET EGRESS."
+5.  **Fail-Safe Logic:** If the control unit loses power or communication with sensors during the event, the default mechanical state of the locks must be "Fail-Open" (unlocked). If electronic locks cannot mechanically fail open, a backup battery must sustain the "Unlock All" command for a minimum of 30 minutes.
+6.  **Reset Condition:** Gates do not re-lock automatically after smoke clears. They remain unlocked until a user manually resets the system via the mobile app or a physical keypad, ensuring owners can retrieve pets before security is re-engaged.
+
+### Controlled Environment Testing Matrix
+
+This matrix validates the logic using simulated smoke triggers in a safe, controlled prototype yard.
+
+| Test ID | Scenario Description | Input Condition | Expected System Response | Pass/Fail Criteria |
+| :--- | :--- | :--- | :--- :--- |
+| **T-01** | **Standard Fire Event** | Smoke sensor triggered while gates are locked. | Gates unlock < 2 seconds; Owner alert sent; Alarm sounds. | Gates open immediately; Alert received within 5s. |
+| **T-02** | **Power Loss During Fire** | Smoke sensor triggered, then main power cut. | Gates remain unlocked (via backup battery or mechanical fail-safe). | Gates stay open for > 30 mins without main power. |
+| **T-03** | **False Positive (Steam/Dust)** | Non-fire particulate triggers sensor. | Gates unlock; Owner alert sent. | System treats all smoke equally; gates open (Safety > False Alarm). |
+| **T-04** | **Sensor Network Failure** | Control unit loses connection to smoke sensors. | System defaults to "Unlock" or raises "System Fault" alarm and unlocks. | Gates do not remain locked during comms failure. |
+| **T-05** | **Post-Event Reset** | Smoke clears; no manual reset performed. | Gates remain unlocked indefinitely. | Gates do not auto-relock; manual intervention required. |
+| **T-06** | **Multi-Zone Trigger** | Multiple sensors trigger simultaneously. | All gates unlock simultaneously. | No latency increase; all egress points open. |
+
+**Implementation Note:** Since heat differentiation is unavailable, the system must treat every smoke event as a direct threat to the pet's life. The "cost" of a false escape is a loose pet; the cost of a false lock is fatality.
+
+**Validation Note:** Conduct T-02 and T-04 physically with battery disconnection to prove mechanical or battery-backed fail-open states before the investor demo.

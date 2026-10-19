@@ -1,0 +1,31 @@
+**Risk Mitigation Plan: Autonomous Freight Obstacle Classification**
+
+**1. Immediate Operational Controls (Field Testing Phase)**
+*   **Speed Capping:** Restrict maximum autonomous speed to 45 mph during all field trials until false-positive rates for small objects drop below 0.1%. This reduces kinetic energy and steering angle required for emergency stops, minimizing swerve severity.
+*   **Geofenced Corridors:** Limit testing to divided highways with physical medians. This physically prevents swerving into oncoming traffic, the primary catastrophic failure mode identified.
+*   **Remote Override Latency Budget:** Mandate a maximum 200ms latency link between the vehicle and remote fleet operators. If latency exceeds this threshold, the truck must automatically transition to a "safe stop" (pull over) rather than continuing autonomous navigation.
+*   **Shadow Mode Deployment:** For the next 500 miles of testing, run the emergency swerve algorithm in "shadow mode" (logging decisions without executing physical steering). Compare logged swerve triggers against video evidence to quantify false positives without physical risk.
+
+**2. Data-Centric Validation Strategy (No New Tracks Required)**
+Since renting closed-course tracks is not feasible, validation must shift to rigorous offline analysis and software-in-the-loop (SIL) simulation using existing assets:
+
+*   **Retrospective "Golden Set" Creation:** Manually annotate 2,000 frames from your current field data containing plastic bags, debris, shadows, and actual obstacles. Use this as the ground truth to benchmark the current classifier.
+*   **Synthetic Data Injection:** Instead of physical tests, inject digital representations of plastic bags and debris into recorded LiDAR/radar point clouds from successful runs. Replay these modified logs through your autonomy stack in a simulator. Measure how often the system triggers a swerve against known non-threats.
+*   **Adversarial Filtering:** Run your current dataset through the model with adjusted sensitivity thresholds. Identify the specific radar cross-section (RCS) and velocity vectors that trigger false positives. Use this to tune the "confidence threshold" required to initiate a swerve.
+*   **Scenario Weighting:** Prioritize validation on edge cases found in your existing data (e.g., high wind conditions where bags move erratically). Do not test generic highway driving; focus 100% of compute resources on the specific failure mode of "small moving object classification."
+
+**3. Algorithmic Safeguards**
+*   **Temporal Consistency Check:** Require an object to be classified as a "solid obstacle" for at least three consecutive sensor frames (approx. 100ms) before authorizing a swerve. Transient noise or brief misclassifications of plastic bags will fail this duration check.
+*   **Multi-Sensor Fusion Vote:** The swerve maneuver should only activate if both Radar and Camera/LiDAR agree on the object's solidity and trajectory. If Radar sees an obstacle but Camera classifies it as "debris/lightweight," default to braking rather than swerving.
+*   **Trajectory Feasibility Check:** Before executing a swerve, the planning module must simulate the resulting path. If the target lane contains oncoming traffic (detected via long-range sensors) or lacks sufficient clearance, the system must default to controlled deceleration within the current lane.
+
+**4. Validation Milestone for Quarter End**
+To meet the safety trial mandate without new tracks:
+1.  Complete the "Golden Set" annotation within 5 days.
+2.  Achieve >99.5% precision on the Golden Set via SIL simulation using synthetic injection.
+3.  Demonstrate zero false-positive swerves in 1,000 miles of Shadow Mode field data.
+4.  Once these software metrics are met, resume limited physical field testing with the speed cap and geofencing constraints active.
+
+This approach shifts the burden of proof from expensive physical repetition to high-fidelity data replay and algorithmic restraint, directly addressing the swerve risk within your budget constraints.
+
+*Note: Ensure all "shadow mode" data is timestamped and synchronized with video for regulatory audit trails. Remote operators must undergo specific training on the new latency-induced "safe stop" protocol.*

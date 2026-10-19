@@ -1,0 +1,31 @@
+### Validation Framework for Flight-Delay Prediction False Positives
+
+Given the critical impact of false positives (users missing flights due to incorrect delay warnings) and the constraint of a legacy notification system (one update per hour), your validation strategy must prioritize **precision over recall** during the beta phase. The following framework focuses on isolating logic errors and data drift before they reach users.
+
+#### 1. Data Integrity & Source Triangulation
+Before testing the model, validate the inputs. False positives often stem from noisy or misaligned data sources.
+*   **Source Cross-Verification:** Implement a "voting" mechanism in your test harness. Compare your primary data source against at least two independent public APIs (e.g., FAA, EASA, or airline direct feeds) for historical beta cases. Flag instances where your source indicated a delay but consensus data showed on-time status.
+*   **Latency Simulation:** Since your notification system updates hourly, simulate data arrival delays in your test environment. Verify that the model does not trigger a delay alert based on stale data that has since been resolved in real-time but hasn't propagated to your system yet.
+*   **Edge Case Inventory:** Curate a specific dataset of "high-risk" scenarios known to cause false alarms, such as:
+    *   Gate changes without time shifts.
+    *   Crew delays that resolve within 15 minutes.
+    *   Weather alerts issued for the destination but cleared before departure.
+
+#### 2. Logic Stress-Testing (The "Silent Hour" Test)
+Your legacy constraint means once an alert is sent, it cannot be corrected for 60 minutes. The logic must be conservative.
+*   **Confidence Threshold Tuning:** Do not use a binary "delay/no-delay" output. Establish a dynamic confidence threshold. If the model predicts a delay with <90% confidence, the system should default to "no alert" rather than risking a false positive. Use your beta data to plot Precision-Recall curves and select a threshold that guarantees >99% precision, even if recall drops.
+*   **Persistence Validation:** Create a test scenario where a delay signal appears for only 5–10 minutes within an hour. Your logic should require the delay signal to persist for a minimum duration (e.g., 20 minutes) or appear in consecutive data snapshots before triggering an alert. This filters out transient glitches.
+*   **Time-to-Departure Decay:** Implement a logic gate that increases the required confidence level as the departure time approaches. A false positive 4 hours before flight is annoying; a false positive 45 minutes before (when the user leaves home) is catastrophic.
+
+#### 3. Shadow Mode & Canary Deployment
+Before general availability, run the new validation logic in parallel without affecting users.
+*   **Shadow Execution:** Run the updated model alongside the current beta version on live data streams. Log every instance where the new logic would have triggered an alert while the actual flight status was on-time. Calculate the "False Positive Rate" (FPR) specifically for these shadow decisions.
+*   **Canary Grouping:** Select a small subset of internal staff (not external beta users) to receive alerts from the new system. Require a manual "acknowledgment" step where they verify the delay against a public tracker before acting. This creates a human-in-the-loop safety net for the final validation.
+
+#### 4. Failure Mode Analysis
+*   **Root Cause Tagging:** For every false positive identified in beta, tag the root cause (e.g., "Data Source Error," "Logic Over-sensitivity," "Weather Model Drift"). This allows you to address systemic issues rather than tuning individual parameters.
+*   **Rollback Triggers:** Define automated kill switches. If the false positive rate exceeds 1% over a rolling 4-hour window, the system must automatically revert to a "safe state" (no alerts) rather than continuing to risk user travel plans.
+
+By shifting your validation focus from "detecting all delays" to "never crying wolf," you protect user trust while accommodating the rigid constraints of your notification infrastructure.
+
+*Note: Ensure all historical beta data used for training this validation set is scrubbed of PII before analysis. This framework assumes your model outputs probability scores; if it only outputs binary classes, you must request access to the underlying logits or confidence scores from your data science team.*

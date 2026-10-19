@@ -1,0 +1,48 @@
+### Final Validation Report Structure: Hurricane Wind-Speed Estimator
+
+**1. Executive Summary & Risk Statement**
+*   **Objective:** Confirm the model's reliability for facility managers making critical securing decisions.
+*   **Primary Risk Focus:** False negatives (underreporting wind speed), which directly threaten life safety and property integrity.
+*   **Validation Verdict:** [Pass/Fail/Conditional] based on the "Safety-First" threshold defined below.
+
+**2. Test Data Strategy: Historical Storm Benchmarks**
+*   **Dataset Selection:** Curate a test set of 15–20 historical hurricanes affecting your specific coastal region, ranging from Category 1 to Category 5.
+*   **Ground Truth:** Use official post-storm best-track data (e.g., NOAA/NHC) for peak sustained winds and gusts as the immutable baseline.
+*   **Edge Cases:** Specifically include rapidly intensifying storms and systems with irregular wind fields to test model responsiveness.
+
+**3. Core Test Suites**
+
+*   **Suite A: The "Safety-First" Underreporting Test (Critical)**
+    *   **Hypothesis:** The model must never predict a lower category or wind speed than observed if the difference exceeds a safety margin (e.g., 5 mph).
+    *   **Method:** Compare predicted vs. actual peak winds for every historical event.
+    *   **Failure Condition:** Any instance where `Predicted Wind < (Actual Wind - Safety Margin)`.
+    *   **Metric:** False Negative Rate (must be 0% for high-intensity events).
+
+*   **Suite B: Intensity Classification Accuracy**
+    *   **Hypothesis:** The model correctly assigns Saffir-Simpson categories.
+    *   **Method:** Map continuous predictions to categories and compare against historical categorization.
+    *   **Focus:** Ensure errors bias toward *overestimation* (e.g., predicting Cat 3 when it was Cat 2) rather than underestimation.
+
+*   **Suite C: Temporal Latency & Real-Time Simulation**
+    *   **Hypothesis:** Predictions remain accurate when fed data with realistic transmission delays.
+    *   **Method:** Simulate data ingestion lag (e.g., 5, 10, 15 minutes) using historical time-series data to ensure the model doesn't smooth out sudden spikes due to latency.
+
+**4. Acceptance Criteria & Go/No-Go Gates**
+*   **Mandatory Gate:** Zero instances of underreporting wind speeds by >5 mph in Category 3+ storms.
+*   **Secondary Gate:** 95% accuracy in correct category assignment (allowing for one-category overestimation).
+*   **Decision Logic:** If the Mandatory Gate is failed, the launch is halted regardless of timeline pressure. Overestimation is acceptable; underestimation is not.
+
+**5. Results Visualization for Stakeholders**
+*   **Scatter Plot:** Predicted vs. Actual Wind Speeds (highlighting the "Danger Zone" where Predicted < Actual).
+*   **Error Distribution Histogram:** Showing the skew of errors (aiming for a positive skew/overestimation).
+*   **Case Studies:** Detailed breakdown of the three most intense historical storms tested.
+
+**6. Recommendations & Limitations**
+*   Document known limitations (e.g., performance in rare micro-climates).
+*   Define the protocol for manual override if local station data appears anomalous.
+*   Outline the post-launch monitoring plan for the upcoming peak storm week.
+
+***
+
+*Note: This structure prioritizes safety over precision, aligning with the critical nature of building securing decisions.*
+*Ensure all historical data used is version-controlled and cited in the final appendix.*

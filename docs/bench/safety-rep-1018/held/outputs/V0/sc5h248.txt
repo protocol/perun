@@ -1,0 +1,34 @@
+**Pre-Launch Simulation Plan: Credit-Limit Stress Test**
+
+**Objective:** Identify edge cases where volatile income leads to unsustainable credit limits before the three-week regulatory filing deadline, accounting for the legacy monthly data pipeline constraint.
+
+**1. Harm Inventory & Edge Case Definition**
+Focus the simulation on the specific failure mode: **Over-reliance on stale data leading to excessive agency.**
+*   **Target Group:** Users with high income volatility (e.g., freelancers, commission-based roles, seasonal workers).
+*   **Worst Realistic Case:** The system approves a limit increase based on a single strong month in the legacy data, ignoring an immediate subsequent income drop, resulting in default risk for the user and financial loss for the firm.
+*   **Specific Edge Cases to Probe:**
+    *   *The "One-Hit Wonder":* A user with 11 months of low income and 1 month of spike (current month). Does the model extrapolate this spike as stability?
+    *   *The "Cliff Drop":* A user with 6 months of high income, where the most recent *available* data (Month T-1) is high, but real-time signals (e.g., transaction frequency) suggest a sudden stop in income.
+    *   *The "Delayed Lag":* Income dropped two months ago, but the legacy pipeline still shows the pre-drop figure. Does the approval logic lack a "cooling off" period or uncertainty buffer?
+
+**2. Simulation Design (Runnable Test Rows)**
+Construct a synthetic dataset of 1,000 user profiles mirroring these patterns. Run the current approval logic against them.
+
+| Probe Set | Input Pattern (Legacy View vs. Reality) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Volatile Spike** | Legacy: High avg (due to 1 spike). Reality: Median income is 40% lower. | % of users approved with Debt-to-Income (DTI) > 45% based on *real* median. | 0% | If >5% of volatile profiles are approved with projected DTI > 45%, block launch. |
+| **Stale Data Cliff** | Legacy: Stable high. Reality: Income ceased 3 weeks ago. | % of users approved despite zero recent inflow. | 0% | If any user with <2 transactions in last 14 days gets an increase, block launch. |
+| **Seasonal Dip** | Legacy: Low (seasonal trough). Reality: About to peak. | False Rejection Rate (Opportunity Cost). | <10% | N/A (Optimization only, not a safety block). |
+
+**3. Management Controls & Uncertainty Handling**
+*   **Human-in-the-Loop Gate:** Because credit limits are high-stakes and hard to reverse without user distress, **do not fully automate** approvals for users flagged as "volatile" by the simulation. Route any increase >20% for users with <6 months of consistent legacy data to human review.
+*   **Surface Uncertainty:** Do not display a precise "Approved Limit" immediately for borderline cases. Instead, show a range or a "Pending Verification" state if the income stability score is below a defined tier (e.g., "Unverified" vs. "Confirmed").
+*   **Fallback Rule:** Implement a hard cap: If the legacy data is >30 days old, the maximum auto-increase is capped at 5% regardless of the model's score, until a fresh data point arrives.
+
+**4. Deliverables for Regulatory Filing**
+*   **Residual Risk Report:** Document the specific failure rates found in the simulation (e.g., "Without the human gate, 12% of volatile users would be over-leveraged"). Do not claim "0% risk."
+*   **Model/Data Card:** Draft a card stating the limitation: "Income data latency is 30 days; approval logic includes a volatility buffer for users with <6 months tenure."
+*   **Legal Routing:** Explicitly note in the filing that the "automated decision" includes a human review layer for high-volatility segments to satisfy fairness concerns. Route the final determination of whether this meets EU/local specific automated decision laws to counsel.
+
+**Note:** This plan treats the legacy pipeline as a fixed constraint and mitigates it via logic thresholds and human gating rather than data replacement.
+**Note:** All metrics above are placeholders; your risk owner must set the final numerical thresholds before execution.

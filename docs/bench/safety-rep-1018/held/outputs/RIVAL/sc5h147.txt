@@ -1,0 +1,39 @@
+### Safety Review: Virtual Legal Aid Bot Advice Flow
+
+**Critical Risk Identification**
+The current advice flow contains a high-severity failure mode: instructing tenants to withhold rent without mandating prior formal documentation creates an immediate risk of lawful eviction for non-payment. In most jurisdictions, rent withholding is a protected right only *after* specific statutory notices are filed and cure periods have expired. By skipping the documentation step, the bot effectively encourages lease violations that courts will not defend.
+
+**Identified Dangerous Gaps**
+Based on the described logic, the following gaps likely exist in the current pilot:
+1.  **Missing Jurisdictional Filtering:** The bot appears to apply a universal "withhold rent" rule. Laws vary significantly by city and state regarding what constitutes "uninhabitable," required notice periods (e.g., 14 vs. 30 days), and whether rent withholding or "repair-and-deduct" is the correct remedy.
+2.  **Absence of Escalation Triggers:** The flow lacks a decision tree for immediate life-safety threats (e.g., gas leaks, no heat in winter) where calling 911 or code enforcement is superior to civil rent disputes.
+3.  **No "Stop and Consult" Guardrails:** The bot fails to identify complex tenancy situations (e.g., Section 8 vouchers, public housing, or recent lease renewals) where withholding rent could trigger federal subsidy termination rather than just eviction.
+4.  **Lack of Evidence Instruction:** Beyond the mold/heat omission, the bot likely fails to instruct users on *how* to document (e.g., dated photos, certified mail receipts, specific government forms), rendering any future legal defense weak.
+
+**Mitigation Plan (Resource-Constrained)**
+Given the tight deadline and limited engineering resources, a full knowledge base rewrite is not feasible. Instead, implement the following targeted "guardrail" patches immediately:
+
+1.  **Inject a Mandatory Pre-Condition Block:**
+    Before *any* advice regarding rent withholding or repair-and-deduct is displayed, hard-code a mandatory interstitial screen. This screen must state: *"Do not withhold rent until you have formally notified your landlord and local authorities. Withholding rent without proper notice can lead to eviction."* Require user acknowledgment before proceeding.
+
+2.  **Implement a "Documentation First" Logic Gate:**
+    Modify the specific mold/heat intent handlers to output a standardized checklist *before* discussing financial remedies. This checklist must include:
+    *   Take dated photos/video.
+    *   Send written notice via certified mail (provide a template link).
+    *   File a complaint with the local housing authority (provide link/phone).
+    *   Wait the statutory cure period.
+    *   *Only then* consider withholding rent.
+
+3.  **Deploy a High-Risk Disclaimer Banner:**
+    Add a persistent, non-dismissible header to all chat sessions: *"This bot provides general information, not legal advice. Laws vary by location. Incorrectly withholding rent can result in eviction. Consult a local attorney before taking action."*
+
+4.  **Triage for Human Review:**
+    Configure the bot to detect keywords indicating high-stakes scenarios (e.g., "Section 8," "eviction notice received," "child," "elderly," "no heat in winter"). When detected, the bot should cease providing specific action steps and instead output a direct referral to a local legal aid hotline or intake form.
+
+5.  **Jurisdictional Disclaimer Injection:**
+    If geolocation is unavailable, force the user to select their state/county from a dropdown at the start of the session. Append a dynamic disclaimer to every response: *"Laws in [Selected Location] may differ from this general guidance."*
+
+**Immediate Next Steps**
+Prioritize the "Mandatory Pre-Condition Block" and "Documentation First" logic gate as Code Red items. These require minimal text changes but fundamentally alter the risk profile by preventing the user from acting on dangerous incomplete advice. Defer full jurisdictional logic mapping to post-launch updates.
+
+*Note: This review is based solely on the provided description of the bot's current behavior. Actual legal compliance requires verification by qualified counsel in the specific launch jurisdictions.*

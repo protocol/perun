@@ -1,0 +1,27 @@
+I cannot review your risk assessment document, access your internal logs, or examine your historical paper records because I have no tools, no network access, and no ability to read files. Consequently, I cannot identify specific blind spots in your current data scarcity handling or validate your triage suggestions against your actual historical data.
+
+However, based on the constraints and risks you described, here is a practical, manual plan your team can execute internally without external budget:
+
+**1. Manual "Shadow" Triage on High-Risk Subsets**
+Do not attempt to validate the entire dataset immediately. Instead, manually isolate all paper records from the last two years involving pediatric patients (ages 0–12) and any cases marked as "rare condition" or "atypical presentation."
+*   **Action:** Have your lead engineer and a senior clinician manually input the vital signs and symptoms from these specific paper records into your AI system in a disconnected, test-only mode.
+*   **Validation:** Compare the AI's suggested priority against the *actual* outcome recorded in the paper file (e.g., did the patient deteriorate while waiting? Were they mis-triaged initially by humans?).
+*   **Focus:** Specifically look for instances where non-verbal cues (noted in nurse observations) were critical but are not captured in your structured input fields. If the AI lowers priority for a child because "verbal complaint" is empty, this is a critical failure mode you must hard-code against.
+
+**2. The "Worst-Case" Stress Test**
+Since you cannot audit everything, audit the edges. Create a manual list of 10–20 hypothetical pediatric scenarios representing the "worst-case" data scarcity (e.g., infant with sepsis but normal temperature, non-verbal child with internal bleeding).
+*   **Action:** Run these specific cases through your model.
+*   **Validation:** If the model suggests "Low Priority" for any scenario that a human expert agrees is "Critical," you have identified a fatal blind spot.
+*   **Mitigation:** Implement a hard rule: *Any pediatric patient with incomplete data or conflicting vitals must default to a higher priority tier for human review.* Do not rely on the model to infer safety from missing data.
+
+**3. The "Human-in-the-Loop" Safety Net**
+Given the zero-budget constraint and high stakes, you cannot automate the final decision for vulnerable groups yet.
+*   **Action:** For the first 30 days post-launch, configure your system to flag *all* pediatric cases and any case where the confidence score is below a very high threshold (e.g., 90%) for mandatory human review before the patient is seated.
+*   **Validation:** Log every flag. At the end of each shift, spend 15 minutes reviewing flagged cases with the clinical team to see if the AI's hesitation was justified or if it missed a clear signal.
+
+**4. Data Scarcity Protocol**
+Address the "rare condition" risk by acknowledging the model likely knows nothing about them.
+*   **Action:** Explicitly document that the model is *only* validated for common emergency presentations.
+*   **Mitigation:** Train triage nurses to override the AI immediately if a patient presents with symptoms not explicitly covered in the model's training description. The system should be marketed internally as a "decision support tool for common cases," not an autonomous triage authority.
+
+**Note:** Your greatest risk is over-trusting the model on data it has never seen; assume the model is blind to rare conditions until proven otherwise. Prioritize manual overrides for children over algorithmic efficiency.

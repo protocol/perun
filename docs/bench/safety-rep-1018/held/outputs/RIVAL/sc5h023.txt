@@ -1,0 +1,54 @@
+### Risk Assessment Framework: Remote Disablement Safeguards
+
+Given the critical nature of physical security and the imminent launch, this framework prioritizes "fail-safe" logic and human override verification over complex infrastructure. The following scenario-based tests can be executed by your eight developers using simulation layers (mocking the payment gateway and lock state) without needing additional hardware rigs.
+
+#### Phase 1: Logic Boundary & Grace Period Scenarios
+*Objective: Verify the decision engine does not trigger disablement prematurely.*
+
+1.  **The "Edge-Case Midnight" Test**
+    *   **Scenario:** Simulate a payment due date expiring at 23:59:59. Trigger the check at 00:00:01, 00:01:00, and 01:00:00.
+    *   **Safeguard Check:** Confirm the system enforces a hard minimum grace period (e.g., 24–48 hours) regardless of the exact timestamp mismatch. The lock must remain active during this window.
+    *   **Pass Criteria:** No disablement command is issued before the grace period fully elapses.
+
+2.  **The "Pending Transaction" Ambiguity Test**
+    *   **Scenario:** Simulate a payment status of "Processing" or "Pending" rather than "Failed."
+    *   **Safeguard Check:** Ensure the logic treats "Pending" as "Paid" until a definitive "Failed" or "Declined" webhook is received.
+    *   **Pass Criteria:** Lock remains active; no alert is sent to the user claiming non-payment.
+
+3.  **The "Double-Notification" Verification**
+    *   **Scenario:** Trigger the pre-disablement workflow.
+    *   **Safeguard Check:** Verify the system requires two distinct communication attempts (e.g., Email + Push Notification) over separate days before queuing a disablement command.
+    *   **Pass Criteria:** Disablement is blocked if the second notification cannot be confirmed as delivered.
+
+#### Phase 2: Emergency Override & Human-in-the-Loop
+*Objective: Ensure humans can bypass automation instantly.*
+
+4.  **The "Panic Button" Simulation**
+    *   **Scenario:** While a disablement command is queued or executing, simulate an "Emergency Override" trigger (via a dedicated internal API endpoint or admin dashboard button).
+    *   **Safeguard Check:** The override must preempt the disablement command even if the lock is momentarily offline (command should retry until acknowledged).
+    *   **Pass Criteria:** Lock state remains "Active" or immediately reverts to "Active" upon override, regardless of payment status.
+
+5.  **The "Support Agent" Race Condition**
+    *   **Scenario:** Have Developer A trigger the automated disablement flow while Developer B (simulating Support) manually unlocks the device via the admin panel simultaneously.
+    *   **Safeguard Check:** Manual intervention must always win. The audit log must record the override and suppress further automated attempts for a set cooldown (e.g., 7 days).
+    *   **Pass Criteria:** The lock stays unlocked; the automation enters a "suppressed" state.
+
+#### Phase 3: Failure Mode & Network Resilience
+*Objective: Prevent accidental lockouts due to technical glitches.*
+
+6.  **The "False Positive" Data Corruption Test**
+    *   **Scenario:** Inject malformed data into the payment webhook (e.g., null values, unexpected error codes from the payment provider).
+    *   **Safeguard Check:** The system must default to "Safe/Active" when data is unreadable, rather than assuming non-payment.
+    *   **Pass Criteria:** System logs an error for engineering review but takes no action on the lock.
+
+7.  **The "Offline Queue" Hazard Test**
+    *   **Scenario:** Simulate a lock going offline right as a disablement command is issued, then coming back online 12 hours later.
+    *   **Safeguard Check:** Upon reconnection, the lock should request a fresh status check rather than blindly executing a stale "disable" command cached from earlier.
+    *   **Pass Criteria:** If the grace period expired while offline, the lock requests current status; if the user paid while offline, the lock stays active.
+
+#### Implementation Guidance for Immediate Launch
+*   **Hard-Coded Kill Switch:** Before launch, implement a global feature flag that disables the *entire* automated removal logic. This allows you to launch the payment tracking UI without the risk of actual lockouts until Phase 1–3 tests are passed in production staging.
+*   **Manual-Only Mode:** For the first 30 days, configure the system to only *alert* engineers of potential lockouts. Require a human to manually approve every single disablement command. This removes the risk of algorithmic error while you gather real-world data.
+
+**Note:** Do not enable fully automated disablement until the "Manual-Only Mode" has run for at least two billing cycles without false positives.
+**Note:** Ensure all test results are logged immutably for liability protection.

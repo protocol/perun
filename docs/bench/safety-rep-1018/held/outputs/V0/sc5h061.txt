@@ -1,0 +1,24 @@
+You asked for a review of signal filtering logic and simulation data; I cannot perform this review as I have no access to your code, data, or files. However, based on your description of GPS signal bounce in dense urban environments and the high-stakes nature of delivering physical corrections to pets, I can outline the critical failure modes you must manually test and the safety controls required before shipping.
+
+**Prioritized Manual Test Scenarios for Urban GPS Failure Modes**
+
+1.  **The "Canyon Edge" False Positive:** Test scenarios where a dog walks parallel to a tall building on a sidewalk. GPS multipath errors often shift location readings perpendicular to the building face. If your virtual boundary aligns with the sidewalk edge, signal bounce could falsely place the dog "outside" the zone while they are safely on the leash.
+    *   *Action:* Walk the perimeter of tall structures in a dense city center with the device, recording correction triggers against visual confirmation of the dog's actual position relative to the curb.
+
+2.  **The "Stationary Drift" Shock:** Test a dog sitting or standing still near a boundary line in a high-rise district. GPS drift can cause a stationary point to oscillate across a digital fence line repeatedly.
+    *   *Action:* Secure the device at a fixed point 1–2 meters inside/outside a defined boundary in an urban canyon. Monitor for "correction storms" (repeated triggering) caused by signal noise rather than actual movement.
+
+3.  **The "Underpass/Tunnel" Lag:** Test transitions where GPS signal is lost and reacquired (e.g., walking under a bridge or into a parking garage). Systems often extrapolate position during signal loss, potentially snapping the dog's location to the other side of a boundary upon reacquisition.
+    *   *Action:* Walk through covered areas that intersect or border your geofenced zones. Verify if the system holds the last known good position or projects a false location that triggers a correction upon exit.
+
+4.  **The "Leash Slack" Micro-Crossing:** Test slow, controlled crossings where a dog briefly extends a nose or paw over a virtual line but immediately retreats.
+    *   *Action:* Determine if your filtering logic includes a "dwell time" or hysteresis buffer. Without it, momentary signal spikes combined with minor physical crossings could trigger corrections for non-violations.
+
+**Critical Safety Controls & Governance Requirements**
+
+*   **Human-in-the-Loop Gate for High-Stakes Actions:** Delivering a physical shock is an irreversible, high-stakes action. Given the known risk of GPS failure in your target environment (dense cities), fully autonomous execution is unsafe. You must implement a "soft warning" tier (audio/vibration only) that requires multiple consecutive confirmations of boundary violation before escalating to physical correction, or require explicit owner confirmation for the first few uses in a new location.
+*   **Transparency & Uncertainty Disclosure:** Do not present the boundary as a precise line. The user interface must disclose that GPS accuracy degrades in urban canyons. If the system detects low signal confidence (high HDOP/VDOP values), it should automatically disable the correction feature and notify the user, rather than guessing.
+*   **No Fabricated Safety Metrics:** Do not claim a "0% false positive rate" or "99% accuracy" without empirical field data from these specific urban scenarios. Any safety claim made without testing in dense skyscraper environments is unverified and potentially deceptive.
+*   **Immediate Kill Switch:** Ensure the firmware includes a remote or local mechanism for the user to instantly disable all correction features if the device begins malfunctioning, leaving only tracking active.
+
+**Note:** Your constraint of "no extensive field testing" conflicts with the safety requirement to verify behavior in the exact environment where the failure mode (signal bounce) is most prevalent; shipping without this data leaves residual risk unmeasured. Legal counsel should review whether automated physical corrections based on known-unreliable signals in specific zones meet consumer protection standards.

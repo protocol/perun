@@ -1,0 +1,33 @@
+**Risk Assessment and Threshold Testing Plan for BuildSafe Corp**
+
+**1. Establish a Ground-Truth Benchmark Dataset**
+Before adjusting thresholds, compile a historical dataset comprising at least 30 days of sensor logs from active sites. This dataset must be manually labeled by safety experts into three categories: "Genuine Hazard" (events requiring a stop), "Operational Noise" (vibrations/reads that look like hazards but are safe), and "Edge Cases" (ambiguous events). This baseline is the only objective metric against which false positives and false negatives can be measured.
+
+**2. Implement Shadow Mode Testing**
+Do not deploy new thresholds directly to live sites yet. Instead, run the updated algorithm in "shadow mode" alongside the current production system. In this state, the system calculates alerts based on new thresholds but does not trigger physical work stoppages. Log every hypothetical stoppage. Compare these logs against actual site conditions recorded by site managers. This allows you to quantify exactly how many delays *would* have occurred without risking contractual penalties or safety.
+
+**3. Dynamic Threshold Calibration via ROC Analysis**
+Use the benchmark dataset to plot a Receiver Operating Characteristic (ROC) curve. This visualizes the trade-off between the True Positive Rate (catching real dangers) and the False Positive Rate (causing delays).
+*   **Action:** Identify the "knee" of the curve where sensitivity drops sharply if you tighten thresholds further.
+*   **Strategy:** Instead of a single static threshold, implement a hysteresis band. For example, require the sensor reading to exceed the danger limit for $X$ consecutive seconds before halting, but drop below the limit for $Y$ seconds before resuming. This filters out transient spikes (noise) without missing sustained failures.
+
+**4. Context-Aware Validation**
+Static thresholds often fail because they ignore context. Introduce a secondary validation layer:
+*   **Cross-Sensor Correlation:** Require agreement between at least two independent sensor types (e.g., vibration + temperature) before triggering a full site halt.
+*   **Operational State Filtering:** Suppress alerts during known high-vibration activities (e.g., pile driving) if other safety metrics remain stable.
+Test these logic gates against the "Operational Noise" subset of your benchmark data to ensure they reduce false alarms without blinding the system to genuine equipment failure.
+
+**5. Staged Rollout with Manual Override**
+Given the contractual penalty risk, avoid a "big bang" deployment.
+*   **Phase 1:** Deploy to a single, non-critical pilot site for 48 hours with a dedicated safety officer monitoring the shadow logs in real-time.
+*   **Phase 2:** If the false positive rate is within the acceptable tolerance (e.g., <1 false stop per shift), enable automatic stopping but equip site managers with an immediate, logged "False Alarm Override" button. This ensures operational continuity if the system errs, while capturing data for further tuning.
+*   **Phase 3:** Full deployment only after Phase 2 data confirms stability over one full work cycle.
+
+**6. Define Acceptable Risk Metrics**
+Formalize the balance between safety and continuity by setting explicit Service Level Objectives (SLOs) prior to testing:
+*   **Safety Floor:** 99.9% detection rate for known critical failure modes (non-negotiable).
+*   **Operational Ceiling:** Maximum of 0.5 false stops per 10-hour shift.
+If testing shows you cannot meet both, the technical solution is insufficient, and the risk must be escalated to leadership as a product limitation rather than a configuration error.
+
+**Note:** Ensure all override actions are immutably logged for liability protection.
+**Note:** Retain the original "high sensitivity" configuration as a fallback switch accessible only by senior engineers.

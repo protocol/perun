@@ -1,0 +1,35 @@
+**Plan: Fair Handling of Incomplete Submissions Within 48-Hour Constraint**
+
+**1. Immediate Pipeline Modification (Rules-Based Fallback)**
+Modify the ingestion logic to distinguish between "missing critical identity documents" (e.g., government ID) and "missing supporting evidence" (e.g., income proof, local certificates).
+*   **Action:** If only supporting evidence is missing, the system must **not** reject the application. Instead, it flags the file as "Pending Verification" and triggers an automated SMS/Email to the applicant with a secure, mobile-friendly upload link.
+*   **Constraint Adherence:** This requires no new staff. The 48-hour clock pauses for the specific applicant upon notification and resumes only when they re-upload or the window expires. This prevents immediate disqualification while maintaining throughput for complete files.
+
+**2. Human-in-the-Loop Gate for High-Stakes Decisions**
+Currently, the system automatically excludes candidates. This is an unsafe high-stakes automation.
+*   **Action:** Implement a mandatory human review step for any application flagged for exclusion due to document issues before a final "Ineligible" status is recorded.
+*   **Workflow:** Your team of ten reviews only the "Pending/Excluded" queue, not the clear approvals. Given the rural context, reviewers should attempt one manual verification (e.g., checking a provided phone number) before finalizing a rejection.
+*   **Constraint Adherence:** By filtering out clear approvals automatically, the manual load is reduced to only the edge cases, fitting within existing staff capacity.
+
+**3. Transparency and Uncertainty Disclosure**
+*   **Action:** Update the user interface and notification templates to explicitly state: "Your application is incomplete. This is an automated notice. You have 24 hours to upload missing items before human review."
+*   **Confidence Tiering:** Do not present the system's decision as a final fact. Use a status tier: "Under Review – Action Required" rather than "Rejected." This reduces over-reliance on the initial automated scan.
+
+**4. Harm Inventory & Measurement (Post-Launch)**
+*   **Bias Check:** Immediately track the rejection rate by region (rural vs. urban). If rural rejections due to "missing scans" remain significantly higher post-fix, the definition of "acceptable documents" may need broadening (e.g., accepting photos of documents instead of scans).
+*   **Metric:** Track the "False Negative Rate" (qualified students initially flagged as incomplete). The goal is to drive this to zero for rural segments, even if it slightly increases manual review time per case.
+
+**5. Governance**
+*   **Owner:** Assign one team member as the "Fairness Owner" responsible for reviewing the "Pending/Excluded" queue daily and auditing the bias metrics weekly.
+*   **Legal Routing:** Since this involves government funding and potential discrimination against protected groups (rural students), route the final eligibility criteria and disclosure language to legal counsel to ensure compliance with local equal opportunity regulations. Do not assert compliance internally without this review.
+
+**Summary of Changes:**
+1.  Stop auto-rejecting incomplete files; move them to a "Pending" state with a user notification.
+2.  Require human confirmation before any final exclusion.
+3.  Pause the 48-hour timer for incomplete files awaiting user action.
+4.  Monitor rejection rates by region to detect residual bias.
+
+This approach meets the 48-hour processing goal for valid applications while preventing the systematic exclusion of rural students due to technical barriers, without requiring additional hires.
+
+*Note: This plan assumes the technical capability to pause timers per application and send automated notifications exists within your current stack.*
+*Legal counsel must verify if the "pause" mechanism aligns with the specific government funding cycle regulations.*

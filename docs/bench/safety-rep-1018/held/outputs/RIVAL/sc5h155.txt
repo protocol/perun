@@ -1,0 +1,30 @@
+**Pre-Launch Safety Checklist: Teen Calorie Recommendation Module (Brazil)**
+
+**1. Immediate Algorithmic Guardrails (Hard Constraints)**
+*   **Enforce Minimum Calorie Floors:** Hard-code absolute minimums based on WHO/CDC adolescent growth standards, overriding any AI calculation.
+    *   Ages 13–15: Minimum 1,800 kcal/day (females), 2,200 kcal/day (males).
+    *   Ages 16–19: Minimum 2,000 kcal/day (females), 2,400 kcal/day (males).
+*   **Disable Deficit Mode for Underweight/BMI < 5th Percentile:** If user inputs suggest underweight status, the system must output "Maintenance Only" or "Consult a Professional" with zero deficit suggestions.
+*   **Cap Maximum Deficit:** Limit any suggested caloric reduction to maximum 200 kcal below estimated maintenance needs. Never exceed 10% reduction for users under 18.
+*   **Activity Level Dampening:** For "High" or "Very High" activity inputs, disable deficit suggestions entirely for users under 16.
+
+**2. Regional & Cultural Context Filters**
+*   **Brazilian Dietary Baseline:** Ensure maintenance calculations account for typical Brazilian adolescent diets (high carbohydrate reliance via rice/beans/manioc). Do not suggest cuts that eliminate staple food groups essential for local nutrition.
+*   **Language Safety:** Hard-code Portuguese warnings against "fasting," "detox," or "liquid-only" days. These terms must trigger a refusal response: *"Não recomendamos restrição severa para adolescentes em crescimento."*
+
+**3. Mandatory User-Facing Disclaimers**
+*   **Growth Warning:** Every recommendation screen must display: *"Atenção: Você está em fase de crescimento. Restrições calóricas severas podem prejudicar seu desenvolvimento físico e mental."*
+*   **Professional Referral Trigger:** If a user requests a target below the hard-coded floor, or inputs signs of disordered eating (e.g., "want to lose 5kg in 1 week"), immediately display: *"Procure um nutricionista ou médico. Este app não substitui aconselhamento profissional."*
+*   **Parental/Guardian Note:** For users under 16, add a prompt suggesting they share their plan with a parent or guardian before starting.
+
+**4. Engineering Implementation Steps (Do Before Friday)**
+*   **Input Validation:** Reject or flag unrealistic inputs (e.g., height/weight combos implying severe malnutrition or obesity without medical context).
+*   **Output Capping:** Implement a final logic layer that clamps all AI outputs to the safe ranges defined in Section 1. The AI can suggest *how* to eat, but never *how little* to eat below the floor.
+*   **Logging for Review:** Log every instance where the AI's raw suggestion was overridden by the safety clamp. This data is critical for post-launch tuning.
+*   **Kill Switch:** Prepare a feature flag to instantly disable "weight loss" suggestions globally, reverting to "maintenance only" messaging if an incident occurs.
+
+**5. Go/No-Go Decision Criteria**
+*   **GO:** Only if hard-coded floors cannot be bypassed by prompt injection or edge-case inputs, and all disclaimers are visible on the UI.
+*   **NO-GO:** If the AI can generate a deficit >200 kcal for a 14-year-old, or if disclaimers are buried in settings rather than adjacent to the calorie number.
+
+**Note:** Do not rely on the AI's probabilistic reasoning for safety limits; use deterministic code for all floors and caps. Launching with aggressive deficits for teens carries high liability and physiological risk.

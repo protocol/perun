@@ -1,0 +1,34 @@
+### Compatibility and Fairness Testing Plan for GlobeTrotter Inc.
+
+**1. Define the Compatibility Matrix**
+Establish a definitive list of "supported" browser and operating system versions based on your product requirements. This matrix must explicitly include the older versions currently reporting issues (e.g., Safari on iOS 14, Chrome on Android 9, older desktop Firefox/Edge versions). Do not rely on assumptions; if a version is marked as "supported" in your documentation, it must be part of this test scope.
+
+**2. Construct Controlled Test Scenarios**
+Create a set of identical search queries (e.g., "New York to London, specific dates, economy class") to serve as your baseline. These queries must be run across every device/OS combination in your matrix.
+*   **Control Group:** Run these queries on the latest supported devices to establish the "master inventory list" of available flights.
+*   **Test Group:** Run the exact same queries on the older targeted devices.
+
+**3. Execute Differential Analysis**
+Compare the flight results returned to the Test Group against the Control Group.
+*   **Inventory Parity Check:** Verify that the number of flights and specific flight IDs displayed on older devices match the master list. Any discrepancy indicates a filtering error.
+*   **Attribute Verification:** Ensure that pricing, seat availability, and layover details are identical. Sometimes data renders but is truncated or formatted incorrectly on older engines, hiding options from the user.
+*   **Logic Inspection:** If discrepancies exist, isolate whether the cause is client-side rendering (the data arrived but wasn't shown) or server-side filtering (the server withheld data based on the User-Agent string).
+
+**4. Automate User-Agent Spoofing for Breadth**
+Since physical access to every legacy device may be limited for a team of six, utilize headless browser testing tools (such as Puppeteer or Playwright) to spoof User-Agent strings. This allows your developers to simulate requests from dozens of older browser versions rapidly from their local machines.
+*   Script the test suite to iterate through your compatibility matrix automatically.
+*   Flag any request where the response payload size or content differs from the baseline by more than 0%.
+
+**5. Implement a "Fairness" Assertion Gate**
+Before deployment, introduce a mandatory CI/CD check that fails the build if inventory variance is detected between supported versions. This ensures that no code commit can accidentally reintroduce compatibility filtering logic. The assertion should state: *"All supported user agents must receive identical flight inventory sets for identical search parameters."*
+
+**6. Rapid Manual Spot-Check**
+Allocate 2–4 hours for the six developers to perform manual verification on real devices (or high-fidelity emulators) for the top three most popular legacy configurations identified in your analytics. Automated tests catch logic errors, but manual checks confirm visual layout and interaction usability, ensuring older devices aren't just receiving data, but can actually interact with the booking buttons.
+
+**7. Rollback and Monitoring Strategy**
+Given the tight launch schedule, prepare an immediate feature-flag toggle to revert to the legacy display logic if post-launch monitoring shows a drop in conversion rates specifically tied to older user agents. Instrument your analytics to tag sessions by browser version and alert immediately if "flights viewed per session" drops for any specific segment.
+
+By focusing on differential analysis between a known-good baseline and the targeted older environments, you can mathematically prove whether inventory is being unfairly withheld, ensuring a fair experience for all travelers regardless of their technical setup.
+
+*Note: Prioritize automating the User-Agent spoofing immediately to maximize coverage within your time constraints.*
+*Ensure your "supported" list is signed off by product management to avoid testing obsolete, unsupported versions.*

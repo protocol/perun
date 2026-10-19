@@ -1,0 +1,34 @@
+**Validation Protocol Strategy: Distinguishing Cardiac Arrest from Vigorous Exercise**
+
+Given the budget constraint limiting live trials, your validation must rely on high-fidelity simulation and adversarial "red-teaming" of your alert logic before any regional rollout. Because this system executes a high-stakes, irreversible action (dispatching emergency services), you cannot rely solely on aggregate accuracy metrics. You must implement a human-in-the-loop gate or a multi-factor confirmation step before the final alert is transmitted, unless the signal confidence is absolute.
+
+**1. Construct a Harm Inventory**
+Before testing, explicitly document the specific failure modes:
+*   **False Positives (Over-reliance/Hallucination):** The system interprets vigorous exercise (e.g., gardening, dancing, rushing) as cardiac arrest, overwhelming hospitals and causing user distress.
+*   **False Negatives (Missed Detection):** The system fails to detect a genuine event because the heart rate pattern resembles exercise, leading to delayed care.
+*   **Affected Parties:** Elderly users (psychological distress, loss of trust), Emergency Services (resource depletion), and Medical Advisors (liability).
+
+**2. Simulation-Based Measurement Plan**
+Since large-scale live trials are not feasible, design a runnable evaluation suite using your simulation data. Create one test row per identified harm with the following components:
+*   **Probe Sets:** Curate datasets containing:
+    *   *Positive Controls:* Verified cardiac arrest signatures (flatline, erratic fibrillation).
+    *   *Negative Controls:* Verified high-intensity activities specific to your demographic (e.g., brisk walking, climbing stairs, shoveling snow).
+    *   *Adversarial Inputs:* Edge cases where exercise mimics arrest (e.g., sudden stop after sprinting, tremors combined with elevated heart rate).
+*   **Metrics & Thresholds:** Do not invent a "safe" error rate. Define a stop condition: if the false positive rate exceeds a specific, owner-defined threshold (e.g., >1 false alert per 100 hours of simulated activity), the feature must not launch autonomously.
+*   **Subgroup Analysis:** Slice results by activity type and user baseline health. Aggregate accuracy is insufficient; you must prove performance across all specific activity segments.
+
+**3. Manage Residual Risk with Confidence Tiers**
+Do not display raw probability scores (e.g., "87% chance of arrest") to users or backend systems, as this implies a calibration you cannot verify without live data. Instead, implement defined coarse confidence tiers:
+*   **Confirmed:** Multiple biometric indicators align perfectly with arrest protocols. -> *Auto-alert.*
+*   **Corroborated:** Strong signal but some ambiguity with movement data. -> *Trigger immediate secondary check (e.g., audio prompt asking "Are you okay?" or haptic feedback requiring a cancel response within 15 seconds).*
+*   **Unverified:** Signal is noisy or inconsistent. -> *Log for review, no alert.*
+
+This tiered approach introduces a necessary friction point for ambiguous cases, preventing automated dispatches based on uncertain data.
+
+**4. Transparency and Governance**
+Prepare a Model Card for your internal team and medical partners. This document must state the intended use (monitoring elderly during daily activity), the limitations (validated only via simulation, not live patient data), and the known failure modes identified in your harm inventory. Explicitly mark any unmeasured metrics as "UNVERIFIED." Assign a specific owner (e.g., Lead Medical Advisor) to review any failures detected during the simulation phase.
+
+**5. Critical Boundary**
+This protocol identifies risks and proposes controls; it does not certify the system as "safe" or "unbiased." The decision to ship rests with your leadership and medical advisors. Furthermore, because this system makes automated decisions with consequential impacts on health, you must route the question of legal disclosure requirements and regulatory compliance (e.g., medical device regulations) to legal counsel immediately. Do not assert compliance based on this simulation strategy alone.
+
+*Note: Ensure your simulation data includes diverse body types and movement patterns to avoid bias against specific demographics. If the simulation cannot adequately replicate the chaos of a real fall or seizure, the human-in-the-loop gate must remain mandatory.*

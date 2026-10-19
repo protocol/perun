@@ -1,0 +1,54 @@
+### Pre-Launch Safety Protocol: High-Risk Connection Filter
+
+**Objective:** Prevent the matching algorithm from suggesting connections between users with a prior harassment report history, utilizing a manual intervention layer since the engine cannot be rebuilt.
+
+#### Phase 1: Data Extraction & Flagging (Automated)
+1.  **Generate "Block List" Pairs:**
+    *   Query the database for all unique pairs of User A and User B where a harassment report exists between them (regardless of who reported whom).
+    *   Format this as a simple lookup table: `[User_ID_A, User_ID_B]`.
+    *   *Constraint:* Do not alter the main matching engine. This list exists solely for filtering.
+
+2.  **Run Pre-Launch Match Simulation:**
+    *   Execute the current matching algorithm against the live user base in a staging environment.
+    *   Export the full list of proposed connections (e.g., "User X suggested to User Y").
+
+3.  **Cross-Reference Scan:**
+    *   Compare the proposed connections list against the "Block List" pairs.
+    *   Flag any match where both IDs appear in a blocked pair.
+    *   Isolate these flagged entries into a "High-Risk Queue."
+
+#### Phase 2: Manual Intervention (Human-in-the-Loop)
+1.  **Review Team Assignment:**
+    *   Assign two team members to the "Safety Review" role for the next 48 hours. The remaining two manage the festival launch logistics.
+    *   Provide reviewers with access *only* to the High-Risk Queue, not the entire user base, to maintain focus.
+
+2.  **Verification Step:**
+    *   For each flagged pair, manually verify the harassment report status in the admin panel.
+    *   Confirm the report is valid and active (not dismissed or resolved with mutual consent, if such a policy exists).
+
+3.  **Action Execution:**
+    *   **Suppress:** Manually remove the connection suggestion from the deployment batch.
+    *   **Log:** Record the suppression in a safety audit log (Date, User A, User B, Reason: "Prior Harassment Report").
+    *   **Clear:** Only pairs cleared by the reviewer are added to the final "Allowed Connections" list for the launch build.
+
+#### Phase 3: Deployment & Monitoring
+1.  **Whitelist Deployment:**
+    *   Instead of deploying the algorithm's raw output, deploy only the vetted "Allowed Connections" list.
+    *   If the app supports dynamic updates, prepare a script to push immediate removals if new reports surface post-launch.
+
+2.  **Emergency Kill Switch:**
+    *   Define a trigger: If *any* user reports a match from the High-Risk Queue post-launch, immediately pause all new connection suggestions.
+    *   Revert to manual review for all subsequent matches until the filter logic can be patched.
+
+3.  **Post-Launch Audit:**
+    *   Schedule a review 24 hours after launch to analyze any new harassment reports linked to algorithmic suggestions.
+
+#### Critical Constraints & Assumptions
+*   **Data Integrity:** This protocol assumes the harassment reports are accurately tagged in the database.
+*   **Time Budget:** The manual review must be completed within the 48-hour pre-launch window. If the volume of flagged pairs exceeds 200, the team must prioritize pairs involving users with multiple prior reports.
+*   **Privacy:** Reviewers must see only IDs and report status, not sensitive personal details, unless necessary for verification.
+
+This protocol creates a temporary "air gap" between the flawed algorithm and the user, ensuring safety through human verification rather than code changes.
+
+*Note: Ensure the "Block List" is updated in real-time if new reports come in during the review window.*
+*Limit: This manual process is not scalable beyond the initial launch; a code fix remains a critical post-festival priority.*

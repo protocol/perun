@@ -1,0 +1,46 @@
+### Symptom Alert Validation Framework
+
+Given the two-week timeline and three-developer constraint, this framework prioritizes rapid deployment of a deterministic test suite to recalibrate alert thresholds without requiring complex machine learning retraining. The goal is to validate that common symptom clusters do not trigger high-severity alerts while ensuring critical patterns remain detected.
+
+#### 1. Data Stratification & Test Profiles
+Create three distinct datasets of symptom profiles to serve as the ground truth for testing. Do not use live user data; generate synthetic profiles based on medical guidelines.
+
+*   **Benign Cluster (Negative Control):** 50 profiles representing common illnesses (e.g., common cold, seasonal allergies, mild tension headaches).
+    *   *Expected Outcome:* No high-severity alerts. Only low-priority wellness notifications or no notifications.
+    *   *Key Variables:* Low fever (<100.4°F), duration <3 days, absence of respiratory distress, absence of neurological deficits.
+*   **Critical Cluster (Positive Control):** 20 profiles representing rare/severe conditions (e.g., meningitis signs, stroke symptoms, severe allergic reaction).
+    *   *Expected Outcome:* Immediate high-severity alert with urgent care instructions.
+    *   *Key Variables:* High fever with stiff neck, sudden onset weakness, difficulty breathing, rapid progression.
+*   **Edge Cases (Boundary Testing):** 30 profiles with overlapping symptoms (e.g., flu vs. early pneumonia, migraine vs. neurological event).
+    *   *Expected Outcome:* Tiered alerts (e.g., "Monitor closely" or "Consult primary care") but *no* immediate high-severity panic-inducing alerts unless specific "red flag" criteria are met.
+
+#### 2. Logic Recalibration Rules
+Before running tests, hard-code or configure the following logic gates in a staging environment:
+
+*   **Duration Weighting:** Increase the threshold for alert severity based on symptom duration. A headache for 4 hours is benign; a headache for 4 days with vomiting requires escalation.
+*   **Combination Logic:** Require at least two "high-risk" indicators before triggering a rare disease alert. Single symptoms (e.g., "fever" alone) should never trigger a rare disease alert.
+*   **Exclusion Filters:** Explicitly exclude benign profiles from the rare disease logic tree. If `symptom_set` matches "Common Cold," bypass the "Meningitis" check entirely.
+
+#### 3. Automated Test Execution Plan
+With only three developers, automate the validation loop to run on every code commit.
+
+*   **Step A: Unit Test Suite:** Write simple functions that input a symptom JSON object and assert the output alert level.
+    *   *Pass Condition:* 100% of Benign profiles return `alert_level: NONE` or `LOW`. 100% of Critical profiles return `alert_level: HIGH`.
+*   **Step B: Regression Sweep:** Run the full dataset of 100 profiles against the current production logic vs. the recalibrated logic.
+    *   *Metric:* Calculate the "False Positive Rate" (FPR). The target FPR for benign profiles must be 0%.
+*   **Step C: Stress Test:** Simulate 1,000 concurrent users logging benign symptoms to ensure the notification engine does not degrade or default to "safe mode" (which might incorrectly trigger high alerts).
+
+#### 4. Go/No-Go Criteria for Launch
+Do not launch unless the following metrics are met in the staging environment:
+1.  **Zero False Positives:** No benign profile triggers a high-severity alert.
+2.  **100% Sensitivity:** All critical profiles trigger the correct high-severity alert.
+3.  **Latency Check:** Alert generation occurs within <2 seconds to prevent user anxiety caused by system lag.
+
+#### 5. Post-Launch Monitoring Plan
+Since the launch cannot be delayed, implement a "circuit breaker" for the notification engine:
+*   **Real-time Dashboard:** Track the ratio of High-Severity Alerts to Total Logs hourly. If the ratio exceeds 0.5% (indicating potential false positives), automatically downgrade all alerts to "Consult a Doctor" level and page the on-call developer.
+*   **Feedback Loop:** Add a "Was this alert helpful?" button to high-severity notifications to gather immediate user feedback for hotfixes.
+
+This framework allows your team to mathematically prove the safety of the notification logic within days, ensuring the marketing launch proceeds without risking user panic.
+
+*Note: Ensure all synthetic data strictly avoids real PII to maintain compliance during testing. If any edge case fails the "Zero False Positive" rule, disable the specific rare disease trigger for that symptom cluster until a patch is ready.*

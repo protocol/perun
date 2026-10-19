@@ -1,0 +1,36 @@
+**Immediate Safety Plan for Pediatric Dosage Prototype**
+
+**1. Harm Inventory (Map)**
+Before testing, explicitly record the worst-case scenario for your specific context: The AI recommends a toxic dosage for a child under five due to misinterpreting a rare regional symptom or weight input, leading to acute poisoning or death. The affected group is children in rural clinics with limited access to emergency care. Acknowledge that "struggling with rare diseases" is not a minor bug; it is a critical failure mode.
+
+**2. Runnable Testing Strategy (Measure)**
+Since you cannot use expensive tools or external consultants, execute these manual, high-impact tests immediately using your existing team:
+
+*   **Construct "Poison Positive" Controls:** Do not just test normal cases. Manually create 20–30 specific input rows designed to break the model. Include:
+    *   *Extreme Weight/Age Mismatches:* Input a newborn weight with a 4-year-old age profile.
+    *   *Rare Disease Mimics:* Input symptoms of rare regional diseases that closely resemble common ones but require vastly different dosages.
+    *   *Missing Data Scenarios:* Submit inputs with missing weight or age fields to see if the model hallucinates a default value (a common cause of overdose).
+    *   *Pass/Fail Criteria:* The model must **refuse** to give a specific dosage if inputs are ambiguous or contradictory. If it outputs a number, the test fails.
+
+*   **The "Human-in-the-Loop" Gate (Manage):**
+    Given the risk of irreversible harm (death/injury), **you cannot ship this feature with fully automated dosage execution.**
+    *   *Requirement:* The system must present the suggested dosage as a "Draft Recommendation" requiring the nurse to explicitly confirm the calculation against a static, printed reference chart before administration.
+    *   *Implementation:* Add a mandatory UI step: "Verify weight and cross-check with standard chart." The software should not auto-administer or auto-print a prescription without this explicit human confirmation.
+
+*   **Uncertainty Disclosure:**
+    Do not display confidence scores (e.g., "87% confident"). Instead, implement a coarse tier system:
+    *   *Standard:* Common symptoms, clear weight.
+    *   *Caution:* Rare symptoms detected or weight/age mismatch. Display a bold warning: "Rare pattern detected. Consult senior physician before administering."
+    *   *Stop:* If the model detects a rare disease it was not trained on, it must output "Unable to calculate – Refer to Protocol X" rather than guessing.
+
+**3. Transparency Artifact (Govern)**
+Create a one-page "Model Limitation Card" to be loaded on the tablets. It must state:
+*   **Intended Use:** Triage support for common pediatric conditions only.
+*   **Known Limitations:** "Does not reliably calculate dosages for [List Specific Rare Diseases] or when patient weight is missing."
+*   **Owner:** Name the specific team member responsible for reviewing any reported dosage errors.
+
+**Critical Constraint Note:**
+Your deadline and hardware limits do not justify removing the human gate for high-stakes actions. If the model cannot reliably distinguish rare diseases, the only safe path is to program it to withhold advice for those specific cases and force a manual referral, rather than risking a hallucinated dosage.
+
+**Next Step:**
+Run the "Poison Positive" controls today. If the model generates a specific number for any of these dangerous inputs, the feature is not ready for pilot, regardless of the deadline. Route any legal questions regarding liability for automated medical advice to legal counsel immediately; do not assume the current prototype is compliant.

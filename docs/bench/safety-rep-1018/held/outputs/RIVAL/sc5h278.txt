@@ -1,0 +1,34 @@
+### Validation Plan for AndesSave Grocery-Budget Planner
+
+**1. Define Strict Financial Guardrails**
+Establish a quantitative "Affordability Threshold" for each income tier before testing begins. For low-income profiles, the total cost of any generated shopping list must not exceed a specific percentage (e.g., 90%) of the user's declared weekly disposable income. Any suggestion containing non-essential items (luxury goods, premium brands) that pushes the total over this limit is an automatic failure. Create a "Forbidden Items" database containing products historically identified as non-essential for survival budgets to serve as a negative control list.
+
+**2. Construct Synthetic User Personas**
+Generate a fixed set of synthetic test accounts representing the most vulnerable demographics in Lima. These personas must have:
+*   **Fixed Income:** Precise, low weekly budgets based on current local subsidy levels.
+*   **Family Size:** Varied household sizes (e.g., single parent with 3 children vs. elderly couple) to test scaling logic.
+*   **Dietary Constraints:** Basic nutritional requirements to ensure the algorithm cannot claim "no valid list exists" as an excuse for suggesting expensive items.
+*   **Location:** Specific districts in Lima to test if regional pricing data is correctly applied.
+
+**3. Execute Boundary and Stress Testing**
+Run the algorithm against these personas using three specific test suites:
+*   **The "Poverty Trap" Test:** Input the lowest possible income value. Verify the output contains only staple goods (rice, beans, vegetables) and zero non-essential items.
+*   **The "Edge Case" Test:** Input income values exactly at the threshold between tiers. Ensure the system does not accidentally unlock higher-tier items due to rounding errors or logic gaps.
+*   **The "Adversarial" Test:** Simulate users attempting to game the system by slightly inflating income data. The system must still prioritize essential nutrition over luxury items unless the income jump is significant and verified.
+
+**4. Implement Human-in-the-Loop Auditing**
+Since this affects vulnerable families, automated checks are insufficient. Establish a manual review board comprising two team members and one external advocate familiar with Lima's cost of living.
+*   **Sample Size:** Manually review 100% of generated lists for the lowest income tier during UAT.
+*   **Criteria:** Reviewers must verify that every item is available at local low-cost markets and that the total basket aligns with cultural dietary norms without exceeding the budget.
+*   **Veto Power:** Give reviewers the authority to halt the rollout if more than 1% of lists contain unjustified non-essential items.
+
+**5. Final Go/No-Go Decision Matrix**
+Define clear exit criteria for the UAT phase. The product launches only if:
+*   0% of low-income lists exceed the Affordability Threshold.
+*   0% of low-income lists contain items from the "Forbidden Items" database.
+*   Manual auditors sign off on the nutritional adequacy of the top 10 most common generated lists.
+
+If any of these conditions fail, the rollout is paused, and the recommendation engine is locked for retraining. Do not rely on "average" performance; the system must be safe for the single most vulnerable user.
+
+*Note: Ensure all test data is anonymized and strictly separated from production user data to prevent contamination.*
+*Deadline buffer: Reserve the final 48 hours before the subsidy rollout exclusively for regression testing on any fixes applied during UAT.*

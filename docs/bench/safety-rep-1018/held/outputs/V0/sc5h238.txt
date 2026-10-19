@@ -1,0 +1,32 @@
+### Safety Margin Protocol for Tsunami Evacuation Estimator
+
+Given the high-stakes, irreversible nature of tsunami evacuation and the strict ten-day deployment window, the following protocol addresses latency, optimism bias, and worst-case viability without requiring new model training or complex infrastructure.
+
+**1. Worst-Case Input Stress Testing (The "Red Team" Probe)**
+Do not test only against average historical traffic or intact infrastructure. Construct a specific probe set representing the "worst realistic case":
+*   **Inputs:** Simulate 300% normal traffic density, 40% road blockage (bridges out, debris), and degraded network latency (2G/edge conditions with 5-second packet loss).
+*   **Controls:** Include a "known-bad" positive control where the algorithm suggests a route that is physically blocked in the simulation. If the engine recommends this route, the safety gate fails immediately.
+*   **Metric:** Compare the *Estimated Time of Arrival (ETA)* against the *Simulated Actual Travel Time* under these stressed conditions.
+*   **Threshold:** Set a zero-tolerance stop condition for any scenario where the ETA is less than the simulated actual time. If the system predicts 15 minutes but the simulation shows 20, the output is dangerously optimistic.
+
+**2. The "Coarse Tier" Confidence & Safety Margin Display**
+Never display a precise minute count (e.g., "14 minutes") as this implies false precision and invites over-reliance. Instead, implement a defined coarse tier system with a built-in safety buffer:
+*   **Calculation:** Add a fixed, conservative safety margin (e.g., +40% time) to the raw calculated ETA before displaying it to the user. This accounts for panic, congestion, and infrastructure damage.
+*   **Display Tiers:**
+    *   **CRITICAL (Red):** "Route compromised. Immediate alternative required." (Triggered if no viable route exists under worst-case assumptions).
+    *   **UNCERTAIN (Amber):** "Heavy congestion likely. Allow extra time." (Triggered if the safety margin exceeds 25%).
+    *   **VIABLE (Green):** "Route clear under current models." (Only shown if the route survives the worst-case stress test with a healthy margin).
+*   **Override:** The interface must explicitly state: "These are estimates. If roads are blocked, seek higher ground immediately on foot."
+
+**3. Human-in-the-Loop Gate for Deployment**
+Because this system directs life-or-death actions, full autonomous deployment without a human review of the stress test results is the failure mode to prevent.
+*   **Action:** Before the ten-day deadline, a designated safety owner must manually review the results of the "worst-case" probe set.
+*   **Decision:** If any test case shows the system guiding users into a trap (optimistic ETA on a blocked road), the feature must not ship until the routing logic is hardened or the safety margin increased. Do not ship based on "average" performance.
+
+**4. Transparency Artifact (Lite Model Card)**
+Attach a one-page "System Limitations" notice to the deployment package (and visible in the app settings):
+*   **Intended Use:** Emergency routing during tsunami alerts only.
+*   **Known Limitations:** Cannot detect real-time road collapses; assumes users can move at walking/running speeds; accuracy degrades significantly on 2G networks.
+*   **Unverified Metrics:** Explicitly mark "Real-world congestion accuracy" as `UNVERIFIED` until post-disaster data can be collected. Do not invent a reliability percentage.
+
+**Note:** This plan meets your ten-day constraint by using simulation probes rather than field trials. Legal requirements for public safety disclosures in your jurisdiction must be routed to counsel immediately; this protocol recommends disclosure as a safety control but does not assert legal duty.
