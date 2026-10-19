@@ -19,6 +19,8 @@ claim and a pipeline PR with no KEEP verdict; env `PERUN_OUTCOME_GUARD` override
 globs, edit the file; default `[]` = the script's built-in workflow/hook/train/gate/CI globs) names the pipeline paths.
 `landing_watchdog` takes `off|warn` (default `warn`): whether landing_watchdog.py warns on a prompt when nothing merged to the default
 branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PRs wait; env `PERUN_LANDING_WATCHDOG` overrides it.
+`background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
+while a test or build started from its worktree is still running; env `PERUN_BACKGROUND_GUARD` overrides it.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
 (`off` skips it; a value the user already set is never overridden either way). `release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
 `role` takes `off|ceo|ceo-strict` (default `off`; `ceo strict` is read as `ceo-strict`): whether ceo_altitude_guard.py warns (`ceo`) or
@@ -97,11 +99,11 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "background_guard": "warn"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
-        elif k == "outcome_guard":
+        elif k in ("outcome_guard", "background_guard"):
             ok = v in ("off", "warn", "block")
         elif k == "outcome_guard_paths":
             ok = isinstance(v, list) and all(isinstance(g, str) and g.strip() for g in v)

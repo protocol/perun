@@ -63,6 +63,14 @@ an over-long one (same MAX_BLOCKS release valve). Off by default so an
 existing install's handbacks are not suddenly rejected; exempt types always
 skip it.
 
+BACKGROUND WORK (policy `background_guard`: `off|warn|block`, default `warn`; env PERUN_BACKGROUND_GUARD overrides). A lane
+owns its background jobs until they exit. When the lane's cwd is inside a LINKED worktree and a test or build runner
+(BG_RE: pytest, jest, vitest, playwright, make, `npm test`, `cargo test`, `go build`, a `*test*.py|sh` script, ...) has its
+cwd inside that worktree, `warn` sends the owner a `systemMessage` naming the pid and command, and `block` exits 2 with the
+same text on stderr (released after PUSH_MAX_S, like a live push). Dev servers are not matched. The scan reuses
+lane_liveness.cwd_pids (lsof, else /proc) plus one `ps`, excludes this hook's own pid, ancestors and descendants, and
+fails open: a blind scan prints COULD_NOT_CHECK and never blocks. A non-worktree cwd (a shared checkout) is not scanned.
+
 LANE AUDIT (default on). Whenever the stop is allowed (also for exempt types,
 flagged `exempt`), one JSON line per lane is appended to a local ledger so
 prose waste is measurable: the lane's assistant TEXT tokens (`narr_tok`
@@ -220,6 +228,87 @@ def _push_running(cwd):
         return None
 
 
+# A test or build runner (not a dev server: those are long-lived by design and `lane_guard.py wait` owns them).
+BG_RE = re.compile(
+    r"(?<![\w.-])(?:pytest|jest|vitest|playwright|cypress|mocha|tox|nox|ctest|tsc|webpack|make|gradle|mvn|bazel"
+    r"|cargo\s+(?:test|build|check|nextest)|go\s+(?:test|build)|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|build)"
+    r"|(?:python3?\s+-m\s+)?unittest|[^/\s]*test[^/\s]*\.(?:py|sh))(?![\w-])")  # *test*.py|sh: basename only
+
+
+def _bg_mode():
+    """off|warn|block: env PERUN_BACKGROUND_GUARD, else policy `background_guard`, else warn. Fails open to warn."""
+    env = os.environ.get("PERUN_BACKGROUND_GUARD", "").strip().lower()
+    if env in ("off", "warn", "block"):
+        return env
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import perun_policy
+        mode = perun_policy.load().get("background_guard")
+    except Exception:
+        mode = None
+    return mode if mode in ("off", "warn", "block") else "warn"
+
+
+def _ps_table(text):
+    """pid -> (ppid, command) from `ps -axo pid=,ppid=,command=` output (macOS and Linux); malformed lines are skipped."""
+    rows = (ln.split(None, 2) for ln in text.splitlines())
+    return {int(a): (int(b), c) for a, b, c in (r for r in rows if len(r) == 3) if a.isdigit() and b.isdigit()}
+
+
+def _bg_found(table, pids, me):
+    """[(pid, command)] of test/build processes among `pids`. `table` maps pid -> (ppid, command). Never counts `me`,
+    its ancestors (the host that runs this hook) or its descendants (the ps/lsof it spawned)."""
+    skip, p = {me}, me
+    while p in table and table[p][0] > 1 and table[p][0] not in skip:
+        p = table[p][0]
+        skip.add(p)
+    kids = {me}
+    while True:
+        more = {q for q, (pp, _) in table.items() if pp in kids} - kids
+        if not more:
+            break
+        kids |= more
+    skip |= kids
+    return sorted((p, table[p][1]) for p in pids if p in table and p not in skip and BG_RE.search(table[p][1]))
+
+
+def _bg_running(cwd):
+    """[(pid, command)] of test/build processes whose cwd is inside this lane's worktree (empty = none), or None =
+    could not check (ps/lsof/proc blind or failed; the hook fails open). Only a linked worktree is scanned: in a shared
+    checkout the same scan would also catch other lanes' nested worktrees, so a non-worktree cwd reports none."""
+    if not cwd or not os.path.isdir(cwd):
+        return None
+    try:
+        top = os.path.realpath(cwd)
+        while not os.path.exists(os.path.join(top, ".git")) and top != os.path.dirname(top):
+            top = os.path.dirname(top)
+        if not os.path.isfile(os.path.join(top, ".git")):
+            return []
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import lane_liveness
+        pids, _ = lane_liveness.cwd_pids(top)
+        if pids is None:
+            return None
+        r = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True, timeout=10)
+        table = _ps_table(r.stdout) if r.returncode == 0 else {}
+        return _bg_found(table, pids, os.getpid()) if table else None
+    except Exception:  # fail open: a broken scan must never wedge a handback
+        return None
+
+
+def _hold(agent_id, suffix):
+    """True while a block on this lane's `suffix` condition is younger than PUSH_MAX_S (the state file's mtime is the
+    first block), so a stuck process cannot trap the lane forever."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    path = _state_path(agent_id) + suffix
+    try:
+        first = os.path.getmtime(path)
+    except OSError:
+        first = time.time()
+        open(path, "w").close()
+    return time.time() - first < PUSH_MAX_S
+
+
 def _counted(msg):
     """Lines of `msg` that count toward the cap: all but fenced code blocks (fence lines included) and
     lines starting with '! '. A one-line fence (an even number of ``` on a line starting with one) toggles
@@ -240,22 +329,28 @@ def check(data):
     running = _push_running(data.get("cwd"))
     if running is None and data.get("cwd"):
         sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a git push from this worktree is still running (ps/lsof unavailable).\n")
-    if running:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        path = _state_path(str(data.get("agent_id") or "unknown")) + ".push"
-        try:  # file mtime = first block; keep blocking while the push is live, released after PUSH_MAX_S
-            first = os.path.getmtime(path)
-        except OSError:
-            first = time.time()
-            open(path, "w").close()
-        if time.time() - first < PUSH_MAX_S:
+    agent_id = str(data.get("agent_id") or "unknown")
+    if running and _hold(agent_id, ".push"):  # keep blocking while the push is live, released after PUSH_MAX_S
+        sys.stderr.write(
+            "A git push from this worktree is still running (its pre-push hook may take 15+ minutes). "
+            "You own it until it exits: wait with lane_guard.py wait --pid <pid> --timeout <s>, then hand back.\n"
+        )
+        return 2
+    mode = _bg_mode()
+    bg = _bg_running(data.get("cwd")) if mode != "off" else []
+    if bg is None and data.get("cwd"):
+        sys.stderr.write("COULD_NOT_CHECK: cannot tell whether a test or build from this worktree is still running (ps/lsof unavailable).\n")
+    if bg:
+        what = ", ".join(f"pid {p} `{c[:80]}`" for p, c in bg[:3]) + (f" (+{len(bg) - 3} more)" if len(bg) > 3 else "")
+        if mode == "block" and _hold(agent_id, ".bg"):
             sys.stderr.write(
-                "A git push from this worktree is still running (its pre-push hook may take 15+ minutes). "
-                "You own it until it exits: wait with lane_guard.py wait --pid <pid> --timeout <s>, then hand back.\n"
+                f"Background work from this worktree is still running: {what}. You own it until it exits: wait with "
+                "lane_guard.py wait --pid <pid> --timeout <s> (or stop your own process), then hand back.\n"
             )
             return 2
+        if mode == "warn":
+            print(json.dumps({"systemMessage": f"background_guard: this lane handed back with a test/build still running from its worktree: {what}."}))
     msg = data.get("last_assistant_message") or ""
-    agent_id = str(data.get("agent_id") or "unknown")
     chars, lines, too_long = _shape(msg)  # fields-only and the 400/8 target never block: audit() logs them
     no_status = _require_status() and not STATUS_RE.search(msg)
     if not (too_long or no_status):
