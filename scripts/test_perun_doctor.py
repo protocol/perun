@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for perun_doctor.py, perun_uninstall.py and install.sh default-on operating layer (temp repos)."""
-import contextlib, io, json, os, shutil, subprocess, sys, tempfile, unittest
+import contextlib, io, json, os, re, shutil, subprocess, sys, tempfile, unittest
 from unittest import mock
 from pathlib import Path
 
@@ -260,12 +260,67 @@ class SandboxProbeTests(unittest.TestCase):
         self.assertIn('FAIL  network: HTTPS to github.com is blocked. Fix: add "github.com" to sandbox.network.allowedDomains', lines)
         self.assertIn("FAIL  local-bind: dev servers cannot listen on localhost. Fix: set sandbox.network.allowLocalBinding: true", lines)
         self.assertIn("OK    git", lines)
-        self.assertRegex(lines[-1], r"^sandbox probe: 2 of 5 checks failed; run python3 .*sandbox_probe\.py")
+        self.assertRegex(lines[-1], r"^sandbox probe: 2 of 9 checks failed; run python3 .*sandbox_probe\.py")
 
     def test_all_ok_verdict(self):
         lines, bad = self.sp.probe([(n, lambda: None, c, f) for n, _, c, f in self.sp.checks(".")])
         self.assertEqual(bad, 0)
-        self.assertTrue(lines[-1].startswith("sandbox probe: 5/5 checks passed in this shell"))
+        self.assertTrue(lines[-1].startswith("sandbox probe: 9/9 checks passed in this shell"))
+
+    def test_tool_probes_skip_when_absent_and_never_install(self):
+        with mock.patch.object(self.sp.shutil, "which", return_value=None), mock.patch.object(self.sp.subprocess, "run") as run:
+            lines, bad = self.sp.probe([c for c in self.sp.checks(".") if c[0] in ("gh", "chromium", "postgres", "tsx")])
+        run.assert_not_called()
+        self.assertEqual(bad, 0)
+        self.assertEqual(lines[:4], [f"SKIP  {n}: not installed" for n in ("gh", "chromium", "postgres", "tsx")])
+        self.assertIn("0/0 checks passed, 4 skipped", lines[-1])
+
+    def _run(self, rc, err=""):
+        return mock.Mock(returncode=rc, stderr=err)
+
+    def _probe(self, name, res):
+        items = [c for c in self.sp.checks(".") if c[0] == name]
+        with mock.patch.object(self.sp.shutil, "which", return_value="/usr/bin/x"), \
+                mock.patch.object(self.sp.os.path, "isfile", return_value=True), \
+                mock.patch.object(self.sp.subprocess, "run", side_effect=res if isinstance(res, Exception) else None, return_value=res):
+            return self.sp.probe(items)
+
+    def test_gh_tls_block_fails_but_unauthenticated_skips(self):
+        lines, bad = self._probe("gh", self._run(1, "x509: OSStatus -26276"))
+        self.assertEqual(bad, 1)
+        self.assertIn('Fix: add "gh *" to sandbox.excludedCommands (sandbox_preflight.py rule: gh)', lines[0])
+        lines, bad = self._probe("gh", self._run(4, "gh: To get started with GitHub CLI, please run: gh auth login"))
+        self.assertEqual((bad, lines[0].split(":")[0]), (0, "SKIP  gh"))
+
+    def test_postgres_block_fails_but_no_server_skips(self):
+        lines, bad = self._probe("postgres", self._run(2, "psql: error: connection to server failed: Operation not permitted"))
+        self.assertEqual(bad, 1)
+        self.assertIn("sandbox_preflight.py rule: db", lines[0])
+        lines, bad = self._probe("postgres", self._run(2, "psql: error: connection refused"))
+        self.assertEqual((bad, lines[0].split(":")[0]), (0, "SKIP  postgres"))
+
+    def test_chromium_and_tsx_any_failure_or_timeout_fails_success_passes(self):
+        for name, rule in (("chromium", "browser"), ("tsx", "tsx")):
+            lines, bad = self._probe(name, self._run(1, "boom"))
+            self.assertEqual(bad, 1)
+            self.assertIn(f"sandbox_preflight.py rule: {rule}", lines[0])
+            self.assertEqual(self._probe(name, subprocess.TimeoutExpired("x", 20))[1], 1)
+            self.assertEqual(self._probe(name, self._run(0))[0][0], f"OK    {name}")
+
+    def test_every_fix_names_a_real_preflight_rule(self):
+        import sandbox_preflight
+        for name, _, _, fix in self.sp.checks("."):
+            m = re.search(r"sandbox_preflight\.py rule: (\w+)", fix)
+            if m:
+                self.assertIn(m.group(1), sandbox_preflight.RISKS, name)
+
+    def test_doctor_shows_skip_as_info(self):
+        items = [(n, (lambda: (_ for _ in ()).throw(self.sp.Skip("not installed"))) if n == "gh" else (lambda: None), c, f)
+                 for n, _, c, f in self.sp.checks(".")]
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"DCR_NO_PROBE": ""}), \
+                mock.patch.object(self.sp, "checks", lambda repo: items):
+            r = rows(d, d)
+        self.assertEqual(r["sandbox gh"], ("INFO", "not installed"))
 
     def test_checks_are_harmless(self):
         src = (ROOT / ".claude/skills/agentic-delivery/scripts/sandbox_probe.py").read_text()
