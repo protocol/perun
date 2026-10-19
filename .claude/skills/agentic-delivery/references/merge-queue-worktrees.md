@@ -274,11 +274,11 @@ this passes.
 
 ## An opt-in throughput lever is inert until the default path takes it — attribute the gain to what runs by default, not to the merge
 
-The throughput-lever instance of `SKILL.md` G2's "a cap that defaults to off is not a cap": when a CI/delivery
+The throughput-lever instance of "a cap that defaults to off is not a cap" (`performance-db-cost.md`): when a CI/delivery
 optimization ships as an **opt-in** capability — a `test:affected` script, an `--affected` flag, a gate mode
 gated behind an env var — *merging* it speeds nothing up. The number moves only once the capability is wired
 into the **default** path the pipeline actually runs: the CI job, the default gate script, the drainer's own
-gate invocation (the diff-affected lever named above is the concrete case this attaches to — run only
+gate invocation (the diff-affected lever named above: run only
 diff-affected tests **by default**, not as a flag a caller must remember). This is the general
 **beware-the-proxy** discipline — a merged PR is a proxy for the outcome, not the outcome itself
 (`deep-code-review`'s `report-format.md`; gate epistemology principle 11 lists "Integrated to the mainline (G7)"
