@@ -1,0 +1,17 @@
+**Appointment-reminder refactor: split into dispatch and scheduling services; latency drops from 1.4s to 380ms.**
+
+**Linus, please approve Option A (shared DB) or Option B (separate schemas with event bus) by Friday.** Code owners Mia and Jo are split on this decision; your call unblocks the path to live before March 3 to prevent the Q2 rollout slip.
+
+**Key figure: 380ms average reminder delivery latency (target: <1.4s).**
+
+This PR refactors the monolithic reminder service into two microservices: one handling SMS/email dispatch, the other managing scheduling logic. The change touches 27 files with 3,842 lines modified. Post-refactor, the test suite maintains 91% coverage.
+
+The legacy cron job failed on Feb 12, making this replacement critical for the Q2 timeline.
+
+**Design options:**
+*   **Option A:** Keeps a shared database between the two new services.
+*   **Option B:** Assigns each service its own schema, synchronized via an event bus. (Author leans toward this option).
+
+**Notes:**
+*   Staging environment is currently experiencing disk space constraints.
+*   API version bump to 2.1 requires a changelog entry (not included in this diff).

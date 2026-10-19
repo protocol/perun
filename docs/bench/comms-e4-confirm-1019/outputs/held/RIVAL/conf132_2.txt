@@ -1,0 +1,28 @@
+**To:** Dana
+**Subject:** Approval needed: Timetable merge approach (greedy vs. queue) before Thu, 24 Apr
+
+Hi Dana,
+
+Could you please review the timetable merge PR and approve one of the two approaches below by **Thursday, 24 Apr**? We need a decision before the May 1 rollout freeze.
+
+The diff switches room allocation from the old queue to a greedy bin-packer, bumps the API to v3, and adds a retry flag. Note: ignore the stale diagram in the docs folder; it doesn't reflect these changes.
+
+**Option 1: Switch to Greedy (Recommended for conflict reduction)**
+*   **Pros:** Significantly reduces student conflicts. In the spring term dry run, greedy resulted in **312 conflicts** compared to 487 with the queue.
+*   **Cons:** Requires a 4-second cache warm-up (vs. 0.2s for the queue).
+*   **Status:** Test suite passed on 14 Apr. Integration env is currently down but expected back Friday.
+
+**Option 2: Stay on Queue + Retry Flag**
+*   **Pros:** No cache warm-up delay (0.2s start). Adds resilience via the new retry flag.
+*   **Cons:** Higher conflict rate (487 in dry run).
+
+The key trade-off is speed/resilience versus the number of remaining student conflicts. Given the 312 conflict count with greedy, that seems to be the primary metric for success, but the 4s warm-up is the operational cost.
+
+Please reply to this PR comment with your choice so we can proceed.
+
+Thanks,
+[Your Name]
+
+---
+*Integration environment is down until Friday; final validation will occur then.*
+*Docs diagram is outdated and excluded from this review.*

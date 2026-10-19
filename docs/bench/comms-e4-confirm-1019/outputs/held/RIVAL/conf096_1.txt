@@ -1,0 +1,30 @@
+**To:** Marcus
+**Subject:** Review needed: Catalogue migration approach (1.2M records)
+
+Hi Marcus,
+
+Could you review the catalogue migration branch and approve one of the two approaches below? We need a go/no-go decision by next Tuesday, 2025-03-11.
+
+**Context**
+We are migrating 1.2M records. The current diff switches us from batch MARC export to an incremental API sync. During testing, we found a side bug in the dedupe logic that dropped 4,200 records; this needs fixing regardless of the path we choose. The PR also includes new retry logic with backoff and updates the env docs to reflect the API token rotation on 2025-02-28.
+
+**Options**
+
+*   **Option A: Keep incremental sync**
+    *   **Target finish:** 2025-03-14
+    *   **Risk:** ~3% rate-limit failures.
+    *   **Trade-off:** Faster delivery, but we need to monitor for throttling.
+
+*   **Option B: Revert to batch (with gzip compression)**
+    *   **Target finish:** 2025-03-21
+    *   **Risk:** 15% longer runtime.
+    *   **Trade-off:** Avoids rate limits entirely, but misses the mid-March window.
+
+Please let me know which direction you prefer so we can finalize the fix for the dropped records and proceed.
+
+Thanks,
+Priya
+
+---
+*Note: Ensure the dedupe fix is verified before merging either option.*
+*Env docs update covers the Feb 28 token rotation.*

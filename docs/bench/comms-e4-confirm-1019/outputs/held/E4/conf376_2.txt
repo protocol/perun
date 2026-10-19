@@ -1,0 +1,11 @@
+**Dana, please choose server-side aggregation (simpler, 3.2x API load) or client-side caching (adds 120ms latency, cuts server load 58%) for the conflict-checking service by Thursday, Feb 13.**
+
+This decision unblocks the code freeze for the spring term rollout on Feb 17. The current diff contains 47 changed files and 2,340 added lines, though 80% of the additions are test data. Implementing either approach resolves the 6 known race conditions present in the old service. Our peak traffic context is 14,200 concurrent users on Tuesdays.
+
+Key figure: 58% server load reduction (measured by approach B).
+
+Approach A (Server-side): Aggregates all section enrollments on the server. It is significantly simpler to implement but increases API calls by a factor of 3.2 during peak usage.
+
+Approach B (Client-side): Uses caching with incremental updates on the client. It introduces approximately 120ms of latency per page load but reduces server load by 58%.
+
+The choice balances implementation speed against infrastructure cost and user-perceived latency. No other changes are included in this diff beyond the conflict logic and its tests.

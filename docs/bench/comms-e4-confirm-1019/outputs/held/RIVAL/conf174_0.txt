@@ -1,0 +1,20 @@
+**Subject:** RFC: Appointment Reminder Refactor – Architecture Decision Required (Option A vs. B)
+
+Hi Linus,
+
+This PR refactors the monolithic reminder service into two microservices: one handling SMS/email dispatch and the other managing scheduling logic. The change touches 27 files with 3,842 lines modified. Post-refactor, the test suite maintains 91% coverage.
+
+The primary driver for this split is performance; average reminder delivery latency drops from 1.4s to 380ms. Given the legacy cron job failure on Feb 12, we must deploy this before March 3 to avoid slipping the Q2 rollout. Additionally, this update includes the API bump to version 2.1, requiring a changelog entry.
+
+We need your approval on the architectural approach before merging, as code owners Mia and Jo are split on the implementation:
+
+*   **Option A:** Both services share a single database.
+*   **Option B:** Each service uses its own schema, synchronized via an event bus.
+
+I recommend Option B to ensure better isolation, but I need your go/no-go call on which path to take. Please review and approve either Option A or B by Friday so we can finalize the merge.
+
+Note: Staging is currently constrained by disk space issues, which may affect final verification runs.
+
+***
+
+*Drafted based on provided metrics and constraints; no external tools or files were accessed.*

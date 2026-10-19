@@ -30,6 +30,8 @@ shorthand. This is about shape and length, not vocabulary. Lookup table:
   with none given, leave them out; stand-ins ("owner unassigned") fail
   `comms_lint.py`. A message ends on the ask. A PR body asks in its own words;
   "Reply A or B" is for messages, never PRs.
+- **Name the options in the ask.** Line 1 names each option by what it is ("hire temp paralegals, outsource, or delay"), never by a bare letter, with the owner and the date the source gives.
+- **Key figure line.** When the source gives a deciding figure, one line `Key figure: <figure> <what it measures>` states it exactly as the source does, near the top.
 - **Add nothing the source lacks.** No number, date, owner, recommendation,
   rationale, command or promise the author did not give. Keep an author's lean at
   its stated strength ("leaning B", not "I recommend B"); with no view given, name the

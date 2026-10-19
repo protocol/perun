@@ -1,0 +1,26 @@
+**PR: AGV Charging Scheduler – Dynamic vs. Fixed Slot Allocation**
+
+**Summary**
+This PR updates the AGV charging scheduler to reduce charger idle time and average wait times. We are evaluating two approaches:
+*   **Approach A (Recommended):** Dynamic slot allocation with predictive demand.
+*   **Approach B:** Fixed slot scheduling with a simpler heuristic.
+
+**Key Metrics & Impact**
+While both approaches pass the current test suite, Approach A delivers significant efficiency gains:
+*   **Idle Time:** Reduces total daily idle charger time by **18%** (primary metric).
+*   **Wait Time:** Cuts average charging wait from 14 minutes to 9 minutes.
+*   **Performance:** Benchmark results for 10k and 20k order volumes are included in the attached report; both approaches scale, but A maintains lower latency under the 20k load.
+
+**Dependencies & Constraints**
+*   **Telemetry:** Approach A requires the new telemetry feed (v2.1), which is currently deployed in staging.
+*   **Hardware:** Note that chargers 12–14 are offline until 5 Oct due to hardware maintenance. This constraint is external to this diff but should be considered during deployment planning.
+
+**Rollback Plan**
+If Approach A exhibits instability in production, the rollback procedure involves reverting to the previous scheduler version (effectively Approach B logic) via the standard deployment pipeline. No data migration is required as the configuration is stateless.
+
+**Decision Required**
+@Priya, please review and approve your preferred approach by **Thursday, 12 Sep**. As the owner of this decision, your guidance is needed to finalize whether we proceed with the efficiency gains of Approach A or the simplicity of Approach B.
+
+---
+*Note: Benchmark data for 10k/20k orders is attached to this PR.*
+*Hardware outage for chargers 12-14 is tracked separately in the ops calendar.*
