@@ -1,0 +1,3 @@
+### Added
+- Delivery: `handback.py` runs a lane's last mile in one command: each gate through the shared `gate_cache.py`, `lane_guard.py handback`, a fast-forward check of the base, `git diff --check`, the changelog-fragment check, and, only with `--repo`, the required check names and exact-SHA check verdict plus a dry-run tracker post through `board_post.py` (`--send` posts). It prints the `clean_finished.sh` and `reap_own.sh --report` teardown commands and never runs them, never pushes, and names the failing step with exit 1.
+- size-budget-raise: .claude/skills/INDEX.md 11119→11213 one INDEX line for the new handback.py script.
