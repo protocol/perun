@@ -1,0 +1,50 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 1504,
+   "severity": "high",
+   "text": "When _actionHandler exists but this.parent is null/undefined, the command event is never emitted anywhere (original this.emit removed, new parent.emit skipped). Input: a root command with _actionHandler and no parent will silently drop the command event, breaking any listeners expecting 'command:<name>' events."
+  },
+  {
+   "file": "index.js",
+   "line": 1505,
+   "severity": "high",
+   "text": "The else-if chain structure means when _actionHandler exists, the fallback to command:* wildcard handling (lines 1507-1510) is never reached even if parent lacks the specific command listener. Input: a subcommand with _actionHandler where parent has no listener for 'command:subcmd' but does have 'command:*' listener will fail to trigger the wildcard handler."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 3237,
+ "prompt": [
+  989,
+  1459
+ ],
+ "completion": 789,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The code removes the unconditional emit and only emits via parent, so a root command with an action handler and no parent will never emit the command event, which is a genuine behavioral regression.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The else-if structure prevents the command:* wildcard fallback from being reached when an action handler exists, even if the parent has no specific listener but does have a wildcard listener, which is a genuine defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

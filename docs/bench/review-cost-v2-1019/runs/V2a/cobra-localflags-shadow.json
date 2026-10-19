@@ -1,0 +1,50 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "V2a",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 88,
+   "severity": "high",
+   "text": "LocalFlags removed the special handling for root commands that merged flag.CommandLine flags. For a root command (no parent), globally registered flags from flag.CommandLine will no longer appear in LocalFlags, breaking flag lookup for root commands that rely on global flags."
+  },
+  {
+   "file": "command.go",
+   "line": 137,
+   "severity": "medium",
+   "text": "InheritedFlags now depends on c.parentsPflags being populated by updateParentsPersistentFlags. If InheritedFlags is called before mergePersistentFlags or LocalFlags (which call updateParentsPersistentFlags), the parentsPflags will be nil or empty, causing inherited flags from parents to be missing."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 6821,
+ "prompt": [
+  1073,
+  4258
+ ],
+ "completion": 1490,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The new mergePersistentFlags no longer contains the flag.CommandLine.VisitAll block that merged global flags into the root command's PersistentFlags, so those flags disappear from LocalFlags for root commands.",
+   "judge": "GLM-5.2"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "InheritedFlags itself calls c.updateParentsPersistentFlags() before using c.parentsPflags, so parentsPflags is always populated regardless of call order.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

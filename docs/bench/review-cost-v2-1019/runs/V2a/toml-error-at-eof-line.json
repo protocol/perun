@@ -1,0 +1,57 @@
+{
+ "id": "toml-error-at-eof-line",
+ "arm": "V2a",
+ "findings": [
+  {
+   "file": "lex.go",
+   "line": 413,
+   "severity": "high",
+   "text": "errorControlChar passes lx.pos-1 to errorPos without bounds check; if a control character appears at position 0 (start of file), this sets Start=-1 causing invalid position or panic during error display."
+  },
+  {
+   "file": "lex.go",
+   "line": 376,
+   "severity": "high",
+   "text": "errorPrevLine unconditionally sets pos.Start = lx.pos - 1 and decrements Line; if called when lx.pos=0 or at line 1, this produces negative Start or Line values causing incorrect error positioning."
+  },
+  {
+   "file": "lex.go",
+   "line": 400,
+   "severity": "medium",
+   "text": "errorf's atEOF branch sets pos.Start = lx.pos - 1 without checking if lx.pos is 0; unexpected EOF at file start would produce negative Start position."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 12243,
+ "prompt": [
+  1073,
+  9746
+ ],
+ "completion": 1424,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  true,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "errorControlChar calls errorPos with lx.pos-1 without checking if lx.pos is 0, which can produce a negative Start position for a control character at the start of the file.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "errorf's atEOF branch sets pos.Start = lx.pos - 1 without checking if lx.pos is 0, which can produce a negative Start position for an unexpected EOF at file start.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,76 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "V2c",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "EXIT_CODE is declared but never initialized before being used in the 'already installed' branch; when a version is already installed, the test `[ $EXIT_CODE -ne 0 ]` evaluates with an empty variable causing a syntax error or unpredictable behavior."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "Logic inversion: default packages are now installed only when EXIT_CODE is non-zero (failure), but they should be installed on success; the original condition checked for SKIP_DEFAULT_PACKAGES and DEFAULT_PACKAGES presence, not error status."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 59,
+   "severity": "high",
+   "text": "The ALIAS assignment is now guarded by `[ $EXIT_CODE -ne 0 ]`, meaning the alias is only set when previous operations failed; aliases should be set on successful install/use regardless of error status."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 44,
+   "severity": "medium",
+   "text": "nvm_install_default_packages is called without arguments but the original code passed DEFAULT_PACKAGES; the function now fetches packages internally but DEFAULT_PACKAGES was removed from scope, potentially causing the function to operate on empty data."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 79,
+   "severity": "medium",
+   "text": "In the fresh install path, default packages are only installed when EXIT_CODE equals 0, but EXIT_CODE may be uninitialized if nvm use or nvm install-latest-npm were not executed, leading to unpredictable behavior."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 4995,
+ "prompt": [
+  977,
+  2738
+ ],
+ "completion": 1280,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  true,
+  false,
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "The finding identifies the same inverted EXIT_CODE condition gating default package installation on failure in the already-installed path.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "The function now fetches DEFAULT_PACKAGES internally, so the removed argument is not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "not_a_bug",
+   "reason": "In the fresh install path, EXIT_CODE is initialized to -1 before the conditional blocks, so it is not uninitialized.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

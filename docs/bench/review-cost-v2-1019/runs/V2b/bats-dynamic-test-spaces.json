@@ -1,0 +1,74 @@
+{
+ "id": "bats-dynamic-test-spaces",
+ "arm": "V2b",
+ "findings": [
+  {
+   "file": "test_functions.bash",
+   "line": 46,
+   "severity": "high",
+   "text": "The eval at line 46 executes arbitrary code from the --description argument. A test description like '$(malicious_cmd)' or '`cmd`' would be executed during parsing."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": null,
+   "severity": "high",
+   "text": "The removed bats_test_begin() function previously called setup() for each test. Without it, test setup code never runs, breaking all tests that rely on setup()."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": 71,
+   "severity": "medium",
+   "text": "BATS_TEST_DESCRIPTION is only set when the test name matches (line 68 condition). Tests that don't match will have an empty or stale BATS_TEST_DESCRIPTION, breaking test reporting."
+  },
+  {
+   "file": "test_functions.bash",
+   "line": 59,
+   "severity": "medium",
+   "text": "Calling bats_test_function without --description or --tags (e.g., just a test name) hits the *) case and exits with error. This breaks existing calls that pass only a test name."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 4592,
+ "prompt": [
+  1119,
+  2219
+ ],
+ "completion": 1254,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The eval at line 46 executes the --description argument as shell code, allowing command substitution or arbitrary commands in the description to run during parsing.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The setup() call was moved to a different location in the change (likely in bats-exec-test), so the removal of bats_test_begin() does not necessarily break setup() execution.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: the condition at line 68 uses unquoted $* which fails to match test names with spaces, leaving BATS_TEST_DESCRIPTION unset for such tests.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "The new code requires --description or --tags options, but the reference bug is about the matching condition, not the option parsing; this is a deliberate interface change, not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

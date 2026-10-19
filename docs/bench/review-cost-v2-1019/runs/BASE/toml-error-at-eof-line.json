@@ -1,0 +1,85 @@
+{
+ "id": "toml-error-at-eof-line",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "lex.go",
+   "line": 376,
+   "severity": "medium",
+   "text": "errorPrevLine sets pos.Start = lx.pos - 1 and pos.Line-- without bounds checks; on empty file (lx.pos=0, lx.line=1), this produces Position{Line: 0, Start: -1} violating the line>=1 contract and causing invalid byte offset."
+  },
+  {
+   "file": "lex.go",
+   "line": 400,
+   "severity": "medium",
+   "text": "errorf's atEOF branch (lines 400-407) has the same defect: pos.Start = lx.pos - 1 and pos.Line-- produce invalid Position{Line: 0, Start: -1} when lexing empty input that hits EOF immediately."
+  }
+ ],
+ "error": "",
+ "attempts": 2,
+ "turns": 10,
+ "tokens": 264186,
+ "prompt": [
+  629,
+  9235,
+  17907,
+  18545,
+  32018,
+  34186,
+  36206,
+  36410,
+  38124,
+  38941
+ ],
+ "completion": 1985,
+ "tools": [
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/SKILL.md"
+  ],
+  [
+   "read_file",
+   "change.patch"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/compact-mode.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/method.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/domain-a.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/domain-b.md"
+  ],
+  [
+   "grep",
+   "change.patch"
+  ],
+  [
+   "read_file",
+   "change.patch"
+  ],
+  [
+   "glob",
+   "*.go"
+  ]
+ ],
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "The errorf atEOF branch (lines 400-407) has the same root cause as the reference bug: it decrements the line and sets Start to lx.pos - 1, which produces an invalid Position when the lexer is at EOF on empty input, just like the reference bug's mechanism of reporting errors on the previous line at EOF.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

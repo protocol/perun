@@ -1,0 +1,50 @@
+{
+ "id": "execa-sync-duplicate-file-targets",
+ "arm": "V2b",
+ "findings": [
+  {
+   "file": "output-async.js",
+   "line": 50,
+   "severity": "high",
+   "text": "The input/output direction logic is inverted. When direction is 'input', the code sets inputStream=subprocess.stdio[fdNumber] and outputStream=stream, then pipes from inputStream to outputStream. This causes data to flow FROM the subprocess TO the user's stream instead of FROM the user's stream INTO the subprocess, breaking all input piping."
+  },
+  {
+   "file": "duplicate.js",
+   "line": 229,
+   "severity": "medium",
+   "text": "The hasSameValue function handles 'filePath' and 'fileUrl' types but has no case for 'fileNumber'. If two file descriptors use the same file descriptor number, the duplicate detection silently fails, potentially causing data corruption or unexpected behavior."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 13152,
+ "prompt": [
+  1119,
+  9393
+ ],
+ "completion": 2640,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The code correctly pipes from the user's stream to the subprocess for input direction, as the inputStream is the user's stream and outputStream is the subprocess's stdio.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The hasSameValue function lacks a case for 'fileNumber', so duplicate file descriptor numbers are not detected, which is a genuine defect separate from the reference bug about file paths vs URLs.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

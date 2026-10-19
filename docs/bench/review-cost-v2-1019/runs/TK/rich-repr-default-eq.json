@@ -1,0 +1,62 @@
+{
+ "id": "rich-repr-default-eq",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "repr.py",
+   "line": 119,
+   "severity": "high",
+   "text": "Custom __rich_repr__ methods lose angular support: the code only sets __rich_repr__.angular when auto-generating the method (line 122), but classes with custom __rich_repr__ that set __rich_repr__.angular = True will have getattr return False, breaking angular bracket output."
+  },
+  {
+   "file": "repr.py",
+   "line": 105,
+   "severity": "medium",
+   "text": "Auto-generated __rich_repr__ assumes all __init__ parameters are stored as instance attributes; if a parameter like 'password' is accepted but not stored as self.password, getattr(self, name) will raise AttributeError at runtime."
+  },
+  {
+   "file": "repr.py",
+   "line": 114,
+   "severity": "low",
+   "text": "The bare except with 'from None' swallows the original exception traceback, making debugging harder when inspect.signature fails for unexpected reasons like malformed __init__ annotations."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 5292,
+ "prompt": [
+  989,
+  3207
+ ],
+ "completion": 1096,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The code only sets __rich_repr__.angular when auto-generating the method, but custom __rich_repr__ methods that set angular=True will still have getattr return True because the attribute is set on the function object itself, not overwritten by the decorator.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The auto-generated __rich_repr__ uses getattr(self, name) for every __init__ parameter, which will raise AttributeError if a parameter is not stored as an instance attribute.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The bare except with 'from None' is intentional to raise a ReprError with a clean message, and the original traceback is not required for the functionality.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

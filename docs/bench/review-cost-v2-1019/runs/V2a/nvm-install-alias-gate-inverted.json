@@ -1,0 +1,71 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "V2a",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "Inverted condition: default packages are installed only when EXIT_CODE indicates failure (-ne 0) instead of success. With a successful nvm use and NVM_UPGRADE_NPM=1, EXIT_CODE=0 causes the condition to fail, skipping default package installation entirely."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 48,
+   "severity": "high",
+   "text": "Inverted condition: reinstall-packages only runs when EXIT_CODE indicates failure (-ne 0). A successful installation with EXIT_CODE=0 will skip reinstalling packages from the previous version."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 59,
+   "severity": "high",
+   "text": "Inverted condition: alias is only set when EXIT_CODE indicates failure (-ne 0). A successful install with EXIT_CODE=0 will not create the requested alias."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 43,
+   "severity": "high",
+   "text": "EXIT_CODE may be uninitialized when NVM_UPGRADE_NPM is not set to 1. The variable is only assigned inside the NVM_UPGRADE_NPM=1 block, but used in conditions at lines 43, 48, and 59, causing unpredictable behavior."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 79,
+   "severity": "medium",
+   "text": "EXIT_CODE may be uninitialized in the fresh install path if nvm use is not called or fails silently. The condition [ $EXIT_CODE -eq 0 ] at line 79 would then behave unpredictably, potentially skipping default package installation."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 6193,
+ "prompt": [
+  1073,
+  2834
+ ],
+ "completion": 2286,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  true,
+  true,
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "3": {
+   "verdict": "gt_same",
+   "reason": "EXIT_CODE is uninitialized in the already-installed path when NVM_UPGRADE_NPM is not 1, and the inverted conditions at lines 43/48/59 (the gating on [ $EXIT_CODE -ne 0 ]) are the same root cause as the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "gt_same",
+   "reason": "The fresh install path's EXIT_CODE is uninitialized if nvm use is not called or fails silently, and the condition [ $EXIT_CODE -eq 0 ] at line 79 is the same inverted-test mechanism as the reference bug, causing default packages to be skipped.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

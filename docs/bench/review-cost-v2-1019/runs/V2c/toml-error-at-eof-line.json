@@ -1,0 +1,57 @@
+{
+ "id": "toml-error-at-eof-line",
+ "arm": "V2c",
+ "findings": [
+  {
+   "file": "lex.go",
+   "line": 376,
+   "severity": "high",
+   "text": "errorPrevLine sets pos.Start = lx.pos - 1 without checking if lx.pos is 0; if an error occurs at the very start of input (e.g., empty file or control char at position 0), Start becomes -1 causing invalid position reporting."
+  },
+  {
+   "file": "lex.go",
+   "line": 400,
+   "severity": "high",
+   "text": "errorf's EOF handling sets pos.Start = lx.pos - 1 without bounds check; if atEOF is true at position 0 (empty file), Start becomes -1, producing invalid error position."
+  },
+  {
+   "file": "lex.go",
+   "line": 412,
+   "severity": "medium",
+   "text": "errorControlChar calls errorPos with lx.pos-1; if a control character appears at position 0, the start offset becomes -1, corrupting error position data."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 11944,
+ "prompt": [
+  977,
+  9650
+ ],
+ "completion": 1317,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: errorf's EOF handling sets pos.Start = lx.pos - 1 without bounds check, which is exactly the mechanism described in the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: errorControlChar calls errorPos with lx.pos-1, which is the same mechanism of setting Start to lx.pos-1 without bounds check, as described in the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

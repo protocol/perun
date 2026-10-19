@@ -1,0 +1,66 @@
+{
+ "id": "nvm-install-alias-gate-inverted",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "nvm.sh",
+   "line": 3341,
+   "severity": "high",
+   "text": "Condition `[ $EXIT_CODE -ne 0 ]` is inverted - default packages only install when prior command FAILED. Also EXIT_CODE is uninitialized here (declaration moved but initialization removed), causing undefined behavior. Input: successful nvm use with SKIP_DEFAULT_PACKAGES unset will skip default packages."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 3346,
+   "severity": "high",
+   "text": "Condition `[ $EXIT_CODE -ne 0 ]` prevents reinstall-packages from running on success. The reinstall should happen when installation succeeds, not fails. Input: installing a version with REINSTALL_PACKAGES_FROM set will skip reinstalling packages."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 3357,
+   "severity": "high",
+   "text": "Condition `[ $EXIT_CODE -ne 0 ]` prevents alias from being set on success. Alias should be set when installation succeeds. Input: installing with ALIAS set will fail to create the alias."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 3363,
+   "severity": "high",
+   "text": "Returns uninitialized EXIT_CODE variable instead of actual command result. The initialization `EXIT_CODE=-1` was removed but variable is still returned, causing unpredictable return values. Input: any install path returns garbage exit code."
+  },
+  {
+   "file": "nvm.sh",
+   "line": 3416,
+   "severity": "medium",
+   "text": "In nvm_install_default_packages, if nvm_get_default_packages succeeds but returns empty string, function returns 0 (success code) instead of continuing. The condition `[ $EXIT_CODE -ne 0 ] || [ -z \"${DEFAULT_PACKAGES}\" ]` returns early on empty packages with wrong exit code."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 4936,
+ "prompt": [
+  989,
+  2750
+ ],
+ "completion": 1197,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  true,
+  true,
+  true,
+  false,
+  true
+ ],
+ "verdicts": {
+  "3": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the same root cause as the reference bug: the EXIT_CODE variable is used uninitialized in the already-installed branch, causing default-packages, reinstall-packages, and alias steps to be gated on the inverted test.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

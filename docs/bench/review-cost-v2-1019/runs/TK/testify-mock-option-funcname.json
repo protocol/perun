@@ -1,0 +1,86 @@
+{
+ "id": "testify-mock-option-funcname",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 46,
+   "severity": "high",
+   "text": "Panic bug: reflect.Value.Len() panics if f.value is not Array/Chan/Map/Slice/String. Passing a non-slice functional option value will crash at runtime."
+  },
+  {
+   "file": "mock.go",
+   "line": 76,
+   "severity": "high",
+   "text": "Panic bug: Same Len() issue in Diff() - tValue.Len() will panic if the stored value is not a slice/array/map/chan/string type."
+  },
+  {
+   "file": "mock.go",
+   "line": 106,
+   "severity": "high",
+   "text": "Panic bug: expectedOpts.Len() and actualOpts.Len() at lines 106/110 will panic if the inputs are not slice/array/map/chan/string, causing crash on non-slice functional options."
+  },
+  {
+   "file": "mock.go",
+   "line": 150,
+   "severity": "medium",
+   "text": "Bug: Error message uses expectedNames[i] for both expected and actual output, hiding the actual function name that differed in the diff output."
+  },
+  {
+   "file": "mock.go",
+   "line": 160,
+   "severity": "medium",
+   "text": "Potential panic: runtime.FuncForPC returns nil for methods or dynamically generated functions, causing nil pointer dereference on .Name() call."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 5781,
+ "prompt": [
+  989,
+  3552
+ ],
+ "completion": 1240,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "FunctionalOptionsArgument.value is always a slice (variadic []interface{}), so Len() is safe.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "In Diff(), t is the FunctionalOptionsArgument.value which is always a slice, so Len() is safe.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "assertOpts is only called with the slice value from FunctionalOptionsArgument and the actual argument, both expected to be slices of options.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "The error message uses expectedNames[i] for both sides, but this is a cosmetic issue in the diff output, not a functional defect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "gt_same",
+   "reason": "funcName uses runtime.FuncForPC and trims the package path, but the reference bug is about the closure/package suffix remaining in the name, which is exactly what this function fails to fully strip.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

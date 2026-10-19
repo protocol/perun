@@ -1,0 +1,69 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "V2b",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 103,
+   "severity": "high",
+   "text": "LocalFlags now excludes flags found in parentsPflags, but the old code included all local flags unconditionally. If a flag exists in both c.flags and parentsPflags (e.g., a persistent flag from a parent with the same name as a local flag), it will be incorrectly excluded from LocalFlags."
+  },
+  {
+   "file": "command.go",
+   "line": 84,
+   "severity": "medium",
+   "text": "LocalFlags removed the fallback that added global flag.CommandLine flags when the command has no parent. Commands at the root level will no longer include global flags in their LocalFlags output."
+  },
+  {
+   "file": "command.go",
+   "line": 137,
+   "severity": "medium",
+   "text": "InheritedFlags now only iterates over parentsPflags instead of recursively visiting all parent commands' PersistentFlags. If updateParentsPersistentFlags hasn't been called yet or parentsPflags is stale, InheritedFlags will return incomplete or empty results."
+  },
+  {
+   "file": "command.go",
+   "line": 194,
+   "severity": "low",
+   "text": "mergePersistentFlags changed from recursive traversal starting at c to calling merge(c) then VisitParents(merge). The old code merged from root down, the new code merges from c up through parents, which could cause different flag precedence if parent and child have flags with the same name."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 6890,
+ "prompt": [
+  1119,
+  4304
+ ],
+ "completion": 1467,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  true,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The removal of the global flag.CommandLine fallback is intentional per the new design; the reference bug is about shadowing by parent persistent flags, not global flags.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "InheritedFlags calls updateParentsPersistentFlags() which populates parentsPflags from all parents via VisitParents, so it is not stale or incomplete.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "The merge order change does not cause a different precedence because mergePersistentFlags only adds flags if not already present, so the first (child) wins regardless of traversal order.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,57 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "V2c",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 94,
+   "severity": "high",
+   "text": "LocalFlags no longer adds global flag.CommandLine flags for root commands. The old code had explicit handling when !c.HasParent() to copy global flags, but this was removed. A root command calling LocalFlags will miss all global flags."
+  },
+  {
+   "file": "command.go",
+   "line": 103,
+   "severity": "medium",
+   "text": "The addToLocal closure excludes flags found in parentsPflags, but parentsPflags contains persistent flags from ALL parents. If a parent's persistent flag has the same name as a local flag, the local flag won't be included in LocalFlags output."
+  },
+  {
+   "file": "command.go",
+   "line": 160,
+   "severity": "medium",
+   "text": "updateParentsPersistentFlags initializes c.parentsPflags with c.Name() as the FlagSet name, but this set aggregates flags from all parent commands. Using the child command's name for a parent-aggregated flag set is semantically incorrect and could cause confusion in error messages or debugging."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 6774,
+ "prompt": [
+  977,
+  4162
+ ],
+ "completion": 1635,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  true,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The reference bug is about child flags shadowing parent persistent flags being excluded from local flags, not about global flag.CommandLine flags for root commands; the removal of global flag copying is a separate change and the finding does not match the reference mechanism.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "Using c.Name() as the FlagSet name for parentsPflags is only a naming choice for error messages/debugging and does not affect functionality or the reference bug's mechanism.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

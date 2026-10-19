@@ -1,0 +1,50 @@
+{
+ "id": "cobra-localflags-shadow",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "command.go",
+   "line": 80,
+   "severity": "high",
+   "text": "LocalFlags() no longer includes global flags from flag.CommandLine for root commands. The original code had explicit logic to copy global flags when !c.HasParent(), but this was removed. A root command with globally registered flags will not return them via LocalFlags()."
+  },
+  {
+   "file": "command.go",
+   "line": 80,
+   "severity": "medium",
+   "text": "LocalFlags() now caches c.lflags across calls instead of building a fresh FlagSet each time. If flags are added to the command after the first LocalFlags() call, subsequent calls will return stale results missing the newly added flags."
+  }
+ ],
+ "error": "",
+ "attempts": 2,
+ "turns": 2,
+ "tokens": 9660,
+ "prompt": [
+  989,
+  4174
+ ],
+ "completion": 4497,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The new LocalFlags() removes the explicit flag.CommandLine copy for root commands, so globally registered flags are no longer returned.",
+   "judge": "GLM-5.2"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "LocalFlags() re-visits c.flags and c.PersistentFlags() each call and adds missing flags, so newly added flags are not stale.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

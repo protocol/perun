@@ -1,0 +1,62 @@
+{
+ "id": "execa-sync-duplicate-file-targets",
+ "arm": "V2c",
+ "findings": [
+  {
+   "file": "handle.js",
+   "line": 396,
+   "severity": "high",
+   "text": "Resource leak: when getFinalFileDescriptor throws after creating streams but before pushing to fileDescriptors array, cleanupCustomStreams only cleans up previously-successful entries, leaking the streams from the failing iteration."
+  },
+  {
+   "file": "output-sync.js",
+   "line": 112,
+   "severity": "medium",
+   "text": "Same file specified as both string path and URL (e.g., '/tmp/out.txt' and 'file:///tmp/out.txt') produces different pathString keys in outputFiles Set, causing second write to overwrite instead of append to the same physical file."
+  },
+  {
+   "file": "output-async.js",
+   "line": 26,
+   "severity": "low",
+   "text": "Variable naming is inverted between Map set (line 53 uses inputStream as key) and iteration (line 26 destructures key as outputStream), creating confusion though logic appears functionally correct for current use cases."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 13359,
+ "prompt": [
+  977,
+  9251
+ ],
+ "completion": 3131,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The catch block only cleans up fileDescriptors that have been fully pushed, so streams created in the failing iteration are not destroyed, causing a resource leak.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "gt_same",
+   "reason": "The outputFiles Set keys by the raw path string, so a filePath and fileUrl pointing to the same file produce different keys and are treated as different files, causing the second write to overwrite instead of append.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The variable naming is confusing but the logic correctly maps input streams to output streams, so it is functionally correct and not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

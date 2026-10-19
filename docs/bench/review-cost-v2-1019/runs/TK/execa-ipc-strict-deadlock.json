@@ -1,0 +1,74 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 14,
+   "severity": "high",
+   "text": "Temporal dead zone: INCOMING_MESSAGES is used at line 14 but declared at line 34. Any call to onMessage before module initialization completes throws ReferenceError."
+  },
+  {
+   "file": "outgoing.js",
+   "line": 60,
+   "severity": "high",
+   "text": "Temporal dead zone: OUTGOING_MESSAGES is used at line 60 but declared at line 83. Any call to startSendMessage before module initialization completes throws ReferenceError."
+  },
+  {
+   "file": "outgoing.js",
+   "line": 76,
+   "severity": "high",
+   "text": "Infinite loop risk: if endSendMessage is never called (e.g., exception before it in send.js line 139), the while loop in waitForOutgoingMessages waits forever since the deferred promise never resolves."
+  },
+  {
+   "file": "outgoing.js",
+   "line": 79,
+   "severity": "medium",
+   "text": "Unhandled rejection: if a deferred promise rejects, Promise.all rejects and propagates out of waitForOutgoingMessages, breaking the message emission loop in onMessage and leaving messages stuck in the queue."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 6075,
+ "prompt": [
+  989,
+  3772
+ ],
+ "completion": 1314,
+ "tools": [
+  [
+   "read_file",
+   "./change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The module is fully initialized before any external call to onMessage can occur, so the temporal dead zone is not reachable in practice.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The module is fully initialized before any external call to startSendMessage can occur, so the temporal dead zone is not reachable in practice.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "If endSendMessage is not called due to an exception before it in sendMessageAsync, the deferred promise never resolves and waitForOutgoingMessages loops forever, which is a genuine defect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "If a deferred promise rejects, Promise.all rejects and propagates out of waitForOutgoingMessages, breaking the message emission loop and leaving messages stuck, which is a genuine defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

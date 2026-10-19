@@ -1,0 +1,110 @@
+{
+ "id": "testify-mock-option-funcname",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "mock.go",
+   "line": 148,
+   "severity": "high",
+   "text": "assertOpts compares pointer addresses instead of dereferenced values: reflect.New(vt) creates new allocations at lines 140-141, so expectedValues[i].Interface() and actualValues[i].Interface() are different pointer addresses even when the functional options write identical values, causing all pointer-typed option comparisons to falsely fail."
+  },
+  {
+   "file": "mock.go",
+   "line": 150,
+   "severity": "medium",
+   "text": "Error formatting at line 150 uses expectedNames[i] for both expectedFmt and actualFmt, so when actualOpt differs the error message shows the expected function name for both sides, hiding which actual function was received."
+  },
+  {
+   "file": "mock.go",
+   "line": 106,
+   "severity": "medium",
+   "text": "assertOpts calls expectedOpts.Len() and actualOpts.Len() at lines 106 and 110 without verifying Kind() is Slice/Array first; if FunctionalOptions receives a non-slice value or assertOpts is called with non-slice actual, Len() panics."
+  },
+  {
+   "file": "mock.go",
+   "line": 139,
+   "severity": "medium",
+   "text": "Line 139 calls ot.In(i).Elem() assuming all functional option parameters are pointer types; if an option takes a non-pointer type (e.g., func(Config) instead of func(*Config)), Elem() panics on the non-pointer Kind."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 6,
+ "tokens": 139329,
+ "prompt": [
+  629,
+  11785,
+  26569,
+  29608,
+  33314,
+  33778
+ ],
+ "completion": 3646,
+ "tools": [
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/SKILL.md"
+  ],
+  [
+   "read_file",
+   "change.patch"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/compact-mode.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/method.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/lang-go.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/domain-a.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/domain-j.md"
+  ],
+  [
+   "read_file",
+   ".claude/skills/deep-code-review/references/report-format.md"
+  ],
+  [
+   "grep",
+   "change.patch"
+  ]
+ ],
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: reflect.New creates distinct pointer allocations for expected and actual options, so pointer-typed option values compare unequal even when functionally identical.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The error formatting at line 150 indeed uses expectedNames[i] for both expectedFmt and actualFmt, so the actual function name is never shown in the failure message.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "assertOpts is only called from Diff with expected being a FunctionalOptionsArgument whose value is a slice (from variadic call), and actual is expected to be a slice of options; no non-slice input is plausible in the code path.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "Line 139 calls ot.In(i).Elem() without checking that the option parameter is a pointer type, so a non-pointer option parameter would cause a panic.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}
