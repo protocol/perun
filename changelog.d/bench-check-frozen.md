@@ -1,0 +1,2 @@
+### Fixed
+- `scripts/bench_check.py` rule e: each `<sha256>  <path>` line in a bench's `SHA256-frozen.txt` must name an existing file that still hashes to it. A driver edited after the freeze now fails the gate, and so does a missing listed file or a malformed line. Paths resolve from the repo root, then the bench dir. Committed benches that list changed or missing files now fail `python3 scripts/bench_check.py <dir>`; CI checks only new bench dirs, so they are not blocked.

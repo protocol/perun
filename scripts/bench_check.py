@@ -24,7 +24,11 @@ Fails (exit 1, one line per problem) when a bench dir:
   c. has a PREREGISTERED*.md naming a SHA256*.txt hash file that does not exist;
   d. has a scenario whose 10-word shingles overlap all other docs/bench dirs, or (held
      scenarios) the bench's own tune scenarios, by more than --max-overlap (default 0.2). --allow FILE (default DIR/overlap-allow.txt) lists
-     template phrases, one per line, whose shingles are ignored.
+     template phrases, one per line, whose shingles are ignored;
+  e. lists in SHA256-frozen.txt a file that is missing, or whose sha256 differs from its line's
+     hash, or a line that is not "<sha256>  <path>". A path resolves from the repo root first
+     (the sha256sum -c convention in the bench READMEs), then from the bench dir. Enforced by
+     main(), not check(), so check() reports rules a-d only.
 DIR/reuse-allow.txt (optional) lists outputs/ paths whose byte-identical reuse is
 deliberate (e.g. a rival arm generated once and shared): an exact file path or a
 directory (matches everything beneath it). Document why in PREREGISTERED.md.
@@ -43,7 +47,8 @@ strings, so a frozen line rewritten to a hash that some later ledger event also 
 passes, and committed file bytes are not re-hashed against SHA256-frozen.txt. A single
 scenario file with no tune/held file name, "split" field or tune/held id is treated as
 unsplit, so no tune/held check runs on it. Edits to a bench dir that already exists on
-BASE are not gated.
+BASE are not gated. Files a SHA256-frozen.txt line lists are re-hashed (rule e); files it never
+lists are not.
 """
 import argparse, hashlib, io, json, re, subprocess, sys, tarfile, tempfile
 from datetime import datetime, timezone
@@ -155,6 +160,31 @@ def ledger_errs(d):
     return out
 
 
+def frozen_errs(d):
+    """Rule e: every "<sha256>  <path>" line of SHA256-frozen.txt names a file that exists and still hashes to it.
+
+    The path resolves from REPO first, then from d (sha256sum -c run from the repo root or the bench dir);
+    the first base that holds the file is the one hashed. Reads only. No SHA256-frozen.txt gives no errors
+    here (ledger_errs reports it). A line that is not "<64 hex>  <path>" is an error (fails closed).
+    """
+    f = d / "SHA256-frozen.txt"
+    if not f.is_file():
+        return []
+    out = []
+    for n, l in enumerate(f.read_text().splitlines(), 1):
+        m = re.fullmatch(r"([0-9a-fA-F]{64}) [ *](.+)", l)
+        if not m:
+            out.append(f"{f}: line {n} is not '<sha256>  <path>'")
+            continue
+        p = m.group(2)
+        hit = next((c for c in (REPO / p, d / p) if c.is_file()), None)
+        if hit is None:
+            out.append(f"{f}: {p} is missing (tried the repo root and the bench dir)")
+        elif hashlib.sha256(hit.read_bytes()).hexdigest() != m.group(1).lower():
+            out.append(f"{f}: {p} changed after the freeze (sha256 differs)")
+    return out
+
+
 def check(d, others, allow=None, max_overlap=0.2):
     d, errs = Path(d), []
     # a. scenario files fail closed; tune/held id collision; cross-bench byte-identical outputs
@@ -236,7 +266,7 @@ def main(argv=None):
         extra = [x for x in sorted((Path(tmp) / "docs/bench").glob("*")) if x.is_dir() and not (root / x.name).exists()]
         for d in dirs:
             others = [x for x in sorted(root.iterdir()) if x.is_dir() and x.resolve() != d.resolve()] + extra
-            errs += check(d, others, a.allow, a.max_overlap)
+            errs += check(d, others, a.allow, a.max_overlap) + frozen_errs(d)
     print("\n".join(errs) or f"bench_check: {len(dirs)} dir(s) clean")
     return 1 if errs else 0
 
