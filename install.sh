@@ -40,7 +40,7 @@
 #                         before every push (opt in yourself: git config
 #                         core.hooksPath .githooks -- never run by this
 #                         script). Prints (does not write) a settings.json
-#                         snippet for agentic-delivery's two-tier SubagentStop
+#                         snippet for agentic-delivery's SubagentStop
 #                         handback_cap hook and its SubagentStart
 #                         subagent_start_inject hook.
 # Narrow:
@@ -109,7 +109,7 @@ on re-install). Overlay skills are opt-in.
                        ceo_altitude_guard.py hook (counts always, warns/blocks only once policy role is set), the
                        outcome_claim_guard.py Stop + UserPromptSubmit + PreToolUse hook (unmeasured "fixed/faster" claims; policy outcome_guard), the
                        landing_watchdog.py UserPromptSubmit + PreToolUse(Agent|Task) hook (nothing merged for an hour while green PRs wait; policy landing_watchdog), the
-                       SubagentStart house-default injector, the two-tier
+                       SubagentStart house-default injector, the
                        SubagentStop handback_cap, and the subagent model pin
                        (agentic-delivery/references/operating-discipline.md).
                        Never overwrites an existing file at that path (writes
@@ -522,7 +522,7 @@ automates them (they need forge/org privileges this script does not have):
       are free) and get a local-first patch to review; it never edits a workflow.
 
 Optional, only useful alongside --with-delivery: --with-operating-layer WRITES the
-two-tier SubagentStop hand-back cap, the SubagentStart house-default injector, and
+SubagentStop hand-back cap, the SubagentStart house-default injector, and
 the subagent model pin as a settings.operating-layer.json.new snippet to merge by
 hand -- see agentic-delivery/references/operating-discipline.md (the always-on
 operating layer's one entry point) and its "Install and self-check" section.
@@ -567,8 +567,6 @@ HOUSE
     [[ -f "${OPLAYER_LOCAL}" ]] || { echo '{}' > "${OPLAYER_LOCAL}"; OPLAYER_LOCAL_NEW=1; }
     OPLAYER_PRE="$(mktemp "${TMPDIR:-/tmp}/perun.XXXXXX")"; cp "${OPLAYER_LOCAL}" "${OPLAYER_PRE}"
     # Append template hook entries not already present; existing env/model win.
-    # Placeholder matchers (contain "<") never fire: skip them, tell the operator.
-    echo "warning: skipped template hook entries with a placeholder matcher (e.g. <your-read-only-review-type>); add a SubagentStop entry with your real review agent type by hand" >&2
     # dm: recursive merge, existing (right) values win, arrays unioned (existing order first).
     # autoCompactWindow 200000: only when no user/project/local settings file sets it (local would shadow a user's value) and policy auto_compact is not off.
     OPLAYER_AC=200000
@@ -592,7 +590,7 @@ HOUSE
       (.hooks[]?[]?.hooks[]? | select((.command? | type) == "string") | .command) |= up
       | reduce ($t.hooks | keys[]) as $e (.;
           (.hooks[$e] // []) as $a
-          | .hooks[$e] = $a + ($t.hooks[$e] | map(select(((.matcher // "") | contains("<") | not) and (. as $x | $a | index([$x]) | not)))))
+          | .hooks[$e] = $a + ($t.hooks[$e] | map(select(. as $x | $a | index([$x]) | not))))
       | .env = ($t.env + (.env // {}))
       | (if $t.sandbox then .sandbox = dm($t.sandbox; .sandbox // {}) else . end)
       | (if $t.permissions then .permissions = dm($t.permissions; .permissions // {}) else . end)

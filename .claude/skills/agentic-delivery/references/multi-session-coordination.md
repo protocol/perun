@@ -810,7 +810,7 @@ instructions**:
   - **A read-only research/review type gets a higher hand-back cap, not an
     exemption** — exempt means uncapped, which reopens the cost problem on a
     harness with no report file (`host-enforcement.md`'s `SubagentStop`
-    two-tier install, not restated here).
+    cap install, not restated here).
 
 Two operational riders:
 

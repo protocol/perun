@@ -133,8 +133,8 @@ script header.
 **A harness with no report file** (a review lane's findings ARE its chat
 answer) still needs a cap, never an exemption (exempt = uncapped). Matching
 hooks run in parallel and any block wins, so give that type its own entry
-(`matcher` = the type, env `HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000`,
-as in the template), list it in
+(`matcher` = the type, env `HANDBACK_MAX_LINES=25 HANDBACK_MAX_CHARS=2000`;
+add by hand), list it in
 `LANE_RULES_SKIP_TYPES`, and scope the default entry's `matcher` to leave it
 out: a matcher with other characters is a JavaScript regex, e.g.
 `^(?!security-reviewer$).*`.
@@ -161,7 +161,7 @@ Exceptions are carved **mechanically, by agent type**, not left to each lane's m
    (comma-separated; default empty) and injected with the tag stripped for every
    other type.
 3. **A read-only research/review type gets a higher hand-back cap, not an
-   exemption** — already the two-tier `SubagentStop` rule above; this hook does not
+   exemption** — already the `SubagentStop` cap rule above; this hook does not
    touch the cap.
 
 `scripts/subagent_start_inject.py` — **use this when** a house standard is drifting
