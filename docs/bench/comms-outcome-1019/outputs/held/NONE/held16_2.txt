@@ -1,0 +1,35 @@
+**Subject:** Review Request: Article Scheduler Approach (A vs. B) – Approval Needed by Thu, May 7
+
+Hi Priya,
+
+I need your review and approval on the architectural approach for the publishing tool's article scheduler by this Thursday, May 7. This timeline is critical to begin the required migration this Friday, May 8, before the old cron table is deprecated.
+
+We are evaluating two options:
+
+**Approach A: Retain Current Cron-Based Scheduler**
+*   **Scope:** A 300-line fix.
+*   **Pros:** Minimal code change; faster test suite execution.
+*   **Cons:** Reliability issues persist. QA identified 2 bugs in this approach during the last sprint. Historically, this system missed 37 publishes last month out of 2,100 scheduled (a 1.76% failure rate).
+
+**Approach B: Move to Queue-Based System (Existing Event Bus)**
+*   **Scope:** Approximately 1,200 lines of code changes across 14 files.
+*   **Pros:** Significantly reduces missed publishes, addressing the 1.76% failure rate observed last month. Leverages our existing event bus, which currently handles 5,000 events/day without issue.
+*   **Cons:** Larger implementation footprint. The test suite runs 40% slower, though this is considered acceptable given the reliability gains.
+
+**Recommendation**
+I strongly recommend **Approach B**. While the implementation is larger and tests are slower, the primary goal is eliminating missed publishes. The data from last month (37 missed articles) and the recent bugs found in Approach A during QA suggest that sticking with the cron-based system carries too much operational risk. The event bus has proven capacity to handle the load.
+
+**Next Steps**
+*   **Thursday, May 7:** Your approval of Approach B.
+*   **Friday, May 8:** Begin migration to the new system to meet the deprecation deadline of the old cron table.
+
+Please note that the UI changes for the calendar view are scoped to a separate PR and are not included in this review.
+
+Let me know if you have any questions or need further details on the diff summary.
+
+Best regards,
+
+[Your Name]
+
+*Note: Migration must start Friday to avoid service disruption from the deprecated table.*
+*Test suite performance impact for Approach B is acknowledged and accepted.*

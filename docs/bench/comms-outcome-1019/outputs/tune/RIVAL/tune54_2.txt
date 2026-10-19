@@ -1,0 +1,31 @@
+Subject: Decision needed: Licence audit scanner approach (A vs B) by 9 Sep
+
+Hi Priya,
+
+Could you please review the two proposed approaches for the new licence audit scanner and approve your preferred option by 9 September? This selection is required to finalize the tooling before the Q3 compliance report deadline on 12 September.
+
+The proposed change replaces our old regex matcher with a proper SPDX parser. This update fixes a bug where the "unknown" licence bucket incorrectly counted 12% of files. In our last audit, we identified 3,412 dependencies that need accurate reporting. The current pull request touches 14 files, with a net addition of 510 lines of code (+820/−310).
+
+We are evaluating two implementation paths:
+
+*   **Approach A:** A Go-based scanner using the existing internal database.
+    *   *Benefit:* Reuses our current pipeline architecture.
+    *   *Trade-off:* Slightly less flexible for ad-hoc audits compared to B.
+*   **Approach B:** A Python-based scanner with a separate cache.
+    *   *Benefit:* Faster execution for ad-hoc audits.
+    *   *Trade-off:* Introduces a separate caching layer outside the existing DB.
+
+I am currently leaning toward Approach A because it integrates directly with our established pipeline, reducing maintenance overhead. However, given your ownership of the compliance decision, I want to ensure you weigh the speed benefit of Approach B against the architectural simplicity of Approach A.
+
+Two important constraints for either option:
+1.  **Audit Log Format:** The output format must remain unchanged to satisfy legal team requirements. Both approaches currently meet this.
+2.  **CI Performance:** The CI job duration has already improved from 9 minutes to 6 minutes in the current draft, regardless of the final scanner language choice.
+
+Please let me know which approach you approve so we can merge the changes and proceed with the Q3 report generation.
+
+Best regards,
+
+[Your Name]
+
+---
+*Note: The 9 Sep deadline allows a 3-day buffer before the 12 Sep compliance submission.*

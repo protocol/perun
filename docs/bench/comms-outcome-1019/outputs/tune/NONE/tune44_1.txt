@@ -1,0 +1,35 @@
+**PR Title:** Timetable Engine Migration: Proposal for Core Rewrite (Approach B) vs. Caching Layer (Approach A)
+
+**Description:**
+
+Hi Priya,
+
+This PR finalizes the decision path for the timetable engine migration ahead of the September 2nd autumn catalog launch. We need your approval to proceed with either Approach A or Approach B by September 25th.
+
+**Performance Analysis**
+Our primary constraint is the 40ms response limit during peak loads for semesters with 5,000 courses.
+*   **Approach A (Current Solver + Caching):** While this adds a caching layer, profiling indicates it will still hit the 40ms limit on 5k-course semesters. Furthermore, on smaller 2k-course runs, the caching improvement yields only a 9% gain, which is insufficient for our scalability goals.
+*   **Approach B (Kotlin Rewrite):** The new algorithm in the spike successfully reduced peak conflict detection from **38ms down to 12ms**. This 12ms figure provides the necessary headroom for future growth and strictly adheres to our latency SLAs.
+
+**Recommendation**
+Based on the data, I recommend **Approach B**. The reduction from 38ms to 12ms is critical for stability under load, whereas Approach A fails to resolve the core bottleneck.
+
+**Risks and Mitigation**
+Approach B involves refactoring three legacy modules: Room Booking, Lecturer Preferences, and the Exam Slotter. To mitigate deployment risk:
+1.  **Rollback Plan:** A detailed rollback strategy has been drafted. If you approve Approach B, we require your formal sign-off on this plan by September 25th.
+2.  **Test Suite Status:** The staging suite is currently green for Approach B, with two known flaky tests:
+    *   One failure occurs specifically on Tuesdays.
+    *   One failure occurs on the 14th of the month.
+    *   *Note:* We have identified a separate flaky test occurring on May 8, which we suspect is related to a timezone handling issue. These are being investigated but do not block the core logic validation.
+
+**Action Required**
+Please review the attached diff summary and performance metrics.
+*   [ ] **Approve Approach A** (Acknowledging the 40ms risk remains).
+*   [ ] **Approve Approach B** (Recommended). If selected, please confirm your sign-off on the associated rollback plan by September 25th.
+
+Let's lock this in so we can stabilize before the catalog goes live.
+
+***
+
+The May 8 flaky test note is included as requested, though the date is in the past relative to the September deadline.
+Ensure the rollback document is attached to this PR before sending.

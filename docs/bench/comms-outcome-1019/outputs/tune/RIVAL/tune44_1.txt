@@ -1,0 +1,16 @@
+**PR: Migrate Timetable Engine to Kotlin Core (Approach B)**
+
+**Summary**
+This PR replaces the current constraint solver with a Kotlin-based scheduling core (Approach B). While Approach A (adding a caching layer) was considered, benchmarking shows it fails to meet the 40ms limit on 5k-course semesters. The new algorithm reduces peak conflict detection from 38ms to 12ms, ensuring performance at scale. Approach A only yields a 9% gain on 2k-course runs, which is insufficient for autumn load.
+
+**Impact & Risks**
+Approach B modifies three legacy modules: room booking, lecturer preferences, and the exam slotter. The test suite on staging is green except for two flaky tests. One fails consistently on Tuesdays; the other triggers on the 14th of the month. We suspect the failure observed on May 8 stems from a timezone handling issue in the legacy date parser. These are being tracked separately and do not block the core logic.
+
+**Rollback Plan**
+A rollback script is included to revert the three affected modules to their previous state. Because this touches critical scheduling paths, we require a formal sign-off on this rollback strategy before merging.
+
+**Action Required**
+Please review and approve either Approach A or B. If you approve Approach B, kindly sign off on the attached rollback plan by the 25th. We must lock the code by then to meet the September 2 catalog launch.
+
+---
+*Note: The flaky test details are based on the staging report provided; no new runs were performed.*

@@ -1,0 +1,32 @@
+**PR Title:** Timetable Engine Migration: Proposal to Adopt Approach B (Kotlin Rewrite)
+
+**Description for Reviewer (Priya):**
+
+This PR proposes finalizing the migration strategy for the university timetable engine. After evaluating the two available approaches against our performance targets and the upcoming autumn catalog deadline (Sept 2), we recommend **Approach B: Rewriting the scheduling core in Kotlin**.
+
+**Performance Justification**
+Our primary constraint is maintaining response times under 40ms for semesters containing up to 5,000 courses.
+*   **Approach A (Current Solver + Caching):** Analysis indicates this approach will still hit the 40ms limit on 5k-course semesters. Furthermore, the caching layer yields only a 9% performance gain on smaller 2k-course runs, which is insufficient for our scaling needs.
+*   **Approach B (Kotlin Rewrite):** The new algorithm successfully reduced peak conflict detection from **38ms down to 12ms** in our recent spike. This 12ms figure provides the necessary headroom to comfortably meet the 40ms limit even under maximum load.
+
+**Scope and Risks**
+Approach B involves modifications to three legacy modules: Room Booking, Lecturer Preferences, and the Exam Slotter. While the test suite on staging is currently green for Approach B, we have identified two flaky tests requiring attention:
+1.  A test failing specifically on Tuesdays.
+2.  A test failing on the 14th of the month.
+3.  Additionally, we observed a failure on May 8 which we suspect is related to a timezone handling issue.
+
+These flaky tests are being investigated, but they do not currently block the core logic validation.
+
+**Decision Required**
+Please review and approve one of the following paths:
+
+1.  **Approve Approach A:** Acknowledge that we will likely hit the 40ms limit on large semesters and accept the marginal 9% gain on smaller runs.
+2.  **Approve Approach B:** Authorize the Kotlin rewrite based on the 12ms performance metric.
+    *   *Condition:* If Approach B is selected, you must sign off on the associated **Rollback Plan** by the **25th**. This deadline is critical to ensure stability before the autumn catalog goes live on Sept 2.
+
+Given the hard performance ceiling, Approach B is the only viable path to guarantee system reliability for the next academic year.
+
+***
+
+Note: The rollback plan document is attached separately for your signature if Approach B is selected.
+Please confirm your decision by EOD tomorrow to keep the migration timeline on track.

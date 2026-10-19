@@ -1,0 +1,20 @@
+**Approach B (Kotlin rewrite) cuts peak conflict detection from 38ms to 12ms, while Approach A (caching) gains only 9% on 2k-course runs and still risks exceeding the 40ms limit on 5k-course semesters.**
+
+We are finalizing the timetable engine migration before the autumn catalog goes live on Sept 2. The decision window closes on the 25th.
+
+**Comparison of Approaches**
+*   **Approach A:** Retains the current constraint solver with a new caching layer.
+    *   *Performance:* Only a 9% gain on 2k-course runs; likely to hit the 40ms limit on 5k-course semesters.
+    *   *Risk:* Low code churn, but fails to meet the critical 12ms target required for scale.
+*   **Approach B:** Rewrites the scheduling core in Kotlin using the new algorithm.
+    *   *Performance:* Verified reduction of peak conflict detection from 38ms to 12ms in the spike.
+    *   *Scope:* Touches three legacy modules: room booking, lecturer preferences, and the exam slotter.
+    *   *Testing:* Staging suite is green except for two flaky tests (one occurring on Tuesdays, one on the 14th). The May 8 failure is suspected to be a timezone issue.
+
+**Required Actions**
+Priya, please review and approve either Approach A or Approach B.
+
+If you select **Approach B**, you must also sign off on the rollback plan by the 25th to mitigate the risk associated with modifying the three legacy modules.
+
+---
+*Note: The flaky test patterns (Tuesdays/14th) and the May 8 timezone suspicion require investigation before final deployment, but do not block the architectural decision today.*

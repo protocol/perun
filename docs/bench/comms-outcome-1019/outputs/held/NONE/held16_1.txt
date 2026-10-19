@@ -1,0 +1,33 @@
+**Subject:** Review Request: Article Scheduler Approach (A vs. B) – Approval Needed by Thu, May 7
+
+Hi Priya,
+
+I'm requesting your review and approval on the architectural approach for fixing the article scheduler in the publishing tool. We need a decision by **Thursday, May 7**, to begin the required migration on **Friday, May 8**, as the legacy cron table is being deprecated.
+
+We are evaluating two options:
+
+*   **Approach A (Status Quo Fix):** Retain the current cron-based scheduler with a targeted fix.
+    *   **Scope:** ~300 lines of code changes.
+    *   **Stability:** QA identified **2 bugs** in this approach during the last sprint.
+    *   **Risk:** This method does not address the root cause of missed publishes. Last month, we experienced **37 missed publishes** out of 2,100 scheduled (a **1.76% failure rate**).
+
+*   **Approach B (Queue-Based System):** Migrate to a queue-based system leveraging our existing event bus.
+    *   **Scope:** ~1,200 lines of code changes across 14 files.
+    *   **Capacity:** The event bus currently handles **5,000 events/day**, providing ample headroom for our scheduling volume.
+    *   **Reliability:** This architecture significantly reduces the risk of missed publishes compared to the cron model.
+    *   **Trade-off:** The test suite for this approach is **40% slower** than Approach A, though this is considered an acceptable cost for increased reliability.
+
+**Recommendation:**
+I strongly recommend **Approach B**. Despite the larger code footprint and slower test execution, it directly addresses the 1.76% failure rate we observed last month and eliminates the recurring bugs found in the cron-based logic. Given the mandatory migration deadline this Friday due to the deprecation of the old cron table, moving to the more robust queue-based system now prevents technical debt and future publishing failures.
+
+**Note on Scope:**
+Please note that the upcoming UI changes for the calendar view are scoped to a separate PR and are not included in this review.
+
+Could you please confirm your approval of Approach B by end-of-day Thursday so the team can proceed with the migration immediately on Friday?
+
+Thanks,
+
+[Your Name]
+
+Approach B requires starting the migration this Friday due to cron table deprecation.
+UI calendar updates are excluded from this PR and tracked separately.

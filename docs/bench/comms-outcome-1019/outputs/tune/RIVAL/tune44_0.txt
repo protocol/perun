@@ -1,0 +1,28 @@
+**PR: Migrate timetable engine to Kotlin-based scheduler (Approach B)**
+
+**Summary**
+This PR replaces the current constraint solver with a Kotlin-native scheduling core (Approach B). While Approach A (adding a caching layer) was considered, profiling shows it only yields a 9% gain on 2k-course runs and still exceeds the 40ms limit during 5k-course semesters. The new algorithm in Approach B reduces peak conflict detection from 38ms to 12ms, ensuring we meet performance targets for the autumn catalog.
+
+**Changes**
+- Rewrote the scheduling core in Kotlin.
+- Updated interfaces for three legacy modules: room booking, lecturer preferences, and the exam slotter.
+- Removed the proposed caching abstraction used in Approach A.
+
+**Testing & Known Issues**
+The test suite on staging is green except for two flaky tests:
+1. A failure occurring on Tuesdays.
+2. A failure occurring on the 14th of each month (next occurrence May 8). We suspect a timezone handling issue in the legacy exam slotter and are investigating.
+
+**Rollback Plan**
+Because this change touches three critical legacy modules, a rollback plan is required if we proceed with Approach B. The plan involves reverting this commit and redeploying the previous container image. No database migrations are irreversible.
+
+**Action Required**
+Please review and approve either Approach A or B.
+- If you approve **Approach A**: We will implement the caching layer immediately, noting the risk of exceeding the 40ms limit on large semesters.
+- If you approve **Approach B** (recommended): Please sign off on the rollback plan by the 25th. We must lock the code by then to meet the September 2 launch date for the autumn catalog.
+
+The 12ms peak detection time is the key metric enabling this migration; sticking with the current path risks timeout errors during peak registration.
+
+---
+*Note: The flaky test on May 14th was mentioned in the context of the 14th; the specific May 8 date in your request likely refers to the next Tuesday occurrence or a specific test run date, but the pattern is "the 14th" and "Tuesdays". I have listed them as distinct patterns based on your input.*
+*Ensure the timezone fix for the flaky tests is tracked in a follow-up ticket if not resolved before the 25th.*
