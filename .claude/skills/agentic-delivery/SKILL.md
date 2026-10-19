@@ -37,10 +37,11 @@ chat may be terse.
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
 | Slow pipeline (hooks, CI, merge wait) | `references/pipeline-optimizer.md`; `scripts/pipeline_profile.py map` first; claims: `scripts/outcome_claim_guard.py` |
 | Verify or relay a lane's result | `references/verification-handback.md` |
-| Long session, compaction, new session, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate, before a context-heavy step, before handback |
+| Long session, compaction, memory or docs bloat | `references/focus-kit.md`: update `.claude/handoff.md` (`scripts/focus_kit.py handoff set`) at each gate and before handback |
 | New machine or new fleet | `references/operating-discipline.md` first: always-on layer entry point, `install.sh --with-operating-layer` snippet, `scripts/operating_selfcheck.py` |
-| Use when you need a PR's state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
-| Use when committing a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
+| PR state | `scripts/pr_state.py <n>`: head, checks, review, behind, train; exit 0 green, 1 red, 2 pending |
+| Hand a PR or issue to a lane | `scripts/premise_check.py <n>...`: flags merged/closed PRs and cited paths or symbols absent at HEAD; exit 1 flagged |
+| Commit a changelog fragment | `.githooks/pre-commit` runs `scripts/ci-gates.sh fragments`: marker and heading rules |
 
 ---
 
@@ -135,10 +136,10 @@ making it non-blocking is (`pipeline-optimizer.md`).
 |---|---|---|---|
 | G0 Intake | Owner goal | Brief | Goals, non-goals, constraints, and **appetite** (a stated time-box, not an estimate — Shape Up); `idea-critic` on any agent-originated approach before the owner sees it |
 | G1 Spec | Brief | Testable spec | Acceptance criteria; names `deep-code-review` scope and pinned base SHA |
-| G2 Plan | Spec | Acyclic work graph | Role triggers, one writer per worktree; **every lane with a paid model call names a per-lane token/dollar budget before G4 starts — no budget set is blocked, not unlimited** (a cap that defaults to off is not a cap); in a multi-repo plan, classify each item provider vs consumer before cutting lanes (`references/roles.md` *No scope creep*) |
+| G2 Plan | Spec | Acyclic work graph | Role triggers, one writer per worktree; **every lane with a paid model call names a per-lane token/dollar budget before G4 starts — no budget set is blocked, not unlimited**; in a multi-repo plan, classify each item provider vs consumer before cutting lanes (`references/roles.md` *No scope creep*) |
 | G3 Design | Graph | ADRs / contracts | Interfaces, NFR budgets, data/security decisions explicit. Shape: `references/template-adr.md` |
 | G4 Implement | Work packets | Patch/commit per lane | Tests before or with the change; packet names review skill + immutable base SHA |
-| G5 Verify | Exact revision | Test receipts | **Local stack up** then build, lint, type, unit, and applicable integration/E2E **green at that SHA**; a gate that never started the app is `UNVERIFIED`. **UI change (domain P):** headed-browser evidence on the exact route after the action. Unit tests alone are not a UI gate; UI DONE needs `journey: <page> <steps> PASS` (`verification-handback.md`) |
+| G5 Verify | Exact revision | Test receipts | **Local stack up** then build, lint, type, unit, and applicable integration/E2E **green at that SHA**; a gate that never started the app is `UNVERIFIED`. **UI change (domain P):** headed-browser evidence on the exact route after the action. UI DONE needs `journey: <page> <steps> PASS` (`verification-handback.md`) |
 | G6 Review | Exact revision + receipts | `deep-code-review` + QA + security verdicts | Independent of the builder; applies the `deep-code-review` severity rubric — Blocker/Critical block, High needs a named owner's acceptance, Medium is tracked and non-blocking |
 | G7 Integrate | Accepted lanes | Integration receipt + `deep-code-review DIFF` | One integration owner; rerun affected gates on the exact final SHA |
 | G8 Release | Exact integrated SHA | Release manifest | Rollback proven; **owner approves** outward/production action |
