@@ -384,10 +384,12 @@ class PerunRoadmap(unittest.TestCase):
     def test_field_proven_items_are_present_with_real_sources(self):
         d = json.loads(self.inp.read_text())
         r = {x["it"]["id"]: x for x in ranked(d)["ranked"]}
-        for i in ("gate-cache-tree-sha", "autonomy-advisor", "zero-chat-lanes"):
+        for i in ("gate-cache-tree-sha", "zero-chat-lanes"):
             self.assertIn(i, r)
-        for i in ("gate-cache-tree-sha", "autonomy-advisor"):  # reach and impact cite the committed field page
-            self.assertEqual((r[i]["conf"], r[i]["asm"]), (1.0, ["effort"]))
+        # reach and impact cite the committed field page
+        self.assertEqual((r["gate-cache-tree-sha"]["conf"], r["gate-cache-tree-sha"]["asm"]), (1.0, ["effort"]))
+        shipped = [i for i in d["items"] if i["id"] == "autonomy-advisor"]
+        self.assertTrue(shipped and shipped[0]["reject"].startswith("Already shipped"))
         self.assertTrue((ROOT / "docs/peer-survey-2026-10-16.md").exists())
 
     def test_survey_items_are_all_accounted_for(self):

@@ -478,7 +478,37 @@
    "merged_from": [
     "COO lens: stale worktrees (session_brief.py)",
     "CISO lens: a deleting janitor is a host-safety risk"
-   ]
+   ],
+   "critic": {
+    "verdict": "PASS_TO_USER",
+    "independence": "inline",
+    "origin": "agent-originated",
+    "claim": "Land the worktree janitor from PR 1382 and write the teardown standard from issue 1531, so finished worktrees and leftover dev servers are reported and removed after a train.",
+    "steelman": "Fleet runs leave finished worktrees and orphan dev servers behind on every train; the field report behind session_brief.py counted 130 or more. That clutter costs disk, ports and session-start context, and the platform already guards hook-made worktree removal, so a reviewed, scoped janitor brings Perun level with the host.",
+    "hats_run": [
+     "skeptic",
+     "better-way",
+     "kill-criteria"
+    ],
+    "assumptions": [
+     "Leftover worktrees and servers slow real sessions, not just look untidy. Next: measure session-start time and free ports before and after one train with the janitor in report-only mode.",
+     "PR 1382 still applies to current main. Next: rebase it and run its tests before anything else."
+    ],
+    "better_ways": [
+     "Report-only first: print what would be removed and let the owner run the removal line. Next: ship report-only, and add removal only for paths the run itself created and recorded."
+    ],
+    "kill_criteria": [
+     "The janitor ever proposes a path it did not create: stop and keep report-only.",
+     "Report-only shows fewer than 5 leftovers per train over 3 trains: close PR 1382 as not worth the risk."
+    ],
+    "strongest_attack_survived": "A cleanup tool that deletes is itself a host-safety risk, and a past incident deleted user files. It survives only as report-first, acting solely on paths the run recorded creating, with exact-PID teardown and no variable-path recursive delete.",
+    "questions_parent_must_resolve": [
+     "May the janitor ever delete, or does it stay report-only? Next: the owner decides; deletion on the host needs the owner's go."
+    ],
+    "user_question": "Should the janitor stay report-only, or may it remove worktrees the run itself created?",
+    "dissent_ledger": "Skeptic: deletion risk on the host. Better-way: report-only with owner-run removal. Kept the item, scoped to report-first.",
+    "remaining_risk": "PR 1382 may be stale against main, and leftover counts come from one field report."
+   }
   },
   {
    "id": "review-cost-per-recall",
@@ -719,60 +749,11 @@
   {
    "id": "autonomy-advisor",
    "title": "Autonomy advisor: read the sandbox and permission settings and print the narrow rules that stop sandbox retries, never writing settings",
-   "role": "COO",
-   "lever": "reliability",
+   "reject": "Already shipped: sandbox_preflight.py prints the narrow rules (RISKS keys tsx, browser, db, gh) and sandbox_probe.py now probes gh, headless Chromium, a Postgres client connect and tsx at runtime, naming the preflight rule that fixes each failure (SKIP when a tool is absent, exit 1 on a real block, nothing installed or written).",
    "evidence": [
-    "docs/peer-survey-2026-10-16.md#f2",
-    "docs/peer-survey-2026-10-16.md#p3",
     ".claude/skills/agentic-delivery/scripts/sandbox_probe.py",
-    "docs/host-safety.md"
-   ],
-   "reach": 4,
-   "reach_src": "docs/peer-survey-2026-10-16.md#f2",
-   "impact": 2,
-   "impact_src": "docs/peer-survey-2026-10-16.md#f2",
-   "effort": 3,
-   "effort_src": "assumed: one probe per tool and a printer; the rules differ per host",
-   "vision": "aligned",
-   "vision_reason": "Delivery: about 5 sandbox-blocked retries per session (F2) cost autonomy, and the owner wants safety defaults that keep agents working without hand-edited settings.",
-   "metric": "Sandbox-blocked retries per session: about 5 (field report F2) to 1 or fewer; one printed rule per probed failure, 0 settings files written.",
-   "risks": "Advice for a tool that was not probed is a guess: print rules only for probed failures, never write settings (the owner adds the rule), and keep each rule as narrow as the failing tool.",
-   "where": ".claude/skills/agentic-delivery/scripts/sandbox_probe.py and the operating-layer settings template.",
-   "done_when": "Run in a Claude Code Bash call, it probes gh, Chromium, Postgres and tsx IPC, and for each failure prints the one narrow permission or exclude rule that clears it; it writes nothing and exits non-zero while a failure remains.",
-   "verify": "On a scratch host, apply each printed rule and re-run the advisor: the failure clears, and no printed rule allows more than its failing tool.",
-   "merged_from": [
-    "COO lens: field report F2",
-    "CISO lens: narrow rules, not blanket allows"
-   ],
-   "critic": {
-    "verdict": "PASS_TO_USER",
-    "independence": "inline",
-    "origin": "agent-originated",
-    "claim": "Add an advisor that reads the sandbox and permission state and prints the narrow rules that stop repeated sandbox retries, never writing settings.",
-    "steelman": "The field report shows about 5 sandbox-blocked retries per session; the preflight in flight reports what is blocked, and printing one narrow rule per probed failure lets the owner restore autonomy without broad allows.",
-    "hats_run": [
-     "skeptic",
-     "better-way",
-     "kill-criteria"
-    ],
-    "assumptions": [
-     "A printed rule clears its failure. Next: for each of the 4 tools in P3, apply the printed rule on a scratch host and re-run the probe; drop any rule that does not clear its failure."
-    ],
-    "better_ways": [
-     "Fold the printout into sandbox-preflight. Next: read that lane's brief; if a fix line per failure is in scope, close this item as a duplicate."
-    ],
-    "kill_criteria": [
-     "The preflight lane already prints fix rules: close as a duplicate.",
-     "A printed rule widens access beyond the failing tool in any test: stop."
-    ],
-    "strongest_attack_survived": "It may duplicate the in-flight sandbox preflight, and sandbox_probe.py already prints a fix per failure. It survives as a separate item only because it targets the permission rules for the 4 named tools (gh, Chromium, Postgres, tsx IPC) that sandbox_probe.py does not probe, and the first kill criterion closes it if the preflight lane covers them.",
-    "questions_parent_must_resolve": [
-     "Is the in-flight preflight scoped to print fixes? Next: read that lane's brief."
-    ],
-    "user_question": "Does the in-flight sandbox preflight already print the narrow permission rule per blocked tool?",
-    "dissent_ledger": "Skeptic: duplicates the preflight. Better-way: fold it in. Kept as a separate item with a duplicate-closing kill criterion.",
-    "remaining_risk": "Overlap with the in-flight preflight is unverified because that lane has no open PR."
-   }
+    ".claude/skills/agentic-delivery/scripts/sandbox_preflight.py"
+   ]
   },
   {
    "id": "zero-chat-lanes",
