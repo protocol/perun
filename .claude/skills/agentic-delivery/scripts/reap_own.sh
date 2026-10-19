@@ -17,7 +17,11 @@
 # server or listener is left under it) and as the coordinator-wake check. When pgrep/lsof fail or a live pid's cwd
 # is unreadable it prints "orphans=COULD_NOT_CHECK" and exits 2, never a false "orphans=0"; the kill mode likewise prints "reaped=COULD_NOT_CHECK" (exit 2).
 set -euo pipefail
-WAIT=${KILL_WAIT_S:-5}
+REPORT=0; [ "${1:-}" = "--report" ] && REPORT=1
+if [ $REPORT = 1 ]; then ROOT=${ROOT:-}; else : "${ROOT:?set ROOT to your own tree}"; fi
+[ -z "$ROOT" ] || ROOT=$(cd "$ROOT" && pwd -P)  # lsof reports resolved paths; a symlinked ROOT would match nothing
+KEEP=${KEEP:+$(cd "$KEEP" && pwd -P)}; PATTERN=${PATTERN:-next-server|next dev}; KEEP=${KEEP:-}
+MAX=${MAX_AGE_S:-7200}; WAIT=${KILL_WAIT_S:-5}
 alive() { kill -0 "$1" 2>/dev/null && [ "$(ps -o stat= -p "$1" 2>/dev/null | cut -c1)" != Z ]; }
 age() { { ps -o etime= -p "$1" 2>/dev/null || true; } | tr -d ' ' | awk -F'[-:]' '{n=NF; s=$n+60*$(n-1); if(n>=3)s+=3600*$(n-2); if(n>=4)s+=86400*$(n-3); print s}'; }
 kill_verified() {
@@ -26,12 +30,6 @@ kill_verified() {
   kill -9 "$1" 2>/dev/null || true; sleep 0.2
   if alive "$1"; then echo "WARN: pid $1 survived SIGKILL" >&2; return 1; fi
 }
-[ -z "${REAP_OWN_SOURCE_ONLY:-}" ] || return 0  # run_ledger.sh sources the helpers above (alive, age, kill_verified) and nothing else
-REPORT=0; [ "${1:-}" = "--report" ] && REPORT=1
-if [ $REPORT = 1 ]; then ROOT=${ROOT:-}; else : "${ROOT:?set ROOT to your own tree}"; fi
-[ -z "$ROOT" ] || ROOT=$(cd "$ROOT" && pwd -P)  # lsof reports resolved paths; a symlinked ROOT would match nothing
-KEEP=${KEEP:+$(cd "$KEEP" && pwd -P)}; PATTERN=${PATTERN:-next-server|next dev}; KEEP=${KEEP:-}
-MAX=${MAX_AGE_S:-7200}
 prc=0; PIDS=$(pgrep -u "$(id -u)" -f "$PATTERN") || prc=$?; BAD=""  # rc 1 = no match; rc >= 2 = pgrep itself failed
 [ "$prc" -le 1 ] || BAD="pgrep failed rc=$prc"
 command -v lsof >/dev/null || BAD="${BAD:+$BAD; }lsof missing"

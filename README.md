@@ -46,7 +46,10 @@ Perun against a plain prompt (39 cases, paired):
 | Recall, strict | 0.462 | 0.615 | +0.154 [0.000, +0.308] |
 | Verified precision | 0.778 | 0.800 | +0.022 [-0.104, +0.142] |
 | F1 | 0.515 | 0.606 | not computed |
-| Cost per case | $0.06 | $0.12 | about 2 times |
+
+Cost is not shown for these two tables: the same harness re-run on 37 of the 39 cases
+priced the plain prompt at $0.098 per case, not the $0.06 first recorded, and the first
+run did not record what its figure included. Cost per bug found is below.
 
 Perun against `/code-review` (34 of the 39 cases; 5 did not finish before the spend cap):
 
@@ -56,7 +59,6 @@ Perun against `/code-review` (34 of the 39 cases; 5 did not finish before the sp
 | Recall, strict | 0.441 | 0.647 | 0.735 | 0.529 |
 | Verified precision | 0.792 | 0.839 | 0.336 | 0.688 |
 | F1 | 0.516 | 0.649 | 0.411 | 0.515 |
-| Cost per case | $0.061 | $0.126 | $0.109 | $0.192 |
 
 Paired differences, Perun minus the other (95% interval):
 
@@ -79,7 +81,7 @@ comparable with the tables above.
 
 **On the strongest model the review method ties a plain prompt (measured 2026-10-13).**
 The same 39 cases on `claude-opus-5-5`: plain prompt F1 0.772, Perun 0.777 (difference
-+0.005, interval -0.051 to +0.061), at $0.17 against $0.27 per review. A second
++0.005, interval -0.051 to +0.061), (per-run cost was not published for this run). A second
 independent pass raised recall from 0.69 to 0.74 (+0.05, interval 0.00 to +0.13) at twice
 the cost. Extra probe steps were tried on 24 further cases, did not help, and were not
 shipped. The advantages in the tables above are measured on the mid-tier model only.
@@ -88,7 +90,7 @@ shipped. The advantages in the tables above are measured on the mid-tier model o
 Python cases on `claude-sonnet-5-5`, pooled over repeated runs: Perun caught 48.0% of the
 known bugs against 43.3% for a plain prompt with the same tools (+4.7 points, interval +0.7
 to +9.3); precision was equal (80%); F1 0.601 against 0.563 (+0.038, interval -0.006 to
-+0.086, a tie); $0.14 against $0.07 per run. Extra "run a probe for each candidate" and
++0.086, a tie); per-run cost was not published for this run. Extra "run a probe for each candidate" and
 "compare old and new behavior" steps, and a much shorter core file, were tested and either
 did not help or made results worse; none shipped. Plainly: on small bug-fix diffs Perun is
 a little better than a plain prompt at finding bugs on the mid-tier model and no better on
@@ -111,7 +113,19 @@ run: "better" only if the F1 difference's 95% interval stays above 0. Result: a 
 three. Every arm caught the same share of known bugs (29.7%); F1 was 0.442 for Perun against
 0.430, 0.451 and 0.422. Perun's findings were real more often than a plain prompt's (86%
 against 73%) and wshobson's (72%); the pr-review-toolkit agent reported fewer findings and
-was the most precise (93%, a tie with Perun). Perun cost $0.20 per case against $0.14 to $0.16.
+was the most precise (93%, a tie with Perun). Perun cost $0.136 per case against $0.090 to $0.098 for the others (review calls only; 1.4 to 1.5 times).
+
+**What a caught bug costs (computed 2026-10-19 from committed files).** Per bug found,
+Perun costs more than the cheapest rival, and its recall gain over it is not measured. On
+22 patch-only cases, with raw outputs committed: Perun caught 13 of 22 bugs at $0.093 per
+caught bug (review calls only), the Anthropic toolkit reviewer 12 of 22 at $0.030, about 3.1
+times as much. Recall was 0.591 against 0.545 (the intervals overlap), and false alarms
+were equal at 0.50 per case. Per case, review cost was $0.0551 against $0.0162 (3.4 times).
+On the 37-case run above every arm caught 11 bugs, so cost per caught bug follows cost per
+case: $0.457 for Perun against $0.303 to $0.330 for the others (aggregates only; false
+alarms per case were not recorded there). Perun's measured edge is fewer false alarms
+than `/code-review` and, on two older sets, than a plain prompt; it is not a cheaper bug. Method, intervals and every
+set: [cost per caught bug](docs/bench/review-cost-per-recall/README.md).
 
 - **Shorter instructions to read.** AI tools charge by the *token* (a piece of a word).
   The instructions the assistant must read before each review shrank by
