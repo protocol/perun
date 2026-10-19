@@ -132,7 +132,10 @@ def ledger_errs(d):
     if not frozen.is_file() or not led.is_file():
         return [f"{d}: SHA256-frozen.txt and ledger.jsonl are both required"]
     lines = frozen.read_bytes().splitlines(keepends=True)
-    hs = [hashlib.sha256(b"".join(lines[:k])).hexdigest() for k in range(1, len(lines) + 1)]
+    hs, run = [], hashlib.sha256()  # hash of each line prefix, one incremental pass
+    for l in lines:
+        run.update(l)
+        hs.append(run.copy().hexdigest())
     ev = []
     for n, l in enumerate(led.read_text().splitlines(), 1):
         if not l.strip():
@@ -145,11 +148,15 @@ def ledger_errs(d):
             return [f"{d}: ledger.jsonl line {n} is not a JSON object with a comparable ts/iso"]
         ev.append(e)
 
+    first = {}  # hash prefix (12+ hex chars) -> smallest k whose line-prefix hash starts with it
+    for k, h in enumerate(hs, 1):
+        for i in range(12, len(h) + 1):
+            first.setdefault(h[:i], k)
+
     def hit(e):  # k = number of frozen lines the event's hash covers; 0 = no match
         if e.get("event") not in PREREG:
             return 0
-        return next((k for k, h in enumerate(hs, 1) for key in KEYS
-                     if isinstance(e.get(key), str) and len(e[key]) >= 12 and h.startswith(e[key].lower())), 0)
+        return min((first[v.lower()] for key in KEYS if isinstance(v := e.get(key), str) and v.lower() in first), default=0)
     ks = {n: hit(e) for n, e in enumerate(ev)}
     pre = [n for n, k in ks.items() if k]
     gen = next((n for n, e in enumerate(ev) if e.get("event") not in PREREG), len(ev))
@@ -158,11 +165,11 @@ def ledger_errs(d):
     p, g = ev[pre[0]], ev[gen:gen + 1]
     if pre[0] > gen or (g and p["_t"] is not None and g[0]["_t"] is not None and p["_t"] > g[0]["_t"]):
         return [f"{d}: preregistered event is not earlier than the first generation event"]
-    later = [v.lower() for e in ev[pre[0] + 1:] for v in strings(e)]
+    later = {v.lower() for e in ev[pre[0] + 1:] for v in strings(e) if len(v) >= 12}
     out = []
     for l in lines[ks[pre[0]]:]:  # lines appended after the prereg hash must be covered by a later event
         h = (l.decode(errors="replace").split() or [""])[0].lower()
-        if h and not any(len(v) >= 12 and h.startswith(v) for v in later):
+        if h and not any(h[:i] in later for i in range(12, len(h) + 1)):
             out.append(f"{d}: SHA256-frozen.txt line {l.decode(errors='replace').strip()!r} is after the preregistered hash and not in any later ledger event")
     return out
 
@@ -422,7 +429,10 @@ def main(argv=None):
         if ref:  # benches that landed on REF after the branch point
             tar = subprocess.run(["git", "-C", str(REPO), "archive", ref, "docs/bench"], capture_output=True)
             if not tar.returncode:
-                tarfile.open(fileobj=io.BytesIO(tar.stdout)).extractall(tmp, filter="data")  # no link out of tmp
+                try:
+                    tarfile.open(fileobj=io.BytesIO(tar.stdout)).extractall(tmp, filter="data")  # no link out of tmp
+                except tarfile.TarError as e:
+                    sys.exit(f"bench_check: docs/bench at {ref} cannot be read safely: {e}")
         extra = [x for x in sorted((Path(tmp) / "docs/bench").glob("*")) if x.is_dir() and not (root / x.name).exists()]
         leaky = [x for x in sorted(root.iterdir()) if x.is_dir() and leak(x)]
         errs += [f"{x}: symlink leads outside the repo, so it is not read as another bench" for x in leaky]
