@@ -114,6 +114,15 @@ def dev_servers(paths):
     return hits
 
 
+def _ledger_count():
+    """Leftover count from run_ledger.sh --count (finished = clean_finished.sh checks, so it may call gh); 0 when no ledger, None when the check failed."""
+    try:
+        r = _run(["bash", str(HERE / "run_ledger.sh"), "--count"], 3)
+        return int(r.stdout.strip()) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
 def hygiene_line(repo: Path):
     wts = worktrees(repo)
     if not wts:
@@ -139,6 +148,11 @@ def hygiene_line(repo: Path):
     if servers:
         parts.append(f"{len(servers)} dev server(s) listening from this repo's worktrees (pids {' '.join(servers[:5])}); "
                      f"list: bash {main_wt}/{sc}/reap_own.sh --report")
+    led = _ledger_count()
+    if led:
+        parts.append(f"{led} leftover(s) this machine's runs recorded creating (finished worktrees, dev servers); report only: bash {main_wt}/{sc}/run_ledger.sh")
+    elif led is None:
+        unchecked.append("run ledger")
     if unchecked:
         parts.append(f"NOT CHECKED (git/lsof unavailable or timed out): {', '.join(unchecked)}; this is not zero")
     return "; ".join(parts) or None
