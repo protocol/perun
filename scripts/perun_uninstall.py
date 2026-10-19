@@ -148,7 +148,7 @@ def plan(repo):
     cfg = repo / ".claude/settings.local.json"
     if cfg.is_file() and not safe(repo, ".claude/settings.local.json"):
         notes.append(".claude/settings.local.json: kept: symlink in path, not touched")
-    elif cfg.is_file() and (m.get("hooks") or m.get("env") or m.get("model") or m.get("autocompact") or m.get("settings") or m.get("settings_created")):
+    elif cfg.is_file() and (m.get("hooks") or m.get("env") or m.get("model") or m.get("autocompact") or m.get("statusline") or m.get("settings") or m.get("settings_created")):
         try:
             c = json.loads(cfg.read_text())
         except ValueError as e:
@@ -173,6 +173,8 @@ def plan(repo):
             del c["model"]
         if m.get("autocompact") and c.get("autoCompactWindow") == m["autocompact"]:
             del c["autoCompactWindow"]
+        if m.get("statusline") and c.get("statusLine") == m["statusline"]:
+            del c["statusLine"]
         sn = strip(c, m.get("settings", {}))
 
         def write(c=c):
