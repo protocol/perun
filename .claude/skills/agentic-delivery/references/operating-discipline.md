@@ -11,7 +11,7 @@ drift signal). Install + verify: **Install and self-check** below.
 Two spend modes. Cautious by default; at maximum pace, once the owner grants it, caps, waits and approval pauses lift and spend rises only where it buys speed or quality, behind a waste filter. The rule, its triggers, the push grant and the `perun_policy.py` knobs live once, in `templates/lane-preamble.md` **Drive to the goal**.
 
 1. **Communication + minimal-code modes, main session and every subagent** — `host-enforcement.md` **Standing modes at SubagentStart**; `multi-session-coordination.md` **A standing house default must live where every subagent reads it**.
-2. **Hand-back caps, two-tier** — `host-enforcement.md` **Subagent handback: fields-only, mechanically capped**.
+2. **Hand-back cap** — `host-enforcement.md` **Subagent handback: fields-only, mechanically capped**.
 3. **Model and effort routing** — `deep-code-review`'s `model-tiering.md` **Route delivery lanes by work type and stage** (path-based review strictness stays `templates/review-tiers.tsv`); the host-enforced subagent model pin: `host-enforcement.md` **Subagent model + cache-TTL pin**.
 4. **Fan-out probing** — `fanout-host-sizing.md` **Gate on free RAM and the swap trend** (`scripts/host_probe.py`).
 5. **Usage-window pacing** — `cost-quality-guardrails.md` §2 **Lane caps** (`scripts/token_report.py --budget`, `agentic-ceo` sibling skill).
