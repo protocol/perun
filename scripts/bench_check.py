@@ -24,14 +24,23 @@ Fails (exit 1, one line per problem) when a bench dir:
   c. has a PREREGISTERED*.md naming a SHA256*.txt hash file that does not exist;
   d. has a scenario whose 10-word shingles overlap all other docs/bench dirs, or (held
      scenarios) the bench's own tune scenarios, by more than --max-overlap (default 0.2). --allow FILE (default DIR/overlap-allow.txt) lists
-     template phrases, one per line, whose shingles are ignored.
+     template phrases, one per line, whose shingles are ignored;
+  e. lists in SHA256-frozen.txt a file that is missing, or whose sha256 differs from its line's
+     hash, or a line that is not "<sha256>  <path>". A path resolves from the repo root first
+     (the sha256sum -c convention in the bench READMEs), then from the bench dir. Enforced by
+     main(), not check(), so check() reports rules a-d only.
 DIR/reuse-allow.txt (optional) lists outputs/ paths whose byte-identical reuse is
 deliberate (e.g. a rival arm generated once and shared): an exact file path or a
 directory (matches everything beneath it). Document why in PREREGISTERED.md.
 
 Old benches lack ledgers, so only dirs named on the command line are checked; --changed
 names the docs/bench dirs absent from BASE (default origin/main), so CI gates only new
-benches; a missing BASE is an error.
+benches; a missing BASE is an error. For a dir that BASE already holds, --changed fails only
+when the diff since the merge base touches (edits, deletes or renames) SHA256-frozen.txt or a
+listed file inside that dir. The list is read from BASE, so dropping it does not unfreeze its
+inputs, and paths follow BASE's symlinks with every link counted, so a post-freeze driver edit
+cannot ride into an old bench while notes, ledger appends and results still can. Listed files outside the dir
+(shared scripts, SKILL.md) keep evolving; snapshot them into the bench dir to freeze them.
 
 The disjointness corpus (rules a, d) is every other docs/bench dir in the working tree plus
 every dir at --against REF (default origin/main when it exists) that the tree lacks, so a
@@ -42,10 +51,11 @@ Trust limits (this catches accidents, not a lane forging records): hashes are co
 strings, so a frozen line rewritten to a hash that some later ledger event also contains
 passes, and committed file bytes are not re-hashed against SHA256-frozen.txt. A single
 scenario file with no tune/held file name, "split" field or tune/held id is treated as
-unsplit, so no tune/held check runs on it. Edits to a bench dir that already exists on
-BASE are not gated.
+unsplit, so no tune/held check runs on it. In a bench dir that already exists on BASE,
+--changed gates only the frozen list and the frozen in-dir inputs (see above). Files a SHA256-frozen.txt line lists are re-hashed (rule e); files it never
+lists are not.
 """
-import argparse, hashlib, io, json, re, subprocess, sys, tarfile, tempfile
+import argparse, collections, hashlib, io, json, os, re, subprocess, sys, tarfile, tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -149,14 +159,44 @@ def ledger_errs(d):
     later = [v.lower() for e in ev[pre[0] + 1:] for v in strings(e)]
     out = []
     for l in lines[ks[pre[0]]:]:  # lines appended after the prereg hash must be covered by a later event
-        h = (l.decode().split() or [""])[0].lower()
+        h = (l.decode(errors="replace").split() or [""])[0].lower()
         if h and not any(len(v) >= 12 and h.startswith(v) for v in later):
-            out.append(f"{d}: SHA256-frozen.txt line {l.decode().strip()!r} is after the preregistered hash and not in any later ledger event")
+            out.append(f"{d}: SHA256-frozen.txt line {l.decode(errors='replace').strip()!r} is after the preregistered hash and not in any later ledger event")
+    return out
+
+
+def frozen_errs(d):
+    """Rule e: every "<sha256>  <path>" line of SHA256-frozen.txt names a file that exists and still hashes to it.
+
+    The path resolves from REPO first, then from d (sha256sum -c run from the repo root or the bench dir;
+    a "../" path resolves from d only, so it never reaches outside the repo by way of REPO/..);
+    the first base that holds the file is the one hashed. Reads only. No SHA256-frozen.txt gives no errors
+    here (ledger_errs reports it). A line that is not "<64 hex>  <path>" is an error (fails closed).
+    """
+    f = d / "SHA256-frozen.txt"
+    if not os.path.lexists(f):
+        return []
+    if not repo_file(f):
+        return [f"{f}: resolves outside the repo or is not a file"]
+    out = []
+    for n, l in enumerate(repo_file(f).read_text(errors="replace").splitlines(), 1):
+        m = re.fullmatch(r"([0-9a-fA-F]{64}) [ *](.+)", l)
+        if not m:
+            out.append(f"{f}: line {n} is not '<sha256>  <path>'")
+            continue
+        p = m.group(2)
+        hit = None if p.startswith("/") else next((c for c in in_repo(REPO / p, d / p) if c.is_file()), None)
+        if hit is None:
+            out.append(f"{f}: {p} is missing (tried the repo root and the bench dir)")
+        elif hashlib.sha256(hit.read_bytes()).hexdigest() != m.group(1).lower():
+            out.append(f"{f}: {p} changed after the freeze (sha256 differs)")
     return out
 
 
 def check(d, others, allow=None, max_overlap=0.2):
     d, errs = Path(d), []
+    if q := leak(d):
+        return [f"{q}: symlink leads outside the repo, so nothing in {d} is read"]
     # a. scenario files fail closed; tune/held id collision; cross-bench byte-identical outputs
     for f in scenario_files(d):
         data = load(f)
@@ -205,8 +245,137 @@ def check(d, others, allow=None, max_overlap=0.2):
     return errs
 
 
+def leak(d):
+    """The first symlink at or under D whose real path is outside the repo, else None.
+
+    os.walk never descends a link, and a dangling or cyclic link stays inside, so reading through
+    any other link under D cannot reach a file outside the checkout.
+    """
+    walk = [Path(d)] + [Path(r) / n for r, ds, fs in os.walk(d) for n in ds + fs]
+    root = REPO.resolve()
+    return next((q for q in walk if q.is_symlink() and not Path(os.path.realpath(q)).is_relative_to(root)), None)
+
+
+def disk_link(p):
+    """The target of repo path P if it is a symlink in the working tree, else None."""
+    q = REPO / p
+    return os.readlink(q) if q.is_symlink() else None
+
+
+def repo_file(p):
+    """P resolved by the in-repo walk if it ends at a regular file inside REPO, else None (never follows a link out)."""
+    return next((c for c in in_repo(p) if c.is_file()), None)
+
+
+def in_repo(*cands):
+    """The candidates whose every symlink hop stays inside REPO, as the real path each one names.
+
+    Uses the same component walk as frozen_touched, so a link with an absolute target or one that
+    leaves the checkout (even to re-enter it) counts as missing: no frozen line reaches outside the
+    checkout, and none freezes a file the landed-bench guard would not see.
+    """
+    out, root = [], str(REPO)
+    for c in cands:
+        s = str(c.absolute())
+        if not s.startswith(root + "/"):
+            continue
+        try:
+            final = aliases(s[len(root) + 1:], disk_link)[1]
+        except (ValueError, OSError):  # NUL byte or unreadable link: counts as missing
+            continue
+        if final not in ("", "/"):
+            out.append(REPO / final)
+    return out
+
+
+def base_links(base):
+    """{repo path: target} for every symlink in the tree at BASE (one ls-tree; targets read only for links)."""
+    out = {}
+    for e in filter(None, git("ls-tree", "-r", "-z", base).stdout.split("\0")):
+        meta, path = e.split("\t", 1)
+        if meta.startswith("120000"):
+            out[path] = git("cat-file", "blob", meta.split()[2]).stdout
+    return out
+
+
+def aliases(path, link):
+    """(every symlink PATH passes through plus PATH itself, the repo path it finally names).
+
+    LINK(path) gives a symlink's target or None. Walks components the way the OS does, so "link/.."
+    leaves the link's target, not the link's parent. Leaving the repo (an absolute target, or ".."
+    above the root), an absolute PATH, a NUL byte, more than 40 hops or more than 1024 components ends the walk with final "/", which no
+bench dir matches.
+    """
+    seen, stack, rest, hops, n = {path}, [], collections.deque(path.split("/")), 0, 0
+    if path.startswith("/") or "\0" in path:
+        return seen | {"/"}, "/"
+    while rest:
+        c, n = rest.popleft(), n + 1
+        if n > 1024:  # bounds the walk (each step joins the stack); no real frozen path is this deep
+            return seen | {"/"}, "/"
+        if c in ("", "."):
+            continue
+        if c == "..":
+            if not stack:
+                return seen | {"/"}, "/"
+            stack.pop()
+            continue
+        stack.append(c)
+        cur = "/".join(stack)
+        t = link(cur)
+        if t is not None:
+            hops += 1
+            if hops > 40:  # a cycle or an over-long chain cannot be followed, so it fails closed
+                return seen | {"/"}, "/"
+            seen.add(cur)
+            if t.startswith("/") or "\0" in t:
+                return seen | {"/"}, "/"
+            stack = stack[:-1]
+            rest.extendleft(reversed(t.split("/")))
+    final = "/".join(stack)
+    return seen | {final}, final
+
+
+def frozen_touched(base, touched):
+    """Errors for benches landed at BASE whose frozen list or listed in-dir inputs the diff (repo-relative paths) touches.
+
+    Reads each list from BASE, so a deleted or renamed list still guards what it froze. Listed paths
+    (repo-root or bench-dir relative) are followed through BASE's symlinks, and every link on the way
+    counts too, so neither editing an aliased file nor retargeting a link slips past. Files outside the
+    bench dir (shared tools, SKILL.md) may evolve. A list line that is not "<sha256>  <path>" fails closed
+    once the diff touches that dir, since what it froze cannot be told.
+    """
+    out, links = [], base_links(base)
+    for p in filter(None, git("ls-tree", "--name-only", "-z", base, "docs/bench/").stdout.split("\0")):
+        rel = f"{p}/SHA256-frozen.txt"
+        names, final = aliases(rel, links.get)
+        lst = git("show", f"{base}:{final}")
+        if lst.returncode:
+            continue
+        if names & touched:
+            out.append(f"{rel}: touched after the freeze (a landed bench's frozen list is immutable)")
+        hit = any(t.startswith(p + "/") for t in touched)
+        for n, l in enumerate(lst.stdout.splitlines(), 1):
+            m = re.fullmatch(r"[0-9a-fA-F]{64} [ *](.+)", l)
+            if not m:
+                if hit:
+                    out.append(f"{rel}: line {n} is not '<sha256>  <path>', so this landed bench cannot be checked")
+                continue
+            hits = False
+            for c in (m.group(1), f"{p}/{m.group(1)}"):
+                names, final = aliases(c, links.get)
+                # an in-dir link or file, or any link on a path that lands in the dir
+                hits |= any(n in touched and (n.startswith(p + "/") or final.startswith(p + "/")) for n in names)
+            if hits:
+                out.append(f"{rel}: {m.group(1)} touched after the freeze (a landed bench's inputs are immutable)")
+    return out
+
+
 def git(*a):
-    return subprocess.run(["git", "-C", str(REPO), *a], capture_output=True, text=True)
+    """Run git in REPO; stdout/stderr decoded byte-exact (surrogateescape, no newline translation)."""
+    r = subprocess.run(["git", "-C", str(REPO), *a], capture_output=True)
+    r.stdout, r.stderr = (x.decode("utf-8", "surrogateescape") for x in (r.stdout, r.stderr))
+    return r
 
 
 def main(argv=None):
@@ -222,24 +391,35 @@ def main(argv=None):
     if a.changed:
         if git("rev-parse", "--verify", "-q", a.changed).returncode:
             sys.exit(f"bench_check: --changed base {a.changed} not found (fetch it)")
-        dirs += [d for d in sorted(root.iterdir()) if d.is_dir()
-                 and not git("ls-tree", a.changed, f"docs/bench/{d.name}/").stdout.strip()]
+        new = [d for d in sorted(root.iterdir()) if d.is_dir()
+               and not git("ls-tree", a.changed, f"docs/bench/{d.name}/").stdout.strip()]
+        dirs += new
+        diff = git("diff", "--name-only", "--no-renames", "-z", "--merge-base", a.changed, "HEAD")
+        if diff.returncode:
+            sys.exit(f"bench_check: no merge base with {a.changed} (fetch full history)")
+        touched = set(filter(None, diff.stdout.split("\0")))
+        errs = frozen_touched(a.changed, touched)
+    else:
+        errs = []
     ref = a.against or ("origin/main" if not git("rev-parse", "--verify", "-q", "origin/main").returncode else None)
     if a.against and git("rev-parse", "--verify", "-q", a.against).returncode:
         sys.exit(f"bench_check: --against ref {a.against} not found (fetch it)")
-    errs = []
     with tempfile.TemporaryDirectory() as tmp:
         if ref:  # benches that landed on REF after the branch point
             tar = subprocess.run(["git", "-C", str(REPO), "archive", ref, "docs/bench"], capture_output=True)
             if not tar.returncode:
-                tarfile.open(fileobj=io.BytesIO(tar.stdout)).extractall(tmp)
+                tarfile.open(fileobj=io.BytesIO(tar.stdout)).extractall(tmp, filter="data")  # no link out of tmp
         extra = [x for x in sorted((Path(tmp) / "docs/bench").glob("*")) if x.is_dir() and not (root / x.name).exists()]
+        leaky = [x for x in sorted(root.iterdir()) if x.is_dir() and leak(x)]
+        errs += [f"{x}: symlink leads outside the repo, so it is not read as another bench" for x in leaky]
         for d in dirs:
-            others = [x for x in sorted(root.iterdir()) if x.is_dir() and x.resolve() != d.resolve()] + extra
-            errs += check(d, others, a.allow, a.max_overlap)
+            others = [x for x in sorted(root.iterdir()) if x.is_dir() and x.resolve() != d.resolve()]
+            others = [x for x in others if x not in leaky] + extra
+            errs += check(d, others, a.allow, a.max_overlap) + frozen_errs(d)
     print("\n".join(errs) or f"bench_check: {len(dirs)} dir(s) clean")
     return 1 if errs else 0
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(errors="backslashreplace")  # git paths keep non-UTF-8 bytes (surrogateescape)
     sys.exit(main())
