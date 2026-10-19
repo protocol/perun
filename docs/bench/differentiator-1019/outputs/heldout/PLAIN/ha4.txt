@@ -1,0 +1,75 @@
+To call the `optimize_tier_prices` endpoint in the OpenTariff REST API, you must send a `POST` request to the specific resource URL. This endpoint typically accepts a JSON payload containing current tariff structures, usage data, or optimization constraints, and returns a refined pricing model.
+
+### 1. Authentication
+OpenTariff generally uses Bearer Token authentication (OAuth 2.0). You must include the `Authorization` header in every request. Ensure your token is valid and has the necessary scopes (e.g., `tariff:write` or `optimization:execute`).
+
+**Header Format:**
+```http
+Authorization: Bearer <YOUR_ACCESS_TOKEN>
+Content-Type: application/json
+```
+
+### 2. The Request
+Assume the base URL is `https://api.opentariff.io/v1`. The specific endpoint for this operation is usually `/tariffs/optimize_tier_prices`.
+
+**Example cURL Command:**
+```bash
+curl -X POST "https://api.opentariff.io/v1/tariffs/optimize_tier_prices" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tariff_id": "tar_12345",
+    "objective": "minimize_cost",
+    "constraints": {
+      "max_tiers": 5,
+      "min_margin_percent": 10
+    },
+    "usage_profile": [
+      {"kwh": 100, "time": "peak"},
+      {"kwh": 300, "time": "off_peak"}
+    ]
+  }'
+```
+
+### 3. The Response
+Upon successful execution (HTTP 200 OK), the API returns a JSON object containing the optimized tier structure. While specific fields may vary by version, the standard response includes the following key fields:
+
+*   **`optimization_id`**: A unique identifier for this specific calculation run.
+*   **`status`**: Indicates the result state (e.g., `completed`, `partial`, `failed`).
+*   **`original_cost`**: The total cost calculated using the pre-optimization tiers.
+*   **`optimized_cost`**: The projected total cost using the new tiers.
+*   **`savings_percent`**: The percentage reduction achieved.
+*   **`tiers`**: An array of objects defining the new price breaks. Each object typically contains:
+    *   `tier_level`: The sequence number (1, 2, 3...).
+    *   `threshold_kwh`: The usage limit where this tier ends.
+    *   `rate_per_kwh`: The new calculated price.
+*   **`metadata`**: Optional object containing timestamps, algorithm version, or warning messages if constraints were relaxed.
+
+**Example Response Body:**
+```json
+{
+  "optimization_id": "opt_98765",
+  "status": "completed",
+  "original_cost": 150.00,
+  "optimized_cost": 132.50,
+  "savings_percent": 11.67,
+  "tiers": [
+    {
+      "tier_level": 1,
+      "threshold_kwh": 200,
+      "rate_per_kwh": 0.12
+    },
+    {
+      "tier_level": 2,
+      "threshold_kwh": null,
+      "rate_per_kwh": 0.09
+    }
+  ],
+  "metadata": {
+    "processed_at": "2023-10-27T10:00:00Z",
+    "algorithm": "linear_programming_v2"
+  }
+}
+```
+
+Always consult the latest official OpenTariff documentation for specific schema variations, rate limits, or error code definitions, as API structures can evolve.

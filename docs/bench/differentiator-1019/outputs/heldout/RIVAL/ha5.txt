@@ -1,0 +1,50 @@
+I cannot provide the parameters or JSON configuration for a `dunning_auto_tune` webhook for "Subscribly" because **no such public parameter or webhook event exists** in standard billing platforms (like Stripe, Paddle, or Recurly) or in any widely known SaaS product named Subscribly with that specific capability.
+
+It is highly likely you are encountering one of the following scenarios:
+
+1.  **Hallucinated Feature Name:** You may be combining concepts. "Dunning" (failed payment recovery) and "Auto-tuning" (algorithmic optimization) are real concepts, but they are rarely exposed as a single webhook configuration parameter named `dunning_auto_tune`.
+2.  **Internal/Custom Tool:** "Subscribly" might be an internal tool at your company or a very niche startup whose API documentation is not public. If so, I do not have access to its private schema.
+3.  **Confusion with Stripe/Paddle:** Major processors like Stripe have `customer.subscription.updated` or `invoice.payment_failed` webhooks, and they offer "Smart Retries" (which is an auto-tune feature), but this is configured via the **Dashboard UI** or specific API endpoints (e.g., updating the `settings` object), not via a webhook parameter called `dunning_auto_tune`.
+
+### How to Actually Enable Dunning Auto-Tuning
+
+If your goal is to enable algorithmic retry logic (smart dunning) for a subscription business, here is how it is typically done on major platforms:
+
+#### If using Stripe (Smart Retries)
+Stripe's "Smart Retries" is an AI-driven dunning feature. You do not enable it via a webhook parameter. You enable it via the API by updating the subscription settings or via the Dashboard.
+
+**API Approach (Node.js example):**
+```javascript
+const stripe = require('stripe')('sk_test_...');
+
+await stripe.subscriptions.update('sub_12345', {
+  // Smart retries are often enabled by default on new accounts
+  // or configured at the account level, not per-subscription webhook.
+  // However, you can configure retry schedules if custom logic is needed.
+});
+```
+*Note: Stripe's native AI retries are usually a toggle in the Dashboard under Billing > Settings > Dunning.*
+
+#### If building a Custom Webhook Handler
+If you are building a system where *your* server listens for payment failures to trigger a tuning algorithm, you would listen for standard failure events, not a config parameter.
+
+**Example JSON Payload you might RECEIVE (not send):**
+```json
+{
+  "id": "evt_12345",
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_12345",
+      "status": "open",
+      "customer": "cus_12345",
+      "attempt_count": 1
+    }
+  }
+}
+```
+
+### Recommendation
+1.  **Check Documentation:** Verify the exact name of the tool. If you meant **Stripe**, **Paddle**, or **Chargebee**, search their docs for "Smart Retries" or "Dunning Management."
+2.  **Dashboard Configuration:** Most "auto-tune" features are machine-learning models managed by the provider. They are enabled via a checkbox in the settings UI, not by sending a JSON configuration webhook.
+3.  **Clarify the Tool:** If "Subscribly" is a specific internal tool, please provide its API schema or documentation context so I can give you the exact JSON.
