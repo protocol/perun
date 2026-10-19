@@ -1,0 +1,28 @@
+**Title:** AGV Charging Scheduler: Dynamic Slot Allocation (Option A) vs. Fixed Heuristic (Option B)
+
+**Summary**
+This PR proposes switching the AGV charging scheduler from a fixed slot heuristic (Option B) to dynamic slot allocation with predictive demand (Option A). While Option B is simpler, Option A reduces average charging wait times from 14 minutes to 9 minutes and cuts total daily idle charger time by 18%.
+
+**Decision Required**
+**@Priya**, as the decision owner, please review and approve one approach by **Thursday, 12 Sep**.
+
+**Comparison**
+*   **Option A (Proposed):** Uses dynamic slot allocation and predictive demand.
+    *   *Pros:* Reduces average wait time (14m → 9m) and idle charger time (-18%).
+    *   *Cons:* Adds a dependency on the new telemetry feed (v2.1), currently in staging.
+*   **Option B (Current):** Uses fixed slot scheduling with a simpler heuristic.
+    *   *Pros:* Simpler implementation; no new dependencies.
+    *   *Cons:* Higher wait times and increased idle charger usage.
+
+**Testing & Benchmarks**
+The full test suite passed for both implementations. Attached benchmark results compare performance under loads of 10k and 20k orders, confirming the efficiency gains of Option A at scale.
+
+**Rollback Plan**
+If Option A exhibits instability in production, we will revert to Option B immediately. Since Option B requires no external telemetry dependencies, the rollback involves redeploying the previous scheduler logic and disabling the v2.1 telemetry integration.
+
+**Known Constraints (Out of Scope)**
+Note that chargers 12–14 remain offline until 5 Oct due to hardware maintenance. This constraint is managed operationally and is not addressed within this code change.
+
+---
+*Includes benchmark data for 10k/20k order scenarios as requested.*
+*Rollback steps verified against current deployment pipeline.*

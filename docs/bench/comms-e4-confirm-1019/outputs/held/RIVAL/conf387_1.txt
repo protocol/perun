@@ -1,0 +1,21 @@
+**PR: Fix booking-conflict handling (conf2x088-1)**
+
+This PR addresses the double-booking issue that's driving up refunds. Last month we migrated 214 bookings, but we're still seeing a $1.2k monthly spike in refunds caused by slots booked twice. The root cause is how we handle conflicts: currently, 38% of no-show cancellations happen inside the 2-hour window, and our logic doesn't account for that tightly enough.
+
+I've implemented two potential approaches in this branch:
+
+*   **Option A:** Keeps a single booking slot per studio and queues any overflow requests.
+*   **Option B:** Splits the studio into two virtual zones to allow parallel bookings without overlap.
+
+I'm leaning toward **Option B** as the more scalable fix, but I need your call on which direction to take.
+
+**Next Steps:**
+1.  Please review the diff and approve either Option A or B.
+2.  If you greenlight **Option B**, please ping Marco immediately. He needs to adjust the calendar sync logic to support the virtual zone split.
+
+*Note: The diff includes a hunk for the new locker-booking flag. That is out of scope for this ticket; please ignore it.*
+
+We need this settled by **Thursday** to meet our promise to the pilot studio before their 6pm class scheduling runs.
+
+---
+Let me know if you need more context on the refund data or the migration details.

@@ -1,0 +1,22 @@
+Subject: Decision needed: Timetable merge approach (greedy vs. queue)
+
+Hi Dana,
+
+Could you please review the timetable merge PR and approve your preferred approach by Thursday, 24 Apr? We need to lock this in before the May 1 rollout freeze.
+
+The diff switches room allocation from the old queue to a greedy bin-packer and bumps the API to v3 with a new retry flag. Here is the trade-off:
+
+*   **Greedy bin-packer:** Significantly reduces student conflicts. In the spring term dry run, conflicts dropped to 312 compared to 487 with the queue. The downside is a 4s cache warm-up time (vs. 0.2s for the queue).
+*   **Queue (current):** Faster startup (0.2s) but higher conflict rate. If we stay on this, we would rely on the new retry flag for resilience rather than switching algorithms.
+
+The test suite passed on 14 Apr, though the integration environment is currently down until Friday. Also, please ignore the stale diagram in the docs folder; it does not reflect these changes.
+
+Please reply in the PR comment with your choice:
+1.  **Switch to greedy** for fewer conflicts (accepting the 4s warm-up).
+2.  **Stay on queue** and use the retry flag for resilience.
+
+Thanks,
+
+[Your Name]
+
+Note: The 312 conflict figure represents the remaining student conflicts if we ship the greedy approach.

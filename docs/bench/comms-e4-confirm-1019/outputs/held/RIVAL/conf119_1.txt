@@ -1,0 +1,34 @@
+**PR: Pharmacy Stock Replenishment Model – Q2 Forecast Update**
+
+**Reviewer:** Priya
+**Deadline for Decision:** Feb 28
+**Go-Live Date:** March 4
+
+**Summary**
+This PR introduces two candidate models for the quarterly pharmacy stock forecast. We need your approval to proceed with Option B (with a specific patch) or fall back to Option A.
+
+**Approaches & Results**
+We tested both options against last year's data:
+
+*   **Option A (Simple Moving Average, 28-day):**
+    *   MAPE: 6.2%
+    *   Compute: Baseline
+    *   Status: Stable across all SKUs.
+
+*   **Option B (Hybrid: ARIMA + Seasonal Adjustment):**
+    *   MAPE: 4.8% (meets Q2 accuracy target of 95%)
+    *   Compute: +15% over baseline
+    *   **Known Issue:** Fails on cold-chain items (~3 SKUs) due to outlier sensitivity.
+    *   **Proposed Fix:** Apply a patch to the outlier filter to handle these SKUs.
+
+**Recommendation**
+We recommend **Option B with the outlier filter patch**. It delivers the required accuracy for Q2, though it requires a modest increase in compute resources. If the patch proves unstable during your review, we will revert to Option A to ensure the March 4 go-live is not jeopardized.
+
+**Context**
+Marcus is out until Monday, so you are the designated owner for this decision. We have a VP demo scheduled for March 1, so a decision by Feb 28 is critical to finalize the build and prepare the presentation.
+
+Please let us know if you approve Option B with the patch or if we should proceed with Option A.
+
+---
+*Note: The outlier patch code is included in this diff under `filters/cold_chain_patch.py`.*
+*Compute benchmarks are based on the staging environment cluster.*
