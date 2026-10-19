@@ -1,0 +1,36 @@
+### Safety Evaluation Plan: Predictive Discipline System
+
+**1. Risk Assessment: False Accusations from Location Data**
+The primary risk is the conflation of "unauthorized location" with "truancy." Current logic flags any deviation from the classroom during instructional hours as an absence, failing to account for sanctioned non-classroom activities (e.g., lunch breaks, nurse visits, counselor meetings).
+*   **Severity:** High. False positives lead to unjustified disciplinary records, erosion of student trust, and potential legal liability for the district regarding due process.
+*   **Root Cause:** The model lacks context awareness. It processes GPS coordinates as binary states (In-Class vs. Out-of-Class) without cross-referencing the school's master schedule or authorized break times.
+*   **Impact Scope:** With a ten-engineer team and a two-week deadline, there is insufficient time to retrain the predictive model on complex behavioral patterns. The immediate risk is systemic over-flagging during transition periods (start/end of class, lunch).
+
+**2. Verification Process: The "Human-in-the-Loop" Protocol**
+To mitigate risk without altering GPS infrastructure or data frequency, implement a mandatory administrative review layer before any flag becomes a disciplinary action.
+
+*   **Step A: Soft-Flagging Status**
+    Configure the system output to default to "Pending Review" rather than "Confirmed Truant." No notification is sent to parents or students at this stage.
+*   **Step B: Automated Context Filtering (Logic Patch)**
+    Before human review, apply a deterministic filter to the GPS data:
+    *   Cross-reference the timestamp against the school's digital bell schedule.
+    *   If the timestamp falls within a scheduled break (lunch, passing period), automatically suppress the flag.
+    *   If the location corresponds to known sanctioned zones (nurse, cafeteria, admin office) during instructional time, suppress the flag.
+    *   *Note:* This requires no new hardware, only a configuration update to include the bell schedule and a static list of sanctioned zone coordinates.
+*   **Step C: Administrator Dashboard Review**
+    School administrators access a daily dashboard listing only the "unfiltered" flags.
+    *   **Action:** Admins must manually verify the student's status (e.g., check with the teacher or hall monitor) within 24 hours.
+    *   **Decision:** The admin selects "Confirm Truancy" or "False Positive."
+    *   **Feedback Loop:** If "False Positive" is selected, the system logs the location/time as a new "sanctioned exception" to refine future automated filtering.
+*   **Step D: Final Notification**
+    Only flags marked "Confirm Truancy" by an administrator trigger parent notifications or disciplinary records.
+
+**3. Implementation Timeline (2 Weeks)**
+*   **Days 1-3:** Ingest bell schedules and map sanctioned zones. Deploy the "Soft-Flag" status and deterministic filter logic.
+*   **Days 4-10:** Pilot the Administrator Dashboard with one school. Collect false positive data to tune the sanctioned zone list.
+*   **Days 11-14:** Roll out to all districts with mandatory training for admins on the review protocol. Establish a rapid-response channel for parents to dispute flags.
+
+This approach shifts the burden of proof from the student to the system, ensuring no disciplinary action occurs without human verification, thereby satisfying safety requirements while meeting the deployment deadline.
+
+*Ensure the "sanctioned zone" list is easily updatable by school staff as room usage changes.*
+*Log all "False Positive" overrides to create an audit trail for future model retraining.*

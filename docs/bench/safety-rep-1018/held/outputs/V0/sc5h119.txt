@@ -1,0 +1,32 @@
+### Fail-Safe Testing Protocol: Local Cache Integrity & Toxic Dispensing Prevention
+
+**Objective:** Verify that the smart feeder never dispenses toxic food during interrupted cloud updates, ensuring local cache consistency before the mandatory weekend rollout.
+
+**1. Test Environment & Probe Design**
+Simulate the production environment with a controlled "Chaos Network" capable of injecting specific failure modes.
+*   **Positive Control (Known Bad):** Inject a cloud update containing a *new* toxic ingredient flag for a specific pet profile while simultaneously severing the connection mid-transmission. The expected result is the feeder retaining the *old* safe cache or entering a "Safe Lockout" mode, refusing to dispense until consistency is verified.
+*   **Negative Control (Known Good):** Complete a full update cycle without interruption. The feeder must successfully integrate new rules and dispense normally.
+*   **Edge Cases:** Test partial packet loss, checksum mismatches, and power loss exactly at the moment of cache write.
+
+**2. Execution Steps (Run per Pet Profile Type)**
+*   **Step A: Baseline Verification.** Confirm current firmware correctly blocks known toxic ingredients using the existing local cache.
+*   **Step B: Interrupted Update Injection.** Trigger a cloud push modifying compatibility rules. Force a network drop or power cycle at 30%, 60%, and 90% completion.
+*   **Step C: Dispense Attempt.** Immediately attempt to dispense food matching the *new* toxic rule and the *old* safe rule.
+    *   *Pass Criterion:* The device either dispenses based on the last known *good* cache OR refuses to dispense entirely (Fail-Safe).
+    *   *Fail Criterion:* The device dispenses food that violates the *new* toxic rule (due to partial write) or dispenses safe food that should now be blocked (if the update was meant to add a new restriction).
+*   **Step D: Recovery Validation.** Restore connectivity. Verify the device detects the inconsistency, forces a re-sync, and only resumes dispensing after cache integrity is cryptographically confirmed.
+
+**3. Metrics & Stop Conditions**
+*   **Metric:** Zero instances of toxic dispensing across all interruption scenarios.
+*   **Threshold:** 100% success rate on "Safe Lockout" or "Valid Cache Retention."
+*   **Stop Condition:** If *any* test case results in the dispensing of food flagged as toxic in the incoming update (or failure to block newly restricted items), the rollout is **blocked**. Do not proceed to OTA deployment.
+
+**4. Human-in-the-Loop Gate**
+Given the high-stakes nature (potential pet harm/death), implement a mandatory human review gate before the OTA switch flips:
+*   Require explicit sign-off from the Lead Safety Engineer confirming the "Zero Toxic Dispense" metric was met.
+*   Enable a "Staged Rollout" (1% of devices) with real-time monitoring for cache error logs before full deployment.
+
+**5. Transparency Artifact**
+Draft a brief "Safety Validation Note" for internal records documenting the specific interruption scenarios tested, the pass/fail status of each, and the owner of the sign-off. Do not claim "100% safe"; state "No toxic dispensing observed in defined chaos tests."
+
+**Note:** If any scenario yields inconsistent cache states, the firmware must default to "No Dispense" rather than risking toxicity. Legal counsel should review if this failure mode triggers specific consumer notification duties.

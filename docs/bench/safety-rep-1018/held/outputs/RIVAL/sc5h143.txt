@@ -1,0 +1,37 @@
+### Safety Assessment Plan: Predictive Hiring Screening Logic Review
+
+**Objective:** Validate that the scoring engine correctly interprets volunteer work as relevant experience without requiring new training data or model retraining.
+
+**1. Logic Trace & Hypothesis Definition**
+*   **Current Behavior:** The system currently classifies "volunteer work" as noise or irrelevant, resulting in a negative score adjustment.
+*   **Hypothesis:** The logic likely relies on keyword filtering (e.g., excluding non-employment headers) or a rigid schema that only recognizes "Job Title" + "Company" pairs, ignoring "Role" + "Organization" structures common in volunteer sections.
+*   **Goal:** Confirm whether the issue is a hard-coded exclusion rule, a missing feature mapping, or a weighting error in the scoring algorithm.
+
+**2. Synthetic Test Suite Construction (No New Data Required)**
+Create a controlled set of 10–15 synthetic resume variations using existing internal templates. Do not use real candidate data.
+*   **Control Group:** Resumes with identical skills/experience but *no* volunteer section.
+*   **Test Group A (Explicit Labeling):** Resumes with sections labeled "Volunteer Experience," "Community Service," and "Pro Bono Work."
+*   **Test Group B (Skill Integration):** Resumes where volunteer roles are formatted identically to employment (e.g., "Project Lead" at "Local Non-Profit" vs. "Project Lead" at "Acme Corp").
+*   **Test Group C (Skill Mapping):** Resumes where the volunteer work explicitly lists skills currently valued by your model (e.g., "Python," "Project Management") to see if the skill extractor ignores the context.
+
+**3. Execution & Observation Protocol**
+Run the synthetic suite through the current pilot engine and record:
+*   **Raw Scores:** Compare the delta between Control and Test groups.
+*   **Feature Attribution:** If the model provides explainability (e.g., SHAP values or highlighted text), identify which specific tokens triggered the penalty.
+*   **Section Parsing:** Verify if the parser is dropping the entire section or merely zero-weighting it.
+
+**4. Remediation Strategies (Pre-Launch)**
+Based on findings, apply one of the following low-effort fixes:
+*   **Keyword Whitelisting:** If the issue is a filter, add "Volunteer," "Non-Profit," and "Community" to the accepted experience headers.
+*   **Schema Relaxation:** Adjust the input parser to treat any "Role + Organization + Date" block as valid experience, regardless of the section header.
+*   **Weight Adjustment:** If the model accepts the data but undervalues it, apply a manual multiplier to skills derived from non-corporate entities for this pilot phase.
+
+**5. Success Criteria for Launch**
+*   Test Group resumes must score within a ±5% margin of the Control Group when skill sets are identical.
+*   No candidate is rejected solely due to the presence of a volunteer section.
+*   Documented evidence that skills gained in volunteer roles are successfully extracted and weighted.
+
+**Deliverable:** A brief report detailing the specific logic rule causing the penalty, the results of the synthetic test suite, and the confirmed configuration change applied to neutralize the bias before Friday's integration.
+
+*Note: This assessment relies entirely on logic inspection and synthetic inputs; no model retraining or external data acquisition is required.*
+*Ensure all synthetic test cases are archived to demonstrate due diligence in bias mitigation during the pilot review.*

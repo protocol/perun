@@ -1,0 +1,39 @@
+### Pre-Launch Safety Review Plan: DetainConnect Scheduling Bot
+
+**Objective:** Verify that legal counsel access slots are prioritized correctly for all detainees, specifically preventing denial of access due to logic errors, within a three-week timeline and without modifying the underlying calendar API.
+
+#### 1. Harm Inventory & Scope
+*   **Primary Harm:** Unfair outcome/Bias. The system systematically denies legal access to innocent detainees, violating due process and court orders.
+*   **Secondary Harm:** Unsafe automation. The bot executes irreversible denials of legal rights without human oversight.
+*   **Constraint:** The calendar synchronization API is read-only/maintenance mode; fixes must occur in the application logic layer (priority handling) before the API call.
+
+#### 2. Testing Strategy (Measure)
+Execute the following specific test rows. Do not rely on aggregate success rates; focus on the failure of high-stakes denials.
+
+| Harm Scenario | Probe Set (Inputs) | Positive Control (Must Fail) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Priority Logic Error** | Requests for innocent detainees with active court orders vs. general visitors. | System denies a lawyer slot for an innocent detainee when slots exist. | System grants a lawyer slot when available; correctly denies general visitors when full. | **Pass:** 0% denial of valid legal requests. **Threshold:** Zero tolerance for false negatives on legal access. | **Immediate Block:** Any single instance of a valid lawyer request being denied while slots remain. |
+| **API Boundary Handling** | Requests made during API latency spikes or partial data returns (simulated). | System defaults to "deny" when API response is delayed or ambiguous. | System queues the request or flags for human review instead of denying. | **Pass:** 100% of ambiguous states result in "pending/human review," not "denied." | **Rollback:** If >5% of requests default to denial under simulated latency. |
+| **Subgroup Fairness** | Requests sliced by detainee ID ranges, facility blocks, and charge types (innocent vs. pending). | System shows lower grant rates for specific blocks or charge types due to logic bias. | Grant rates are uniform across all subgroups for valid legal requests. | **Pass:** No statistical variance in grant rates across subgroups. | **Block Launch:** Any detected disparity in access rates between subgroups. |
+
+**Additional Probes:**
+*   **Injection/Leakage:** Ensure user-supplied data (detainee notes) cannot alter priority logic for other users.
+*   **Excess Agency:** Verify the bot cannot permanently ban a lawyer; all denials must be reversible.
+
+#### 3. Risk Management Controls (Manage)
+*   **Human-in-the-Loop (HITL) Gate:** Given the high-stakes nature (legal access), **no denial of a lawyer's request shall be final automatically.** All denials must route to a human reviewer for immediate confirmation before notifying the user. This is mandatory until the error rate is proven zero over a significant sample.
+*   **Uncertainty Rendering:** If the system cannot verify priority status due to API limits, display status as "Verification Pending" (coarse tier) rather than a definitive "Denied." Do not show numerical confidence scores.
+*   **Kill Switch:** Implement an immediate toggle to disable automated denials, reverting to a manual scheduling queue if the error reappears.
+
+#### 4. Governance & Artifacts
+*   **Owner:** Assign one engineer as the specific owner for "Legal Access Integrity."
+*   **Transparency Artifact:** Create a brief "System Limitation Card" documenting the API constraint, the specific logic fix applied, and the results of the above tests. This must accompany the launch.
+*   **Legal Routing:** Since this involves court orders and detainee rights, route the final "compliance with court order" determination to legal counsel. Do not assert compliance internally; provide the test data for their verification.
+
+**Execution Timeline:**
+*   **Week 1:** Build adversarial probe sets and simulate API constraints.
+*   **Week 2:** Run tests, implement HITL gate, and refine logic.
+*   **Week 3:** Final validation, create transparency card, and legal review.
+
+*Note: This plan assumes the logic error is isolatable in the pre-API layer. If the error resides within the third-party API itself, the HITL gate becomes the only viable control.*
+*No metric is certified as "safe"; residual risk remains until live monitoring confirms stability.*

@@ -1,0 +1,34 @@
+### Fairness and Accuracy Review Plan for Drought Claims
+
+**1. Borderline Case Flagging Workflow**
+To mitigate risks from outdated weekly snapshots and cloud obscuration, implement a three-tier confidence scoring system before final adjudication:
+
+*   **High Confidence (Auto-Approve/Deny):** Clear satellite data showing moisture levels definitively above or below the payout threshold with no cloud cover in the last 14 days.
+*   **Low Confidence (Auto-Flag):** Trigger human review if:
+    *   **Cloud Interference:** >20% of the farm's geofence is obscured by clouds in the most recent two snapshots.
+    *   **Temporal Gap:** The last clear image is older than 10 days during a critical growth stage.
+    *   **Boundary Proximity:** Calculated moisture levels fall within ±5% of the payout threshold.
+    *   **Historical Deviation:** Current readings deviate significantly (>2 standard deviations) from the 5-year average for that specific week, suggesting potential sensor error or localized micro-climates not captured by weekly scans.
+*   **Human Review Protocol:** Flagged cases are routed to agronomists who must cross-reference satellite data with:
+    *   Farmer-submitted ground photos (if available via mobile upload).
+    *   Local weather station rainfall logs.
+    *   Neighbor claim patterns (to identify localized weather events missed by low-resolution scans).
+
+**2. Metrics for Systematic Bias Detection**
+Track the following metrics disaggregated by geographic region (district/county) and farm size to ensure equitable treatment:
+
+*   **Flag Rate Disparity:** The percentage of claims flagged for human review per region. A significantly higher flag rate in specific areas may indicate persistent cloud cover issues or sensor calibration errors affecting those zones.
+*   **Reversal Rate:** The percentage of initially denied claims that are approved after human review. High reversal rates in specific regions suggest the automated model is systematically underestimating drought conditions there.
+*   **Time-to-Payout Variance:** Average processing time per region. Regions with high cloud cover should not experience disproportionately longer delays if the fallback workflow is functioning correctly.
+*   **False Negative Estimate:** Using a random sample of 5% of "auto-denied" claims for immediate human audit to estimate how many valid claims are being incorrectly rejected without ever reaching the review stage.
+*   **Cloud Cover Correlation:** Correlation coefficient between local cloud cover frequency and claim denial rates. A strong positive correlation indicates the model is penalizing farmers for weather conditions affecting visibility rather than actual drought.
+
+**3. Implementation Constraints & Mitigation**
+Given the older server infrastructure and weekly snapshot limitation:
+*   **Pre-computation:** Run cloud-cover probability maps overnight to pre-identify high-risk zones before claims are even submitted, allowing for proactive communication to farmers in those areas.
+*   **Graceful Degradation:** If image processing fails due to server load, default to "flag for review" rather than "deny," ensuring computational constraints do not create false denials.
+*   **Feedback Loop:** Require human reviewers to tag the *reason* for overturning a decision (e.g., "cloud obscuration," "outdated image," "threshold error") to continuously retrain the flagging thresholds.
+
+This plan prioritizes preventing false denials over maximizing automation speed, acknowledging the critical impact of delayed payouts on smallholder survival.
+
+*Note: This plan assumes access to historical weather data and a mechanism for farmers to submit ground evidence. Immediate pilot testing on historical data from the last two seasons is recommended before full deployment.*

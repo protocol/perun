@@ -1,0 +1,38 @@
+### Review Process Structure for LifeFlow Banks Inventory Logic
+
+**1. Define Synthetic Data Baselines**
+Create three distinct static datasets representing your current inventory state, as real-time logs are unavailable:
+*   **Dataset A (Stable):** Units with clear expiry dates well in the future and stable, historical temperature readings. Expected outcome: 0% flagged for disposal.
+*   **Dataset B (Critical):** Units genuinely expired or with recorded temperature violations exceeding safety thresholds. Expected outcome: 100% flagged for disposal.
+*   **Dataset C (Edge/Latency):** Units nearing expiry (e.g., 24 hours) or with "stale" temperature data (last update >4 hours ago). This is your primary test set for latency scenarios.
+
+**2. Construct Latency Simulation Scenarios**
+Since the database cannot handle real-time streams, manually inject "time-shifted" data into Dataset C to simulate latency:
+*   **Scenario 1 (Moderate Lag):** Present temperature data that is 2 hours old against a current decision timestamp.
+*   **Scenario 2 (Severe Lag):** Present temperature data that is 12 hours old.
+*   **Scenario 3 (Data Gap):** Remove temperature records entirely for specific units to test default behavior.
+
+**3. Execute Logic Dry-Runs**
+Run the decision engine against these prepared datasets in an isolated environment. Do not connect to live clinic databases.
+*   **Step A:** Process Dataset A and B first to verify the engine correctly identifies obvious "Keep" and "Discard" cases. If these fail, the core logic is flawed regardless of latency.
+*   **Step B:** Process Dataset C under each latency scenario. Record exactly which units are flagged.
+
+**4. Analyze Discrepancies (The "Waste" Audit)**
+Compare the engine's output against the known ground truth of your synthetic data:
+*   **False Positives:** Identify any viable units in Dataset C flagged for disposal solely due to data latency or missing recent logs. These represent unnecessary waste.
+*   **False Negatives:** Identify any compromised units that were *not* flagged because the system relied on outdated "safe" temperature readings. These represent patient safety risks.
+
+**5. Establish Decision Threshold Policies**
+Based on the audit, define explicit rules for the rollout:
+*   **The "Grace Period" Rule:** If data latency is between X and Y hours, does the system default to "Hold" (quarantine) rather than "Discard"?
+*   **The "Conservative" Rule:** Does missing data trigger an automatic discard, or a manual review flag? Given your goal to prevent waste, recommend a "Manual Review" flag for edge cases rather than automatic disposal.
+
+**6. Manual Verification Protocol for Rollout**
+For the initial rollout to twenty clinics, implement a human-in-the-loop step:
+*   Any unit flagged for disposal where the triggering data is older than the defined latency threshold must be reviewed by a human operator before final destruction.
+*   Log every instance where human review overrides the automated decision to refine the algorithm post-rollout.
+
+This structured approach isolates the decision logic from infrastructure limitations, allowing you to quantify the risk of waste before live deployment.
+
+*Note: Ensure all synthetic data strictly mimics the format of your legacy database exports to avoid parsing errors during testing.*
+*This protocol assumes the decision engine can accept batch file inputs rather than requiring live API calls.*

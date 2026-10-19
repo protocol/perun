@@ -1,0 +1,25 @@
+**Pre-Launch Safety Validation and Fail-Safe Strategy**
+
+**1. Accuracy Validation Against Known Trajectories**
+Given the two-week constraint and the inability to modify the legacy navigation system's error checking, validation must occur upstream within your tracker before data transmission.
+
+*   **Historical Replay Testing:** Immediately ingest historical datasets from the last three major eruption cycles. Run your tracker's algorithm against this archived data to simulate real-time processing. Compare your generated routing advice against the actual flight paths taken by airlines that successfully avoided ash during those events. Discrepancies greater than 5% in trajectory prediction require immediate algorithmic tuning.
+*   **Synthetic Stress Injection:** Create synthetic data feeds representing "worst-case" plume dispersion models (e.g., rapid wind shear, multi-layer plumes). Feed these into your system to verify that the routing logic correctly identifies no-fly zones. Since the legacy system cannot validate inputs, your tracker must internally flag any input data that falls outside physical probability bounds (e.g., negative altitude, impossible wind speeds) and reject it before it reaches the pilot interface.
+*   **Shadow Mode Deployment:** For the remaining test days, run the tracker in "shadow mode" alongside current operational systems without influencing pilot decisions. Record every advisory your system *would* have issued. Have senior flight instructors review these shadow advisories against actual conditions to sign off on accuracy.
+
+**2. Fail-Safe Mechanisms for Data Interruption**
+Because the legacy system lacks modern error handling, your tracker must act as a "smart wrapper" that ensures the legacy system never receives corrupted or missing data.
+
+*   **Data Freshness Heartbeat:** Implement a strict time-to-live (TTL) check on every data packet. If a new plume update is not received within a predefined window (e.g., 60 seconds), your system must automatically trigger a "Data Stale" state.
+*   **Graceful Degradation Protocol:** Upon detecting a data interruption or stale state, do not pass the last known (now potentially incorrect) position to the legacy system. Instead, inject a pre-formatted, high-priority "UNRELIABLE DATA" flag into the data stream that the legacy system can display as a static warning. Simultaneously, revert the routing advice to a conservative, pre-calculated "safe corridor" based on static geographical no-fly zones and standard diversion airports, rather than dynamic plume data.
+*   **Local Caching with Expiry:** Maintain a local cache of the last valid plume model. If the feed cuts, display this cached model to the pilot but overlay it with a prominent, flashing visual indicator stating "LIVE FEED LOST – USE STATIC BACKUP." This ensures the pilot knows the dynamic routing is inactive while still providing the last known safe context.
+*   **Manual Override Confirmation:** Require a manual "Acknowledge Static Mode" input from the pilot if the system reverts to backup modes. This prevents the crew from unknowingly relying on outdated dynamic data.
+
+**3. Final Pre-Launch Checklist**
+*   **Day 1-5:** Complete historical replay and synthetic stress testing. Freeze the algorithm.
+*   **Day 6-10:** Execute shadow mode deployment and instructor review. Finalize the "Data Stale" logic.
+*   **Day 11-13:** Conduct end-to-end failure simulations (pull the plug on the data feed) to verify the legacy system displays the correct static warnings and safe corridors.
+*   **Day 14:** Final sign-off based on shadow mode accuracy metrics and successful fail-over drills.
+
+**Note:** This strategy assumes your team has immediate access to historical eruption datasets and flight logs.
+**Note:** Ensure all "static backups" and safe corridors are updated weekly until launch to reflect current airport availability.

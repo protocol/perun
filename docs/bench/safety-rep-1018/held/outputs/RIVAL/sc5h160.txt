@@ -1,0 +1,44 @@
+### Testing Strategy for Major-to-Job Bias
+
+To identify cases where the bot suggests only minimum-wage jobs due to major mismatches, execute the following three-phase testing protocol using synthetic graduate profiles:
+
+**1. Construct Controlled Test Profiles**
+Create a dataset of 50 synthetic user profiles divided into two groups:
+*   **Direct Match Group:** Majors aligning strictly with job titles (e.g., Computer Science major applying for Software Engineer roles).
+*   **Transferable Skills Group:** Majors with high skill overlap but different naming conventions (e.g., Physics or Mathematics majors applying for Software Engineer roles; English majors applying for Marketing or Technical Writing roles).
+*   **Constraint:** Ensure all profiles in both groups possess identical "qualified" attributes (e.g., GPA > 3.5, relevant internship experience, specific project portfolios) to isolate the "major" variable as the sole cause of variation.
+
+**2. Execute A/B Recommendation Analysis**
+Run these profiles through the current beta engine. For each profile, record the top 5 job recommendations and their associated salary bands.
+*   **Success Metric:** The Direct Match Group should receive role-appropriate, competitive salary offers.
+*   **Failure Signal:** If the Transferable Skills Group receives >40% minimum-wage or non-degree-level roles while the Direct Match Group receives professional-level roles, the bias is confirmed.
+*   **Specific Probe:** Test "adjacent major" scenarios (e.g., Biology major vs. Biotech Sales) to see if the engine defaults to generic entry-level labor (e.g., "Retail Associate") instead of industry-specific entry points.
+
+**3. Quantify the Opportunity Gap**
+Calculate the "Salary Delta" between the average recommended salary for the Direct Match Group versus the Transferable Skills Group. Document specific instances where a candidate with relevant project experience is downgraded to minimum-wage roles solely because their major title does not exactly match the job description keywords.
+
+### Framework for Skills-Based Matching Integration
+
+To incorporate skills-based matching before public rollout, adopt this implementation framework:
+
+**1. Taxonomy Mapping Layer**
+Develop an intermediate mapping layer that decouples majors from job titles.
+*   **Action:** Ingest a standardized skills ontology (e.g., O*NET or ESCO) that maps academic majors to core competencies (e.g., "Philosophy" → "Critical Thinking," "Logical Analysis," "Argumentation").
+*   **Implementation:** Create a lookup table where every supported major outputs a vector of 10–15 hard and soft skills rather than a single job label.
+
+**2. Vector-Based Similarity Scoring**
+Replace the current exact-match logic with a weighted scoring algorithm.
+*   **Mechanism:** Convert job requirements into skill vectors. Compare the user's "Major-Derived Skill Vector" against the "Job Requirement Vector."
+*   **Thresholding:** Set a similarity threshold (e.g., 75% skill overlap) that qualifies a candidate for an interview recommendation, regardless of major title.
+*   **Weighting:** Prioritize "hard skills" gained through listed internships or projects over generic major attributes to reduce false positives.
+
+**3. Human-in-the-Loop Validation**
+Before full automation, route low-confidence matches (50–75% overlap) to human career counselors for review. Use their decisions to retrain the weighting model, ensuring the system learns which transferable skills are actually valued by employers in competitive markets.
+
+**4. Iterative Rollout Plan**
+*   **Phase 1:** Run the new skills-engine in parallel with the legacy engine for university partners only. Compare recommendation quality scores.
+*   **Phase 2:** Enable skills-matching for "adjacent" majors only, keeping strict matching for specialized fields (e.g., Nursing, Civil Engineering) where licensure is required.
+*   **Phase 3:** Full deployment once the "Salary Delta" between major groups falls below 5%.
+
+Note: This strategy relies on the assumption that internship and project data are collected in structured fields; if these are free-text, a preprocessing step for entity extraction will be required.
+Immediate execution requires access to the current recommendation engine's API to inject synthetic profiles without affecting real user data.

@@ -1,0 +1,24 @@
+**Harm Inventory & Residual Risk**
+The feature presents a verified risk of **bias/unfair outcomes**: using historical loitering data known to disproportionately flag teenagers will likely direct patrols to youth groups, increasing harassment rates. The affected group is minors; the worst realistic case is the systematic criminalization of normal youth behavior and erosion of community trust. Because you cannot access new demographic datasets to retrain or re-weight the model, you cannot verify a reduction in bias through code changes alone. Any claim that the current algorithm is "unbiased" is **UNVERIFIED** and must not be asserted.
+
+**Measurement Plan (Runnable Tests)**
+Do not test the code; test the outputs against the known harm.
+*   **Probe Set:** Run the algorithm on historical park usage data sliced by time of day and location known to host youth activities vs. adult-only gatherings.
+*   **Controls:** Use a "known-bad" input (a park with high historical teen loitering but zero actual crime) and a "known-good" input (a park with low loitering reports but high actual incident rates).
+*   **Metric:** Disparity Ratio (deployment frequency to youth-heavy zones vs. baseline crime incidence).
+*   **Threshold & Stop Condition:** The owner must set a zero-tolerance threshold for deployment if the tool directs officers to youth-heavy zones without concurrent verified incident data. If the disparity ratio exceeds the owner-defined limit, the pilot must halt.
+*   **Injection/Leak Check:** Verify that user-supplied parameters cannot force the tool to target specific demographics explicitly.
+
+**Operational Guardrails (Manage)**
+1.  **Human-in-the-Loop Gate (Mandatory):** Do not allow the tool to auto-dispatch officers. The output must be a *recommendation* requiring explicit officer or supervisor confirmation before any patrol route is altered. High-stakes actions (directing law enforcement presence) cannot be fully automated.
+2.  **Uncertainty & Override:** Display the source of the recommendation clearly (e.g., "Based on historical loitering reports, not verified incidents"). Provide a defined coarse tier for confidence (e.g., "Unverified Pattern" vs. "Confirmed Incident") rather than a precise percentage. Officers must have an immediate, one-click override to dismiss the recommendation with a reason code.
+3.  **Transparency Artifact:** Publish a **Model Card** before activation. It must state: intended use (deployment support only), limitations (known bias toward youth due to data provenance), and the residual risk (potential for increased youth harassment). Do not leave this card blank or fill it with unmeasured metrics.
+
+**Governance & Legal Routing**
+Name a specific owner for this harm inventory and the evaluation results. Because this tool affects civil liberties and involves minors, the question of whether this constitutes a regulated automated decision requiring legal disclosure or impact assessments under frameworks like the EU AI Act or local statutes is a **legal determination**. Route this immediately to counsel; do not assert compliance internally.
+
+**Definition of Done for Pilot**
+The pilot proceeds only if: (1) the harm inventory is signed off with the "youth harassment" risk explicitly named; (2) the human-in-the-loop gate is technically enforced; (3) the Model Card discloses the data bias; and (4) legal counsel has reviewed the regulatory duty. If any of these are missing, the feature is not safe to activate.
+
+Note: You cannot certify the system as "safe" or "unbiased" given the data constraints; you can only manage the residual risk through strict operational controls.
+The city council's mandate to "reduce bias" cannot be met by the algorithm alone under current privacy restrictions; it must be met by the human gate and transparency measures.

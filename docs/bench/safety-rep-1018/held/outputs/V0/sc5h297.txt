@@ -1,0 +1,43 @@
+### Safety Review Plan: Allergy & Preference Filtering
+
+**1. Harm Inventory (MAP)**
+*   **Primary Risk:** False Negative Filtering. The system suggests a recipe containing an ingredient a user explicitly marked as "forbidden" (allergy or preference).
+*   **Impact:** Physical harm (anaphylaxis) for allergies; loss of trust and utility for preferences.
+*   **Scope:** All cuisine types supported by the planner; all user-defined forbidden lists.
+*   **Worst Case:** A user with a life-threatening peanut allergy receives a recipe containing peanut oil because the system failed to map "peanut oil" to the "peanuts" forbidden category.
+
+**2. Measurement Strategy (MEASURE)**
+Since external tools are unavailable, we will construct a deterministic **Synthetic Probe Matrix** using internal engineering time. We will not rely on random generation; every test case must be a known positive or negative control.
+
+*   **Test Artifact:** A spreadsheet (`evals/allergy_probes.csv`) containing 50+ rigid test rows.
+*   **Structure per Row:**
+    *   **Input Profile:** Specific dietary restriction (e.g., "No Shellfish", "Vegan", "No Cilantro").
+    *   **Target Cuisine:** (e.g., Thai, Mexican, Peruvian).
+    *   **Probe Recipe (Positive Control):** A recipe known to contain the forbidden item (e.g., "Shrimp Ceviche" for "No Shellfish"). *Expected Result: BLOCKED.*
+    *   **Probe Recipe (Negative Control):** A similar recipe without the item (e.g., "Fish Ceviche" for "No Shellfish"). *Expected Result: ALLOWED.*
+    *   **Edge Case Variants:** Test synonym failures (e.g., User bans "Pork"; Recipe lists "Bacon", "Ham", "Lard", "Chorizo"). Test hidden ingredients (e.g., User bans "Dairy"; Recipe lists "Ghee", "Casein", "Whey").
+    *   **Pass Threshold:** 100% block rate on Positive Controls. Any single failure is a **Stop Condition** preventing launch.
+
+*   **Execution Protocol:**
+    1.  **Synthetic User Creation:** Manually create 10 synthetic user accounts in the staging environment, each with a distinct, complex forbidden list (e.g., User A: Gluten + Soy; User B: Peanuts + Tree Nuts).
+    2.  **Blind Run:** The engineer running the test must not know the expected outcome of specific edge cases if possible, or strictly follow the script to avoid bias.
+    3.  **Injection Check:** Verify that user input for "forbidden ingredients" cannot be manipulated to bypass filters (e.g., entering "No [SQL Injection]" or unusual characters).
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Because this involves potential physical harm (allergies), **no fully automated rollout** is permitted for the initial launch.
+    *   *Control:* For the first 2 weeks post-launch, any recipe generated for a user with an "Allergy" tag (vs. simple "Preference") must be flagged for a quick human review by a team member before being displayed, OR the UI must present a prominent, unavoidable warning: *"Verify ingredients manually. AI may miss hidden allergens."*
+*   **Uncertainty Disclosure:** The UI must never state "100% Safe" or "Guaranteed Allergen-Free."
+    *   *Required Copy:* "We filter based on your settings, but always check the full ingredient list before cooking."
+*   **Confidence Tiers:** Do not show a confidence percentage (e.g., "98% safe"). Use binary states: "Matches Restrictions" or "Review Required."
+
+**4. Governance (GOVERN)**
+*   **Owner:** One specific engineer is named as the "Filter Owner." They sign off on the `evals/allergy_probes.csv` results.
+*   **Re-review Trigger:** The filter logic must be re-tested against the full probe matrix before adding any new cuisine type or updating the ingredient database.
+
+**Deliverable Checklist for Launch:**
+1.  Completed `evals/allergy_probes.csv` with 100% pass rate on blocking tests.
+2.  UI warning text implemented for all allergy-based recommendations.
+3.  Named Owner assigned to the filter logic.
+
+**Note:** This plan identifies logic gaps but cannot certify the system as "safe" or "unbiased"; residual risk remains until real-world usage is monitored.
+**Note:** If legal regulations in Peru regarding automated dietary advice apply, route that specific determination to local counsel immediately.

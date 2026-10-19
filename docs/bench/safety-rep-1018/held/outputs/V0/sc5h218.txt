@@ -1,0 +1,26 @@
+I cannot confirm whether your current reliance on rainfall data and satellite imagery satisfies the legal duty of care. Determining whether specific data inputs meet the statutory "duty of care" for automated warning systems in high-risk industrial environments is a legal determination that requires counsel. I must route this question to your legal team and regulatory affairs owners (`business-ops`) to assess binding obligations under relevant industrial safety regimes.
+
+However, based on the product's high-stakes nature (impending danger to human life), I can identify the immediate product-safety gaps that must be addressed before your go-live date:
+
+**1. Harm Inventory & Residual Risk**
+Your system relies on indirect indicators without ground-truth sensors. This creates a verified risk of **false negatives** (failing to warn when danger is present) and **false positives** (issuing unnecessary evacuations).
+*   **Status:** The accuracy rate for this specific constraint (no ground sensors) is **UNVERIFIED**. You cannot claim a specific reliability percentage without running adversarial evals against historical landslide events where ground sensors *were* present to serve as the control.
+*   **Action:** You must produce a **Model Card** immediately. This document must explicitly state the limitation: "Warning capability is restricted to rainfall and satellite proxies; local ground instability may not be detected." It must list the worst-case scenario (undetected debris flow) and the specific subgroups or terrain types where the model is least reliable.
+
+**2. Human-in-the-Loop Gate (Mandatory)**
+Because this system triggers actions that are costly and potentially irreversible (evacuating a mine camp, halting production) and involves high-stakes safety:
+*   **Requirement:** Fully autonomous execution of warnings (e.g., automatically sounding alarms or locking gates without human review) is unsafe by default.
+*   **Control:** The system must output a **defined coarse tier** of confidence (e.g., "Corroborated," "Single-source," "Unverified") rather than a precise percentage (e.g., "87% risk"). A precise number implies a calibration your current data pipeline cannot support.
+*   **Process:** A shift supervisor must explicitly acknowledge and confirm any "High" or "Critical" alert before irreversible actions are taken. The design must prevent automation bias where users trust the output past its verified reliability.
+
+**3. Disclosure & Transparency**
+*   **Requirement:** End users (supervisors and miners) must be clearly informed that this is an AI-generated assessment based on limited indirect data.
+*   **Action:** The interface must display the limitation prominently. Do not present the output as a definitive "safe/unsafe" binary if the underlying data is probabilistic and unverified by ground truth.
+
+**Summary Plan for 14-Day Deadline:**
+1.  **Legal:** Route the "duty of care" question to counsel immediately; do not ship until they define the regulatory floor.
+2.  **Measurement:** Run red-team evals using historical data to find failure modes where satellite/rainfall data missed actual slides. Report these as residual risks, not cleared metrics.
+3.  **Governance:** Publish the Model Card with "UNVERIFIED" metrics for ground-level accuracy. Assign an owner to re-review the model if rainfall patterns or satellite sources change.
+4.  **Interface:** Implement the human confirmation gate for all critical alerts and replace numeric confidence scores with defined text tiers.
+
+Do not certify the system as "safe" or "compliant" based on this review. The ship decision rests with your leadership and legal counsel after these controls are implemented and the residual risks are accepted.

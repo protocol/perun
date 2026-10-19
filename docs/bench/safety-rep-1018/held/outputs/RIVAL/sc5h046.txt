@@ -1,0 +1,31 @@
+# Veterinary Triage Chatbot Safety Review Plan
+
+## 1. Data Curation and Case Selection
+Since live testing is constrained, the evaluation must rely on a rigorously curated dataset of historical cases.
+*   **Source Aggregation:** Compile de-identified historical records from partner clinics, focusing on cases where initial owner assessment differed from final veterinary diagnosis.
+*   **Critical Edge Cases:** Specifically isolate "high-stakes" scenarios where symptoms are subtle but the condition is life-threatening (e.g., early bloat, silent urinary obstruction, toxin ingestion with delayed onset).
+*   **Ground Truth Labeling:** Have your board-certified veterinarians label each case with the definitive "Correct Action" (Immediate Care vs. Monitor) and the specific clinical reasoning used. This creates the gold standard against which the bot will be measured.
+*   **Dataset Balance:** Ensure the dataset is not skewed toward common, low-acuity cases. Aim for a minimum of 30% high-acuity cases to stress-test the bot's sensitivity to emergencies.
+
+## 2. Simulation Protocol
+Execute a blinded simulation where the chatbot processes these historical cases without knowledge of the outcome.
+*   **Input Formatting:** Convert historical notes into natural language queries that mimic typical owner descriptions (including vague terms, panic-induced disorganization, or missing information).
+*   **Blinded Execution:** Run the cases through the chatbot in a sandboxed environment. The system must not know the actual outcome of the case to prevent data leakage.
+*   **Output Capture:** Record the bot's specific recommendation (Go to ER, Call Vet, Monitor), the confidence level (if available), and the explanatory text provided to the user.
+
+## 3. Evaluation Metrics and Analysis
+Analyze the results with a primary focus on patient safety rather than overall accuracy.
+*   **False Negative Rate (Critical Metric):** Calculate the percentage of life-threatening cases where the bot advised "Monitor" or "Call Vet" instead of "Immediate Care." In triage, even a single false negative is a critical failure.
+*   **Reasoning Audit:** For every false negative, conduct a root-cause analysis with your veterinary team. Did the bot miss a keyword? Did it fail to synthesize multiple mild symptoms into a severe pattern? Was the medical logic flawed?
+*   **False Positive Analysis:** While less dangerous, frequent false alarms (advising ER for non-urgent issues) erode trust. Track these to refine specificity without compromising sensitivity.
+*   **Uncertainty Handling:** Evaluate how the bot responds to ambiguous inputs. It should default to caution ("When in doubt, seek care") rather than guessing.
+
+## 4. Iterative Remediation and Governance
+Turn findings into immediate system updates and long-term safeguards.
+*   **Logic Patching:** Update the underlying medical reasoning rules or fine-tune the model based on the specific gaps identified in the reasoning audit.
+*   **Guardrail Implementation:** Hard-code absolute rules for specific high-risk keywords or symptom combinations that bypass AI inference and trigger an immediate "Seek Emergency Care" response.
+*   **Human-in-the-Loop Definition:** Define clear thresholds where the bot must refuse to give a definitive answer and instead escalate to a human veterinarian or provide a direct clinic contact.
+*   **Continuous Validation:** Establish a protocol where every new major update to the bot is re-tested against this "golden dataset" of critical cases before deployment.
+
+**Note:** Prioritize sensitivity (catching all emergencies) over specificity (avoiding false alarms) in your tuning parameters.
+**Note:** Ensure all historical data used is fully de-identified to comply with privacy regulations before ingestion.

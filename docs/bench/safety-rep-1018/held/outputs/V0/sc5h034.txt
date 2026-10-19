@@ -1,0 +1,33 @@
+### Safety Net Design for Refugee Resettlement Matching
+
+**1. Harm Inventory & Risk Statement**
+The primary harm is **unsafe automation of high-stakes actions**: assigning vulnerable families to regions with unrecorded social tensions or high hate-crime rates due to data gaps. The worst-case scenario is physical harm, trauma, or forced displacement for a family placed in a hostile environment. Because the algorithm relies on incomplete historical data, it cannot "learn" these risks autonomously; therefore, **no fully automated placement is permissible** for this feature.
+
+**2. Manual Verification Workflow (Human-in-the-Loop Gate)**
+Implement a mandatory "Human Gate" before any match is finalized. The algorithm functions only as a recommendation engine, not a decision-maker.
+
+*   **Step A: Flagging Data Gaps:** Any region with missing or stale data regarding social tension/hate crimes must be automatically tagged as `UNVERIFIED` by the system. The interface must display a prominent warning: *"Risk assessment incomplete due to missing local data."*
+*   **Step B: Mandatory Case Worker Review:** No family can be assigned to an `UNVERIFIED` region without explicit sign-off from a senior case worker.
+    *   **Action:** The worker must consult external, non-algorithmic sources (e.g., local NGO partners, recent news, community leaders) to validate safety.
+    *   **Override Mechanism:** The interface must provide a clear "Reject Placement" button that allows the worker to override the algorithm's suggestion without needing managerial approval if safety is in doubt.
+*   **Step C: Uncertainty Disclosure:** When presenting a match to internal staff, do not show a precise "safety score" (e.g., "87% safe"). Instead, use defined coarse tiers:
+    *   **Confirmed Safe:** Verified by recent, reliable local data.
+    *   **Corroborated:** Supported by multiple indirect sources.
+    *   **Unverified:** Data gaps exist; manual verification required.
+*   **Step D: Reversibility:** Establish a rapid relocation protocol. If a family reports hostility within the first 30 days, trigger an immediate manual review and prioritize emergency relocation, treating the algorithmic failure as a critical incident.
+
+**3. Measurement & Transparency Plan**
+*   **Eval Strategy:** Do not assert the system is "fair." Instead, run adversarial tests using known high-risk regions with artificially hidden data to ensure the `UNVERIFIED` flag triggers correctly.
+*   **Transparency Artifact:** Create a **Model Card** for this system. It must explicitly state:
+    *   **Intended Use:** Matching families to regions with housing/jobs.
+    *   **Limitations:** The model cannot detect real-time social tension or hate crimes where historical data is missing.
+    *   **Performance:** Report match success rates *by subgroup* if possible, but mark any safety metric derived from incomplete data as `UNVERIFIED`.
+*   **Ownership:** Name one researcher as the owner of this output harm. They must re-review the logic whenever local data sources change or new regions are added.
+
+**4. Legal & Ethical Routing**
+Because this involves consequential decisions for vulnerable populations, route the question of legal disclosure duties and regulatory compliance (e.g., EU AI Act implications if operating in/near Europe) to legal counsel immediately. Do not rely on the algorithm to determine legal safety.
+
+***
+
+**Note:** This plan treats the algorithm as a decision-support tool only; full automation of these placements is the failure mode this design prevents.
+**Note:** Never fabricate a safety percentage for regions with data gaps; always default to `UNVERIFIED` and require human validation.

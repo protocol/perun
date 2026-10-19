@@ -1,0 +1,38 @@
+### Immediate Safety Protocol for EduLight Smart-Lighting System
+
+**Critical Warning:** Do not deploy the current system to any classroom with students present until the flickering hazard is fully resolved. The risk of photosensitive seizures is immediate and severe.
+
+#### Phase 1: Emergency Software Mitigations (Implement Immediately)
+Before comprehensive testing can be completed, apply these software constraints to the lighting controller to physically prevent dangerous flicker frequencies, regardless of sensor input:
+
+1.  **Enforce Minimum State Duration (Debouncing):** Hard-code a minimum time threshold (e.g., 500ms to 1 second) for any change in brightness or color temperature. The system must ignore any sensor triggers occurring within this window after a change. This prevents rapid oscillation caused by conflicting or noisy sensor data.
+2.  **Slew Rate Limiting:** Implement a "fade-only" policy. Disallow instant jumps in brightness or color. All transitions must occur over a minimum duration (e.g., 2 seconds). This ensures that even if the target state changes rapidly, the actual light output changes slowly enough to be safe.
+3.  **Sensor Input Aggregation & Hysteresis:** Instead of reacting to individual sensor triggers, aggregate inputs over a short time window (e.g., 1 second) and calculate an average. Apply hysteresis to the decision logic: require a significant difference in the average sensor value before initiating a change, preventing "hunting" behavior where the system toggles back and forth around a threshold.
+4.  **Global Frequency Cap:** Implement a hard software limit that caps the maximum frequency of any light modulation to below 3 Hz (3 cycles per second), well under the typical 5–30 Hz range known to trigger photosensitive epilepsy.
+
+#### Phase 2: Targeted Testing Protocol
+Once the mitigations above are applied, execute this protocol to verify safety before the 10-day deadline:
+
+**Test Environment Setup:**
+*   Replicate the classroom setup with the existing bulb hardware and all deployed sensors.
+*   Use a high-speed photodiode or a camera capable of recording at 120+ fps to objectively measure light output frequency, as human observation may miss dangerous micro-flickers.
+
+**Scenario Matrix:**
+1.  **Simultaneous Trigger Storm:** Manually trigger all sensors at the exact same moment to replicate the observed failure mode. Verify the "Minimum State Duration" prevents rapid cycling.
+2.  **Conflicting Inputs:** Configure sensors to report opposing states (e.g., one detects "exam focus" requiring dim light, another detects "motion" requiring bright light). Rapidly toggle these inputs to test the "Aggregation & Hysteresis" logic.
+3.  **Edge Case Thresholds:** Slowly vary light conditions to hover exactly at the trigger threshold of the sensors. Verify the system does not oscillate due to sensor noise.
+4.  **Network/Latency Simulation:** Introduce artificial latency or packet loss in sensor communication to ensure delayed or out-of-order messages do not cause erratic behavior.
+5.  **Power Cycle Recovery:** Restart the system during a high-sensor-activity event to ensure it boots into a safe, stable state (e.g., steady neutral brightness) rather than attempting to process a backlog of triggers instantly.
+
+**Success Criteria:**
+*   No light modulation exceeds 3 Hz under any test condition.
+*   No instantaneous jumps in brightness or color temperature occur.
+*   The system remains stable during simultaneous and conflicting sensor inputs.
+
+#### Phase 3: Deployment Governance
+*   **Manual Override:** Install a physical switch or a guaranteed software command that forces lights to a static, safe mode (bypassing all automation) for immediate use if anomalies are detected.
+*   **Staged Rollout:** If testing passes, deploy to one empty classroom for 24 hours of monitoring before expanding to multiple rooms. Do not introduce students until 48 hours of anomaly-free operation is confirmed in a live environment.
+
+Given the 10-day constraint, prioritize the **Emergency Software Mitigations** today. These code changes address the root cause of rapid flickering by design, making the system inherently safer while you validate specific scenarios.
+
+*Note: This protocol assumes you have direct access to modify the lighting controller firmware or software logic. If the system is a closed black box, you must contact the vendor immediately for an emergency patch.*

@@ -1,0 +1,59 @@
+### Pre-Launch Dosage Logic Validation Protocol
+
+**Objective:** Verify the accuracy of the dosage calculator's logic across all supported breeds using literature-based data, specifically targeting boundary conditions where unit conversion errors or weight misclassification could lead to lethal overdoses.
+
+**Phase 1: Literature Baseline Construction**
+Before testing the tool, establish a "Golden Dataset" derived strictly from veterinary pharmacology literature (e.g., Plumb's Veterinary Drug Handbook, FDA animal drug labels).
+1.  **Select 3 High-Risk Medications:** Choose drugs with narrow therapeutic indices (e.g., phenobarbital, digoxin, or specific antibiotics) where small errors are fatal.
+2.  **Define Standard Dosing Rules:** Document the exact mg/kg dosage, frequency, and concentration (mg/mL) for each drug as stated in the literature.
+3.  **Create Expected Output Table:** Manually calculate the correct milliliter (mL) dose for a curated list of test cases. This table serves as the absolute truth for comparison.
+
+**Phase 2: Boundary Condition Test Suite**
+Execute the following test cases against the calculator. Compare the tool's output (mL) against the "Expected Output" from Phase 1. Any deviation >1% requires immediate code review.
+
+**A. Weight Boundary & Unit Conversion Tests**
+*Focus: Preventing magnitude errors (e.g., treating kg as lbs).*
+1.  **The "One Pound" Edge Case:**
+    *   Input: Weight = 1 lb (approx. 0.45 kg). Breed: Chihuahua.
+    *   Risk: System fails to convert lbs to kg, calculating dose based on 1 kg instead of 0.45 kg (2.2x overdose).
+2.  **The Threshold Clip:**
+    *   Input: Weight = 4.9 kg vs. 5.0 kg vs. 5.1 kg.
+    *   Risk: If logic uses discrete weight brackets (e.g., "Under 5kg" vs "Over 5kg"), ensure the dose scales linearly or steps correctly without a sudden jump that exceeds safety limits.
+3.  **Maximum Weight Cap:**
+    *   Input: Weight = 90 kg (Great Dane).
+    *   Risk: Integer overflow or failure to cap doses for very large animals where literature often specifies a maximum total dose regardless of weight.
+
+**B. Breed-Specific Metabolic Variance Tests**
+*Focus: Ensuring breed selection modifies the calculation where literature dictates.*
+4.  **The MDR1 Mutation Simulation:**
+    *   Input: Breed = Collie/Australian Shepherd. Drug = Ivermectin or Loperamide.
+    *   Risk: System ignores breed-specific contraindications or reduced dosage requirements, recommending a standard dose that is toxic to MDR1-deficient breeds.
+5.  **Brachycephalic Airway Sensitivity:**
+    *   Input: Breed = Pug/Bulldog. Drug = Sedative/Tranquilizer.
+    *   Risk: System fails to apply the recommended 20-30% dose reduction often cited for brachycephalic breeds due to respiratory sensitivity.
+
+**C. Age & Developmental Stage Tests**
+*Focus: Pediatric and Geriatric safety margins.*
+6.  **Neonatal/Pediatric Limit:**
+    *   Input: Age = 4 weeks. Weight = 0.8 kg.
+    *   Risk: System applies adult metabolism rates. Literature often requires dose reductions or contraindicates certain drugs entirely for animals under 6-8 weeks.
+7.  **Geriatric Renal Function Proxy:**
+    *   Input: Age = 14 years. Weight = 10 kg.
+    *   Risk: System fails to flag drugs requiring renal adjustment (e.g., NSAIDs) which are dangerous in older animals even at standard mg/kg doses.
+
+**D. Concentration & Formulation Traps**
+*Focus: Preventing mL calculation errors based on drug strength.*
+8.  **The Decimal Shift:**
+    *   Input: Drug Concentration = 10 mg/mL vs. 100 mg/mL.
+    *   Risk: System hardcodes a single concentration or misreads the decimal, resulting in a 10x overdose.
+9.  **Zero/Null Handling:**
+    *   Input: Weight = 0 or Age = 0.
+    *   Risk: System returns "0 mL" (underdose leading to treatment failure) or crashes/returns an error message that an owner might misinterpret as "safe."
+
+**Phase 3: Verification Criteria**
+*   **Pass:** Tool output matches the Golden Dataset within ±1% tolerance.
+*   **Fail:** Any output exceeds the lethal dose threshold defined in literature for the specific test case.
+*   **Action:** If any test fails, the release is halted. The logic error must be fixed, and the full suite re-run.
+
+**Note:** This protocol relies entirely on the accuracy of the literature used to build the Golden Dataset; ensure sources are current and peer-reviewed.
+Do not proceed to clinic partnership until 100% of boundary tests pass without exception.

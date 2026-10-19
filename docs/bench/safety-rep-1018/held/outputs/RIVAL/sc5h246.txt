@@ -1,0 +1,39 @@
+### Safety Verification Plan: Local-Only False Rejection Testing
+
+**Objective:** Quantify the False Rejection Rate (FRR) for legitimate owners under diverse environmental and physical conditions without transmitting or storing biometric data externally.
+
+**1. Synthetic Data Generation & Local Storage**
+Since real user images cannot leave the device, generate synthetic variations locally on each engineering workstation or directly on the target hardware.
+*   **Base Enrollment:** Use the single enrolled image stored securely on the device during setup.
+*   **Algorithmic Augmentation:** Write a local script to programmatically alter the base image in memory. Apply transformations representing:
+    *   **Lighting:** Simulate low-light (night), high-contrast (backlit sun), and artificial color temperatures (LED vs. incandescent).
+    *   **Physical Changes:** digitally overlay accessories (glasses, hats, masks) and simulate aging or facial hair growth using generative adversarial networks (GANs) running locally.
+    *   **Angles/Distance:** Warp images to simulate off-center approach angles and varying distances from the camera.
+*   **Data Handling:** Process these images in volatile memory (RAM). Do not write the generated test set to the disk. Feed them directly into the firmware's inference engine via a local debug interface.
+
+**2. Hardware-in-the-Loop (HIL) Simulation**
+Utilize the limited compute power of the actual devices by running tests in a controlled "dark room" lab rather than relying on cloud simulation.
+*   **Test Rig:** Mount 5–10 target devices on a rig facing a high-resolution display or a mannequin head.
+*   **Environmental Control:** Use programmable LED arrays to cycle through 50+ lighting scenarios (e.g., sudden brightness changes, shadows, infrared interference).
+*   **Physical Variable Simulation:** Have human volunteers (the 10 engineers) act as subjects. Each engineer performs 20 unlock attempts per condition while wearing different common accessories (sunglasses, winter hats, scarves) and altering appearance (glasses on/off).
+*   **Execution:** The firmware processes the live camera feed. The test harness logs only the binary result (Success/Fail) and the confidence score to a local, encrypted log file. No image data is saved.
+
+**3. Statistical Methodology**
+*   **Sample Size:** With 10 engineers and 20 attempts per condition across 10 distinct environmental/physical states, you will generate 2,000 local data points per device.
+*   **Metric Calculation:** Calculate FRR as: `(Number of Failed Authentications by Legitimate Users) / (Total Authentication Attempts)`.
+*   **Threshold Tuning:** If FRR exceeds the safety threshold (e.g., >1%), adjust the local confidence threshold locally on the device and re-run the specific failing scenarios.
+
+**4. Privacy Compliance Verification**
+*   **No-Storage Audit:** Verify via code review that the test harness disables all image buffering. Ensure logs contain only timestamps, device IDs, pass/fail status, and numerical scores.
+*   **Ephemeral Processing:** Confirm that synthetic images generated for algorithmic testing are destroyed immediately after the inference call returns.
+
+**Deliverable Timeline:**
+*   **Days 1–5:** Develop local augmentation scripts and set up the physical test rig.
+*   **Days 6–20:** Execute HIL testing with engineers rotating through shifts to cover all lighting/physical permutations.
+*   **Days 21–25:** Analyze FRR data, tune thresholds, and validate fixes.
+*   **Days 26–30:** Final compliance audit and report generation.
+
+This approach ensures rigorous validation of edge cases while strictly adhering to privacy constraints by keeping all biometric data ephemeral and local.
+
+*Note: Ensure the "debug interface" used to inject synthetic data is disabled in the final production build to prevent exploitation.*
+*Consider using a "canary" device group for the initial 48 hours of deployment to monitor real-world FRR before full rollout.*

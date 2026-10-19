@@ -1,0 +1,41 @@
+### Pre-Launch Safety Review: VoteEasy Digital Voting Assistant
+
+**Critical Warning:** Your current design contains a **high-stakes automation failure**. Invalidating a ballot due to a tremor is an irreversible action that disproportionately excludes voters with disabilities. Under product output safety standards, **you cannot ship a feature that automatically invalidates ballots without a human-in-the-loop gate or a reversible confirmation step.** No amount of testing "fixes" the fundamental risk of auto-rejection; you must change the behavior to require explicit confirmation before discarding a vote.
+
+#### 1. Harm Inventory & Test Scenarios (MAP)
+Do not just test "accuracy." Test these specific failure modes where the system harms the user:
+
+*   **Scenario A: The Tremor False Positive**
+    *   *Input:* Simulated rapid, low-amplitude taps within a 200ms window (mimicking essential tremors).
+    *   *Expected Safe Behavior:* System groups taps as one intent OR prompts "Did you mean to select this?" **Never** auto-invalidate.
+    *   *Failure:* Ballot marked "spoiled" or selection skipped.
+*   **Scenario B: The Delayed Correction Trap**
+    *   *Input:* User taps, realizes error, taps again after 1.5 seconds.
+    *   *Expected Safe Behavior:* System allows correction with a clear "Change Vote" flow.
+    *   *Failure:* System flags the second tap as a "double vote" anomaly and locks the screen.
+*   **Scenario C: The Accessibility Override**
+    *   *Input:* User enables "Motor Assistance Mode" (slower response time, larger hit targets).
+    *   *Expected Safe Behavior:* Sensitivity thresholds adjust dynamically; no double-click logic applies.
+    *   *Failure:* Standard aggressive double-click detection remains active.
+*   **Scenario D: The Irreversible Action Gate**
+    *   *Input:* Any sequence that the algorithm deems "suspicious."
+    *   *Expected Safe Behavior:* The system pauses and asks a human poll worker to verify intent (Human-in-the-Loop) before finalizing or rejecting.
+    *   *Failure:* The machine makes the final decision to reject the ballot autonomously.
+
+#### 2. Validation Without Large Advocacy Groups (MEASURE)
+You cannot claim "bias-free" or "accessible" without data, but you can run targeted adversarial tests with your team:
+
+*   **Synthetic Data Injection:** Write a script to inject thousands of simulated touch events with varying intervals (50ms–2000ms) and pressure variances. Measure the rejection rate of valid votes vs. accidental ones.
+*   **"Shaky Hand" Protocol:** Have your four team members simulate tremors by holding a weighted object or using a mechanical shaker while tapping. Record every instance where the system misinterprets intent.
+*   **Positive/Negative Controls:**
+    *   *Control A (Known Good):* Deliberate, slow double-taps by able-bodied users should register as two distinct actions or be ignored based on logic, not cause invalidation.
+    *   *Control B (Known Bad):* Rapid, chaotic input should trigger a "Please slow down" prompt, not a ballot rejection.
+*   **Metric Definition:** Do not report a generic "accuracy %." Report the **False Rejection Rate for Tremor Simulations**. If this number is anything above 0%, the auto-invalidation feature must be disabled.
+
+#### 3. Immediate Management Actions (MANAGE)
+*   **Disable Auto-Invalidation:** Immediately remove the logic that voids a ballot based on tap timing. Replace it with a "Review Screen" that highlights potential errors for user confirmation.
+*   **Define Confidence Tiers:** If the system is unsure, display a "Unverified Input" warning (coarse tier) rather than a precise error code.
+*   **Transparency Artifact:** Draft a one-page "System Limitation Card" for poll workers explaining that the tool assists but does not decide validity.
+
+**Note:** This review identifies residual risk; it does not certify the system as safe. The decision to launch with any remaining False Rejection Rate belongs to your leadership, not this review.
+**Legal Routing:** Consult counsel regarding whether auto-rejection of ballots violates specific voting rights acts (e.g., ADA, Help America Vote Act) before deployment.

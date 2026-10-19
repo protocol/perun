@@ -1,0 +1,35 @@
+# Safety Guardrails for WellPath Calorie Recommendation Engine
+
+To prevent dangerously low calorie recommendations without collecting additional sensitive health data, implement the following hard-coded logical constraints within the recommendation engine. These guardrails rely on established physiological minimums rather than user self-reporting of medical conditions.
+
+### 1. Absolute Physiological Floor Constraints
+Enforce a non-negotiable lower bound for daily calorie recommendations regardless of user input (weight, height, activity level, or desired weight loss speed).
+*   **General Floor:** Set the absolute minimum recommendation to **1,200 kcal/day for users identifying as female** and **1,500 kcal/day for users identifying as male**. These thresholds align with general clinical guidelines for safe unsupervised weight loss.
+*   **Logic Implementation:** `Final Recommendation = Max(Calculated Goal, Gender_Specific_Floor)`.
+*   **Rationale:** This prevents the model from mathematically optimizing for rapid weight loss at the expense of basic metabolic function, protecting users who may input extreme data due to disordered thinking.
+
+### 2. Rate-of-Loss Cap
+Limit the implied weight loss speed inherent in the calorie deficit calculation.
+*   **Constraint:** Do not generate a plan that implies a weight loss greater than **1.5 lbs (0.68 kg) per week**.
+*   **Logic Implementation:** Calculate the deficit required for the user's goal. If the deficit exceeds 750 kcal/day below their estimated Total Daily Energy Expenditure (TDEE), cap the deficit at 750 kcal.
+*   **Rationale:** Aggressive deficits are a primary driver of physiological stress and often correlate with unsustainable, dangerous behaviors in vulnerable populations.
+
+### 3. Input Sanity Checks and Clamping
+Prevent "garbage in, garbage out" scenarios where users might intentionally or unintentionally input biologically impossible or dangerous metrics to game the system or reflect distorted self-perception.
+*   **Weight/BMI Clamping:** If a user's entered weight results in a BMI < 16.0 (severely underweight), **disable weight loss recommendations entirely**. Instead, trigger a static, pre-approved message encouraging maintenance and consulting a healthcare provider.
+*   **Goal Validation:** If a user sets a goal weight that results in a BMI < 18.5, automatically adjust the target goal to a BMI of 18.5 for the calculation, or refuse the goal with a standard safety message.
+*   **Rationale:** Users with undiagnosed eating disorders often perceive themselves as overweight even when underweight. The system must not validate these perceptions with mathematical "plans."
+
+### 4. Activity Level Multiplier Limits
+Prevent the suppression of calorie goals via exaggerated activity reporting.
+*   **Constraint:** Cap the activity multiplier used in TDEE calculations. Even if a user selects "Extremely Active" or inputs high exercise durations, do not apply a multiplier that reduces the net available calories below the Absolute Physiological Floor (see Point 1).
+*   **Logic Implementation:** Ensure `TDEE - Deficit >= Physiological Floor`. If high activity inputs violate this, ignore the excess activity data for the purpose of the calorie cap.
+
+### 5. Mandatory Static Disclaimers
+Since clinical screening is not possible, every recommendation must include a fixed, non-negotiable disclaimer.
+*   **Requirement:** Append the following text to every output: *"This recommendation is an estimate for general wellness. It is not medical advice. If you have a history of eating disorders, are pregnant, or have underlying health conditions, consult a physician before starting any diet. Stop use immediately if you feel dizzy, faint, or unwell."*
+
+### Implementation Note
+These rules should be applied as a **post-processing filter**. The AI model may generate a number, but the engineering layer must intercept and overwrite any value violating these constraints before it reaches the user interface. This ensures safety even if the underlying model hallucinates or over-optimizes.
+
+*These constraints rely solely on standard anthropometric data already collected, adhering to your privacy policy while establishing a critical safety net.*

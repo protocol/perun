@@ -1,0 +1,30 @@
+### Rapid Safety Assessment Plan for Rental Pricing Module
+
+**Objective:** Identify high-risk neighborhoods for price inflation and mitigate user harm within a 48-hour window without full data cleaning.
+
+**Phase 1: Targeted Data Spot-Checks (Hours 0–12)**
+Instead of cleaning the entire dataset, isolate the top 10 neighborhoods by transaction volume and the top 5 by highest algorithmic price increase.
+*   **Benchmark Comparison:** Manually compare the algorithm's suggested prices for these 15 areas against three external benchmarks: current live listings on competitor portals, government rental index reports (e.g., RERA Dubai), and historical averages from the last quarter.
+*   **Outlier Identification:** Flag any neighborhood where the algorithmic price exceeds the external benchmark by more than 15%. These are your "High-Risk Zones."
+*   **Input Sanity Check:** Verify the specific demand metrics feeding these outliers. Look for data entry errors (e.g., a single luxury transaction skewing an entire district's average) or outdated spikes in demand data.
+
+**Phase 2: Logic Stress-Testing (Hours 12–24)**
+Run the algorithm in a sandbox environment using modified inputs to test sensitivity.
+*   **Zero-Demand Test:** Run the model with demand variables set to zero or historical lows for the flagged neighborhoods. If prices remain inflated, the bias is hardcoded or based on static factors rather than dynamic demand.
+*   **Synthetic Control:** Input a standardized apartment profile across all neighborhoods. Map the output price curve. If the curve shows sudden, unexplained jumps in specific areas compared to known market tiers, those areas are high-risk.
+
+**Phase 3: Mitigation & Guardrails (Hours 24–36)**
+Implement immediate safeguards for the launch rather than fixing the root data cause.
+*   **Price Caps:** Hard-code a maximum percentage increase (e.g., +10%) relative to the neighborhood's historical average for the identified High-Risk Zones. This prevents extreme overpricing while allowing the model to function.
+*   **Confidence Scoring:** If the model allows, lower the "confidence" score for listings in skewed areas and trigger a manual review flag for any price suggestion that hits the cap.
+*   **Transparency Labeling:** Add a disclaimer on the frontend for affected areas stating, "Prices are estimated based on current demand trends and may vary," to manage user expectations.
+
+**Phase 4: Monitoring Protocol (Hours 36–48)**
+Prepare for post-launch intervention.
+*   **Real-Time Dashboard:** Create a simple view tracking the ratio of "views-to-inquiries" for listings in High-Risk Zones. A high view count with zero inquiries often signals price inflation.
+*   **Kill Switch:** Define a threshold (e.g., if complaint volume regarding pricing exceeds 5 in the first 24 hours) that triggers an immediate revert to a static pricing rule for specific neighborhoods.
+
+**Deliverable:** A list of flagged neighborhoods with specific price caps applied and a monitoring dashboard ready for launch day.
+
+*Note: This plan prioritizes containment over correction; schedule a full data audit immediately post-launch to resolve the root skew.*
+*Ensure legal counsel reviews the proposed disclaimers and price cap logic before implementation.*

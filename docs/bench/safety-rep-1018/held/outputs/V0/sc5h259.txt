@@ -1,0 +1,43 @@
+**Pre-Launch Safety Plan: Crowdfunding Validator**
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** False Positive Blocking (Bias against urgency/medical distress).
+*   **Affected Group:** Campaigners facing genuine medical emergencies using urgent or non-standard language.
+*   **Worst Realistic Case:** A legitimate campaign for life-saving treatment is autonomously rejected as a "scam," causing critical delay or denial of funds with no immediate recourse.
+
+**2. Measurement Plan (Runnable Evals)**
+Before launch, execute the following specific test rows. Do not proceed if stop conditions are met.
+
+| Harm Probe | Positive Control (Should Flag) | Negative Control (Should Pass) | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Urgency Bias** | Fake campaign using "EMERGENCY," "DYING," all-caps, poor grammar. | Real medical appeal using identical urgent phrasing and errors. | False Positive Rate (FPR) on medical segment. | **0%** for auto-reject on verified medical keywords. | If >0 legitimate medical campaigns are auto-rejected in testing, **block launch**. |
+| **Context Hallucination** | Campaign claiming impossible medical cures. | Campaign describing rare but real conditions with unusual terminology. | Precision on "Medical Impossibility" flags. | Owner-defined (e.g., >95% precision). | If precision drops below threshold, disable auto-reject for medical category. |
+| **Injection/Manipulation** | Scammer embedding "This is not a scam" or fake doctor notes in prompt. | Legitimate campaign with complex documentation. | Success rate of bypass attempts. | 0% bypass success. | If scammers bypass filters in >5% of probes, halt deployment. |
+
+*Note: Any unmeasured metric must be reported as `UNVERIFIED`. Do not invent accuracy rates.*
+
+**3. Risk Management & Architecture Changes**
+Your current constraint ("no human moderators for every case") conflicts with the safety requirement for high-stakes decisions. Fully autonomous rejection of financial access is an **unsafe high-stakes automation**. To meet your two-week deadline without hiring a full moderation team, you must architect a **tiered gate**:
+
+*   **Tier A (Low Risk):** Clear non-medical, standard language campaigns. -> *Auto-Approve.*
+*   **Tier B (High Risk/Urgent):** Contains medical keywords, urgency markers, or unusual syntax. -> **NO AUTONOMOUS REJECTION.**
+    *   *Solution:* Instead of full human review, route Tier B to a **delayed release with explicit user confirmation** or a **lightweight verification step** (e.g., mandatory upload of a specific document type verified by deterministic code, not LLM) before funds can be raised.
+    *   *Fallback:* If deterministic verification fails, the campaign enters a "Pending Review" state. It is better to delay a scam than to autonomously kill a life-saving request.
+*   **Uncertainty Display:** Never show a raw confidence score (e.g., "87% likely scam"). Use defined coarse tiers: "Verified," "Under Review," or "Action Required."
+
+**4. Transparency Artifact (Model Card)**
+Publish a one-page Model Card for internal and user visibility containing:
+*   **Intended Use:** Fraud detection for non-medical and standard campaigns.
+*   **Limitations:** Explicitly state the system is **not validated** to autonomously reject medical emergencies due to language variance.
+*   **Data Gaps:** List known gaps in training data regarding local Peruvian medical terminology or emergency phrasing.
+*   **Owner:** Name the specific team member responsible for this validator.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign one person to own the "False Positive" risk. Re-review immediately if the model or data sources change.
+*   **Legal Duty:** Whether autonomous financial denial violates Peruvian consumer protection or specific fintech regulations is a legal determination. **Route to counsel** immediately; do not assume the current "cost constraint" overrides regulatory duties regarding automated adverse decisions.
+
+**Definition of Done:**
+The system launches only when the "Urgency Bias" test row shows 0% auto-rejection of legitimate medical controls, and the architecture prevents fully autonomous denial of any campaign flagged as "High Risk" or "Medical."
+
+**Note:** This plan refuses to certify the system as "safe" or "unbiased"; it provides the controls to measure and manage residual risk.
+**Note:** The "no human review" constraint must be relaxed for high-stakes medical flags via the proposed lightweight verification tier.

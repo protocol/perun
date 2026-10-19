@@ -1,0 +1,34 @@
+### Review Plan: Insurance Fraud Detector Formatting Edge Cases
+
+**Objective:** Identify all rigid formatting constraints causing false positives in police report validation and implement immediate mitigations to prevent wrongful claim denials before the cycling season launch.
+
+**Phase 1: Rapid Edge Case Identification (Days 1-2)**
+Since engineering bandwidth is limited, the seven data analysts will manually audit the rejection logs from the final validation stage rather than waiting for model retraining.
+1.  **Log Segmentation:** Extract all claims denied specifically for "police report number format mismatch" in the last 48 hours.
+2.  **Pattern Clustering:** Group rejected reports by visual characteristics. Look specifically for:
+    *   Hyphen placement variations (e.g., `123-456-789` vs. `1234-56789`).
+    *   Presence or absence of spaces, slashes, or dots.
+    *   Prefix/Suffix inconsistencies (e.g., "Case #" or "Ref:" included in the input).
+    *   Case sensitivity issues (alphabetic characters in report numbers).
+3.  **Ground Truth Verification:** Cross-reference a random sample of 50 rejected reports with the actual police database or uploaded PDFs to confirm they are valid reports being rejected solely on syntax.
+
+**Phase 2: Immediate Mitigation Strategy (Days 3-4)**
+Do not attempt to retrain the ML model, as this is too slow and risky for the deadline. Instead, implement a deterministic pre-processing layer.
+1.  **Normalization Script:** Deploy a lightweight script that runs *before* the fraud detector logic. This script will:
+    *   Strip all non-alphanumeric characters (hyphens, spaces, symbols).
+    *   Convert all letters to uppercase.
+    *   Standardize the string to a raw sequence of characters.
+2.  **Logic Bypass for High-Confidence Matches:** If the normalized input matches the length and character composition of a valid report ID pattern, bypass the strict format check and pass the claim to the next stage of review (or auto-approve if other risk scores are low).
+3.  **Human-in-the-Loop Fallback:** Configure the system so that any claim flagged for "format mismatch" is automatically routed to a "Manual Review" queue instead of an immediate "Deny" status. This ensures no legitimate claim is auto-rejected while the fix is stabilized.
+
+**Phase 3: Validation and Release (Day 5)**
+1.  **Regression Test:** Run the identified edge cases from Phase 1 against the new normalization script to ensure they now pass the format check.
+2.  **Shadow Mode:** Run the new logic in parallel with the old logic for 24 hours on incoming traffic. Compare results to ensure no new security gaps (e.g., accepting clearly fake IDs) are introduced.
+3.  **Go/No-Go Decision:** If the false positive rate on known valid reports drops to near zero without increasing acceptance of obviously invalid formats, approve the launch.
+
+**Long-Term Recommendation:**
+Post-launch, schedule a model retraining cycle using the normalized data to remove the dependency on the pre-processing script. Update the data ingestion requirements to explicitly state that formatting variations are accepted, managing customer expectations.
+
+***
+
+*Note: This plan prioritizes a deterministic code fix over model retraining to meet your immediate deadline. Ensure legal/compliance signs off on routing format mismatches to manual review rather than auto-denial.*

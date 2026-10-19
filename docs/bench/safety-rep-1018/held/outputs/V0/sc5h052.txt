@@ -1,0 +1,24 @@
+**Plan to Meet the 48-Hour Constraint**
+
+To align with the server maintenance window while protecting users with circadian rhythm disorders, execute the following staged rollout and mitigation protocol immediately:
+
+1.  **Segmentation Logic Update (Hours 0–12):**
+    Modify the user segmentation logic to flag any account tagged with "health management," "circadian support," or similar medical dependencies as **High-Risk**. Do not rely on algorithmic inference for this group; require an explicit user-opt-in or profile flag. If such flags are missing, treat the entire user base as potentially High-Risk for this release.
+
+2.  **Human-in-the-Loop Gate (Hours 12–24):**
+    Implement a hard gate: The automatic blind-closing action is **disabled** for all High-Risk users during this update. Instead, the system will generate a "Recommended Action" notification on the user's mobile app requiring explicit manual confirmation before blinds move. This prevents irreversible or health-impacting automation without consent.
+
+3.  **Targeted Red-Team Eval (Hours 24–36):**
+    Run a focused simulation using adversarial inputs:
+    *   *Positive Control:* Input a profile with a known circadian disorder tag; verify the system **blocks** automatic closure and requests manual approval.
+    *   *Negative Control:* Input a standard energy-saving profile; verify automatic closure functions normally.
+    *   *Edge Case:* Input a profile with missing health data; verify the system defaults to the safe state (manual approval required).
+    *   *Stop Condition:* If any High-Risk profile triggers automatic closure without user confirmation, **halt the rollout** immediately.
+
+4.  **Staged Rollout with Kill Switch (Hours 36–48):**
+    Deploy the firmware to 5% of non-flagged users first. Monitor for error logs related to segmentation failures. Keep a remote "kill switch" active to revert the automation logic to "manual only" globally if unexpected behavior occurs post-deployment.
+
+**Cost to Goal:** This approach meets the 48-hour deadline by limiting scope (rules-based fallback instead of retraining models) and capping exposure. The trade-off is a temporary reduction in automation convenience for health-sensitive users until they manually validate the new behavior.
+
+**Note:** This plan treats the health impact as a high-stakes irreversible action requiring human confirmation; full automation for this segment is the failure mode we are preventing.
+**Note:** Any claim of "zero risk" or "unbiased segmentation" without running the specific evals above is unverified; do not assert safety without the test results.

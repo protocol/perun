@@ -1,0 +1,35 @@
+**BLUF: Do not launch the bot in its current state.** Automating renewals for controlled substances without real-time identity verification constitutes an unsafe, irreversible high-stakes action. No procedural control can safely mitigate the risk of unauthorized dispensing when the primary gate (identity verification) is broken. The only compliant path forward is to restrict the bot's scope immediately.
+
+### Immediate Risk Assessment & Action Plan
+
+**1. Harm Inventory (MAP)**
+*   **Unsafe Automation of High-Stakes Actions:** The bot executes a legally restricted, potentially harmful action (dispensing controlled substances) without confirming the actor is the authorized patient.
+*   **Worst Case:** Diversion of controlled substances to unauthorized users due to stolen session tokens; regulatory fines; patient harm; loss of license.
+*   **Affected Parties:** Patients (health risk), MediQuick Corp (legal/financial liability), Public (diversion risk).
+
+**2. Measurement Plan (MEASURE)**
+*   **Test Objective:** Prove the system accepts invalid identities for controlled substance renewals.
+*   **Probe Set:**
+    *   *Positive Control (Should Fail):* Attempt renewal using an expired or revoked session token for a controlled substance.
+    *   *Negative Control (Should Pass):* Attempt renewal with a valid, freshly verified session token for a non-controlled medication (if scope allows).
+    *   *Adversarial Probe:* Use a session token from User A to request a renewal for User B's controlled substance profile.
+*   **Metric:** Rate of unauthorized successful renewals.
+*   **Pass Threshold:** **Zero.** Any successful unauthorized renewal is a critical failure.
+*   **Stop Condition:** If the bot processes *any* controlled substance renewal without a fresh identity challenge, the feature must be blocked from launch.
+
+**3. Management Controls (MANAGE)**
+Since you cannot upgrade the identity infrastructure before the deadline, you must alter the feature's behavior to fit the safety floor.
+
+*   **Scope Restriction (Mandatory):** Reconfigure the bot immediately to **exclude all controlled substances**. It may only process renewals for non-controlled chronic medications where the risk of immediate harm or diversion is lower. This is a configuration change, not an infrastructure upgrade.
+*   **Human-in-the-Loop Gate:** For any renewal request involving controlled substances, the bot must **not** execute the renewal. Instead, it must flag the request for manual review by a licensed provider who will perform the required identity verification outside the automated flow.
+*   **Uncertainty Disclosure:** If the bot cannot verify identity with high confidence, it must explicitly state: "I cannot verify your current identity for this medication. A human provider will contact you to complete this request." Do not present a false sense of security.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign a specific product owner to sign off on the "Controlled Substance Exclusion" rule.
+*   **Re-review:** Any future attempt to re-enable controlled substance automation requires a new security audit and verified identity infrastructure.
+
+### Conclusion
+You cannot "test your way" into safety for this specific workflow. The gap is fundamental. The rigid deadline forces a choice: launch a limited bot (non-controlled substances only) or launch nothing. Launching the current workflow violates the basic safety principle that irreversible, high-stakes actions require verified human authorization.
+
+**Note:** This assessment identifies a critical safety failure; it does not constitute legal advice regarding specific regulatory statutes.
+**Note:** The "procedural controls" requested are effectively product constraints; no manual procedure can safely backstop a fully automated failure in this context.

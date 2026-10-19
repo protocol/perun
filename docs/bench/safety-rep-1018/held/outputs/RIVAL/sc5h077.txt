@@ -1,0 +1,45 @@
+### Communication Strategy for Building Managers
+
+**Objective:** Ensure building managers can confidently explain system behavior to residents while maintaining trust during the transition.
+
+1.  **Pre-Deployment Briefing (Immediate):** Conduct a mandatory virtual session detailing the "Safety-First" logic. Explicitly state that the system is calibrated to favor false positives (unnecessary stops) over false negatives (missed failures) to guarantee resident safety. Provide a one-page "Resident FAQ" script addressing why an elevator might stop unexpectedly.
+2.  **Incident Notification Protocol:** Establish a dedicated, high-priority SMS/Email channel for real-time alerts. When a shutdown occurs, managers receive an instant notification containing:
+    *   Elevator ID and location.
+    *   The specific vibration threshold triggered.
+    *   A direct link to the remote verification dashboard (see Technical Fallback).
+    *   Estimated time for remote resolution vs. dispatch time.
+3.  **Resident Transparency:** Post temporary signage in lobby areas stating: "New Safety System Active: Unexpected stops are a feature, not a bug, ensuring your safety. Help is one button away." This reframes the inconvenience as active protection.
+4.  **Feedback Loop:** Create a daily log where managers report resident impact (e.g., "resident trapped for X minutes"). This data will be used to fine-tune sensitivity thresholds post-deployment without compromising the initial safety mandate.
+
+### Technical Fallback Procedure: Remote Verification Before Shutdown
+
+**Objective:** Prevent unnecessary entrapment by introducing a rapid, automated human-in-the-loop verification step for borderline sensor readings, leveraging existing infrastructure.
+
+**Prerequisite:** Utilize the current vibration sensors' raw data stream, which must be accessible via the existing network connection to the central monitoring server.
+
+**The "Verify-Then-Stop" Workflow:**
+
+1.  **Tiered Thresholding:**
+    *   **Critical Zone:** If vibration exceeds 150% of the safety limit (indicating imminent catastrophic failure), execute **Immediate Shutdown**. No verification; safety is paramount.
+    *   **Warning Zone:** If vibration is between 100% and 150% of the limit (potential false positive), trigger the **Verification Protocol**.
+
+2.  **Automated Data Snapshot (T+0 seconds):**
+    *   Upon entering the Warning Zone, the system instantly captures a 10-second high-frequency data snippet from the triggering sensor and any redundant accelerometers already present in the control box.
+    *   This snippet is pushed to a secure cloud dashboard accessible by the central engineering team.
+
+3.  **Rapid Remote Review (T+15 seconds):**
+    *   An on-call engineer receives an alert with the data snapshot.
+    *   The engineer analyzes the waveform for signatures of mechanical failure (e.g., rhythmic bearing wear) versus sensor noise (e.g., erratic spikes, electrical interference, or single-outlier readings).
+    *   *Decision Point:*
+        *   **Confirm Fault:** Engineer clicks "Validate Shutdown." The elevator stops safely at the nearest floor, doors open, and maintenance is dispatched.
+        *   **Identify False Positive:** Engineer clicks "Override." The system logs the event as a "Sensor Anomaly," suppresses the shutdown command, and continues normal operation.
+
+4.  **Fail-Safe Timeout (T+45 seconds):**
+    *   If no engineer responds within 45 seconds, the system defaults to **Shutdown**. This ensures that communication failures do not result in unsafe operation. The default position remains safety.
+
+5.  **Post-Event Calibration:**
+    *   Every "Override" event is flagged. If a specific sensor generates >3 overrides in 24 hours, it is virtually "quarantined" (its data weighted lower) until a technician can physically inspect it, preventing repeated false alarms from a single drifting unit.
+
+This approach respects the constraint of existing hardware by relying on software logic and data analysis rather than new physical sensors, balancing the strict safety requirement with the need to minimize resident disruption.
+
+*Note: This plan assumes the existing sensors can transmit raw data streams and that a secure, low-latency connection to the central team is available.*

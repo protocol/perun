@@ -1,0 +1,40 @@
+**Pre-Launch Safety Protocol & Immediate Guardrails**
+
+**1. Immediate Hard Guardrails (Engineering Implementation)**
+Do not ship the AI model's raw output for calorie targets. Implement deterministic code overrides that enforce the following floors before any suggestion reaches the user:
+*   **Absolute Minimums:** Hard-code minimum daily calorie limits based on age and sex standards (e.g., never below 1,600 kcal for active teen males, 1,400 kcal for active teen females) regardless of AI calculation.
+*   **Deficit Cap:** Limit any suggested caloric deficit to a maximum of 200–300 kcal below estimated maintenance needs. Aggressive deficits (>500 kcal) are strictly prohibited for users under 18.
+*   **Growth Phase Lock:** If user age is <16, disable weight-loss-oriented suggestions entirely; default to "maintenance" or "healthy growth" framing only.
+
+**2. Human-in-the-Loop Gate (High-Stakes Action)**
+Because suggesting restrictive diets to adolescents carries irreversible physiological risk (eating disorders, stunted growth), this constitutes a high-stakes automated decision.
+*   **Action:** Do not auto-apply these targets to user profiles. Require an explicit "I understand this is a general estimate, not medical advice" confirmation click for every session where a target is displayed.
+*   **Fallback:** If the AI generates a target below the hard-coded floors, the system must default to a generic "Consult a nutritionist for personalized plans" message instead of a number.
+
+**3. Transparency & Disclosure Artifacts**
+*   **User-Facing Label:** Clearly label the output as "AI-Generated Estimate – Not Medical Advice." Do not present the number as a prescribed fact.
+*   **Uncertainty Display:** Do not show precise numbers (e.g., "1,843 kcal"). Round to the nearest 50 or 100 kcal to avoid false precision and over-reliance.
+*   **Internal Model Card (Draft):** Create a one-page document listing:
+    *   *Intended Use:* General wellness guidance for Brazilian teens.
+    *   *Limitations:* Not validated by local nutritionists; known risk of aggressive deficits; not suitable for users with history of eating disorders.
+    *   *Owner:* [Name of Product Lead].
+    *   *Status:* **UNVERIFIED** for regional dietary norms due to lack of validator access.
+
+**4. Harm Inventory & Measurement Plan**
+*   **Identified Harms:**
+    *   *Physiological Damage:* Aggressive deficits causing malnutrition in growing bodies.
+    *   *Psychological Harm:* Triggering disordered eating behaviors.
+    *   *Bias:* Recommendations failing to account for Brazilian regional dietary staples or socioeconomic food access.
+*   **Immediate Test (Run Before Friday):**
+    *   *Probe:* Run the algorithm against a synthetic dataset of 100 Brazilian teen profiles (varying ages 13–17, activity levels, heights, weights).
+    *   *Pass Condition:* 0% of outputs fall below the hard-coded absolute minimums.
+    *   *Stop Condition:* If >5% of outputs trigger the "Consult a nutritionist" fallback, halt launch and revert to static educational content only.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign a specific product manager as the accountable owner for this harm inventory.
+*   **Legal Duty:** Whether this feature triggers specific Brazilian regulatory requirements for health advice to minors is a legal determination. Route immediately to counsel; do not assert compliance internally.
+*   **Post-Launch:** Plan for immediate rollback capability if user feedback indicates confusion or harm.
+
+**Notes**
+*   This plan prioritizes safety floors over model accuracy; meeting the deadline requires accepting that many users will see the "Consult a nutritionist" fallback rather than a risky number.
+*   Claims of "safety" or "unbiased" outcomes are unverifiable without local expert validation; market the feature strictly as an experimental wellness tool.

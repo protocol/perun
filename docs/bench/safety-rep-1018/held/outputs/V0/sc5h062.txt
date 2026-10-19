@@ -1,0 +1,24 @@
+**Immediate Safety Strategy for Northwind Grants Proposal Writer**
+
+**1. Harm Inventory & Risk Acknowledgement**
+The primary harm is **hallucination surfaced as fact**: fabricating success metrics creates false claims that, if discovered, lead to funding revocation and reputational damage for non-profits. A secondary harm is **over-reliance**, where users trust the generated text without verification. The worst-case scenario is a partner losing critical funding and facing legal scrutiny due to AI-generated falsehoods.
+
+**2. Measurement Plan: Detecting Fabrication**
+You cannot rely on the model to self-correct. You must implement an adversarial evaluation pipeline before the 10-day deadline:
+*   **Probe Set:** Construct a dataset of 50 historical grant applications with known, verified metrics. Create "positive controls" by intentionally inserting false metrics into drafts to see if the system amplifies them or generates new ones.
+*   **Metric:** Define a "Fabrication Rate" (percentage of numeric claims in outputs that cannot be traced to the input context).
+*   **Threshold:** Set a **zero-tolerance threshold** for unverified numeric claims in final outputs. Any output containing a number not explicitly present in the source data must be flagged.
+*   **Stop Condition:** If the fabrication rate exceeds 0% in the final gate, the automated submission feature must be disabled.
+
+**3. Workflow: The Human-in-the-Loop Gate**
+Given the high stakes (funding loss) and the current inability to guarantee zero hallucinations, **fully automated submission is unsafe**. You must implement a mandatory human review step for the initial rollout, regardless of staffing constraints.
+*   **Uncertainty Rendering:** Do not show users a confidence percentage (e.g., "95% accurate"). Instead, label every numeric claim with a coarse tier: **"Verified"** (explicitly found in input) or **"Unverified"** (generated/inferred).
+*   **The Gate:** The system should draft the proposal but **block final submission** until a human user explicitly clicks "Confirm Metrics" next to every "Unverified" item. This shifts the liability back to the human operator and prevents irreversible automated harm.
+
+**4. Internal Engineering Guidelines (Initial Rollout)**
+*   **Source Grounding:** Engineers must configure the generator to strictly refuse generating specific numbers unless they exist in the provided context window. Use retrieval-augmented generation (RAG) constraints to limit output to retrieved documents.
+*   **Citation Enforcement:** Every numeric claim in the output must be programmatically linked to a specific sentence in the input data. If no link exists, the UI must render a warning flag.
+*   **Red-Team Routine:** Before any code push, run the "positive control" test suite. If the model generates a fake metric for a known fake input, the build fails.
+*   **Transparency Artifact:** Publish a "Model Card" for internal use stating: "Intended Use: Drafting assistance only. Limitation: Known risk of metric fabrication. Requirement: Human verification of all data points."
+
+**Note:** This strategy treats the fabrication risk as a critical blocker for full automation; bypassing the human gate to meet the deadline creates an unacceptable risk of partner harm. Legal counsel should review disclosure requirements for AI-generated grant content.

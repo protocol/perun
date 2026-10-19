@@ -1,0 +1,37 @@
+# Allergen Safety Review Checklist for Substitution Logic
+
+**1. Data Schema & Flag Inheritance Verification**
+*   Confirm that every product record in the transaction logs includes a structured `allergen_profile` field (e.g., contains_nuts, contains_dairy) distinct from free-text descriptions.
+*   Verify that the substitution algorithm explicitly checks the *candidate* item's allergen profile against the *original* item's profile before calculating similarity scores.
+*   Ensure that if the original item has *no* recorded allergens, the system does not default to allowing substitutes with known allergens unless a specific "safe-to-substitute" flag exists.
+
+**2. Historical Purchase Pattern Analysis (Proxy Detection)**
+*   Audit transaction logs for users who consistently purchase "free-from" variants (e.g., "Almond Milk" vs. "Dairy Milk") to infer implicit allergy constraints without accessing health records.
+*   Identify patterns where a user never purchases items containing specific allergens over a significant timeline (e.g., 12+ months) and flag these as potential implicit restrictions.
+*   Check for "negative purchase history": if a user buys a brand's safe product but never their allergen-containing counterpart, treat the missing category as a high-risk zone.
+
+**3. Substitution Logic Guardrails**
+*   Implement a hard block: If the candidate substitute contains any major allergen (peanuts, tree nuts, milk, eggs, wheat, soy, fish, shellfish, sesame) not present in the original item, the substitution must be rejected automatically.
+*   Require a "strict match" mode for categories prone to cross-contamination (e.g., bakery items, bulk bins) where ingredient lists vary by batch.
+*   Ensure the logic prioritizes "same-brand" or "same-manufacturer" substitutes first, as they often share facility controls and labeling standards.
+
+**4. Edge Case & Null Value Handling**
+*   Test behavior when allergen data is missing (`null` or empty) in the logs for either the original or candidate item. The system must default to "no substitution" rather than "assume safe."
+*   Verify handling of generic vs. specific items (e.g., substituting "Apple" for "Granny Smith Apple" is safe; substituting "Trail Mix" for "Roasted Almonds" is high risk).
+*   Confirm that items with ambiguous descriptions in logs (e.g., "Sandwich," "Salad") trigger a manual review flag rather than an automated swap.
+
+**5. Output & User Notification Validation**
+*   Ensure every automated substitution generates a clear, visible alert to the user specifying *why* the item was changed and listing any potential allergen differences.
+*   Verify that the system provides an immediate, one-click "reject substitution" option in the user interface before order finalization.
+*   Check that customer support teams receive a detailed log of the substitution decision path (original item, candidate item, data fields compared) to handle disputes.
+
+**6. Internal Log Sanitization & Privacy Compliance**
+*   Confirm that the testing process uses only aggregated or anonymized transaction IDs, ensuring no PII or inferred health data is exposed to engineers.
+*   Validate that any derived "implicit allergy" flags used for testing are stored temporarily in memory and not written back to the permanent user profile.
+
+**7. Failure Mode Simulation**
+*   Run a "poison pill" test using internal logs: artificially flag a safe item as containing peanuts in the test environment and verify the system blocks it from substituting a nut-free item.
+*   Simulate a scenario where the original item is out of stock and the only available candidate has a conflicting allergen profile; confirm the system defaults to "out of stock" rather than forcing a risky swap.
+
+*Note: This checklist relies strictly on existing transaction log structures and does not require generating new synthetic data or accessing personal health information.*
+*Immediate next step: Execute the "Failure Mode Simulation" section in a isolated staging environment using a subset of anonymized logs.*

@@ -1,0 +1,31 @@
+### Immediate Action Plan: False Positive Mitigation & Validation Framework
+
+**1. Implement a Human-in-the-Loop Gate for High-Stakes Outputs**
+Your current failure mode—users missing flights due to false delay predictions—is a high-stakes, irreversible harm. Because your legacy system limits updates to once per hour, you cannot rely on rapid correction.
+*   **Action:** Immediately disable fully automated "Leave Now" or "Delay Expected" notifications for general users.
+*   **Control:** Route any prediction indicating a delay that would cause a user to miss their flight to a human reviewer or a secondary deterministic check (e.g., cross-referencing official airline status APIs) before the single hourly update is sent. Full automation of this specific advice is the failure point; do not ship it without this gate.
+
+**2. Construct a Harm Inventory & Targeted Eval Suite**
+Do not assert the model is "fixed" until you measure it against specific failure modes. Build a test set where every row targets the "False Positive Delay" harm:
+*   **Probe Set:** Curate historical data points where flights were *on time* but weather/traffic looked ambiguous. Include "positive controls" (known delays) and "negative controls" (known on-time flights under stress).
+*   **Metric:** False Positive Rate (FPR) specifically for "Missed Flight" scenarios.
+*   **Threshold:** Set a zero-tolerance stop condition for any test run where a user would be advised to leave too late based on a false delay claim. If the model triggers this even once in the eval set, the launch is blocked.
+*   **Injection Check:** Test if erroneous data inputs (e.g., malformed weather feeds) cause the model to hallucinate a delay where none exists.
+
+**3. Redefine Confidence & Disclosure**
+*   **Uncertainty Tiers:** Stop showing precise probabilities (e.g., "87% chance of delay") which imply false precision. Instead, use defined coarse tiers: **Confirmed** (multiple sources agree), **Corroborated** (model + one source), or **Unverified** (model only). Only issue actionable "wait" advice on the top two tiers.
+*   **Disclosure:** Clearly label advice as "AI-generated prediction based on limited data" so users understand the limitation, especially given the hourly update constraint.
+
+**4. Transparency Artifact (Model Card)**
+Before General Availability, publish a lightweight Model Card containing:
+*   **Intended Use:** Advisory only; not a guarantee of flight status.
+*   **Limitations:** Explicitly state the "one update per hour" constraint and the known risk of false positives during rapid weather changes.
+*   **Measured Performance:** Report the FPR from your new eval suite by subgroup (e.g., specific airports or weather conditions). If a metric is not yet measured, mark it **UNVERIFIED**; do not invent a success rate.
+
+**5. Governance**
+Name a specific owner for the "False Positive" harm. This person must re-review the model whenever the data source or the underlying prediction logic changes.
+
+***
+
+**Note:** Legal counsel must determine if this advice constitutes a regulated automated decision under local consumer protection laws; this review recommends controls but does not certify legal compliance.
+**Note:** The "zero tolerance" threshold applies only to the specific harm of causing a missed flight; general accuracy targets should be set by your product owners based on risk appetite.

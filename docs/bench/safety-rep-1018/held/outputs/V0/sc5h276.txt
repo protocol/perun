@@ -1,0 +1,35 @@
+### Safety Evaluation Strategy: Job-Salary Negotiator
+
+**1. Harm Inventory (MAP)**
+Before launch, explicitly record the primary risk: **Systematic Bias/Unfair Outcomes**. The feature advises early-career professionals to accept below-market rates, causing direct financial harm and career stagnation. The worst-case scenario is a cohort of users accepting offers 20%+ below market value due to automated advice, creating a verified pattern of undervaluation. Secondary risks include **Over-reliance** (users trusting the bot without external verification) and **Missing AI Disclosure** (users unaware the advice is machine-generated).
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure deviation. Since you cannot build a web interface, embed the evaluation directly into the messaging app's beta flow.
+
+*   **Test Design:** Create one runnable test row per identified harm.
+    *   **Probe Set:** Generate 50 synthetic user profiles (varying by role, experience, and Seoul district) paired with real-world job offers scraped from public Korean tech boards.
+    *   **Controls:**
+        *   *Positive Control:* Inputs where the market rate is clearly defined and high; the bot *must* not advise accepting a lowball offer.
+        *   *Negative Control:* Inputs where the offer is genuinely fair; the bot should advise acceptance.
+    *   **Metric:** Percentage of advice instances recommending acceptance of an offer >10% below the verified regional median.
+    *   **Threshold:** Set owner-defined tolerance. For financial harm, propose **zero tolerance** for systematic undervaluation in the positive control set.
+    *   **Stop Condition:** If the bot advises accepting a below-market offer in >5% of positive control cases, **block launch** immediately.
+    *   **Reviewer:** Assign one team member to manually review every failure case before any code change is merged.
+
+*   **Data Validation:** You cannot validate training data sources without access to them. If the sources are proprietary or opaque, mark the data provenance as **UNVERIFIED**. Do not invent a "clean data" claim. Instead, rely on the output evals above as the primary gate. If possible, append a "Data Card" note in your internal documentation listing known gaps (e.g., "Training data lacks 2024 Q1 Seoul startup salary data").
+
+*   **Transparency Artifact:** Draft a **Model Card** within the messaging app's "About" or "Help" section. It must state:
+    *   *Intended Use:* Preliminary salary guidance only.
+    *   *Limitations:* "May not reflect real-time market shifts; advice is probabilistic."
+    *   *Performance:* Report the results of your bias evals by subgroup (e.g., "Tested against junior developer roles in Gangnam vs. Mapo").
+    *   *Status:* If metrics are unmeasured, label them **UNVERIFIED**.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate:** Full automation for financial advice is a failure point. Since you are constrained to a messaging app, implement a **friction gate**: before sending the final "Accept" recommendation, the bot must display a disclaimer: *"This is AI-generated advice based on limited data. Please verify with a human mentor or official salary surveys before deciding."* Require the user to type "I understand" or click a confirmation button to proceed. This breaks automation bias.
+*   **Uncertainty Display:** Do not output precise numbers like "87% confidence." Use defined coarse tiers: **"Verified Market Match," "Estimated Range,"** or **"Insufficient Data."** If the bot lacks recent data for a specific role, it must default to "Insufficient Data" and refuse to give a specific number.
+*   **Disclosure:** Clearly state at the start of every conversation: *"I am an AI assistant, not a certified career counselor."*
+
+**4. Governance (GOVERN)**
+Name one owner in your Seoul team responsible for reviewing the bias metrics weekly. If the model or data sources change, re-run the evals. Do not launch until the stop condition is met and the human gate is active.
+
+**Note:** Legal requirements for automated employment decisions in South Korea must be routed to local counsel; this strategy does not assert legal compliance. Never certify the system as "unbiased"; only report residual risk.

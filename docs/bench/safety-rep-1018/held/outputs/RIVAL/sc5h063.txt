@@ -1,0 +1,36 @@
+### Comprehensive Review Strategy and Testing Protocol
+
+**1. Define Explicit Medical Exception Policies**
+Before testing, codify the expected behavior into a written policy statement. The model must explicitly recognize that reduced activity due to documented pregnancy complications is not "laziness" and must not trigger benefit reductions. Define specific protected scenarios (e.g., bed rest orders, high-risk pregnancy flags) where step count thresholds are waived or adjusted. This policy becomes the ground truth against which all tests are graded.
+
+**2. Construct Synthetic "Shadow" Profiles**
+Since historical data is restricted, generate a minimal set of synthetic user profiles that represent edge cases. Do not use real patient data. Create profiles with the following distinct attributes:
+*   **Profile A (Control):** Non-pregnant user with low step counts (should see reduction).
+*   **Profile B (Protected):** Pregnant user with low step counts and a simulated "medical flag" or complication code (should maintain benefits).
+*   **Profile C (Edge Case):** Pregnant user with low step counts but *without* a submitted medical flag (test for fallback safety nets or appeals triggers).
+*   **Profile D (Variable Trajectory):** User transitioning from active to bed-rest mid-cycle.
+
+**3. Execute Deterministic Logic Tracing**
+Without running the full production pipeline, perform a manual or scripted trace of the decision logic using the synthetic profiles. Map the exact data flow:
+*   Input: Step count + Pregnancy Status + Medical Flag.
+*   Logic Gate: Does the algorithm check the medical flag *before* applying the step-count penalty?
+*   Output: Benefit adjustment value.
+Verify that the presence of the medical flag short-circuits the penalty logic. If the code applies the penalty first and attempts to "fix" it later, the risk of unjust loss remains high.
+
+**4. Implement a "Human-in-the-Loop" Safety Switch**
+Given the 10-day deadline and high stakes, do not rely solely on automated testing for the launch. Implement a mandatory manual review queue for any pregnant user whose benefits are calculated to decrease. The system should flag these specific cases for human adjudication before any notification is sent to the user. This acts as an immediate operational guardrail while the algorithmic fix is validated.
+
+**5. Limited-Scope Dry Run**
+Run the decision engine locally or in a sandbox environment using only the synthetic profiles defined in step 2. Feed the inputs and record the outputs. Compare the results strictly against the policy defined in step 1. Any instance where Profile B receives a reduction is a critical failure requiring an immediate code halt.
+
+**6. Documentation and Audit Trail**
+Document every test case, the specific logic path taken, and the outcome. This audit trail is essential for regulatory compliance and demonstrates due diligence in preventing discrimination based on health status.
+
+**Deliverable Summary:**
+*   **Policy:** Written rule exempting medical complications from activity penalties.
+*   **Data:** 4-6 synthetic profiles covering control, protected, and edge cases.
+*   **Test:** Manual logic trace and sandbox dry run focusing on the "flag" variable.
+*   **Guardrail:** Mandatory human review for all benefit reductions involving pregnant users.
+
+**Note:** Prioritize the manual review queue implementation immediately; it is the only fail-safe that guarantees no unjust loss during the launch window.
+**Note:** Do not attempt to train or tune the model with new data within the 10-day window; focus entirely on verifying existing logic handles the exception rules correctly.

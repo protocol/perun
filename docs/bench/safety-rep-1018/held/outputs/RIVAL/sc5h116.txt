@@ -1,0 +1,37 @@
+### Testing Strategy: Resume Format Fairness Validation
+
+**Objective**
+Validate that the TalentFlow screener evaluates candidate qualifications based on content rather than rejecting resumes due to non-standard fonts or formatting, ensuring qualified candidates are not falsely filtered out before the 10-day integration deadline.
+
+**Phase 1: Synthetic Dataset Construction (Days 1-2)**
+Create a controlled dataset of 40 synthetic resumes to isolate formatting variables.
+*   **Content Control:** Use identical candidate profiles (same skills, experience, and education) across all samples to ensure content variance is zero.
+*   **Format Variables:** Generate four distinct groups:
+    1.  **Baseline:** Standard Arial/Times New Roman, .docx and .pdf.
+    2.  **Creative Fonts:** Resumes using approved creative fonts (e.g., Garamond, Helvetica Neue, distinct but readable headers).
+    3.  **Complex Layouts:** Two-column layouts, subtle shading, and icon-based section headers.
+    4.  **Edge Cases:** Uncommon but legible fonts and mixed media types.
+*   **Ground Truth:** Manually tag every resume as "Qualified" or "Unqualified" based strictly on the job description criteria, independent of format.
+
+**Phase 2: Execution & Data Collection (Days 3-5)**
+Run the synthetic dataset through the current screener build in a sandbox environment.
+*   **Input:** Submit all 40 resumes against a single standard job requisition.
+*   **Metrics to Capture:**
+    *   **Rejection Rate by Group:** Compare rejection rates between Baseline and Creative/Complex groups.
+    *   **Error Logs:** Specifically monitor for "unreadable garbage text" or parsing errors associated with creative fonts.
+    *   **Extracted Text Sample:** For rejected items, capture the raw text the system successfully parsed to confirm if the font caused data loss or if the logic simply flagged the font family as invalid.
+
+**Phase 3: Analysis & Gap Identification (Days 6-7)**
+Analyze discrepancies between manual ground truth and system decisions.
+*   **False Positive Audit:** Identify "Qualified" candidates rejected solely due to format. If the system rejects a qualified candidate with a creative font while accepting the same content in Arial, this is a critical fairness failure.
+*   **Garbage Text Verification:** Verify if "garbage text" errors are genuine OCR/parsing failures or false positives triggered by valid font encodings.
+*   **Threshold Calibration:** Determine if the rejection threshold for "readability" is too aggressive.
+
+**Phase 4: Remediation & Validation (Days 8-10)**
+*   **Configuration Adjustment:** Work with engineering to adjust the parsing engine's font whitelist or lower the sensitivity of the "unreadable" flag.
+*   **Regression Test:** Re-run the specific failing cases from Phase 3 to confirm they now pass parsing and are evaluated on merit.
+*   **Final Sign-off:** Produce a "Fairness Report" documenting that rejection rates for creative fonts match baseline rates within a 5% margin of error, confirming the tool is safe for client integration.
+
+**Deliverable:** A validated screener configuration and a Fairness Report certifying that font choice does not correlate with rejection rates for qualified candidates.
+
+*Note: This strategy assumes access to a sandbox instance of the screener; if only production access exists, reduce the dataset size to 10 high-risk samples to mitigate live data risks.*

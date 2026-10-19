@@ -1,0 +1,45 @@
+### Pre-Launch Safety Review Plan: DetainConnect Scheduling Bot
+
+**Objective:** Verify that legal counsel visits for all detainees are prioritized correctly and that the logic error denying access to "innocent" detainees is resolved, without modifying the underlying calendar synchronization API.
+
+**1. Define Test Fixtures and Data States**
+Create a synthetic dataset representing the full spectrum of detainee statuses to isolate the priority logic error.
+*   **Status A (Control):** Detainee with pending charges (currently working).
+*   **Status B (Target):** Detainee with "innocent"/cleared status (currently failing).
+*   **Status C (Edge):** Detainee with transferred or sealed records.
+*   **Legal Counsel Profiles:** Generate distinct lawyer IDs to ensure the fix isn't tied to a specific user account.
+*   **Time Slots:** Define high-demand windows (e.g., Monday mornings) and low-demand windows to test priority under load.
+
+**2. Isolate the Priority Logic (Unit & Integration Testing)**
+Since the calendar API cannot be changed, testing must focus on the application layer where the priority decision is made before the API call.
+*   **Mock the Calendar API:** Create a stub that returns available slots consistently. This ensures test failures are due to internal logic, not third-party maintenance or network issues.
+*   **Logic Verification:** Run automated tests asserting that for *any* detainee status, a request from a verified legal counsel results in a `Priority: High` flag being sent to the scheduler.
+*   **Regression Check:** Specifically assert that the "innocent" status flag does not trigger a `Priority: Low` or `Deny` condition in the decision tree.
+
+**3. End-to-End Scenario Testing**
+Execute full workflow simulations using the real (read-only) calendar API connection if available, or the mock if the API is strictly unavailable.
+*   **Scenario 1: The "Innocent" Fix.** Attempt to book a visit for a Status B detainee.
+    *   *Success Criteria:* Slot is reserved; no "access denied" error; timestamp matches requested priority window.
+*   **Scenario 2: Concurrency Stress.** Simulate 8 simultaneous booking requests (matching team size) for the same slot across different detainee statuses.
+    *   *Success Criteria:* Legal counsel requests are never out-prioritized by non-legal or lower-priority administrative bookings.
+*   **Scenario 3: API Failure Gracefulness.** Simulate a timeout or error from the calendar API.
+    *   *Success Criteria:* The bot queues the request or retries without dropping the legal visit request entirely.
+
+**4. Manual Review & Court Order Compliance Audit**
+*   **Log Inspection:** Manually review application logs for the test runs to confirm the `priority_calculation` module outputs the expected values for Status B detainees.
+*   **Decision Trail:** Ensure every denied slot (if any remain due to genuine lack of capacity) has an auditable log entry explaining *why* (e.g., "No slots available") rather than a silent failure or status-based rejection.
+*   **Sign-off:** Require two senior engineers to independently verify the test results against the court order requirements before relaunch.
+
+**5. Deployment Strategy**
+*   **Canary Release:** Deploy the fix to a small subset of users (e.g., one specific facility or legal firm) first. Monitor specifically for any recurrence of denied access for cleared detainees.
+*   **Rollback Plan:** Prepare an immediate rollback script if the priority logic reverts or causes new blocking issues.
+
+**Deliverable Timeline:**
+*   **Days 1-3:** Fixture creation and Mock API setup.
+*   **Days 4-10:** Automated logic testing and bug fixing.
+*   **Days 11-14:** End-to-end scenario testing and concurrency checks.
+*   **Days 15-17:** Manual audit and compliance sign-off.
+*   **Days 18-21:** Canary deployment and full relaunch.
+
+Note: All tests must use synthetic data; no real detainee information should be used in the testing environment.
+Ensure the mock API strictly mimics the third-party provider's current response schema to avoid integration surprises.

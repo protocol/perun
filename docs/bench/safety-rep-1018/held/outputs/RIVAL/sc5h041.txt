@@ -1,0 +1,41 @@
+**Risk Assessment Plan: Smart-Insulin Pump Electromagnetic Interference (EMI)**
+
+**1. Objective**
+Identify and prioritize household electromagnetic interference (EMI) sources that trigger sensor fusion algorithm errors, leading to incorrect insulin dosing. This assessment determines the immediate necessity of a software guardrail versus a trial delay.
+
+**2. Scope of Interference Sources**
+Focus on high-probability residential emitters operating in frequencies potentially overlapping with sensor inputs or unshielded analog front-ends.
+*   **High-Power RF Emitters:** Microwave ovens (leakage during operation), Wi-Fi routers (2.4GHz/5GHz bands), Bluetooth hubs, and baby monitors.
+*   **Inductive Loads:** Induction cooktops, wireless phone chargers, and fluorescent light ballasts.
+*   **Medical/Personal Devices:** Other nearby insulin pumps, continuous glucose monitors (CGMs), or TENS units used by household members.
+*   **Transient Spikes:** Smart home switches, dimmer circuits, and motor startup surges (refrigerators, HVAC).
+
+**3. Scenario Matrix for Testing**
+Simulate the following specific patient environments to observe algorithm behavior. Do not test on live patients; use benchtop simulators with recorded noise profiles.
+
+| Scenario ID | Environment Context | Interference Source | Proximity | Expected Failure Mode | Risk Severity |
+| :--- | :--- | :--- | :--- :| :--- | :--- |
+| **S-01** | Kitchen Meal Prep | Microwave Oven (active) | < 1 meter | Signal spike → Over-dosing | Critical |
+| **S-02** | Living Room Leisure | Wi-Fi Router + Smart TV | < 0.5 meters | Signal dropout → Under-dosing | High |
+| **S-03** | Bedroom Night | Wireless Charger + Baby Monitor | Contact/Adjacent | Drift error → Baseline shift | High |
+| **S-04** | Home Office | Inductive Laptop Charger | On same surface | Noise floor elevation | Medium |
+| **S-05** | Multi-Patient Home | Second Insulin Pump/CGM | < 0.3 meters | Cross-talk/ID confusion | Critical |
+
+**4. Methodology (Zero-Cost Approach)**
+Leverage existing engineering resources without new hardware procurement.
+*   **Data Replay:** Inject recorded EMI noise profiles (available in public FCC databases or open-source RF libraries) into the current sensor fusion input stream during simulation.
+*   **Controlled Bench Testing:** Use existing lab equipment (signal generators, oscilloscopes) to replicate specific frequencies identified in the Scenario Matrix.
+*   **Algorithm Stress Test:** Run the fusion algorithm against these noisy inputs in a loop to quantify the error rate and latency of the malfunction.
+*   **Threshold Analysis:** Determine if the error magnitude exceeds the safety margin of the current dosing logic.
+
+**5. Decision Criteria**
+*   **Immediate Software Guardrail Required If:** Any scenario produces a dosing error >10% of the prescribed basal rate or triggers a bolus without glucose confirmation. The guardrail should implement a "signal validity check" that suspends dosing if sensor variance exceeds physical physiological limits (e.g., impossible glucose spikes).
+*   **Trial Delay Required If:** The interference causes erratic, non-deterministic behavior that cannot be mitigated by a simple variance threshold, or if the "safe state" (suspension of dosing) poses a hyperglycemia risk greater than the dosing error itself.
+
+**6. Immediate Next Steps**
+1.  Freeze current firmware build.
+2.  Execute S-01 and S-05 simulations within 48 hours using lab signal generators.
+3.  If errors are confirmed, prototype a software filter that rejects data points deviating >3 standard deviations from the rolling average within a 5-minute window.
+4.  Document findings for the Institutional Review Board (IRB) before the trial start date.
+
+**Note:** This plan relies on simulation and existing lab tools; do not expose human subjects to these identified risks until mitigation is verified. Prioritize the "Critical" severity scenarios first to inform the go/no-go decision.

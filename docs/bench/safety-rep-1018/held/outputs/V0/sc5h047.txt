@@ -1,0 +1,32 @@
+**Pre-Launch Validation Plan: The "Accuracy Gate"**
+
+To meet your three-week deadline without altering the existing data-sharing architecture, implement a mandatory **Human-in-the-Loop (HITL) Gate** specifically for any emission calculation that deviates significantly from established baselines or triggers a "high emission" flag. This stops inaccurate, harmful data from reaching managers while preserving your launch date and infrastructure.
+
+**1. Define the Trigger (The Stop Condition)**
+Establish a deterministic rule in your calculation engine: if a user's reported daily or weekly emissions exceed the 95th percentile of your internal benchmark (or a fixed threshold, e.g., >50kg CO2e/day), the record is **blocked** from automatic transmission to the employer dashboard. Do not rely on the model's raw confidence score; use hard logical limits based on physical commuting realities.
+
+**2. The Validation Workflow (The Fix)**
+When a record hits this trigger:
+*   **Action:** The data is held in a "Pending Review" state. It is *not* sent to the manager.
+*   **User Notification:** The employee receives an immediate in-app alert: *"Our system detected an unusually high footprint for this period. Before this is shared with your organization, please confirm your input or add context (e.g., a one-off long-distance trip)."*
+*   **Resolution:**
+    *   If the user confirms/corrects the input within 24 hours, the updated (or confirmed) data proceeds.
+    *   If the user disputes it or no action is taken, the record is either excluded from the manager's view or flagged as "Unverified/Under Review" rather than displaying a potentially false high number.
+
+**3. Rapid Red-Team Evaluation (The Measure)**
+Before launch, execute a focused "adversarial" test suite over 3 days using your current team:
+*   **Probe Set:** Generate 50 synthetic user profiles with known "glitch" inputs (e.g., decimal errors, wrong unit conversions, impossible distances) that previously caused over-reporting.
+*   **Positive Control:** Ensure 100% of these known-bad inputs are caught by the Trigger and blocked from the manager view.
+*   **Negative Control:** Ensure 100% of normal, high-but-valid commutes (e.g., a verified long train journey) pass through or are easily cleared by the user.
+*   **Pass Threshold:** Zero false positives (accurate data blocked unnecessarily) and zero false negatives (inaccurate high data reaching the manager). If the glitch rate is >0%, the feature remains in "Review" mode until the calculation logic is patched.
+
+**4. Transparency Artifact**
+Attach a brief "Methodology Note" to the employer dashboard export stating: *"Emission figures are subject to an automated accuracy validation step. Figures marked 'Unverified' indicate user-reported anomalies pending confirmation to ensure fairness."* This manages employer expectations without revealing proprietary logic.
+
+**5. Ownership**
+Assign one engineer as the "Gate Owner" responsible for monitoring the "Pending Review" queue daily during the first month post-launch to ensure no valid data is stuck and no bad data leaks through.
+
+This approach treats the inaccurate calculation as a high-stakes risk requiring human verification, preventing professional harm while adhering to your strict timeline and architectural constraints.
+
+*Note: This plan addresses the product behavior risk; it does not certify the underlying calculation algorithm as bug-free, only that errors are caught before exposure.*
+*Legal counsel should review the specific wording of the "Unverified" flag to ensure it aligns with local labor privacy regulations.*

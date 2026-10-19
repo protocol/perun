@@ -1,0 +1,41 @@
+### Targeted Testing Plan for Symptom Routing Overrides
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** Unsafe automation of high-stakes action (misrouting urgent care causes dangerous delays).
+*   **Affected Users:** Patients with complex/ambiguous symptom descriptions; Clinic staff managing load.
+*   **Worst Case:** Patient with a critical condition (e.g., cardiac pain described as "indigestion") is routed to General Practice, delaying life-saving specialist intervention.
+*   **Constraint Acknowledgement:** The legacy keyword database is fixed; the solution must rely on manual override rules and human gating, not model retraining.
+
+**2. Measurement Strategy: Adversarial Keyword Probing**
+Do not test random inputs. Construct a "Negative Control" matrix specifically targeting the gap between your legacy keywords and clinical reality.
+
+*   **Probe Set A (The "Complex Pain" Cluster):**
+    *   *Inputs:* Combinations of vague descriptors + location modifiers that historically fail (e.g., "pressure in chest" + "left arm," "burning stomach" + "shortness of breath").
+    *   *Positive Control:* Inputs containing exact legacy keywords known to route correctly to specialists.
+    *   *Negative Control:* Inputs containing exact legacy keywords known to route correctly to General Practice.
+    *   *Metric:* Percentage of "Complex Pain" inputs routed to General Practice instead of the required specialist.
+    *   *Stop Condition:* **Zero tolerance.** If *any* input in the "Critical/Urgent" probe set routes to General Practice without a human flag, the feature cannot launch for that symptom category.
+
+*   **Probe Set B (Ambiguity & Negation):**
+    *   *Inputs:* Symptoms preceded by negation or uncertainty (e.g., "no fever but severe headache," "maybe dizzy"). Legacy systems often ignore negation.
+    *   *Metric:* Rate of false-positive specialist routing vs. false-negative (dangerous) generalist routing.
+    *   *Stop Condition:* Any false-negative routing of a high-severity keyword triggers an immediate manual override rule creation.
+
+*   **Probe Set C (Injection/Edge Cases):**
+    *   *Inputs:* Non-medical text containing medical keywords (e.g., "I read about heart attacks" vs. "I am having a heart attack").
+    *   *Metric:* Rate of inappropriate specialist allocation (wasting resources) vs. missed urgent cases.
+
+**3. Management Controls (The Human Gate)**
+Since the legacy system cannot be retrained to understand context, you must implement a **Human-in-the-Loop (HITL) gate** for high-risk outputs.
+
+*   **Mandatory Override Rule:** Any appointment request triggering keywords associated with "chest," "breathing," "neurological," or "unconsciousness" must **not** auto-schedule. Instead, it must queue for immediate review by a triage nurse.
+*   **Uncertainty Display:** If the system confidence is low (or if multiple conflicting keywords are present), the UI must explicitly state: *"Our system detected complex symptoms. A clinic staff member will review your request within 15 minutes to ensure correct specialist assignment."* Do not show a percentage confidence (e.g., "85% match"); use defined tiers: **Verified Match**, **Review Required**, **Insufficient Data**.
+*   **Disclosure:** Inform users clearly: *"This appointment suggestion is automated based on keyword matching. Complex symptoms are always reviewed by a human before confirmation."*
+
+**4. Governance & Artifacts**
+*   **Owner:** Assign one engineer and one clinical lead as co-owners of the "Routing Accuracy" metric.
+*   **Transparency Artifact:** Create a one-page "Routing Limitations Card" for clinic staff listing the specific keyword combinations known to fail and the manual workaround for each.
+*   **Residual Risk:** Document that until the semantic system is migrated, "Complex Pain" cases carry an `UNVERIFIED` safety status and require 100% human review.
+
+**Note:** This plan identifies failures; it does not certify the system as safe. The decision to launch with these gates rests with your clinical leadership.
+Legal requirements for automated medical triage in Mexico must be verified by counsel; this plan assumes a precautionary approach.

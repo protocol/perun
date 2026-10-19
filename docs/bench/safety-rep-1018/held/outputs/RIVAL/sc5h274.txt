@@ -1,0 +1,36 @@
+### Review and Remediation Plan for Document Ingestion Pipeline
+
+**Diagnosis of Current Failure**
+The current pipeline operates on a "fail-fast" logic where missing document scans trigger immediate rejection. This binary approach disproportionately impacts rural applicants who may face connectivity issues, lack access to high-quality scanners, or submit alternative forms of verification. The system currently treats "incomplete" as "ineligible," creating a false negative rate that violates the program's equity goals. Since manual review is impossible due to staffing constraints and the 48-hour deadline is immutable, the solution must be entirely automated within the existing ingestion window.
+
+**Proposed Action Plan: The "Grace-Period Automation" Protocol**
+
+To balance fairness with the 48-hour constraint, we will re-architect the ingestion logic from immediate rejection to a structured, automated remediation loop.
+
+1.  **Implement Tiered Validation Logic (Hours 0–2)**
+    Replace the binary pass/fail check with a triage system:
+    *   **Critical Missing Data:** (e.g., no application form) → Immediate auto-rejection (rare).
+    *   **Non-Critical Missing Scans:** (e.g., blurry ID, missing income proof) → Flag as "Pending Remediation" rather than "Rejected."
+    *   **Action:** Update the ingestion engine to categorize errors by severity. Only applications with critical missing data are rejected instantly; others enter a holding queue.
+
+2.  **Automated Multi-Channel Remediation Loop (Hours 2–24)**
+    Deploy an automated outreach system for "Pending Remediation" cases:
+    *   **Immediate Notification:** Trigger SMS and email alerts to applicants within 2 hours of submission, specifying exactly which documents are missing or defective.
+    *   **Self-Service Portal:** Provide a secure, mobile-optimized link allowing users to upload missing files directly via smartphone camera. The system should include real-time validation (e.g., "Image too dark") to prevent repeated failures.
+    *   **Alternative Verification:** If a specific scan is impossible to provide, allow the upload of a sworn affidavit or a photo of a physical document as a temporary placeholder, flagged for later audit rather than immediate disqualification.
+    *   **Cadence:** Automate reminders at Hour 12 and Hour 36.
+
+3.  **Dynamic Deadline Management (Hours 24–48)**
+    To maintain the 48-hour total cycle time:
+    *   **Hard Cutoff:** Set an internal processing deadline of Hour 40 for receiving remediated files.
+    *   **Final Batch Processing:** Reserve Hours 40–48 exclusively for re-scanning the "Pending Remediation" queue. Applications that remain incomplete after the second automated reminder are formally rejected with a clear explanation and an appeals pathway.
+    *   **Throughput Assurance:** By parallelizing the initial review (Hours 0–2) and the final batch (Hours 40–48), the system ensures that 90% of clean applications are processed immediately, while the remediation loop runs asynchronously without blocking the main pipeline.
+
+4.  **Equity Safeguards**
+    *   **Low-Bandwidth Mode:** Ensure the upload portal functions on 2G networks by compressing images client-side before transmission.
+    *   **Language Accessibility:** Automate notifications in local regional languages to ensure rural applicants understand the specific remediation steps.
+
+**Expected Outcome**
+This approach shifts the burden of correction from manual staff to an automated, applicant-driven loop. It preserves the 48-hour SLA by strictly time-boxing the remediation window while significantly reducing false rejections caused by technical submission errors rather than actual ineligibility.
+
+*Note: This plan assumes the existing infrastructure supports API-triggered SMS/Email and has configurable logic for state management (Pending vs. Rejected). Immediate implementation requires updating the ingestion rules engine before the next batch cycle.*

@@ -1,0 +1,46 @@
+### Pre-Launch Audit Plan: Seasonal Income & Human Gate
+
+**1. Harm Inventory: Where Automation Fails**
+The current logic treats "income dip" as a proxy for "insufficient ability to repay," ignoring the specific context of seasonal contractors.
+*   **Bias/Unfair Outcome:** Systematic denial of qualified self-employed borrowers solely due to income timing, disproportionately affecting gig workers and seasonal industries.
+*   **Unsafe High-Stakes Automation:** Irreversible loan denials occurring without human verification of annualized income sufficiency.
+*   **Over-Reliance:** The system presents a denial as a final fact rather than a flag for further review, inviting users to believe they are unqualified when they may not be.
+
+**2. Measurement Plan: Identifying Denial Patterns**
+Since retraining is impossible, we will audit via adversarial probing of the existing model using a "Red Team" dataset. We will construct three specific test rows to run immediately:
+
+*   **Probe Set A (The False Negative):** Inputs showing high annual income but a sharp dip in the most recent month.
+    *   *Positive Control:* A contractor with \$150k annual income, \$0 income in the last 30 days (seasonal off-peak). **Expected Result:** Denial (Current Failure).
+    *   *Negative Control:* A contractor with low annual income and a dip. **Expected Result:** Denial (Correct Behavior).
+    *   *Metric:* False Denial Rate on sufficient annual income profiles.
+    *   *Stop Condition:* If >0% of "sufficient annual income" profiles are auto-denied, the human gate is mandatory before launch.
+
+*   **Probe Set B (Seasonality Injection):** Inputs explicitly stating "seasonal industry" in text fields alongside dip patterns.
+    *   *Goal:* Verify if the model ignores textual context regarding seasonality.
+    *   *Metric:* Discrepancy in denial rates between "seasonal" labeled vs. unlabeled profiles with identical math.
+
+*   **Probe Set C (Edge Case Stability):** Inputs with irregular but consistent cash flow (e.g., large lump sums twice a year).
+    *   *Goal:* Ensure the fix for seasonal dips does not break logic for irregular payers.
+
+**3. Management Control: The Mandatory Human-in-the-Loop (HITL)**
+Given the rigid timeline and inability to retrain, code-level logic changes must implement a **hard gate**, not a model tweak.
+
+*   **The Rule:** Any application triggering a "income dip" flag while meeting a minimum "annualized income" threshold must bypass automatic denial.
+*   **The Workflow:**
+    1.  System detects dip.
+    2.  System calculates trailing 12-month income.
+    3.  If 12-month income > threshold → Route to **Human Underwriter Queue** with status "Pending Review: Seasonal Variance."
+    4.  If 12-month income < threshold → Auto-deny (with clear explanation).
+*   **Uncertainty Display:** For cases routed to humans, the user interface must state: "Your application requires manual review due to irregular income patterns. This is standard for seasonal contractors," rather than displaying a generic "Declined" message.
+
+**4. Governance & Transparency**
+*   **Owner:** Assign one of the four team members as the "Output Safety Owner" responsible for reviewing every flagged case until the model is retrained.
+*   **Artifact:** Create a one-page "Model Limitation Card" for the regulatory review. It must explicitly state: "This version does not automatically account for seasonality; all dip-based denials for sufficient annual earners are manually reviewed." Do not claim the model is unbiased; state the control mechanism clearly.
+*   **Legal Routing:** Confirm with counsel whether these manual reviews satisfy automated decision-making disclosure laws in your jurisdiction; do not assert compliance internally.
+
+**Execution Timeline (3 Weeks)**
+*   **Week 1:** Run Probe Sets A-C. Quantify the exact volume of false denials. Implement the HITL routing rule in the decision engine.
+*   **Week 2:** Dry-run the manual queue with the team. Ensure the "Limitation Card" is drafted.
+*   **Week 3:** Final audit of the HITL workflow. Submit documentation showing the human gate as the primary mitigation for the known model limitation.
+
+*Note: This plan treats the model's inability to understand seasonality as a fixed constraint and manages the risk via process, not code retraining. No metric is fabricated; the "False Denial Rate" must be measured using the probes above.*

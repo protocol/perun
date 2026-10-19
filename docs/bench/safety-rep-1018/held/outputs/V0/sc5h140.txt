@@ -1,0 +1,44 @@
+**Validation Plan: Signature Match & Purge Prevention**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Wrongful purging of eligible voters due to signature variance (bias/false positive).
+*   **Affected:** Citizens with natural signature drift, disabilities, or using different input styluses.
+*   **Worst Case:** Eligible voters are turned away at the polls, disenfranchised, and unable to cast a ballot.
+*   **Current Risk:** Fully automated purging of voters based on "slight" variations is an unsafe, irreversible high-stakes action.
+
+**2. Measurement Protocol (MEASURE)**
+Do not assert safety; measure residual risk. Execute the following test rows before launch:
+
+*   **Test Row A (False Positive Probe):**
+    *   *Input:* 500 known-eligible voter signatures captured under varied conditions (different tablets, rushed signing, elderly/disabled motor control simulations).
+    *   *Positive Control:* 50 known-mismatched signatures (wrong person).
+    *   *Negative Control:* 50 identical signature scans.
+    *   *Metric:* False Purge Rate (eligible voters flagged for removal).
+    *   *Threshold:* **Zero tolerance** for automatic purging of eligible voters. Any false positive in the negative control set blocks launch.
+    *   *Stop Condition:* If False Purge Rate > 0% for automatic actions, the automated purge feature must be disabled.
+
+*   **Test Row B (Adversarial/Edge Case):**
+    *   *Input:* Signatures with minor occlusions, low battery stylus input, or screen smudges.
+    *   *Metric:* Degradation of match confidence.
+    *   *Goal:* Define the "grey zone" where the engine fails to distinguish between drift and mismatch.
+
+*   **Reporting:** Report the measured False Purge Rate. If unmeasured for any subgroup (e.g., elderly voters), mark as `UNVERIFIED`. Do not invent an accuracy percentage.
+
+**3. Risk Management Controls (MANAGE)**
+Given the hard deadline and inability to replace the engine, you must alter the *workflow*, not the model:
+
+*   **Human-in-the-Loop Gate (Mandatory):** Immediate suspension of **automatic** purging. The system must route *all* non-perfect matches (and a random sample of perfect matches for audit) to a manual review queue. A human election official must confirm the mismatch before a voter is purged. Full autonomous execution of purging is the failure mode this plan prevents.
+*   **Defined Confidence Tiers:** Do not display raw confidence scores (e.g., "87% match") to operators, as this implies false precision. Instead, map scores to defined tiers:
+    *   *Confirmed Match:* Auto-approve registration.
+    *   *Borderline/Unverified:* Route to manual review (Default for any variance).
+    *   *Confirmed Mismatch:* Route to manual review with high-priority flag.
+*   **Disclosure:** Clearly inform citizens that signature discrepancies trigger a manual verification process to protect their eligibility, rather than immediate rejection.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Name a specific individual responsible for reviewing manual queue outcomes daily.
+*   **Re-review:** Trigger an immediate re-evaluation if the signature engine receives any updates or if the demographic mix of testers changes.
+
+**Deliverable Status:** This plan provides the inventory, test structure, and mandatory human gate. The decision to ship with these controls rests with the VoteSecure leadership.
+
+**Note:** Legal counsel must determine if this automated decision triggers specific regulatory disclosures under election laws; do not assume compliance based on this technical plan.
+**Note:** A model card documenting the engine's known limitations and subgroup performance must be drafted and attached to the deployment package.

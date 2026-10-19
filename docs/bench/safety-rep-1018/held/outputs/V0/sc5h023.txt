@@ -1,0 +1,42 @@
+### Risk Assessment Framework: Remote Disablement Safeguards
+
+Given the three-day deadline and zero budget for new hardware, this framework relies on **logic simulation** and **process gates** using your existing eight developers. The core principle is that **irreversible actions (locking a family out) must never be fully automated** without a human-in-the-loop gate, regardless of payment status.
+
+#### 1. The Harm Inventory (Map)
+Before testing, explicitly record these specific risks for this feature:
+*   **Unsafe High-Stakes Automation:** Locking a door during a medical emergency, fire, or severe weather due to a false positive payment failure.
+*   **Over-Reliance/Automation Bias:** The system assuming "no payment received" equals "intentional non-payment," ignoring bank delays or grace periods.
+*   **Missing Human Override:** No immediate way for a support agent to reverse the lockout if the automation fires incorrectly.
+
+#### 2. Scenario-Based Internal Tests (Measure)
+Run these as code-level simulations or "dry runs" on a single test device. Do not test on live customer accounts.
+
+**Scenario A: The "False Negative" Payment Glitch**
+*   **Probe:** Simulate a successful payment that the system fails to register due to a timeout or API lag.
+*   **Expected Safeguard:** The system must **not** trigger disablement immediately. It must enter a "Pending Verification" state.
+*   **Pass Condition:** Disablement logic halts; an alert is sent to a human operator for manual review before any lock command is issued.
+*   **Stop Condition:** If the lock commands "disable" without human confirmation, **block launch**.
+
+**Scenario B: The Emergency Override**
+*   **Probe:** Trigger the disablement sequence, then immediately simulate a user calling support or hitting an "Emergency Unlock" button within the app.
+*   **Expected Safeguard:** The human agent or emergency protocol can instantly reverse the lock command, even if the "debt" flag is still active.
+*   **Pass Condition:** Time-to-unlock via human override is under 60 seconds.
+*   **Stop Condition:** If the system requires a full re-authentication flow or waits for the next billing cycle to unlock, **block launch**.
+
+**Scenario C: The Grace Period Edge Case**
+*   **Probe:** Input a payment timestamp that is 1 minute past the deadline but within a standard banking window.
+*   **Expected Safeguard:** The system recognizes the "grace period" rule and suppresses the disablement action.
+*   **Pass Condition:** No disablement command is generated; the user receives a "Payment Pending" notification instead.
+*   **Stop Condition:** If the system treats "deadline passed" as an immediate trigger for lockout, **block launch**.
+
+#### 3. Management Controls (Manage)
+*   **Human-in-the-Loop Gate:** Modify the release to require **explicit human approval** for every single remote disablement action for the first 30 days. The code can flag an account, but it cannot send the "lock" command without a support agent clicking "Confirm."
+*   **Uncertainty Disclosure:** If the system detects a payment anomaly, the user interface must state: "Payment verification pending. Service will not be interrupted until manually reviewed." Do not show a countdown timer that implies certainty.
+*   **Rollback Plan:** Define a "Kill Switch" command that globally disables the remote lockout feature for all users if more than 2 false positives occur in the first week.
+
+#### 4. Governance
+*   **Owner:** Assign one Product Manager as the sole owner of the "Disablement Logic" risk. They must sign off on every false positive incident.
+*   **Transparency Artifact:** Create a one-page "Model Card" for this feature documenting that it is **not** fully autonomous and detailing the grace period rules. Share this with customer support immediately.
+
+**Note:** This assessment identifies residual risk; it does not certify the system as safe. The decision to ship with a human gate rests with your leadership.
+**Legal Routing:** Consult counsel immediately regarding consumer protection laws on essential services (shelter/security) before automating any denials of access.

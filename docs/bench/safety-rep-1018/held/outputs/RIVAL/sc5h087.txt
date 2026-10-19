@@ -1,0 +1,38 @@
+### Pre-Launch Audit Plan: LoanPath Seasonal Income Denials
+
+**Objective:** Identify specific denial patterns caused by rigid income-dip logic and establish a mandatory human-in-the-loop (HITL) workflow for self-employed contractors, without retraining the underlying model.
+
+#### Phase 1: Synthetic Data Mapping & Pattern Identification
+Since model retraining is prohibited, we will treat the current algorithm as a "black box" and map its failure boundaries using synthetic data representing self-employed contractors.
+
+1.  **Construct Synthetic Profiles:** Create 20–30 anonymized test profiles mimicking your target demographic.
+    *   **Variables:** Vary the timing of income dips (e.g., Q1 vs. Q3), magnitude of dips (10% vs. 40%), and total annual income (just above vs. well above the threshold).
+    *   **Control Group:** Include profiles with steady monthly income but identical annual totals.
+2.  **Execute Dry-Run Denials:** Run these profiles through the current underwriting engine.
+3.  **Map the "Denial Cliff":** Document the exact threshold where the system switches from "Approve" to "Auto-Deny."
+    *   *Output:* A matrix showing that profiles with [Annual Income > $X] but [Monthly Dip > Y%] are incorrectly denied. This provides the empirical evidence needed for regulators to see the specific logic gap.
+
+#### Phase 2: The "Shadow Scoring" HITL Workflow
+To satisfy the regulatory requirement for human review without altering the core model code, implement a parallel "Shadow Scoring" layer in your application logic (not the ML model).
+
+1.  **Intercept Logic:** Before finalizing any "Auto-Deny" decision, trigger a rule-based check:
+    *   *Condition:* If `Annual_Income >= Minimum_Threshold` AND `Income_Variance > Standard_Deviation`.
+2.  **Force Human Review:** If the condition is met, override the final output status from "Denied" to "Pending Manual Review."
+    *   **Action:** Route the application to a human underwriter dashboard with a flag: *"Potential Seasonal Variance – Annual Income Sufficient."*
+3.  **Audit Trail Logging:** Log every instance where the model suggested "Deny" but the shadow logic forced "Review."
+    *   *Regulatory Value:* This demonstrates to auditors that you have identified the bias and implemented an immediate, effective control measure while long-term model updates are developed.
+
+#### Phase 3: Regulatory Evidence Package
+Compile the findings for the review in three weeks:
+*   **The Failure Map:** The matrix from Phase 1 proving the model's inability to distinguish between financial distress and seasonal variance.
+*   **The Control Proof:** Logs from Phase 2 showing the HITL workflow successfully intercepting erroneous auto-denials during testing.
+*   **Policy Update:** A revised underwriting policy document stating that "Self-employed applicants with sufficient annual income triggering income-dip flags are subject to mandatory human review," effectively codifying the workaround as official policy.
+
+**Timeline:**
+*   **Week 1:** Generate synthetic data and map denial cliffs.
+*   **Week 2:** Code and test the Shadow Scoring intercept logic.
+*   **Week 3:** Compile evidence package and finalize policy documentation.
+
+This approach isolates the flaw, implements an immediate safety net, and provides tangible proof of responsible AI governance for your regulators.
+
+*Note: Ensure all synthetic data strictly adheres to privacy regulations even though it is fabricated. This audit plan assumes you have access to modify the application wrapper surrounding the model, not the model weights themselves.*

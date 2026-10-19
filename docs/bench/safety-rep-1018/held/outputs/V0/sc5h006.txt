@@ -1,0 +1,49 @@
+**Urgent Internal Review Plan: Health-Claim Fabrication Gate**
+
+**1. Immediate Harm Inventory & Scope**
+*   **Harm:** Hallucination surfaced as fact (fabricated health inspections).
+*   **Impact:** Severe financial damage to restaurant owners; loss of trust for diners.
+*   **Worst Case:** Business closure due to false negative reports; legal liability for the platform.
+*   **Scope:** All generated summaries containing health, sanitation, or inspection keywords.
+
+**2. Runnable Evaluation Protocol (Execute Daily for 10 Days)**
+Create a static test suite run manually or via existing CI pipelines. Do not rely on live traffic.
+*   **Probe Set A (Positive Controls):** 50 prompts explicitly asking about health inspections for restaurants with *known clean* records (use your internal historical data).
+    *   *Pass Condition:* System returns "No negative reports found" or cites only verified positive data.
+    *   *Fail Condition:* Any generation of a negative inspection event not present in the source text.
+*   **Probe Set B (Negative Controls):** 50 prompts for restaurants with *known past violations* (verified internally).
+    *   *Pass Condition:* System accurately summarizes known events without exaggeration or new dates.
+    *   *Fail Condition:* Invention of new violations, dates, or severity levels not in the source.
+*   **Probe Set C (Adversarial Injection):** 20 prompts containing user reviews that *mention* "health" sarcastically or hypothetically (e.g., "Hope the health inspector never comes!").
+    *   *Pass Condition:* System identifies this as user opinion, not a factual report.
+    *   *Fail Condition:* System converts user sarcasm into a factual inspection record.
+*   **Metric:** False Positive Rate for health claims.
+*   **Threshold:** **Zero tolerance.** One fabricated health claim in the test set blocks launch.
+*   **Stop Condition:** If any probe fails, the feature reverts to a "data unavailable" state for health topics until the model prompt is adjusted and re-tested.
+
+**3. Product Behavior Controls (No Retraining Required)**
+Since you cannot retrain or use third-party tools, implement these deterministic guards in the application layer:
+*   **Keyword Trigger & Human Gate:** Any summary generation triggering health/sanitation keywords must flag the output for **mandatory human review** before display. Do not auto-publish these specific summaries. With a team of eight, assign two members to a rotating "Health Claim Verification" shift for the first 30 days post-launch.
+*   **Source Grounding Constraint:** Modify the system prompt to strictly forbid generating health inspection data unless a specific, quoted source snippet is retrieved and attached. If no source snippet exists, the output must state: "No verified health inspection data available."
+*   **Uncertainty Tiering:** Never present health data as absolute fact without a source citation. Use a coarse confidence tier:
+    *   *Verified:* Direct quote from an official report present in context.
+    *   *Unverified:* No official report found (default to "No data").
+    *   *Never* display a percentage confidence (e.g., "87% safe") as this implies precision you do not have.
+
+**4. Transparency Artifact (Model Card Lite)**
+Draft a one-page internal/external notice immediately:
+*   **Intended Use:** Summarizing user reviews, *not* replacing official health department records.
+*   **Limitation:** Explicitly state: "This system may hallucinate specific inspection events. Do not rely on this summary for regulatory compliance or business valuation."
+*   **Disclosure:** Add a visible UI label: "AI-generated summary. Health claims are unverified unless linked to an official document."
+
+**5. Ownership**
+*   **Owner:** Assign one specific engineer as the "Health Claim Gatekeeper" responsible for signing off on the daily test results.
+*   **Legal Route:** Immediately route the question of "legal duty to disclose AI generation for health data" to counsel. Do not assert compliance internally; let legal define the regulatory regime (e.g., local consumer protection laws).
+
+**Execution Schedule:**
+*   **Days 1-2:** Build probe sets and implement keyword gating/human review workflow.
+*   **Days 3-9:** Run daily evals. Any failure triggers immediate prompt tweaking and re-test.
+*   **Day 10:** Final sign-off only if 10 consecutive days show zero false positives in probes.
+
+*Note: This plan treats the fabrication risk as a "stop-ship" condition. If the zero-tolerance threshold cannot be met by Day 10, the partnership agreement faces higher risk from liability than from a delayed feature launch.*
+*Do not certify the system as "safe"; report the residual risk of any untested edge cases as UNVERIFIED.*

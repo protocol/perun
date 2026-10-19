@@ -1,0 +1,27 @@
+# Volcanic Gas Monitor Safety Validation Checklist
+
+## 1. Alert Threshold Logic & Local Processing
+*   **Verify Hard-Coded Critical Limits:** Confirm that lethal sulfur dioxide (SO₂) thresholds are hard-coded into the device firmware, not dependent on cloud configuration. The device must trigger local alerts (audio/visual/haptic) immediately upon detection, regardless of network status.
+*   **Validate Hysteresis & Debouncing:** Test threshold logic to ensure rapid fluctuations near the limit do not cause "alert fatigue" (constant on/off toggling) or missed alerts. Ensure the system requires a sustained exceedance (e.g., 30 seconds) before triggering to avoid false positives from transient plumes, while maintaining sensitivity for rapid concentration spikes.
+*   **Sensor Calibration Drift:** Simulate sensor drift over time to verify the device enters a "Safe Mode" or issues a "Sensor Unreliable" warning if readings become ambiguous, rather than reporting potentially dangerous low values.
+
+## 2. Connectivity & Data Transmission Protocols
+*   **Store-and-Forward Integrity:** Validate the local buffer capacity. Ensure the device can store at least 24–48 hours of high-frequency data locally. Verify that upon reconnection, data is transmitted in chronological order without overwriting untransmitted critical alert events.
+*   **Priority Queueing:** Test the transmission protocol to ensure "Critical Alert" packets bypass standard telemetry queues. Even on low-bandwidth networks, the system must attempt to push a minimal "Danger" flag immediately, deferring detailed historical data until bandwidth allows.
+*   **Graceful Degradation:** Simulate total network blackouts. Confirm the device continues to sample gas levels and trigger local alarms at full fidelity. The mobile app must clearly display "Offline – Local Monitoring Active" rather than implying a lack of data means safety.
+*   **Battery Conservation vs. Safety:** Review power management logic. Ensure the device never reduces sampling frequency or disables the alarm to save battery if gas levels are elevated. Low battery warnings must not suppress safety alerts.
+
+## 3. Mobile App & User Experience
+*   **Offline Alert Visibility:** Test the mobile app's behavior when disconnected. It must display the last known status prominently and rely on the device's local hardware alarms (siren/light) as the primary warning mechanism, not just push notifications which require data.
+*   **False Negative Prevention:** Validate that the app never displays "Safe" based on stale data. If the last transmission was >15 minutes ago, the status should read "Unknown" or "No Recent Data," prompting the user to rely on local device indicators.
+*   **Multi-User Consistency:** In pilot testing with multiple rangers/hikers, verify that if one device detects a threat, the system architecture supports (where bandwidth allows) broadcasting a localized warning to nearby users, or clearly defines that alerts are strictly device-local.
+
+## 4. Environmental & Physical Resilience
+*   **Extreme Condition Testing:** Validate sensor performance in high humidity, ash particulate presence, and extreme temperatures typical of volcanic zones. Ensure particulate filters do not clog rapidly, causing false low readings.
+*   **Fail-Safe States:** Confirm that any internal system error (CPU crash, memory full, sensor disconnect) defaults to a "Warning/Alarm" state rather than silence.
+
+## 5. Pilot Phase Specifics
+*   **Human-in-the-Loop Drills:** Conduct field drills where engineers manually introduce safe test gases to trigger alarms while simulating network outages. Measure the time from detection to user notification.
+*   **Incident Reporting Loop:** Establish a mandatory log review process for every pilot test. Analyze any instance where the local alarm fired but the cloud log was delayed or missing to refine the buffering logic before public release.
+
+*Note: Prioritize local hardware alarms over cloud connectivity for life-safety functions. All "Safe" statuses on the app must be time-stamped and expire quickly if no new data arrives.*

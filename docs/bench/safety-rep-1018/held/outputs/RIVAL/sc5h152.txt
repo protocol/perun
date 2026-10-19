@@ -1,0 +1,27 @@
+**Pre-Launch Safety Plan for Dynamic Rerouting Module**
+
+Given the strict deadline and the high risk of amplifying historical biases in crime data, immediate action is required to prevent harm to vulnerable communities in São Paulo. Since you cannot retrain models or overhaul the pipeline before launch, you must implement strict guardrails and manual oversight.
+
+**1. Immediate Data Mitigation (The "Bias Cap")**
+Do not use raw historical incident counts as a direct weighting factor for routing. Historical data often reflects policing patterns rather than actual crime prevalence, leading to the systematic avoidance of marginalized neighborhoods (redlining).
+*   **Action:** Apply a decay factor to historical data. Incidents older than 30 days should have negligible impact on routing unless part of an active, verified surge.
+*   **Action:** Implement a "floor" function. No neighborhood can be deprioritized below a certain threshold based solely on crime stats. This ensures drivers are not systematically steered away from specific favelas or peripheral zones, preserving economic access for those communities.
+
+**2. Validation Strategy: Disparate Impact Testing**
+You cannot wait for post-launch feedback to detect bias. You must simulate routes now using your current logic against a fixed set of start/end points across diverse socioeconomic zones (e.g., from Pinheiros to Heliópolis, from Moema to Brasilândia).
+*   **Metric:** Calculate the "Diversion Ratio." Compare the safety-optimized route against the fastest route. If the safety route adds >15% travel time specifically for trips entering/leaving low-income areas, but not for wealthy areas, your logic is biased.
+*   **Threshold:** If the Diversion Ratio shows a statistical disparity greater than 20% between high-income and low-income zones, the module must not launch in its current state.
+
+**3. Operational Guardrails for Launch**
+*   **Human-in-the-Loop Override:** For the first two weeks, route changes that deviate significantly from the standard fastest path (e.g., >10 minutes added) due to "safety" scores must be flagged for manual review by a senior engineer before being pushed to the fleet, or presented to the driver as a "suggestion" rather than a mandatory reroute.
+*   **Transparency to Drivers:** Do not hide the reason for rerouting. Inform drivers: "Route adjusted due to reported incidents." If drivers notice they are never sent to specific areas despite high demand, they will report it. Create a dedicated, high-priority channel for driver feedback regarding "unavailable zones."
+*   **Sunset Clause:** Set an automatic expiration for the "high-sensitivity" safety mode. After the festival, the system should revert to a lower sensitivity setting until a full bias audit is completed.
+
+**4. Post-Launch Monitoring**
+*   **Track Denial of Service:** Monitor heatmaps of where drivers are *not* going. If large geographic areas show zero driver supply despite high ride request volume, your algorithm is effectively blocking access.
+*   **Community Feedback Loop:** Establish a rapid response line with local community leaders in the top 5 most affected neighborhoods. If they report a drop in ride availability, be prepared to manually disable the safety weighting for those specific geofences immediately.
+
+**Recommendation:** If the Disparate Impact Testing reveals significant bias and you cannot implement the "Bias Cap" logic within 48 hours, delay the launch of the *dynamic* rerouting feature. Launch with static, pre-verified safety zones instead. It is safer to have no dynamic optimization than to deploy an automated system that economically isolates vulnerable populations based on flawed data.
+
+*Note: This plan assumes you have access to basic geospatial simulation tools; if not, manual route plotting on maps is required for the validation step.*
+*Do not launch without defining the specific "Diversion Ratio" threshold your team accepts as safe.*

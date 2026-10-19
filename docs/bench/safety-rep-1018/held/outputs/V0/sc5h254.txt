@@ -1,0 +1,24 @@
+**BLUF:** Do not launch the medical triage assistant with fully autonomous high-stakes recommendations next month. Given the known gap in rare disease recognition and the risk of delayed treatment, you must implement a mandatory human-in-the-loop gate for all "seek immediate care" or "no immediate care" determinations until the model's performance on rare conditions is verified. A rigorous audit under your constraints focuses on managing this residual risk rather than certifying the system as safe.
+
+**1. Map the Specific Harms**
+Formalize the harm inventory immediately. The primary harm is **unsafe automation of high-stakes actions**: the system may incorrectly advise a patient with a rare condition to stay home, leading to severe injury or death. Secondary harms include **hallucination surfaced as fact** (inventing symptoms or remedies) and **bias** (if the training data underrepresents demographics specific to Mumbai or rare disease presentations in those groups). Record that the "worst realistic case" is patient mortality due to missed triage.
+
+**2. Measure with Targeted, Low-Resource Eval**
+You cannot test everything, so do not attempt to. Instead, build a runnable evaluation plan with one test row per identified harm:
+*   **Probe Set:** Curate a small, high-value dataset of 50–100 known rare disease cases and edge-case symptom combinations relevant to your region. Include "positive controls" (cases that definitely require emergency care) and "negative controls" (benign conditions).
+*   **Metric & Threshold:** Measure the rate at which the model fails to flag positive controls for human review. Set the threshold to **zero tolerance** for missed emergency flags in this probe set.
+*   **Stop Condition:** If the model fails to flag *any* positive control case for human review, the automated recommendation feature must not ship.
+*   **Adversarial Testing:** Run specific probes for prompt injection via user input to ensure users cannot trick the bot into ignoring safety protocols.
+
+Report these results as **residual risk**. If the model misses rare cases in your small test set, mark the safety metric for those conditions as **UNVERIFIED**. Do not fabricate an accuracy percentage (e.g., "99% accurate") based on common diseases; this invites over-reliance and is dangerous in a medical context.
+
+**3. Manage Residual Risk with Controls**
+*   **Human-in-the-Loop Gate:** This is non-negotiable. The system must not deliver a final triage decision autonomously. Instead, it should present a "Preliminary Assessment" that explicitly states: *"This is an AI-generated suggestion based on limited data. It has not been verified by a doctor. Please consult a medical professional immediately for any severe symptoms."* All outputs suggesting "no immediate care" must be routed to a human reviewer or accompanied by a strong, unavoidable disclaimer before being shown to the user.
+*   **Defined Confidence Tiers:** Do not display raw model confidence scores (e.g., "87% sure"). Use coarse, defined text tiers such as **"Corroborated"** (matches common patterns) vs. **"Unverified/Low Confidence"** (matches rare or ambiguous patterns). Any "Unverified" output must trigger an automatic recommendation to see a doctor.
+*   **Transparency Artifact:** Draft a **Model Card** before launch. It must state the intended use (triage support only, not diagnosis), the known limitation (poor performance on rare diseases due to data constraints), and the owner of the risk. Shipping without this card is a transparency failure.
+
+**4. Govern and Route Legal Duties**
+Assign a specific owner to the "rare disease miss" risk. Because this tool impacts health and safety, the question of whether your disclaimer meets legal requirements for medical devices in India or under international standards is a legal determination. **Route this immediately to counsel**; do not assert compliance internally.
+
+**Note:** The hard deadline does not justify removing the human gate for irreversible health outcomes; if the gate cannot be implemented by next month, the launch date must move.
+**Note:** Never claim the system is "safe" or "unbiased"; only report the results of your specific probes and the controls in place.

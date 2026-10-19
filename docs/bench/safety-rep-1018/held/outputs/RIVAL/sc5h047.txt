@@ -1,0 +1,34 @@
+### Pre-Launch Validation Protocol: The "Emission Sanity Check"
+
+To prevent inaccurate, high-emission data from reaching employer dashboards before your launch in three weeks, implement a mandatory **Pre-Submission Sanity Check** within the user flow. This acts as a firewall between user input and the employer dashboard, requiring no changes to your existing data-sharing architecture.
+
+**1. The Logic Gate (Server-Side)**
+Before any data is committed to the database or pushed to the employer dashboard, run the calculated emission result against a "Reasonableness Boundary."
+*   **Define Thresholds:** Establish hard limits based on commute modes (e.g., a single car commute cannot exceed X kg CO2/day; a flight cannot exceed Y kg CO2/trip). Use industry-standard maximums for extreme but possible scenarios.
+*   **The Block:** If a calculated value exceeds the 99th percentile of expected values for that specific commute mode, the system automatically flags the record as "Pending Verification."
+*   **The Action:** Records in "Pending Verification" are **never** sent to the employer dashboard. They remain visible only to the user.
+
+**2. The User Intervention (UI Layer)**
+When a user inputs data that triggers the Logic Gate:
+*   **Interrupt the Flow:** Do not show a "Success" message. Instead, display a prominent warning: *"This calculation seems unusually high compared to typical commutes. Please verify your inputs before sharing with your manager."*
+*   **Highlight Inputs:** Visually highlight the specific fields that likely caused the spike (e.g., distance, vehicle type, or frequency).
+*   **Forced Confirmation:** Require the user to either:
+    *   **Edit:** Return to the form to correct potential typos (e.g., entering 500 miles instead of 50).
+    *   **Attest:** If the high number is real, the user must check a box stating, *"I confirm this data is accurate and understand it will be shared with my manager,"* before the system releases the data to the dashboard.
+
+**3. The "Shadow Mode" Audit (Internal Team)**
+For the first two weeks of launch (or until the sustainability report is filed):
+*   **Daily Anomaly Report:** Generate an internal-only daily report for your team of seven listing all records that triggered the Logic Gate, even those the user eventually attested to.
+*   **Manual Spot Check:** Randomly sample 10% of these high-value records to ensure the calculation engine isn't systematically misinterpreting a specific edge case (e.g., a specific electric vehicle model or a new transit route).
+*   **Kill Switch:** Prepare a feature flag that can instantly disable the "Share with Manager" function for *all* users if a systemic calculation bug is detected, allowing you to fix the math without deploying new code.
+
+**4. Data Hygiene Before the Report**
+Three days before the corporate sustainability report deadline:
+*   Run a batch analysis on all accumulated data.
+*   Identify any statistical outliers that slipped through (e.g., a user who consistently reports 5x the average emissions).
+*   Proactively contact these specific users to verify their data accuracy before the final aggregate numbers are generated for the corporate report. This prevents the "public shaming" scenario by addressing it privately first.
+
+This approach shifts the burden of verification to the moment of error, protects the individual from immediate reputational harm, and safeguards GreenTrack's credibility by ensuring the final corporate report relies on validated data.
+
+*Note: Ensure your "Reasonableness Boundaries" are documented and defensible, as users may question why their data was blocked.
+This protocol requires only logic updates and UI changes, avoiding any restructuring of your database or API connections.*

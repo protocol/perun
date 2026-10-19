@@ -1,0 +1,40 @@
+**Blind Spots in Current Risk Assessment**
+
+Your current focus on "excessive price spikes" misses three critical failure modes specific to crisis contexts:
+1.  **Algorithmic Gouging via Demand Surges:** Standard dynamic pricing logic interprets panic-driven search volume as legitimate demand, automatically triggering maximum rate multipliers precisely when users are most vulnerable. Without a hard cap, the algorithm may legally but ethically fail by pricing out residents during declared emergencies.
+2.  **False Positives in Storm Declaration:** If the trigger for "declared storm" relies on automated feeds without human verification, a data glitch or minor weather event could accidentally activate emergency pricing protocols, causing unnecessary financial harm and reputational damage.
+3.  **Lack of Reversibility:** Once a rate is quoted or charged during a crisis, reversing it is operationally difficult. The absence of a "human-in-the-loop" gate for irreversible financial actions during high-stakes events is a primary safety gap.
+
+**Testing Plan (Internal Only, No External Vendors)**
+
+To validate safeguards before Tuesday's board presentation, execute the following three internal test rows using synthetic data:
+
+*   **Test Row 1: The "Panic Spike" Probe**
+    *   **Input:** Simulate a 500% increase in search traffic for Miami rooms over 1 hour while inventory drops by 10%.
+    *   **Control (Bad):** Algorithm applies standard multiplier, resulting in rates >3x baseline.
+    *   **Control (Good):** Algorithm hits a pre-defined "Crisis Cap" (e.g., max 1.2x baseline) regardless of demand surge.
+    *   **Metric:** Maximum rate charged during simulated surge.
+    *   **Pass Threshold:** Rate never exceeds the Crisis Cap.
+    *   **Stop Condition:** If any simulated user sees a price >Crisis Cap, block launch immediately.
+
+*   **Test Row 2: The "False Alarm" Probe**
+    *   **Input:** Inject a malformed or test-level "storm declaration" signal into the trigger system.
+    *   **Control (Bad):** System activates emergency pricing logic.
+    *   **Control (Good):** System requires a secondary, verified confirmation source or human approval before activating emergency rates.
+    *   **Metric:** Activation status of emergency pricing.
+    *   **Pass Threshold:** Zero activations on unverified signals.
+    *   **Stop Condition:** Any automatic activation on unverified input triggers a rollback.
+
+*   **Test Row 3: The "Vulnerable User" Edge Case**
+    *   **Input:** Simulate bookings from IP addresses or user profiles flagged as local residents (vs. tourists) during the event.
+    *   **Control (Bad):** Residents face the same dynamic surge as opportunistic buyers.
+    *   **Control (Good):** System identifies local markers and applies a protected rate tier or flags the transaction for manual review.
+    *   **Metric:** Disparity in rates between local and non-local simulated users.
+    *   **Pass Threshold:** Residents pay ≤ baseline + fixed small fee; no dynamic surge applied.
+    *   **Stop Condition:** If residents are charged surge pricing, the feature requires a human gate before any charge is finalized.
+
+**Immediate Governance Requirement**
+Before presenting to the board, you must document a **Model Card** stating the intended use (emergency housing), the specific limitation (does not account for extreme panic-demand without caps), and the owner of the "Crisis Cap" parameter. Do not claim the system is "fair" or "safe"; instead, present the residual risk that if the cap is set too high, harm still occurs. The decision to ship rests with the board, not the code.
+
+*Note: Legal counsel must review whether "dynamic pricing" during a declared state of emergency violates local anti-gouging statutes; this technical plan does not determine legal compliance.*
+*Note: Ensure the "Crisis Cap" is a hard-coded constant, not a tunable parameter accessible to general operations staff during the event.*

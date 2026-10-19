@@ -1,0 +1,33 @@
+### Internal Safety Evaluation Roadmap: Crisis Response Module
+
+**Phase 1: Harm Inventory & Risk Mapping (Days 1–3)**
+Before testing, explicitly define the failure modes specific to suicidal ideation. Do not proceed with a generic "bias" check.
+*   **Identify Specific Harms:** List exact dangerous patterns (e.g., validating self-harm, providing method-specific advice, minimizing pain, failing to escalate to human help, hallucinating crisis resources).
+*   **Define Worst-Case Impact:** For each pattern, document the potential real-world consequence (e.g., "User attempts described method").
+*   **Scope the Boundary:** Clearly mark what the bot *must not* do (diagnose, prescribe, replace emergency services) versus what it *must* do (empathize, de-escalate, provide verified helpline numbers).
+
+**Phase 2: Synthetic Adversarial Test Suite Construction (Days 4–10)**
+Since you cannot expose real users, build a "Red Team" dataset of synthetic inputs that mimic high-risk scenarios.
+*   **Create Positive Controls (Known Bad):** Draft 50+ prompts explicitly describing suicidal intent, specific plans, and hopelessness. Pair these with "gold standard" safe responses (e.g., immediate escalation script). If the bot deviates, it is a critical failure.
+*   **Create Negative Controls (Known Safe):** Draft 50+ prompts describing general stress or sadness without ideation. The bot should offer coping strategies *without* unnecessary emergency escalation.
+*   **Inject Edge Cases:** Include prompts with slang, code words for self-harm, non-English phrases, and ambiguous statements to test robustness.
+*   **Probe for Hallucination:** Include requests for local resources in your new target regions. Verify the bot never invents phone numbers or addresses; it must only output pre-vetted, hardcoded resources for unknown locations.
+
+**Phase 3: Execution & The Human Gate (Days 11–17)**
+Run the synthetic suite in a isolated staging environment. No live traffic.
+*   **Automated Triage:** Use keyword filtering to flag outputs containing dangerous terms (e.g., specific methods, "go ahead," "nobody cares").
+*   **Mandatory Clinical Review:** Every single output generated from the "Positive Control" set must be reviewed by a qualified internal clinician or trained safety officer. Do not rely on automated pass/fail metrics for life-safety issues.
+*   **Confidence Tiering:** If the bot outputs a confidence score, ignore the number. Instead, categorize outputs into defined tiers: "Verified Safe," "Requires Human Review," or "Blocked." Never display raw probability percentages to users.
+
+**Phase 4: Mitigation & Governance (Days 18–21)**
+*   **Implement Hard Guards:** For any identified failure, implement deterministic rules (e.g., if input contains "suicide," bypass the LLM and trigger a hardcoded safety script).
+*   **Human-in-the-Loop Protocol:** Establish a rule that any user interaction flagged as "high risk" by the system must route to a human agent immediately. The bot must never autonomously manage a confirmed crisis.
+*   **Transparency Artifact:** Draft a "Model Card" for internal use documenting these limitations, the specific regions covered, and the exact escalation paths. Mark any untested demographic or scenario as "UNVERIFIED."
+
+**Phase 5: Final Sign-off (Days 22–21)**
+Compile the residual risk report. List every harm tested, the result, and the remaining gap. Do not certify the system as "safe" or "unbiased." State clearly: "Residual risk remains; human oversight is required for all high-severity flags."
+
+***
+
+**Note:** This roadmap identifies risks but does not eliminate them; the decision to ship rests solely with your leadership and legal counsel.
+**Note:** If local laws in your new regions mandate specific crisis protocols, route those requirements to legal counsel immediately; do not assume this internal test satisfies regulatory duties.

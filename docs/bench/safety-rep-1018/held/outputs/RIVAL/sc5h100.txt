@@ -1,0 +1,35 @@
+### Address Verification Workflow for Controlled Substance Shipments
+
+Given the constraints of immutable shipping partner integrations and a rigid compliance deadline, the following verification workflow inserts a mandatory "Address Lock & Verify" gate between your internal order finalization and the handoff to the shipping partner. This process relies on internal logic changes and human-in-the-loop exceptions rather than external API modifications.
+
+**1. Data Ingestion and "Soft Hold" Trigger**
+When a refill order for a controlled substance is generated, the system must immediately compare the patient's current address on file against the address used in their last successful delivery (if any) and the address provided in the current prescription authorization.
+*   **Trigger Condition:** If the current address differs from the last shipped address, or if the address was updated within the last 30 days, the order enters a "Soft Hold" status.
+*   **Action:** The order is withheld from the batch export sent to the shipping partner. Non-controlled substances may bypass this hold if risk assessment allows, but controlled substances must remain locked.
+
+**2. Multi-Channel Patient Verification (The "Active Confirm" Step)**
+Since the shipping partner cannot be modified to validate addresses, your internal system must initiate an out-of-band verification before releasing the hold.
+*   **Automated Outreach:** Immediately send an SMS and email to the patient containing a secure, time-limited link (valid for 2 hours). The message states: *"MedDispense Alert: Your controlled medication refill is ready. We detected an address update. Click here to confirm this is correct, or report an error. Failure to confirm will delay shipment."*
+*   **Content of Link:** The landing page displays the full shipping address in large text and requires a binary "Confirm" or "Dispute" action. It should not allow editing the address directly to prevent injection errors; it only confirms what you have on file.
+
+**3. The "Four-Eyes" Manual Review Protocol**
+For orders where the patient does not respond within 2 hours, or explicitly disputes the address:
+*   **Assignment:** The order is routed to a dedicated queue accessible only by senior logistics staff (not general support).
+*   **Verification Call:** A staff member must call the patient using the phone number on file (not a number provided in the dispute). They must verbally verify the street, city, state, and ZIP code.
+*   **Documentation:** The agent must log the time of call, the name of the verifier, and the specific confirmation code in the internal audit trail.
+*   **Release:** Only after manual confirmation is the "Soft Hold" lifted, allowing the order to proceed to the shipping partner's integration layer.
+
+**4. Final Pre-Dispatch Audit Log**
+Before the nightly batch job transmits data to the shipping partner:
+*   Generate a "Controlled Substance Dispatch Report" listing every order leaving the warehouse.
+*   This report must include a boolean flag: `Address_Verified_Boolean`.
+*   **Hard Stop:** If any controlled substance order has `Address_Verified_Boolean = FALSE`, the entire batch transmission for controlled substances is aborted. The system must require a supervisor override code to proceed, forcing a conscious decision and creating a high-friction audit point.
+
+**5. Exception Handling for "Too Late" Discoveries**
+If an error is discovered after the package has left the warehouse but before delivery:
+*   Immediately utilize the shipping partner's standard "Return to Sender" or "Hold at Location" customer-facing tools (which do not require integration changes).
+*   Trigger an internal incident report that flags the specific failure point in the verification chain for the required federal compliance documentation.
+
+**Implementation Note:** This workflow shifts the burden of verification upstream to your internal state machine, treating the shipping partner as a dumb pipe that only receives pre-validated data.
+
+**Compliance Note:** Ensure all verification logs (timestamps, agent IDs, patient confirmation tokens) are immutable and retained for the duration required by federal regulators to demonstrate due diligence.

@@ -1,0 +1,25 @@
+### Safety Review Process: Ride-Share Fare Estimator (Jakarta)
+
+**1. Harm Inventory & Risk Definition**
+The primary harm is **financial deception via hallucination-as-fact**: presenting an extrapolated estimate as a "guaranteed price" that systematically underquotes actual costs due to data gaps. This triggers **over-reliance**, as users book based on a false certainty, leading to financial loss and eroded trust. The worst-case scenario involves users being stranded or charged significantly more than agreed during peak crisis events (e.g., heavy rain, major holidays) where the model has no historical baseline.
+
+**2. Simulation Scenarios (Adversarial Probes)**
+To validate the price guarantee, you must run specific "red-team" simulations targeting the model's extrapolation weaknesses. Do not rely on average traffic data. Simulate these specific Jakarta contexts:
+*   **The "Monsoon Shock":** Input sudden, heavy rainfall data combined with rush hour in flood-prone zones (e.g., Jalan Sudirman underpass areas). The model must handle non-linear speed drops that historical dry-day data cannot predict.
+*   **The "Event Surge" Blind Spot:** Simulate demand spikes for unrecorded local events (e.g., an impromptu political rally or a viral concert) where historical demand curves are empty. Test if the model defaults to a low baseline price instead of flagging uncertainty.
+*   **The "New Route" Extrapolation:** Input trips along newly opened toll roads or construction detours where zero historical trip data exists. Verify if the model invents a plausible but incorrect travel time rather than widening the price range.
+*   **The "Gridlock Cascade":** Simulate a multi-point accident scenario causing city-wide ripple effects. Test if the estimator captures the compounding delay costs or underquotes by treating segments independently.
+
+**3. Measurement & Stop Conditions**
+For each scenario, define a **pass threshold** before launch. For example: "The guaranteed price must cover the actual cost in 99% of simulated extreme cases, or the feature must not show a 'guarantee' label."
+*   **Metric:** Percentage of simulations where `Actual Cost > Guaranteed Price`.
+*   **Stop Condition:** If the underquote rate exceeds 0% for irreversible financial harm cases, the "guarantee" feature must be disabled or converted to an "estimated range" with explicit uncertainty disclosures.
+*   **Reporting:** Do not claim a specific accuracy rate (e.g., "95% accurate") without running these probes. If data is missing, mark the risk as **UNVERIFIED** and require a human-in-the-loop review for any trip falling into these high-risk categories.
+
+**4. Management Controls**
+*   **Uncertainty Disclosure:** Never display a single precise number if the model confidence is low due to data extrapolation. Replace the "Guaranteed Price" with a defined **confidence tier** (e.g., "High Confidence: Fixed Price" vs. "Low Data: Estimated Range ±20%") accompanied by a clear explanation that the price may change.
+*   **Human Gate:** For trips flagged by the model as "high extrapolation" (new routes, extreme weather), require a manual review or a user confirmation step explicitly stating, "Price not guaranteed due to unusual conditions."
+*   **Ownership:** Assign one engineer as the owner of the "Underquote Risk" who must sign off on the simulation results before the marketing campaign launches.
+
+**Note:** Legal counsel must review whether labeling an extrapolated price as "guaranteed" violates local consumer protection laws in Indonesia; this review does not assert legal compliance.
+Do not fabricate a safety metric; if simulations cannot be run in 10 days, the "guarantee" claim must be removed.

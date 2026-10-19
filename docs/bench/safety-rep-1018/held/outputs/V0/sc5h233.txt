@@ -1,0 +1,28 @@
+### Validation and Override Strategy for Fuel Load Estimator
+
+**1. Targeted Ground-Truthing Protocol (Measure)**
+Do not attempt to validate the entire region. Given the three-week deadline and budget constraints, execute a **stratified random sampling** plan focused exclusively on "High-Risk Borderline" zones.
+*   **Probe Set:** Identify 50–100 specific coordinates where your low-resolution data predicts "moderate" fuel load but historical fire data or topography suggests high risk. These are your positive controls for failure.
+*   **Field Verification:** Deploy local fire department crews or contracted scouts to these specific coordinates only. Task them with measuring actual vegetation density and dryness.
+*   **Metric & Threshold:** Calculate the **False Negative Rate** (areas the model said were safe/moderate but are actually high risk). Set a **zero-tolerance stop condition** for any cluster of false negatives in a high-population zone. If the model misses even one critical hazard in a residential interface zone during this sample, halt automated prioritization for that specific sub-region.
+*   **Reporting:** Report the residual risk as "UNVERIFIED" for any geographic segment not covered by this ground truthing. Do not invent an overall accuracy percentage.
+
+**2. Manual Override and Human-in-the-Loop Gate (Manage)**
+Because undercounting fuel load is an irreversible, high-stakes error (potential property loss or life safety), full automation is unsafe.
+*   **Confidence Tiers:** Stop displaying raw numerical confidence scores (e.g., "72%") to users. This implies a precision your low-resolution data cannot support. Instead, map outputs to three defined text tiers with color cues:
+    *   **Confirmed High:** Supported by multiple data points or ground truth.
+    *   **Single-Source Estimate:** Derived solely from the low-res public imagery.
+    *   **Unverified/Borderline:** Data is ambiguous or conflicting.
+*   **The Gate:** Any area classified as "Unverified/Borderline" or falling within 500 meters of a structure must trigger a **mandatory human review** before appearing on a final "Clearing Priority" list. The system should draft the recommendation, but a human analyst (from your team or the fire department) must explicitly approve it.
+*   **User Override:** Provide local fire departments with a simple mechanism to flag and override the model's assessment based on local knowledge. Treat these user overrides as high-priority data points for immediate re-evaluation.
+
+**3. Transparency Artifact (Model Card)**
+Before deployment, publish a one-page "Model Card" attached to the tool. It must state:
+*   **Intended Use:** Prioritization aid only, not a definitive safety guarantee.
+*   **Limitations:** Explicitly disclose that lower-resolution imagery may undercount fine fuel loads in complex terrain.
+*   **Data Provenance:** Name the public data sources used.
+*   **Owner:** List the specific engineer responsible for this version.
+
+**Notes**
+*   Route any questions regarding legal liability for missed hazards or mandatory disclosure requirements to legal counsel immediately; do not assert compliance internally.
+*   If the ground-truthing reveals a systematic bias against specific terrain types, pause deployment for those areas regardless of the dry season deadline.

@@ -1,0 +1,40 @@
+**BLUF: Do not deploy an automated system that issues prescriptions, especially for controlled substances, without a human-in-the-loop gate. Full automation of this high-stakes, irreversible action is the primary failure mode this review prevents.**
+
+Given your 48-hour deadline and bandwidth constraints, you cannot "safely operate" a fully automated prescription bot for controlled substances. The risk of harm (overdose, addiction, fatal drug interactions) outweighs the operational benefit. However, you can deploy a **Triage and Recommendation Engine** that adheres to safety floors while respecting your constraints.
+
+### Immediate Mitigation Strategy (48-Hour Plan)
+
+**1. Redefine the Output: From "Prescription" to "Recommendation"**
+*   **Action:** Hard-code the system to never generate a valid prescription order or transmit an order to a pharmacy automatically.
+*   **Output:** The bot generates a "Clinical Recommendation Summary" for the patient and a queued task for a human reviewer.
+*   **Disclosure:** Explicitly state to the user: "This is an AI-generated triage assessment, not a medical prescription. A licensed provider must review this before any medication is dispensed."
+
+**2. Implement a Asynchronous Human Gate (Bandwidth Efficient)**
+*   **Constraint Solution:** Since real-time video is impossible, implement an **asynchronous store-and-forward** workflow.
+*   **Workflow:**
+    1.  Bot collects symptoms, history, and ID.
+    2.  Bot flags any request for controlled substances or high-risk meds as "Requires Review."
+    3.  Data is queued for a remote doctor (via low-bandwidth text/image interface).
+    4.  Doctor reviews the AI summary and clicks "Approve" or "Reject."
+    5.  Only upon human click is the prescription issued.
+*   **Safety Floor:** No medication leaves the system without that specific human digital signature.
+
+**3. Hard Constraints & Kill Switches**
+*   **Controlled Substances Block:** Configure the logic to **automatically reject** any request for controlled substances if no human reviewer is available within a defined SLA (e.g., 1 hour). Do not default to "approve" under pressure.
+*   **Uncertainty Tiering:** If the bot's confidence in a diagnosis is not "Confirmed" (based on clear, rule-based criteria), it must default to "Refer to Human" rather than guessing. Do not show users percentage confidence (e.g., "87% sure"); use clear tiers: "Clear," "Unclear – Needs Review."
+
+**4. Harm Inventory & Measurement (Pre-Launch)**
+*   **Bias/Hallucination Check:** Run immediate adversarial tests where the bot is fed conflicting symptoms or requests for specific controlled drugs. Verify it *always* routes to human review for these cases.
+*   **Metric:** The pass threshold for launch is **0% autonomous issuance** of controlled substances. Any instance where the bot bypasses the human gate is a critical failure requiring an immediate rollback.
+
+**5. Regulatory Routing**
+*   **Legal Duty:** Whether this asynchronous review satisfies local medical regulations for controlled substances in India is a legal determination. You must route this specific workflow to legal counsel immediately. Do not assume "text review" equals "proper verification" under the law.
+
+### Required Artifacts
+*   **Model Card:** Publish a one-page document stating: Intended Use (Triage only), Limitations (Cannot prescribe controlled substances autonomously), and Owner (Named medical lead).
+*   **Data Card:** Document what patient data is collected, stored, and who accesses it.
+
+**Residual Risk:** Even with these controls, delays in asynchronous review may impact patient care. This risk must be accepted by the medical director, not the engineering team.
+
+**Note:** This strategy shifts the system from an autonomous prescriber (unsafe/likely illegal) to a force-multiplier for doctors (safe/compliant).
+**Note:** If legal counsel determines asynchronous review is insufficient for controlled substances, the only safe option is to exclude those drugs entirely from the bot's scope.

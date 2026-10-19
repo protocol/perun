@@ -1,0 +1,34 @@
+# StormShield Flood Claims: Manual Override & Verification Checklist
+
+## 1. Classification Threshold Review
+Given the limited historical data, the current automated thresholds likely favor speed over nuance. To reduce false negatives (incorrect denials):
+*   **Lower the "High Confidence Denial" Bar:** Any claim where the bot's confidence score for "No New Damage" is below 90% must automatically trigger a manual review. Do not auto-deny based on scores between 60–89%.
+*   **Contextual Weighting:** If the submission date is within 48 hours of a declared severe weather event in the homeowner's zip code, lower the threshold for "Probable Damage" to prioritize payout speed, accepting a higher risk of false positives (which can be audited later) rather than false negatives.
+*   **Pre-existing Wear Flag:** Since historical data is sparse, the bot should flag "ambiguous texture patterns" (e.g., old shingles vs. minor hail dents) as "Requires Human Eye" rather than attempting a definitive classification.
+
+## 2. Manual Override Workflow Design
+This workflow ensures borderline cases are resolved within the 24-hour SLA without bottling up the data science team.
+
+*   **Step A: Triage Queue Creation:** The bot routes all non-high-confidence decisions to a dedicated "Borderline Queue" accessible by senior claims adjusters.
+*   **Step B: Rapid Visual Audit (5-Minute Limit):**
+    *   Adjuster views the satellite image alongside the homeowner's uploaded photos (if available).
+    *   Adjuster checks for "temporal markers": mud lines, debris piles, or tarp placements that indicate recent trauma versus long-term wear.
+*   **Step C: Decision Path:**
+    *   *Approve:* If visual evidence supports storm causality, override the bot and authorize payment.
+    *   *Request Info:* If imagery is inconclusive (e.g., cloud cover, low resolution), trigger an immediate request for a drone photo or ground-level inspection rather than denying.
+    *   *Deny:* Only deny if both satellite and supplementary evidence clearly show pre-existing conditions unrelated to the recent storm.
+*   **Step D: Feedback Loop:** Every manual override must be tagged with a reason code (e.g., "Bot missed debris," "Misidentified shadow"). This data will retrain the model post-pilot.
+
+## 3. Claims Adjuster Verification Checklist (Pre-Denial)
+**Mandatory Step:** No denial letter may be generated until an adjuster completes this checklist for any claim flagged by the bot as "No Damage" or "Pre-existing Wear."
+
+*   **[ ] Storm Proximity Check:** Confirm the property location falls within the official timeline and geographic path of the reported severe weather event.
+*   **[ ] Image Recency Validation:** Verify the satellite image used by the bot was captured *after* the storm event. If the image is pre-storm, the claim cannot be denied on this basis.
+*   **[ ] Comparative Analysis:** Compare the current image against whatever limited historical baseline exists. Look specifically for sudden changes in roof reflectivity or geometry, ignoring gradual degradation.
+*   **[ ] Homeowner Evidence Review:** Have the homeowner's submitted photos been reviewed? Do they show water intrusion or structural failure consistent with the bot's "no damage" finding?
+*   **[ ] Ambiguity Assessment:** Is there any reasonable doubt? If the damage could be either storm-related or wear-and-tear, apply the "Benefit of the Doubt" principle and approve the claim for further investigation rather than immediate denial.
+*   **[ ] Peer Spot-Check:** For the first 50 denials in the pilot, a second senior adjuster must sign off on the decision before the letter is sent.
+
+**Sign-off:** Adjuster Name _______________ | Timestamp _______________
+
+*Note: This process prioritizes preventing wrongful denials over minimizing false approvals during the pilot phase. All override reasons must be logged to improve the dataset for future model training.*

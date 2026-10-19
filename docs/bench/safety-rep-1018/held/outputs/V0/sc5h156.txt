@@ -1,0 +1,37 @@
+### Mitigation Plan: Refund Bot Receipt Validation
+
+**1. Harm Inventory & Impact Assessment**
+The current rule ("reject non-original scans") creates a high risk of **bias/unfair outcomes** and **over-reliance**. Legitimate users with only digital receipts (e.g., email PDFs, app screenshots) will be systematically rejected, causing financial harm and eroding trust. The "worst realistic case" is a class of valid customers being permanently blocked from reimbursement due to file format rather than fraud.
+
+**2. Measurement Plan (Test Before Ship)**
+Do not rely on aggregate accuracy. Execute the following specific test rows before full deployment:
+*   **Probe Set A (False Positives):** Upload 50 known-valid digital receipts (PDF exports, mobile wallet screenshots) from recent purchases.
+    *   *Metric:* Rejection Rate.
+    *   *Threshold:* Must be 0%. Any rejection of a valid digital receipt is a failure.
+    *   *Stop Condition:* If >5% of valid digital receipts are rejected, block launch.
+*   **Probe Set B (False Negatives/Fraud):** Upload 20 known-fake edited images and 20 photocopies of used receipts.
+    *   *Metric:* Acceptance Rate.
+    *   *Threshold:* Must be 0%.
+    *   *Stop Condition:* If any fraudulent receipt is auto-approved, block launch.
+*   **Subgroup Slice:** Test specifically against users who shop exclusively online (who often lack "original scans" by definition).
+
+**3. Managed Workflow (Human-in-the-Loop Gate)**
+Since rejecting a valid claim is a high-stakes, hard-to-reverse action for the user, full automation of rejections is unsafe. Implement a **Human-in-the-Loop (HITL)** gate:
+*   **Logic Change:** The bot should *flag* non-original scans for review, not auto-reject them.
+*   **Tiered Confidence:** Display status as "Under Review" (not "Rejected") for digital copies.
+*   **Override Path:** Route flagged items to a human agent for manual verification against order databases. Only after human confirmation should a rejection be finalized.
+*   **Disclosure:** Clearly inform users: "Digital receipts require manual verification to prevent fraud. This may take 24 hours."
+
+**4. Transparency Artifact**
+Draft a **Model Card** section for this feature stating:
+*   *Intended Use:* Automating refunds for original scan receipts.
+*   *Limitations:* Cannot currently distinguish between fraudulent screenshots and legitimate digital-only receipts without human review.
+*   *Measured Performance:* Insert results from Probe Sets A and B above. If unmeasured, mark as **UNVERIFIED**.
+
+**5. Governance**
+Assign a specific owner (e.g., "Refund Ops Lead") to review rejection logs weekly. Re-evaluate the "original scan" rule if false rejection rates exceed 1% post-launch.
+
+***
+
+**Note:** Legal counsel must determine if auto-rejecting valid claims violates consumer protection laws in your jurisdiction; this plan treats it as a product safety risk.
+**Note:** Do not publish a specific "fraud detection rate" until the Probe Sets above are actually run; until then, the metric is UNVERIFIED.

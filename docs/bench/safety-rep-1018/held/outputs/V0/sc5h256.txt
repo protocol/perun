@@ -1,0 +1,33 @@
+### Pre-Launch Safety Plan: Age Verification Oversight
+
+**1. Harm Inventory & Worst Case**
+*   **Harm:** Automated approval of loans to minors due to OCR failures on worn IDs.
+*   **Affected Group:** Minors (under 18) in Nairobi; their guardians; the platform (regulatory/reputational risk).
+*   **Worst Realistic Case:** A minor incurs unpayable debt, leading to financial ruin, legal action against the platform for violating child lending laws, and loss of operating license.
+
+**2. Immediate Human-in-the-Loop Gate (The Floor)**
+Given the high-stakes, irreversible nature of disbursing funds to a legally ineligible group, **full automation for age verification must be paused.**
+*   **Trigger:** Any application where the extracted birth date indicates an age between 16 and 20, or where the confidence score of the date extraction is below "High" (or if the ID image is flagged as "worn/low quality" by your current lightweight scanner).
+*   **Action:** Route these specific cases to a manual review queue. No funds are disbursed until a human agent visually verifies the birth date against the uploaded image and, if possible, cross-references the name/ID number with the national database via a low-bandwidth text-only query.
+
+**3. Runnable Measurement Plan (One Row Per Harm)**
+*   **Probe Set:** Assemble 50 test images of worn IDs with known birth dates (25 clearly under 18, 25 clearly over 21). Include "positive controls" (images known to fail your current OCR) and "negative controls" (clear images).
+*   **Metric:** False Acceptance Rate (FAR) for minors.
+*   **Threshold:** **Zero tolerance.** Any instance where the automated system approves a known minor without triggering the manual gate is a fail.
+*   **Stop Condition:** If the manual review process cannot clear the queue within 24 hours (threatening your school-term deadline), cap the daily loan volume to match review capacity rather than removing the gate.
+*   **Owner:** Designate one team member as the "Safety Owner" to review every flagged case and log failures daily.
+
+**4. Managing Uncertainty & Disclosure**
+*   **Confidence Tiers:** Do not show users a percentage (e.g., "87% verified"). Instead, use defined tiers:
+    *   *Confirmed:* Clear image, date matches database exactly.
+    *   *Review Required:* Image worn, date ambiguous, or age near threshold.
+    *   *Unverified:* System cannot read date; reject automatically.
+*   **Disclosure:** Inform applicants during the upload step: "For security, some applications require brief manual review of your ID before approval." This manages expectations regarding speed without admitting specific system flaws.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign a specific person to own the "Minor Lending Risk."
+*   **Legal Routing:** You are operating in a regulated domain (lending to minors). **Route immediately to local counsel** to confirm if this specific failure mode violates Kenyan child protection or financial conduct laws. Do not assume the current workaround is compliant.
+*   **Transparency Artifact:** Create a one-page "Model Card" for internal use documenting that the system is known to fail on worn IDs for ages 16–20, and that the manual gate is the primary control. This prevents future teams from assuming the AI is reliable in this area.
+
+**Note:** This plan prioritizes stopping harm over speed; removing the human gate to meet the deadline creates unacceptable legal liability.
+**Note:** Low bandwidth is a constraint, but text-based database checks and human visual inspection of compressed images remain viable alternatives to high-res AI analysis.

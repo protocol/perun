@@ -1,0 +1,30 @@
+**Testing Protocol for Optical Sorting Upgrade**
+
+**1. Test Matrix Design**
+Construct a controlled dataset of 500 representative containers covering the full spectrum of label conditions: pristine, slightly worn (target failure mode), heavily worn, and missing. Pair each container type with three lighting scenarios simulating facility variations: standard fluorescent, low-light dawn/dusk simulation, and high-glare direct exposure. This creates 1,500 unique test permutations without requiring new hardware.
+
+**2. Baseline Throughput Calibration**
+Before error testing, run the conveyor at maximum rated speed with pristine labels under standard lighting. Record the baseline pass rate and cycle time. This establishes the "golden path" performance metric. Any subsequent test that reduces throughput below this baseline indicates a processing bottleneck introduced by the algorithm's decision latency, not just classification errors.
+
+**3. Static Classification Accuracy Phase**
+ Halt the conveyor. Present each of the 1,500 permutations individually to the sensor ten times. Record the classification output (Accept/Reject) for every trial.
+ *   **Metric:** Calculate the False Rejection Rate (FRR) specifically for "slightly worn" labels under each lighting condition.
+ *   **Goal:** Identify if specific lighting angles exacerbate the misidentification of worn labels. If FRR exceeds 2% for slightly worn items in any lighting condition, the current threshold is too aggressive.
+
+**4. Dynamic Throughput Stress Phase**
+Resume conveyor movement at 50%, 75%, and 100% of maximum speed. Run mixed batches containing a known ratio of clean, slightly worn, and truly contaminated items.
+ *   **Method:** Use high-speed external recording (standard smartphone slow-motion is sufficient) to track individual items entering and exiting the sorting zone.
+ *   **Metric:** Compare the system's logged decisions against the video evidence. Focus on "edge cases" where the item is moving fast under suboptimal lighting.
+ *   **Constraint Check:** Verify that the decision time per item does not cause backlog. If the system pauses to process complex visual data from worn labels, throughput will drop, violating the operational constraint.
+
+**5. Threshold Tuning and Validation**
+Based on Phase 3 data, adjust the software's confidence threshold for rejection.
+ *   **Action:** If "slightly worn" items are falsely rejected, lower the rejection confidence requirement slightly or adjust the contrast sensitivity settings in the software configuration.
+ *   **Re-test:** Immediately re-run the top 3 failing scenarios from Phase 3 and the full Phase 4 dynamic test.
+ *   **Acceptance Criteria:** The solution is valid only if the False Rejection Rate for "slightly worn" labels drops below 1% while maintaining 99% rejection of truly contaminated items, with zero degradation to the baseline throughput established in Step 2.
+
+**6. Pre-Audit Simulation**
+Execute a continuous 4-hour run using a randomized mix of all label states and lighting conditions (using portable lights to simulate shifts). Log total volume, false rejects, and false accepts. This provides the statistical confidence interval required for the city audit.
+
+*Note: Ensure all test data is logged with timestamps to correlate errors with specific environmental shifts during the 4-hour simulation.*
+*Do not modify the physical sensor housing; all adjustments must remain within the existing software configuration parameters.*

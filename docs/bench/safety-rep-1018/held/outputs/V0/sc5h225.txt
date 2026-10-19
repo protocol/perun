@@ -1,0 +1,42 @@
+### Pre-Launch Safety Review Plan: Flood-Levee-Stress Analyzer
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, formally record the specific risks of using five-year-old open-source data for current flood prediction:
+*   **Hallucination as Fact:** The model predicts stability based on outdated soil compaction or levee reinforcement data that no longer exists, leading engineers to ignore actual weak points.
+*   **Bias/Exclusion:** Older datasets may lack recent urban development (new drainage, filled wetlands), systematically underestimating risk in newly developed zones.
+*   **Over-Reliance:** Engineers trust the "critical weakness" score without accounting for the data's age, skipping manual site inspections.
+*   **Worst Realistic Case:** A predicted "safe" section breaches during heavy rainfall because the model was unaware of recent erosion or construction changes, causing property damage or loss of life.
+
+**2. Measurement Plan: Stress-Testing Against Outdated Data**
+Do not assert accuracy; measure residual risk using these specific evaluation rows. Each row must include a pass/fail threshold set by your lead engineer.
+
+*   **Probe Set A (Temporal Drift):**
+    *   *Input:* Historical rainfall events from 5+ years ago vs. recent extreme weather patterns not in the training data.
+    *   *Positive Control:* Known breach locations from recent years (post-dataset) fed as "unknown" inputs.
+    *   *Metric:* False Negative Rate (did the model mark a known recent breach as "stable"?).
+    *   *Stop Condition:* Any false negative on a known recent breach blocks launch.
+*   **Probe Set B (Infrastructure Changes):**
+    *   *Input:* Synthetic scenarios simulating construction projects completed after the dataset cutoff.
+    *   *Metric:* Discrepancy between model prediction and hydrological first-principles calculation for those specific zones.
+    *   *Stop Condition:* Discrepancy >15% triggers mandatory manual review of all similar zones.
+*   **Probe Set C (Adversarial/Uncertainty):**
+    *   *Input:* Edge-case rainfall intensities exceeding historical records in the old dataset.
+    *   *Metric:* Model confidence output.
+    *   *Requirement:* The model must **not** output a precise percentage (e.g., "92% safe"). It must output a defined coarse tier: **"Unverified due to data age"** or **"Extrapolated – High Uncertainty."**
+    *   *Stop Condition:* If the model outputs high confidence without an uncertainty flag for out-of-distribution inputs, the confidence scaling logic must be rewritten.
+
+**3. Human-in-the-Loop Gates (Mandatory)**
+Automated execution of high-stakes decisions is prohibited. The following gates are required before any result reaches city officials:
+
+*   **Gate 1: The "Data Age" Warning:** Every output must carry a visible, non-dismissable disclosure stating: *"Prediction based on datasets ending [Year]. Recent infrastructure changes or erosion are not reflected. Validation required."*
+*   **Gate 2: Irreversible Action Block:** The system cannot automatically generate "All Clear" certifications or authorize the closure of floodgates. Any recommendation to *not* inspect a sector must be explicitly signed off by a senior municipal engineer who has reviewed the raw data gaps.
+*   **Gate 3: The "Unknown" Triage:** Any zone flagged by the model as "Unverified" or where the input data conflicts with known recent developments must be routed to a human for physical inspection or updated satellite imagery review before any operational decision is made.
+
+**4. Transparency Artifact (Model Card)**
+Prepare a one-page "Data Limitation Card" to accompany the software. It must list:
+*   **Intended Use:** Preliminary stress identification only; not a final safety certification.
+*   **Data Provenance:** Specific open-source datasets used and their cutoff dates.
+*   **Known Limitations:** Explicit statement that recent construction, land-use changes, and climate shifts post-[Year] are unmodeled.
+*   **Owner:** Name the specific team lead responsible for this version.
+
+**Note:** Do not fabricate a "safety rate" or claim the model is "bias-free"; the use of outdated data makes these claims unverifiable. Route any questions regarding legal liability for missed breaches to municipal counsel immediately.

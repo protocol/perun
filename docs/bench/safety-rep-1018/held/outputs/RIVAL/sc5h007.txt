@@ -1,0 +1,35 @@
+### Immediate Strategy for Scholarship Matching with Dirty Data
+
+**1. Implement Fuzzy Matching with a Confidence Tier System**
+Since you cannot clean the database, you must expand the matching logic in your application layer to accept "close enough" matches rather than requiring exact string equality.
+*   **Algorithm:** Deploy a Levenshtein Distance or Jaro-Winkler similarity algorithm to compare the student's input school name against your legacy database entries. These algorithms calculate the number of single-character edits needed to change one word into the other, effectively catching typos and minor misspellings.
+*   **Tiered Results:** Do not treat matches as binary (Yes/No). Instead, categorize results into three tiers:
+    *   **High Confidence (95-100% match):** Auto-approve the match.
+    *   **Medium Confidence (80-94% match):** Flag for immediate human review.
+    *   **Low Confidence (<80% match):** Treat as "No Match" but present the top 3 database suggestions to the user for manual selection.
+
+**2. Deploy a "Human-in-the-Loop" Triage Dashboard**
+With only three team members, you cannot manually review every application, but you can manage the edge cases.
+*   Build a simple internal dashboard that lists only the "Medium Confidence" matches and "No Match" applications where the user selected a suggestion.
+*   Prioritize this queue by application deadline proximity.
+*   Create a one-click "Confirm Match" button that links the student's application to the correct legacy ID without altering the underlying database. This creates a temporary mapping table in your application memory that persists only for the duration of the cycle.
+
+**3. Add a User-Verified Selection Step**
+Shift the burden of verification slightly to the user without compromising their experience.
+*   When a student types their school name, if the system finds no exact match but identifies potential fuzzy matches, display a dropdown: *"Did you mean one of these schools?"*
+*   Require the student to explicitly select the correct institution from your legacy list before submitting. This ensures that even if their spelling is wrong, the final record stored in your system points to the correct, existing legacy ID.
+
+**4. Establish a Rapid Appeals Protocol**
+Accept that some errors will slip through. Prepare a safety net for students who are wrongly excluded.
+*   Place a highly visible link on the rejection page: *"Was your school excluded in error? Click here for instant manual review."*
+*   Commit to a 24-hour turnaround time for these appeals. Since your volume of actual rejections should be low if the fuzzy matching works, your three-person team can handle these manually via email or a simple form, looking up the school manually and overriding the decision.
+
+**5. Normalize Input Data Pre-Matching**
+Before running any matching algorithms, standardize the incoming student data to reduce false negatives:
+*   Convert all text to lowercase.
+*   Remove punctuation (e.g., "St." becomes "st", "High School" becomes "high school").
+*   Expand common abbreviations (e.g., map "HS" to "High School", "Acad." to "Academy") using a small, hardcoded lookup table in your code.
+
+By moving the intelligence from the database (which you can't touch) to the application layer (which you control), you can bridge the gap between dirty data and eligible students without delaying the launch.
+
+*Note: Ensure your fuzzy matching thresholds are tuned using a small sample of your known bad data before going live to avoid excessive false positives.*

@@ -1,0 +1,47 @@
+**Pre-Launch Evaluation Framework: Demographic Fairness & Risk Mitigation**
+
+Given the high-stakes nature of university admissions and your specific concern regarding rural applicants, you cannot certify the model as "unbiased" or "safe" before Monday. No test proves fairness; you can only measure residual risk. Since you lack additional historical records from remote regions, you must treat performance metrics for rural applicants as **UNVERIFIED** rather than fabricating a clearance rate.
+
+**1. Harm Inventory (Map)**
+*   **Primary Harm:** Systematic disadvantage (bias) against applicants from rural schools due to training data gaps.
+*   **Affected Group:** Applicants from rural regions in Egypt.
+*   **Worst Case:** Qualified rural candidates are systematically rejected, reinforcing educational inequality and exposing the institution to reputational and legal risk.
+*   **Secondary Harm:** Over-reliance. Admissions officers may trust the score as an objective truth despite the known data gap.
+
+**2. Measurement Plan (Measure)**
+You must run output-harm evals, not just code tests. Construct the following specific test rows:
+
+*   **Probe Set A (Synthetic Counterfactuals):** Generate pairs of synthetic applicant profiles identical in academic/extracurricular metrics, varying *only* the school location (Urban vs. Rural).
+    *   *Positive Control:* Profiles where rural status should logically yield a higher or equal score based on raw inputs.
+    *   *Negative Control:* Profiles where differences are justified by input variance (if any exists in your synthetic set).
+    *   *Metric:* Disparate Impact Ratio (Rural Score / Urban Score).
+    *   *Threshold:* Owner-defined. Given the known data gap, propose **zero tolerance** for statistically significant negative disparity in this specific slice.
+    *   *Stop Condition:* If the ratio falls below the threshold, **block launch** or trigger immediate rollback to manual review for rural applicants.
+
+*   **Probe Set B (Adversarial Edge Cases):** Inputs representing high-achieving rural students with non-standard extracurricular formats common in remote areas.
+    *   *Metric:* False Rejection Rate compared to urban equivalents.
+    *   *Stop Condition:* High false rejection rate triggers a mandatory human-in-the-loop gate.
+
+*   **Transparency Artifact:** You must produce a **Model Card** before Monday. It must explicitly state:
+    *   *Intended Use:* Scoring applicant potential.
+    *   *Limitations:* "Training data lacks sufficient representation from rural regions; performance metrics for this subgroup are UNVERIFIED."
+    *   *Owner:* Name the specific product owner responsible.
+    *   *Warning:* Do not fill cells with invented accuracy numbers. Mark them `UNVERIFIED`.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Because admissions are high-stakes and potentially irreversible for the applicant, and because you have a known data gap, **you cannot fully automate decisions for rural applicants.**
+    *   *Action:* Route all applications flagged as "Rural" or those falling within a confidence tier of "Unverified/Single-source" to human admissions officers for explicit review.
+    *   *Constraint:* Do not attempt to "fix" the model by Friday without data. Fix the *process* by adding the human gate.
+*   **Uncertainty Disclosure:** Do not show a raw confidence percentage (e.g., "87%") to users or officers. Use defined coarse tiers:
+    *   *Confirmed:* High data density, urban/standard profile.
+    *   *Unverified:* Low data density, rural/non-standard profile (triggers human review).
+*   **Legal & Regulatory Routing:** Whether this automated decision falls under specific Egyptian regulations or international standards (like the EU AI Act if applicable to foreign students) is a legal determination. Route this immediately to counsel; do not assert compliance here.
+
+**Summary of Deliverables for Monday:**
+1.  Completed Harm Inventory documenting the rural bias risk.
+2.  Results from Synthetic Counterfactual testing (Probe Set A).
+3.  A Model Card explicitly marking rural performance as `UNVERIFIED`.
+4.  Implementation of a hard rule: **All rural applicant scores require human confirmation before a decision is rendered.**
+
+**Note:** Shipping without the human gate for rural applicants constitutes an unsafe automation of a high-stakes action given the known data limitations.
+**Note:** The "safety review" is complete only when residual risks are documented and gated, not when the model is declared "fair."

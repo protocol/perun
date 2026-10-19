@@ -1,0 +1,51 @@
+# Pre-Launch Safety Protocol: Voice-Activated Fund Transfer
+
+**Objective:** Validate recipient identification accuracy under name ambiguity constraints without delaying the holiday launch.
+
+### I. Data Preparation & Environment Setup
+1.  **Synthetic Contact List Creation:** Populate staging test accounts with high-risk ambiguity datasets:
+    *   **Exact Duplicates:** Two contacts named "John Smith" with different account numbers.
+    *   **Phonetic Matches:** "Sean Connery" vs. "Shawn Connery"; "Knight" vs. "Night".
+    *   **Prefix/Suffix Variations:** "Mike Ross" vs. "Michael Ross Jr."; "Dr. Sarah Lee" vs. "Sarah Lee".
+    *   **Common Names:** Multiple entries for "Maria Garcia" or "James Wilson".
+2.  **Target Account Verification:** Ensure all synthetic destination accounts are internal staging accounts with zero balances to prevent accidental loss, even in a "late staging" environment.
+
+### II. Manual Validation Checklist (QA Execution)
+*Execute the following test cases using voice commands only. Do not use manual dropdown selection.*
+
+**Category A: Exact Name Collisions**
+*   [ ] **Test 1:** Command: "Transfer $10 to John Smith."
+    *   *Pass Criteria:* System halts and asks, "I found multiple contacts named John Smith. Which one did you mean: John Smith ending in 1234 or John Smith ending in 5678?"
+*   [ ] **Test 2:** Command: "Transfer $10 to the first John Smith."
+    *   *Pass Criteria:* System confirms the specific account number associated with the "first" entry before executing.
+
+**Category B: Phonetic & Spelling Ambiguity**
+*   [ ] **Test 3:** Command: "Transfer $10 to Sean Connery." (Where "Shawn Connery" also exists).
+    *   *Pass Criteria:* System reads back the full name and last 4 digits of the account number: "Sending to Sean Connery, account ending 9988. Confirm?"
+*   [ ] **Test 4:** Command: "Transfer $10 to Mike Ross." (Where "Michael Ross" exists).
+    *   *Pass Criteria:* System distinguishes based on exact stored name or requests clarification if confidence is below threshold.
+
+**Category C: Contextual Disambiguation**
+*   [ ] **Test 5:** Command: "Transfer $10 to my brother John." (Where "John Smith" is tagged as 'Brother' and "John Doe" is tagged as 'Colleague').
+    *   *Pass Criteria:* System prioritizes the contact with the matching relationship tag.
+*   [ ] **Test 6:** Command: "Transfer $10 to John Smith the plumber." (Where one John Smith has "Plumber" in notes/company field).
+    *   *Pass Criteria:* System utilizes metadata to filter or asks for confirmation.
+
+**Category D: Negative Controls & Error Handling**
+*   [ ] **Test 7:** Command: "Transfer $10 to Bob Jones." (Where no contact exists, but a similar name "Rob Jones" exists).
+    *   *Pass Criteria:* System states, "I couldn't find Bob Jones. Did you mean Rob Jones?" and waits for explicit confirmation before proceeding.
+*   [ ] **Test 8:** Command: "Transfer $10 to Smith." (Ambiguous last name only).
+    *   *Pass Criteria:* System rejects the command as too vague, listing potential matches rather than guessing.
+
+### III. Go/No-Go Decision Matrix
+*   **GREEN LIGHT:** All tests in Categories A, B, and C result in explicit clarification or precise matching. No funds move without verbal confirmation of the last 4 digits of the account number.
+*   **RED LIGHT:** Any test results in an immediate transfer to the wrong account without an intermediate clarification step.
+*   **MITIGATION:** If any "RED LIGHT" scenario occurs, enable a mandatory "Read-Back" feature for all transfers over $0.00 until the algorithm is tuned, requiring the user to say "Confirm" after hearing the account number.
+
+### IV. Deployment Guardrails
+1.  **Transaction Limits:** Cap voice-initiated transfers at $500 for the first 48 hours post-launch.
+2.  **Audit Trail:** Log every voice command, the system's confidence score, the selected account, and the user's verbal confirmation for immediate review.
+3.  **Kill Switch:** Prepare an immediate toggle to disable voice transfers while retaining read-only voice balance checks if error rates exceed 0.1%.
+
+Note: This protocol assumes the "late staging" environment mirrors production data structures regarding contact storage.
+Ensure QA testers use varied accents and speech patterns during execution to validate phonetic matching robustness.

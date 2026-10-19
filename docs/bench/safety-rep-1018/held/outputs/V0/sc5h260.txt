@@ -1,0 +1,32 @@
+**Pre-Launch Monitoring Plan: Dynamic Price Anomaly Dashboard**
+
+Given the contractual constraint preventing algorithmic changes to location weighting, the monitoring plan must function as an external safety layer that detects and flags excessive pricing without altering the core engine. The dashboard will operate on a "detect-and-alert" model, triggering human intervention when automated pricing deviates from established market baselines.
+
+**Dashboard View Specifications**
+
+1.  **Real-Time Price Deviation Gauge**
+    *   **Metric:** Percentage difference between the engine's generated rate and the rolling 24-hour regional average for the same vehicle class.
+    *   **Visualization:** A color-coded gauge per vehicle category. Green indicates <10% deviation; Yellow indicates 10–25%; Red indicates >25%.
+    *   **Data Source:** Ingested stream of your engine's output prices vs. a static or slowly updated lookup table of "reasonable market limits" derived from historical non-peak data or competitor benchmarks (since you cannot alter the weighting factors, you must define the baseline externally).
+
+2.  **Geospatial Heatmap of "High-Risk" Zones**
+    *   **Metric:** Count of transactions where the price deviation exceeds the Red threshold (>25%), clustered by geohash.
+    *   **Visualization:** A map of Sydney overlaying your "high-tourist zones." Areas with concentrated red alerts will pulse.
+    *   **Purpose:** Specifically targets the identified failure mode of price-gouging in tourist zones. This allows the operations team to see if the "exorbitant rates" are isolated incidents or systemic across a specific zone.
+
+3.  **Alert Feed & Action Log**
+    *   **Content:** Real-time list of triggered events containing: Transaction ID, Vehicle Type, Location, Generated Price, Regional Average, and Deviation %.
+    *   **Action Column:** A mandatory "Status" dropdown for the operations team (e.g., "Investigating," "Manual Override Applied," "False Positive").
+    *   **Stop Condition:** If >5% of transactions in any single hour trigger a Red alert, the dashboard displays a global "CRITICAL" banner recommending an immediate manual pause of dynamic pricing for affected zones.
+
+**Implementation Steps for Two-Week Launch**
+
+*   **Day 1-3: Baseline Definition.** Since you cannot change the algorithm, your team must manually define the "Regional Average" and "Reasonable Market Limits" using historical data from periods *before* the new weighting factors were applied or using competitor scrapes. This baseline is the yardstick for the dashboard.
+*   **Day 4-10: Dashboard Construction.** Build the visualization layer to ingest the pricing engine's output logs. Configure the threshold logic (e.g., `IF (Engine_Price - Baseline_Price) / Baseline_Price > 0.25 THEN ALERT`).
+*   **Day 11-14: Simulation & Dry Run.** Feed historical "gouging" scenarios into the system to verify the dashboard triggers correctly. Ensure the operations team practices the "Manual Override" workflow, as the system itself cannot auto-correct due to your contractual constraints.
+
+**Operational Protocol**
+The dashboard does not fix the price; it exposes the harm. When a Red alert fires, the operations team must have the authority to manually contact the customer or issue a refund/credit post-transaction, as the code cannot be changed to prevent the charge upfront. This satisfies the need for immediate detection while respecting the rigidity of the data provider contract.
+
+*Note: This plan treats the symptom (excessive price) via monitoring because the root cause (location weighting) is contractually locked. Long-term resolution requires renegotiating the data provider terms.*
+*Ensure the "Regional Average" baseline is updated weekly to prevent drift as market conditions change naturally.*

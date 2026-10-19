@@ -1,0 +1,32 @@
+# Validation Plan: Signature Matching Error Rate & Manual Review Triggers
+
+**Objective:** Quantify false-positive rates (wrongful purging) caused by minor signature variations and define a confidence threshold for mandatory manual review before primary voting.
+
+### 1. Test Data Construction
+Since live voter data cannot be risked, construct a synthetic test set mirroring the production database structure:
+*   **Baseline Set:** 500 digitized signatures from previous election records (stored as "historical truth").
+*   **Variation Set A (Natural Drift):** 500 signatures from the same individuals captured under varying conditions (different stylus pressure, angles, speeds, and times of day) to simulate legitimate natural variation.
+*   **Variation Set B (Stress Cases):** 200 signatures with intentional minor distortions (tremors, rushed signing, partial occlusion) to represent borderline cases.
+*   **Negative Control:** 100 signatures from different individuals to ensure the system still rejects clear mismatches.
+
+### 2. Execution Protocol
+Run the existing signature matching engine against these datasets in an isolated staging environment that mirrors production hardware latency.
+*   **Test Run 1 (Baseline vs. Natural Drift):** Pair every "Baseline" signature with its corresponding "Natural Drift" variants.
+    *   *Expected Outcome:* Match/Verify.
+    *   *Failure Condition:* The system flags the pair as a mismatch and triggers a "purge" or "rejection" action. This is a **False Positive**.
+*   **Test Run 2 (Stress Cases):** Pair "Baseline" with "Stress Cases."
+    *   *Goal:* Identify the breaking point where valid signatures are rejected.
+*   **Test Run 3 (Negative Control):** Ensure the system correctly identifies non-matches to prevent establishing a threshold so low it accepts impostors.
+
+### 3. Metrics & Analysis
+Calculate the **False Positive Rate (FPR)** specifically for the "Natural Drift" set.
+*   *Formula:* (Number of Valid Signatures Wrongly Rejected) / (Total Valid Variation Tests).
+*   **Threshold Determination:** Plot the system's internal confidence scores against the pass/fail results. Identify the confidence score where the FPR exceeds an acceptable risk tolerance (e.g., 0.1% or 1 in 1,000 voters).
+*   **Manual Review Trigger:** Set the manual review threshold slightly above this breaking point. Any signature match scoring below this new threshold must route to a human reviewer rather than auto-purging or auto-rejecting.
+
+### 4. Operational Recommendation
+*   **Immediate Action:** Disable automatic "purging" of voters based solely on signature mismatch until the manual review workflow is integrated.
+*   **Workflow Change:** Implement a "Soft Fail" state. If the signature match confidence falls below the newly established threshold, the kiosk should prompt: *"Signature verification requires additional confirmation. Please contact a poll worker."*
+*   **Documentation:** Log all "Soft Fail" instances with the confidence score and the image pair for post-election auditing and engine tuning.
+
+**Note:** Given the hard deadline and inability to replace the engine, this "Soft Fail" approach mitigates wrongful purging without requiring code changes to the matching algorithm itself. Ensure all testing uses only synthetic or explicitly consented data to maintain voter privacy compliance.

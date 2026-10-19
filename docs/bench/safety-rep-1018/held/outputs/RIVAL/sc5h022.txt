@@ -1,0 +1,19 @@
+### Disaster-Relief Chatbot Data Sync Review & Contingency Plan
+
+**1. Immediate Data Synchronization Logic Review (Days 1–2)**
+Since you cannot add infrastructure, focus on optimizing existing data flows and adding defensive logic to the bot's decision engine:
+
+*   **Implement "Staleness Checks":** Modify the bot's logic to compare the timestamp of the last shelter update against a strict threshold (e.g., 15 minutes). If data is older than this threshold, the bot must **not** recommend that specific shelter as "available." Instead, it should label the status as "Unverified – Contact Directly."
+*   **Hard-Code Fallback Prioritization:** Create a static, manually verified list of primary shelters known for high reliability. Program the bot to prioritize these locations in its ranking algorithm, even if dynamic data suggests smaller, less reliable sites have marginally higher capacity.
+*   **Simulate Lag Scenarios:** With your four developers, run manual "crisis simulations" where you artificially delay the data feed inputs. Observe if the bot still directs users to full locations. Adjust the weighting of "last updated" timestamps until the bot refuses to send users to stale data points.
+*   **Client-Side Caching Audit:** Ensure the bot isn't caching old capacity numbers on the user's device or intermediate layers. Force a "no-cache" header on all shelter data requests to ensure the freshest possible pull from your limited server.
+
+**2. Contingency Protocol for Outdated Information (Day 3)**
+Prepare a human-in-the-loop safety net for when the automated system fails:
+
+*   **The "Verify Before You Go" Disclaimer:** Update the bot's standard response for any shelter recommendation to include a mandatory warning: *"Capacity data may be delayed due to emergency conditions. Please call [Shelter Phone Number] or check the official website before traveling."* Include the direct phone number for every recommended location.
+*   **Escalation to Human Operators:** Establish a simple protocol where if the bot detects high uncertainty (e.g., multiple shelters reporting conflicting data or no updates for >30 mins), it triggers a fallback message: *"Our automated data is currently unstable. Please contact the Northwind Relief Hotline at [Number] for real-time assistance."* Ensure your team has a rotating shift schedule to man this hotline during peak storm hours.
+*   **Post-Deployment Monitoring:** Assign one developer to monitor server logs and user feedback channels continuously during the storm season. If reports of users arriving at full shelters spike, be prepared to temporarily disable automated recommendations for affected regions and revert to a static list of confirmed open shelters.
+*   **Communication Strategy:** Proactively inform partner shelters and local authorities that the bot's data may have latency. Provide them with a direct line to report immediate closures so your team can manually override the bot's database for critical locations.
+
+**Note:** This plan relies entirely on logic changes and procedural safeguards, requiring no new cloud resources. Prioritize the "staleness check" implementation first, as it offers the highest risk reduction for minimal effort.

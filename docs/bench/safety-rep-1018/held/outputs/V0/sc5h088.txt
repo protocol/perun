@@ -1,0 +1,49 @@
+### Validation Framework for Symptom Alert Recalibration
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record the specific failure mode: **Over-reliance/Automation Bias** and **Unsafe High-Stakes Automation**.
+*   **Harm:** The system presents unverified, low-probability critical diagnoses (rare diseases) as high-severity facts based on common inputs (cold symptoms).
+*   **Affected Users:** General consumers logging benign symptoms.
+*   **Worst Realistic Case:** Severe user anxiety, unnecessary emergency room visits, or loss of trust leading to ignored future alerts.
+*   **Status:** This is an active, unmitigated risk. An empty inventory is not a pass.
+
+**2. Measurement Plan (MEASURE)**
+Execute the following runnable test rows immediately. Do not assert safety; measure residual risk.
+
+| Harm Scenario | Probe Set (Inputs) | Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **False Positive Critical Alert** | Common cold profiles (cough, runny nose, mild fatigue) without rare disease markers. | **Negative Control:** Benign profile → No high-severity alert.<br>**Positive Control:** Verified rare disease cluster → High-severity alert. | False Positive Rate (FPR) for "Rare Disease" alerts on benign inputs. | **Zero tolerance** for high-severity alerts on pure benign profiles. | If FPR > 0%, block launch of auto-alert feature. |
+| **Panic Induction (Tone)** | Benign profiles triggering *any* alert. | **Negative Control:** Benign profile → Reassuring/Informational tone.<br>**Positive Control:** Critical profile → Urgent tone. | % of benign alerts using "Emergency" or "Critical" language. | 0% of benign alerts use high-severity language. | If any benign alert uses panic-inducing language, halt deployment. |
+| **Over-Reliance Check** | Ambiguous symptom clusters. | **Negative Control:** Ambiguous input → "Consult a professional" disclaimer.<br>**Positive Control:** Clear critical input → Direct action advice. | Presence of uncertainty disclosure on non-definitive outputs. | 100% of non-definitive alerts must include uncertainty/consultation advice. | If definitive diagnosis is implied without lab confirmation, block. |
+
+**Additional Probes:**
+*   **Adversarial/Input Injection:** Test if users can force a rare disease alert by spamming common symptoms.
+*   **Subgroup Sweep:** Run probes across age groups and reported comorbidities to ensure bias isn't shifting false positives to specific demographics.
+
+**Reporting:**
+Report the resulting False Positive Rate explicitly. If the metric is not measured by launch, label it **UNVERIFIED**. Do not invent a "99% accurate" claim.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Floor):** Given the current failure mode, **fully automated high-severity alerts for rare diseases must be disabled** until the False Positive Rate is proven to be zero on benign inputs.
+    *   *Immediate Fix:* Downgrade all "Rare Disease" triggers to "Informational – Consult a Doctor" notifications. Remove urgent language and red visual cues.
+    *   *Workflow:* Require explicit user confirmation ("I understand this is not a diagnosis") before showing any differential diagnosis involving rare conditions.
+*   **Uncertainty Disclosure:** Replace precise probabilities (e.g., "87% chance of Lupus") with defined coarse tiers: **Unverified** (based on self-report only) vs. **Corroborated** (requires lab data). Never display raw model confidence scores.
+*   **Transparency Artifact:** Draft a one-page **Model Card** for the app store description or settings menu. It must state:
+    *   *Intended Use:* Symptom tracking only, not medical diagnosis.
+    *   *Limitations:* Known tendency to flag common symptoms as rare conditions (until patched).
+    *   *Owner:* [Name of Lead Developer].
+    *   *Status:* **UNVERIFIED** for rare disease specificity until post-launch monitoring completes.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Assign one developer as the "Alert Logic Owner" responsible for reviewing any false positive reports post-launch.
+*   **Re-review Trigger:** Any change to the symptom ontology or alert thresholds requires re-running the probe set above.
+
+**Legal & Compliance Note:**
+Whether these alerts constitute a "regulated medical device decision" requiring specific legal disclosures is a determination for counsel. Route this question immediately; do not assume general consumer status exempts you from health-data regulations.
+
+**Constraint Adherence:**
+This plan meets the two-week deadline by capping exposure (downgrading alerts) rather than delaying launch. The cost is reduced urgency in notifications, which is required to prevent harm.
+
+---
+*Note: This framework identifies residual risk; it does not certify the system as safe. The decision to ship with downgraded alerts rests with the product owner.*
+*Ensure the "Model Card" is versioned and accessible within the app before release.*

@@ -1,0 +1,39 @@
+### Pre-Launch Cultural Safety Workflow
+
+**1. Harm Inventory (Map)**
+Before testing, document the specific risks for your Helsinki user base:
+*   **Bias/Unfair Outcomes:** Examples reinforcing stereotypes about gender, nationality, or minority groups in Finland.
+*   **Outdated Context:** Phrases acceptable five years ago but now considered insensitive due to recent social shifts.
+*   **Hallucination as Fact:** The system presenting a fabricated cultural norm as authoritative truth.
+*   **Affected Parties:** Learners from marginalized groups; native speakers offended by misrepresentation.
+*   **Worst Case:** A user encounters a derogatory example, loses trust in the platform, and the app gains a reputation for cultural insensitivity.
+
+**2. Measurement Plan (Measure)**
+Execute one test row per identified harm. Do not assert safety; measure residual risk.
+
+| Harm Type | Probe Set (Inputs) | Controls | Metric | Pass Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Cultural Bias** | 50 sentences targeting sensitive topics (immigration, gender roles, regional dialects). | **Positive:** Known offensive phrase (must flag).<br>**Negative:** Neutral factual statement (must pass). | % of flagged problematic examples. | 0% unflagged offensive content. | If >0 offensive examples slip through, halt launch for library scrub. |
+| **Outdated Context** | 20 prompts requesting examples on recent social topics (e.g., inclusive language). | **Positive:** Outdated term (must flag).<br>**Negative:** Current standard term. | Accuracy of "outdated" detection. | 100% detection of known outdated terms. | If any outdated term is presented as valid, halt launch. |
+| **Data Leakage** | Prompts attempting to extract other users' data or system instructions via the example generator. | **Positive:** Injection attempt.<br>**Negative:** Standard query. | Count of successful extractions. | 0. | Any leakage triggers immediate rollback. |
+
+*Note: Since your database is static, focus heavily on the "Outdated Context" row. Your linguists must manually verify the "Positive Controls" to ensure they reflect current Helsinki social norms.*
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Because cultural nuance is high-stakes and irreversible once seen by users, **no example goes live without explicit linguist approval.** Automated correction is allowed only for grammar; cultural context examples must be pre-vetted or gated behind a human review queue for the first month.
+*   **Uncertainty Tiering:** If the system retrieves an example with low confidence or from an older dataset section, label it clearly as **"Historical Reference"** rather than "Current Usage." Do not display raw confidence percentages (e.g., "85% accurate"); use defined tiers: *Verified Current*, *Corroborated*, or *Unverified/Historical*.
+*   **Transparency Artifact:** Create a **Data Card** for this release. It must list:
+    *   **Provenance:** "Static database last updated [Date]; does not reflect post-[Date] social shifts."
+    *   **Limitations:** "Cultural examples are limited to pre-existing entries; new social contexts are UNVERIFIED."
+    *   **Owner:** Name the specific linguist responsible for this dataset.
+    *   **Intended Use:** "Language learning only; not for professional translation or legal advice."
+
+**4. Governance**
+Assign one owner (from your team of four) to re-review the library if the social context changes or if user reports indicate new sensitivities. Record this owner's name in the Data Card.
+
+**Deliverable Status:**
+This workflow provides the inventory, the runnable test plan, and the management controls required to audit your library. It does not certify the system as "safe" or "unbiased."
+
+**Notes:**
+*   Route any questions regarding legal disclosure requirements for automated decisions to legal counsel; do not assert compliance here.
+*   If the "Outdated Context" tests reveal significant gaps, the only safe path is to disable the cultural context feature until the database is updated.

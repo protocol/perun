@@ -1,0 +1,44 @@
+# Risk Mitigation Plan: Alert Classification & Privacy Protection
+
+## Immediate Containment (Pre-Testing)
+1.  **Disable Employer Notifications:** Immediately suspend all external notifications to employers via your legacy infrastructure's configuration switch or feature flag. If no switch exists, temporarily route all alerts to an internal "quarantine" email address monitored only by your clinical safety lead.
+2.  **Manual Triage Protocol:** Until automated testing is complete, require human review of any entry flagged as "crisis" before any external party is contacted.
+
+## Testing Protocol: Classification Verification
+
+### Phase 1: Dataset Curation
+Create two distinct datasets of journal entries (10 entries each) to serve as your ground truth:
+*   **Set A (False Positives - Mild Stress):** Entries containing phrases like "overwhelmed by deadlines," "difficult meeting with boss," "tired of this project," or "need a break." These must **not** trigger external alerts.
+*   **Set B (True Positives - Genuine Crisis):** Entries containing explicit indicators of self-harm, suicide ideation, immediate danger to others, or severe dissociation (e.g., "I can't go on," "planning to end it," "hearing voices telling me to hurt someone"). These **must** trigger alerts.
+
+*Note: Use synthetic data only. Do not use real user data for testing.*
+
+### Phase 2: Execution Steps
+1.  **Isolate the Environment:** Ensure your test environment is disconnected from the live production database to prevent accidental leakage of test data.
+2.  **Run Set A (Stress Tests):**
+    *   Input each entry from Set A into the system.
+    *   **Pass Criteria:** The system logs the entry internally but generates **zero** external notifications.
+    *   **Failure Action:** If an alert is generated, tag the specific trigger phrase and lower the sensitivity threshold for "work-related" keywords in your classification logic.
+3.  **Run Set B (Crisis Tests):**
+    *   Input each entry from Set B into the system.
+    *   **Pass Criteria:** The system generates an immediate alert to the designated internal safety channel (not yet employers).
+    *   **Failure Action:** If no alert is generated, review the keyword weighting for severity indicators.
+4.  **Boundary Testing:** Test ambiguous entries (e.g., "I'm stressed enough to quit") to ensure they default to privacy (no alert) rather than false positive.
+
+### Phase 3: Legacy Infrastructure Workaround
+Since modifying the recipient list is difficult:
+*   **Interception Layer:** Implement a lightweight middleware script between your detection engine and the legacy notification sender. This script will inspect the "severity score" of the alert.
+    *   If `severity == LOW/MEDIUM` (Work Stress): Block the payload from reaching the legacy sender. Log internally only.
+    *   If `severity == CRITICAL` (Genuine Crisis): Allow the payload to pass to the legacy sender, but initially route it only to your internal clinical team, not employers.
+*   **Hard-Coded Block:** As a failsafe within the legacy config, replace the employer distribution list with a single internal safety officer's email address until the classification model achieves 100% accuracy on Set A.
+
+### Phase 4: Validation & Sign-off
+*   **Success Metric:** 0% false positive rate on Set A; 100% detection rate on Set B.
+*   **Documentation:** Record the specific keywords that previously caused false positives and the logic updates applied to neutralize them.
+*   **Go/No-Go Decision:** Do not re-enable employer notifications until three consecutive successful test runs occur with zero false positives.
+
+## Critical Constraints & Next Steps
+*   **Ethical Boundary:** Under no circumstances should employers be notified of mild stress. This violates user trust and potentially labor laws.
+*   **Technical Debt:** Treat the legacy infrastructure workaround as a temporary patch. Prioritize refactoring the notification module as your first engineering sprint post-beta.
+
+*Note: This plan assumes you have control over the classification logic thresholds. If the classification model is a third-party black box, you must implement the interception layer strictly based on the output confidence scores.*

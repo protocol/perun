@@ -1,0 +1,45 @@
+**Testing Strategy: Preventing Accidental Door Locking**
+
+**1. Harm Inventory & Worst-Case Definition**
+Before testing, explicitly record the primary harm: **Unsafe Automation of Irreversible Actions**. The feature executes a physical constraint (locking doors) that is hard to reverse immediately.
+*   **Affected Group:** Passengers in vaguely defined "high-risk" zones, specifically those in safe neighborhoods misidentified as high-risk.
+*   **Worst Realistic Case:** A passenger feels threatened inside the vehicle (e.g., by the driver) or experiences a medical emergency, attempts to exit, finds the doors locked due to a geofence error, and cannot escape quickly. This transforms a safety feature into a trap.
+
+**2. Measurement Plan: One Test Row Per Harm**
+Do not rely on aggregate accuracy. Execute the following specific probe sets to measure entrapment risk.
+
+*   **Probe Set A: False Positive Geofence Sweep**
+    *   **Inputs:** GPS traces from 50 known safe neighborhoods adjacent to flagged high-risk zones during late-night hours.
+    *   **Positive Control (Known Bad):** A trace entering a verified high-risk zone; expected result is door lock.
+    *   **Negative Control (Known Good):** A trace in a verified low-risk zone far from boundaries; expected result is no lock.
+    *   **Metric:** False Lock Rate (percentage of safe-zone traces triggering a lock).
+    *   **Pass Threshold:** Owner-defined. Given the irreversible nature, propose **zero tolerance** for false locks in safe zones until a human gate is added.
+    *   **Stop Condition:** If *any* false lock occurs in a safe zone during testing, block launch immediately.
+    *   **Reviewer:** Product Owner + Safety Lead.
+
+*   **Probe Set B: Boundary Fuzziness Stress Test**
+    *   **Inputs:** GPS traces oscillating across the vague boundary line (entering/exiting repeatedly) to simulate signal drift.
+    *   **Metric:** Lock/Unlock Chatter Frequency and Latency to Unlock.
+    *   **Pass Threshold:** Unlock must occur within 2 seconds of exiting the zone; no more than 1 unnecessary lock/unlock cycle per boundary crossing.
+    *   **Stop Condition:** If unlock latency exceeds 2 seconds or chatter causes passenger confusion, block launch.
+
+*   **Probe Set C: Emergency Override Verification**
+    *   **Inputs:** Simulated "panic" inputs (e.g., rapid door handle pulls, app-based emergency button) while the geofence is active.
+    *   **Metric:** Time-to-Unlock from emergency trigger.
+    *   **Pass Threshold:** Immediate unlock (<1 second) regardless of geofence status.
+    *   **Stop Condition:** If the door remains locked during an emergency trigger, block launch.
+
+**3. Management Controls & Residual Risk**
+*   **Human-in-the-Loop Gate:** Because locking doors is a high-stakes, irreversible action, **full autonomous execution is the failure mode.** Until geofence precision is proven, the feature must require explicit passenger confirmation via the app before locking, or provide an immediate, one-touch manual override inside the car that bypasses the geofence logic entirely.
+*   **Uncertainty Display:** Do not present a false precision (e.g., "98% safe zone"). Instead, define coarse tiers for zone confidence: **Confirmed High-Risk** (locks enabled), **Unverified/Borderline** (locks disabled by default), and **Confirmed Safe** (locks disabled).
+*   **Residual Risk Reporting:** If the false lock rate is not zero after testing, report it as **UNVERIFIED** for safety claims. Do not invent a "safe enough" percentage.
+
+**4. Transparency Artifact**
+Prepare a **Model/Data Card** for this feature before launch. It must list:
+*   **Intended Use:** Late-night safety enhancement.
+*   **Limitations:** Vague boundary definitions leading to potential false locks in safe areas.
+*   **Measured Performance:** False lock rates by neighborhood segment (not just aggregate).
+*   **Owner:** Name the specific individual responsible for reviewing lock events.
+
+**Note:** Legal counsel must review whether automatic locking constitutes a regulated automated decision requiring specific disclosures under local laws.
+**Note:** If the three-week deadline prevents achieving a zero false-lock rate, the constraint to move is the launch date or the scope of automation, not the safety gate.

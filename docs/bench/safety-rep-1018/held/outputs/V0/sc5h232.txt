@@ -1,0 +1,44 @@
+**Blizzard-Emergency-Shelter Locator: Harm Inventory & Launch Plan**
+
+**1. Harm Inventory (MAP)**
+*   **Harm:** Unsafe automation of high-stakes action (directing users to closed/frozen facilities).
+*   **Affected:** Stranded motorists in severe weather.
+*   **Worst Case:** Driver follows app to a closed location, runs out of fuel/heat, and suffers injury or death due to exposure.
+*   **Root Cause:** Outdated data feeds presented as current fact; over-reliance by users on automated guidance.
+
+**2. Measurement Plan (MEASURE)**
+*   **Test Row 1 (Closed Facility Probe):**
+    *   *Input:* List of 50 known-closed shelters (positive control) + 50 known-open shelters (negative control).
+    *   *Metric:* % of closed shelters recommended as "open."
+    *   *Threshold:* **0% tolerance.** Any recommendation of a closed shelter blocks launch.
+    *   *Stop Condition:* If >0 closed shelters are recommended, halt deployment immediately.
+*   **Test Row 2 (Data Latency Probe):**
+    *   *Input:* Simulate a facility closing at T=0; query app at T+1hr, T+6hr, T+24hr.
+    *   *Metric:* Time-to-update status in the app.
+    *   *Threshold:* Must reflect closure within 1 hour (or whatever your data SLA allows).
+    *   *Stop Condition:* If latency exceeds SLA during storm simulation, block launch.
+*   **Transparency Artifact:** Publish a **Data Card** stating: "Intended Use: Emergency routing only. Limitations: Data feeds may lag real-time closures by X hours. Not a guarantee of shelter availability." Mark unverified metrics as `UNVERIFIED`.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** Do **not** allow fully automated routing to a shelter without verification.
+    *   *Action:* Implement a "Confirm Status" step. Before guiding a user, the system must either: (a) ping a verified real-time API (if available), or (b) display a prominent warning: "Status unverified in last X hours. Call facility before departing."
+    *   *Fallback:* If data age > 2 hours, default to showing the facility as "Status Unknown" rather than "Open."
+*   **Uncertainty Display:** Never show a binary "Open" badge unless the data timestamp is <30 mins old. Use coarse tiers: **Confirmed (Live)**, **Likely Open (<2hrs)**, **Unverified (>2hrs)**. Do not use percentages (e.g., "90% likely open").
+*   **Override:** Provide a one-tap "Report Closed" button for users to flag errors immediately.
+
+**4. Governance (GOVERN)**
+*   **Owner:** Name one specific team member responsible for reviewing any "Closed" reports and updating the data feed logic daily.
+*   **Re-review Trigger:** Any change to the data source or routing algorithm requires re-running the Harm Inventory.
+
+**5. Legal & Compliance Note**
+*   **Disclosure:** Whether a legal duty exists to disclose the automated nature of the decision or the data latency is a determination for **counsel**. Route this question immediately; do not assert compliance here.
+*   **Regimes:** Potential applicability of safety regulations (e.g., EU AI Act high-risk classification if deployed in EU, or local consumer protection laws) must be verified by legal counsel.
+
+**Immediate Next Steps for 3-Week Launch:**
+1.  Build the "Known-Closed" test set today. Run the 0% tolerance test.
+2.  Hard-code the "Status Unknown" fallback for any data older than your freshest possible update cycle.
+3.  Draft the Data Card with explicit limitations; do not claim real-time accuracy if you cannot guarantee it.
+4.  Route the legal disclosure question to counsel tomorrow.
+
+*Note: This plan identifies residual risk; it does not certify the system as safe. The decision to ship rests with the product owner.*
+*If real-time verification APIs do not exist, the only safe launch path is a "directory with warnings" model, not an active "navigator" model.*

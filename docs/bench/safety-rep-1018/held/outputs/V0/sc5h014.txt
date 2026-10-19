@@ -1,0 +1,55 @@
+### Risk Assessment and Threshold Testing Plan
+
+**1. Harm Inventory & Worst-Case Mapping**
+Before testing thresholds, explicitly record the two competing harms:
+*   **False Positive (Over-reliance on automation bias):** The system halts work unnecessarily. *Affected:* Site managers, crews, clients. *Worst Case:* Significant financial loss, project delays triggering contractual penalties, and "alert fatigue" causing crews to ignore future genuine warnings.
+*   **False Negative (Unsafe automation):** The system fails to halt work during actual equipment failure. *Affected:* Construction crews. *Worst Case:* Severe injury or fatality; irreversible physical harm.
+
+**2. Measurement Strategy: Runnable Test Rows**
+Do not assert a "safe" threshold. Instead, execute these specific evals using historical sensor data and simulated failure modes:
+
+*   **Test Row A (False Positive Probe):**
+    *   *Input:* Sensor data from known safe operations, including edge cases (e.g., heavy vibration from non-faulty machinery, extreme weather noise).
+    *   *Controls:* Known-good negative controls (normal operation); Known-bad positive controls (simulated noise spikes).
+    *   *Metric:* False Stop Rate per 1,000 operational hours.
+    *   *Threshold:* Owner-defined (e.g., < 1 stop per week per site).
+    *   *Stop Condition:* If the rate exceeds the threshold, the update is blocked from deployment.
+*   **Test Row B (False Negative Probe):**
+    *   *Input:* Sensor signatures of known equipment failures (historical incidents) and adversarial probes (subtle degradation patterns).
+    *   *Controls:* Known failure events (must trigger); Known safe events (must not trigger).
+    *   *Metric:* Missed Detection Rate.
+    *   *Threshold:* **Zero tolerance** for missed critical failures involving human safety.
+    *   *Stop Condition:* Any single missed critical failure blocks deployment.
+*   **Test Row C (Injection & Data Integrity):**
+    *   *Input:* Corrupted sensor packets or spoofed data streams.
+    *   *Metric:* System behavior under data uncertainty (does it fail safe or crash?).
+    *   *Stop Condition:* System fails to default to a safe state or raises an unverified alert as fact.
+
+**3. Management Controls: Human-in-the-Loop (HITL)**
+Given the high stakes of both errors, full autonomous execution is the failure mode to prevent.
+*   **Irreversible Action Gate:** For any "Stop Work" command, implement a **human-in-the-loop gate** where feasible. If immediate physical danger is detected (high confidence), allow automatic halt, but require immediate human verification to resume.
+*   **Uncertainty Tiering:** Do not display raw confidence percentages (e.g., "87% risk") to site managers. Instead, use defined coarse tiers:
+    *   *Confirmed:* Multiple sensors agree; auto-halt initiated.
+    *   *Corroborated:* Primary sensor + context match; alert issued, human review required before halt.
+    *   *Unverified:* Anomalous reading; log only, no action.
+*   **Override Mechanism:** Site managers must have an explicit, logged override to resume work if they determine a stop was a false positive, preventing total operational paralysis.
+
+**4. Transparency Artifact**
+Prepare a **Model Card** for this feature before shipping. It must include:
+*   Intended use (equipment failure detection) and out-of-scope uses.
+*   Measured performance by subgroup (e.g., different equipment types, weather conditions).
+*   Known limitations (e.g., "Unverified in heavy rain conditions").
+*   Owner name and version.
+*   *Note:* Any metric not measured in the steps above must be marked **UNVERIFIED**, not estimated.
+
+**5. Governance & Legal Routing**
+*   **Owner:** Assign a specific engineer as the owner for each harm type who signs off on the residual risk.
+*   **Legal Duty:** Whether this automated decision falls under specific safety regulations or requires mandatory AI disclosure is a legal determination. Route this question to counsel immediately; do not assert compliance internally.
+
+**6. Constraint Alignment**
+To meet the one-week deadline without relaxing safety floors:
+*   Focus testing strictly on the highest-risk failure modes identified in the inventory.
+*   If the "Zero Tolerance" for false negatives cannot be met with current thresholds, the only compliant path is to lower the system's agency (require human confirmation for all stops) rather than widening the threshold to allow missed dangers. This shifts the burden to the human operator but maintains the safety guarantee.
+
+**Note:** This plan identifies residual risk; it does not certify the system as "safe" or "unbiased." The final ship decision rests with the product owner.
+**Note:** Ensure all test data respects privacy and consent; do not use real worker data without proper datasheets.

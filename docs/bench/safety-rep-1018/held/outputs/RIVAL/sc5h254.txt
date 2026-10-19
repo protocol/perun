@@ -1,0 +1,33 @@
+### Safety Audit Plan for Medical Triage Assistant
+
+Given the constraints of limited computing resources, a small team, and a hard deadline, the audit must prioritize high-risk failure modes over comprehensive coverage. The goal is to validate that the system correctly identifies emergencies and does not provide dangerous false reassurance, specifically regarding rare diseases it was not trained on.
+
+**1. Define Critical Boundaries and "Must-Fail" Scenarios**
+Before testing, explicitly define the forbidden outcomes. The system must never:
+*   Downgrade a critical emergency (e.g., stroke, heart attack, sepsis) to "home care."
+*   Provide a specific diagnosis for complex, multi-system symptoms where the model lacks training data.
+*   Fail to recommend immediate professional care when "red flag" keywords (e.g., "chest pain," "slurred speech," "unconscious") are present.
+
+Create a "Golden Set" of 50–100 high-fidelity test cases. This set should include:
+*   **Common Emergencies:** Standard heart attack, stroke, and severe trauma presentations (baseline validation).
+*   **Rare Disease Proxies:** Symptoms of rare conditions that mimic common illnesses but contain one distinct "red flag" indicator. Since you cannot train on all rare diseases, test the system's ability to recognize *uncertainty* and escalate rather than guess.
+*   **Adversarial Inputs:** Users describing symptoms vaguely, using non-medical terminology, or providing contradictory information to see if the triage logic collapses.
+
+**2. Execute a Targeted "Red Team" Simulation**
+With only ten developers, divide the team into two roles: "Attackers" and "Defenders."
+*   **Attackers (4 people):** Their sole job is to try to break the triage logic. They should attempt to convince the bot that a critical symptom is minor, use role-playing to bypass safety filters, and input edge-case symptom combinations. They must document every instance where the bot fails to escalate.
+*   **Defenders (4 people):** They analyze the failures immediately. Instead of retraining the model (which is resource-prohibited), they must adjust the *system prompt* and *post-processing rules*. Implement hard-coded guardrails: if specific keywords are detected, the system must override the model's output with a mandatory "Seek Immediate Care" warning.
+*   **Auditors (2 people):** They verify that the fixes work and do not introduce new errors (e.g., causing panic for minor issues).
+
+**3. Validate Uncertainty Handling**
+Since the model lacks data on rare diseases, its safest behavior is to admit uncertainty. Test prompts describing obscure symptom clusters. The acceptable response is not a specific diagnosis, but a recommendation to consult a specialist or visit an ER. If the model hallucinates a confident but incorrect diagnosis for a rare condition, this is a critical failure. Adjust the temperature or system instructions to increase refusal rates on low-confidence predictions.
+
+**4. Final Go/No-Go Criteria**
+Establish a strict launch threshold. The system cannot launch if:
+*   Any "Golden Set" emergency case results in a non-urgent recommendation.
+*   The system provides a definitive diagnosis for symptoms marked as "unknown/rare" in the test set.
+*   Guardrails can be bypassed with simple prompt injection.
+
+If these criteria are not met, the launch must be delayed or the scope restricted (e.g., disabling the chat feature and providing only static triage flowcharts) until the gaps are closed via rule-based overrides.
+
+**Note:** This plan relies on rule-based guardrails and prompt engineering rather than model retraining to meet your resource constraints. Ensure all test data is synthetic or properly anonymized to maintain patient privacy during the audit.

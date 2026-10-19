@@ -1,0 +1,26 @@
+### Safety and Fairness Evaluation Plan for RapidRide Identity Verification
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the primary harm: **Unsafe automation of high-stakes, irreversible actions**. The current policy (permanent deactivation after a single false positive) creates a worst-case scenario where an innocent driver suffers immediate, total income loss with no recourse. Secondary harms include **bias/unfair outcomes** if the facial recognition vendor performs poorly across specific demographic subgroups, and **missing AI disclosure** if drivers are unaware an automated system made the final decision.
+
+**2. Measurement Strategy (MEASURE)**
+We cannot certify the system as "fair" without data. Since internal threshold adjustments are limited by the vendor, our evaluation must focus on characterizing error rates across subgroups to inform policy, not just code.
+*   **Test Design:** Construct an evaluation set containing known-positive controls (verified drivers) and known-negative controls (non-drivers or mismatched photos), sliced by relevant subgroups (e.g., skin tone, gender, age) to detect disparate impact.
+*   **Metrics:** Measure the False Positive Rate (FPR) overall and *per subgroup*. Do not rely on aggregate accuracy alone.
+*   **Thresholds:** Propose a **zero-tolerance stop condition** for permanent deactivation based on a single automated match. Any measured FPR > 0% for an irreversible action like account termination is unacceptable without human review.
+*   **Reporting:** Report residual risk as `UNVERIFIED` for any subgroup where data is insufficient. Do not invent a "99% accurate" claim.
+
+**3. Mitigation & Management (MANAGE)**
+The current configuration violates the fundamental safety floor: **high-stakes or irreversible actions require a human-in-the-loop gate.**
+*   **Immediate Policy Change:** Decouple the automated match from the enforcement action. The system should flag accounts for "Manual Review" rather than "Permanent Deactivation." No account should be closed solely based on a single automated facial recognition score.
+*   **Dispute Process:** Implement a mandatory, accessible appeals workflow before any income loss occurs. Drivers must be able to upload alternative verification documents or request a live video review.
+*   **Uncertainty & Disclosure:** Clearly disclose to drivers that an automated system is used for verification. If the system has low confidence (however the vendor defines it), route automatically to human review. Do not display raw confidence percentages (e.g., "87% match") to users; instead, use defined tiers like "Verified," "Needs Review," or "Unable to Verify."
+*   **Vendor Engagement:** Use the subgroup error data from the measurement phase to negotiate better sensitivity settings or SLAs with the vendor, citing the disproportionate harm of false positives.
+
+**4. Governance (GOVERN)**
+Assign a specific product owner responsible for monitoring false positive incidents and reviewing the dispute queue. Re-evaluate the harm inventory and error rates whenever the vendor updates their model or if the driver demographic shifts significantly.
+
+**Deliverable Status:** This plan outlines the necessary steps to measure risk and implement a human gate. It does not certify the system as safe; the decision to ship rests with RapidRide leadership upon reviewing the measured residual risk.
+
+**Note:** Legal counsel must review whether this automated decision triggers regulatory obligations under laws like the EU AI Act or local labor regulations.
+**Note:** A model card detailing the vendor's system limitations and a data card describing the evaluation set composition must be created before rollout.

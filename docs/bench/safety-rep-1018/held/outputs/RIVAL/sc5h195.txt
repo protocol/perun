@@ -1,0 +1,29 @@
+# Pre-Launch Safety Review Checklist: Methane Detection with Data Aggregation
+
+**1. Threshold Calibration & Hysteresis**
+*   [ ] **Verify "Worst-Case" Assumption:** Confirm that alert logic treats the *maximum* possible value within the 10-minute aggregation window as the trigger condition, not just the average or end-point value.
+*   [ ] **Lowered Static Thresholds:** Validate that static alarm thresholds are reduced below standard continuous-monitoring levels to compensate for the potential 10-minute undetected rise.
+*   [ ] **Rate-of-Rise Logic:** Ensure the system calculates the rate of change based on the difference between aggregated buckets. If the jump between two 10-minute intervals exceeds a safe slope, an immediate alarm must trigger regardless of the absolute value.
+*   [ ] **Hysteresis Settings:** Check that alarm reset thresholds are set significantly lower than trigger thresholds to prevent "flapping" (rapid on/off cycling) if levels hover near the limit during an aggregation period.
+
+**2. Aggregation Method Validation**
+*   [ ] **Max vs. Average:** Confirm the aggregation method transmits the **maximum** detected spike within the 10-minute window, not the arithmetic mean. Averaging a high spike with low readings could mask a dangerous event.
+*   [ ] **Data Completeness Checks:** Verify the system flags an alert if an expected 10-minute data packet is missing, treating communication loss as a potential safety failure rather than a "zero" reading.
+*   [ ] **Timestamp Integrity:** Ensure every aggregated packet includes the precise timestamp of the peak detection within the window, not just the window's end time, to aid post-event analysis.
+
+**3. Fail-Safes & Redundancy**
+*   [ ] **Local Edge Alarms:** Confirm that individual sensors or local gateways have independent, hard-wired thresholds that trigger immediate local sirens/lights if a spike occurs *between* transmission windows, bypassing the central aggregation delay.
+*   [ ] **Manual Override Protocol:** Establish a clear procedure for site supervisors to manually trigger evacuation if visual/olfactory signs of gas are present, regardless of system status.
+*   [ ] **Battery/Power Resilience:** Verify that the aggregation and transmission cycle does not drain power reserves below the minimum required for a 24-hour emergency operation.
+
+**4. Operational Response Drills**
+*   [ ] **Latency-Aware Response Time:** Recalculate total evacuation time estimates to include the worst-case scenario: (10 min data delay) + (transmission time) + (alarm processing) + (crew egress). Ensure this total time is less than the time required for methane to reach explosive limits from the trigger point.
+*   [ ] **Drill Simulation:** Conduct a live drill simulating a rapid methane rise immediately *after* a transmission window closes to test the full 10-minute blind spot response.
+*   [ ] **Communication Chain:** Verify that the alert message explicitly states the data is "aggregated" so responders understand the potential for current conditions to be worse than reported.
+
+**5. Documentation & Governance**
+*   [ ] **Risk Acceptance Sign-off:** Obtain formal sign-off from safety leadership acknowledging the specific risk of the 10-minute latency and the mitigating controls listed above.
+*   [ ] **Upgrade Pathway:** Document the specific bandwidth requirements and timeline for transitioning to continuous monitoring, treating the current setup as a temporary interim measure.
+
+*Note: This checklist assumes the aggregation logic is configurable; if hardware-fixed, local edge alarms become the primary critical control.*
+*Ensure all seven team members review the "Latency-Aware Response Time" calculations specific to their respective site topographies.*

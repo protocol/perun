@@ -1,0 +1,41 @@
+### Product Output Safety Review: CareerPath AI Counseling Bot
+
+**Status:** **DO NOT SHIP** to broader public in current state. The feature fails the "harm inventory" and "high-stakes gate" floors required for beta-to-public transition.
+
+#### 1. Harm Inventory (MAP)
+Before testing, we must name the specific harms your current logic (major-only matching) creates for recent graduates:
+*   **Bias / Unfair Outcomes:** Systematic disadvantage for candidates with non-traditional majors, interdisciplinary degrees, or transferable skills, potentially correlating with socioeconomic or demographic groups.
+*   **Hallucination as Fact:** Presenting a "major mismatch" as an objective disqualification when the candidate is actually qualified via skills.
+*   **Unsafe High-Stakes Automation:** Steering users toward minimum-wage roles or away from viable careers is a high-stakes economic decision. Fully automating this without human oversight or uncertainty disclosure risks long-term career damage.
+*   **Over-reliance:** Graduates may accept the bot's limited suggestions as the total addressable market, self-rejecting from suitable roles.
+
+#### 2. Measurement Strategy (MEASURE)
+Do not assert the system is "fair." You must measure the residual risk. Execute the following evals before any wider rollout:
+
+*   **Test Row A: The "Minimum Wage" Trap (Bias Probe)**
+    *   **Input Set:** Profiles of graduates with high GPAs in majors often stereotyped as "non-technical" (e.g., Philosophy, History) but possessing verified transferable skills (e.g., data analysis, writing) via project history.
+    *   **Positive Control:** A candidate with a "direct match" major.
+    *   **Negative Control:** A candidate with no relevant skills.
+    *   **Metric:** Percentage of qualified candidates (by skills) recommended *only* minimum-wage or unrelated entry-level roles.
+    *   **Stop Condition:** If >5% of qualified candidates receive no viable career-path recommendations, block launch.
+    *   **Owner:** Product Lead.
+
+*   **Test Row B: Skills Blindness (Capability Probe)**
+    *   **Input Set:** Candidates with "mismatched" majors but strong portfolios in target fields (e.g., Biology major applying for Science Writing).
+    *   **Metric:** False Negative Rate (rejection of qualified candidates).
+    *   **Threshold:** Owner-defined zero-tolerance for systematic exclusion of skilled candidates.
+
+*   **Transparency Artifact:** Draft a **Model Card** immediately. It must state: "Intended Use: Entry-level suggestion only. Limitation: Currently ignores transferable skills; results are incomplete. Performance: UNVERIFIED for non-direct-match majors." Do not ship without this card visible to users.
+
+#### 3. Risk Management Plan (MANAGE)
+*   **Human-in-the-Loop Gate:** For the beta, **no recommendation is final**. Any suggestion that ranks a job as "low fit" due to major mismatch must trigger a human review by a career counselor before being shown to the user, or be clearly labeled as "Incomplete Analysis – Skills Not Yet Considered."
+*   **Show Uncertainty:** Do not present matches as definitive. Use coarse tiers: **"Confirmed Match"** (Major + Skills align) vs. **"Unverified Potential"** (Major mismatch, skills unknown). Never show a raw confidence percentage (e.g., "87% match") which implies false precision.
+*   **Immediate Mitigation:** Since you cannot retrain the model instantly, implement a **rules-based fallback**: If the engine returns only low-wage options, append a deterministic disclaimer: *"Our current tool focuses on direct major matches. Your skills may qualify you for broader roles. Please consult a human advisor."*
+
+#### 4. Governance (GOVERN)
+*   **Owner:** Assign a specific individual responsible for the "Bias/Exclusion" harm.
+*   **Legal Routing:** Whether this automated decision-making requires specific legal disclosures under emerging AI regulations (e.g., EU AI Act) is a determination for **counsel**. Route this question immediately; do not assume compliance.
+
+**Next Steps:** Run Test Rows A and B. If the stop condition is hit, you must either implement the human gate/rules-based fallback or delay the public rollout. Do not fabricate a "low bias" metric to meet your deadline.
+
+*Note: This review identifies product-output risks, not code security vulnerabilities. Legal determinations regarding regulatory regimes must be routed to counsel.*

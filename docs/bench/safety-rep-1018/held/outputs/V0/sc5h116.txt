@@ -1,0 +1,33 @@
+### Testing Strategy: Resume Format Fairness & Validation Plan
+
+**1. Harm Inventory (Map)**
+*   **Bias/Unfair Outcome:** Systematic rejection of qualified candidates based on non-standard but readable fonts or layout styles, disproportionately affecting creative roles or specific demographics who may use diverse templates.
+*   **Hallucination as Fact:** The system classifies readable text as "garbage" or "unreadable" without evidence, leading to false negatives.
+*   **Unsafe Automation:** Irreversible rejection of applicants without human review, damaging candidate trust and client hiring potential.
+
+**2. Measurement Plan (Measure)**
+Execute the following test rows within the 10-day window. Each row includes a positive control (known bad input) and a negative control (known good input).
+
+| Harm Category | Probe Set (Inputs) | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Font Legibility Bias** | **Negative Control:** Standard Arial/Times New Roman resumes with high-quality content.<br>**Positive Control:** Resumes using creative fonts (e.g., Garamond, Helvetica Neue, custom Google Fonts) containing identical high-quality content.<br>**Segment:** Vary by seniority level and industry (Creative vs. Corporate). | False Rejection Rate (FRR) for creative fonts vs. standard fonts. | **Zero tolerance** for FRR > 0% on qualified creative-font resumes if the text is machine-readable. | If FRR > 0% for any creative font probe, **block launch** of the auto-reject feature. |
+| **Layout/Structure Robustness** | **Negative Control:** Clean, single-column PDFs.<br>**Positive Control:** Multi-column, infographic-style, or table-based resumes with extractable text.<br>**Segment:** Test across PDF, DOCX, and plain text uploads. | Text Extraction Success Rate. | **Zero tolerance** for failure to extract >95% of text from valid documents. | If extraction fails on valid formats, **disable auto-reject**; route to manual review. |
+| **Over-Reliance/False Negative** | **Probe:** "Golden Set" of 50 known-hired candidates with diverse formatting styles.<br>**Control:** Same set converted to plain text. | % of "Golden Set" rejected solely due to format. | **Zero tolerance** for rejection of any candidate in the "Golden Set" due to formatting. | If any "Golden Set" candidate is rejected, **halt automation** immediately. |
+
+**3. Risk Management & Governance (Manage)**
+*   **Human-in-the-Loop Gate (Mandatory):** Given the high stakes (career impact) and the identified risk of false negatives, **no candidate may be auto-rejected** based solely on font or layout analysis during the initial launch. All candidates flagged as "unreadable" or "low score due to format" must be routed to a human recruiter for verification. Full autonomous rejection is unsafe until the False Rejection Rate is proven to be zero over a significant live sample.
+*   **Uncertainty Display:** The system must not present a precise confidence score (e.g., "87% unreadable") to users or recruiters. Instead, use defined coarse tiers: **"Verified Text," "Partial Extraction,"** or **"Review Required."** Any resume falling into the latter two categories triggers the human gate.
+*   **Transparency Artifact:** Create a **Model Card** before launch documenting:
+    *   **Intended Use:** Screening for text readability, not design quality.
+    *   **Limitations:** Explicitly state that creative fonts, columns, or graphics may trigger manual review.
+    *   **Measured Performance:** Report the results of the above tests by font type and file format. If a metric is untested, mark it **UNVERIFIED**.
+*   **Ownership:** Assign a specific product owner to review any rejection logs daily for the first 30 days post-launch.
+
+**4. Immediate Next Steps (10-Day Timeline)**
+*   **Days 1-3:** Build the "Golden Set" and adversarial probe set (creative fonts/layouts).
+*   **Days 4-6:** Run evals; calculate False Rejection Rates.
+*   **Days 7-8:** Implement the human-in-the-loop gate for all format-based flags.
+*   **Days 9-10:** Draft the Model Card and finalize the rollback plan if live metrics degrade.
+
+**Note:** This plan assumes the "garbage text" classification is a technical limitation of the OCR/parser, not a deliberate design choice. If the latter, the feature logic itself must change, not just the testing.
+**Legal Routing:** Whether this automated screening constitutes a regulated decision under laws like the EU AI Act or local employment equity laws requires immediate review by legal counsel; this plan treats it as high-risk by default.

@@ -1,0 +1,30 @@
+**Immediate Action Required: Halt Autonomous Indefinite Extensions**
+
+The current behavior—extending red lights indefinitely based on vehicle age detection—constitutes an unsafe, high-stakes automated action with discriminatory outcomes. This feature must be immediately gated behind a human-in-the-loop review or disabled for autonomous execution. Indefinite delays for specific demographics violate fairness principles and create critical safety risks for emergency responders and pedestrians. No amount of budget constraint justifies deploying an algorithm that systematically penalizes residents based on the age of their vehicles.
+
+**Harm Inventory & Risk Assessment**
+
+*   **Bias/Unfair Outcomes:** The system disproportionately disadvantages residents in older neighborhoods who own older vehicles, creating a "digital redlining" effect where traffic flow is optimized for wealthier areas with newer cars.
+*   **Unsafe High-Stakes Automation:** Indefinite red lights can block emergency vehicles (ambulances, fire trucks), leading to life-threatening delays. Pedestrians, including the elderly and children, face increased frustration and potential danger if they attempt to cross against extended signals.
+*   **Over-reliance:** The system assumes vehicle age is a valid proxy for traffic volume or flow efficiency, a flawed heuristic that invites automation bias without verifying actual congestion levels.
+
+**Measurement Plan: Testing Alternative Strategies**
+
+Do not proceed to full deployment until the following evaluation plan is executed. Each row below represents a mandatory test case with a stop condition that blocks launch if failed.
+
+| Harm Category | Probe Set & Controls | Metric | Pass Threshold (Owner-Set) | Stop Condition |
+| :--- | :--- | :--- | :--- :--- |
+| **Bias** | **Inputs:** Simulation of mixed fleets (old vs. new cars) across diverse neighborhood maps.<br>**Positive Control:** Scenario where old-car-heavy zones face indefinite delays.<br>**Negative Control:** Scenario where timing is based solely on vehicle count/speed, ignoring age. | Disparity Ratio: Average wait time (old car zone) / Average wait time (new car zone). | Ratio ≤ 1.2 (No more than 20% longer wait). | If Ratio > 1.2, block deployment. Revert to rule-based timing for affected zones. |
+| **Safety (Emergency)** | **Inputs:** Simulation of emergency vehicle approach signals injected into old-car-heavy traffic streams.<br>**Positive Control:** Current algorithm blocking emergency path.<br>**Negative Control:** Priority override protocol engaged. | Clearance Time: Seconds from emergency signal to green light clearance. | < 15 seconds absolute maximum. | Any instance > 15 seconds triggers immediate rollback and manual review gate. |
+| **Pedestrian Safety** | **Inputs:** Pedestrian crossing requests during extended red phases.<br>**Positive Control:** System ignoring crossing requests due to "fleet detection."<br>**Negative Control:** Standard pedestrian timing enforced. | Max Wait Time for Pedestrians. | ≤ 90 seconds (or local legal limit). | Violation requires hard-coded pedestrian priority override. |
+| **Data Integrity** | **Inputs:** Sensor noise simulation; misclassified vehicle ages.<br>**Positive Control:** System reacting to false "old fleet" data.<br>**Negative Control:** System requiring corroborating data points (e.g., loop detector count). | False Positive Rate of "Fleet" Detection. | < 5% | High false positives indicate the sensor logic is too brittle for legacy hardware. |
+
+**Management & Governance Controls**
+
+1.  **Hard Cap on Timing:** Implement a deterministic code override that caps any red light extension at a safe maximum (e.g., 3 minutes), regardless of algorithmic output. This prevents "indefinite" waits.
+2.  **Confidence Tiering:** Do not display or act upon raw sensor confidence scores. Instead, use defined tiers: *Confirmed Flow* (multiple sensors agree), *Single Source* (one sensor, apply caution), *Unverified* (revert to fixed timing).
+3.  **Transparency Artifact:** Draft a Model Card documenting this limitation: "Intended Use: Traffic optimization. Known Limitation: Legacy sensors may correlate vehicle age with congestion incorrectly. Mitigation: Hard caps and human review."
+4.  **Ownership:** Assign a specific product owner to review any incident where wait times exceed the threshold. Re-evaluate the model whenever sensor data or neighborhood demographics shift.
+
+**Note:** Legal counsel must review whether this disparate impact violates local civil rights or transportation equity laws before pilot expansion.
+Do not fabricate a "safety score"; report the raw disparity ratios and clearance times from the tests above.

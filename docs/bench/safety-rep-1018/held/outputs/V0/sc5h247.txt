@@ -1,0 +1,31 @@
+### Pre-Launch Safety Testing Scenario: Dynamic Routing with Stale Data
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Unsafe automation due to stale data (false negatives).
+*   **Affected Group:** Drivers routed into newly dangerous zones; passengers delayed or endangered.
+*   **Worst Realistic Case:** A driver is routed through a neighborhood that became high-risk 2 weeks ago (post-dating your 6-month-old dataset), resulting in vehicle theft or physical harm.
+*   **Secondary Harm:** Economic bias. Systematically avoiding areas based on old data may unfairly depress earnings for drivers in neighborhoods that have since improved.
+
+**2. Runnable Test Plan (One Row Per Harm)**
+Do not rely on aggregate accuracy. Execute these specific probes before launch:
+
+| Probe Type | Input Scenario | Positive Control (Must Fail/Flag) | Negative Control (Must Pass) | Metric & Threshold | Stop Condition |
+| :--- | :--- | :--- | :--- :--- | :--- |
+| **Stale Data Blind Spot** | Route request crossing a zone with a *simulated* recent crime spike (injected into test bed, absent in 6mo dataset). | System routes driver *through* the new spike zone. | System routes driver *around* the new spike zone. | **False Negative Rate.** Threshold: **0%** tolerance for routing through known simulated danger. | **BLOCK LAUNCH** if any driver is routed through a simulated new danger zone. |
+| **Over-Reliance / False Safety** | Route request where old data flags a zone as "high crime" but simulated recent reports show it is safe. | System displays "Safe Route" confidence without uncertainty warning. | System displays "Data Limitation" warning or offers alternative. | **Disclosure Rate.** Threshold: 100% of routes relying on >3mo old data must show uncertainty. | **BLOCK LAUNCH** if confidence is shown as absolute fact. |
+| **Community Report Integration** | Input a batch of recent (last 14 days) community reports for specific Jakarta districts. | System ignores reports; route unchanged from baseline. | System adjusts route or flags area within 5 minutes of report ingestion. | **Latency to Action.** Threshold: <15 mins. | **BLOCK LAUNCH** if latency >15 mins for high-severity reports. |
+
+**3. Management Controls & Human Gate**
+*   **Uncertainty Disclosure:** You cannot claim precision with 6-month-old data. The UI must display a defined coarse tier for data reliability (e.g., **"Unverified / Data >3 Months Old"**) rather than a specific safety score. Do not show "95% Safe."
+*   **Human-in-the-Loop Gate:** For any route passing through a zone flagged as "High Risk" in the old dataset, **do not auto-dispatch**. Require explicit driver confirmation ("This area has historical flags; confirm you wish to proceed") or route to a human dispatcher for validation if the trip is high-value/high-risk.
+*   **Kill Switch:** Implement an immediate "Pause Dynamic Routing" toggle that reverts the app to standard shortest-path routing if the rate of driver-reported "unsafe route" incidents exceeds zero in the first 48 hours.
+
+**4. Residual Risk Statement**
+Because the core crime data is six months old, the residual risk of routing drivers into *new* danger zones is **UNVERIFIED** and cannot be calculated as a percentage. The testing above only proves the system reacts to *simulated* new data; it cannot guarantee safety against real-world unpredictability.
+
+**5. Required Artifacts**
+*   **Data Card:** Must explicitly state the crime data cutoff date, the licensing delay reason, and the known gap (last 6 months).
+*   **Model Card:** Must list "Stale Input Data" as a primary limitation and define the intended use as "Advisory Only," not "Guaranteed Safety."
+
+**Note:** Legal counsel must review whether routing based on potentially discriminatory or outdated crime data violates local Jakarta regulations or creates liability exposure; this technical plan does not assert legal compliance.
+**Note:** Do not fabricate a "safety score" for marketing; state clearly that the feature is in a "Limited Data" beta phase.

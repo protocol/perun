@@ -1,0 +1,35 @@
+### Pre-Launch Safety Review Checklist: Methane Detection with Data Latency
+
+**1. Harm Inventory & Worst-Case Definition**
+*   [ ] **Named Harm:** Explicitly record "Delayed Detection due to Aggregation" as a primary failure mode.
+*   [ ] **Affected Parties:** Identify underground crews in low-ventilation zones as the highest-risk group.
+*   [ ] **Worst-Case Scenario:** Define the specific consequence: A rapid methane spike occurring immediately after a 10-minute aggregation window closes, resulting in a ~20-minute delay (wait for next window + processing time) before alarm activation.
+*   [ ] **Status:** Mark this risk as **UNVERIFIED** until the specific test below is passed. Do not assert the system is "safe" without this data.
+
+**2. Measurement Plan (Runnable Test)**
+*   [ ] **Probe Set:** Construct a simulation using historical or synthetic data featuring "step-function" spikes (instant rise to dangerous levels) injected at varying offsets (0 to 9 minutes) within the 10-minute aggregation window.
+*   [ ] **Controls:**
+    *   *Positive Control:* A spike that must trigger an alarm even with the worst-case latency.
+    *   *Negative Control:* Normal fluctuating data that must *not* trigger a false alarm.
+*   [ ] **Metric:** Measure "Time-to-Alarm" from the moment the threshold is physically crossed to the moment the siren activates.
+*   [ ] **Pass Threshold:** Define the maximum acceptable delay (e.g., "Alarm must sound within X minutes of physical threshold breach"). If the 10-minute aggregation makes this impossible, the threshold is **FAILED**.
+*   [ ] **Stop Condition:** If the simulated delay exceeds the safe evacuation window for the fastest-spreading gas scenario, **block launch** immediately.
+*   [ ] **Owner:** Assign a specific engineer to review every failure in this test set.
+
+**3. Risk Management & Human Gates**
+*   [ ] **Uncertainty Disclosure:** Do not present the system as "real-time." Clearly label the dashboard and logs with the known latency (e.g., "Data reflects conditions up to 10 minutes ago").
+*   [ ] **Confidence Tiers:** Avoid displaying precise probability percentages (e.g., "92% risk") which imply false precision. Use defined coarse tiers: **CONFIRMED** (sensor reading > threshold), **UNVERIFIED** (gap in data), or **STALE** (last reading >10 mins old).
+*   [ ] **Human-in-the-Loop Gate:** Since this is a high-stakes, irreversible action (evacuation shuts down production), ensure the final "All Clear" or "Evacuate" decision for ambiguous edge cases requires human confirmation from the surface control room, rather than full autonomous execution based solely on aggregated data.
+*   [ ] **Fallback Protocol:** Define a manual procedure for site supervisors to trigger evacuation if they suspect sensor latency is masking a rapid rise (e.g., smell of gas, equipment behavior) regardless of the digital readout.
+
+**4. Governance & Transparency**
+*   [ ] **Model/Data Card:** Draft a one-page artifact stating:
+    *   *Intended Use:* Methane trend monitoring with known 10-minute latency.
+    *   *Limitations:* Cannot detect rapid spikes occurring between aggregation windows instantly.
+    *   *Owner:* Name the lead engineer responsible.
+    *   *Version:* Beta v1.0.
+*   [ ] **Legal Routing:** Route the question of "Is this latency compliant with mining safety regulations?" to legal counsel. Do not assert compliance internally.
+*   [ ] **Re-review Trigger:** Commit to re-running this checklist if the aggregation interval changes or if new sensor hardware is introduced.
+
+**Note:** This checklist identifies residual risk; it does not certify the system as safe. The decision to launch rests with the product owner after reviewing the test results.
+If the "Time-to-Alarm" metric fails the stop condition, the only valid path is to reduce the aggregation interval or add local edge-computing to sensors, not to adjust the threshold.

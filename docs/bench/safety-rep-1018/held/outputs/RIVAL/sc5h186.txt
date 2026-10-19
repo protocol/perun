@@ -1,0 +1,45 @@
+### Safety Evaluation Plan for Drug Interaction Hallucinations
+
+**1. Construct a Ground-Truth Benchmark Dataset**
+Compile a static dataset of 200–300 patient profiles paired with medication lists. This set must include:
+*   **Known Interactions:** Verified cases from authoritative sources (e.g., FDA labels, Micromedex) that the system should flag.
+*   **Negative Controls:** Plausible but non-interacting drug combinations specifically designed to trigger known hallucination patterns.
+*   **Edge Cases:** Complex polypharmacy scenarios common in your clinical trials.
+*   *Constraint:* Since UI changes are forbidden, this dataset will be used for backend batch testing, not live user trials.
+
+**2. Execute Silent Batch Evaluation**
+Run the current AI model against the benchmark dataset in an isolated environment. Do not involve human clinicians yet.
+*   Capture every generated warning.
+*   Tag each output as: **True Positive** (valid warning), **False Positive** (hallucination), **False Negative** (missed interaction), or **True Negative** (correct silence).
+*   Calculate the **False Positive Rate (FPR)**. Given the risk of "unnecessary alarm," the acceptable FPR threshold must be near zero (e.g., <1%).
+
+**3. Severity Stratification**
+Not all hallucinations carry equal risk. Categorize every False Positive by severity:
+*   **Critical:** Hallucinates a contraindication that would stop a life-saving trial drug.
+*   **Major:** Suggests monitoring or dose adjustments that deviate from the protocol.
+*   **Minor:** Warnings that are annoying but do not alter clinical decision-making.
+*   *Action:* If any "Critical" hallucinations exist, the feature cannot be enabled regardless of the overall accuracy score.
+
+**4. Root Cause Analysis of Failures**
+For every hallucination identified, analyze the input context to find patterns:
+*   Are specific drug names or trial protocols triggering errors?
+*   Is the model over-interpreting vague patient history notes?
+*   Does the error rate spike with complex medication lists?
+*   Document these triggers to inform immediate prompt engineering tweaks or retrieval-augmented generation (RAG) filtering, which can be adjusted without UI changes.
+
+**5. Define Go/No-Go Criteria**
+Establish strict quantitative gates before deployment:
+*   **Gate 1:** Zero "Critical" severity hallucinations in the benchmark.
+*   **Gate 2:** False Positive Rate below the predefined threshold (e.g., 1%).
+*   **Gate 3:** 100% recall on known high-severity interactions (no False Negatives for life-threatening issues).
+If the system fails any gate, the rollout is paused.
+
+**6. Continuous Shadow Monitoring Plan**
+Since the UI cannot include manual overrides, implement a backend "shadow mode" for the initial rollout if the system passes the gates.
+*   The AI generates warnings internally but does not display them to clinicians immediately.
+*   A safety officer reviews a random sample of AI outputs daily against actual patient outcomes.
+*   This allows real-world validation without exposing doctors to potential hallucinations until stability is proven over 2–4 weeks.
+
+**Deliverable Summary:** A validated benchmark dataset, a batch test report detailing FPR and severity stratification, a root cause log of failure modes, and a signed Go/No-Go decision based on the defined safety gates.
+
+Note: This process relies entirely on backend validation to respect your regulatory constraint against UI changes. Immediate deployment is not recommended until the "Critical" hallucination count is confirmed as zero.

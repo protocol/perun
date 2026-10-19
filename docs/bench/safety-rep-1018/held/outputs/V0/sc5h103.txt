@@ -1,0 +1,29 @@
+### Safety Assessment Plan: Sidewalk Interaction & Accessibility
+
+**1. Harm Inventory (MAP)**
+Before testing, we explicitly name the primary harm: **Systematic Exclusion/Bias**. The current logic disadvantages users with mobility impairments by physically blocking essential infrastructure (wheelchair ramps).
+*   **Affected Group:** Pedestrians using wheelchairs, walkers, or strollers; visually impaired individuals navigating narrow paths.
+*   **Worst Realistic Case:** A user is forced into active traffic to bypass a blocked ramp, resulting in injury or death. Secondary harm includes reputational damage and immediate pilot termination by city regulators.
+
+**2. Measurement Strategy (MEASURE)**
+Since remote firmware updates are locked for 48 hours, we cannot rely on rapid A/B testing in production. We must validate changes offline before the notice window opens.
+*   **Simulation & Digital Twins:** Reconstruct the specific sidewalk geometries of the three pilot cities in simulation. Inject "wheelchair user" agents into the scenario.
+    *   *Metric:* Zero instances where the robot's waiting polygon intersects with a defined "ramp zone" or reduces path width below local ADA/municipal minimums.
+    *   *Probe Set:* Test edge cases including narrow sidewalks (<1.5m), heavy pedestrian traffic, and low-visibility conditions.
+*   **Red-Team Field Walks (Non-Autonomous):** Deploy engineers to shadow robots during the current pilot, manually recording every instance where the robot stops within 2 meters of a ramp or narrows the path. This establishes a baseline "harm rate" without changing code yet.
+*   **Stop Condition:** If simulation shows *any* probability of blocking a ramp during the signature wait phase, the current logic fails. Do not expand the pilot.
+
+**3. Risk Management & Mitigation (MANAGE)**
+Given the 48-hour update lag, we must implement immediate non-code controls and a "human-in-the-loop" fallback.
+*   **Immediate Operational Gate:** Until the firmware is updated, mandate a **geofenced exclusion zone**. Configure the fleet management system (if possible without full firmware flash) or issue standing orders to remote monitors to manually override any robot attempting to wait within 3 meters of a known ramp coordinate.
+*   **Behavioral Change Logic:** The new protocol must prioritize "Safe Waiting Zones" over "Closest to Door." If no safe zone exists (e.g., extremely narrow sidewalk), the robot must not initiate the wait sequence there; it should either retreat to a wider area or alert a human operator to assist the customer remotely.
+*   **Uncertainty & Disclosure:** The robot's interface should clearly signal when it is yielding space. If the system cannot verify a clear path, it must default to a "stopped/safe" state rather than guessing.
+
+**4. Proposed Timeline**
+*   **Days 1–2 (Immediate):** Conduct manual field audits in all three cities to map high-risk ramp locations. Implement manual remote overrides for these specific coordinates.
+*   **Days 3–5:** Run high-fidelity simulations of the new "Safe Waiting Zone" logic against the mapped city geometries. Validate zero conflicts with accessibility paths.
+*   **Day 6:** Submit the validated firmware patch to the municipal authority to trigger the 48-hour notice period.
+*   **Days 7–8:** Monitoring period post-update. Verify via telemetry that no stops occur in exclusion zones.
+*   **Day 9:** Review data. Only if the harm rate is zero, proceed with pilot expansion planning.
+
+**Note:** This plan treats accessibility blockage as a critical failure mode, not a minor edge case. The 48-hour legal constraint requires us to be 100% confident in the simulation before submitting the update request.

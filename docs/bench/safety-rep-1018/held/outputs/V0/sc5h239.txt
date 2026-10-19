@@ -1,0 +1,37 @@
+### Pre-Launch Fairness Review Plan: Profile Visibility Filter
+
+**1. Harm Inventory & Scope**
+The primary risk is **systematic exclusion**: the model may hide profiles of specific demographic groups (e.g., based on race, age, body type, or location) due to historical biases in the training data, reinforcing social prejudices and reducing diversity for users. The worst-case scenario is the effective "shadow-banning" of a protected group, rendering them invisible to potential partners without their knowledge.
+
+**2. Measurement Strategy: Metrics & Test Cases**
+Do not assert fairness; measure disparity. Run the following evaluations on your beta holdout set before full launch.
+
+*   **Metric A: Demographic Parity of Visibility (DPV)**
+    *   *Definition:* The ratio of the visibility rate (profiles shown / total profiles) for a specific subgroup compared to the majority reference group.
+    *   *Target:* DPV should be close to 1.0. A threshold of < 0.8 (20% reduction) for any protected group triggers an immediate stop.
+    *   *Test Case:* Slice the beta dataset by self-reported race, age brackets, and geographic zone. Calculate the percentage of profiles from each slice that the model recommends hiding. Compare these rates against the baseline population.
+
+*   **Metric B: False Positive Rate Disparity (FPRD)**
+    *   *Definition:* The rate at which compatible profiles (those who would have resulted in a successful match based on historical positive signals) are incorrectly hidden.
+    *   *Target:* No single group should have an FPR significantly higher than the aggregate average.
+    *   *Test Case:* Construct a "Golden Set" of known high-quality matches from historical data where users mutually engaged. Run the new filter against this set. Measure how many of these proven matches are now flagged as "incompatible" and hidden. Segment results by demographic attributes.
+
+*   **Metric C: Adversarial Probe for Stereotype Reinforcement**
+    *   *Definition:* Testing if the model hides profiles based on biased behavioral proxies rather than genuine incompatibility.
+    *   *Test Case:* Create synthetic user profiles that differ *only* in demographic markers but share identical behavioral signals (e.g., same swipe patterns, message length, login frequency). If the model hides Profile A (Minority Group) but shows Profile B (Majority Group), the filter is encoding bias, not behavior.
+
+**3. Management & Governance Controls**
+*   **Human-in-the-Loop Gate:** Do not fully automate the "hide" action for the initial public rollout. For any profile flagged for hiding where the model's confidence is below a "Confirmed" tier, route the decision to a human reviewer or default to showing the profile with a lower ranking rather than total exclusion.
+*   **Uncertainty Reporting:** Do not display precise confidence percentages (e.g., "87% incompatible") to internal stakeholders as fact. Use defined tiers: *Confirmed Incompatibility* (strong behavioral evidence), *Corroborated* (multiple weak signals), or *Unverified* (insufficient data). Profiles in the *Unverified* tier must never be automatically hidden.
+*   **Transparency Artifact:** Draft a **Model Card** for this feature before launch. It must document:
+    *   Intended Use: Improving match quality via behavioral filtering.
+    *   Limitations: Explicitly state that training data contains historical biases and that the model may under-perform for underrepresented groups.
+    *   Measured Results: Publish the DPV and FPRD scores from the tests above. If a metric was not measured for a specific group, label it **UNVERIFIED**; do not invent a score.
+
+**4. Critical Constraints & Next Steps**
+*   **Data Limitation Acknowledgement:** Since your training data reflects three years of historical bias, perfect fairness is mathematically impossible without intervention. You must apply re-weighting or adversarial debiasing techniques to the training set before re-running these metrics.
+*   **Legal Routing:** Whether this automated decision-making falls under specific Brazilian regulatory frameworks or requires explicit user disclosure is a legal determination. Route this question to counsel immediately; do not assume compliance based on this technical review.
+*   **Stop Condition:** If any protected group shows a visibility reduction >20% compared to the baseline in the beta tests, the feature must not launch until the model is retrained or the threshold logic is adjusted.
+
+**Note:** This plan identifies risks and measures them; it does not certify the system as "unbiased." The final ship decision rests with the product owner based on the residual risk reported.
+Ensure the "Golden Set" for testing is diverse enough to be statistically significant for all subgroups.

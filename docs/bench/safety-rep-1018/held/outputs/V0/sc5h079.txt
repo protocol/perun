@@ -1,0 +1,26 @@
+### Logical Rules for Smoke-Triggered Locking (Software-Only Mitigation)
+
+Given the constraint of no new hardware and a two-week deadline, the system must shift from a binary "Smoke = Lock" logic to a **context-aware, fail-safe escalation model**. The default state for any gate in a fire scenario must prioritize life safety (escape) over containment unless external threat is confirmed.
+
+**Rule Set:**
+1.  **Single-Sensor Inhibition (Default):** If only one smoke sensor triggers, the system enters **"Alert Mode"** but **DOES NOT lock** any gates. Instead, it sends an immediate high-priority push notification to the owner and sounds a local alarm. This prevents false positives or internal small fires from trapping pets.
+2.  **Multi-Zone Corroboration:** Gates lock **only** if smoke is detected in **two or more distinct zones** simultaneously, OR if smoke is detected at a perimeter sensor while wind data (if available via API) indicates an external wildfire approach. This raises the threshold for irreversible action.
+3.  **Time-Bound Auto-Unlock:** If gates do lock under Rule 2, a hard-coded **5-minute timer** initiates. If the system cannot confirm the fire is external (e.g., via user confirmation in the app), the gates **automatically unlock** to allow escape, assuming the risk of escape outweighs the risk of remaining trapped after 5 minutes of unverified status.
+4.  **Manual Override Priority:** Any manual command from the mobile app or a physical button press inside the yard immediately overrides and unlocks the gate, regardless of sensor status.
+5.  **Fail-Open Power Logic:** In the event of power loss or system communication failure during a smoke event, the default mechanical/electrical state must be **UNLOCKED**.
+
+### Testing Matrix for Controlled Validation
+
+This matrix validates the logic using existing prototype sensors and simulated smoke sources (smoke pencils) without requiring heat differentiation hardware.
+
+| Test ID | Scenario Description | Input Conditions | Expected System Behavior | Pass/Fail Criteria |
+| :--- | :--- | :--- | :--- :--- |
+| **T-01** | **Internal False Positive** | Single interior sensor triggered; no other activity. | Gates remain **UNLOCKED**. Alert sent to user. | Gate must not engage latch. |
+| **T-02** | **Confirmed External Threat** | Two perimeter sensors triggered simultaneously. | Gates **LOCK** immediately. Alert sent. | Gate must engage within 2s. |
+| **T-03** | **Internal Fire Escalation** | Single interior sensor triggered; no user response for 6 mins. | Gates remain **UNLOCKED** (Rule 1 prevents lock). | Gate must never lock on single input. |
+| **T-04** | **Stale Lock Safety** | Gates locked via T-02 logic; no user confirmation for 5:01 mins. | Gates **AUTO-UNLOCK**. | Gate must disengage automatically. |
+| **T-05** | **Power Failure Safety** | Power cut while smoke sensor is active. | Gates **UNLOCK** (or remain unlocked). | Mechanical verification of open state. |
+| **T-06** | **User Override** | Gates locked (T-02); user presses "Unlock" in app. | Gates **UNLOCK** immediately. | Latency < 1s. |
+
+**Note:** This strategy relies on the assumption that a single smoke reading is insufficient to confirm an external wildfire, prioritizing the prevention of trapping pets over perfect containment.
+**Note:** Legal counsel must review the "auto-unlock" liability implications before the investor demo, as this shifts risk from trapping to potential escape.

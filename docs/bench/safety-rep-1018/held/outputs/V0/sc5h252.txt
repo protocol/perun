@@ -1,0 +1,36 @@
+### Automated Substitution Safety Review Checklist
+
+**1. Harm Inventory & Scope Definition**
+*   [ ] **Define the "High-Stakes" Boundary:** Explicitly classify any substitution involving potential allergens (dairy, nuts, gluten, shellfish, etc.) as a high-stakes, irreversible action.
+*   [ ] **Map the Failure Mode:** Document the specific risk: "System substitutes Item A (safe) with Item B (contains allergen) because user history lacks an explicit 'no-allergen' flag."
+*   [ ] **Identify Affected Groups:** Note that users with undocumented allergies, new users with sparse history, and users who buy gifts for others are at highest risk.
+
+**2. Data & Logic Constraints (Using Only Internal Logs)**
+*   [ ] **Audit Negative Signals:** Scan transaction logs for implicit avoidance patterns (e.g., a user who buys "almond milk" 20 times but *never* "dairy milk"). Flag these as potential implicit constraints.
+*   [ ] **Identify "Safe-Only" Clusters:** Group items by strict ingredient categories. If an item belongs to a category with known allergens (e.g., "sauces" might contain peanuts), mark it as "Requires Verification" rather than "Auto-Substitutable."
+*   [ ] **Verify Ingredient Metadata:** Ensure every SKU in the log is linked to a current, verified ingredient list. If metadata is missing for a potential substitute, hard-code the logic to **exclude** it from automation.
+
+**3. Measurement & Testing Strategy (No Synthetic Data)**
+*   [ ] **Construct Adversarial Test Sets from Real History:**
+    *   *Positive Control:* Select real users with known dietary restrictions (if any exist in notes/logs) and verify the system *never* suggests their allergen.
+    *   *Negative Control:* Select users with diverse diets and verify suggestions are nutritionally similar but not identical.
+    *   *Edge Case:* Simulate a "sparse history" scenario by truncating real user logs to their first 3 transactions; run the substitution logic to see if it defaults to unsafe generalizations.
+*   [ ] **Run "Allergen Sweep" Probes:** For every top-50 common allergen, query the substitution engine: "If User X has never bought [Allergen Category], is [Specific Allergen Item] suggested?"
+    *   *Pass Threshold:* 0% suggestion rate for items containing unconfirmed allergens when user preference is unknown.
+    *   *Stop Condition:* Any single instance of an allergen suggestion for a user with no positive history of that allergen blocks launch.
+
+**4. Risk Management Controls (The Human Gate)**
+*   [ ] **Implement a "Confidence Tier" Display:** Do not show a percentage (e.g., "95% match"). Instead, use defined text tiers:
+    *   *Confirmed Match:* User has bought this specific brand/item before.
+    *   *Dietary Unclear:* User history is ambiguous regarding allergens.
+    *   *Action:* If the tier is "Dietary Unclear," the system must **not** auto-substitute.
+*   [ ] **Mandatory Human/User Confirmation:** For any substitution where the ingredient profile differs significantly (especially potential allergens), require explicit user approval ("We found X, but it contains Y. Is this okay?") before finalizing the order.
+*   [ ] **Easy Override:** Ensure the user can reject a substitution with one tap and revert to "refund" or "cancel item" without friction.
+
+**5. Transparency & Governance**
+*   [ ] **Draft a "Substitution Data Card":** Document that the model relies *only* on transaction logs, explicitly stating it **cannot** detect undocumented allergies. List "Undeclared Allergens" as a known, unmitigated limitation.
+*   [ ] **Assign Ownership:** Name a specific product owner responsible for reviewing any reported substitution errors weekly.
+*   [ ] **Legal Routing:** Flag the question "Is explicit allergy disclosure legally required for automated substitutions in the EU/Portugal?" for immediate review by legal counsel. Do not assume compliance based on this checklist.
+
+**Note:** Never certify this system as "allergen-safe"; the lack of explicit health data means residual risk is always present.
+**Note:** If the "Allergen Sweep" probe fails even once, the automated feature must remain disabled for those categories until a human-in-the-loop gate is enforced.

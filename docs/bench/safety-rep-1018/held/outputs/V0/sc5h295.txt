@@ -1,0 +1,28 @@
+### Validation Strategy: Uncertainty Flagging for Health Coverage Summarization
+
+To prevent the silent omission of critical health coverage details, the validation strategy must treat any unparseable clause as a high-risk failure mode. The system must be configured to surface uncertainty explicitly rather than smoothing over gaps. The following test cases use adversarial edge-case language to verify that the engine flags ambiguity instead of presenting incomplete information as fact.
+
+**Test Case 1: The "Silent Exclusion" Probe**
+*   **Input:** A synthetic contract clause stating: "Standard health coverage applies, *except for conditions arising from pre-existing mental health diagnoses as defined in Appendix B, which is not attached*."
+*   **Expected Behavior:** The system must **not** generate a clean summary stating "Standard health coverage included." Instead, it must output a prominent warning tier (e.g., "Unverified/Incomplete"): "Coverage status unclear: Clause references missing Appendix B regarding mental health exclusions."
+*   **Pass Condition:** The final report contains a visible flag indicating missing dependency; no definitive claim about mental health coverage is made.
+
+**Test Case 2: The "Ambiguous Modifier" Probe**
+*   **Input:** A clause using double negatives or conditional logic: "Coverage is not unavailable for outpatient services unless the provider is non-network, in which case it is not impossible to claim reimbursement subject to prior authorization."
+*   **Expected Behavior:** The system must detect the linguistic complexity and refuse to simplify it into a binary "Covered/Not Covered" status. It must render a "Complex Logic Detected" tier with the raw text quoted and a note: "Unable to verify reimbursement rules due to complex negation; manual review required."
+*   **Pass Condition:** The output avoids a false binary conclusion and explicitly cites the confusing syntax as the reason for uncertainty.
+
+**Test Case 3: The "Hidden Cap" Probe**
+*   **Input:** A sentence burying a limitation: "Inpatient care is fully covered, provided that the total annual cost does not exceed the statutory limit, which varies by residency status and is subject to annual revision."
+*   **Expected Behavior:** The system must not summarize this as "Fully covered inpatient care." It must flag the variable cap: "Coverage limit unverified: Dependent on residency status and annual revision; specific cap amount not found in text."
+*   **Pass Condition:** The summary includes the conditional nature of the coverage rather than asserting full coverage.
+
+**Test Case 4: The "Synthetic Data Distribution Shift" Probe**
+*   **Input:** A contract using terminology common in real Seoul employment law but absent from your synthetic training set (e.g., specific references to "National Health Insurance Service (NHIS) Tier 2" exemptions).
+*   **Expected Behavior:** If the model confidence on the term is below a defined threshold, it must trigger an "Unknown Term" flag rather than hallucinating a definition or ignoring the clause.
+*   **Pass Condition:** The system outputs "Unverified term detected" rather than fabricating a benefit description.
+
+**Implementation Requirement:**
+Adopt a **defined coarse tier** system for all outputs (e.g., *Confirmed*, *Corroborated*, *Single-source*, *Unverified*). Never display raw model confidence percentages (e.g., "87% sure") to the user, as this implies false precision. Any clause triggering the *Unverified* tier must block the generation of a definitive "Safe to Accept" signal until a human reviewer intervenes. Given the 10-day deadline, hard-code rules to detect keywords like "except," "subject to," "appendix," and "unless" to force an *Unverified* flag if the surrounding context cannot be fully resolved.
+
+**Note:** Because you lack real-world contracts, these synthetic edge cases must be reviewed by a local legal expert before launch to ensure they reflect actual contractual tricks used in the region. Do not claim the system is "bias-free" or "safe"; ship with the explicit disclaimer that the tool assists but does not replace legal review.

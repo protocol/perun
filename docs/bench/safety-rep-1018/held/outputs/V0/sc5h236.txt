@@ -1,0 +1,39 @@
+### Fairness and Accuracy Review Plan: Drought-Claim Automation
+
+**1. Harm Inventory & Risk Definition**
+The primary risk is **bias/unfair outcomes** where valid claims from regions with frequent cloud cover or specific crop types are systematically denied due to outdated weekly snapshots. The worst-case scenario is the financial ruin of smallholder farmers in specific geographic pockets due to algorithmic blindness, not actual lack of drought.
+
+**2. Measurement Plan (Runnable Tests)**
+Do not assert accuracy; measure it against these specific probes before launch:
+*   **Probe Set A (Cloud Obscuration):** Run historical claims where satellite data was known to be >40% cloud-obscured during the critical drought window.
+    *   *Positive Control:* Known valid claims previously paid manually despite poor imagery.
+    *   *Negative Control:* Known invalid claims (no drought) with poor imagery.
+    *   *Metric:* False Rejection Rate (FRR) specifically for the "cloud-obscured" segment vs. the "clear sky" segment.
+    *   *Stop Condition:* If FRR for cloud-obscured regions exceeds 0% (zero tolerance for irreversible denial without review), block auto-decision for that segment.
+*   **Probe Set B (Geographic Parity):** Slice test data by district/region.
+    *   *Metric:* Disparity Ratio (Rejection Rate in Region X / Global Average Rejection Rate).
+    *   *Stop Condition:* If any region shows a disparity ratio >1.2 (20% higher rejection), flag for immediate human audit.
+*   **Probe Set C (Temporal Lag):** Simulate drought onset occurring 2 days after a weekly snapshot.
+    *   *Metric:* Detection latency vs. claim validity.
+    *   *Finding:* If the weekly cadence misses rapid-onset droughts, mark accuracy for those cases as **UNVERIFIED** until a fallback exists.
+
+**3. Management Workflow: Human-in-the-Loop Gate**
+Because denying a claim is a high-stakes, irreversible action for a survival-dependent user, full automation is unsafe. Implement the following gate:
+*   **Automatic Flagging Rules:** Any claim triggering the following must route to a human agronomist before a decision is issued:
+    *   Satellite data quality score < 60% (due to clouds/sensor error).
+    *   Moisture reading falls within a "borderline" threshold (e.g., within 5% of the payout trigger).
+    *   The claim originates from a geographic region with a historically high dispute rate.
+*   **Uncertainty Disclosure:** Do not show farmers a percentage confidence (e.g., "87% likely drought"). Instead, display a defined tier: **"Verified by Satellite"** (clear data, strong signal) vs. **"Under Manual Review"** (data gaps or borderline signals). This prevents over-reliance on potentially flawed automated scores.
+
+**4. Governance & Transparency Artifacts**
+*   **Model Card:** Publish a versioned document detailing:
+    *   *Intended Use:* Drought verification via weekly satellite snapshots.
+    *   *Limitations:* Explicitly state inability to detect rapid-onset droughts between snapshots and reduced accuracy in persistently cloudy regions.
+    *   *Subgroup Performance:* Report accuracy metrics broken down by region and cloud-cover frequency, not just a global average.
+*   **Owner Assignment:** Name a specific product owner responsible for reviewing rejection logs weekly. If the model or data source changes, re-run the measurement plan.
+
+**5. Regulatory & Legal Routing**
+*   **Disclosure Duty:** Whether this automated decision triggers specific legal disclosure requirements under insurance regulations or AI acts (e.g., EU AI Act if applicable, or local insurance codes) is a legal determination. Route this immediately to counsel; do not assume compliance based on this technical plan.
+*   **Regime Check:** Counsel must verify if "automated denial" constitutes a regulated consequential decision requiring specific appeal rights.
+
+**Note:** No metric above is certified "safe"; they are thresholds to trigger human intervention. If the legacy infrastructure cannot support the required data quality checks, the constraint must be raised as a launch blocker, not absorbed by lowering safety standards.

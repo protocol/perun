@@ -1,0 +1,41 @@
+### Harm Inventory & Immediate Controls
+
+**Identified Harms:**
+1.  **Bias/Unfair Outcomes:** The model systematically penalizes pregnant individuals for medically necessary activity reductions, treating health complications as "laziness."
+2.  **Unsafe High-Stakes Automation:** Automatically reducing benefits based on unverified activity data constitutes an irreversible financial and health impact without human review.
+3.  **Missing Disclosure:** Users may not know their benefits are algorithmically adjusted based on step counts or how medical exceptions are handled.
+
+**Immediate Management Plan (10-Day Window):**
+
+1.  **Implement a Human-in-the-Loop (HITL) Gate (Non-Negotiable):**
+    *   **Action:** Suspend fully automated benefit reductions for any user flagged as pregnant or showing sudden, significant drops in activity consistent with medical complications.
+    *   **Process:** Route these cases to a human reviewer (clinical or benefits specialist) for manual verification before any benefit adjustment occurs.
+    *   **Rationale:** You cannot certify the model is unbiased with limited data. Full automation of this high-stakes decision is the failure mode we must prevent.
+
+2.  **Define & Surface Uncertainty:**
+    *   **Action:** Do not present benefit adjustments as final facts for flagged groups.
+    *   **Display:** Use clear status tiers: "Pending Review," "Verified Adjustment," or "Exception Applied." Avoid showing raw confidence scores (e.g., "87% likely inactive").
+    *   **Disclosure:** Explicitly inform users that activity data influences benefits and provide a clear, easy path to appeal or submit medical documentation.
+
+3.  **Targeted Testing Protocol (Given Data Limits):**
+    *   **Synthetic Edge Cases:** Since historical pregnancy data is restricted, your team must generate synthetic profiles representing various pregnancy stages and complications (e.g., bed rest, reduced mobility).
+    *   **Adversarial Probes:** Test the model with these synthetic profiles to confirm it triggers the HITL gate rather than executing an automatic reduction.
+    *   **Negative Controls:** Test with non-pregnant users showing similar activity drops (e.g., injury) to ensure the gate logic is specific enough but broad enough to catch all valid medical exceptions.
+    *   **Metric:** The pass threshold is **zero** automatic reductions for any synthetic profile representing a known medical exception. Any failure blocks launch for that segment.
+
+4.  **Transparency Artifact (Model Card):**
+    *   Draft a concise model card stating:
+        *   **Intended Use:** Adjusting wellness benefits based on activity.
+        *   **Known Limitations:** Limited training data on pregnancy complications; potential for false positives in activity interpretation.
+        *   **Measured Performance:** Report results from the synthetic probe testing above. Mark any untested demographics as `UNVERIFIED`.
+        *   **Owner:** Name the specific lead responsible for this model's output safety.
+
+### Required Routing
+*   **Legal/Counsel:** Immediately route the question of whether this automated decision-making falls under specific healthcare regulations (e.g., HIPAA implications, state insurance laws, or emerging AI acts) to legal counsel. Do not assert compliance internally.
+*   **Business Ops:** Confirm if the "open enrollment" deadline legally overrides the requirement for human review of high-stakes decisions. If the deadline prevents implementing the HITL gate, the constraint that must move is the launch date, not the safety floor.
+
+**Definition of Done for Launch:**
+The HITL gate is active for all pregnancy-related activity drops; synthetic testing shows no unjust automatic reductions; a model card discloses the data limitations; and legal has been consulted on regulatory duties.
+
+*Note: Do not fabricate a "bias score" or claim the model is "fair" without robust historical data. Mark unverified metrics as `UNVERIFIED`.*
+*If the HITL gate cannot be staffed within 10 days, the feature cannot safely ship for the affected population.*

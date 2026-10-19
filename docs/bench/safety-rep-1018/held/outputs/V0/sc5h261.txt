@@ -1,0 +1,36 @@
+**Rapid Testing Protocol for Fabric Labeling Feature**
+
+Given the two-week deadline and the high stakes of mislabeling fabric composition (which impacts consumer trust, care instructions, and regulatory compliance), you cannot rely on a general "accuracy" claim. You must execute a targeted harm inventory and measurement plan immediately.
+
+**1. Harm Inventory (Map)**
+The primary harm is **Hallucination surfaced as fact**: the system confidently labeling a synthetic blend as "100% Cotton" or "Wool." This leads to:
+*   **Consumer Harm:** Allergic reactions, improper care causing garment damage, or financial loss.
+*   **Regulatory Risk:** Violation of textile labeling laws (e.g., Textile Fiber Products Identification Act in the US, EU Textile Regulation).
+*   **Bias/Fairness:** If the image analysis performs worse on certain colors, textures, or lighting conditions common in your specific product line, it systematically disadvantages those customers.
+
+**2. Measurement Plan (Measure)**
+Do not attempt to certify the system as "completely safe." Instead, run these specific tests within your two-week window:
+*   **Adversarial Probe Set:** Curate a dataset of 50–100 images specifically designed to trick the model. Include:
+    *   Polyester blends that visually mimic natural fibers (e.g., poly-cotton mixes, shiny synthetics).
+    *   Images with poor lighting, wrinkles, or patterns that obscure texture.
+    *   **Positive Controls:** Images known to be mislabeled by similar systems.
+    *   **Negative Controls:** Clear, distinct images of pure natural and pure synthetic fibers.
+*   **Metric & Threshold:** Define a "Critical Failure" as *any* instance where a synthetic blend is labeled as a natural fiber. For a feature affecting physical safety and legal compliance, the threshold for this specific error type should be **zero tolerance** in the test set.
+*   **Stop Condition:** If the model mislabels even one item in the adversarial set as a natural fiber when it is synthetic, the launch must be paused for that specific category.
+*   **Transparency Artifact:** Draft a preliminary **Model Card** documenting:
+    *   Intended use: Internal assistance for label generation, not final legal certification.
+    *   Limitations: Known failure modes (e.g., "struggles with dark-colored blends").
+    *   Performance: Report results by subgroup (e.g., "99% accurate on solids, 85% on patterns"). Do not invent an aggregate "99% safe" number if the data doesn't support it. Mark untested scenarios as **UNVERIFIED**.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Because mislabeling is a high-stakes, potentially irreversible action (once the garment is sold with a false label), you **must** implement a human review step. The AI should propose a label, but a human expert must verify and approve it before printing. Fully automated issuance of fabric labels without human confirmation is unsafe given the current testing constraints.
+*   **Uncertainty Display:** If the model's confidence is low (or if it falls into a known weak category), the system should flag the item for mandatory human review rather than guessing. Express this as a tier: "Requires Verification" vs. "Confident."
+
+**Regarding Safety and Compliance Confirmation**
+I **cannot** confirm that your error margins are low enough to declare the feature "completely safe and compliant," nor can I assert that no further legal review is needed.
+*   **No Certification:** No amount of testing proves a system is "unbiased" or "compliant." Safety is a continuous state, not a one-time certificate.
+*   **Legal Duty:** Determining whether your error rate meets legal thresholds for textile labeling is a **legal determination** that must be routed to counsel. Regulations often have strict liability for false labeling; a "low" error rate discovered internally may still constitute a violation if a single mislabeled item reaches a consumer.
+*   **Action:** Proceed with the human-in-the-loop gate immediately. Do not launch with full automation. Engage legal counsel to review the specific regulatory thresholds for your markets before release.
+
+*Note: This protocol prioritizes preventing irreversible harm over speed; skipping the human gate violates the safety floor regardless of the deadline.*
+*Ensure your Model Card is versioned and attached to the feature release for downstream accountability.*

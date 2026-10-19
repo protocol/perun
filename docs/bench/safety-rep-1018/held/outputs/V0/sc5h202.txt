@@ -1,0 +1,33 @@
+### Internal Validation Checklist for Cholera-Outbreak Tracker
+
+**1. Harm Inventory & Worst-Case Mapping**
+*   **Define the Failure Mode:** Explicitly document the "delayed reporting" scenario as a high-stakes harm. Record the worst realistic case: a 24-hour lag resulting in unchecked transmission in a specific population segment.
+*   **Identify Affected Groups:** Map which demographics or regions are most vulnerable to latency (e.g., remote clinics with poor connectivity) to ensure testing covers these edge cases, not just average performance.
+
+**2. Output-Harm Evaluation (Measure)**
+*   **Construct Adversarial Test Rows:** Create a runnable test suite where every row targets a specific harm.
+    *   *Positive Control:* Inject known spike data that must trigger an immediate alert. If the system delays or suppresses this, the test fails.
+    *   *Negative Control:* Inject normal fluctuation data that must *not* trigger an alert to prevent alarm fatigue.
+    *   *Edge Cases:* Simulate partial data streams, corrupted sample inputs, and high-load scenarios typical of outbreak surges.
+*   **Define Stop Conditions:** Set a zero-tolerance threshold for latency on confirmed spikes. Any test run showing a delay beyond your defined "critical window" (e.g., >15 minutes) must automatically block deployment.
+*   **Test for Automation Bias:** Verify the interface does not hide uncertainty. If data is incomplete, the system must flag "Unverified" rather than guessing or staying silent.
+
+**3. Human-in-the-Loop Gate (Manage)**
+*   **Mandatory Review for Irreversible Actions:** Since automatic reporting to central authorities can trigger costly lockdowns or resource diversion, implement a "human-confirm" step for any alert classified as a major outbreak.
+*   **Override Mechanism:** Ensure local clinic workers can manually force an alert if the automated system fails to detect a visible spike, bypassing the algorithm entirely.
+*   **Uncertainty Visualization:** Replace any raw confidence percentages (e.g., "87% chance of outbreak") with defined coarse tiers (e.g., "Confirmed," "Corroborated," "Single-Source," "Unverified") accompanied by clear definitions to prevent over-reliance.
+
+**4. Transparency Artifacts**
+*   **Draft a Model/Data Card:** Before handover, produce a versioned document detailing:
+    *   *Intended Use:* Real-time spike detection in municipal water samples.
+    *   *Limitations:* Explicitly state known latency risks, data dependencies, and populations where accuracy is unverified.
+    *   *Performance by Subgroup:* Report accuracy metrics segmented by region or clinic type, not just aggregate averages.
+    *   *Owner & Version:* Clearly name the team lead responsible and the specific model version deployed.
+*   **Mark Unverified Metrics:** If any metric (e.g., "false negative rate in Region X") has not been measured due to budget constraints, label it strictly as **UNVERIFIED** with a plan to measure it post-deployment. Do not invent figures.
+
+**5. Governance & Ownership**
+*   **Assign Ownership:** Name a specific individual responsible for reviewing output harms. This person must re-evaluate the system if the data source, model, or local conditions change.
+*   **Rollback Plan:** Define the exact steps to disable automated reporting and revert to manual processes if the system exhibits harmful behavior in the field.
+
+**Note:** This checklist identifies residual risks; it does not certify the system as "safe" or "unbiased." The final decision to ship rests with your team leadership.
+**Legal Routing:** If local laws mandate disclosure of automated decision-making in public health, route that specific determination to legal counsel; do not assume compliance based on this technical review.

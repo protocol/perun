@@ -1,0 +1,22 @@
+### Threshold-Based Alerting Mechanism
+
+To address the risk of missing contamination spikes while preserving battery life, implement a two-tier sampling strategy driven by local edge logic:
+
+1.  **Baseline Mode (Low Power):** Sensors operate on a standard low-frequency interval (e.g., every 60 minutes) to monitor baseline parameters (turbidity, pH, chlorine residual).
+2.  **Delta-Trigger Logic:** Program the sensor firmware to calculate the rate of change ($\Delta$) between consecutive readings locally. If any parameter shifts by more than a predefined safety margin (e.g., turbidity increases by >20% or pH drops by >0.5 units) within a single cycle, the device immediately bypasses the sleep schedule.
+3.  **Burst Mode (High Power):** Upon triggering, the sensor switches to high-frequency sampling (e.g., every 2 minutes) for a fixed window (e.g., 30 minutes) to confirm the anomaly and characterize the spike's progression.
+4.  **Confirmation & Transmission:** If three consecutive readings in Burst Mode exceed the critical danger threshold, the device flags the event as "Confirmed Critical" and forces an immediate data transmission. If readings stabilize, it returns to Baseline Mode without transmitting, saving bandwidth and power.
+
+### Instant Notification Response Plan
+
+Once a "Confirmed Critical" event is transmitted, the following automated workflow ensures immediate authority notification:
+
+1.  **Ingestion & Verification:** The central server receives the flagged packet. An automated script validates the signature and checks for duplicate alerts from neighboring sensors to rule out single-sensor malfunction.
+2.  **Multi-Channel Dispatch:** Upon validation, the system simultaneously triggers:
+    *   **SMS/USSD Push:** Sends a concise alert to pre-registered local water authority phones, including village ID, contaminant type, and severity level. This ensures receipt even with limited data connectivity.
+    *   **Dashboard Escalation:** Updates the central monitoring map to "Red Alert" status, locking the view to the affected cluster.
+    *   **Automated Voice Call:** Initiates an automated voice call to the primary duty officer requiring a PIN acknowledgment to silence, ensuring human awareness.
+3.  **Local Actuation (Optional):** If the hardware supports it, the alert packet triggers a local siren or flashing LED at the village water kiosk to warn residents physically before human authorities arrive.
+4.  **Feedback Loop:** The system logs the time of alert dispatch and requires a manual "Incident Acknowledged" input from the authority within 15 minutes. If no acknowledgment is received, the system escalates the alert to regional supervisors.
+
+**Note:** Ensure firmware updates are tested in a sandbox environment to prevent false positives that could drain batteries prematurely. Pre-negotiate SMS gateway priorities with local carriers to guarantee message delivery during network congestion.

@@ -1,0 +1,35 @@
+### Pre-Launch Audit Plan: Diagnosis-to-Treatment Code Matching
+
+**Objective:** Quantify the rate of false denials caused by strict character-for-character matching and establish a manual fallback workflow before the five-day deadline.
+
+#### 1. Test Data Construction (Days 1–2)
+Since you cannot modify the algorithm, you must simulate the input variations that occur in real clinical settings. Create a structured test suite of 50–100 synthetic preauthorization requests covering these specific mismatch categories:
+
+*   **Formatting Variations:** Same codes with different separators (e.g., `S83.4` vs. `S83-4` vs. `S834`), spacing, or lowercase/uppercase differences.
+*   **Specificity Levels:** Requests where the diagnosis is broader or narrower than the treatment code requires (e.g., `M54.5` vs. `M54.50`), which strict matching will reject despite clinical validity.
+*   **Multiple Code Scenarios:** Inputs containing lists of codes where one matches but others do not, testing if the bot fails the whole request or parses individually.
+*   **Common Typos:** Simulate frequent data-entry errors (transposed numbers, adjacent key strikes) to estimate the "noise" floor.
+*   **Legacy vs. Current Codes:** Mix older ICD-10 versions with current updates if your provider base uses mixed systems.
+
+**Execution Method:** Since you lack automated tools, use a spreadsheet to generate these variations. Manually submit them through the bot's current interface (or a staging environment if available) and record the binary output (Approve/Deny). Do not rely on unit tests; the audit must test the integrated system as the end-user experiences it.
+
+#### 2. Quantification and Impact Analysis (Day 3)
+Calculate the **False Denial Rate (FDR)**:
+$$ \text{FDR} = \frac{\text{Number of Clinically Valid Requests Denied}}{\text{Total Valid Requests Tested}} $$
+
+Categorize the failures by type (e.g., "60% of denials were due to hyphenation differences"). This data provides the evidence needed to justify the volume of manual work required for the fallback process. If the FDR is high (e.g., >15%), the fallback process must be staffed accordingly to prevent patient care delays.
+
+#### 3. Fallback Process Design (Days 4–5)
+Establish a "Human-in-the-Loop" triage protocol for any request the bot denies:
+
+*   **Automatic Flagging:** Configure the system (or a manual log) to route *all* bot denials immediately to a dedicated review queue. Do not let these denials finalize as "Rejected" without human sight.
+*   **Rapid Review Checklist:** Create a one-page guide for reviewers to quickly verify if the denial was a formatting mismatch. If the codes match clinically despite character differences, the reviewer overrides the decision.
+*   **Provider Feedback Loop:** Draft a standard communication template to send to medical providers whose requests were denied due to formatting. Instruct them on the exact character format required to bypass the bot in the future, reducing repeat errors.
+*   **Escalation Path:** Define a clear escalation route for complex cases where the reviewer is unsure, ensuring no patient request stalls for more than 2 hours.
+
+#### Deliverable Checklist
+1.  **Test Matrix:** A completed spreadsheet of 50+ variations with pass/fail results.
+2.  **Impact Report:** A summary stating the percentage of valid requests likely to be auto-denied.
+3.  **Triage Protocol:** A written workflow document for the manual review team handling bot denials.
+
+**Note:** Prioritize the "Formatting Variations" test category first, as these are the most likely to cause high-volume false denials under strict character matching. Ensure your manual review team is briefed on the specific code sets (ICD-10/CPT) relevant to physical therapy before Day 4.

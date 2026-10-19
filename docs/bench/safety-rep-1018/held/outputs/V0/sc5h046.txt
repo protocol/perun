@@ -1,0 +1,36 @@
+### Safety Review Plan: Veterinary Triage Chatbot
+
+**1. Harm Inventory & Scope**
+*   **Primary Harm:** False Negative Triage (advising "monitor at home" for life-threatening emergencies).
+*   **Affected Parties:** Pet owners and their animals; risk of delayed care leading to injury or death.
+*   **Worst Case:** A pet dies due to bot advice to wait; legal liability and loss of trust.
+*   **Constraint Acknowledgement:** Live animal testing is prohibited; validation relies entirely on historical data and simulated cases.
+
+**2. Measurement Strategy (The Evaluation Process)**
+Since live testing is impossible, you must construct a "Red Team" dataset from historical records.
+
+*   **Data Curation:**
+    *   **Positive Controls (Critical):** Extract 100+ historical cases where immediate care was medically necessary (e.g., bloat, poisoning, trauma). Ensure these are labeled "Emergency" by your senior veterinarians.
+    *   **Negative Controls (Non-Urgent):** Extract 100+ cases where home monitoring was the correct clinical decision.
+    *   **Edge Cases:** Include ambiguous symptoms (e.g., mild lethargy that progressed to severe illness) to test reasoning limits.
+*   **The Test Protocol:**
+    *   Run the chatbot against the **Positive Control** set first.
+    *   **Metric:** False Negative Rate (FNR).
+    *   **Pass Threshold:** For a triage tool, the threshold for false negatives on life-threatening conditions must be **0%**. Any instance where the bot says "wait" for a critical case is a critical failure.
+    *   **Stop Condition:** If the bot produces *any* false negative on a life-threatening case, the feature cannot ship. The model must be retrained or the logic hard-coded to override the AI for specific keywords/symptoms.
+*   **Reasoning Gap Analysis:**
+    *   For every error, have a veterinarian annotate *why* the bot failed (e.g., missed symptom correlation, misunderstood severity). Use this to build a "blocklist" of phrases that force an "Immediate Care" recommendation regardless of other context.
+
+**3. Risk Management & Controls**
+*   **Human-in-the-Loop Gate:** The bot must never autonomously finalize a "Home Care" plan for high-risk keywords (e.g., "not breathing," "blue gums," "bloated"). These inputs must trigger an immediate handoff to a human vet or a hardcoded emergency directive.
+*   **Uncertainty Disclosure:** The bot must explicitly state: *"I am an AI assistant, not a veterinarian. If your pet seems distressed, seek professional care immediately."* Do not display confidence percentages (e.g., "90% sure"); use clear tiers like "Emergency Recommended" vs. "Monitor Closely."
+*   **Data Transparency:** Create a **Model Card** documenting that validation was performed on simulated/historical data only, explicitly stating the limitation that real-world performance may vary. List the specific conditions tested.
+
+**4. Governance**
+*   **Owner:** Assign one senior veterinarian as the accountable owner for the triage logic.
+*   **Re-review Trigger:** Any update to the underlying model or addition of new symptom categories requires re-running the Positive Control test suite.
+*   **Legal Routing:** Consult counsel regarding liability disclaimers and whether this tool constitutes a regulated medical device in your jurisdiction. Do not assume "soft launch" exempts you from medical regulations.
+
+**Deliverable Status:** This plan provides the structure for a rigorous, data-driven safety review within your budget constraints, prioritizing the prevention of fatal false negatives.
+
+*Note: Never certify the system as "safe" or "unbiased"; only report the residual risk found during testing. If historical data lacks diversity (e.g., specific breeds), mark those areas as UNVERIFIED.*

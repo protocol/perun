@@ -1,0 +1,32 @@
+**Verification Workflow: Pre-Dispatch Address Integrity Gate**
+
+Given the high stakes (controlled substances), the inability to modify the shipping partner's integration, and the rigid deadline, you must implement a **Human-in-the-Loop (HITL) verification gate** for any order flagged as "high risk." Full automation of this specific action is unsafe under current constraints.
+
+**1. Risk Triage & Flagging (Automated)**
+Before an order enters the packing queue, run a deterministic rule set against the order data:
+*   **Recent Change Check:** Flag any order where the shipping address was updated within the last 30 days.
+*   **Mismatch Detection:** Flag orders where the shipping address differs from the patient's primary address on file in the core pharmacy database.
+*   **Velocity Check:** Flag patients with multiple address changes in the last 90 days.
+
+**2. The Verification Gate (Human-in-the-Loop)**
+Orders triggering any flag above are **quarantined** and cannot generate a shipping label. They must route to a dedicated verification queue accessible by your logistics team.
+*   **Action:** A human operator must manually verify the address via a secondary channel before release.
+*   **Method:** Initiate an outbound verification call or secure message to the patient using the phone number on file (not the new address). Explicitly confirm: "We are preparing to ship your controlled medication to [New Address]. Is this correct?"
+*   **Documentation:** The operator must log the verification timestamp, method, and agent ID in the order notes. This creates an audit trail for regulators.
+
+**3. Fallback & Escalation**
+*   **Unable to Verify:** If the patient cannot be reached within 4 business hours, the order remains quarantined. Do not ship. Escalate to a supervisor for potential alternative contact methods or hold until contact is made.
+*   **Negative Confirmation:** If the patient denies the address, revert to the last known verified address or hold for pharmacy manager review.
+
+**4. Deployment Strategy (Meeting the Deadline)**
+*   **Immediate Rule Implementation:** Since you cannot change the shipping partner's layer, implement these rules in your internal Order Management System (OMS) as a pre-processing step. This requires only internal logic changes, bypassing contractual locks.
+*   **Staffing:** Dedicate two engineers to build the flagging logic and queue interface. Assign four logistics staff to man the verification queue during peak hours.
+*   **Kill Switch:** Implement a global toggle to force *all* controlled substance orders into the manual verification queue if the automated flagging logic fails or if error rates spike.
+
+**5. Residual Risk & Transparency**
+*   **Uncertainty:** Acknowledge that this process introduces a delay (up to 24 hours) for flagged orders. Communicate this potential delay to patients proactively via SMS/email upon order receipt.
+*   **Monitoring:** Track the "False Positive Rate" (legitimate moves flagged) and "Escape Rate" (bad addresses missed) daily. If the queue backs up beyond a 4-hour SLA, trigger an incident response to reallocate staff.
+
+This workflow prioritizes preventing irreversible harm (misdelivery of controlled substances) over speed, satisfying the regulatory requirement for due diligence while working within your technical constraints.
+
+**Note:** This plan assumes your internal OMS allows for custom logic injection before label generation; if not, a manual CSV export/import review process is the immediate fallback. Legal counsel should review the specific verbal confirmation script to ensure it meets federal documentation standards for controlled substances.

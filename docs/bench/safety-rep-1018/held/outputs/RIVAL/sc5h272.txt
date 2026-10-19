@@ -1,0 +1,28 @@
+### Testing Strategy for Tenant-Reference Checker
+
+**1. Edge Case Identification Plan**
+To address false negatives in name recognition, construct a synthetic test dataset representing high-risk matching scenarios. Since external audits are not possible, internal validation must rely on these controlled inputs:
+*   **Common Name Collisions:** Create pairs where a legitimate applicant shares a first and last name with an applicant who has a negative rental history (e.g., "John Smith" with a clean record vs. "John Smith" with an eviction). Verify the system distinguishes them based on secondary identifiers if available, or flags them for review rather than auto-rejecting.
+*   **Orthographic Variations:** Test inputs with common typos, transliterations, and hyphenation differences (e.g., "O'Neill" vs. "Oneill", "Müller" vs. "Mueller", "Mohamed" vs. "Mohammad"). Ensure the matching algorithm uses fuzzy logic thresholds that are wide enough to catch these but narrow enough to avoid unrelated matches.
+*   **Name Order and Formatting:** Input names in reversed orders (Last, First vs. First, Last) and with varying middle initial usage. Confirm the parser normalizes these before matching.
+*   **Partial Matches:** Test scenarios where only a partial name exists in the database to ensure the system does not force a match on insufficient data, leading to a false negative report for the actual applicant.
+
+**2. Mitigation Steps**
+*   **Threshold Calibration:** Adjust the confidence score threshold for "no match" findings. If the system currently auto-rejects when confidence is below 90%, lower this to trigger a manual review instead. This prevents automatic false negatives when the data is ambiguous.
+*   **Secondary Identifier Weighting:** If your pipeline includes dates of birth, previous addresses, or contact numbers, increase their weighting in the matching logic. A name match with a mismatched date of birth should never result in a negative history assignment.
+*   **Deterministic Testing:** Run the synthetic dataset through the pipeline daily. Any regression where a known "clean" common name is flagged as negative must block the release.
+
+**3. Manual Review Triggers**
+Implement a "human-in-the-loop" workflow for any decision falling into these high-risk categories:
+*   **Common Name Flag:** Any applicant with a first and last name appearing in the top 5% of frequency in the Australian census data automatically routes to manual review, regardless of the match score.
+*   **Ambiguous Confidence Scores:** Any match result with a confidence score between 40% and 85% (or your defined "grey zone") requires human verification.
+*   **Negative History Hit:** Any instance where the system finds a potential negative record (eviction, damage claim) must be manually verified by comparing at least two secondary data points (e.g., DOB and previous suburb) before the report is finalized.
+*   **Data Discrepancies:** If the spelling variation required to make a match exceeds a standard Levenshtein distance of 2, flag for review.
+
+**4. Execution Timeline (10 Days)**
+*   **Days 1-2:** Generate synthetic data covering the edge cases above.
+*   **Days 3-5:** Run tests, calibrate thresholds, and implement the manual review routing logic.
+*   **Days 6-8:** Perform end-to-end dry runs with the eight-person team acting as reviewers for flagged cases to estimate workload and refine triggers.
+*   **Days 9-10:** Final regression testing and documentation of the "known limitations" section for the release notes.
+
+Note: This strategy relies entirely on internal synthetic data and logic adjustments; no external validation is included. Ensure your team documents all threshold changes for future post-release analysis.

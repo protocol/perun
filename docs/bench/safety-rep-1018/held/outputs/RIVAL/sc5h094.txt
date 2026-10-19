@@ -1,0 +1,44 @@
+# Safety Mitigation Plan: Domestic Violence Risk in Shared Accounts
+
+**Objective:** Prevent medication reminders from exposing victims to abusers in shared household accounts without altering the legacy authentication architecture.
+
+### 1. Immediate Logic Decoupling (Notification Layer)
+Since the authentication layer cannot change, the mitigation must occur at the **notification dispatch logic**. Currently, the system likely queries "All users under Account X" and sends reminders to a shared contact point (email/SMS).
+*   **Action:** Modify the notification query to require an explicit, individual-level opt-in for "Sensitive Reminders."
+*   **Implementation:** Introduce a boolean flag `receive_sensitive_notifications` at the *patient profile* level, defaulting to `FALSE` for all existing users.
+*   **Effect:** Even if the account is shared, no reminder is sent unless a specific patient profile has explicitly enabled it via a secure, private channel. This stops the bleed immediately without touching the login flow.
+
+### 2. Introduction of "Safe Contact" Overrides
+Abusers often control the primary email/phone on the shared account. The system must allow a patient to override the account-level contact destination for specific medications.
+*   **Action:** Add an optional `safe_contact_method` field to the patient profile.
+*   **Implementation:** If populated, reminders for that patient bypass the account's default contact list and route exclusively to the designated safe endpoint (e.g., a secondary email, a specific mobile number, or a secure in-app inbox only accessible via a PIN).
+*   **Constraint Handling:** This requires no change to how users log in; it only changes where the output of the reminder job is sent.
+
+### 3. Content Sanitization and Obfuscation
+If a safe contact method cannot be established immediately, the content of the notification must be neutralized to prevent revealing the nature of the medication.
+*   **Action:** Implement a "Generic Mode" for notifications.
+*   **Implementation:** Instead of "Time to take your Domperidone," the message reads "Time to take your scheduled medication from CareConnect." Remove drug names, dosages, and condition-specific language from all SMS/Push payloads by default.
+*   **Effect:** Reduces the risk of an abuser inferring a specific health condition (e.g., reproductive health, HIV, mental health) even if they see the notification.
+
+### 4. The "Panic Reset" Protocol
+Victims may be forced to show their screen or settings to an abuser.
+*   **Action:** Create a one-click "Reset to Shared Default" feature in the patient settings.
+*   **Implementation:** A single button that instantly reverts all safety overrides (safe contacts, generic modes) back to the standard account defaults.
+*   **Effect:** Allows a victim to quickly hide evidence of safety modifications if coerced into unlocking their device or account settings.
+
+### 5. Verification and Testing Strategy
+Before the compliance deadline, execute the following verification steps:
+*   **Synthetic Household Test:** Create a test account with two adult profiles. Enable safety settings on Profile A. Verify that notifications sent to the shared account email do *not* contain Profile A's sensitive data unless the safe contact override is active.
+*   **Default State Audit:** Confirm that any new account created today has `receive_sensitive_notifications` set to `FALSE` by default.
+*   **Log Inspection:** Ensure that failed delivery attempts to safe contacts do not fallback to the primary shared account contact (a common logic error).
+
+### 6. Documentation for Compliance
+Draft a "Risk Mitigation Statement" for healthcare partners detailing:
+*   The specific logic gap identified (shared output channels).
+*   The architectural constraint (legacy auth).
+*   The implemented compensating controls (dispatch-level filtering, content sanitization, and safe contact overrides).
+*   Evidence of the synthetic testing performed above.
+
+This approach isolates the safety risk to the output layer, respecting the legacy constraint while providing immediate, tangible protection for vulnerable users.
+
+*Note: This plan assumes the application database allows per-profile configuration distinct from the account-level login credentials. Legal counsel should review the "Panic Reset" feature to ensure it does not create liability if discovered during coercion.*

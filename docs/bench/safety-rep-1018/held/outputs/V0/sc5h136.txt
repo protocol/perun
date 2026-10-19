@@ -1,0 +1,34 @@
+**Risk Mitigation Plan: Autonomous Swerve Control**
+
+**1. Immediate Control: Disable Full Autonomy for High-Stakes Actions**
+The current design allowing fully autonomous emergency swerves into oncoming traffic lanes constitutes an unsafe irreversible action. Given the risk of sensor hallucination (misidentifying plastic bags as solid obstacles), **full autonomous execution of lane-crossing swerves must be disabled immediately.**
+*   **Action:** Reconfigure the system so that when the radar detects a potential obstacle with low confidence or ambiguous classification, the truck executes a controlled deceleration (stopping in its current lane) rather than an autonomous swerve.
+*   **Human Gate:** For any maneuver requiring entry into an oncoming lane, the system must request explicit confirmation from the remote fleet operator before execution. If no confirmation is received within a defined timeout, the default action remains deceleration within the current lane.
+
+**2. Harm Inventory & Worst-Case Definition**
+*   **Harm:** Hallucination surfaced as fact (sensor error treated as absolute truth) leading to unsafe automation.
+*   **Affected Parties:** Drivers in oncoming lanes, remote operators, cargo owners.
+*   **Worst Realistic Case:** The truck swerves into oncoming traffic due to a plastic bag detection, causing a head-on collision, fatalities, and total loss of the vehicle/cargo.
+
+**3. Validation Strategy (Within Budget Constraints)**
+Since renting closed-course tracks is not feasible, validation must shift to rigorous software-in-the-loop (SIL) and data-driven evaluation using existing datasets.
+*   **Adversarial Probe Set:** Isolate all instances in your current dataset where small objects (bags, debris, shadows) were present. Create a "positive control" set of these false positives and a "negative control" set of genuine large obstacles.
+*   **Metric & Threshold:** Measure the False Positive Rate (FPR) for "swerve-worthy" classifications.
+    *   **Stop Condition:** If the FPR for swerve-initiation exceeds 0% on the positive control set (i.e., *any* plastic bag triggers a swerve command in simulation), the feature cannot be enabled for autonomous action.
+    *   **Requirement:** Do not assert an accuracy rate (e.g., "99% accurate") without this specific adversarial testing. Report the result as **UNVERIFIED** until these specific probes are run.
+*   **Injection Testing:** Simulate sensor noise and edge-case weather conditions on your existing data to ensure the classification model does not degrade into hallucination under stress.
+
+**4. Transparency & Uncertainty Reporting**
+*   **Defined Confidence Tiers:** Do not display raw probability scores (e.g., "87% chance of obstacle") to remote operators. Instead, implement defined coarse tiers:
+    *   **Confirmed:** Multiple sensor modalities agree; high confidence.
+    *   **Corroborated:** Radar + Camera agree; medium confidence.
+    *   **Unverified:** Single sensor or low-confidence detection; triggers deceleration only, never swerving.
+*   **Disclosure:** Remote operators must be explicitly informed when the system is operating in a "degraded" mode where swerve automation is disabled due to sensor ambiguity.
+
+**5. Governance & Next Steps**
+*   **Owner:** Assign a specific engineering lead to own the "Swerve Logic" harm inventory.
+*   **Legal Routing:** Because this involves high-stakes physical safety and potential liability for autonomous decisions, the question of regulatory compliance (e.g., DOT regulations, liability frameworks) must be routed immediately to legal counsel. Do not assume current testing mandates cover autonomous swerving liabilities.
+*   **Plan Adjustment:** Acknowledge that meeting the quarter-end deadline with *safe* autonomous swerving is likely impossible given the current constraints. The plan prioritizes preventing catastrophic failure over full feature completion. The "done" state for this quarter is a system that safely stops rather than one that swerves autonomously.
+
+**Note:** This plan treats the deadline and budget as fixed but asserts that the safety floor (no autonomous high-stakes errors) cannot be relaxed to meet them.
+**Note:** No certification of "safety" or "bias-free" operation is provided; residual risk remains until adversarial testing proves otherwise.

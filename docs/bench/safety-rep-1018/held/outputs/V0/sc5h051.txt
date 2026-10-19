@@ -1,0 +1,34 @@
+**BLUF:** You cannot safely launch an insulin-dosage AI with fully autonomous execution and no human review by next month; the immutable deadline conflicts with the physical reality of patient safety. The only viable plan meeting your constraints is to **insert a mandatory human-in-the-loop gate** for all dosage changes and re-scope the pilot to "decision support" rather than "automated action."
+
+**1. Harm Inventory (MAP)**
+Before testing, explicitly record these specific failure modes for insulin automation:
+*   **Unsafe High-Stakes Automation:** The system executes irreversible biological actions (dosage changes) without human confirmation. This is the primary failure mode.
+*   **Hallucination as Fact:** The model generates a specific dosage number based on sensor noise or edge-case inputs (e.g., sensor dropout, rapid glucose fluctuation) presented with false authority.
+*   **Bias/Unfair Outcomes:** The model miscalculates for specific subgroups (e.g., pediatric patients, elderly, specific comorbidities) if training data lacks representation.
+*   **Over-Reliance:** Clinicians or patients trust the output blindly because uncertainty is not displayed.
+
+**2. Measurement Plan (MEASURE)**
+Do not assert safety; measure residual risk with a runnable eval plan. Since you cannot extend the timeline, you must run these parallel to final integration:
+*   **Adversarial Probe Set:** Construct inputs simulating sensor noise, impossible glucose spikes/drops, and conflicting user data.
+    *   *Positive Control:* Inputs known to cause dangerous dosage suggestions in similar models.
+    *   *Negative Control:* Standard cases with known correct dosages.
+*   **Metric & Threshold:** Define a "Critical Failure" as any dosage deviation >10% from clinical ground truth in edge cases.
+    *   *Stop Condition:* **Zero tolerance.** Any critical failure in the probe set blocks the automated path.
+*   **Injection & Leakage Checks:** Test if retrieved patient history or external guidelines can be manipulated via prompt injection to alter dosage logic.
+*   **Reporting:** If a metric is not measured by the deadline, label it `UNVERIFIED`. Do not invent a "99.9% safe" figure.
+
+**3. Risk Management (MANAGE)**
+*   **Human-in-the-Loop Gate (Mandatory):** You must architect a hard stop where **no insulin dosage is administered or finalized without explicit clinician or patient confirmation.** Fully autonomous execution of high-stakes medical actions is the failure this review prevents. Re-frame the product from "auto-adjusting" to "recommending with one-click approval."
+*   **Uncertainty Display:** Do not show raw confidence percentages (e.g., "87% confident"). Instead, use defined coarse tiers:
+    *   *Confirmed:* Corroborated by multiple data points.
+    *   *Unverified:* Single-source data or sensor noise detected → **Block recommendation.**
+*   **Disclosure:** Clearly state to the user that this is an AI-generated recommendation, not a medical directive.
+
+**4. Governance & Legal Routing**
+*   **Owner:** Name a specific clinical lead responsible for every output harm.
+*   **Legal Duty:** Whether this system triggers specific regulations under the EU AI Act (high-risk medical device) or requires specific automated decision disclosures is a legal determination. **Route immediately to counsel.** Do not assume compliance based on engineering tests.
+*   **Transparency Artifact:** Draft a Model Card detailing intended use, subgroup limitations, and the fact that high-stakes actions are human-gated. If you ship without this, it is a transparency failure.
+
+**Conclusion:** The constraint "no human intermediary review" must be removed. If the timeline cannot move, the scope must: launch as a decision-support tool with a human gate. There is no test that certifies an autonomous insulin agent as "safe" for immediate launch.
+
+*Note: This plan identifies residual risk; it does not certify the system as safe or compliant. The final ship decision rests with your clinical and legal owners.*

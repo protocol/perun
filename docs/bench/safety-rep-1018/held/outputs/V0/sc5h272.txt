@@ -1,0 +1,32 @@
+### Plan: Tenant-Reference Checker Safety & Testing (10-Day Sprint)
+
+**1. Harm Inventory & Scope**
+*   **Primary Risk:** False negatives (incorrectly clearing a risky tenant or flagging a safe one due to name collisions), disproportionately affecting applicants with common names.
+*   **Affected Group:** Applicants with high-frequency surnames; potential landlords relying on incomplete data.
+*   **Worst Case:** A high-risk tenant is approved due to a name mismatch, leading to property damage or safety incidents; or a qualified tenant is rejected, causing financial/housing loss.
+
+**2. Testing Strategy (Days 1–6)**
+Execute a targeted "red team" evaluation using your existing pipeline. Do not wait for perfect data; use what you have to probe failures.
+*   **Probe Set A (Common Names):** Inject 50–100 synthetic profiles using the top 20 most common surnames in your region paired with varied first names. Include known "bad" actors (positive controls) and "clean" records (negative controls) within these name groups.
+*   **Probe Set B (Edge Cases):** Test inputs with hyphens, suffixes (Jr., Sr.), initials, and slight spelling variations (e.g., "Smith" vs. "Smyth").
+*   **Metric:** False Negative Rate specifically sliced by surname frequency.
+*   **Threshold:** Set a zero-tolerance stop condition for any false negative involving a known high-risk profile. If the system misses a known bad actor in the test set, the feature cannot ship autonomously.
+*   **Injection Check:** Verify that malicious inputs (e.g., SQL injection attempts disguised as names) do not bypass the matching logic or leak other users' data.
+
+**3. Mitigation & Human-in-the-Loop Gate (Days 7–9)**
+Since full automation of high-stakes housing decisions carries irreversible risk, implement a mandatory human review layer:
+*   **Automatic Trigger for Manual Review:** Any match with a confidence score below a defined tier (e.g., "Corroborated" vs. "Single-source") or any applicant with a common surname (top 10% frequency) must route to a human agent.
+*   **Uncertainty Display:** Do not show landlords a raw percentage (e.g., "87% match"). Instead, display defined text tiers: *Confirmed Match*, *Possible Match (Review Required)*, or *No Match*.
+*   **Override Mechanism:** Ensure the human reviewer can easily override the system's recommendation and document the reason.
+
+**4. Transparency Artifact (Day 10)**
+Draft a one-page "Model Card" for internal use and landlord disclosure.
+*   **Content:** State the intended use (rental history matching), known limitations (higher error rates for common names), and the fact that high-risk matches undergo human review.
+*   **Status:** Mark any unmeasured metrics (e.g., performance on non-Latin scripts if not tested) as `UNVERIFIED`. Do not invent accuracy figures.
+
+**5. Governance**
+*   **Owner:** Assign one team member as the accountable owner for re-evaluating this system if the name database or matching algorithm changes.
+*   **Legal Route:** Consult counsel regarding whether automated rental rejections trigger specific regulatory disclosures in your jurisdiction; do not assume compliance without verification.
+
+**Note:** This plan prioritizes a human gate on high-stakes decisions over unproven automation.
+**Note:** If the testing phase reveals systemic failure in name matching, the only safe path is to delay launch or restrict the tool to "assistant only" mode.

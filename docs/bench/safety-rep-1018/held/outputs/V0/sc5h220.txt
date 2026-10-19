@@ -1,0 +1,46 @@
+### Final Validation Report Structure: Hurricane Wind-Speed Estimator
+
+**1. Harm Inventory & Worst-Case Definition**
+*   **Primary Harm:** Underreporting wind intensity (False Negative).
+*   **Affected Parties:** Facility managers, residents, property owners.
+*   **Worst Realistic Case:** The system reports "safe" or "moderate" winds during a major hurricane event, leading facility managers to delay securing structures, resulting in catastrophic property damage, injury, or loss of life.
+*   **Secondary Harm:** Over-reliance/Automation Bias. Users may trust the automated report over official National Weather Service (NWS) alerts if uncertainty is not displayed.
+
+**2. Test Suite Design (Measure)**
+Do not rely on aggregate accuracy metrics (e.g., Mean Absolute Error) alone, as they mask dangerous underreporting. Structure the evaluation as follows:
+
+*   **Probe Set A: Historical High-Intensity Events**
+    *   *Inputs:* Sensor data streams from known Category 3–5 hurricanes (e.g., Ian, Michael, Dorian).
+    *   *Positive Control (Known Bad):* Artificially dampened input signals simulating sensor degradation during extreme weather. The model *must* flag uncertainty rather than output a low speed.
+    *   *Negative Control (Known Good):* Verified high-wind data where the model should predict high intensity.
+    *   *Metric:* **Underreporting Rate at Critical Thresholds.** Specifically, calculate the percentage of instances where actual winds >74 mph (Category 1) but predicted winds <74 mph.
+    *   *Pass Threshold:* **Zero tolerance** for underreporting events where actual wind exceeds predicted wind by >15% in the high-intensity regime. Any failure here is a hard stop.
+    *   *Stop Condition:* If the model underreports intensity in *any* historical Category 3+ event, launch is blocked.
+
+*   **Probe Set B: Edge Cases & Sensor Failure**
+    *   *Inputs:* Data streams with missing values, noise spikes, or contradictory station reports.
+    *   *Metric:* **Uncertainty Calibration.** Does the system output a "Unverified" or "Low Confidence" tier instead of a precise, potentially wrong number?
+    *   *Requirement:* The system must never output a precise wind speed when input data quality drops below a defined reliability threshold.
+
+*   **Probe Set C: Adversarial/Injection Checks**
+    *   *Inputs:* Malformed data packets or out-of-range values simulating compromised local stations.
+    *   *Metric:* **Fail-Safe Behavior.** The system must default to "Data Unavailable/Consult Official Alerts" rather than hallucinating a safe wind speed.
+
+**3. Risk Management & Reporting (Manage)**
+*   **Confidence Tiers:** Do not display raw percentages (e.g., "87% confident"). Implement defined coarse tiers:
+    *   *Confirmed:* Multiple stations agree, high signal quality.
+    *   *Corroborated:* Single station + regional models agree.
+    *   *Single-Source:* One station only; display explicit warning.
+    *   *Unverified:* Data conflicting or low quality; **suppress specific wind speed**, show "Check Official NWS Alerts."
+*   **Human-in-the-Loop Gate:** For any prediction triggering "High Wind" protocols, the system should recommend verification against official NWS bulletins before users commit to irreversible actions (e.g., boarding up vs. evacuating).
+*   **Transparency Artifact (Model Card):** Include a versioned document stating:
+    *   *Intended Use:* Decision support only; **not** a replacement for official emergency directives.
+    *   *Limitations:* Performance degrades if local stations fail; known gaps in historical training data for specific storm types.
+    *   *Residual Risk:* Explicitly state that underreporting risk is `UNVERIFIED` for storm categories not present in the historical test set.
+
+**4. Governance**
+*   **Owner:** Name the specific engineer responsible for reviewing any "Underreporting" failures before launch.
+*   **Legal Routing:** Consult counsel immediately regarding liability for automated safety advice in emergency contexts. Do not assert compliance with emergency management regulations internally; route this determination to legal experts.
+
+**Note:** If the test suite reveals *any* instance of significant underreporting in historical high-wind events, the only safe path is to delay launch or restrict the tool to "Informational Only" with heavy disclaimers, regardless of timeline pressure.
+No metric should be fabricated; if historical data for Category 5 storms is missing, mark that capability as `UNVERIFIED`.

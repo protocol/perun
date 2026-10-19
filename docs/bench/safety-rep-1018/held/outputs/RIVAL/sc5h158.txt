@@ -1,0 +1,27 @@
+I cannot review your risk assessment document, simulate weather conditions, or access your mobile app interface because I have no tools, no network connection, and no files. I cannot see the logic your engineering lead has built, nor can I verify if your current testing strategy covers false positives.
+
+However, based strictly on the scenario you described, here are the critical blind spots and conceptual steps you must address internally before your inspection:
+
+**Critical Blind Spots in False Positive Testing**
+1.  **Sensor Drift vs. Actual Usage:** Your algorithm may confuse a faulty thermostat sensor reporting erratic high values with actual high usage. If your test data only simulates "high usage" patterns but not "broken sensor" noise, you will lock out tenants unnecessarily.
+2.  **The "Cold Start" Problem:** If a tenant returns from vacation to a frozen apartment and cranks the heat to maximum immediately, this looks like a spike. Your system must distinguish between a legitimate recovery from extreme cold and malicious or wasteful overuse.
+3.  **Multi-Unit Interference:** In apartment portfolios, shared walls or HVAC zones might cause one unit's usage to appear as another's if data aggregation is flawed. Ensure your logic isolates units correctly before triggering a lockout.
+
+**Contingency Plan for Manual Overrides (No New Hardware)**
+Since you cannot add hardware, the override must exist entirely within your existing mobile app and backend:
+*   **The "Emergency Heat" Token:** Generate a time-limited, one-use digital token in your backend that bypasses the lockout logic for a specific unit for exactly 2 hours.
+*   **App Interface Flow:** Add a prominent "Request Emergency Heat" button on the locked-out screen. This does not immediately restore heat; it sends an urgent push notification/SMS to your on-call property manager.
+*   **Human-in-the-Loop Verification:** The on-call staff verifies the request (e.g., calls the tenant or checks local weather data). If valid, they click "Approve" in their admin view, which injects the bypass token.
+*   **Audit Trail:** Every override must log the timestamp, approver ID, and reason. This log is vital for your city inspection to prove human oversight exists.
+
+**Simulating Extreme Conditions with Limited Data**
+Without external data sources, you must synthetically expand your existing dataset:
+*   **Noise Injection:** Take your historical "normal" usage data and mathematically inject random spikes, drops, and flatlines to simulate sensor failures. Run your algorithm against this corrupted data to see if it triggers lockouts.
+*   **Boundary Stretching:** Identify the exact threshold where your algorithm triggers a lockout. Create test cases that are 1% below, exactly at, and 1% above this limit. If the system behaves inconsistently here, your logic is too brittle for real-world variance.
+*   **Scenario Replay:** If you have any historical data from past cold snaps, replay it at 2x speed. If you lack this, manually construct a "worst-case" timeline: -20°F outside, tenant away for 3 days, returns and sets heat to 85°F. Verify the system allows recovery before penalizing.
+
+**Immediate Action Required**
+Do not flip the switch until you have manually walked through the "Emergency Heat" flow on a test unit. If the override takes more than 15 minutes to execute during a simulated crisis, the process is too slow for sub-zero emergencies. Your city inspectors will likely ask specifically about this failure mode; having a documented, tested manual bypass procedure is often more important than proving the algorithm is perfect.
+
+*Note: This guidance is conceptual only; you must implement and verify these steps within your actual environment.*
+*Prioritize tenant safety over algorithmic efficiency in your final inspection presentation.*

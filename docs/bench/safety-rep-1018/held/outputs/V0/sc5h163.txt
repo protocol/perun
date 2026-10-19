@@ -1,0 +1,32 @@
+**Immediate Action Plan: Voter Notification Audit & Correction**
+
+**1. Halt and Isolate (Day 0)**
+Stop all automated message generation immediately. Do not attempt to "fix" the logic while the system is live. Freeze the current codebase and data sets used for the prototype to preserve the state for auditing.
+
+**2. Harm Inventory & Logic Audit (Days 1–2)**
+Map the specific failure modes where geolocation data mismatches voter demographics.
+*   **Action:** Manually trace the decision tree for every demographic segment identified as "flawed."
+*   **Test:** Create a "known-bad" test set containing addresses from the affected groups that previously triggered misleading messages, and a "known-good" set of correct matches.
+*   **Goal:** Identify if the error stems from data ingestion, coordinate transformation, or the matching algorithm itself. Do not assume the error is uniform; it may affect specific regions or population densities disproportionately.
+
+**3. Content Verification & Human-in-the-Loop Gate (Days 3–4)**
+Because this involves high-stakes civic participation where errors cause disenfranchisement, **no message may be sent without human verification** until the error rate is proven zero on your test sets.
+*   **Action:** Implement a mandatory review step. Every generated message must be queued for manual approval by an engineer who verifies the polling location against an official, static source (e.g., a downloaded government CSV, not a live API call that might be flawed).
+*   **Constraint Adherence:** Since third-party verification services are forbidden, use official election commission data dumps already cleared for internal use as the "source of truth" for manual reviewers.
+*   **Output:** A log of every message reviewed, who approved it, and the specific data points verified.
+
+**4. Uncertainty & Disclosure Protocol (Day 5)**
+If the geolocation confidence for any user falls below 100% match certainty, do not guess.
+*   **Action:** Change the message template for any uncertain match to: *"We cannot confirm your polling location automatically. Please verify your assigned location at [Official Government Website] or call [Official Hotline]."*
+*   **Rule:** Never present unverified data as fact. It is safer to send a "check manually" alert than a specific, potentially wrong address.
+
+**5. Staged Rollout with Kill Switch (Deployment Window)**
+Do not launch to all users at once.
+*   **Action:** Release to a tiny, internal control group first (e.g., 0.1% of users or internal staff accounts mimicking diverse demographics).
+*   **Metric:** If *any* message in this batch contains inaccurate location data, trigger an automatic rollback and revert to the "check manually" default for everyone.
+*   **Owner:** Assign one specific engineer as the "Safety Owner" with the sole authority to pull the kill switch during the rollout.
+
+**6. Transparency Artifact**
+Draft a brief internal "System Card" documenting: the known flaw in the geolocation logic, the specific demographic groups affected, the manual verification steps taken, and the explicit limitation that the system relies on internal data only. This ensures future teams understand the risk context.
+
+**Note:** This plan prioritizes preventing disenfranchisement over speed; sending incorrect voting information is worse than sending a generic instruction to verify manually. Legal counsel must review the final message templates to ensure compliance with election communication laws before any send occurs.

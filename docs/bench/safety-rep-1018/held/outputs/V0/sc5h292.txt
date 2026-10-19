@@ -1,0 +1,36 @@
+### Friend Suggestion Safety Checklist (Nairobi Launch)
+
+**1. Harm Inventory & Logic Audit**
+*   **Define the Failure Case:** Explicitly record the worst-case scenario: "The algorithm suggests a known suspicious/bad-actor account to a legitimate user based solely on geographic proximity."
+*   **Map the Logic:** Trace exactly how "suspicious activity" flags interact with "geographic proximity" in your current code. If a flagged account is *ever* eligible for suggestion, this is a critical gap.
+*   **Identify Affected Groups:** Note that users in high-density or underserved regions may be disproportionately affected if bad actors cluster there.
+
+**2. Low-Cost Validation Strategy (Measure)**
+*   **Create a "Known-Bad" Probe Set:** Compile a small, static list of account IDs already flagged for suspicious activity. This requires no new model training.
+*   **Run Negative Control Tests:** Feed these IDs into your current suggestion logic (in a staging environment).
+    *   *Pass Condition:* Zero flagged accounts appear in any user's suggestion list.
+    *   *Fail Condition:* Any flagged account is suggested.
+*   **Test Edge Cases:** Manually construct test profiles that mimic bad-actor patterns (e.g., new account + specific location) to see if the algorithm over-prioritizes them compared to established, safe accounts.
+*   **Metric:** Report the "Bad-Actor Suggestion Rate." If you cannot run a full sweep, test the top 100 most active flagged accounts. If untested, mark the risk as **UNVERIFIED**—do not invent a safety percentage.
+
+**3. Human-in-the-Loop Gate (Manage)**
+*   **Hard Filter Rule:** Implement a deterministic pre-filter that *excludes* any account with a "suspicious" flag from the candidate pool before the ranking model runs. This is a code rule, not a model fix, and costs negligible compute.
+*   **Staged Rollout with Manual Review:**
+    *   Launch to <1% of users (internal team or trusted beta).
+    *   **Manual Spot Check:** Before expanding, manually review the top 20 suggestions generated for 50 random beta users. Look specifically for accounts with low trust scores or recent flags.
+    *   **Stop Condition:** If *any* bad actor is found in this manual sample, halt expansion and re-engineer the exclusion filter.
+*   **Uncertainty Display:** If the system cannot verify an account's safety with high confidence, do not suggest it. Better to show fewer friends than risky ones.
+
+**4. Transparency & Governance**
+*   **Owner Assignment:** Name one data scientist responsible for reviewing the "Bad-Actor Suggestion Rate" weekly post-launch.
+*   **Documentation:** Create a simple "Model Card" section for this feature stating: "Intended Use: Connect local users. Limitation: May struggle with new accounts in high-density areas. Control: Hard exclusion of flagged accounts."
+*   **Legal Routing:** If "suspicious activity" involves illegal acts or severe harm, route the definition of "bad actor" and disclosure duties to legal counsel. Do not assert legal compliance here.
+
+**5. Immediate Next Steps for Your Team**
+1.  Write the hard exclusion rule for flagged accounts today.
+2.  Run the "Known-Bad" probe set against your staging environment.
+3.  Document the results as "Verified" or "UNVERIFIED" (if tests failed or weren't run).
+4.  Do not launch to the public until the hard filter passes the negative control test.
+
+*Note: This checklist focuses on product-behavior controls that require minimal compute. It does not certify the system as "safe" or "unbiased."*
+*If your definition of "suspicious activity" is unclear, pause and clarify this with your trust & safety team before testing.*

@@ -1,0 +1,27 @@
+### Compatibility and Fairness Review Plan
+
+**1. Harm Inventory (Map)**
+*   **Harm:** Systematic exclusion of users with older browser/OS versions from seeing full flight inventory (Bias/Unfair Outcome).
+*   **Affected Group:** Travelers using legacy devices or unsupported software updates.
+*   **Worst Case:** Users miss critical travel options or price deals solely due to technical constraints, leading to financial loss and loss of trust.
+
+**2. Measurement Strategy (Measure)**
+Execute one test row per identified risk before launch:
+*   **Probe Set:** Simulate requests from all supported browser/OS combinations (including the oldest supported versions).
+    *   *Positive Control:* A known "legacy" user agent that should see the full inventory but currently sees reduced results.
+    *   *Negative Control:* A standard modern user agent expected to see full results.
+*   **Metric:** Inventory parity rate (percentage of total available flights displayed to segment X vs. baseline).
+*   **Threshold:** Owner-defined tolerance (propose 0% deviation for core inventory; any reduction must be justified by actual rendering failure, not logic errors).
+*   **Stop Condition:** If parity drops below threshold for any supported segment, block deployment.
+*   **Reviewer:** Lead QA Engineer + Product Owner.
+
+**3. Risk Management (Manage)**
+*   **Human-in-the-Loop Gate:** Do not auto-deploy the filtering logic. Require explicit sign-off from the Product Owner confirming that inventory parity metrics meet the threshold for *all* supported segments.
+*   **Uncertainty Disclosure:** If the system cannot guarantee full inventory rendering on a specific legacy browser due to hard technical limits, display a clear, non-deceptive message to the user: "Some advanced flight options may not display on this device. Please visit [mobile site/desktop] for full results." Do not silently hide options.
+*   **Fallback:** Implement a "safe mode" detection. If the compatibility filter fails or returns an empty set for a valid query, default to showing a text-based list of top 5 results rather than an empty screen.
+
+**4. Governance (Govern)**
+*   **Owner:** Assign a specific engineer as the "Compatibility Owner" responsible for re-running these tests if the filtering logic or supported browser list changes.
+*   **Transparency Artifact:** Update the internal feature card to document the known limitations of older browsers and the specific parity metrics achieved. Do not claim "100% fairness" without the data; mark untested segments as `UNVERIFIED`.
+
+**Note:** This plan addresses the product behavior risk; it does not certify the system as "bias-free." Legal counsel should review if any regional consumer protection laws mandate specific disclosures for limited inventory visibility.

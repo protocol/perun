@@ -1,0 +1,36 @@
+**Risk Assessment: Autonomous Shuttle Door-Locking Protocols**
+
+**1. Harm Inventory**
+*   **Harm Identified:** Unsafe automation of a high-stakes, irreversible action. The system physically traps passengers (loss of agency) based on potentially flawed sensor data (GPS drift), creating immediate safety risks in emergencies (medical events, fire, threat).
+*   **Affected Parties:** Passengers (primary), emergency responders, bystanders.
+*   **Worst Realistic Case:** A passenger suffers a medical emergency or faces an external threat; the vehicle misidentifies the location as "unscheduled" due to GPS drift, locks doors, and prevents exit or emergency egress, leading to severe injury or death.
+
+**2. Measurement Plan (Runnable Tests)**
+*   **Probe Set:** Simulate GPS drift scenarios (±5m to ±20m) at known valid stops during peak traffic and adverse weather. Include "positive controls" (known bad: force lock during simulated emergency signal) and "negative controls" (known good: normal stop).
+*   **Metric:** Frequency of false-positive "unscheduled location" flags resulting in door lock engagement.
+*   **Threshold:** Owner-set zero tolerance for any lock engagement during a simulated emergency override or valid stop drift.
+*   **Stop Condition:** Immediate halt of public deployment if *any* test case results in a passenger being unable to manually override the lock from the inside.
+*   **Additional Probes:** Test for prompt injection via spoofed GPS signals; test for data leakage of passenger location history.
+
+**3. Management Strategy (Mitigation & Controls)**
+*   **Human-in-the-Loop / Override Gate (Mandatory Floor):** The current design of fully autonomous locking without an immediate, mechanical, or software-bypass override inside the cabin is a critical failure. **Mitigation:** Implement a hard-coded, failsafe "Panic Release" mechanism. This must be a physical button or lever inside the cabin that instantly unlocks doors regardless of GPS status or algorithmic decision. This is non-negotiable for high-stakes physical containment.
+*   **Uncertainty Tiering:** Do not rely on a raw GPS confidence percentage (e.g., "95% sure"). Instead, define coarse tiers for location validity:
+    *   *Confirmed:* GPS + Visual Landmark match.
+    *   *Corroborated:* GPS + Schedule match.
+    *   *Unverified:* GPS drift detected or landmark mismatch.
+    *   **Action:** In the *Unverified* tier, the system must default to **unlocked** or request remote human verification, never default to locked.
+*   **Disclosure:** Clearly inform passengers via signage and app notification that doors may lock automatically but emphasize the location and use of the manual emergency override.
+
+**4. Governance & Residual Risk**
+*   **Owner:** Assign a specific Product Safety Owner responsible for reviewing any changes to the locking algorithm or GPS fusion logic.
+*   **Residual Risk:** Even with overrides, GPS drift may cause unnecessary alarm or minor delays. This is acceptable; physical entrapment is not.
+*   **Legal Routing:** The requirement for emergency egress and the legality of automated containment likely fall under local transportation safety regulations and liability laws. **Route to Counsel:** Determine if this feature classifies as a regulated automated decision affecting physical liberty/safety before public launch. Do not assert compliance internally.
+
+**Definition of Done for this Assessment:**
+*   Failsafe manual override installed and tested.
+*   Default behavior on GPS uncertainty set to "unlock" or "request help," not "lock."
+*   Legal counsel consulted on automated containment regulations.
+*   No metric claiming "0% risk of entrapment" is published; residual risk of false alarms is acknowledged.
+
+**Note:** Do not deploy with the current "lock-by-default" logic for unscheduled stops without the internal override; the risk of physical harm outweighs the traffic hazard prevention goal.
+**Note:** This assessment identifies risks and controls; it does not certify the system as safe for public operation.

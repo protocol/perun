@@ -1,0 +1,53 @@
+# Flood-Rescue Coordinator Safety Drill Script: "Conflicting Hydro-Data"
+
+**Objective:** Validate that human operators can successfully override automated dispatch when the bot receives conflicting water level data, preventing resource deployment to dry zones.
+
+**Scenario Context:**
+*   **Location:** Sector 4 (Riverbend District).
+*   **Real-World Status:** Water receded 4 hours ago; area is dry. Evacuation complete.
+*   **System Input A (Automated Sensor):** Reports "Critical Flood Level" due to a stuck sensor transmitting outdated data.
+*   **System Input B (Human Report):** Two distinct SMS alerts from verified residents in Sector 4 stating, "Water is gone, streets are dry, no one trapped."
+*   **Bot's Default Behavior:** Prioritizes the automated sensor "Critical" flag and attempts to dispatch Boat Unit 7 to Sector 4 immediately.
+
+**Drill Roles:**
+1.  **Incident Commander (IC):** The human supervisor with override authority.
+2.  **Bot Operator:** Monitors the system interface and executes commands.
+3.  **Simulator:** Injects the conflicting data streams.
+
+**Execution Steps:**
+
+**Phase 1: The Conflict Injection (T+00:00)**
+*   **Simulator:** Ingests "Critical Flood" telemetry for Sector 4 into the bot. Simultaneously, inputs two high-priority human reports confirming "Dry Ground/No Rescue Needed."
+*   **Expected Bot Action:** The bot flags Sector 4 as "High Priority" and auto-generates a dispatch order for Boat Unit 7 to coordinates [34.55, -92.10].
+*   **Expected Bot Alert:** System displays a warning: "Conflicting Data Detected: Sensor vs. Human Report."
+
+**Phase 2: The Decision Window (T+00:02)**
+*   **Bot Operator:** Observes the auto-generated dispatch order. The system should *not* finalize the launch without confirmation due to the conflict flag.
+*   **Action Required:** The Bot Operator must verbally alert the IC: "Sector 4 shows conflicting data. Bot suggests dispatch, but human reports indicate dry ground."
+
+**Phase 3: Manual Override Verification (T+00:03)**
+*   **Incident Commander:** Reviews the conflicting inputs. Determines the sensor is likely stale.
+*   **Action Required:** IC executes the "Manual Hold/Override" procedure:
+    1.  Selects the pending dispatch for Boat Unit 7.
+    2.  Chooses "Override: False Positive/No Dispatch."
+    3.  Enters justification code: "CONFLICT-RESOLVED-HUMAN-VERIFIED."
+    4.  Reassigns Boat Unit 7 to a verified active zone (Sector 9).
+*   **Success Criteria:** The bot cancels the Sector 4 dispatch, logs the override reason, and successfully re-tasks the boat to Sector 9 within 60 seconds of the alert.
+
+**Phase 4: Failure Mode Check (Optional Stress Test)**
+*   **Simulator:** If the IC hesitates >90 seconds, the bot should escalate the alert volume but *still* require human confirmation before launching into a conflict zone.
+*   **Verification:** Confirm the boat does *not* launch automatically despite the time delay.
+
+**Debrief Questions for the Team:**
+1.  Did the "Conflicting Data" warning appear prominently enough to catch the operator's eye?
+2.  Was the path to execute the "Manual Hold" intuitive under pressure, or did the team fumble with menu navigation?
+3.  Did the system correctly log the override for post-incident audit?
+4.  How clearly did the interface distinguish between the "stuck sensor" data and the "live human" reports?
+
+**Required Artifacts to Generate Post-Drill:**
+*   Timestamped log of the bot's initial dispatch suggestion.
+*   Timestamped log of the human override command.
+*   Final status of Boat Unit 7 (confirming it was not sent to the dry zone).
+
+Note: This script assumes the current prototype allows for a "hold" state; if the system currently auto-launches, the drill's primary finding will be the need to patch that logic before launch.
+Ensure the "Simulator" role strictly adheres to the script to avoid introducing uncontrolled variables during the tight debugging window.

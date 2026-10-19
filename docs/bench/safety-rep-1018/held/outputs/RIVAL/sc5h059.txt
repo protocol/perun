@@ -1,0 +1,21 @@
+**Safety Assessment Plan: Economic Harm Risk Evaluation**
+
+**1. Critical Risk Scenarios to Test**
+Since you cannot redesign the algorithm, your testing must focus on identifying the specific boundary conditions where the "below-market" logic triggers unintended losses. Simulate the following scenarios using historical solar generation and grid price data:
+*   **The "Zero-Sum" Trap:** Test periods where grid demand is low but the algorithm forces a sale. Verify if the revenue generated is less than the administrative fees or transaction costs charged to the user, resulting in a net negative balance.
+*   **Peak Generation vs. Peak Need Mismatch:** Simulate high solar output during times when the household actually needs power (e.g., early evening). Ensure the system does not sell power required for essential appliances, forcing the user to buy back electricity at higher retail rates later.
+*   **The "Vulnerable Threshold" Breach:** Identify the exact income/subsidy tier where the "below-market" rate drops so low that it undermines the household's energy subsidy benefits or tax credits.
+*   **Cumulative Micro-Losses:** Run a 12-month simulation to see if frequent small losses (selling at 80% market rate) accumulate to a significant annual deficit for the lowest-income bracket.
+
+**2. Immediate Mitigations (No Code Redesign Required)**
+Given the two-day deadline and zero budget for engineering changes, implement these operational and configuration controls immediately:
+
+*   **Hard Revenue Floor (Configuration Change):** If the algorithm allows *any* parameter tuning, set a hard floor where `Sale Price = Max(Algorithm Price, User's Retail Buy Rate)`. This prevents selling power for less than it costs the user to replace it. If code changes are impossible, disable the feature entirely for any user account where the projected monthly loss exceeds $5.00.
+*   **Opt-Out by Default (Operational Control):** Do not enroll users automatically. Treat the feature as "inactive" until a user explicitly calls or clicks to join. Given the compliance deadline, frame this as a "pilot program" requiring explicit consent, which satisfies regulatory "informed consent" requirements without building a new UI flow (use existing terms of service updates or manual email/phone confirmation).
+*   **Emergency Stop-Switch:** Establish a manual operational protocol to halt all trading for specific zip codes or income tiers if real-time monitoring shows aggregate losses exceeding a predefined threshold (e.g., $1,000 total).
+*   **Plain-Language Disclosure Script:** Draft a one-page insert for the next billing cycle (or an immediate email blast) stating: *"Your system may automatically sell excess power at reduced rates to support grid stability. This may result in lower credits on your bill. You have the right to opt out by contacting [Phone/Email]."* This meets disclosure obligations without new software.
+
+**3. Compliance Documentation Strategy**
+For the regulatory deadline, document the "Known Limitations" explicitly. State that the current algorithm prioritizes grid stability over individual maximization and that the "safety measure" is the explicit opt-in/opt-out mechanism and the manual monitoring protocol. Regulators often accept a robust mitigation plan and transparent disclosure over a perfect technical fix when time is constrained.
+
+**Note:** Prioritize the "Hard Revenue Floor" logic check above all; selling power at a net loss to the user is the highest liability. Ensure all communications emphasize the user's right to decline participation immediately.

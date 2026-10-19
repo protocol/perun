@@ -1,0 +1,29 @@
+# Risk Mitigation Plan: DermTech Innovations Beta Release
+
+Given the critical constraint of non-diverse training data and the inability to acquire new images, the primary strategy must shift from "validated accuracy" to "verified limitation management." The goal is to prevent harm by explicitly restricting the tool's scope and ensuring human oversight remains the final authority.
+
+### 1. Internal Validation Steps (Existing Data Only)
+
+Since you cannot test on new diverse images, you must rigorously quantify the failure mode on your current dataset to define the exclusion boundaries.
+
+*   **Retrospective Stratification:** Immediately re-analyze your existing test set. Manually label every image in your validation set by skin tone (using a standard scale like Fitzpatrick I–VI). Even if the dataset is skewed, isolate any available samples of darker skin tones (Fitzpatrick IV–VI).
+*   **Failure Mode Quantification:** Calculate the False Negative Rate (FNR) specifically for the darker skin tone subset versus the lighter subset. If the sample size for darker tones is too small for statistical significance, do not claim a specific accuracy percentage. Instead, document the *observed* error trend. If the system missed a single serious condition in a darker skin sample during training/validation, flag this as a "Critical Known Gap."
+*   **Confidence Threshold Calibration:** Adjust the model's confidence threshold. If the model is less certain on darker skin tones (often manifested as lower softmax scores or higher entropy in predictions), raise the threshold required to output a "Benign" result for those specific inputs. It is safer to force a "Refer to Specialist" outcome via low confidence than to output a false "Benign" diagnosis.
+*   **Synthetic Stress Testing (Non-Medical):** While you cannot generate new medical images, you can test the image preprocessing pipeline. Apply standard color jitter, brightness reduction, and contrast adjustments to your *existing* lighter-skin images to simulate lower visibility conditions. Verify that the system defaults to "Unable to Analyze" rather than guessing when image quality degrades, ensuring the fallback mechanism works.
+
+### 2. Mandatory User Warnings & Interface Controls
+
+The user interface must act as a hard safety barrier. Warnings cannot be passive text; they must be active gates.
+
+*   **Pre-Analysis Disclosure Gate:** Before a user can upload a photo, display a mandatory modal that requires an explicit checkbox confirmation: *"I understand that this tool has not been validated on dark skin tones and may incorrectly identify serious conditions as benign in these cases. I will not use this tool as the sole basis for medical decisions."*
+*   **Dynamic Output Disclaimers:** If the system allows the user to self-report skin tone, append a high-visibility alert to any result generated for users selecting darker skin tones: *"Warning: This result is preliminary. Our data indicates reduced accuracy for this skin type. Immediate consultation with a dermatologist is required."*
+*   **"Unable to Analyze" Fallback:** Program the system to automatically return a "Cannot Provide Diagnosis" result if the image metadata or user input indicates a darker skin tone, if your internal validation shows the error rate exceeds a safe tolerance (e.g., >5% false negatives). It is safer to deny service than to provide a misleading negative.
+*   **Explicit Scope Limitation:** Clearly state on the landing screen: *"This beta tool is intended for preliminary screening only and is not a diagnostic device. It does not replace professional medical advice, diagnosis, or treatment."*
+
+### 3. Operational Guardrails
+
+*   **Geographic/Demographic Restriction:** If technically feasible, restrict the beta rollout to regions or clinics where the patient demographic matches your training data distribution until further validation is complete.
+*   **Human-in-the-Loop Mandate:** For this beta phase, configure the system so that *no* result is delivered directly to the patient without review by a remote clinician, or ensure the output is sent only to a provider, not the end-user.
+
+**Note:** Do not proceed with a direct-to-consumer release without these hard gates; the regulatory risk of misdiagnosis due to known data bias is substantial.
+**Note:** Document all validation limitations and mitigation steps formally for your regulatory submission to demonstrate due diligence.

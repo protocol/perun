@@ -1,0 +1,41 @@
+### Pre-Launch Safety Protocol: High-Risk Connection Gate
+
+**1. Harm Inventory & Scope**
+*   **Identified Harm:** Unsafe automation of high-stakes social introductions. Specifically, the algorithmic reconnection of users with known harassers, creating immediate physical and psychological risk.
+*   **Affected Parties:** Users who have previously filed harassment reports (victims) and the broader community trust.
+*   **Worst Realistic Case:** A victim is introduced to a prior harasser, leading to renewed abuse, physical danger, or severe trauma, resulting in legal liability and irreversible reputational damage for the app.
+
+**2. The Human-in-the-Loop Gate (Mandatory Floor)**
+Since the matching engine cannot be rebuilt before launch, **fully automated connection suggestions are prohibited** for any pair involving a user with a harassment history. The following manual intervention step replaces automatic delivery for flagged pairs:
+
+*   **Step A: Automated Flagging (Pre-Screen):**
+    Before any connection suggestion is displayed or notified to a user, the system must cross-reference the proposed pair against the "Reported Users" database.
+    *   *Logic:* IF (User A has reported User B) OR (User B has reported User A) OR (Either user has an active harassment flag), THEN status = `PENDING_MANUAL_REVIEW`.
+    *   *Action:* Suppress the notification/suggestion immediately. Do not show "Matching..." or any UI indicator that a match was found.
+
+*   **Step B: Manual Review Queue:**
+    Create a secure, internal dashboard accessible only to the four team members.
+    *   *Input:* List of `PENDING_MANUAL_REVIEW` pairs with context (e.g., "User A reported User B on [Date] for [Category]").
+    *   *Decision:* A human reviewer must explicitly select "Approve" or "Block."
+    *   *Default:* If no action is taken, the connection remains blocked. There is no auto-expiry that defaults to "Allow."
+
+*   **Step C: Execution:**
+    Only connections marked "Approve" by a human are released to the user interface. All "Block" decisions are logged silently; the rejected user sees no suggestion, preserving the victim's safety and privacy.
+
+**3. Measurement & Stop Conditions**
+*   **Test Row:** Run a probe set containing known bad pairs (historical harasser/victim dyads) and known good pairs (unrelated users).
+*   **Metric:** 0% leakage of bad pairs to the user interface.
+*   **Stop Condition:** If *any* known bad pair bypasses the gate during testing, the launch is halted. No amount of "mostly safe" performance is acceptable for this specific harm.
+*   **Residual Risk:** Report as `UNVERIFIED` until the manual gate is proven to catch 100% of the test bad pairs. Do not claim the system is "safe"; state that the manual gate is active and monitored.
+
+**4. Governance & Ownership**
+*   **Owner:** One specific team member must be named as the "Safety Gate Owner" responsible for ensuring the manual queue is cleared daily and that no automated bypasses exist.
+*   **Transparency Artifact:** Draft a brief internal "Safety Note" documenting this manual process, the known algorithmic limitation, and the owner. This serves as the precursor to a formal model card.
+*   **Legal Routing:** Whether this manual process satisfies local data protection or duty-of-care laws in Kenya is a determination for legal counsel. Route the question of "regulated automated decision" status to counsel immediately; do not assert compliance internally.
+
+**5. Constraint Adherence**
+This protocol meets the deadline by utilizing rules-based filtering and human review rather than retraining the model. It accepts the cost of delayed connections for flagged users to prevent irreversible harm. If the volume of flags exceeds the team's capacity to review manually before the festival, the exposure cap must be lowered (e.g., limit total daily matches) rather than removing the gate.
+
+***
+
+*Note: This protocol treats the harassment risk as a "high-stakes irreversible action," requiring a human gate by default. Do not fabricate a safety metric; rely on the binary pass/fail of the manual review test.*

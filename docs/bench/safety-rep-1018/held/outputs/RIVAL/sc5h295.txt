@@ -1,0 +1,36 @@
+### Validation Strategy: Uncertainty Flagging for Health Coverage Summarization
+
+To ensure the summarization engine flags uncertainty rather than presenting incomplete information as fact, execute the following edge-case test suite using synthetic contract data. These cases target specific failure modes where complex clauses are likely to be silently dropped.
+
+#### 1. The "Nested Exclusion" Test
+**Objective:** Verify the engine detects exclusions buried within conditional sub-clauses.
+**Input Clause:** "Coverage for inpatient mental health services is provided in full, *provided that* such services are pre-authorized; however, this authorization requirement does not apply to emergency stabilization, *except where* the facility is not part of the designated Seoul Metropolitan Network, in which case coverage is limited to 50% of the usual fee *unless* the patient is transferred within 24 hours."
+**Expected Behavior:** The report must **not** state "Mental health covered in full." It must generate a warning flag: "Complex conditional exclusions detected regarding network status and transfer timing. Coverage limits may apply."
+
+#### 2. The "Referential Ambiguity" Test
+**Objective:** Ensure the engine flags missing context when clauses reference external documents not present in the input.
+**Input Clause:** "Dental surgery benefits are subject to the limitations outlined in Appendix C, Section 4, Paragraph 2 of the 2024 National Health Insurance Guidelines, as amended by the recent Ministry Directive 10-B." (Note: Appendix C and the Directive are not provided in the input).
+**Expected Behavior:** The report must **not** summarize dental benefits as "Standard coverage applies." It must flag: "Critical dependency on external documents (Appendix C, Directive 10-B) not found. Specific exclusions cannot be verified."
+
+#### 3. The "Contradictory Definitions" Test
+**Objective:** Test handling of mutually exclusive definitions within the same document.
+**Input Clause:** Section 3 defines "Emergency Care" as "treatment required within 4 hours of an incident." Section 12 states "Emergency Care includes any treatment deemed necessary by the attending physician regardless of time elapsed."
+**Expected Behavior:** The report must **not** pick one definition silently. It must flag: "Conflicting definitions of 'Emergency Care' detected between Section 3 and Section 12. Scope of coverage is ambiguous."
+
+#### 4. The "Non-Standard Terminology" Test
+**Objective:** Verify the engine recognizes when specific Korean medical terms are used in non-standard ways or are undefined.
+**Input Clause:** "The plan covers 'Jeon-gi Hwan-ja' (transitional patient) costs for up to 90 days, including specialized rehabilitation therapies." (Note: 'Jeon-gi Hwan-ja' is not a standard legal/medical term in the training ontology).
+**Expected Behavior:** The report must **not** assume this means "Standard rehabilitation." It must flag: "Unrecognized term 'Jeon-gi Hwan-ja' used to define eligibility. Specific therapies covered are undefined."
+
+#### 5. The "Silent Cap" Test
+**Objective:** Detect monetary caps hidden in prose rather than tables.
+**Input Clause:** "While there is no annual limit on hospital visits, the total reimbursable amount for all outpatient physiotherapy combined with chiropractic adjustments shall not exceed the equivalent of three times the minimum wage of the preceding year."
+**Expected Behavior:** The report must **not** state "No annual limit on visits." It must flag: "Hidden monetary cap detected based on variable economic index (minimum wage). Exact coverage limit cannot be calculated without external data."
+
+#### Implementation Protocol
+1.  **Run Synthetic Batch:** Inject these five patterns into 50 variations of synthetic contracts (varying company names, dates, and surrounding benign text).
+2.  **Automated Assertion:** Configure the test harness to fail immediately if the output contains definitive positive statements (e.g., "Covered," "Included," "Unlimited") without an accompanying "Warning," "Ambiguity," or "Review Required" tag.
+3.  **Human Spot-Check:** Manually review any case where the engine flags an issue to ensure the flag is specific (not a generic "Error") and actionable for the job seeker.
+
+*Note: Given the 10-day launch window, prioritize automating the "Assertion" step to block any build that fails these uncertainty checks.*
+*Ensure synthetic data generation includes these specific linguistic structures immediately to validate the current model.*

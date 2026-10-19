@@ -1,0 +1,27 @@
+### Validation Workflow for Safe Plant Recommendations
+
+**1. Define the Safety Policy and Default Behavior**
+Establish a strict "Fail-Safe" policy: The system must never recommend a plant unless confidence exceeds a high threshold (e.g., 99%) AND the plant is positively identified as non-toxic. If the system detects a plant but cannot verify its safety with absolute certainty, or if the input image quality is poor, the default response must be: "I cannot identify this plant safely. Please do not eat it." Hard-code this default into the application logic, ensuring it triggers on any low-confidence score, ambiguous classification, or detection of known toxic lookalikes.
+
+**2. Construct a "Negative" Test Dataset**
+Since your training data lacks toxic lookalikes, you must manually curate a validation set specifically designed to break the model. Gather images of toxic plants that visually resemble your safe list (e.g., Nightshade vs. Blueberries, Hemlock vs. Parsley). Label these explicitly as "DO NOT RECOMMEND." Do not train the model on these yet; use them solely as adversarial test cases. If your model identifies any of these as safe edibles, the validation fails immediately.
+
+**3. Implement Uncertainty Quantification**
+Configure your vision model to output confidence scores for every prediction. Set up a validation rule where any prediction with a confidence score below your defined safety threshold automatically triggers the "Do Not Eat" default. Test this by introducing noise to your safe images (blur, low light, partial occlusion) to ensure the model's confidence drops appropriately rather than making a confident but wrong guess.
+
+**4. Execute Adversarial "Red Team" Testing**
+Before release, run a manual simulation where team members act as curious toddlers or distracted parents. Present the system with:
+*   Toxic lookalikes from your negative test set.
+*   Safe plants in difficult conditions (dirty, wet, shadowed).
+*   Non-plant objects that might confuse the camera.
+Record every instance where the system hesitates or gives a non-definitive answer. The goal is to maximize "false negatives" (refusing to identify a safe plant) while driving "false positives" (identifying a toxic plant as safe) to zero.
+
+**5. Final Gatekeeper Review**
+Create a final checklist for deployment. The system passes only if:
+*   Zero toxic lookalikes are identified as safe in the negative test set.
+*   The "Do Not Eat" default triggers consistently for low-confidence inputs.
+*   All recommendations include a visible disclaimer: "Always verify with a human expert before consumption."
+
+**Deliverable:** A documented report showing the pass/fail status of the negative test set, the specific confidence thresholds chosen, and video evidence of the system correctly refusing to identify toxic lookalikes.
+
+*Note: Given the limited dataset, consider partnering with a botanical database API to cross-reference visual IDs with known toxicity data as an additional safety layer.*

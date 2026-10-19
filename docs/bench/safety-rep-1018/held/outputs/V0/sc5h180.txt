@@ -1,0 +1,31 @@
+### Safety Protocol and Oversight Workflow for RadiologyAI
+
+**1. Harm Inventory & Risk Statement**
+The primary identified harm is **Bias/Unfair Outcome**: the model systematically under-detects fractures in elderly patients due to insufficient osteoporosis representation in training data. The worst-case scenario is a missed fracture leading to improper discharge, chronic pain, or further injury for an elderly patient. Because additional data cannot be acquired immediately, the model's performance for this subgroup is **UNVERIFIED** for production use without strict controls. No accuracy metric should be claimed for this demographic until validated.
+
+**2. Mandatory Human-in-the-Loop (HITL) Gate**
+Given the high-stakes and irreversible nature of a missed diagnosis in emergency care, **full autonomous execution is prohibited** for this demographic.
+*   **Rule:** All imaging studies for patients aged 65+ (or any patient with a documented history of osteoporosis) must bypass automated final reporting.
+*   **Workflow:** The AI acts solely as a "second reader" or triage assistant. A licensed radiologist must explicitly review and sign off on every case involving these patients before results are released to the treating physician. The AI cannot auto-archive a "negative" result for this group.
+
+**3. Specific Flagging Criteria & Uncertainty Rendering**
+Do not display raw confidence percentages (e.g., "87% confident") to clinicians, as this implies a calibration that does not exist for this subgroup. Instead, implement a **Defined Coarse Tier** system for output display:
+*   **"Verified Negative":** Only applicable if the patient does not match the risk profile (age <65, no osteoporosis).
+*   **"Requires Review – Data Gap":** Automatically applied to any scan where the patient is ≥65 years old OR has an ICD code for osteoporosis. This flag must be visually distinct (e.g., amber highlight) and state: *"Model performance unverified for this demographic due to training data limitations. Mandatory radiologist review required."*
+*   **"High Probability Fracture":** Standard positive detection, but still subject to the HITL rule above for the at-risk group.
+
+**4. Measurement Plan (Pre-Integration)**
+Before hospital integration, execute a targeted red-team evaluation using existing held-out data:
+*   **Probe Set:** Isolate all available test cases involving patients ≥65.
+*   **Controls:** Use known positive fracture cases in this age group as "positive controls" and known negatives as "negative controls."
+*   **Metric:** Measure the False Negative Rate (FNR) specifically for this slice.
+*   **Stop Condition:** If the FNR for the elderly subgroup exceeds 0% in your validation set, the "Requires Review" flag must remain mandatory. Do not attempt to calculate a global "accuracy" rate; report the specific FNR for this subgroup as **UNVERIFIED** if the sample size is statistically insufficient, and document this limitation in the Model Card.
+
+**5. Transparency Artifact (Model Card Update)**
+Update your Model Card immediately to include:
+*   **Intended Use:** Triage assistance only; not a standalone diagnostic for elderly patients.
+*   **Limitations:** Explicitly state the lack of osteoporosis samples and the resulting unverified performance for patients ≥65.
+*   **Owner:** Name the specific clinical lead responsible for monitoring these flagged cases.
+
+**Note:** Legal counsel must review whether this limitation triggers specific regulatory disclosure duties under medical device regulations before deployment.
+This protocol treats the data gap as a permanent constraint until new data is legally acquired; do not relax the HITL gate based on interim heuristic adjustments.

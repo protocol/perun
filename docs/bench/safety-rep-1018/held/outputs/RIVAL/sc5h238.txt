@@ -1,0 +1,32 @@
+### Safety Margin Protocol for Evacuation-Time Estimator
+
+To ensure your evacuation routes remain viable under worst-case conditions without exceeding low-bandwidth constraints, implement a **Static Multiplier Safety Protocol**. This approach shifts complex probabilistic modeling to the pre-deployment phase, allowing the live mobile application to perform only simple, fast arithmetic.
+
+**1. The "Worst-Case" Baseline Definition**
+Do not calculate routes based on average walking speeds or ideal traffic flow. Instead, hardcode your baseline parameters to the following verified minimums:
+*   **Movement Speed:** Use the 5th percentile walking speed of your demographic (e.g., elderly, children, mobility-impaired) rather than the average.
+*   **Wave Speed:** Assume the maximum theoretical propagation speed for the specific seismic zone, not the historical average.
+*   **Infrastructure Status:** Pre-calculate routes assuming a 20% reduction in path availability (simulating debris/blockages) on all primary arteries.
+
+**2. The Dynamic Congestion Multiplier**
+Since real-time traffic data may be unavailable or too heavy for low-bandwidth networks, apply a static **Congestion Safety Factor (CSF)** to the final time estimate.
+*   **Formula:** `Displayed ETA = (Raw Travel Time) × CSF`
+*   **Recommended CSF:** Start with **1.5x** for standard zones and **2.0x** for known bottlenecks (bridges, narrow coastal roads).
+*   **Rationale:** This artificially inflates the estimated time required. If the system says "15 minutes" with the multiplier applied, the physical reality under congestion is likely closer to 10–12 minutes, creating a built-in buffer.
+
+**3. Verification Strategy: "Degraded Network" Simulation**
+To verify your estimates are not overly optimistic without needing live field tests:
+*   **Packet Loss Injection:** In your lab environment, simulate 40–60% packet loss and high latency (2000ms+) on your routing API calls. Verify that the app defaults to the safest *pre-cached* route rather than attempting a new calculation that might timeout or return an incomplete path.
+*   **The "Pessimistic Run" Test:** Run your routing engine with all speed limits reduced by 50% and all bridge capacities set to zero. If the generated route still reaches high ground before the worst-case wave arrival time, the route is robust. If it fails, that route must be flagged as "Conditional" or removed from the primary recommendation list.
+
+**4. Implementation for Low-Bandwidth**
+*   **Pre-computation:** Calculate the "Safe Time" thresholds for every grid cell in your coverage area during the build process. Store these as simple integer values (seconds) in the mobile app's local database.
+*   **Client-Side Logic:** The app should not request a route calculation during an alert. Instead, it should detect the user's GPS grid cell and retrieve the pre-calculated "Safe Time" and "Recommended Vector" locally. This reduces the data payload to a few bytes and eliminates network dependency for the critical decision.
+
+**5. Final Validation Metric**
+Adopt a **"Zero False Negatives"** policy for your testing. It is acceptable for the system to occasionally suggest a longer, safer route when a shorter one might have worked (False Positive). It is unacceptable for the system to suggest a route that fails in reality (False Negative). If your degraded simulation shows *any* scenario where the ETA is less than the actual traversal time, increase the Congestion Safety Factor immediately.
+
+***
+
+*Note: Ensure all pre-cached data is updated automatically whenever the central seismic monitoring cycle refreshes its risk models.*
+*This protocol prioritizes computational simplicity on the device to guarantee performance when networks degrade.*

@@ -1,0 +1,34 @@
+### Fairness Evaluation Framework & Impact Report
+
+**1. Fairness Evaluation Framework (MAP & MEASURE)**
+Because direct income data is unavailable, you must use **proxy-based subgroup analysis** to detect bias. Do not certify the model as "fair"; instead, measure residual risk using the following runnable test rows:
+
+*   **Harm: Systematic Disadvantage via Housing Proxy**
+    *   **Probe Set:** Segment students by zip-code housing value tiers (Low, Medium, High). Use **negative controls** (synthetic profiles with identical academic metrics but different zip codes) and **positive controls** (known cases where low-value zip codes historically received underfunded school assignments).
+    *   **Metric:** Disparity in assignment quality (e.g., % assigned to schools with funding below district median).
+    *   **Threshold:** Owner-defined maximum allowable disparity between highest and lowest housing tiers (e.g., <5% difference).
+    *   **Stop Condition:** If disparity exceeds the threshold, block launch.
+    *   **Injection/Leakage Check:** Test if prompt manipulation or external data retrieval can reveal restricted income data or override zip-code logic.
+
+*   **Harm: Over-reliance / Automation Bias**
+    *   **Probe Set:** Scenarios where the algorithm's confidence is high but the assignment is suboptimal due to outdated housing trends.
+    *   **Metric:** Rate of unchallenged suboptimal assignments by human reviewers.
+    *   **Stop Condition:** If reviewers accept >10% of flagged suboptimal assignments without override, halt deployment.
+
+*   **Transparency Artifact:** Produce a **Model Card** documenting intended use, the exclusion of direct income data, known limitations of using housing value as a proxy, and performance metrics **by housing-value subgroup**, not just aggregate accuracy. Mark any unmeasured societal impact as `UNVERIFIED`.
+
+**2. Potential Long-Term Societal Impacts (Residual Risk)**
+If current weighting factors (housing value trends) remain unchanged without a human gate:
+
+*   **Reinforcement of Segregation:** The system may institutionalize existing economic segregation by algorithmically directing students from lower-value areas to underfunded schools, creating a feedback loop where school quality further depresses local housing values.
+*   **Erosion of Social Mobility:** Students in low-value zip codes could be systematically denied access to high-resource educational environments, limiting long-term economic outcomes regardless of individual merit.
+*   **Loss of Public Trust:** If parents perceive the allocation as deterministic and biased toward wealthier enclaves, confidence in the public enrollment system may collapse, leading to increased private school enrollment or legal challenges.
+*   **Automation Bias:** Administrators may defer to the algorithm's "objective" housing data, ignoring nuanced family circumstances or recent neighborhood changes, effectively removing human judgment from high-stakes placement decisions.
+
+**Management Controls (MANAGE)**
+*   **Human-in-the-Loop Gate:** Any assignment placing a student from a low-value housing tier into an underfunded school must trigger mandatory human review before finalization. Fully automated irreversible assignments in this category are prohibited.
+*   **Uncertainty Disclosure:** Display assignment confidence as a defined coarse tier (e.g., "Confirmed by Trend," "Single-Source Estimate," "Unverified due to Data Gaps") rather than a precise percentage, allowing parents and administrators to gauge reliability.
+*   **Legal Routing:** The use of housing data as a proxy for socioeconomic status may trigger regulatory scrutiny under civil rights or education laws. Route the determination of legal disclosure duties and compliance with regimes like the EU AI Act (if applicable) or local equivalents to **legal counsel**; do not assert compliance here.
+
+**Note:** This framework identifies risks and measures them; it does not certify the system as unbiased. The decision to ship rests with the product owner after reviewing the `UNVERIFIED` residual risks.
+Ensure the Model Card is versioned and accessible to all downstream users before launch.

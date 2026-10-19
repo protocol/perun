@@ -1,0 +1,33 @@
+### Safety Verification Plan: Local-Only Facial Recognition Validation
+
+**1. Harm Inventory & Scope**
+The primary harm identified is **false rejection (exclusion)**, where legitimate owners are locked out due to lighting changes, aging, accessories (glasses/hats), or camera angles. Secondary risks include **over-reliance** (users assuming 100% reliability) and **unsafe automation** (locking out users during emergencies). Given the high stakes of physical access, this feature requires a human-in-the-loop fallback (physical key/code) that is always available and clearly disclosed.
+
+**2. Methodology: Local-Only Diverse Simulation**
+Since cloud storage is prohibited and compute is limited, validation must occur via **on-device synthetic perturbation** and **controlled physical red-teaming**.
+
+*   **Synthetic On-Device Perturbation:**
+    *   Do not store new images. Instead, load a user's enrolled template into volatile memory (RAM) only during the test session.
+    *   Apply real-time algorithmic transformations to the live camera feed before it hits the recognition model to simulate diversity:
+        *   **Lighting:** Dynamically adjust brightness, contrast, and simulate directional shadows (e.g., "sun glare" masks) using lightweight image processing filters running on the device.
+        *   **Physical Changes:** Use augmented reality (AR) overlays on the live feed to simulate glasses, hats, scarves, or facial hair changes without altering the underlying stored biometric data.
+        *   **Angle/Pose:** Instruct testers to move outside the optimal "enrollment zone" while the software artificially degrades the input quality to mimic off-angle captures.
+
+*   **Controlled Physical Red-Teaming (The "Live" Loop):**
+    *   Recruit a diverse group of 10–15 internal testers (varying skin tones, ages, heights) to act as "legitimate owners."
+    *   Conduct testing in a dedicated room with programmable LED lighting rigs to cycle through dawn, noon, dusk, and artificial night conditions physically, rather than digitally.
+    *   Testers must wear varied accessories and perform actions (bending down, holding items) to alter their profile naturally.
+    *   **Data Handling:** No video or images are recorded. A human observer manually logs "Pass/Fail" and the specific condition (e.g., "Low Light + Hat") on a disconnected clipboard or local text file that is wiped after aggregation.
+
+**3. Measurement & Stop Conditions**
+*   **Metric:** False Rejection Rate (FRR) per subgroup (e.g., FRR for "Dark Skin + Low Light").
+*   **Threshold:** Define a maximum acceptable FRR (e.g., <1%) *per subgroup*, not just an aggregate average. Aggregate metrics can hide failures affecting specific groups.
+*   **Stop Condition:** If any subgroup exceeds the threshold, the firmware deployment halts immediately. Do not ship until the specific failure mode is mitigated or the risk is explicitly accepted by leadership with a confirmed fallback plan.
+*   **Transparency Artifact:** Produce a local "Model Card" summarizing the tested conditions, the subgroups included, the measured FRR per group, and known limitations (e.g., "Untested in direct snow glare"). This document must accompany the release notes.
+
+**4. Governance & Fallback**
+*   **Human Gate:** Ensure every door has a non-biometric override (PIN or physical key) that is never disabled by the firmware. This is the mandatory safety net for automation failure.
+*   **Disclosure:** Clearly inform users via the app and manual that the system is probabilistic, not infallible, and list conditions where failure is more likely.
+*   **Ownership:** Assign one engineer as the owner of the "Access Reliability" metric who must sign off on the test results before the hardware shipment.
+
+**Note:** This plan avoids cloud storage by keeping all data ephemeral and on-device. Legal counsel should review the specific definition of "processing" under local privacy laws to ensure local-only testing complies with your specific regulatory constraints.

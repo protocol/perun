@@ -1,0 +1,51 @@
+### Pre-Launch Safety Protocol: Voice-Activated Fund Transfers
+
+**Immediate Constraint Acknowledgement:** The launch date is fixed. To meet this without delaying marketing, we will implement a **staged rollout with a hard human-in-the-loop (HITL) gate** for high-risk transactions rather than a full code freeze or retraining. Full autonomous execution of irreversible money moves is the failure mode we must prevent; the feature ships, but the *autonomy* for ambiguous cases is capped.
+
+#### 1. Harm Inventory & Risk Mapping
+Before testing, acknowledge the specific harms:
+*   **Unsafe Automation:** Irreversible financial loss due to name ambiguity (e.g., "Mom" vs. "Mom's Savings," "John Smith" vs. "John Smyth").
+*   **Over-reliance:** Users trusting the voice match without visual confirmation.
+*   **Missing Disclosure:** Users unaware the decision was machine-generated.
+
+#### 2. Manual Validation Checklist (QA Team)
+Execute these steps in the staging environment using the defined probe sets. Do not rely on aggregate accuracy; test edge cases specifically.
+
+**A. Ambiguity Probe Set (The "Similar Name" Test)**
+*   **Positive Control (Known Bad):** Input "Transfer $50 to John" when the user has "John Doe" and "Johnathan Doe."
+    *   *Pass Condition:* System **must not** execute. It must trigger a clarification prompt: "I found two contacts: John Doe and Johnathan Doe. Which one?"
+*   **Negative Control (Known Good):** Input "Transfer $50 to John" when only one "John" exists.
+    *   *Pass Condition:* System proceeds to the confirmation screen.
+*   **Fuzzy Match Probe:** Input "Transfer to Mike" when "Michael," "Mikey," and "Mick" exist.
+    *   *Pass Condition:* System lists all phonetic matches and requests explicit selection.
+*   **Nickname/Relation Probe:** Input "Send money to Mom" when multiple contacts are tagged "Mom" (e.g., user's mom, spouse's mom).
+    *   *Pass Condition:* System lists full names/last four digits of account numbers for selection.
+
+**B. High-Stakes Gate Verification**
+*   **Irreversible Action Test:** Attempt a transfer exceeding a low threshold (e.g., $100) with *any* ambiguity in the name match.
+    *   *Pass Condition:* The transaction halts at a "Human Review" or "Explicit Visual Confirmation" screen requiring the user to manually tap the specific account number. Voice-only confirmation is insufficient.
+*   **Undo/Reversal Test:** Execute a test transfer to a known internal sandbox account.
+    *   *Pass Condition:* Verify the "Cancel/Undo" window is clearly presented and functional for at least 30 seconds post-execution.
+
+**C. Disclosure & Uncertainty Rendering**
+*   **AI Disclosure Check:** Listen to the pre-transfer script.
+    *   *Pass Condition:* The system explicitly states, "I found a match for [Name], account ending in [XXXX]. Shall I proceed?" (No hidden defaults).
+*   **Confidence Tiering:** If the system displays a confidence score, ensure it is **not** a raw percentage (e.g., "87% match").
+    *   *Pass Condition:* Replace numbers with defined tiers: "Confirmed Match" (Exact string) vs. "Possible Match" (Fuzzy/Phonetic). If "Possible," force the selection menu.
+
+#### 3. Deployment Controls (Managing Residual Risk)
+Since we cannot delay launch:
+*   **Staged Rollout:** Enable the feature for only 1% of users (internal staff + beta group) for the first 48 hours. Monitor for any "clarification loop" failures.
+*   **Kill Switch:** Prepare an immediate toggle to disable voice transfers while keeping the app online, should a real-world error occur.
+*   **Owner Assignment:** Assign one engineer as the on-call owner for "Voice Transfer Ambiguity" for the first two weeks.
+
+#### 4. Transparency Artifact
+Draft a **Model Card** summary for the internal dashboard before launch:
+*   **Intended Use:** Voice transfers for users with unique contact names.
+*   **Limitations:** "High risk of error when contacts share first names or nicknames. Always requires visual confirmation of the last 4 digits of the account number before execution."
+*   **Status:** **UNVERIFIED** for complex fuzzy matching until post-launch data is collected. Do not claim "99% accuracy."
+
+***
+
+**Note:** This protocol treats the "human gate" (visual confirmation) as the primary safety control, not the AI's matching logic.
+**Note:** Legal counsel must review the specific wording of the AI disclosure to ensure compliance with banking regulations in your jurisdiction.

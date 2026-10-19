@@ -1,0 +1,24 @@
+### Mitigation Strategy for Caregiving Gap Bias in TalentFlow
+
+Given the two-week timeline and strict budget constraints preventing extensive retraining or additional annotation, the following immediate mitigation strategy focuses on configuration changes, rule-based overrides, and transparent scoring adjustments rather than model retraining.
+
+#### 1. Immediate Configuration Changes (Days 1-3)
+*   **Disable Hard Auto-Rejection:** Immediately disable any binary "auto-reject" logic triggered solely by employment gaps. Replace this with a "flag for review" status. No candidate should be excluded from the pipeline without human oversight based purely on time gaps.
+*   **Implement a "Caregiving Gap" Exemption Rule:** Create a pre-processing filter that identifies gap durations typically associated with caregiving (e.g., 6 months to 3 years). If a gap falls within this range, the system should bypass the standard penalty weight applied to "unexplained unemployment" for that specific period.
+*   **Neutralize Gap Duration Weighting:** Temporarily set the scoring weight for "employment gap duration" to zero in the production configuration. This prevents the model from mathematically penalizing non-linear paths while you validate the fix.
+
+#### 2. Scoring Weight Review & Adjustment (Days 4-7)
+Since you cannot retrain the model, you must adjust how the model's outputs are interpreted or weighted in the final decision logic:
+*   **Isolate the Penalty Variable:** Run a batch analysis on a sample of historical data (using existing annotated data) to quantify exactly how much the "gap" feature drags down the overall score.
+*   **Apply a Post-Hoc Score Boost:** Implement a deterministic rule in the final scoring layer: if a candidate's profile indicates a gap but their skills/experience score is above a certain threshold, apply a fixed positive offset to their final score to counteract the model's inherent bias.
+*   **Shift Focus to Skills Recency:** Adjust the evaluation criteria to prioritize "most recent relevant skills" over "continuous tenure." If the model allows feature importance tuning without retraining, reduce the importance of "timeline continuity" and increase "skill match percentage."
+
+#### 3. Validation & Integration Prep (Days 8-14)
+*   **Synthetic Stress Testing:** Create a small set of synthetic profiles (e.g., 20 candidates) that are identical in skills and experience but differ only in the presence and duration of a caregiving gap. Run these through the updated system. The output scores should be statistically indistinguishable.
+*   **Human-in-the-Loop Protocol:** For the initial launch with job boards, mandate that any candidate flagged with a gap >6 months receives a mandatory manual review step before a final "reject" decision can be logged. This acts as a safety net while the automated weights are monitored.
+*   **Documentation for Compliance:** Document these changes explicitly as "bias mitigation controls" for your compliance records. This demonstrates due diligence to partners and regulators, showing that you are actively managing algorithmic fairness despite budget limits.
+
+#### 4. Long-Term Recommendation (Post-Launch)
+Once revenue starts flowing, prioritize a targeted fine-tuning dataset. Collect a small, high-quality dataset of successful hires who had caregiving gaps. Use this for a focused fine-tuning run to permanently correct the model's internal weights, removing the need for rule-based overrides.
+
+**Note:** This approach treats the symptom via logic layers rather than curing the model's internal bias directly, which is the only viable path given your resource constraints. Ensure your legal team reviews the "manual review" protocol to maintain consistency in hiring practices.

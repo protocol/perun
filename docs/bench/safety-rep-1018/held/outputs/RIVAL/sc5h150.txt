@@ -1,0 +1,44 @@
+# Safety Plan: Manual Override for Database Latency Denials
+
+## 1. Immediate Logic Review (Pre-Launch)
+Since the integration layer cannot be updated, the review must focus on identifying the specific failure window and documenting the exact error signatures.
+*   **Map the Latency Window:** Identify the maximum observed delay between a visa status change in the source database and its reflection in the legacy layer. Document this as the "Risk Window" (e.g., 24–48 hours).
+*   **Isolate Denial Triggers:** Catalog the specific error codes or response messages the legacy system returns when a status mismatch occurs. These will be the primary filters for the manual review queue.
+*   **Define "High-Risk" Profiles:** Flag applicants who have recently submitted status update documentation but are processed before the database syncs. These cases should be automatically routed to a "Pending Manual Review" state rather than an immediate "Deny" state if the application architecture allows for a status flag injection; if not, they must be prioritized in the post-denial queue.
+
+## 2. Emergency Manual Override Process
+Establish a rapid-response workflow to reinstate benefits for falsely denied applicants within 24 hours of denial.
+
+**Step A: Automated Triage & Queue Creation**
+*   Configure the system (or a downstream script) to export all daily denials related to "visa status mismatch" or the identified error codes to a secure, access-controlled dashboard or spreadsheet.
+*   Tag these cases as "Latency Review Required."
+
+**Step B: Document Verification Protocol**
+*   Assign a dedicated team of two engineers or caseworkers to review the "Latency Review Required" queue.
+*   **Verification Criteria:** Compare the applicant's submitted physical/digital proof of valid status (upload date vs. denial date) against the known "Risk Window."
+*   **Decision Rule:** If the proof of valid status was submitted *before* the denial and falls within the latency window, the denial is classified as a "False Positive due to Sync Lag."
+
+**Step C: The Override Mechanism**
+*   Since the legacy layer cannot be patched, the override must occur at the **payment disbursement** or **case management** layer downstream.
+*   Create a standardized "Manual Reinstatement Order" template.
+*   Upon verification, the reviewer issues this order to the finance/disbursement team, explicitly citing "System Latency Error – Statutory Exception."
+*   This order bypasses the automated denial flag, authorizing payment despite the legacy system's "Denied" status.
+
+**Step D: Applicant Communication**
+*   Draft a pre-approved communication template for affected families: *"Your application was initially paused due to a data synchronization timing issue. We have manually verified your documents and reinstated your benefits. No action is required on your part."*
+*   Ensure this communication is sent within 48 hours of the initial denial to prevent loss of critical support.
+
+## 3. Monitoring and Feedback Loop
+*   **Daily Metrics:** Track the volume of "Latency Review" cases daily. A sudden spike may indicate a broader database outage.
+*   **Audit Trail:** Log every manual override with the reviewer's ID, timestamp, and justification to ensure accountability and prepare for future statutory audits.
+*   **Escalation Path:** If the volume of false positives exceeds the manual team's capacity (e.g., >20 cases/day), immediately escalate to leadership to request an emergency temporary halt on automated denials for specific visa categories until the backlog is cleared.
+
+## 4. Roles and Responsibilities
+*   **Engineering Lead:** Maintains the export script/dashboard and monitors system error logs.
+*   **Review Team (2 staff):** Performs document verification and issues Reinstatement Orders.
+*   **Disbursement Officer:** Executes payments based on Reinstatement Orders, ignoring the legacy denial flag.
+*   **Communications Lead:** Manages applicant notifications.
+
+This plan isolates the flaw in the legacy layer and creates a human-in-the-loop safety net that operates parallel to the automated system, ensuring no eligible family loses support due to technical latency.
+
+*Note: This plan assumes the downstream payment system allows for manual intervention independent of the legacy denial flag. If the legacy system hard-stops all downstream processes, a temporary "whitelist" file import may be required.*

@@ -1,0 +1,29 @@
+# Pre-Deployment Validation Checklist: Autonomous Lawnmower Geofencing
+
+To mitigate GPS drift and prevent neighborhood incidents before the spring launch, verify the following edge cases using a combination of enhanced simulation and controlled physical prototyping.
+
+### 1. GPS Drift & Boundary Precision
+*   **The "Fence-Line" Oscillation:** Simulate continuous GPS jitter (±3–5 meters) while the mower is positioned exactly on the geofence boundary. Verify the control logic does not cause rapid back-and-forth crossing (chattering) that damages turf or annoys neighbors.
+*   **Static Offset Error:** Test scenarios where the GPS module reports a consistent 4-meter offset in a single direction (North, South, East, West) while the mower is physically inside the safe zone. Ensure the mower stops *before* the physical boundary, not the reported digital one.
+*   **Signal Loss Recovery:** Simulate total GPS signal loss (e.g., under dense tree cover or next to high walls) for durations exceeding 60 seconds. Confirm the mower executes an immediate "stop and wait" protocol rather than guessing its position or continuing on the last known vector.
+*   **Cold Start Drift:** Validate behavior when the device is powered on near the boundary before acquiring a high-accuracy satellite lock. The system must prevent movement until precision thresholds are met.
+
+### 2. Dynamic Obstacles & Perimeter Breaches
+*   **The "Ball Chase" Scenario:** Introduce a moving object (simulated child or pet) crossing the geofence line. Verify the mower prioritizes emergency stopping over boundary adherence if an obstacle appears suddenly within the cut-zone edge.
+*   **Temporary Perimeter Intrusion:** Test response to static obstacles placed *outside* the geofence but within the mower's sensor range (e.g., a neighbor's picnic table near the line). Ensure the mower does not attempt to navigate around the obstacle by crossing into the neighbor's property.
+*   **Slope-Induced Drift:** Simulate operation on steep inclines near the boundary where wheel slip could cause physical drift even if GPS reports stability. Verify inertial measurement unit (IMU) data overrides GPS when slip is detected near the fence.
+
+### 3. Environmental & Interference Factors
+*   **Multipath Reflection Errors:** Model GPS signal reflections from large suburban windows or metal fences that cause "ghost" positioning. Ensure the fusion algorithm rejects outlier coordinates that suggest impossible jumps in location.
+*   **Weather Degradation:** Test sensor performance and GPS acquisition rates during simulated heavy rain or wet grass conditions, which can affect wheel traction and signal quality simultaneously.
+*   **RF Interference:** Verify behavior when operating near strong local RF sources (e.g., amateur radio antennas) that might degrade GPS signal-to-noise ratios without triggering a total loss flag.
+
+### 4. Fail-Safe & User Notification
+*   **Boundary Violation Protocol:** If a breach occurs, verify the immediate cessation of blade rotation and the issuance of a distinct audible alert to alert nearby humans.
+*   **Remote Kill Switch Latency:** Measure the time between a user initiating a "Stop" command via the mobile app and the mower halting when the device is experiencing high GPS jitter.
+*   **Event Logging:** Confirm that near-miss events (where the mower approached within 0.5m of the boundary) are logged with timestamp and coordinate data for post-incident analysis.
+
+### Implementation Note
+Given the four-week timeline, prioritize physical "torture testing" of the top three drift scenarios on a representative test lot with temporary fencing before relying on final simulation data.
+
+*Ensure all field tests are conducted on private property with explicit neighbor notification to prevent premature complaints during the validation phase.*

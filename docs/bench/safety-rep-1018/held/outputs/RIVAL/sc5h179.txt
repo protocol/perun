@@ -1,0 +1,39 @@
+### Validation Strategy: Savings Asset Weighting for Gig-Economy Fairness
+
+**Objective**
+To quantify the impact of increasing savings asset weightings on loan approval rates for gig-economy workers without modifying the core scoring engine, ensuring regulatory compliance and fairness prior to launch.
+
+**1. Data Segmentation and Baseline Establishment**
+*   **Cohort Definition:** Isolate a representative validation dataset containing only gig-economy applicants. Define this cohort using established markers (e.g., income source variability, employment type codes) to ensure distinct separation from traditional W-2 earners.
+*   **Control Group:** Maintain a parallel control group of traditional earners to monitor for unintended drift in approval criteria for standard profiles.
+*   **Baseline Metrics:** Run the current production weighting parameters against the gig-economy cohort. Record the baseline denial rate, average credit score of denied applicants, and the specific distribution of "savings-to-income" ratios within the denied population. This establishes the "current state" bias.
+
+**2. Parameter Simulation Matrix**
+Since the core engine is immutable, create a simulation layer that adjusts input values *before* they enter the scoring engine, effectively mimicking a change in weighting.
+*   **Weighting Scenarios:** Define a matrix of adjustment factors for the savings asset input. For example:
+    *   *Scenario A:* 1.2x multiplier on verified liquid assets.
+    *   *Scenario B:* 1.5x multiplier.
+    *   *Scenario C:* 2.0x multiplier (capped at a specific debt-to-income threshold).
+*   **Implementation Logic:** Apply these multipliers to the raw savings data in the pre-processing stage. Feed the adjusted values into the unmodified scoring engine. This tests the hypothesis that higher perceived liquidity offsets income volatility within the existing algorithmic logic.
+
+**3. Impact Analysis and Fairness Metrics**
+For each scenario in the matrix, calculate the following:
+*   **Approval Rate Delta:** The percentage point increase in approvals for the gig-economy cohort compared to the baseline.
+*   **Risk Segmentation:** Analyze the credit performance (if historical proxy data exists) or risk scores of the *newly approved* applicants. Ensure the relaxation of criteria does not admit applicants with catastrophic risk profiles unrelated to income volatility.
+*   **Disparate Impact Testing:** Calculate the approval rate ratio between the gig-economy cohort and the traditional earner control group for each scenario. Identify the specific weighting factor that maximizes gig-worker inclusion while keeping the disparate impact ratio within regulatory thresholds (e.g., the 80% rule).
+*   **False Positive/Negative Trade-off:** Estimate the potential increase in default risk versus the reduction in false rejections based on the model's existing sensitivity to asset inputs.
+
+**4. Sensitivity and Stress Testing**
+*   **Boundary Analysis:** Test edge cases where savings are high but income is extremely volatile, versus moderate savings with stable gig income. Determine if the weighting creates a "cliff effect" where minor data changes cause massive scoring swings.
+*   **Adversarial Robustness:** Assess if the new weighting scheme is susceptible to manipulation (e.g., temporary large deposits designed solely to trigger the multiplier). Ensure the validation includes checks for "seasoned" assets versus recent inflows.
+
+**5. Documentation for Regulatory Review**
+Compile a pre-launch report detailing:
+*   The methodology used for input adjustment.
+*   The specific correlation between increased asset weighting and approval outcomes.
+*   The selected optimal weighting parameter that balances fairness with risk management.
+*   A clear statement that the core engine remains unchanged, validating the integrity of the production system.
+
+**Deliverable:** A comparative analysis table showing approval rates and risk metrics across all weighting scenarios, recommending a single optimal parameter set for implementation.
+
+*Note: Ensure all synthetic data or multipliers used in testing are strictly isolated from the live production environment to prevent data contamination.*
