@@ -2931,6 +2931,18 @@
         "Says the note is deleted after one injection and block mode writes no note",
         "Says it fails open on a missing session_id or bad state"
       ]
+    },
+    {
+      "id": "landing-watchdog-stalled-merges",
+      "prompt": "A coordinator kept spawning new lanes for several hours while nothing reached the default branch and green PRs sat open, and nobody noticed. What in the operating layer would have caught it, and what does it need to say?",
+      "expected_output": "landing_watchdog.py, a UserPromptSubmit hook (also a `check` CLI). It fires when zero first-parent commits landed on the default branch in the last landing_stall_min minutes (default 60) and at least one open non-draft PR has all checks green. It adds one line of additionalContext: \"Landing stalled: 0 merged to <branch> in N min, K green PRs waiting. Fix landing before starting new work.\" It asks the remote at most once per 15 minutes per repo (cached verdict replayed between), is mode warn or off (env PERUN_LANDING_WATCHDOG or policy landing_watchdog), never blocks, and fails open: no gh, no origin, a failed fetch or any error prints nothing.",
+      "expectations": [
+        "Names landing_watchdog.py as a UserPromptSubmit hook and says it warns the model, not only the owner",
+        "Says the signal is zero first-parent commits on the default branch in the window AND at least one open non-draft PR with all checks green",
+        "Gives the one-line message: landing stalled, 0 merged in N min, K green PRs waiting, fix landing before new work",
+        "Says the remote is queried at most once per 15 minutes and the cached verdict is replayed between",
+        "Says it fails open and has only off and warn modes (policy landing_watchdog, landing_stall_min, env PERUN_LANDING_WATCHDOG)"
+      ]
     }
   ]
 }

@@ -31,7 +31,7 @@ chat may be terse.
 
 | Task | Open |
 |---|---|
-| Land PRs as a train | `scripts/merge_train.py`, `scripts/train_land.sh`; depth `references/merge-queue-worktrees.md` |
+| Land PRs as a train | `scripts/merge_train.py`, `scripts/train_land.sh`; depth `references/merge-queue-worktrees.md`; stalled: `scripts/landing_watchdog.py check` |
 | Fix a red gate or union | `references/gate-epistemology.md`, `references/red-gate-triage.md`; repeat flake: `scripts/flake_ledger.py` |
 | Start a lane | `templates/lane-preamble.md` |
 | Isolate a lane's worktree | `references/worktree-isolation.md` |
