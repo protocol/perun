@@ -1,0 +1,74 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "medium",
+   "text": "`promise.pipe` is bound with `{...sourceInfo, spawned: destination}`. That swaps in the new source process but keeps the first process's `stdioStreamsGroups` and `options`. In `a.pipe(b).pipe(c, {from: 3})`, the `from` stream is validated against `a`'s stdio config, not `b`'s. A fd that exists only in `b` is wrongly rejected, and a fd that exists only in `a` is wrongly accepted. With `b` spawned with `all: false` and `a` with `all: true`, `from: 'all'` passes the option check but `b.all` is undefined, so the error message is wrong."
+  },
+  {
+   "file": "abort.js",
+   "line": 6,
+   "severity": "low",
+   "text": "`aborted(signal, sourceStream)` stays pending when the pipe finishes without an abort. It holds a listener on the caller's `signal` and a reference to `sourceStream`. A long-lived shared `AbortSignal` reused across many `.pipe(dest, {signal})` calls accumulates listeners, which triggers MaxListeners warnings and leaks."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 34518,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 23751,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 1823,
+  "output_tokens_details": {
+   "thinking_tokens": 1270
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 23751,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1660,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 21257,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 21257
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the same root cause as the reference bug: chained .pipe() binds the next pipe to the source subprocess instead of the previous pipe's promise, causing validation against the wrong process's stdio config.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The aborted() promise in unpipeOnSignalAbort never resolves when the pipe completes normally, leaving the signal listener and sourceStream reference attached indefinitely, causing listener accumulation and leaks.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

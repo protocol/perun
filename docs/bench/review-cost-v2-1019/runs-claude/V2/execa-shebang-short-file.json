@@ -1,0 +1,122 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 96,
+   "severity": "high",
+   "text": "`process.chdir(parsed.options.cwd)` is called with `cwd` undefined whenever the caller sets no cwd. The error is swallowed, so `which` resolves against the current directory. `path.resolve(undefined, resolved)` on line 106 then throws a TypeError, which the catch turns into undefined. Resolution fails for every command in that case, so `.cmd`/`.bat` files lose the double-escape and shebang handling."
+  },
+  {
+   "file": "command-file.js",
+   "line": 54,
+   "severity": "high",
+   "text": "The file is escaped from `parsed.file` (the unresolved name) instead of `resolvedFile`. Shebang rewriting sets `parsed.file` to a bare interpreter name such as `node`. `path.normalize` and `escapeMetaChars` can mangle a path that contains spaces or other metacharacters. Caret-escaping a path with spaces such as `C:\\Program Files\\x.cmd` breaks it, because cmd treats the escaped spaces as part of the name only in some contexts."
+  },
+  {
+   "file": "command-file.js",
+   "line": 147,
+   "severity": "medium",
+   "text": "Shebang parsing splits only on a single space and takes the last path segment. `#!/usr/bin/env -S node --flag` returns `-S`. `#!/usr/bin/env  node` (two spaces) returns an empty string. A tab separator or a CRLF line ending leaves `\\r` attached to the interpreter, because `.` matches `\\r`, and then the interpreter lookup fails."
+  },
+  {
+   "file": "command-file.js",
+   "line": 153,
+   "severity": "medium",
+   "text": "A non-env shebang with an argument, such as `#!/bin/sh -e`, produces `sh -e` as one string. That string is used as the file name for `which`, so it fails to resolve. The script is left unresolved and is still run through cmd with the script prepended as an argument."
+  },
+  {
+   "file": "command-file.js",
+   "line": 60,
+   "severity": "medium",
+   "text": "`windowsVerbatimArguments` is set by mutating the caller's `options` object. Reusing the same options for another call, or for a direct `.exe`, leaks the verbatim flag. Also, `file` is checked for line breaks only after the direct-exe early return, so exe arguments are unchecked, which is fine, but the mutation persists."
+  },
+  {
+   "file": "command-file.js",
+   "line": 111,
+   "severity": "low",
+   "text": "The `finally` block calls `process.chdir(originalDirectory)` without a guard. If the directory was deleted, or chdir was disabled after the check, this throws and masks the result. `chdir` into a process-global directory is also racy with concurrent async work."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 21292,
+ "usage": {
+  "input_tokens": 6,
+  "cache_creation_input_tokens": 4545,
+  "cache_read_input_tokens": 15657,
+  "output_tokens": 1084,
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 4545,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 886,
+    "cache_read_input_tokens": 7994,
+    "cache_creation_input_tokens": 202,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 202
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the same root cause as the reference bug: readShebang ignores the bytes read and parses the whole zero-filled buffer, causing NUL characters in the shebang line, which leads to resolution failure and loss of shebang handling.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The code uses parsed.file after it has been set to the interpreter name, which is correct for shebang resolution; escaping the unresolved name is intentional and not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "gt_same",
+   "reason": "This finding is about shebang parsing issues, but the reference bug is specifically about NUL characters from the zero-filled buffer, not about splitting on spaces or tabs; the mechanism described here is different.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "The code returns `${interpreter} ${argument}` as a single string for non-env shebangs with arguments, which is then used as a file name for which, causing resolution to fail.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "not_a_bug",
+   "reason": "Mutating the caller's options object is a design choice, and the line-break check for exe files is not required since they are spawned directly without cmd.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "5": {
+   "verdict": "not_a_bug",
+   "reason": "The finally block has a guard `if (canChangeDirectory)` before calling chdir, and the described race condition is not a confirmed defect from the code.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

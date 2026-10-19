@@ -1,0 +1,110 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 153,
+   "severity": "medium",
+   "text": "For a shebang with an interpreter argument, such as `#!/bin/sh -e` or `#!/usr/bin/python -u`, the interpreter becomes the single string `\"sh -e\"`. `resolvePath` then looks for an executable with that literal name, finds nothing, and the code falls through to cmd.exe with `sh^ -e` as the command, so the spawn fails. The argument is never split into a separate argv entry."
+  },
+  {
+   "file": "command-file.js",
+   "line": 147,
+   "severity": "low",
+   "text": "The shebang is split on a single space. `#!/usr/bin/env -S node --flag` returns `-S` as the interpreter, and a shebang with repeated spaces gives an empty or wrong argument. The script then runs with the wrong interpreter or not at all."
+  },
+  {
+   "file": "command-file.js",
+   "line": 76,
+   "severity": "low",
+   "text": "`parsed.commandArguments.unshift(resolvedFile)` and `parsed.file = interpreter` run before the interpreter is known to resolve. If it cannot be resolved, `resolvedFile` is undefined and cmd.exe is invoked with the rewritten file and arguments. The error then comes from cmd.exe, not an ENOENT for the original command."
+  },
+  {
+   "file": "command-file.js",
+   "line": 106,
+   "severity": "low",
+   "text": "If `options.cwd` is undefined, `path.resolve(undefined, resolved)` throws a TypeError. The surrounding `catch` swallows it and returns undefined, so every command looks unresolvable. The result is no `.exe` detection, no shebang handling and no batch-file double-escaping, for example when `npm.cmd` is spawned without `cwd`. This is safe only if the caller always sets an absolute `cwd`."
+  },
+  {
+   "file": "command-file.js",
+   "line": 59,
+   "severity": "low",
+   "text": "`parsed.options.windowsVerbatimArguments = true` mutates the caller's options object, because `options` is not cloned. If the caller reuses that object for a later spawn, it keeps the verbatim flag."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 19035,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 7431,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 2660,
+  "output_tokens_details": {
+   "thinking_tokens": 1805
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 7431,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 2497,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 4937,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 4937
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The shebang parser combines the interpreter and its first argument into a single string, so `#!/bin/sh -e` yields `sh -e` as the interpreter, which is not a valid executable name.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The shebang is split on a single space, so `#!/usr/bin/env -S node --flag` returns `-S` as the interpreter, and repeated spaces produce empty or wrong arguments.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The code mutates `parsed.commandArguments` and `parsed.file` before confirming the interpreter resolves, so if resolution fails, `resolvedFile` is undefined and the error surfaces from cmd.exe rather than the original command.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "If `options.cwd` is undefined, `path.resolve(undefined, resolved)` throws a TypeError that is swallowed, causing all commands to be treated as unresolvable.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "real",
+   "reason": "The function mutates the caller's `options` object by setting `windowsVerbatimArguments` without cloning, which can affect later spawns that reuse the same object.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

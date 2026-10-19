@@ -1,0 +1,86 @@
+{
+ "id": "axios-formdata-path-split",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "high",
+   "text": "Prototype pollution: path segments are used as keys with no check for '__proto__', 'constructor' or 'prototype'. For the field name `__proto__[polluted]`, `target['__proto__']` is the truthy Object.prototype, so the code recurses into it and sets `Object.prototype.polluted = value` for every object."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "medium",
+   "text": "Data loss: if a scalar key is followed by a nested key, the scalar is overwritten with `[]`. For example, entries `a=1` then `a[b]=2` discard '1'."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 43,
+   "severity": "low",
+   "text": "Repeated keys nest instead of appending. `a=1`, `a=2`, `a=3` gives `[[\"1\",\"2\"],\"3\"]` because the existing array is wrapped again rather than pushed to."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 14550,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 4584,
+  "cache_read_input_tokens": 8942,
+  "output_tokens": 1020,
+  "output_tokens_details": {
+   "thinking_tokens": 521
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 4584,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 855,
+    "cache_read_input_tokens": 5719,
+    "cache_creation_input_tokens": 2088,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 2088
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The prototype pollution arises from the same parsePropPath splitting mechanism that allows '__proto__' to be used as a path segment, which is the reference bug's root cause.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The buildPath logic overwrites a scalar value with an array when a nested key follows, which is a distinct data-loss defect not caused by the path-splitting mechanism.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "Repeated keys cause the existing array to be wrapped again instead of appending, which is a separate bug in the merge logic unrelated to path parsing.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

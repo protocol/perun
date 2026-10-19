@@ -1,0 +1,86 @@
+{
+ "id": "asdf-recursive-reserved-env",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "cli.go",
+   "line": 338,
+   "severity": "medium",
+   "text": "The root `Action` that called `helpCommand` was removed and replaced with `CommandNotFound`. Running bare `asdf` with no arguments now falls back to urfave/cli's default app help instead of asdf's custom help (`help.Print`, which lists plugins). It also returns exit code 0 where the old path went through `helpCommand`."
+  },
+  {
+   "file": "cli.go",
+   "line": 340,
+   "severity": "low",
+   "text": "In `CommandNotFound`, the error returned by `helpCommand` is discarded. `helpCommand` already calls `cli.OsExiter(1)` on its own failures, so a failure there is handled inconsistently. If `OsExiter` is overridden, for example in tests, the handler carries on and calls `OsExiter(1)` a second time."
+  },
+  {
+   "file": "cli.go",
+   "line": 1102,
+   "severity": "low",
+   "text": "After `cli.OsExiter(1)` in the `NoVersionSetError` branch of `installCommand` there is no `return`. Execution falls through to `logger.Printf(\"error installing version...\")`. This matters whenever `OsExiter` doesn't actually exit, such as a test override, and it prints a duplicate error message. The same problem applies to `currentCommand`, `helpCommand`, `latestCommand` and `failTest`, where code after the call keeps running."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 13744,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 6197,
+  "cache_read_input_tokens": 6614,
+  "output_tokens": 929,
+  "output_tokens_details": {
+   "thinking_tokens": 395
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 6197,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 855,
+    "cache_read_input_tokens": 4010,
+    "cache_creation_input_tokens": 4791,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 4791
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The change intentionally replaces the root Action with CommandNotFound, and the behavior described is a direct consequence of that design choice, not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "not_a_bug",
+   "reason": "The error from helpCommand is discarded because helpCommand itself handles errors by calling cli.OsExiter(1), and the subsequent cli.OsExiter(1) is a deliberate fallback for when helpCommand returns without exiting, which is not a bug in normal operation.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The lack of a return after cli.OsExiter(1) is only problematic if OsExiter is overridden to not exit, which is not the standard behavior and is not a defect in the code's intended operation.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

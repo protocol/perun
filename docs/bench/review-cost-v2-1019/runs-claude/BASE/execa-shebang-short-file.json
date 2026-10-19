@@ -1,0 +1,86 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 106,
+   "severity": "medium",
+   "text": "`path.resolve(parsed.options.cwd, resolved)` throws a TypeError when `options.cwd` is undefined, and the surrounding `catch` turns that into `undefined`. Because the code relies on an undocumented guarantee that `cwd` is already absolute, `execa('foo.cmd')` with no `cwd` option never resolves the file. It then skips shebang and `.cmd`/`.bat` detection, and batch files get single escaping instead of double escaping."
+  },
+  {
+   "file": "command-file.js",
+   "line": 147,
+   "severity": "low",
+   "text": "`parseShebang` splits on a single space and mishandles common shebangs. For `#!/usr/bin/env -S node --flag` it returns `-S` as the interpreter, so the spawn fails. For `#!/usr/bin/node --harmony` it returns `node --harmony` as one file name, which `which` can't resolve, and the later `escapeMetaChars` turns the space into `^ `, so the command is not found."
+  },
+  {
+   "file": "command-file.js",
+   "line": 59,
+   "severity": "low",
+   "text": "The function sets `windowsVerbatimArguments = true` on the caller's `options` object, which is mutated in place and not cloned. If the caller reuses that options object for another call, a later direct `.exe` spawn also inherits verbatim mode and its arguments are not quoted by Node."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 28877,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 17137,
+  "cache_read_input_tokens": 8939,
+  "output_tokens": 2797,
+  "output_tokens_details": {
+   "thinking_tokens": 2165
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 17137,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 2634,
+    "cache_read_input_tokens": 5716,
+    "cache_creation_input_tokens": 14644,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 14644
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The code relies on `options.cwd` being absolute as documented in the comment, and `path.resolve` with undefined cwd uses the current working directory, so the claim of a TypeError is incorrect.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: `parseShebang` mishandles the shebang line due to incorrect parsing, though it focuses on space splitting rather than NUL characters, but the mechanism is the same flawed parsing of the shebang content.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The code mutates `parsed.options.windowsVerbatimArguments = true` on the caller's options object without cloning, which can affect subsequent calls reusing the same options object, a genuine defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

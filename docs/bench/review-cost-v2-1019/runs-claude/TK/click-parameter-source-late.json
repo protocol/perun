@@ -1,0 +1,86 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2650,
+   "severity": "medium",
+   "text": "The `same_source` branch lets a later parameter overwrite an earlier one whenever both have the same source. The old code kept the first non-UNSET value. If two options share a name and both are on the command line (`--a --b`), the one declared later now wins, and it is picked by declaration order rather than command-line order. Same-source DEFAULT fallbacks also get overwritten by later options, unless the explicit-default guard applies."
+  },
+  {
+   "file": "core.py",
+   "line": 2640,
+   "severity": "medium",
+   "text": "Arbitration compares `ParameterSource` enum values with `<`, which assumes a lower value is more explicit. The enum order is COMMANDLINE, ENVIRONMENT, DEFAULT, DEFAULT_MAP, PROMPT. A value from `default_map` or from a prompt therefore loses to another option's plain DEFAULT. For example, if option A gets its value from `default_map` and option B only falls back to its default, B takes the slot."
+  },
+  {
+   "file": "core.py",
+   "line": 2658,
+   "severity": "low",
+   "text": "When an option loses the arbitration and the slot's source is already set, its source is dropped. If the slot's existing source is set but its value is UNSET (for example an `expose_value=False` winner), the slot's source and value come from different options."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 11042,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 2176,
+  "cache_read_input_tokens": 7770,
+  "output_tokens": 1092,
+  "output_tokens_details": {
+   "thinking_tokens": 579
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 2176,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1017,
+    "cache_read_input_tokens": 4065,
+    "cache_creation_input_tokens": 1816,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1816
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same-source arbitration behavior that is the root cause of the reference bug, where later parameters with the same source overwrite earlier ones.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The code uses `<` to compare ParameterSource enum values, which incorrectly prioritizes DEFAULT over DEFAULT_MAP and PROMPT due to enum ordering, a distinct defect from the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The code can leave the slot's source from one option and value from another when the winner has expose_value=False, creating inconsistent state, which is a separate issue from the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

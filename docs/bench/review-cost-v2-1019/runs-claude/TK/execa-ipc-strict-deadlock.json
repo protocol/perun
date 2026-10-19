@@ -1,0 +1,62 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 30,
+   "severity": "medium",
+   "text": "If a 'message' listener throws, `ipcEmitter.emit` throws inside `onMessage` after `shift()`. The loop exits and the promise rejects, so it surfaces as an unhandled rejection. Any messages still queued are never drained. Every later message sees `length > 1` and returns, so no further 'message' events fire. `onDisconnect` then waits forever on `once(ipcEmitter, 'message')`, and 'disconnect' is never emitted. Example: two messages arrive back to back and the first listener throws."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 12422,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 3839,
+  "cache_read_input_tokens": 7768,
+  "output_tokens": 811,
+  "output_tokens_details": {
+   "thinking_tokens": 534
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 3839,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 738,
+    "cache_read_input_tokens": 4063,
+    "cache_creation_input_tokens": 3481,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 3481
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The finding describes a genuine defect where a throwing 'message' listener causes the debounce loop to exit, leaving queued messages undrained and causing onDisconnect to hang, which is a distinct bug from the reference deadlock issue.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

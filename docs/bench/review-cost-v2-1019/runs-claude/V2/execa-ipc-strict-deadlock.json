@@ -1,0 +1,86 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 25,
+   "severity": "medium",
+   "text": "If `waitForOutgoingMessages` rejects or an `emit('message')` listener throws, the loop exits with the message still in `incomingMessages` (the `shift` hasn't happened, or the queue is left non-empty). Every later `onMessage` call then sees `length > 1` and returns early, so incoming messages stall. `onDisconnect` also hangs forever on `once(ipcEmitter, 'message')`, so 'disconnect' is never emitted."
+  },
+  {
+   "file": "incoming.js",
+   "line": 27,
+   "severity": "medium",
+   "text": "Incoming messages wait for all in-flight `sendMessage` calls. A send that stays pending (for example IPC backpressure while the peer isn't reading) blocks delivery of every received message. If the peer is waiting on a reply before it reads, both sides deadlock."
+  },
+  {
+   "file": "validation.js",
+   "line": 23,
+   "severity": "low",
+   "text": "The signatures of `throwOnEarlyDisconnect(isSubprocess)` and `handleSerializationError(error, isSubprocess, message)` changed, and `sendOneMessage` and the `methodName` argument were removed. Any remaining caller that uses the old argument order will misbehave. For example, a caller passing `(methodName, isSubprocess)` would use the method name string as `isSubprocess`, which is truthy, so the error text names the wrong process."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 12519,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 3841,
+  "cache_read_input_tokens": 7663,
+  "output_tokens": 1011,
+  "output_tokens_details": {
+   "thinking_tokens": 461
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 3841,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 935,
+    "cache_read_input_tokens": 4012,
+    "cache_creation_input_tokens": 3480,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 3480
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "The loop's shift occurs after emit, and if emit throws, the message remains queued, but the code does not handle exceptions from emit, so the claim of stalling is speculative and not confirmed by the code.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same deadlock mechanism as the reference bug: waitForOutgoingMessages waits for all outgoing messages, including the response to the incoming message being handled, causing a deadlock when both sides await each other's acknowledgements.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The change updates all callers in the patch to use the new argument order, and no remaining callers with the old order are shown, so the claim of misbehaving callers is unsubstantiated.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

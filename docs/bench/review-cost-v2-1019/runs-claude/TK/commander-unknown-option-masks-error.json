@@ -1,0 +1,74 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 1505,
+   "severity": "medium",
+   "text": "The `command:<name>` event used to be emitted on the command itself. It is now emitted only on `this.parent`, and only when a parent exists. A listener like `cmd.on('command:' + cmd.name(), ...)` is never called. This also applies to a root program with an action handler, because `this.parent` is undefined there."
+  },
+  {
+   "file": "index.js",
+   "line": 1506,
+   "severity": "medium",
+   "text": "The new `else if (this.parent && this.parent.listenerCount(commandEvent))` branch runs before the operands, `*` and unknown-command handling. If a command has no action handler but its parent has a `command:<name>` listener, that listener fires and the rest is skipped. Example: `prog.on('command:sub', ...)` with `sub` having subcommands, then running `prog sub bogus`. The unknown-subcommand error and the `command:*` fallback never run, and `sub`'s own help or error handling is bypassed."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 9575,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 999,
+  "cache_read_input_tokens": 7768,
+  "output_tokens": 804,
+  "output_tokens_details": {
+   "thinking_tokens": 402
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 999,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 731,
+    "cache_read_input_tokens": 4063,
+    "cache_creation_input_tokens": 641,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 641
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "This finding describes the same root cause as the reference bug: the command:<name> event is now emitted on the parent (or not at all for root) instead of on the command itself, masking the intended event dispatch.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "This is a distinct defect where the new parent-listener branch bypasses operand, wildcard, and unknown-command handling, causing incorrect behavior when a parent has a command:<name> listener but the subcommand lacks an action handler.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,81 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2646,
+   "severity": "high",
+   "text": "`source < existing_source` compares two `ParameterSource` members. In upstream click `ParameterSource` is a plain `enum.Enum`, not an `IntEnum`, and I couldn't check this in the repo. If so, the comparison raises `TypeError` whenever two options share a name and the slot already has a source, which is the feature-switch case this patch targets. If the enum is ordered, the order (COMMANDLINE, ENVIRONMENT, DEFAULT, DEFAULT_MAP, PROMPT) is implicit and was never intended as a precedence ranking."
+  },
+  {
+   "file": "core.py",
+   "line": 2655,
+   "severity": "medium",
+   "text": "The old code let the first parameter keep a shared slot. `same_source and not auto_would_downgrade_explicit` now lets a later parameter with the same source overwrite it. Example: `--a/--b` flags that both use the name `mode` and both fall back to DEFAULT. The last-declared option's default now wins even when neither is explicit, or when both are explicit. If `--a --b` are both passed on the command line, the later-processed one now wins instead of the first."
+  },
+  {
+   "file": "core.py",
+   "line": 2637,
+   "severity": "low",
+   "text": "Parameter source is now recorded only for the winning option, and only when no source exists yet. A losing option that reads a different source, such as ENVIRONMENT, has that source dropped when the slot's source is already set and the new source isn't more explicit. A related problem: `existing_value is UNSET` can be true while `existing_source` is already set, because a non-exposed param or a param whose value was UNSET claimed it. The slot then counts as empty and is overwritten without comparing sources, so `ctx.get_parameter_source` can disagree with the value actually stored."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 4,
+ "tokens": 44335,
+ "usage": {
+  "input_tokens": 6,
+  "cache_creation_input_tokens": 15739,
+  "cache_read_input_tokens": 27121,
+  "output_tokens": 1469,
+  "output_tokens_details": {
+   "thinking_tokens": 592
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 15739,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 597,
+    "cache_read_input_tokens": 18185,
+    "cache_creation_input_tokens": 777,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 777
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 4
+ },
+ "matched": [
+  false,
+  false,
+  true
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "unverifiable",
+   "reason": "The patch does not include the definition of ParameterSource, so whether `source < existing_source` raises TypeError cannot be determined from the code.",
+   "judge": "GLM-5.2"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The new same_source tie-break allows a later parameter with the same source to overwrite an earlier one, changing the documented first-wins behavior for shared slots.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

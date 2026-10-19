@@ -1,0 +1,74 @@
+{
+ "id": "commander-unknown-option-masks-error",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "index.js",
+   "line": 1505,
+   "severity": "low",
+   "text": "The legacy `command:<name>` event used to be emitted on the command itself (`this.emit`). It is now emitted only on `this.parent`. A listener registered on the command, e.g. `sub.on('command:sub', fn)`, silently stops firing after its action handler runs. A root command with an action handler has no parent, so it never emits at all. This is a backward-incompatible change in the event target."
+  },
+  {
+   "file": "index.js",
+   "line": 1506,
+   "severity": "low",
+   "text": "The new `else if (this.parent && this.parent.listenerCount(commandEvent))` branch runs before the operands, `*` and `command:*` fallback. A command with no action handler whose parent listens for `command:<name>` now never reaches the unknown-command or help handling. For example, `prog sub extra` with `prog.on('command:sub', ...)` and no action on `sub` is swallowed instead of erroring on `extra`."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 24031,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 13795,
+  "cache_read_input_tokens": 8939,
+  "output_tokens": 1293,
+  "output_tokens_details": {
+   "thinking_tokens": 810
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 13795,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1130,
+    "cache_read_input_tokens": 5716,
+    "cache_creation_input_tokens": 11302,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 11302
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The change moves the legacy command event emission from the command itself to its parent, which is a distinct backward-incompatible behavior change not related to the reference bug about unknown-option masking.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The new parent-listener branch intercepts operands before the unknown-command/help fallback, causing extra arguments to be silently swallowed, which is a separate defect from the reference bug about unknown-option masking.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,98 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 30,
+   "severity": "medium",
+   "text": "If a 'message' listener throws synchronously, `emit` throws inside `onMessage`. The loop exits with messages still queued, so every later `onMessage` sees `length > 1` and returns, and the remaining and future messages are never emitted. Example: two messages arrive in the same tick and the first listener throws."
+  },
+  {
+   "file": "incoming.js",
+   "line": 41,
+   "severity": "low",
+   "text": "`onDisconnect` awaits `once(ipcEmitter, 'message')`, which rejects if the emitter emits 'error'. That rejection leaves `onDisconnect` as an unhandled rejection, so the listener is never removed, `connected` is never set to false, and 'disconnect' is never emitted."
+  },
+  {
+   "file": "validation.js",
+   "line": 23,
+   "severity": "medium",
+   "text": "`throwOnEarlyDisconnect` changed from `(methodName, isSubprocess)` to `(isSubprocess)`, and `handleSerializationError` changed from an options object to positional arguments. Any caller not updated in this patch, such as a getOneMessage or exchange module, now passes the wrong arguments. A caller passing `('getOneMessage', true)` gets a truthy string as `isSubprocess`, so the error message names the wrong process. A caller passing an object to `handleSerializationError` skips the serialization-error rewrite."
+  },
+  {
+   "file": "send.js",
+   "line": 6,
+   "severity": "medium",
+   "text": "The patch renames `./forward.js` to `./reference.js` and removes the exported `sendOneMessage`, with the `exchangeMessage` mention dropped from the comment. Any remaining importer of `sendOneMessage` or `forward.js`, such as an exchange module, fails at load time with a missing export or module error."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 17248,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 6925,
+  "cache_read_input_tokens": 8938,
+  "output_tokens": 1381,
+  "output_tokens_details": {
+   "thinking_tokens": 626
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 6925,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1220,
+    "cache_read_input_tokens": 5715,
+    "cache_creation_input_tokens": 4433,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 4433
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The synchronous throw from a 'message' listener inside the while loop exits onMessage, leaving the queue non-empty and causing all subsequent messages to be dropped, which is a genuine defect not related to the reference deadlock.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The await on once(ipcEmitter, 'message') can reject on 'error' events, leaving onDisconnect as an unhandled rejection and preventing cleanup, which is a distinct bug from the reference deadlock.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The signature changes to throwOnEarlyDisconnect and handleSerializationError break any external callers not updated in this patch, causing incorrect error messages or skipped serialization handling, which is a separate defect from the reference deadlock.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "The removal of sendOneMessage export and renaming of forward.js to reference.js breaks any remaining importers, causing load-time failures, which is a distinct issue from the reference deadlock.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

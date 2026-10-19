@@ -1,0 +1,69 @@
+{
+ "id": "starlette-url-replace-empty-host",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "datastructures.py",
+   "line": 19,
+   "severity": "medium",
+   "text": "When the URL has no netloc (for example a relative URL like '/path'), `hostname` is '' after `rpartition`. `hostname[-1]` then raises IndexError. Before the change this case failed differently, so `URL('/path').replace(port=8000)` now crashes on an unguarded index."
+  },
+  {
+   "file": "datastructures.py",
+   "line": 17,
+   "severity": "low",
+   "text": "The hostname is now taken from the raw netloc instead of `self.hostname`, which lowercases it. `URL('http://EXAMPLE.com:80/').replace(port=81)` now keeps 'EXAMPLE.com' where it used to give 'example.com'. This is a behavior change for callers that compare or normalize hosts."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 13697,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 3979,
+  "cache_read_input_tokens": 8942,
+  "output_tokens": 772,
+  "output_tokens_details": {
+   "thinking_tokens": 343
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 3979,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 607,
+    "cache_read_input_tokens": 5719,
+    "cache_creation_input_tokens": 1483,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1483
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "The finding identifies the same root cause: the new code extracts hostname from raw netloc without lowercasing, which is a behavior change but not the reference bug; however, the reference bug is about IndexError on empty hostname, and this finding describes a different symptom (case preservation), so it is not the same mechanism.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

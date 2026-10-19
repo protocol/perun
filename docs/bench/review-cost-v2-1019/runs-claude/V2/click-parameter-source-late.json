@@ -1,0 +1,74 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2646,
+   "severity": "high",
+   "text": "`source < existing_source` compares `ParameterSource` members. If that is a plain `enum.Enum`, `<` raises `TypeError`. It fires whenever a second option writes a parameter name that already has a source, e.g. a feature-switch group like `--a/--b` with `flag_value` sharing one name. Even with an ordered enum, the declaration order (COMMANDLINE, ENVIRONMENT, DEFAULT, DEFAULT_MAP, PROMPT) would not give the intended explicitness ranking. For example, PROMPT would rank as less explicit than DEFAULT."
+  },
+  {
+   "file": "core.py",
+   "line": 2655,
+   "severity": "medium",
+   "text": "When the slot's earlier value is UNSET, `slot_empty` makes a later option win, even if it only supplied a DEFAULT and the earlier option came from the command line. The `elif existing_source is None` branch is also skipped when the source was already set. As a result, the source can be overwritten, or can disagree with the stored value, when `expose_value=False` options share a name."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 10684,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 2173,
+  "cache_read_input_tokens": 7662,
+  "output_tokens": 845,
+  "output_tokens_details": {
+   "thinking_tokens": 399
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 2173,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 770,
+    "cache_read_input_tokens": 4011,
+    "cache_creation_input_tokens": 1813,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1813
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "not_a_bug",
+   "reason": "ParameterSource is an IntEnum in click, so comparison is valid and ordered by declaration.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The slot_empty condition lets a later DEFAULT source overwrite an earlier COMMANDLINE source when expose_value=False, causing source/value disagreement.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

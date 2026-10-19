@@ -1,0 +1,98 @@
+{
+ "id": "execa-ipc-strict-deadlock",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "incoming.js",
+   "line": 30,
+   "severity": "medium",
+   "text": "If an 'message' listener throws, emit() throws inside the async loop after shift(). The loop aborts and the rest of the queue is never drained. Later messages see length>1 and return early, so no more messages are emitted. onDisconnect also waits forever on once(ipcEmitter,'message'). Failing input: a throwing listener plus two messages sent back-to-back."
+  },
+  {
+   "file": "incoming.js",
+   "line": 39,
+   "severity": "medium",
+   "text": "onDisconnect loops on once(ipcEmitter,'message') while the queue is non-empty. If the drain loop is stuck, 'disconnect' is never emitted and connected is never set to false. This happens when the drain loop waits in waitForOutgoingMessages on a send that never settles, or when it has aborted as described above. Failing input: a message is queued and the peer disconnects while a sendMessage is pending."
+  },
+  {
+   "file": "validation.js",
+   "line": 151,
+   "severity": "low",
+   "text": "throwOnEarlyDisconnect no longer takes methodName and now hardcodes 'getOneMessage()'. Any other caller, such as getEachMessage or exchangeMessage, gets a wrong error message. A caller that still passes (methodName, isSubprocess) would pass the method name string as isSubprocess, which is truthy, so it would also report the wrong process side."
+  },
+  {
+   "file": "send.js",
+   "line": 4,
+   "severity": "low",
+   "text": "The sendOneMessage export is removed and './forward.js' is renamed to './reference.js'. Any remaining importer of sendOneMessage or forward.js, for example an exchangeMessage module, fails at load with a missing export or module. This is unverified, because the patch does not show the other files."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 27087,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 16635,
+  "cache_read_input_tokens": 8939,
+  "output_tokens": 1509,
+  "output_tokens_details": {
+   "thinking_tokens": 769
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 16635,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1346,
+    "cache_read_input_tokens": 5716,
+    "cache_creation_input_tokens": 14142,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 14142
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "A throwing listener aborts the drain loop, leaving the queue stuck and preventing future messages and disconnect handling.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "onDisconnect waits forever on the message event if the drain loop is stuck or aborted, so disconnect is never emitted.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "throwOnEarlyDisconnect now hardcodes 'getOneMessage()' and changed its signature, so other callers get wrong error messages or pass methodName as isSubprocess.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "unverifiable",
+   "reason": "The patch does not show other modules, so we cannot confirm whether any importer still depends on the removed sendOneMessage export or the renamed forward.js module.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

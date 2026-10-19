@@ -1,0 +1,74 @@
+{
+ "id": "axios-formdata-path-split",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "high",
+   "text": "Prototype pollution. For a key like `__proto__[polluted]`, `target['__proto__']` is the truthy `Object.prototype`, and `isObject` accepts it. `buildPath` therefore recurses into it and writes `polluted` onto `Object.prototype`. Appending `('__proto__[isAdmin]', '1')` to the FormData makes `({}).isAdmin === '1'` for every object. The code needs to reject `__proto__` (and similar) segments or use own-property checks."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 42,
+   "severity": "low",
+   "text": "Repeated keys nest instead of accumulating. After the first duplicate, `target[name]` is `[a, b]`. A third entry with the same name makes it `[[a, b], c]` instead of `[a, b, c]`, so FormData with `a=1&a=2&a=3` gives a wrong, nested result."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 9949,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 2593,
+  "cache_read_input_tokens": 6670,
+  "output_tokens": 682,
+  "output_tokens_details": {
+   "thinking_tokens": 275
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 2593,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 606,
+    "cache_read_input_tokens": 4066,
+    "cache_creation_input_tokens": 1131,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1131
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The prototype pollution via `__proto__` is a direct consequence of the reference bug's regex splitting on non-word characters, which allows `__proto__` to be treated as a path segment and then recursed into.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The code's handling of duplicate keys creates nested arrays instead of flat arrays, which is a separate defect from the regex splitting issue.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

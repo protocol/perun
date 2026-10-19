@@ -1,0 +1,93 @@
+{
+ "id": "axios-formdata-path-split",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "formDataToJSON.js",
+   "line": 51,
+   "severity": "high",
+   "text": "Prototype pollution: path segments from user-controlled field names are used unchecked as keys. A field named `__proto__[polluted]` makes `target['__proto__']` resolve to Object.prototype (it is an object), so `polluted` is written onto Object.prototype."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 42,
+   "severity": "medium",
+   "text": "The repeated-key handling wraps the old value as `[old, value]`, which is wrong for a third duplicate. For `a=1&a=2&a=3` it gives `[[1,2],3]` instead of a flat array. It also uses `utils.hasOwnProperty(target, name)`, which may not exist in utils. Neither this nor `utils.matchAll` and `utils.forEachEntry` is defined anywhere in this change, so they may be undefined at runtime."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 17,
+   "severity": "medium",
+   "text": "Path parsing breaks on `[]` and other cases. `match[1] || match[0]` returns the whole match, such as `[0]`, when the bracket content is empty or `0`. Also, `\\w+` splits names containing `-` or `.` (for example `foo-bar` becomes two segments), which changes the key structure."
+  },
+  {
+   "file": "formDataToJSON.js",
+   "line": 39,
+   "severity": "low",
+   "text": "The numeric-key check treats an empty string or a missing name as numeric (`+'' === 0`). The `[]` push case therefore returns false from buildPath and wrongly converts arrays to objects. Sparse or large numeric indexes such as `a[1000]` also create huge sparse arrays."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 15410,
+ "usage": {
+  "input_tokens": 6,
+  "cache_creation_input_tokens": 1767,
+  "cache_read_input_tokens": 12806,
+  "output_tokens": 831,
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 1767,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 566,
+    "cache_read_input_tokens": 5143,
+    "cache_creation_input_tokens": 275,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 275
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  true,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The prototype pollution arises from the same parsePropPath splitting mechanism that allows `__proto__` to be treated as a path segment, which is the reference bug's root cause.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The repeated-key handling produces nested arrays for more than two duplicates, and the undefined utility functions are genuine runtime risks.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "The numeric-key check incorrectly treats empty names as numeric, causing arrays to be converted to objects, and large indexes create sparse arrays.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

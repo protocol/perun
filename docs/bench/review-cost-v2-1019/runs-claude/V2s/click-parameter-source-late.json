@@ -1,0 +1,98 @@
+{
+ "id": "click-parameter-source-late",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "core.py",
+   "line": 2646,
+   "severity": "high",
+   "text": "`source < existing_source` compares `ParameterSource` members, and that enum is a plain `enum.Enum` with no ordering. The `<` raises `TypeError` whenever a second parameter shares a name with one already processed, so any feature-switch group (`--a/--b` with the same dest) crashes during parsing instead of resolving."
+  },
+  {
+   "file": "core.py",
+   "line": 2648,
+   "severity": "medium",
+   "text": "Even if the sources were orderable, `same_source` makes the later parameter overwrite the earlier one. Before, the first value to claim the slot was kept. Two flags sharing a name that both fall back to non-explicit defaults, or both come from the environment, now resolve to the last-processed option. For example, `--shout` with `flag_value='upper'` followed by `--whisper` with `flag_value='lower'` and no arguments yields whichever is declared last."
+  },
+  {
+   "file": "core.py",
+   "line": 2646,
+   "severity": "medium",
+   "text": "The numeric precedence puts PROMPT and DEFAULT_MAP after DEFAULT, so a prompted value would count as less explicit than a plain default. A prompted value could therefore lose the slot to another option's default, which is the wrong precedence. The ordering is not designed for this."
+  },
+  {
+   "file": "core.py",
+   "line": 2658,
+   "severity": "low",
+   "text": "When a parameter loses arbitration, its parameter source is not recorded, and `ctx.set_parameter_source` is only called in the winner branch. A loser with `expose_value=False`, or one that loses to an earlier parameter, leaves `get_parameter_source` describing a different option's source. The old code always recorded the source."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 15595,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 5267,
+  "cache_read_input_tokens": 8942,
+  "output_tokens": 1382,
+  "output_tokens_details": {
+   "thinking_tokens": 658
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 5267,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1217,
+    "cache_read_input_tokens": 5719,
+    "cache_creation_input_tokens": 2771,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 2771
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "ParameterSource is a plain Enum without ordering, so the `<` comparison in `more_explicit` will raise TypeError when two parameters share a name and have different sources.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The new arbitration logic allows a later parameter with the same source to overwrite an earlier one (unless the earlier had an explicit default and the later did not), changing the previous first-wins behavior.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The ordering of ParameterSource puts PROMPT and DEFAULT_MAP after DEFAULT, so a prompted value is considered less explicit than a default, which is incorrect precedence.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "When a parameter loses arbitration, its source is not recorded (except in the narrow `existing_source is None` case), so `get_parameter_source` can return the winner's source or None for the loser, unlike the old code which always recorded the source.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

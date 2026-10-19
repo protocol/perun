@@ -1,0 +1,69 @@
+{
+ "id": "axios-interceptor-nullish-handlers",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "InterceptorManager.js",
+   "line": 20,
+   "severity": "low",
+   "text": "`syncHandlerEntries` reads `handlers.length` without a null check, and it now runs at the start of `forEach`, `use` and `eject`. `clear()` still guards with `if (this.handlers)`, so `handlers` can be null or undefined. If something sets `manager.handlers = null`, `forEach`, which `utils.forEach` used to handle silently, now throws a TypeError."
+  },
+  {
+   "file": "InterceptorManager.js",
+   "line": 27,
+   "severity": "low",
+   "text": "When `handlers.length` differs from the cached `handlersLength` (for example after external code splices `manager.handlers`), entries whose index no longer matches are deleted. A later `eject(id)` for a still-registered interceptor then silently does nothing, so the interceptor keeps running. The old index-based eject would have removed the entry at that position."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 25890,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 15199,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 1747,
+  "output_tokens_details": {
+   "thinking_tokens": 1282
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 15199,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1584,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 12705,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 12705
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "After an external splice changes `handlers.length`, `syncHandlerEntries` deletes entries whose stored index no longer matches, so a later `eject(id)` for a still-registered interceptor finds no entry and does nothing.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,74 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "high",
+   "text": "`promise.pipe` is bound to `{...sourceInfo, spawned: destination}`, so `stdioStreamsGroups` and `options` still belong to the original source. In `a.pipe(b).pipe(c, {from: 3})` or `{from: 'all'}`, the `from` stream is validated against `a`'s stdio groups and `all` option instead of `b`'s. This wrongly accepts or rejects the call, and error messages quote the wrong options."
+  },
+  {
+   "file": "abort.js",
+   "line": 246,
+   "severity": "low",
+   "text": "`aborted(signal, sourceStream)` never settles if the signal never fires, and it keeps a listener on the signal after the pipe finishes. A long-lived shared AbortSignal used for many pipes accumulates listeners and pending promises."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 19660,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 10954,
+  "cache_read_input_tokens": 7662,
+  "output_tokens": 1040,
+  "output_tokens_details": {
+   "thinking_tokens": 680
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 10954,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 965,
+    "cache_read_input_tokens": 4011,
+    "cache_creation_input_tokens": 10594,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 10594
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the chained pipe binding the next pipe to the source subprocess instead of the previous pipe's promise, which is exactly the reference bug's root cause.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The `aborted` promise never settles if the signal never fires, and the listener is not removed after the pipe finishes, causing listener accumulation and pending promises for long-lived signals.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

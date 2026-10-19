@@ -1,0 +1,74 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "abort.js",
+   "line": 245,
+   "severity": "low",
+   "text": "`aborted(signal, sourceStream)` is never cancelled when the pipe finishes first, so its listener on the signal stays registered. If the signal aborts after the pipe has completed, it still runs `mergedStream.remove(sourceStream)` on a finished or destroyed stream. Reusing one long-lived AbortSignal across many `.pipe()` calls therefore leaks listeners and does extra work."
+  },
+  {
+   "file": "validate.js",
+   "line": 523,
+   "severity": "low",
+   "text": "When `from` is invalid but the destination is valid, the code calls `endDestinationStream(destinationStream)`. This ends the destination's stdin even if other sources are already piped into it through the shared merged stream. Example: `a.pipe(c)` followed by `b.pipe(c, {from: 'bogus'})` closes c's stdin and truncates a's data."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 20725,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 10957,
+  "cache_read_input_tokens": 7770,
+  "output_tokens": 1994,
+  "output_tokens_details": {
+   "thinking_tokens": 1613
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 10957,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1919,
+    "cache_read_input_tokens": 4065,
+    "cache_creation_input_tokens": 10597,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 10597
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "real",
+   "reason": "The `unpipeOnAbort` function awaits `aborted(signal, sourceStream)` which only resolves when the signal aborts, and if the pipe finishes first, the listener remains registered and will later call `mergedStream.remove(sourceStream)` on a finished stream, causing leaks and extra work.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "When the source is invalid, `endDestinationStream(destinationStream)` is called unconditionally, which ends the destination's stdin even if other sources are already piped into it via the shared merged stream, truncating their data.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

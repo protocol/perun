@@ -1,0 +1,69 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "V2",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 97,
+   "severity": "medium",
+   "text": "When the new and existing values have different types, mergeMaps logs an error and skips the key. The merged-in value is dropped, so the existing value silently wins. For example, merging `port: \"8080\"` over an existing `port: 8080`, or a scalar over a nil/null value, leaves the old value. MergeConfig still returns nil."
+  },
+  {
+   "file": "viper.go",
+   "line": 110,
+   "severity": "low",
+   "text": "In the `map[interface{}]interface{}` case, `castToMapStringInterface` stringifies keys. Merging into a non-string key such as int `1` calls `itgt[\"1\"] = ...`. That adds a second string key beside the original int key instead of updating it, and the original int key keeps its old value."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 11059,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 2649,
+  "cache_read_input_tokens": 7663,
+  "output_tokens": 743,
+  "output_tokens_details": {
+   "thinking_tokens": 405
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 2649,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 667,
+    "cache_read_input_tokens": 4012,
+    "cache_creation_input_tokens": 2288,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 2288
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "castToMapStringInterface stringifies keys, so when itgt (the original map[interface{}]interface{}) has a non-string key like int 1, the recursive mergeMaps does itgt[\"1\"]=sv, adding a duplicate string key while the original int key retains its old value.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

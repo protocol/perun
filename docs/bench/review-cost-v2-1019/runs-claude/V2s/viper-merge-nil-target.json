@@ -1,0 +1,81 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 992,
+   "severity": "medium",
+   "text": "When the source and target value types differ, mergeMaps only logs and `continue`s, so the new file's value is silently dropped. An explicit `null` (nil type) in the merged file is dropped the same way, and so is `port: \"80\"` over an existing int `port: 80`. The merge reports success but doesn't override."
+  },
+  {
+   "file": "viper.go",
+   "line": 1008,
+   "severity": "medium",
+   "text": "For `map[interface{}]interface{}` targets, `stv` is a shallow copy of `ttv`, so writes go to the copy and are mirrored into `ttv` via `itgt` using the string key. If the existing map has non-string keys (e.g. int `1`), the merged key `\"1\"` doesn't match the original key `1`. A duplicate string key is added next to it instead of overriding it."
+  },
+  {
+   "file": "viper.go",
+   "line": 1013,
+   "severity": "low",
+   "text": "In the default branch and the new-key branch, `itgt[sk]` or `itgt[tk]` is written by string key. A case-variant key such as `Foo` versus an existing `foo` can leave two entries that differ only by case in the original `map[interface{}]interface{}`, so lookups may return the stale value."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 15940,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 5737,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 1259,
+  "output_tokens_details": {
+   "thinking_tokens": 682
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 5737,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1096,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 3243,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 3243
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "This is the same root cause as the reference bug: mergeMaps uses string keys to write into the original map[interface{}]interface{} via itgt, causing type/key mismatches instead of merging into existing non-string keys.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "gt_same",
+   "reason": "This is also the same root cause: writing by string key into the original map[interface{}]interface{} via itgt can create duplicate case-variant keys instead of merging into the existing key, which is the same mechanism as the reference bug.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

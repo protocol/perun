@@ -1,0 +1,83 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 116,
+   "severity": "medium",
+   "text": "In the map[string]interface{} case, a key that matches case-insensitively but with different casing is merged into tgt[tk], which is correct. But the nested-map merge in the map[interface{}]interface{} case (lines 110-113) only writes new or changed keys through to the original map when itgt is passed. castToMapStringInterface builds a copy (stv), so the recursive call's `tgt[sk] = sv` writes go to the copy. Only itgt (the original) receives them. For nested levels that are themselves map[interface{}]interface{}, the recursion passes itgt=nil, so deeper merges are written to the copy and lost. Example: base `a: {b: {c: 1}}`, merged `a: {b: {d: 2}}`. `d` is never added to the original."
+  },
+  {
+   "file": "viper.go",
+   "line": 97,
+   "severity": "medium",
+   "text": "When the source and target types differ, the merge logs an error and silently skips the key. Merged config can't override a value with a different type, such as a scalar `port: 80` replaced by `port: \"80\"`, or int replaced by float64 across formats. The new value is dropped and MergeConfig still returns nil."
+  },
+  {
+   "file": "viper.go",
+   "line": 110,
+   "severity": "medium",
+   "text": "`sv.(map[interface{}]interface{})` is only safe because the types were compared equal. The `default` branch also treats nil values oddly: if both sv and tv are nil, the reflect types are both nil and the code overwrites, which is fine. But if tv is nil and sv is a map, the types differ and the key is skipped, so a null-valued key can never be filled in by a merge."
+  },
+  {
+   "file": "viper.go",
+   "line": 13,
+   "severity": "low",
+   "text": "MergeInConfig, like ReadInConfig, reads the config file but never checks v.config for a nil file path or a missing config. If getConfigFile fails, the error is returned unwrapped and the semantics are unclear."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 2,
+ "tokens": 11148,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 2650,
+  "cache_read_input_tokens": 7770,
+  "output_tokens": 724,
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 2650,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 649,
+    "cache_read_input_tokens": 4065,
+    "cache_creation_input_tokens": 2290,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 2290
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 2
+ },
+ "matched": [
+  true,
+  true,
+  true,
+  false
+ ],
+ "verdicts": {
+  "3": {
+   "verdict": "not_a_bug",
+   "reason": "The code explicitly returns the error from ioutil.ReadFile if the config file cannot be read, and the behavior is consistent with ReadInConfig; there is no claim or requirement to wrap or check for nil file path separately.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

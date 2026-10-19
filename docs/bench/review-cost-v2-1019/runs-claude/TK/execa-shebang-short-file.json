@@ -1,0 +1,110 @@
+{
+ "id": "execa-shebang-short-file",
+ "arm": "TK",
+ "findings": [
+  {
+   "file": "command-file.js",
+   "line": 54,
+   "severity": "high",
+   "text": "The command path is never replaced by the resolved path. `parsed.file` is normalized and used as-is, so the command line is built from the unresolved name. Shebang scripts are also never run through their interpreter. When the shebang case fires, `parsed.file` is the interpreter, but `resolvedFile` is not used. A non-.exe command such as `foo.cmd` also fails to resolve through `cmd.exe` when it is not in the cwd or on the PATH. An unresolved name could even be run from the cwd."
+  },
+  {
+   "file": "command-file.js",
+   "line": 40,
+   "severity": "high",
+   "text": "This returns `parsed` unchanged when the resolved file is `.exe` or `.com`. Before that, the shebang step has already prepended the script to `commandArguments` and set `parsed.file` to the interpreter. The interpreter name is not resolved, and it may be a bare name such as `node`. Separately, when `resolvedFile` is undefined, the command is routed through cmd.exe with escaping that is wrong for a non-batch target."
+  },
+  {
+   "file": "command-file.js",
+   "line": 147,
+   "severity": "medium",
+   "text": "`parseShebang` splits on a single space only. It breaks on tabs and multiple spaces, as in `#!/usr/bin/env  node`, where `argument` is an empty string. It also fails on `env -S node --flag`, which yields `-S` as the interpreter. A shebang read from a 150-byte buffer may be truncated. For a non-shebang binary file, `buffer.toString()` can produce spurious matches. A CRLF-terminated shebang such as `#!/bin/sh\\r` is not handled either: `.trim()` removes the `\\r` and the line is still found, but the `.` pattern may stop at it."
+  },
+  {
+   "file": "command-file.js",
+   "line": 96,
+   "severity": "medium",
+   "text": "`process.chdir(parsed.options.cwd)` runs when `cwd` is undefined or a URL. In the undefined case it throws a TypeError that is swallowed, so resolution runs in the wrong directory. The later `path.resolve(undefined, ...)` then throws. This is caught and returns undefined. The `chdir` is also process-global, so concurrent async work is affected while it runs."
+  },
+  {
+   "file": "command-file.js",
+   "line": 166,
+   "severity": "medium",
+   "text": "The metacharacter set omits `{`, `}`, `'`, `$`, `~` and `#`. It does include space, which is escaped in the file path. Escaping spaces in the path with a caret and then wrapping it in `\"...\"` is wrong. Inside the outer quotes, the carets become literal. A path like `C:\\Program Files\\x.cmd` therefore fails to resolve."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 21424,
+ "usage": {
+  "input_tokens": 6,
+  "cache_creation_input_tokens": 4526,
+  "cache_read_input_tokens": 15813,
+  "output_tokens": 1079,
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 4526,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 909,
+    "cache_read_input_tokens": 8044,
+    "cache_creation_input_tokens": 187,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 187
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the shebang interpreter path not being resolved and the resolved file not being used, which is the same root cause as the reference bug where readShebang ignores bytes read and parses the zero-filled buffer, leading to incorrect interpreter handling.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "gt_same",
+   "reason": "This finding also points to the shebang interpreter not being resolved and the resolved file not being used, matching the reference bug's mechanism of incorrect shebang parsing.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "The finding identifies multiple distinct parsing issues (single-space split, truncation, spurious matches) that are separate from the zero-filled buffer bug, though some overlap with the reference bug's root cause.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "3": {
+   "verdict": "real",
+   "reason": "The chdir with undefined cwd and process-global side effects are genuine defects not related to the shebang buffer parsing.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "4": {
+   "verdict": "real",
+   "reason": "The metacharacter set omissions and incorrect escaping of spaces within quotes are separate genuine defects in the escaping logic, not the shebang parsing.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

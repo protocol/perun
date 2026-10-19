@@ -1,0 +1,69 @@
+{
+ "id": "flask-super-in-comprehension",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "cli.py",
+   "line": null,
+   "severity": "high",
+   "text": "SeparatedPathType.convert now calls zero-arg `super().convert(...)` inside a list comprehension. On Python before 3.12 the comprehension has its own scope, so `super()` binds to the iterator argument and raises `TypeError: super(type, obj): obj must be an instance or subtype of type`. Any `--extra-files a:b` or `FLASK_RUN_EXTRA_FILES` value breaks `flask run`. The removed `super_convert = super().convert` line existed to avoid this."
+  },
+  {
+   "file": "cli.py",
+   "line": 148,
+   "severity": "low",
+   "text": "The new `if kw.arg is not None` filter silently drops `**kwargs` expansions in the app factory string. For `--app 'mod:create_app(**{\"a\": 1})'`, `kw.arg` is None, so the factory is called without `a` instead of failing. The old code kept a None key, which raised a TypeError and was reported."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 29533,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 19428,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 1161,
+  "output_tokens_details": {
+   "thinking_tokens": 666
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 19428,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 998,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 16934,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 16934
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "The `if kw.arg is not None` filter silently drops `**kwargs` expansions (where `kw.arg` is `None` in the AST), causing the factory to be called without those arguments instead of failing.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

@@ -1,0 +1,69 @@
+{
+ "id": "axios-interceptor-nullish-handlers",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "InterceptorManager.js",
+   "line": 130,
+   "severity": "low",
+   "text": "forEach now calls syncHandlerEntries, which reads handlers.length. Before this change utils.forEach tolerated a null or undefined handlers value. If code sets `manager.handlers = null`, forEach, use and eject now throw a TypeError."
+  },
+  {
+   "file": "InterceptorManager.js",
+   "line": 20,
+   "severity": "low",
+   "text": "Entry bookkeeping assumes indexes only change through this class. If external code splices or reorders `manager.handlers` without changing its length, handlers[entry.index] points at a different handler. eject(id) then silently skips the removal, so the interceptor stays active."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 15926,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 5484,
+  "cache_read_input_tokens": 8936,
+  "output_tokens": 1502,
+  "output_tokens_details": {
+   "thinking_tokens": 1113
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 5484,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1343,
+    "cache_read_input_tokens": 5713,
+    "cache_creation_input_tokens": 2994,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 2994
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "real",
+   "reason": "Because syncHandlerEntries only resynchronizes entries on a reference change or length change, a length-preserving external reorder leaves stale index mappings, causing eject to treat the moved handler as invalidated and skip removal.",
+   "judge": "GLM-5.2"
+  }
+ },
+ "verify_error": ""
+}

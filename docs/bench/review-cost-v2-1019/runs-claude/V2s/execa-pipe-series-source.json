@@ -1,0 +1,86 @@
+{
+ "id": "execa-pipe-series-source",
+ "arm": "V2s",
+ "findings": [
+  {
+   "file": "setup.js",
+   "line": 295,
+   "severity": "medium",
+   "text": "In a chained pipe, `promise.pipe` rebinds `spawned` to the destination but keeps the original source's `stdioStreamsGroups` and `options`. `from` is then validated against the wrong process. For example, `a.pipe(b).pipe(c, {from: 'all'})` checks `options.all` of `a` instead of `b`. `{from: 3}` is checked against `a`'s fd layout, so a valid fd on `b` is rejected or an invalid one is accepted. Error messages also cite `a`'s options."
+  },
+  {
+   "file": "abort.js",
+   "line": 246,
+   "severity": "low",
+   "text": "`aborted(signal, sourceStream)` is never cancelled when the pipe finishes normally. A long-lived shared `AbortSignal` passed to many `.pipe(..., {signal})` calls accumulates listeners and pending promises. `util.aborted` is also missing on older supported Node versions, so this module would fail to import."
+  },
+  {
+   "file": "sequence.js",
+   "line": 267,
+   "severity": "low",
+   "text": "`destinationResult.pipedFrom.push` assumes the destination's rejection reason is an Execa error with a `pipedFrom` array. If the destination rejects with a plain value or an error without `pipedFrom`, this throws a TypeError that hides the real failure."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 25239,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 14040,
+  "cache_read_input_tokens": 8938,
+  "output_tokens": 2257,
+  "output_tokens_details": {
+   "thinking_tokens": 1646
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 14040,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 2096,
+    "cache_read_input_tokens": 5715,
+    "cache_creation_input_tokens": 11548,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 11548
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  false,
+  false,
+  false
+ ],
+ "verdicts": {
+  "0": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the chained pipe rebinding `spawned` to the destination while keeping the original source's `stdioStreamsGroups` and `options`, which is the same root cause as the reference bug where the next pipe's validation uses the wrong process.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "1": {
+   "verdict": "real",
+   "reason": "The `unpipeOnAbort` promise is never cancelled when the pipe finishes normally, so a long-lived shared `AbortSignal` accumulates listeners and pending promises, and `aborted` from `node:util` is unavailable on older Node versions, causing import failure.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "real",
+   "reason": "`destinationResult.pipedFrom.push` assumes the destination's rejection reason is an Execa error with a `pipedFrom` array, but if it rejects with a plain value or an error without that property, it throws a TypeError that masks the original failure.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}

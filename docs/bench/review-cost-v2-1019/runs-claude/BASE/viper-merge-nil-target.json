@@ -1,0 +1,81 @@
+{
+ "id": "viper-merge-nil-target",
+ "arm": "BASE",
+ "findings": [
+  {
+   "file": "viper.go",
+   "line": 992,
+   "severity": "medium",
+   "text": "mergeMaps drops the new value when the source and target types differ. It only logs at ERROR and `MergeConfig` still returns nil. Merging `port: \"8080\"` over an existing `port: 80`, or a `null` value or a map over a scalar, leaves the old value in place with no error. That is a silent data-loss path for overrides."
+  },
+  {
+   "file": "viper.go",
+   "line": 1005,
+   "severity": "low",
+   "text": "The `map[interface{}]interface{}` branch converts keys with `fmt.Sprintf(\"%v\")`, then writes `itgt[sk]` and `itgt[tk]` using those string keys. A non-string key such as YAML `1: a` is never matched to the original key. Merging `\"1\": b` adds a second entry next to the int key `1` instead of overriding it."
+  },
+  {
+   "file": "viper.go",
+   "line": 1005,
+   "severity": "low",
+   "text": "The target-side type switch has an unchecked `sv.(map[interface{}]interface{})` assertion. `svType != tvType` is checked beforehand, so it normally holds. Nested maps in the new config are also stored by reference through `tgt[sk] = sv`, so the merged config aliases the parsed input maps."
+  }
+ ],
+ "error": "",
+ "attempts": 1,
+ "turns": 3,
+ "tokens": 26028,
+ "usage": {
+  "input_tokens": 4,
+  "cache_creation_input_tokens": 15444,
+  "cache_read_input_tokens": 8940,
+  "output_tokens": 1640,
+  "output_tokens_details": {
+   "thinking_tokens": 1057
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 15444,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 1477,
+    "cache_read_input_tokens": 5717,
+    "cache_creation_input_tokens": 12950,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 12950
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null,
+  "turns": 3
+ },
+ "matched": [
+  true,
+  false,
+  false
+ ],
+ "verdicts": {
+  "1": {
+   "verdict": "gt_same",
+   "reason": "The finding describes the same root cause as the reference bug: mergeMaps' handling of map[interface{}]interface{} keys via fmt.Sprintf, which causes type mismatches and skips merging instead of properly merging into the target.",
+   "judge": "DeepSeek-V4-Flash"
+  },
+  "2": {
+   "verdict": "not_a_bug",
+   "reason": "The unchecked type assertion is safe because svType == tvType is checked before the switch, and the aliasing of nested maps is a design choice, not a defect.",
+   "judge": "DeepSeek-V4-Flash"
+  }
+ },
+ "verify_error": ""
+}
