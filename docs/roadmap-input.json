@@ -533,6 +533,7 @@
    "where": ".claude/skills/agentic-delivery/scripts/train_flake.sh and merge_train.py (ledger and train summary).",
    "done_when": "Each isolated re-run outcome is recorded per test; a test over the flake threshold is quarantined, reported in the train summary and not blamed on a PR, until its entry expires; the 1.584.0 false-blame rate does not regress.",
    "verify": "bash scripts/test-train-flake-rate.sh still passes; a new ledger test; replay the H11 fixture in docs/bench/merge-train-1584 and compare PRs landed (4 of 6 today).",
+   "reject": "Already shipped: per-test flake ledger with quarantine (CHANGELOG.md 1.587.0, flake_ledger.py, train_flake.sh and train_land.sh read the quarantine list; scripts/test_flake_ledger.py proves a consistent failure is never quarantined).",
    "merged_from": [
     "COO lens: survey P5",
     "CTO lens: the residual cost in H11"
@@ -804,31 +805,6 @@
   }
  ],
  "adrs": [
-  {
-   "id": "ADR-1",
-   "item": "flake-ledger-quarantine",
-   "area": "pipeline",
-   "status": "proposed",
-   "title": "Keep the flake ledger per host and untracked",
-   "context": "train_flake.sh decides REAL or FLAKE per run with a same-host baseline file whose header it checks (a baseline from another host is refused), and it keeps no per-test history beyond that baseline. preflight.py already keeps a per-repo timing cache file meant to be gitignored (.preflight-times.json), so a per-host untracked store has precedent, and flakiness depends on the host.",
-   "options": [
-    {
-     "name": "Per-host untracked ledger beside the baseline",
-     "tradeoffs": "Cheap, no merge conflicts, matches the same-host rule; each host learns its flakes separately."
-    },
-    {
-     "name": "Committed ledger file",
-     "tradeoffs": "Shared across hosts and visible in review; conflicts on every train and records one host's flakes as facts."
-    },
-    {
-     "name": "Do nothing",
-     "tradeoffs": "No new state; every run re-triages the same tests and keeps dropping PRs."
-    }
-   ],
-   "decision": "We will keep the ledger per host and untracked, and print its quarantine list in the train summary, because train_flake.sh already refuses a baseline from another host and a committed file would conflict on every train.",
-   "consequences": "Good: no shared state and no conflicts. Bad: each host re-learns flakes, and a quarantined test hides a real regression until its entry expires. Neutral: promotion to a committed skip list goes through an ordinary PR.",
-   "reversal_cost": "Low, a two-way door: delete the file and the summary line; no other tool reads the format."
-  },
   {
    "id": "ADR-2",
    "item": "handback-automator",
