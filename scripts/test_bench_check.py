@@ -7,13 +7,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 import bench_check as bc
 
 W = lambda n, k: " ".join(f"{k}{i}" for i in range(n))  # n distinct words
+PREREG = "Hashed in SHA256-frozen.txt before any call.\n"
+PH = hashlib.sha256(PREREG.encode()).hexdigest()  # real hash: rule e re-hashes every listed file
 
 
 def bench(root, name, tune_text, held_text):
     d = root / name
     (d / "outputs").mkdir(parents=True)
-    (d / "SHA256-frozen.txt").write_text(f"{'0' * 64}  PREREGISTERED.md\n")
-    (d / "PREREGISTERED.md").write_text("Hashed in SHA256-frozen.txt before any call.\n")
+    (d / "PREREGISTERED.md").write_text(PREREG)
+    (d / "SHA256-frozen.txt").write_text(f"{PH}  PREREGISTERED.md\n")
     h = hashlib.sha256((d / "SHA256-frozen.txt").read_bytes()).hexdigest()
     ev = [{"event": "preregistered", "sha256": h[:16], "ts": 1}, {"model": "m", "ts": 2}]
     (d / "ledger.jsonl").write_text("\n".join(json.dumps(e) for e in ev) + "\n")
@@ -87,7 +89,7 @@ try:
     (new / "ledger.jsonl").write_text(led)
     (new / "SHA256-frozen.txt").write_text("rewritten after the ledger hash\n")
     assert any("no preregistered event" in e for e in errs(root, new))
-    (new / "SHA256-frozen.txt").write_text(f"{'0' * 64}  PREREGISTERED.md\n")
+    (new / "SHA256-frozen.txt").write_text(f"{PH}  PREREGISTERED.md\n")
     lines = led.splitlines()
     (new / "ledger.jsonl").write_text("\n".join(lines[::-1]) + "\n")
     assert any("not earlier" in e for e in errs(root, new))
@@ -97,7 +99,7 @@ try:
     (new / "ledger.jsonl").write_text(led)
     assert errs(root, new) == []
     # b. late append: lines added to SHA256-frozen.txt after the prereg hash was logged
-    appended = f"{'0' * 64}  PREREGISTERED.md\n{'1' * 64}  amended.txt\n"
+    appended = f"{PH}  PREREGISTERED.md\n{'1' * 64}  amended.txt\n"
     (new / "SHA256-frozen.txt").write_text(appended)
     assert any("not in any later ledger event" in e for e in errs(root, new))  # appended line is uncovered
     cover = json.dumps({"event": "frozen", "files": {"amended.txt": "1" * 64}})
@@ -108,9 +110,9 @@ try:
     (new / "ledger.jsonl").write_text(cover + "\n" + led)  # covering event before the prereg does not
     assert any("not in any later" in e or "not earlier" in e for e in errs(root, new))
     (new / "ledger.jsonl").write_text(led)
-    (new / "SHA256-frozen.txt").write_text(f"{'1' * 64}  amended.txt\n{'0' * 64}  PREREGISTERED.md\n")  # first line changed
+    (new / "SHA256-frozen.txt").write_text(f"{'1' * 64}  amended.txt\n{PH}  PREREGISTERED.md\n")  # first line changed
     assert any("no preregistered event" in e for e in errs(root, new))
-    (new / "SHA256-frozen.txt").write_text(f"{'0' * 64}  PREREGISTERED.md\n")
+    (new / "SHA256-frozen.txt").write_text(f"{PH}  PREREGISTERED.md\n")
     # b. accepted hash keys
     for k in ("preregistered_sha256", "frozen_list_sha256", "sha256_of_SHA256-frozen.txt"):
         (new / "ledger.jsonl").write_text(led.replace('"sha256"', f'"{k}"'))
@@ -178,6 +180,7 @@ try:
     assert errs(root, new) == []
 
     # --changed: only dirs absent from the base ref are checked; CLI exit codes
+    (new / "PREREGISTERED.md").write_text(PREREG)  # earlier cases rewrote it; the CLI run re-hashes it (rule e)
     r = Path(tempfile.mkdtemp())
     try:
         g = lambda *a: subprocess.run(["git", "-C", str(r), "-c", "user.name=t", "-c", "user.email=t@example.com", *a],
