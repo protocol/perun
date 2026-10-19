@@ -22,9 +22,8 @@ Not artifact polish, not `deep-code-review`. Those run on artifacts or
 already-narrowed options. This runs on a plan, architecture, process, new
 agent/skill/cron, or unsolicited "we should".
 
-Persisted artifacts stay normal English. Chat may be terse (a voice skill is
-not vendored; see [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)).
-Lookup table: `INDEX.md`; read it instead of opening references blindly.
+Persisted artifacts stay normal English. Lookup table: `INDEX.md`; read it
+instead of opening references blindly.
 
 ---
 
@@ -97,7 +96,8 @@ enforced only by the fixtures in `evals/evals.json`.
    claim in one line; attack that, never a convenient weak reading.
 2. **Options.** Set the claim against *do nothing* and the 2 strongest
    alternatives (include the cheapest): one line each on cost, risk and
-   reversibility. It must beat all three, not only the status quo.
+   reversibility. It must beat *do nothing*; a safer, smaller or staged
+   alternative is a note unless it dominates the claim on the stated facts.
 3. **Fit.** Check it against the strategy context: stage, vision, north star.
    Reuse what `agentic-ceo` already named; otherwise state them as `assumed`.
    A sound idea that does not move the north star is a no or a later.
@@ -110,7 +110,13 @@ enforced only by the fixtures in `evals/evals.json`.
    duration against the time or capacity available, ROI and payback, calendar.
    Open the answer with each mismatch and its corrected number, and size the
    call from the corrected figures.
-6. **Close with ONE decision** (go, no-go or go-if: never a menu). If the plan
+6. **Close with ONE decision** (go, no-go or go-if: never a menu). **No fatal
+   flaw means GO** (`PASS_TO_USER`; a go-if of tripwires is still GO). A flaw is
+   fatal only if it passes the Calibration test. Risks the proposal already
+   names, a high price, an unproven market, key-person or one-way-door exposure
+   and a missing pilot are not fatal alone: they become the kill criteria and
+   leading metric of the GO. Only a fatal flaw is NO-GO (`REVISE`/`HOLD`); a
+   wrongly blocked sound plan is as costly as a wrongly passed one. If the plan
    commits real money, make it a capped, time-boxed first step and name the
    cap. **Kill criteria**: one observable metric with a numeric threshold (the
    requester's own when given and sound), a date inside that first window, and
@@ -228,7 +234,5 @@ change, inline-as-independent).
 ## Verification
 
 - A planted unsupported claim yields `HOLD` or `REVISE`, never `PASS_TO_USER`.
-- `scripts/validate_verdict.py` rejects a missing key, illegal `owner-request`+`HOLD`, a list-shaped `user_question`, an empty `steelman`, a `PASS_TO_USER` whose `strongest_attack_survived` is empty or generic, and an empty `decision` or `leading_metric` when present.
-- An agent-originated `HOLD` never appears in the owner-facing reply.
-- No new profile or bot was created.
-- `evals/evals.json` plants `owner-request-cannot-hold`, `planted-unsupported-claim-hold-or-revise`, and the decision-method closers (`decision-closes-with-one-call-kill-and-metric`).
+- `scripts/validate_verdict.py` rejects each contract violation named under Verdict schema.
+- `evals/evals.json` plants the owner-request, unsupported-claim and decision-closer cases.

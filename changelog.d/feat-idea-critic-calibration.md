@@ -1,0 +1,3 @@
+### Changed
+- idea-critic: calibration fix for reflexive NO-GO. Step 2 now needs the claim to beat do-nothing (a safer, smaller or staged alternative is a note unless it dominates), and step 6 says no fatal flaw means GO and lists what is not fatal alone. Measured on 24 fresh public cases frozen before the run (`docs/bench/idea-critic-calibration-1019/`, replaces the unpreregistered 36-case bench as gated evidence): honest result is a TIE against the pre-fix skill and a loss to no-skill and the rival text; see its README. Tests: `scripts/test_idea_critic_calibration.py`.
+- size-budget-raise: .claude/skills/idea-critic/SKILL.md 15931→15985 the step 2 and step 6 calibration sentences (offset by trimming non-decision prose to fit the 16000-byte core cap)
