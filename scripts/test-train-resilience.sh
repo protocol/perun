@@ -72,8 +72,8 @@ ok $? "heavy_gate: allows again once the train exits (exclusive lease released)"
 out=$(run env); rc=$?  # no RERUN_CMD: stays all-or-nothing
 [ $rc -eq 1 ] && grep -q 'BROWSER RED' <<<"$out" && [ ! -s "$WORK/merged.log" ]; ok $? "train_land: without RERUN_CMD a red browser gate lands nothing"
 mkdir -p "$WORK/hv"; echo "$$ $(date +%s)" >"$WORK/hv/heavy.exclusive"
-out=$(run env); rc=$?
-[ $rc -eq 1 ] && grep -q 'exclusive heavy lease' <<<"$out"; ok $? "train_land: a second gate is refused while another holds the exclusive lease"
+out=$(run env LEASE_WAIT_SECS=0); rc=$?
+[ $rc -eq 4 ] && grep -q 'DEFER.*exclusive heavy lease' <<<"$out"; ok $? "train_land: a second gate is deferred (exit 4, nothing built) while another holds the exclusive lease"
 rm -f "$WORK/hv/heavy.exclusive"
 
 # --- (2) one serial push queue: a live holder of the push lock stops the landing, never lands in parallel ---

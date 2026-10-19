@@ -3919,6 +3919,13 @@ else
   record 1 "train resilience: flake re-run triage, exclusive gate lease, mkdir locks"; tail -8 "$WORK/train-resilience.log"
 fi
 
+# train lease timing (#1777): own per-feature file (scripts/test-train-lease.sh), one case here.
+if bash "$ROOT/scripts/test-train-lease.sh" >"$WORK/train-lease.log" 2>&1; then
+  record 0 "train lease: a busy gate waits or defers (exit 4) before any compose, never refuses after a green gate"
+else
+  record 1 "train lease: a busy gate waits or defers (exit 4) before any compose, never refuses after a green gate"; tail -8 "$WORK/train-lease.log"
+fi
+
 # train base-red guard: own per-feature file (scripts/test-train-red-base.sh), one case here.
 if bash "$ROOT/scripts/test-train-red-base.sh" >"$WORK/train-red-base.log" 2>&1; then
   record 0 "train base-red guard: pre-existing browser failures excused, new ones block"
