@@ -22,7 +22,8 @@ branch for `landing_stall_min` minutes (integer >= 1, default 60) while green PR
 `background_guard` takes `off|warn|block` (default `warn`): whether handback_cap.py (SubagentStop) warns or blocks when a lane hands back
 while a test or build started from its worktree is still running; env `PERUN_BACKGROUND_GUARD` overrides it.
 `auto_compact` takes `on|off` (default `on`): whether `install.sh --apply-operating-layer` may set `autoCompactWindow: 200000`
-(`off` skips it; a value the user already set is never overridden either way). `release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
+(`off` skips it; a value the user already set is never overridden either way). `statusline` takes `on|off` (default `on`): the same
+for the cost `statusLine` (cost_statusline.py). `release_every` takes an integer >= 1 (default 1): `land-release.sh publish` releases only when the minor is a multiple of it.
 `role` takes `off|ceo|ceo-strict` (default `off`; `ceo strict` is read as `ceo-strict`): whether ceo_altitude_guard.py warns (`ceo`) or
 blocks (`ceo-strict`) when the MAIN session hand-edits source or tests; a subagent is never touched. Env `PERUN_ROLE` overrides it for one process.
 `ci` takes `local-first|cloud|auto` (default `auto`): where the gates run. `local-first`: agents run every gate locally before the push
@@ -99,7 +100,7 @@ def load(path: Path | None = None) -> dict:
 
 def validate(raw: dict) -> dict:
     """Defaults overlaid with `raw`; ValueError on an unknown key or a bad value."""
-    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "background_guard": "warn"}
+    pol: dict = {d: "efficient" for d in DIMS} | {"share_learnings": "ask", "auto_update": "on", "auto_update_pr": "on", "auto_update_pr_base": "", "review_gate": "warn", "release_every": 1, "auto_compact": "on", "statusline": "on", "role": "off", "ci": "auto", "outcome_guard": "warn", "outcome_guard_paths": [], "landing_watchdog": "warn", "landing_stall_min": 60, "background_guard": "warn"}
     for k, v in raw.items():
         if k == "share_learnings":
             ok = v in SHARE
@@ -120,7 +121,7 @@ def validate(raw: dict) -> dict:
             ok = v in ("off", "warn")
         elif k == "auto_update_pr_base":  # '' = origin/HEAD; else a plain branch name (no option-like or `..` names)
             ok = isinstance(v, str) and (v == "" or (re.fullmatch(r"[A-Za-z0-9._/-]+", v) is not None and v[0] not in "-/" and v[-1] != "/" and ".." not in v and "//" not in v and v != "HEAD"))
-        elif k in ("auto_update", "auto_update_pr", "auto_compact"):
+        elif k in ("auto_update", "auto_update_pr", "auto_compact", "statusline"):
             ok = v in ON_OFF
         elif k in DIMS:
             ok = v in MODES or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)
